@@ -66,6 +66,15 @@ $(eval $(call gb_Executable_set_include,soffice_bin,\
     $$(INCLUDE) \
     -I$(SRCDIR)/desktop/inc \
 ))
+$(eval $(call gb_Executable_add_ldflags,soffice_bin,\
+	-s EXPORTED_FUNCTIONS=["_malloc"$(COMMA)"_free"] -Wl$(COMMA)--whole-archive $(call gb_StaticLibrary_get_target,unoembind) -Wl$(COMMA)--no-whole-archive \
+))
+ifeq ($(ENABLE_QT6),TRUE)
+$(eval $(call gb_Executable_add_ldflags,soffice_bin, \
+    -s MODULARIZE=1 \
+    -s EXPORT_NAME=soffice_entry \
+))
+endif
 
 $(eval $(call gb_Library_use_custom_headers,soffice_bin,\
 	officecfg/registry \
@@ -79,9 +88,21 @@ $(eval $(call gb_Executable_add_exception_objects,soffice_bin,\
 $(eval $(call gb_Executable_add_ldflags,soffice_bin,\
     --pre-js $(SRCDIR)/desktop/wasm/pre-js.js \
     --profiling \
-    -lworkerfs.js -s MODULARIZE=1 -s EXPORT_NAME=LOK -s EXPORT_ES6=1 -s ENVIRONMENT=worker --no-entry \
-	-Wl$(COMMA)--whole-archive $(call gb_StaticLibrary_get_target,unoembind) -Wl$(COMMA)--no-whole-archive \
+    -lworkerfs.js -s MODULARIZE=1 -s EXPORT_NAME=LOK -s EXPORT_ES6=1 -s ENVIRONMENT=worker --no-entry
 ))
+
+ifneq ($(ENABLE_DBGUTIL),)
+
+$(call gb_Executable_get_linktarget_target,soffice_bin): \
+    $(call gb_CustomTarget_get_workdir,static/unoembind)/bindings_uno.js \
+    $(SRCDIR)/unotest/source/embindtest/embindtest.js
+
+$(eval $(call gb_Executable_add_ldflags,soffice_bin, \
+    --post-js $(call gb_CustomTarget_get_workdir,static/unoembind)/bindings_uno.js \
+    --post-js $(SRCDIR)/unotest/source/embindtest/embindtest.js \
+))
+
+endif
 
 endif
 

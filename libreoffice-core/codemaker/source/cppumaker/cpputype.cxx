@@ -159,7 +159,6 @@ OString getFileExtension(FileType eFileType)
         default:
         case FileType::HDL: return ".hdl"_ostr;
         case FileType::HPP: return ".hpp"_ostr;
-        case FileType::EMBIND_CXX: return "_embind.cxx"_ostr;
     }
 }
 
@@ -188,8 +187,6 @@ public:
     }
 
     virtual void dumpHppFile(FileStream& o, codemaker::cppumaker::Includes & includes) = 0;
-
-    virtual void dumpEmbindCppFile(FileStream& o);
 
     OUString dumpHeaderDefine(FileStream& o, std::u16string_view extension) const;
 
@@ -240,8 +237,6 @@ protected:
     virtual void dumpDeclaration(FileStream &) {
         assert(false);    // this cannot happen
     }
-
-    virtual void dumpEmbindDeclaration(FileStream &) {};
 
     virtual void dumpFiles(OUString const & uri, CppuOptions const & options);
 
@@ -324,8 +319,6 @@ void CppuType::dumpFiles(OUString const & uri, CppuOptions const & options)
 {
     dumpFile(uri, name_, FileType::HDL, options);
     dumpFile(uri, name_, FileType::HPP, options);
-    if(options.isValid("-W"_ostr))
-        dumpFile(uri, name_, FileType::EMBIND_CXX, options);
 }
 
 void CppuType::addLightGetCppuTypeIncludes(
@@ -459,9 +452,6 @@ void CppuType::dumpFile(
                 break;
             case FileType::HDL:
                 dumpHdlFile(out, includes);
-                break;
-            case FileType::EMBIND_CXX:
-                dumpEmbindCppFile(out);
                 break;
         }
     } catch (...) {
@@ -608,6 +598,7 @@ void CppuType::dumpHFileContent(
     out << " *);\n\n#endif\n";
 }
 
+<<<<<<< HEAD
 void CppuType::dumpEmbindCppFile(FileStream &out)
 {
     out << "#ifdef EMSCRIPTEN\n";
@@ -618,6 +609,8 @@ void CppuType::dumpEmbindCppFile(FileStream &out)
     out << "#endif\n";
 }
 
+=======
+>>>>>>> Extract embindmaker from cppumaker into its own tool
 void CppuType::dumpGetCppuType(FileStream & out)
 {
     if (name_ == "com.sun.star.uno.XInterface") {
@@ -1139,14 +1132,10 @@ public:
         OUString const & name, rtl::Reference< TypeManager > const & typeMgr);
 
     virtual void dumpDeclaration(FileStream& o) override;
-    virtual void dumpEmbindDeclaration(FileStream& o) override;
     void dumpHppFile(FileStream& o, codemaker::cppumaker::Includes & includes) override;
 
     void        dumpAttributes(FileStream& o) const;
-    void        dumpEmbindAttributeBindings(FileStream& o) const;
     void        dumpMethods(FileStream& o) const;
-    void        dumpEmbindMethodBindings(FileStream& o, bool bDumpForReference=false) const;
-    void        dumpEmbindWrapperFunc(FileStream& o, const unoidl::InterfaceTypeEntity::Method& method, bool bDumpForReference=false) const;
     void        dumpNormalGetCppuType(FileStream& o) override;
     void        dumpComprehensiveGetCppuType(FileStream& o) override;
     void        dumpCppuAttributeRefs(FileStream& o, sal_uInt32& index);
@@ -1217,6 +1206,7 @@ void InterfaceType::dumpDeclaration(FileStream & out)
     out << "};\n\n";
 }
 
+<<<<<<< HEAD
 void InterfaceType::dumpEmbindDeclaration(FileStream & out)
 {
     // TODO: This is a temporary workaround that likely causes the Embind UNO
@@ -1264,6 +1254,8 @@ void InterfaceType::dumpEmbindDeclaration(FileStream & out)
 }
 
 
+=======
+>>>>>>> Extract embindmaker from cppumaker into its own tool
 void InterfaceType::dumpHppFile(
     FileStream & out, codemaker::cppumaker::Includes & includes)
 {
@@ -1315,31 +1307,6 @@ void InterfaceType::dumpAttributes(FileStream & out) const
     }
 }
 
-void InterfaceType::dumpEmbindAttributeBindings(FileStream& out) const
-{
-    if (!entity_->getDirectAttributes().empty())
-    {
-        out << indent() << "// Bindings for attributes\n";
-    }
-    for (const unoidl::InterfaceTypeEntity::Attribute& attr : entity_->getDirectAttributes())
-    {
-        if (m_isDeprecated || isDeprecated(attr.annotations))
-            continue;
-
-        out << indent();
-        out << ".function(\"";
-        out << "get" << attr.name << "\", &" << codemaker::cpp::scopedCppName(u2b(name_)) << "::get"
-            << attr.name << ")\n";
-        if (!attr.readOnly)
-        {
-            out << indent();
-            out << ".function(\"";
-            out << "set" << attr.name << "\", &" << codemaker::cpp::scopedCppName(u2b(name_))
-                << "::set" << attr.name << ")\n";
-        }
-    }
-}
-
 void InterfaceType::dumpMethods(FileStream & out) const
 {
     if (!entity_->getDirectMethods().empty()) {
@@ -1380,6 +1347,7 @@ void InterfaceType::dumpMethods(FileStream & out) const
     }
 }
 
+<<<<<<< HEAD
 void InterfaceType::dumpEmbindWrapperFunc(FileStream& out,
                                           const unoidl::InterfaceTypeEntity::Method& method,
                                           bool bDumpForReference) const
@@ -1489,6 +1457,8 @@ void InterfaceType::dumpEmbindMethodBindings(FileStream & out, bool bDumpForRefe
 
 
 
+=======
+>>>>>>> Extract embindmaker from cppumaker into its own tool
 void InterfaceType::dumpNormalGetCppuType(FileStream & out)
 {
     dumpGetCppuTypePreamble(out);
@@ -3747,8 +3717,6 @@ private:
 
     virtual void dumpFiles(OUString const & uri, CppuOptions const & options) override {
         dumpFile(uri, name_, FileType::HPP, options);
-        if(options.isValid("-W"_ostr))
-            dumpFile(uri, name_, FileType::EMBIND_CXX, options);
     }
 };
 
