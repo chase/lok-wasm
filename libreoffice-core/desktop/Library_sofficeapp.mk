@@ -74,6 +74,7 @@ $(eval $(call gb_Library_use_libraries,sofficeapp,\
     ucbhelper \
     utl \
     vcl \
+    skia \
 ))
 
 ifeq ($(OS),WNT)

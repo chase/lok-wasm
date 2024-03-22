@@ -120,6 +120,7 @@ endef
 
 endif
 
+$(info ENABLE_SKIA=$(ENABLE_SKIA))
 ifneq ($(ENABLE_SKIA),)
 define gb_LinkTarget__use_skia
 $(call gb_LinkTarget_set_include,$(1),\

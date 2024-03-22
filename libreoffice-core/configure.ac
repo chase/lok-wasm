@@ -1163,6 +1163,8 @@ emscripten)
     enable_wasm_strip=yes
     with_system_zlib=no
     with_theme="colibre"
+    enable_skia=yes
+    build_skia=yes
     _os=Emscripten
     ;;
 
@@ -3065,7 +3067,7 @@ if test "$enable_wasm_strip" = "yes"; then
     enable_report_builder=no
     enable_scripting=no
     enable_sdremote_bluetooth=no
-    enable_skia=no
+    # enable_skia=no
     enable_xmlhelp=no
     enable_zxing=no
     test_libepubgen=no
@@ -3178,7 +3180,7 @@ else
         enable_nss=no
         enable_odk=no
         enable_python=no
-        enable_skia=no
+        # enable_skia=no
         with_java=no
     fi
 fi
@@ -12173,50 +12175,76 @@ AC_SUBST(SYSTEM_POPPLER)
 AC_SUBST(POPPLER_CFLAGS)
 AC_SUBST(POPPLER_LIBS)
 
+AC_MSG_CHECKING([skia related flags "$enable_skia" "$build_skia" "$OS"])
 # Skia?
 ENABLE_SKIA=
-if test "$enable_skia" != "no" -a "$build_skia" = "yes" -a -z "$DISABLE_GUI"; then
-    # Skia now requires at least freetype2 >= 2.8.1, which is less that what LO requires as system freetype.
-    if test "$SYSTEM_FREETYPE" = TRUE; then
-        PKG_CHECK_EXISTS(freetype2 >= 21.0.15, # 21.0.15 = 2.8.1
-            [skia_freetype_ok=yes],
-            [skia_freetype_ok=no])
-    else # internal is ok
-        skia_freetype_ok=yes
-    fi
-    AC_MSG_CHECKING([whether to build Skia])
-    if test "$skia_freetype_ok" = "yes"; then
-        if test "$enable_skia" = "debug"; then
-            AC_MSG_RESULT([yes (debug)])
-            ENABLE_SKIA_DEBUG=TRUE
-        else
-            AC_MSG_RESULT([yes])
-            ENABLE_SKIA_DEBUG=
-        fi
-        ENABLE_SKIA=TRUE
-	if test "$ENDIANNESS" = "big" && test "$ENABLE_SKIA" = "TRUE"; then
-		AC_MSG_ERROR([skia doesn't work/isn't supported upstream on big-endian. Use --disable-skia])
-	fi
+if test "$enable_skia" != "no" -a "$build_skia" = "yes"; then
+    if test "$OS" = "EMSCRIPTEN"; then
+        # Emscripten-specific Skia configuration
+        AC_MSG_CHECKING([whether to build Skia])
+        AC_MSG_RESULT([yes (Emscripten)])
 
+        ENABLE_SKIA=TRUE
         AC_DEFINE(HAVE_FEATURE_SKIA)
         BUILD_TYPE="$BUILD_TYPE SKIA"
 
-        if test "$OS" = "MACOSX"; then
-            AC_DEFINE(SK_SUPPORT_GPU,1)
-            AC_DEFINE(SK_METAL,1)
-            SKIA_GPU=METAL
-            AC_SUBST(SKIA_GPU)
-        else
-            AC_DEFINE(SK_SUPPORT_GPU,1)
-            AC_DEFINE(SK_VULKAN,1)
-            SKIA_GPU=VULKAN
-            AC_SUBST(SKIA_GPU)
-        fi
-    else
-        AC_MSG_RESULT([no (freetype too old)])
-        add_warning "freetype version is too old for Skia library, at least 2.8.1 required, Skia support disabled"
-    fi
+        # Enable GPU support for Emscripten using WebGL
+        AC_DEFINE(SK_SUPPORT_GPU,1)
+        AC_DEFINE(SK_GL,1)
+        SKIA_GPU=GL
+        AC_SUBST(SKIA_GPU)
 
+        # Use the internal FreeType for Emscripten
+        SYSTEM_FREETYPE=TRUE
+    else
+        if test -z "$DISABLE_GUI"; then
+            # Skia now requires at least freetype2 >= 2.8.1, which is less than what LO requires as system freetype.
+            if test "$SYSTEM_FREETYPE" = TRUE; then
+                PKG_CHECK_EXISTS(freetype2 >= 21.0.15, # 21.0.15 = 2.8.1
+                    [skia_freetype_ok=yes],
+                    [skia_freetype_ok=no])
+            else # internal is ok
+                skia_freetype_ok=yes
+            fi
+
+            AC_MSG_CHECKING([whether to build Skia])
+            if test "$skia_freetype_ok" = "yes"; then
+                if test "$enable_skia" = "debug"; then
+                    AC_MSG_RESULT([yes (debug)])
+                    ENABLE_SKIA_DEBUG=TRUE
+                else
+                    AC_MSG_RESULT([yes])
+                    ENABLE_SKIA_DEBUG=
+                fi
+
+                ENABLE_SKIA=TRUE
+                if test "$ENDIANNESS" = "big" && test "$ENABLE_SKIA" = "TRUE"; then
+                    AC_MSG_ERROR([skia doesn't work/isn't supported upstream on big-endian. Use --disable-skia])
+                fi
+
+                AC_DEFINE(HAVE_FEATURE_SKIA)
+                BUILD_TYPE="$BUILD_TYPE SKIA"
+
+                if test "$OS" = "MACOSX"; then
+                    AC_DEFINE(SK_SUPPORT_GPU,1)
+                    AC_DEFINE(SK_METAL,1)
+                    SKIA_GPU=METAL
+                    AC_SUBST(SKIA_GPU)
+                else
+                    AC_DEFINE(SK_SUPPORT_GPU,1)
+                    AC_DEFINE(SK_VULKAN,1)
+                    SKIA_GPU=VULKAN
+                    AC_SUBST(SKIA_GPU)
+                fi
+            else
+                AC_MSG_RESULT([no (freetype too old)])
+                add_warning "freetype version is too old for Skia library, at least 2.8.1 required, Skia support disabled"
+            fi
+        else
+            AC_MSG_CHECKING([whether to build Skia])
+            AC_MSG_RESULT([no (GUI disabled)])
+        fi
+    fi
 else
     AC_MSG_CHECKING([whether to build Skia])
     AC_MSG_RESULT([no])

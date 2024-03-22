@@ -2,6 +2,7 @@
 /external/*
 !/external/.gitkeep
 libreoffice-core/.clangd
+libreoffice-core/.cache/clangd
 libreoffice-core/diag.json
 libreoffice-core/vs-code-template.code-workspace
 
