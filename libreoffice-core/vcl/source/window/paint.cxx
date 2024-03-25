@@ -34,9 +34,9 @@
 #include <svdata.hxx>
 #include <comphelper/lok.hxx>
 #include <comphelper/profilezone.hxx>
-/* #if HAVE_FEATURE_OPENGL */
-/* #include <vcl/opengl/OpenGLHelper.hxx> */
-/* #endif */
+#if HAVE_FEATURE_OPENGL
+#include <vcl/opengl/OpenGLHelper.hxx>
+#endif
 
 // PaintBufferGuard
 
