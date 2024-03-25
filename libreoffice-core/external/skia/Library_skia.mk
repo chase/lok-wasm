@@ -863,20 +863,13 @@ endif
 ifeq ($(OS), EMSCRIPTEN)
 $(info USING EMSCRIPTEN SPECIFIC BUILD CONFIG)
 $(eval $(call gb_Library_add_generated_exception_objects,skia,\
-    UnpackedTarball/skia/src/ports/SkDebug_stdio.cpp \
-    UnpackedTarball/skia/tools/SkSharingProc.cpp \
-    UnpackedTarball/skia/tools/UrlDataManager.cpp \
-    UnpackedTarball/skia/tools/debugger/DebugCanvas.cpp \
-	UnpackedTarball/skia/tools/debugger/DebugLayerManager.cpp \
-    UnpackedTarball/skia/tools/debugger/DrawCommand.cpp \
-    UnpackedTarball/skia/tools/debugger/JsonWriteBuffer.cpp \
 ))
-$(eval $(call gb_Library_add_defs,skia,\
-    -SK_ALLOW_STATIC_GLOBAL_INITIALIZERS=1 \
-    -GR_TEST_UTILS=1 \
-	-SKNX_NO_SIMD \
-	-SK_FORCE_8_BYTE_ALIGNMENT \
-))
+# $(eval $(call gb_Library_add_defs,skia,\
+#     -SK_ALLOW_STATIC_GLOBAL_INITIALIZERS=1 \
+#     -GR_TEST_UTILS=1 \
+# 	-SKNX_NO_SIMD \
+# 	-SK_FORCE_8_BYTE_ALIGNMENT \
+# ))
 endif
 
 
