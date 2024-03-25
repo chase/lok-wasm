@@ -51,6 +51,7 @@ are the same.
 #define SK_ASSUME_GL_ES 0
 
 #define SK_ENABLE_SKSL 1
+#define SK_CPU_SSE_LEVEL 0
 
 // See https://codereview.chromium.org/2089583002 . This makes raster drawing
 // faster in some cases, it was made conditional because of some tests failing,
@@ -66,13 +67,14 @@ are the same.
 // controls whether to build with or without optimizations (set in Makefile).
 #ifdef DBG_UTIL
 
-#define SK_DEBUG
 
-#define SK_ENABLE_DUMP_GPU
 
 #else
+#define SK_DEBUG
 
-#define SK_RELEASE
+/* #define SK_ENABLE_DUMP_GPU */
+
+/* #define SK_RELEASE */
 
 #endif // DBG_UTIL
 

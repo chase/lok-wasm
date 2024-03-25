@@ -8,7 +8,7 @@
 #
 
 
-$(info BUILDING_SKIA, OS = $(OS), ENABLE_SKIA_DEBUG = $(ENABLE_SKIA_DEBUG), SKIA_GPU= $(SKIA_GPU))
+$(info BUILDING_SKIA, OS = $(OS), ENABLE_SKIA_DEBUG = $(ENABLE_SKIA_DEBUG), SKIA_GPU= $(SKIA_GPU), DISABLE_GUI= $(DISABLE_GUI))
 
 $(eval $(call gb_Library_Library,skia))
 
@@ -118,6 +118,7 @@ $(eval $(call gb_Library_set_include,skia,\
     -I$(call gb_UnpackedTarball_get_dir,skia)/include/third_party/skcms/ \
     -I$(call gb_UnpackedTarball_get_dir,skia)/third_party/vulkanmemoryallocator/ \
     -I$(call gb_UnpackedTarball_get_dir,skia)/include/third_party/vulkan/ \
+    -I$(call gb_UnpackedTarball_get_dir,skia)/include/core/ \
     -I$(SRCDIR)/external/skia/inc/ \
 ))
 
@@ -914,9 +915,13 @@ $(eval $(call gb_Library_add_generated_exception_objects,skia,\
         $(LO_SKIA_AVOID_INLINE_COPIES) \
 ))
 
+# Don't need glx window context creation for web 
+ifneq ($(OS),EMSCRIPTEN)
 $(eval $(call gb_Library_add_generated_exception_objects,skia,\
     UnpackedTarball/skia/tools/sk_app/WindowContext \
+    UnpackedTarball/skia/tools/sk_app/unix/RasterWindowContext_unix \
 ))
+endif
 
 ifeq ($(OS),WNT)
 $(eval $(call gb_Library_add_generated_exception_objects,skia,\
@@ -935,10 +940,6 @@ $(eval $(call gb_Library_add_generated_exception_objects,skia,\
     UnpackedTarball/skia/src/utils/win/SkDWriteGeometrySink \
     UnpackedTarball/skia/src/utils/win/SkHRESULT \
     UnpackedTarball/skia/src/utils/win/SkIStream \
-))
-
-$(eval $(call gb_Library_add_generated_exception_objects,skia,\
-    UnpackedTarball/skia/tools/sk_app/win/RasterWindowContext_win \
 ))
 
 ifeq ($(SKIA_GPU),VULKAN)
@@ -1014,9 +1015,6 @@ $(eval $(call gb_Library_add_generated_exception_objects,skia,\
     UnpackedTarball/skia/src/ports/SkOSLibrary_posix \
 ))
 
-$(eval $(call gb_Library_add_generated_exception_objects,skia,\
-    UnpackedTarball/skia/tools/sk_app/unix/RasterWindowContext_unix \
-))
 ifeq ($(SKIA_GPU),VULKAN)
 $(eval $(call gb_Library_add_generated_exception_objects,skia,\
     UnpackedTarball/skia/tools/sk_app/unix/VulkanWindowContext_unix \

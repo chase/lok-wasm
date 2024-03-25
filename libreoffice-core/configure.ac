@@ -7914,6 +7914,7 @@ CXXFLAGS_INTRINSICS_AVX512F=
 CXXFLAGS_INTRINSICS_F16C=
 CXXFLAGS_INTRINSICS_FMA=
 
+AC_MSG_CHECKING(WASM OS "$_os")
 # MACRO: add WASM SIMD support {
 if test "$_os" = Emscripten; then
     flag_sse2="-msse2 -msimd128"
@@ -7932,7 +7933,7 @@ elif test "$GCC" = "yes" -o "$COM_IS_CLANG" = TRUE; then
     flag_sse2=-msse2
     flag_ssse3=-mssse3
     flag_sse41=-msse4.1
-    flag_sse42=-msse4.2
+    # flag_sse42=-msse4.2
     flag_avx=-mavx
     flag_avx2=-mavx2
     flag_avx512="-mavx512f -mavx512vl -mavx512bw -mavx512dq -mavx512cd"
@@ -12193,8 +12194,10 @@ if test "$enable_skia" != "no" -a "$build_skia" = "yes"; then
         AC_DEFINE(SK_GL,1)
         SKIA_GPU=GL
         AC_SUBST(SKIA_GPU)
-
-        # Use the internal FreeType for Emscripten
+        AC_CHECK_LIB(GL, glBegin, [:], AC_MSG_ERROR([libGL required.]))
+        AC_DEFINE(HAVE_FEATURE_OPENGL,1)
+        ENABLE_OPENGL_CANVAS=TRUE
+        DISABLE_GUI=TRUE
         SYSTEM_FREETYPE=TRUE
     else
         if test -z "$DISABLE_GUI"; then
@@ -12345,7 +12348,7 @@ if test "$ENABLE_SKIA" = TRUE -a "$COM_IS_CLANG" != TRUE; then
         flag_sse2=-msse2
         flag_ssse3=-mssse3
         flag_sse41=-msse4.1
-        flag_sse42=-msse4.2
+        # flag_sse42=-msse4.2
         flag_avx=-mavx
         flag_avx2=-mavx2
         flag_avx512="-mavx512f -mavx512vl -mavx512bw -mavx512dq -mavx512cd"
@@ -12419,7 +12422,7 @@ if test "$ENABLE_SKIA" = TRUE -a "$COM_IS_CLANG" != TRUE; then
         AC_MSG_CHECKING([whether $CXX can compile SSE4.2 intrinsics])
         AC_LANG_PUSH([C++])
         save_CXXFLAGS=$CXXFLAGS
-        CXXFLAGS="$CXXFLAGS $flag_sse42"
+        # CXXFLAGS="$CXXFLAGS $flag_sse42"
         AC_COMPILE_IFELSE([AC_LANG_SOURCE([
             #include <nmmintrin.h>
             int main () {

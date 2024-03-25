@@ -34,9 +34,9 @@
 #include <svdata.hxx>
 #include <comphelper/lok.hxx>
 #include <comphelper/profilezone.hxx>
-#if HAVE_FEATURE_OPENGL
-#include <vcl/opengl/OpenGLHelper.hxx>
-#endif
+/* #if HAVE_FEATURE_OPENGL */
+/* #include <vcl/opengl/OpenGLHelper.hxx> */
+/* #endif */
 
 // PaintBufferGuard
 
@@ -275,10 +275,10 @@ void PaintHelper::DoPaint(const vcl::Region* pRegion)
     if (pWindowImpl->maInvalidateRegion.IsEmpty())
         return;
 
-#if HAVE_FEATURE_OPENGL
-    VCL_GL_INFO("PaintHelper::DoPaint on " <<
-                typeid( *m_pWindow ).name() << " '" << m_pWindow->GetText() << "' begin");
-#endif
+/* #if HAVE_FEATURE_OPENGL */
+/*     VCL_GL_INFO("PaintHelper::DoPaint on " << */
+/*                 typeid( *m_pWindow ).name() << " '" << m_pWindow->GetText() << "' begin"); */
+/* #endif */
     // double-buffering: setup the buffer if it does not exist
     if (!pFrameData->mbInBufferedPaint && m_pWindow->SupportsDoubleBuffering())
         StartBufferedPaint();
@@ -312,10 +312,10 @@ void PaintHelper::DoPaint(const vcl::Region* pRegion)
         m_pWindow->PushPaintHelper(this, *m_pWindow->GetOutDev());
         m_pWindow->Paint(*m_pWindow->GetOutDev(), m_aPaintRect);
     }
-#if HAVE_FEATURE_OPENGL
-    VCL_GL_INFO("PaintHelper::DoPaint end on " <<
-                typeid( *m_pWindow ).name() << " '" << m_pWindow->GetText() << "'");
-#endif
+/* #if HAVE_FEATURE_OPENGL */
+/*     VCL_GL_INFO("PaintHelper::DoPaint end on " << */
+/*                 typeid( *m_pWindow ).name() << " '" << m_pWindow->GetText() << "'"); */
+/* #endif */
 }
 
 namespace vcl

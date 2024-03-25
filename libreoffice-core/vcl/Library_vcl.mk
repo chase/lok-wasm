@@ -35,11 +35,23 @@ else
 $(eval $(call gb_Library_add_componentimpl,vcl,unx))
 endif
 
+ifeq ($(OS),EMSCRIPTEN)
+	HEADLESS_EMSCRIPTEN += EMSCRIPTEN 
+endif
+
+ifeq ($(DISABLE_GUI),TRUE)
+	HEADLESS_EMSCRIPTEN += _DISABLE_GUI 
+endif
+
 $(eval $(call gb_Library_set_precompiled_header,vcl,vcl/inc/pch/precompiled_vcl))
 
 $(eval $(call gb_Library_set_include,vcl,\
     $$(INCLUDE) \
     -I$(SRCDIR)/vcl/inc \
+))
+
+$(eval $(call gb_Library_use_externals,vcl,\
+	skia \
 ))
 
 $(eval $(call gb_Library_add_defs,vcl,\
@@ -98,8 +110,8 @@ $(eval $(call gb_Library_use_externals,vcl,\
 ))
 
 $(eval $(call gb_Library_add_exception_objects,vcl,\
-    vcl/source/rendercontext/drawmode \
     vcl/skia/SkiaHelper \
+    vcl/source/rendercontext/drawmode \
     vcl/source/animate/Animation \
     vcl/source/animate/AnimationFrame \
     vcl/source/animate/AnimationRenderer \
@@ -109,8 +121,8 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/printer/QueueInfo \
     vcl/source/window/bubblewindow \
     vcl/source/window/errinf \
-    vcl/source/window/settings \
     vcl/source/window/paint \
+    vcl/source/window/settings \
     vcl/source/window/abstdlg \
     vcl/source/window/accel \
     vcl/source/window/accmgr \
@@ -594,14 +606,19 @@ $(eval $(call gb_Library_add_libs,vcl,\
 endif # USING_X11
 
 
+$(info BUILDING_VCL, OS = $(OS), DISABLE_GUI= $(DISABLE_GUI))
 ifeq ($(DISABLE_GUI),TRUE)
 $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/headless/headlessinst \
+	vcl/skia/salbmp \
+	vcl/skia/zone \
+	vcl/skia/gdiimpl \
 ))
 
 else # !DISABLE_GUI
 
 $(eval $(call gb_Library_add_exception_objects,vcl,\
+
     vcl/source/opengl/OpenGLContext \
     vcl/source/opengl/OpenGLHelper \
     $(if $(filter SKIA,$(BUILD_TYPE)), \

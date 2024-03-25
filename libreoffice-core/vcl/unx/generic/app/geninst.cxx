@@ -27,9 +27,9 @@
 #endif
 
 #include <config_features.h>
-#if HAVE_FEATURE_OPENGL
-#include <vcl/opengl/OpenGLContext.hxx>
-#endif
+/* #if HAVE_FEATURE_OPENGL */
+/* #include <vcl/opengl/OpenGLContext.hxx> */
+/* #endif */
 #include <unx/geninst.h>
 #include <o3tl/string_view.hxx>
 
@@ -37,9 +37,9 @@
 
 SalYieldMutex::SalYieldMutex()
 {
-#if HAVE_FEATURE_OPENGL
-    SetBeforeReleaseHandler( &OpenGLContext::prepareForYield );
-#endif
+/* #if HAVE_FEATURE_OPENGL */
+/*     SetBeforeReleaseHandler( &OpenGLContext::prepareForYield ); */
+/* #endif */
 }
 
 SalYieldMutex::~SalYieldMutex()

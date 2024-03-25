@@ -2511,7 +2511,7 @@ void SAL_CALL VCLXToolkit::processEventsToIdle()
 sal_Int64 SAL_CALL VCLXToolkit::getOpenGLBufferSwapCounter()
 {
 #if HAVE_FEATURE_OPENGL
-    return OpenGLWrapper::getBufferSwapCounter();
+    return getOpenGLBufferSwapCounter();
 #else
     return 0;
 #endif
