@@ -124,9 +124,9 @@ void WatchdogThread::execute()
             continue;
 #endif
 
-/* #if HAVE_FEATURE_OPENGL */
-/*         WatchdogHelper<OpenGLZone>::check(); */
-/* #endif */
+#if HAVE_FEATURE_OPENGL
+        WatchdogHelper<OpenGLZone>::check();
+#endif
 #if HAVE_FEATURE_SKIA
         WatchdogHelper<SkiaZone>::check();
 #endif
