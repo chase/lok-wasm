@@ -12195,7 +12195,6 @@ if test "$enable_skia" != "no" -a "$build_skia" = "yes"; then
         SKIA_GPU=GL
         AC_SUBST(SKIA_GPU)
         AC_CHECK_LIB(GL, glBegin, [:], AC_MSG_ERROR([libGL required.]))
-        AC_DEFINE(HAVE_FEATURE_OPENGL,1)
         ENABLE_OPENGL_CANVAS=TRUE
         DISABLE_GUI=TRUE
         SYSTEM_FREETYPE=TRUE

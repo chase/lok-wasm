@@ -610,6 +610,9 @@ $(info BUILDING_VCL, OS = $(OS), DISABLE_GUI= $(DISABLE_GUI))
 ifeq ($(DISABLE_GUI),TRUE)
 $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/headless/headlessinst \
+	vcl/skia/salbmp \
+	vcl/skia/zone \
+	vcl/skia/gdiimpl \
 ))
 
 else # !DISABLE_GUI
