@@ -861,19 +861,6 @@ $(eval $(call gb_Library_add_generated_exception_objects,skia,\
 endif
 endif
 
-ifeq ($(OS), EMSCRIPTEN)
-$(info USING EMSCRIPTEN SPECIFIC BUILD CONFIG)
-$(eval $(call gb_Library_add_generated_exception_objects,skia,\
-))
-# $(eval $(call gb_Library_add_defs,skia,\
-#     -SK_ALLOW_STATIC_GLOBAL_INITIALIZERS=1 \
-#     -GR_TEST_UTILS=1 \
-# 	-SKNX_NO_SIMD \
-# 	-SK_FORCE_8_BYTE_ALIGNMENT \
-# ))
-endif
-
-
 $(eval $(call gb_Library_add_generated_exception_objects,skia,\
     UnpackedTarball/skia/src/ports/SkGlobalInitialization_default \
     UnpackedTarball/skia/src/ports/SkImageGenerator_none \

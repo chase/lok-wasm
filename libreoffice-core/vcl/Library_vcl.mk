@@ -44,6 +44,7 @@ ifeq ($(DISABLE_GUI),TRUE)
 endif
 
 $(eval $(call gb_Library_set_precompiled_header,vcl,vcl/inc/pch/precompiled_vcl))
+$(eval $(call gb_Library_set_precompiled_header,vcl,external/skia/inc/pch/precompiled_skia))
 
 $(eval $(call gb_Library_set_include,vcl,\
     $$(INCLUDE) \
