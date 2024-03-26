@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "lib/wasm_extensions.hxx"
 #include <map>
 #include <unordered_map>
 #include <memory>
@@ -244,7 +245,8 @@ namespace desktop {
         TimeoutIdle m_TimeoutIdle;
     };
 
-    struct DESKTOP_DLLPUBLIC LibLODocument_Impl : public _LibreOfficeKitDocument
+    // MACRO: Allow direct LOK extensions for WASM
+    struct DESKTOP_DLLPUBLIC LibLODocument_Impl : public WasmDocumentExtension
     {
         css::uno::Reference<css::lang::XComponent> mxComponent;
         std::shared_ptr< LibreOfficeKitDocumentClass > m_pDocumentClass;

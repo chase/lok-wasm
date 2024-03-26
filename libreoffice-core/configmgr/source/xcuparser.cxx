@@ -32,6 +32,7 @@
 #include <sal/log.hxx>
 #include <xmlreader/span.hxx>
 #include <xmlreader/xmlreader.hxx>
+#include <emscripten/bind.h>
 
 #include "data.hxx"
 #include "localizedpropertynode.hxx"
@@ -48,6 +49,10 @@
 #include "xmldata.hxx"
 
 namespace configmgr {
+
+/// MACRO: allow runtime switching of accelerators based on OS {
+static bool g_isMacOs = false;
+/// MACRO: }
 
 XcuParser::XcuParser(
     int layer, Data & data, Partial const * partial,
@@ -286,10 +291,12 @@ void XcuParser::handleComponentData(xmlreader::XmlReader & reader) {
         data_.getComponents().findNode(valueParser_.getLayer(),
                                        componentName_));
     if (!node.is()) {
+                /** MACRO: not helpful
         SAL_WARN(
             "configmgr",
             "unknown component \"" << componentName_ << "\" in \""
                 << reader.getUrl() << '"');
+                    */
         state_.push(State::Ignore(true));
         return;
     }
@@ -445,6 +452,8 @@ void XcuParser::handleLocpropValue(
     bool nil = false;
     OString separator;
     Operation op = OPERATION_FUSE;
+    constexpr OUStringLiteral OS_MACOSX = u"macosx";
+    constexpr OUStringLiteral OS_UNXWNT = u"unxwnt";
     for (;;) {
         int attrNsId;
         xmlreader::Span attrLn;
@@ -482,7 +491,19 @@ void XcuParser::handleLocpropValue(
                    attrLn == "op")
         {
             op = parseOperation(reader.getAttributeValue(true));
+/// MACRO: allow runtime switching of accelerators based on OS {
+        } else if (attrNsId == ParseManager::NAMESPACE_OOR &&
+                   attrLn == "os")
+        {
+            // platform mismatch, ignore this value
+            if ((reader.getAttributeValue(false).convertFromUtf8() == OS_MACOSX && !g_isMacOs) ||
+                (reader.getAttributeValue(false).convertFromUtf8() == OS_UNXWNT && g_isMacOs)
+            ) {
+                state_.push(State::Ignore(true));
+                return;
+            };
         }
+/// MACRO: }
     }
     if (trackPath_) {
         path_.push_back(name);
@@ -898,10 +919,12 @@ void XcuParser::handleSetNode(xmlreader::XmlReader & reader, SetNode * set) {
     switch (op) {
     case OPERATION_MODIFY:
         if (i == members.end()) {
+                /** MACRO: not helpful
             SAL_WARN(
                 "configmgr",
                 "ignoring modify of unknown set member node \"" << name
                     << "\" in \"" << reader.getUrl() << '"');
+                    */
             state_.push(State::Ignore(true));
         } else {
             state_.push(State::Modify(i->second));
@@ -963,6 +986,16 @@ void XcuParser::recordModification(bool addition) {
     }
 }
 
+/// MACRO: allow runtime switching of accelerators based on OS {
+// static
+void setIsMacOSForConfig() {
+    g_isMacOs = true;
+}
+
+EMSCRIPTEN_BINDINGS(xcuparser) {
+    emscripten::function("setIsMacOSForConfig", &setIsMacOSForConfig);
+}
+/// MACRO: }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -17,6 +17,7 @@ $(eval $(call gb_UnpackedTarball_add_patches,fontconfig,\
 	external/fontconfig/fontconfig-2.12.1.patch.1 \
 	external/fontconfig/ubsan.patch \
 	external/fontconfig/libfontconfig-bundled-soname.patch.0 \
+	$(if $(filter EMSCRIPTEN,$(OS)),external/fontconfig/fontconfig-no-atomic-lock.patch.1) \
 ))
 
 # vim: set noet sw=4 ts=4:

@@ -15,6 +15,8 @@ include $(GBUILDDIR)/platform/unxgcc.mk
 gb_EMSCRIPTEN_PRE_JS_FILES = \
     $(SRCDIR)/static/emscripten/environment.js \
     $(call gb_CustomTarget_get_workdir,static/emscripten_fs_image)/soffice.data.js.link \
+    $(call gb_CustomTarget_get_workdir,static/emscripten_fs_image)/soffice_fonts.data.js.link \
+    $(SRCDIR)/static/emscripten/soffice_fccache_loader.js \
 
 gb_RUN_CONFIGURE := $(SRCDIR)/solenv/bin/run-configure
 # avoid -s SAFE_HEAP=1 - c.f. gh#8584 this breaks source maps
@@ -22,15 +24,17 @@ gb_EMSCRIPTEN_CPPFLAGS := -pthread -s USE_PTHREADS=1 -D_LARGEFILE64_SOURCE -D_LA
 gb_EMSCRIPTEN_LDFLAGS := $(gb_EMSCRIPTEN_CPPFLAGS)
 
 # Initial memory size and worker thread pool
-gb_EMSCRIPTEN_LDFLAGS += -s TOTAL_MEMORY=1GB -s PTHREAD_POOL_SIZE=4
+gb_EMSCRIPTEN_LDFLAGS += -s INITIAL_MEMORY=2GB -s PTHREAD_POOL_SIZE=6
 
 # To keep the link time (and memory) down, prevent all rewriting options from wasm-emscripten-finalize
 # See emscripten.py, finalize_wasm, modify_wasm = True
 # So we need WASM_BIGINT=1 and ASSERTIONS=1 (2 implies STACK_OVERFLOW_CHECK)
-gb_EMSCRIPTEN_LDFLAGS += --bind -s FORCE_FILESYSTEM=1 -s WASM_BIGINT=1 -s ERROR_ON_UNDEFINED_SYMBOLS=1 -s FETCH=1 -s ASSERTIONS=1 -s EXIT_RUNTIME=0 -s EXPORTED_RUNTIME_METHODS=["UTF16ToString","stringToUTF16","UTF8ToString","allocateUTF8","printErr","ccall","cwrap"]
+gb_EMSCRIPTEN_LDFLAGS += -lembind -s FORCE_FILESYSTEM=1 -s WASM_BIGINT=1 -s ERROR_ON_UNDEFINED_SYMBOLS=1 -s FETCH=1 -s ASSERTIONS=1 -s EXIT_RUNTIME=0 -s EXPORTED_RUNTIME_METHODS=["UTF16ToString","stringToUTF16","UTF8ToString","allocateUTF8","err"]
 gb_EMSCRIPTEN_QTDEFS := -DQT_NO_LINKED_LIST -DQT_NO_JAVA_STYLE_ITERATORS -DQT_NO_EXCEPTIONS -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB
 
-gb_Executable_EXT := .html
+gb_EMSCRIPTEN_LDFLAGS += -s MINIMAL_RUNTIME_STREAMING_WASM_INSTANTIATION=1
+
+gb_Executable_EXT := .mjs
 ifeq ($(ENABLE_WASM_EXCEPTIONS),TRUE)
 # Note that to really use WASM exceptions everywhere, you most probably want to also use
 # CC=emcc -pthread -s USE_PTHREADS=1 -fwasm-exceptions -s SUPPORT_LONGJMP=wasm
@@ -83,8 +87,7 @@ define gb_Executable_Executable_platform
 $(call gb_LinkTarget_add_auxtargets,$(2),\
         $(patsubst %.lib,%.linkdeps,$(3)) \
         $(patsubst %.lib,%.wasm,$(3)) \
-        $(patsubst %.lib,%.js,$(3)) \
-        $(patsubst %.lib,%.worker.js,$(3)) \
+        $(patsubst %.lib,%.worker.mjs,$(3)) \
 )
 
 $(foreach pre_js,$(gb_EMSCRIPTEN_PRE_JS_FILES),$(call gb_Executable_add_prejs,$(1),$(pre_js)))
@@ -95,8 +98,7 @@ define gb_CppunitTest_CppunitTest_platform
 $(call gb_LinkTarget_add_auxtargets,$(2),\
         $(patsubst %.lib,%.linkdeps,$(3)) \
         $(patsubst %.lib,%.wasm,$(3)) \
-        $(patsubst %.lib,%.js,$(3)) \
-        $(patsubst %.lib,%.worker.js,$(3)) \
+        $(patsubst %.lib,%.worker.mjs,$(3)) \
 )
 
 $(foreach pre_js,$(gb_EMSCRIPTEN_PRE_JS_FILES),$(call gb_CppunitTest_add_prejs,$(1),$(pre_js)))

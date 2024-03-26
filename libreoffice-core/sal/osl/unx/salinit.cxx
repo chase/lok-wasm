@@ -20,14 +20,7 @@
 #include <config_features.h>
 
 #include <sal/config.h>
-
-#if defined MACOSX
-#include <cassert>
-#include <limits>
-#include <unistd.h>
-#include <sys/stat.h>
-#endif
-
+// MACRO: use console.log/warn
 #include <config_global.h>
 #include <osl/process.h>
 #include <sal/main.h>
@@ -35,13 +28,7 @@
 
 #include "saltime.hxx"
 #include "soffice.hxx"
-#include <salusesyslog.hxx>
-
-#if HAVE_SYSLOG_H
-#include <stdlib.h>
-#include <string.h>
-#include <syslog.h>
-#endif
+// MACRO: use console.log/warn
 
 extern "C" {
 
@@ -81,12 +68,7 @@ void sal_detail_initialize(int argc, char ** argv) {
     }
 #endif
     sal_initGlobalTimer();
-#if HAVE_SYSLOG_H
-    const char *use_syslog = getenv("SAL_LOG_SYSLOG");
-    sal_use_syslog = use_syslog != nullptr && !strcmp(use_syslog, "1");
-    if (sal_use_syslog)
-        openlog("libreoffice", 0, LOG_USER);
-#endif
+// MACRO: use console.log/warn
 
     osl_setCommandArgs(argc, argv);
 }

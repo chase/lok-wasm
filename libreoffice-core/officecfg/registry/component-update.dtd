@@ -69,6 +69,7 @@
         #IMPLIED
     oor:separator CDATA #IMPLIED
     oor:external CDATA #IMPLIED
+    oor:os CDATA #IMPLIED
     install:module CDATA #IMPLIED>
     <!-- xml:lang  must only be used for localized properties; defaults to the
              empty string

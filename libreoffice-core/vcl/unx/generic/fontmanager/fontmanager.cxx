@@ -19,6 +19,9 @@
 
 #include <memory>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <osl/thread.h>
 
 #include <unx/fontmanager.hxx>
@@ -192,8 +195,10 @@ std::vector<PrintFontManager::PrintFont> PrintFontManager::analyzeFontFile( int 
     else
     {
         // #i1872# reject unreadable files
-        if( access( aFullPath.getStr(), R_OK ) )
-            return aNewFonts;
+        // MACRO: This is slow and redundant to the code below {
+        // if( access( aFullPath.getStr(), R_OK ) )
+        //     return aNewFonts;
+        // }
 
         bSupported = false;
         if (pFormat)
@@ -224,22 +229,11 @@ std::vector<PrintFontManager::PrintFont> PrintFontManager::analyzeFontFile( int 
             if (!bHack)
             {
                 sal_uInt64 fileSize = 0;
-
-                OUString aURL;
-                if (osl::File::getFileURLFromSystemPath(OStringToOUString(aFullPath, osl_getThreadTextEncoding()),
-                    aURL) == osl::File::E_None)
+                // MACRO: Just use stat, that checks if the file exists and retrieves the file without a lock
+                struct stat statbuf;
+                if (stat(aFullPath.getStr(), &statbuf) >= 0)
                 {
-                    osl::File aFile(aURL);
-                    if (aFile.open(osl_File_OpenFlag_Read | osl_File_OpenFlag_NoLock) == osl::File::E_None)
-                    {
-                        osl::DirectoryItem aItem;
-                        if (osl::DirectoryItem::get(aURL, aItem) == osl::File::E_None)
-                        {
-                            osl::FileStatus aFileStatus( osl_FileStatus_Mask_FileSize );
-                            if (aItem.getFileStatus(aFileStatus) == osl::File::E_None)
-                                fileSize = aFileStatus.getFileSize();
-                        }
-                    }
+                    fileSize = statbuf.st_size;
                 }
 
                 //Feel free to calc the exact max possible number of fonts a file

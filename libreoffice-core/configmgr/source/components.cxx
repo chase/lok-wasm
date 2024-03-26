@@ -169,17 +169,19 @@ private:
     std::shared_ptr<osl::Mutex> lock_;
 };
 
+/// MACRO: We make this a no-op because all changes to config are ephemeral {
 Components::WriteThread::WriteThread(
     rtl::Reference< WriteThread > * reference, Components & components,
     OUString url, Data const & data):
     Thread("configmgrWriter"), reference_(reference), components_(components),
     url_(std::move(url)), data_(data),
-    lock_( lock() )
+    lock_( /* lock() */ )
 {
     assert(reference != nullptr);
 }
 
 void Components::WriteThread::execute() {
+    /*
     delay_.wait(std::chrono::seconds(1)); // must not throw; result_error is harmless and ignored
     osl::MutexGuard g(*lock_); // must not throw
     try {
@@ -193,8 +195,11 @@ void Components::WriteThread::execute() {
         reference_->clear();
         throw;
     }
+    */
     reference_->clear();
 }
+
+// MACRO: }
 
 Components & Components::getSingleton(
     css::uno::Reference< css::uno::XComponentContext > const & context)
@@ -271,8 +276,9 @@ void Components::addModification(std::vector<OUString> const & path) {
     data_.modifications.add(path);
 }
 
+/// MACRO: We make this a no-op because all changes to config are ephemeral {
 void Components::writeModifications() {
-
+/*
     if (data_.modifications.empty())
         return;
 
@@ -292,9 +298,11 @@ void Components::writeModifications() {
 #endif
         break;
     }
+*/
 }
 
 void Components::flushModifications() {
+    /*
     rtl::Reference< WriteThread > thread;
     {
         osl::MutexGuard g(*lock_);
@@ -304,7 +312,9 @@ void Components::flushModifications() {
         thread->flush();
         thread->join();
     }
+    */
 }
+// MACRO: }
 
 void Components::insertExtensionXcsFile(
     bool shared, OUString const & fileUri)

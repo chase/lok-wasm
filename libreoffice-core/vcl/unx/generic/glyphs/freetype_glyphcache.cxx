@@ -128,6 +128,19 @@ bool FreetypeFontFile::Map()
             return false;
         }
         mnFileSize = aStat.st_size;
+        // MACRO: Disable mmap/munmap use because it's slow and breaks things in WASM {
+#if defined(__EMSCRIPTEN__)
+        mpFileMap = static_cast<sal_uInt8 *>(malloc(mnFileSize));
+        if (mpFileMap == nullptr) {
+            SAL_WARN("vcl.unx.freetype", "font file " << maNativeFileName << " malloc fail");
+        }
+
+        if (read(nFile, mpFileMap, mnFileSize) != mnFileSize) {
+            SAL_WARN("vcl.unx.freetype", "font file " << maNativeFileName << " read fail");
+            free(mpFileMap);
+            mpFileMap = nullptr;
+        }
+#else
         mpFileMap = static_cast<unsigned char*>(
             mmap( nullptr, mnFileSize, PROT_READ, MAP_SHARED, nFile, 0 ));
         if( mpFileMap == MAP_FAILED )
@@ -137,6 +150,7 @@ bool FreetypeFontFile::Map()
         }
         else
             SAL_INFO("vcl.unx.freetype", "mmap'ed '" << maNativeFileName << "' successfully");
+#endif
         close( nFile );
     }
 
@@ -150,7 +164,12 @@ void FreetypeFontFile::Unmap()
     assert(mnRefCount >= 0 && "how did this go negative\n");
     if (mpFileMap)
     {
+    // MACRO: Disable mmap/munmap use because it's slow and breaks things in WASM {
+#if defined(__EMSCRIPTEN__)
+        free(mpFileMap);
+#else
         munmap(mpFileMap, mnFileSize);
+#endif
         mpFileMap = nullptr;
     }
 }

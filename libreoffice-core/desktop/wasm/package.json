@@ -1,0 +1,23 @@
+{
+  "name": "@macro-inc/lok",
+  "version": "%PRODUCTVERSION%",
+  "description": "Macro's fork of LibreOfficeKit for WASM",
+  "main": "index.js",
+  "type": "module",
+  "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/coparse-inc/lok-wasm.git"
+  },
+  "author": "Macro",
+  "license": "MPL-2.0",
+  "bugs": {
+    "url": "https://github.com/coparse-inc/libreofficekit/issues"
+  },
+  "homepage": "https://github.com/coparse-inc/libreofficekit#readme",
+  "private": true,
+  "devDependencies": {
+    "@types/emscripten": "^1.39.10",
+    "typescript": "^5.3.3"
+  }
+}

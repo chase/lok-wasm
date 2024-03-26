@@ -1148,10 +1148,29 @@ SFErrCodes OpenTTFontFile(const char* fname, sal_uInt32 facenum, TrueTypeFont** 
         goto cleanup;
     }
 
+    // MACRO: Disable mmap/munmap use because it's slow and breaks things in WASM {
+#if defined(__EMSCRIPTEN__)
+    (*ttf)->ptr = static_cast<sal_uInt8 *>(malloc((*ttf)->fsize));
+    if ((*ttf)->ptr == nullptr) {
+        SAL_WARN("vcl.fonts", "font file " << fname << " malloc fail");
+        ret = SFErrCodes::Memory;
+        goto cleanup;
+    }
+
+    if (read(fd, (*ttf)->ptr, (*ttf)->fsize) != (*ttf)->fsize) {
+        SAL_WARN("vcl.fonts", "font file " << fname << " read fail");
+        free((*ttf)->ptr);
+        (*ttf)->ptr = nullptr;
+        ret = SFErrCodes::FileIo;
+        goto cleanup;
+    }
+#else
     if (((*ttf)->ptr = static_cast<sal_uInt8 *>(mmap(nullptr, (*ttf)->fsize, PROT_READ, MAP_SHARED, fd, 0))) == MAP_FAILED) {
         ret = SFErrCodes::Memory;
         goto cleanup;
     }
+#endif
+    // MACRO: }
 
     ret = (*ttf)->open(facenum);
 
@@ -1159,6 +1178,7 @@ cleanup:
     if (fd != -1) close(fd);
     if (ret != SFErrCodes::Ok)
     {
+        SAL_WARN("vcl.fonts", "font file " << fname << " face open fail");
         delete *ttf;
         *ttf = nullptr;
     }
@@ -1226,7 +1246,11 @@ TrueTypeFont::~TrueTypeFont()
 {
 #if !defined(_WIN32)
     if (!fileName().empty())
+#if defined(__EMSCRIPTEN__)
+        free(ptr);
+#else
         munmap(ptr, fsize);
+#endif
 #endif
 }
 

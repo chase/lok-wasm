@@ -24,17 +24,21 @@ gb_emscripten_fs_image_filelists :=
 # in soffice.data.js.metadata after the image generation or manually add additional
 # commandline entries to the file_packager.py call.
 #
+
+# MACRO: Unused files {
+    # $(INSTROOT)/$(LIBO_BIN_FOLDER)/intro-highres.png \
+    # $(INSTROOT)/$(LIBO_BIN_FOLDER)/intro.png \
+    # $(INSTROOT)/$(LIBO_BIN_FOLDER)/shell/about.svg \
+    # $(INSTROOT)/$(LIBO_BIN_FOLDER)/shell/logo_inverted.svg \
+    # $(INSTROOT)/$(LIBO_BIN_FOLDER)/shell/logo-sc_inverted.svg \
+    # $(INSTROOT)/$(LIBO_BIN_FOLDER)/shell/logo-sc.svg \
+    # $(INSTROOT)/$(LIBO_BIN_FOLDER)/shell/logo.svg \
+# MACRO: }
+
 gb_emscripten_fs_image_files := \
     $(call gb_UnoApi_get_target,offapi) \
     $(call gb_UnoApi_get_target,oovbaapi) \
     $(call gb_UnoApi_get_target,udkapi) \
-    $(INSTROOT)/$(LIBO_BIN_FOLDER)/intro-highres.png \
-    $(INSTROOT)/$(LIBO_BIN_FOLDER)/intro.png \
-    $(INSTROOT)/$(LIBO_BIN_FOLDER)/shell/about.svg \
-    $(INSTROOT)/$(LIBO_BIN_FOLDER)/shell/logo_inverted.svg \
-    $(INSTROOT)/$(LIBO_BIN_FOLDER)/shell/logo-sc_inverted.svg \
-    $(INSTROOT)/$(LIBO_BIN_FOLDER)/shell/logo-sc.svg \
-    $(INSTROOT)/$(LIBO_BIN_FOLDER)/shell/logo.svg \
     $(INSTROOT)/$(LIBO_ETC_FOLDER)/$(call gb_Helper_get_rcfile,bootstrap) \
     $(INSTROOT)/$(LIBO_ETC_FOLDER)/$(call gb_Helper_get_rcfile,fundamental) \
     $(INSTROOT)/$(LIBO_ETC_FOLDER)/$(call gb_Helper_get_rcfile,louno) \
@@ -1384,7 +1388,6 @@ gb_emscripten_fs_image_files += \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/config/wizard/form/styles/red.css \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/config/wizard/form/styles/violet.css \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/config/wizard/form/styles/water.css \
-    $(INSTROOT)/$(LIBO_SHARE_FOLDER)/fonts/truetype/fc_local.conf \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/gallery/fontwork.sdg \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/gallery/fontwork.sdv \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/gallery/fontwork.thm \
@@ -1412,8 +1415,6 @@ gb_emscripten_fs_image_files += \
     $(INSTROOT)/$(LIBO_SHARE_RESOURCE_FOLDER)/common/fonts/opens___.ttf \
     $(INSTROOT)/$(LIBO_URE_ETC_FOLDER)/$(call gb_Helper_get_rcfile,uno) \
     $(INSTROOT)/$(LIBO_URE_MISC_FOLDER)/services.rdb \
-    $(SRCDIR)/android/default-document/example.odt \
-	$(SRCDIR)/android/default-document/example_test.ods \
 
 ifneq ($(ENABLE_WASM_STRIP_CHART),TRUE)
 gb_emscripten_fs_image_files += \
@@ -1477,9 +1478,16 @@ endif # !ENABLE_WASM_STRIP_CHART
 $(foreach theme,$(WITH_THEMES), \
     $(eval gb_emscripten_fs_image_files += $(INSTROOT)/$(LIBO_SHARE_FOLDER)/config/images_$(theme).zip))
 
+# MACRO: Split out fonts to a separate build {
+gb_emscripten_fs_font_image_autoinstall :=
+
+gb_emscripten_fs_font_image_files := \
+    $(INSTROOT)/$(LIBO_SHARE_FOLDER)/fonts/truetype/fc_local.conf \
+
 ifeq ($(WITH_FONTS),TRUE)
-gb_emscripten_fs_image_autoinstall += $(call gb_AutoInstall_get_target,ooo_fonts)
+gb_emscripten_fs_font_image_autoinstall += $(call gb_AutoInstall_get_target,ooo_fonts)
 endif
+# MACRO: }
 
 gb_emscripten_fs_image_filelists += $(call gb_Package_get_target,liblangtag_data)
 gb_emscripten_fs_image_filelists += $(call gb_Package_get_target,fontconfig_data)
@@ -1495,6 +1503,8 @@ $(call gb_CustomTarget_get_target,static/emscripten_fs_image): \
     $(emscripten_fs_image_WORKDIR)/soffice.data \
     $(emscripten_fs_image_WORKDIR)/soffice.data.js.link \
     $(emscripten_fs_image_WORKDIR)/soffice.data.js.metadata \
+    $(emscripten_fs_image_WORKDIR)/soffice_fonts.data \
+    $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js.metadata \
 
 $(emscripten_fs_image_WORKDIR)/soffice.data $(emscripten_fs_image_WORKDIR)/soffice.data.js : $(emscripten_fs_image_WORKDIR)/soffice.data.js.metadata
 
@@ -1503,10 +1513,8 @@ $(emscripten_fs_image_WORKDIR)/soffice.data.js.link: $(emscripten_fs_image_WORKD
 	$(call gb_Helper_copy_if_different_and_touch,$^,$@)
 
 .PHONY: $(emscripten_fs_image_WORKDIR)/soffice.data.concat_lists
-$(emscripten_fs_image_WORKDIR)/soffice.data.concat_lists: $(gb_emscripten_fs_image_filelists) $(gb_emscripten_fs_image_autoinstall)
+$(emscripten_fs_image_WORKDIR)/soffice.data.concat_lists: $(gb_emscripten_fs_image_filelists)
 	$(shell cat $(gb_emscripten_fs_image_filelists) >> $@.tmp)
-	$(foreach list,$(shell sed -ne 's/PACKAGE_FILELIST.*,//' -e 's/.filelist.$$//p' $(gb_emscripten_fs_image_autoinstall)), \
-	    $(shell cat $(call gb_Package_get_target,$(list)) >> $@.tmp))
 	$(shell mv $@.tmp $@)
 
 gb_emscripten_fs_image_all_files = $(gb_emscripten_fs_image_files) $(shell cat $(emscripten_fs_image_WORKDIR)/soffice.data.concat_lists)
@@ -1525,7 +1533,35 @@ $(emscripten_fs_image_WORKDIR)/soffice.data.filelist: \
 # relative to $(BUILDDIR), so we won't run out of cmdline space that fast...
 $(emscripten_fs_image_WORKDIR)/soffice.data.js.metadata: $(emscripten_fs_image_WORKDIR)/soffice.data.filelist
 	$(call gb_Output_announce,$(subst $(BUILDDIR)/,,$(emscripten_fs_image_WORKDIR)/soffice.data),$(true),GEN,2)
-	$(EMSDK_FILE_PACKAGER) $(emscripten_fs_image_WORKDIR)/soffice.data --preload $(shell cat $^) --js-output=$(emscripten_fs_image_WORKDIR)/soffice.data.js --separate-metadata \
+	$(EMSDK_FILE_PACKAGER) $(emscripten_fs_image_WORKDIR)/soffice.data --preload $(shell cat $^) --js-output=$(emscripten_fs_image_WORKDIR)/soffice.data.js --separate-metadata --use-preload-cache \
 	    || rm -f $(emscripten_fs_image_WORKDIR)/soffice.data.js $(emscripten_fs_image_WORKDIR)/soffice.data $(emscripten_fs_image_WORKDIR)/soffice.data.js.metadata
+
+# MACRO: Split out fonts to a separate build {
+$(emscripten_fs_image_WORKDIR)/soffice_fonts.data $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js : $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js.metadata
+
+.PRECIOUS: $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js.link
+$(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js.link: $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js | $(emscripten_fs_image_WORKDIR)/soffice.data.js.link
+	$(call gb_Helper_copy_if_different_and_touch,$^,$@)
+
+.PHONY: $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.concat_lists
+$(emscripten_fs_image_WORKDIR)/soffice_fonts.data.concat_lists: $(gb_emscripten_fs_font_image_autoinstall) | $(gb_emscripten_fs_image_filelists)
+	$(foreach list,$(shell sed -ne 's/PACKAGE_FILELIST.*,//' -e 's/.filelist.$$//p' $(gb_emscripten_fs_font_image_autoinstall)), \
+	    $(shell cat $(call gb_Package_get_target,$(list)) >> $@.tmp))
+	$(shell mv $@.tmp $@)
+
+gb_emscripten_fs_font_image_all_files = $(gb_emscripten_fs_font_image_files) $(shell cat $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.concat_lists)
+
+.PHONY: $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.filelist
+$(emscripten_fs_image_WORKDIR)/soffice_fonts.data.filelist: \
+		$(emscripten_fs_image_WORKDIR)/soffice_fonts.data.concat_lists \
+		$(gb_emscripten_fs_font_image_files) \
+		| $(emscripten_fs_image_WORKDIR)/.dir
+	$(file >$@,$(foreach item,$(filter $(INSTROOT)/$(LIBO_SHARE_FOLDER)%,$(gb_emscripten_fs_font_image_all_files)),$(subst @,@@,$(item))@$(subst @,@@,$(subst $(SRCDIR),,$(item)))))
+
+$(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js.metadata: $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.filelist
+	$(call gb_Output_announce,$(subst $(BUILDDIR)/,,$(emscripten_fs_image_WORKDIR)/soffice_fonts.data),$(true),GEN,2)
+	$(EMSDK_FILE_PACKAGER) $(emscripten_fs_image_WORKDIR)/soffice_fonts.data --preload $(shell cat $^) --js-output=$(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js --separate-metadata --use-preload-cache \
+	    || rm -f $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js $(emscripten_fs_image_WORKDIR)/soffice_fonts.data $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js.metadata
+# MACRO: }
 
 # vim: set noet sw=4:

@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <unistd.h>
 #if defined __GNUC__ && !defined __clang__ && __GNUC__ == 10
 // gcc 10.2.0 gets unhappy about one of the OString inside PrintFont at line 656 (while at least a
 // recent GCC 12 trunk is happy);
@@ -46,6 +47,9 @@
 #include <officecfg/Office/Common.hxx>
 #include <org/freedesktop/PackageKit/SyncDbusSessionHelper.hpp>
 #include <config_fonts.h>
+#include <emscripten/bind.h>
+#include <dirent.h>
+#include <stdio.h>
 
 using namespace psp;
 
@@ -1314,5 +1318,75 @@ void PrintFontManager::matchFont( FastPrintFontInfo& rInfo, const css::lang::Loc
     // cleanup
     FcPatternDestroy( pPattern );
 }
+
+/// MACRO: Allow creating the FontConfig cache so that it can be used to optimize load times {
+// static
+void createFontConfigCache() {
+    FcConfig* pConfig = FcConfigGetCurrent();
+    FcStrList* list = FcConfigGetCacheDirs(pConfig);
+    if (list == NULL) {
+        fprintf(stderr, "Could not get FontConfig cache directories\n");
+        return;
+    }
+
+    FcChar8* dir;
+    while ((dir = FcStrListNext(list)) != NULL) {
+        printf("FC: %s\n", dir);
+    }
+    FcStrListDone(list);
+
+    const char *directory = "/instdir/share/fonts/truetype";
+    FcStrSet *dirs = FcStrSetCreate();
+    FcCache *cache;
+    struct stat statb;
+
+    FcStrSetAddFilename(dirs, (const FcChar8 *)directory);
+
+    // Create a list from the set
+    list = FcStrListCreate(dirs);
+    FcStrSetDestroy(dirs);
+
+    // Initialize the processed_dirs set
+    FcStrSet *processed_dirs = FcStrSetCreate();
+
+    // Scan directories and create caches
+    while ((dir = FcStrListNext(list))) {
+        if (FcStrSetMember(processed_dirs, dir)) {
+            continue; // Skip already processed directories to avoid loops
+        }
+
+        if (stat((char *)dir, &statb) == -1) {
+            continue;
+        }
+
+        if (!S_ISDIR(statb.st_mode)) {
+            continue; // Not a directory, skip
+        }
+
+        if (FcStrSetAdd(processed_dirs, dir) == FcFalse) {
+            continue;
+        }
+
+        cache = FcDirCacheRead(dir, FcTrue, pConfig);
+        if (!cache) {
+            fprintf(stderr, "%s: dir cache fail\n", dir);
+            continue;
+        }
+
+        printf("caching, new cache contents: %d fonts, %d dirs\n",
+               FcCacheNumFont (cache), FcCacheNumSubdir (cache));
+
+        FcDirCacheUnload(cache);
+    }
+
+    // Cleanup
+    FcStrListDone(list);
+    FcStrSetDestroy(processed_dirs);
+}
+
+EMSCRIPTEN_BINDINGS(fontconfig) {
+    emscripten::function("createFontConfigCache", &createFontConfigCache);
+}
+/// }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

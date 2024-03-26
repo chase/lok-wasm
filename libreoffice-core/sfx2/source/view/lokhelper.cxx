@@ -669,7 +669,7 @@ void SfxLokHelper::notifyDocumentSizeChanged(SfxViewShell const* pThisView, cons
     {
         for (int i = 0; i < pDoc->getParts(); ++i)
         {
-            tools::Rectangle aRectangle(0, 0, 1000000000, 1000000000);
+            tools::Rectangle aRectangle(0, 0, SfxLokHelper::MaxTwips, SfxLokHelper::MaxTwips); /// MACRO: use the proper constant instead of a hardcoded value
             const int nMode = pThisView->getEditMode();
             pThisView->libreOfficeKitViewInvalidateTilesCallback(&aRectangle, i, nMode);
         }

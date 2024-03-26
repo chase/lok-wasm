@@ -1,0 +1,27 @@
+{
+  "name": "qa-env",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.0.0-alpha.9",
+    "prettier": "^3.2.5",
+    "solid-js": "^1.8.15",
+    "tailwindcss": "^4.0.0-alpha.9"
+  },
+  "devDependencies": {
+    "@playwright/browser-chromium": "^1.42.1",
+    "@playwright/test": "^1.42.1",
+    "@types/emscripten": "^1.39.10",
+    "@types/node": "^20.11.25",
+    "playwright": "^1.42.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.1.6",
+    "vite-plugin-solid": "^2.10.1"
+  }
+}

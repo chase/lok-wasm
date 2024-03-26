@@ -9,7 +9,7 @@ dnl in order to create a configure script.
 # several non-alphanumeric characters, those are split off and used only for the
 # ABOUTBOXPRODUCTVERSIONSUFFIX in openoffice.lst. Why that is necessary, no idea.
 
-AC_INIT([Collabora Office],[23.05.9.1],[],[],[https://collaboraoffice.com/])
+AC_INIT([Macro],m4_esyscmd([tail -c +2 ../VERSION | tr -d '\n']),[],[],[https://macro.com/])
 
 dnl libnumbertext needs autoconf 2.68, but that can pick up autoconf268 just fine if it is installed
 dnl whereas aclocal (as run by autogen.sh) insists on using autoconf and fails hard
@@ -524,7 +524,7 @@ dnl ===================================================================
 dnl Product version
 dnl ===================================================================
 AC_MSG_CHECKING([for product version])
-PRODUCTVERSION="$LIBO_VERSION_MAJOR.$LIBO_VERSION_MINOR"
+PRODUCTVERSION="$LIBO_VERSION_MAJOR.$LIBO_VERSION_MINOR.$LIBO_VERSION_MICRO"
 AC_MSG_RESULT([$PRODUCTVERSION])
 AC_SUBST(PRODUCTVERSION)
 

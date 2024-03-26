@@ -9,43 +9,57 @@
 
 $(eval $(call gb_Module_Module,more_fonts))
 
+# MACRO: Only keep fonts that support metric-compatible replacement {
+
+# # For Hebrew support:
+# 	ExternalPackage_alef \
+# 	UnpackedTarball_alef \
+# 	ExternalPackage_libre_hebrew \
+# 	UnpackedTarball_libre_hebrew \
+# # For Arabic support:
+# 	UnpackedTarball_amiri \
+# 	ExternalPackage_amiri \
+# 	UnpackedTarball_scheherazade \
+# 	ExternalPackage_scheherazade \
+# 	UnpackedTarball_reem \
+# 	ExternalPackage_reem \
+
+# # ???
+# 	ExternalPackage_gentium \
+# 	UnpackedTarball_gentium \
+# # Dyslexia
+# 	ExternalPackage_opendyslexic \
+# 	UnpackedTarball_opendyslexic \
+
+# # Source code
+# 	ExternalPackage_sourcesans \
+# 	UnpackedTarball_sourcesans \
+
+# # Just a nice font I guess?
+# 	UnpackedTarball_karla \
+# 	ExternalPackage_karla \
+# 	ExternalPackage_dejavu \
+# 	UnpackedTarball_dejavu \
+# 	UnpackedTarball_opensans \
+# 	ExternalPackage_opensans \
+
+# # Times New Roman-esque but Liberation already does that
+# 	UnpackedTarball_libertineg \
+# 	ExternalPackage_libertineg \
+
+# MACRO: }
+
 $(eval $(call gb_Module_add_targets,more_fonts,\
-	ExternalPackage_alef \
-	ExternalPackage_amiri \
 	ExternalPackage_caladea \
 	ExternalPackage_carlito \
-	$(if $(MPL_SUBSET),,ExternalPackage_culmus) \
-	ExternalPackage_dejavu \
-	ExternalPackage_gentium \
-	ExternalPackage_karla \
 	ExternalPackage_liberation \
 	ExternalPackage_liberation_narrow \
-	ExternalPackage_libertineg \
-	ExternalPackage_libre_hebrew \
-	ExternalPackage_sourcesans \
 	ExternalPackage_noto \
-	ExternalPackage_reem \
-	ExternalPackage_scheherazade \
-	ExternalPackage_opendyslexic \
-	ExternalPackage_opensans \
-	UnpackedTarball_alef \
-	UnpackedTarball_amiri \
 	UnpackedTarball_caladea \
 	UnpackedTarball_carlito \
-	$(if $(MPL_SUBSET),,UnpackedTarball_culmus) \
-	UnpackedTarball_dejavu \
-	UnpackedTarball_gentium \
-	UnpackedTarball_karla \
 	UnpackedTarball_liberation \
 	UnpackedTarball_liberation_narrow \
-	UnpackedTarball_libertineg \
-	UnpackedTarball_libre_hebrew \
-	UnpackedTarball_sourcesans \
 	UnpackedTarball_noto \
-	UnpackedTarball_reem \
-	UnpackedTarball_scheherazade \
-	UnpackedTarball_opendyslexic \
-	UnpackedTarball_opensans \
 ))
 
 # vim: set noet sw=4 ts=4:

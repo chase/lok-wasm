@@ -222,7 +222,7 @@ $(eval $(call gb_Helper_register_executables_for_install,OOO,writer_brand, \
 
 $(eval $(call gb_Helper_register_executables_for_install,OOO,ooo, \
 	gengal \
-	$(if $(filter WNT,$(OS)),,uri-encode) \
+	$(if $(filter WNT EMSCRIPTEN,$(OS)),,uri-encode) \
 	$(if $(filter WNT,$(OS)), \
 		senddoc \
 	) \
@@ -339,6 +339,12 @@ ifeq ($(OS),EMSCRIPTEN)
 $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,ooo, \
 	lo-bootstrap \
 ))
+
+# MACRO {
+$(eval $(call gb_Helper_register_packages_for_install,ooo, \
+	desktop_wasm \
+))
+# MACRO }
 endif
 
 ifneq ($(ENABLE_WASM_STRIP_CANVAS),TRUE)
@@ -1037,29 +1043,31 @@ $(eval $(call gb_Helper_register_packages_for_install,ooo,\
 	cui \
 ))
 
+# MACRO: Removed fonts {
+#		fonts_opendyslexic \
+#		fonts_opensans \
+#		fonts_reem \
+#		fonts_sourcesans \
+#		fonts_scheherazade \
+#		fonts_libertineg \
+#		fonts_libre_hebrew \
+#		$(if $(MPL_SUBSET),,fonts_culmus) \
+#		fonts_dejavu \
+#		fonts_gentium \
+#		fonts_karla \
+#		fonts_alef \
+#		fonts_amiri \
+
 $(eval $(call gb_Helper_register_packages_for_install,ooo_fonts,\
 	extras_fonts \
 	$(if $(USING_X11)$(DISABLE_GUI)$(filter ANDROID EMSCRIPTEN,$(OS)), \
 		postprocess_fontconfig) \
 	$(call gb_Helper_optional,MORE_FONTS,\
-		fonts_alef \
-		fonts_amiri \
 		fonts_caladea \
 		fonts_carlito \
-		$(if $(MPL_SUBSET),,fonts_culmus) \
-		fonts_dejavu \
-		fonts_gentium \
-		fonts_karla \
 		fonts_liberation \
 		fonts_liberation_narrow \
-		fonts_libertineg \
-		fonts_libre_hebrew \
 		fonts_noto \
-		fonts_opendyslexic \
-		fonts_opensans \
-		fonts_reem \
-		fonts_sourcesans \
-		fonts_scheherazade \
 	) \
 	$(call gb_Helper_optional,NOTO_FONT,\
 		fonts_notomore \

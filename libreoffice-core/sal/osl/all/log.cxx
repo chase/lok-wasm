@@ -39,13 +39,11 @@
 #define OSL_DETAIL_GETPID getpid()
 #endif
 
-#if HAVE_SYSLOG_H
-#include <syslog.h>
-// sal/osl/unx/salinit.cxx::sal_detail_initialize updates this:
-bool sal_use_syslog;
-#else
-bool const sal_use_syslog = false;
+// MACRO: log using `console.warn/console.log` {
+#if defined __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
 #endif
+// MACRO: }
 
 // Avoid the use of other sal code in this file as much as possible, so that
 // this code can be called from other sal code without causing endless
@@ -254,23 +252,20 @@ void maybeOutputTimestamp(std::ostringstream &s) {
 
 }
 
+// MACRO: log using `console.warn/console.log` {
 void sal_detail_log(
     sal_detail_LogLevel level, char const * area, char const * where,
     char const * message, sal_uInt32 backtraceDepth)
 {
     std::ostringstream s;
-#if !defined ANDROID
     // On Android, the area will be used as the "tag," and log info already
     // contains timestamp and PID.
-    if (!sal_use_syslog) {
-        maybeOutputTimestamp(s);
-        s << toString(level) << ':';
-    }
+    maybeOutputTimestamp(s);
+    s << toString(level) << ':';
     if (level != SAL_DETAIL_LOG_LEVEL_DEBUG) {
         s << area << ':';
     }
     s << OSL_DETAIL_GETPID << ':';
-#endif
     s << osl::Thread::getCurrentIdentifier() << ':';
     if (level == SAL_DETAIL_LOG_LEVEL_DEBUG) {
         s << ' ';
@@ -285,62 +280,25 @@ void sal_detail_log(
         s << " at:\n" << osl::detail::backtraceAsString(backtraceDepth);
     }
 
-#if defined ANDROID
-    int android_log_level;
+#if defined __EMSCRIPTEN__
     switch (level) {
-    case SAL_DETAIL_LOG_LEVEL_INFO:
-        android_log_level = ANDROID_LOG_INFO;
-        break;
-    case SAL_DETAIL_LOG_LEVEL_WARN:
-        android_log_level = ANDROID_LOG_WARN;
-        break;
-    case SAL_DETAIL_LOG_LEVEL_DEBUG:
-        android_log_level = ANDROID_LOG_DEBUG;
-        break;
-    default:
-        android_log_level = ANDROID_LOG_INFO;
-        break;
-    }
-    __android_log_print(
-        android_log_level, area == 0 ? "LibreOffice" : area, "%s",
-        s.str().c_str());
-#else
-    if (sal_use_syslog) {
-#if HAVE_SYSLOG_H
-        int prio;
-        switch (level) {
         case SAL_DETAIL_LOG_LEVEL_INFO:
-            prio = LOG_INFO;
+            EM_ASM({
+                console.log(UTF8ToString($0));
+            }, s.str().c_str());
             break;
         case SAL_DETAIL_LOG_LEVEL_WARN:
-            prio = LOG_WARNING;
-            break;
+            [[fallthrough]];
         case SAL_DETAIL_LOG_LEVEL_DEBUG:
-            prio = LOG_DEBUG;
+            EM_ASM({
+                console.warn(UTF8ToString($0));
+            }, s.str().c_str());
             break;
         default:
             assert(false); // this cannot happen
-            prio = LOG_WARNING;
-        }
-        syslog(prio, "%s", s.str().c_str());
-#endif
-    } else {
-        // avoid calling getLogFile() more than once
-        static std::ofstream * logFile = getLogFile();
-        if (logFile) {
-            *logFile << s.str() << std::endl;
-        }
-        else {
-            s << '\n';
-#ifdef _WIN32
-            // write to Windows debugger console, too
-            OutputDebugStringA(s.str().c_str());
-#endif
-            std::fputs(s.str().c_str(), stderr);
-            std::fflush(stderr);
-        }
     }
 #endif
+// MACRO: log using `console.warn/console.log` }
 }
 
 void sal_detail_set_log_selector(char const *logSelector)

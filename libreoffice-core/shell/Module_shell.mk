@@ -115,7 +115,7 @@ ifneq ($(OS),WNT)
 
 $(eval $(call gb_Module_add_targets,shell,\
 	StaticLibrary_xmlparser \
-	Executable_uri_encode \
+	$(if $(filter-out EMSCRIPTEN,$(OS)),Executable_uri_encode) \
 	Library_cmdmail \
 	$(if $(ENABLE_MACOSX_SANDBOX),,Package_senddoc) \
 ))

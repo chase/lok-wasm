@@ -28,6 +28,7 @@ $(call gb_ExternalProject_get_state_target,freetype,build) :
 			CFLAGS="$(CFLAGS) \
 				$(call gb_ExternalProject_get_build_flags,freetype) \
 				$(call gb_ExternalProject_get_link_flags,freetype) \
+				-DFT_DEBUG_LEVEL_ERROR \
 				$(gb_VISIBILITY_FLAGS) \
 				$(gb_EMSCRIPTEN_CPPFLAGS)" \
 		&& $(MAKE) install \

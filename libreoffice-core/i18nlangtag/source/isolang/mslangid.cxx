@@ -29,8 +29,15 @@
 #include <i18nlangtag/languagetag.hxx>
 
 
+/// MACRO: No "system", so always load as English {
+#ifdef __EMSCRIPTEN__
+LanguageType MsLangId::nConfiguredSystemLanguage   = LANGUAGE_ENGLISH_US;
+LanguageType MsLangId::nConfiguredSystemUILanguage = LANGUAGE_ENGLISH_US;
+#else
 LanguageType MsLangId::nConfiguredSystemLanguage   = LANGUAGE_SYSTEM;
 LanguageType MsLangId::nConfiguredSystemUILanguage = LANGUAGE_SYSTEM;
+#endif
+/// MACRO: }
 
 LanguageType MsLangId::nConfiguredWesternFallback  = LANGUAGE_SYSTEM;
 LanguageType MsLangId::nConfiguredAsianFallback    = LANGUAGE_SYSTEM;

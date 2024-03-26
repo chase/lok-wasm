@@ -103,7 +103,8 @@ SwParaPortion *SwTextFrame::GetPara()
 
 void SwTextFrame::ClearPara()
 {
-    OSL_ENSURE( !IsLocked(), "+SwTextFrame::ClearPara: this is locked." );
+    // MACRO: Stop logging ClearPara
+    // OSL_ENSURE( !IsLocked(), "+SwTextFrame::ClearPara: this is locked." );
     if ( !IsLocked() && GetCacheIdx() != USHRT_MAX )
     {
         SwTextLine *pTextLine = static_cast<SwTextLine*>(SwTextFrame::GetTextCache()->

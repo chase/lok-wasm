@@ -53,7 +53,6 @@
 #include <memory>
 #include <iostream>
 #include <string_view>
-#include <queue>
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/algorithm/string.hpp>
@@ -1755,7 +1754,7 @@ void CallbackFlushHandler::queue(const int type, CallbackData& aCallbackData)
             type != LOK_CALLBACK_MEDIA_SHAPE &&
             type != LOK_CALLBACK_REFERENCE_MARKS)
         {
-            SAL_INFO("lok", "Skipping while painting [" << type << "]: [" << aCallbackData.getPayload() << "].");
+            // SAL_INFO("lok", "Skipping while painting [" << type << "]: [" << aCallbackData.getPayload() << "].");
             return;
         }
 
@@ -1774,7 +1773,7 @@ void CallbackFlushHandler::queue(const int type, CallbackData& aCallbackData)
         // issuing it, instead of the absolute one that we expect.
         // This is temporary however, and, once the control is created and initialized
         // correctly, it eventually emits the correct absolute coordinates.
-        SAL_INFO("lok", "Skipping invalid event [" << type << "]: [" << aCallbackData.getPayload() << "].");
+        // SAL_INFO("lok", "Skipping invalid event [" << type << "]: [" << aCallbackData.getPayload() << "].");
         return;
     }
 
@@ -1785,12 +1784,12 @@ void CallbackFlushHandler::queue(const int type, CallbackData& aCallbackData)
     // Reset the updated flag if we get a normal message.
     if(isUpdatedType(type))
     {
-        SAL_INFO("lok", "Received event with updated type [" << type << "] as normal callback");
+        // SAL_INFO("lok", "Received event with updated type [" << type << "] as normal callback");
         resetUpdatedType(type);
     }
     if(isUpdatedTypePerViewId(type))
     {
-        SAL_INFO("lok", "Received event with updated type [" << type << "] as normal callback");
+        // SAL_INFO("lok", "Received event with updated type [" << type << "] as normal callback");
         resetUpdatedTypePerViewId(type, aCallbackData.getViewId());
     }
 
@@ -1833,7 +1832,7 @@ void CallbackFlushHandler::queue(const int type, CallbackData& aCallbackData)
             auto pos2 = toQueue2(pos);
             if (pos != m_queue1.rend() && pos2->getPayload() == aCallbackData.getPayload())
             {
-                SAL_INFO("lok", "Skipping queue duplicate [" << type << + "]: [" << aCallbackData.getPayload() << "].");
+                // SAL_INFO("lok", "Skipping queue duplicate [" << type << + "]: [" << aCallbackData.getPayload() << "].");
                 return;
             }
         }
@@ -1865,8 +1864,8 @@ void CallbackFlushHandler::queue(const int type, CallbackData& aCallbackData)
             case LOK_CALLBACK_INVALIDATE_VISIBLE_CURSOR:
             case LOK_CALLBACK_INVALIDATE_TILES:
             case LOK_CALLBACK_TOOLTIP:
-                if (removeAll(type))
-                    SAL_INFO("lok", "Removed dups of [" << type << "]: [" << aCallbackData.getPayload() << "].");
+                removeAll(type);
+                    // SAL_INFO("lok", "Removed dups of [" << type << "]: [" << aCallbackData.getPayload() << "].");
                 break;
         }
     }
@@ -1894,8 +1893,8 @@ void CallbackFlushHandler::queue(const int type, CallbackData& aCallbackData)
             case LOK_CALLBACK_COLOR_PALETTES:
             case LOK_CALLBACK_TOOLTIP:
             {
-                if (removeAll(type))
-                    SAL_INFO("lok", "Removed dups of [" << type << "]: [" << aCallbackData.getPayload() << "].");
+                removeAll(type);
+                    // SAL_INFO("lok", "Removed dups of [" << type << "]: [" << aCallbackData.getPayload() << "].");
             }
             break;
 
@@ -1972,8 +1971,8 @@ void CallbackFlushHandler::queue(const int type, CallbackData& aCallbackData)
     assert(aCallbackData.validate() && "Cached callback payload object and string mismatch!");
     m_queue1.emplace_back(type);
     m_queue2.emplace_back(aCallbackData);
-    SAL_INFO("lok", "Queued #" << (m_queue1.size() - 1) <<
-             " [" << type << "]: [" << aCallbackData.getPayload() << "] to have " << m_queue1.size() << " entries.");
+    // SAL_INFO("lok", "Queued #" << (m_queue1.size() - 1) <<
+    //          " [" << type << "]: [" << aCallbackData.getPayload() << "] to have " << m_queue1.size() << " entries.");
 
 #ifdef DBG_UTIL
     {
@@ -2020,8 +2019,8 @@ bool CallbackFlushHandler::processInvalidateTilesEvent(int type, CallbackData& a
         if (rcOld.isInfinite() && (rcOld.m_nPart == -1 || rcOld.m_nPart == rcNew.m_nPart) &&
             (rcOld.m_nMode == rcNew.m_nMode))
         {
-            SAL_INFO("lok", "Skipping queue [" << type << "]: [" << aCallbackData.getPayload()
-                                               << "] since all tiles need to be invalidated.");
+            // SAL_INFO("lok", "Skipping queue [" << type << "]: [" << aCallbackData.getPayload()
+            //                                    << "] since all tiles need to be invalidated.");
             return true;
         }
 
@@ -2030,8 +2029,8 @@ bool CallbackFlushHandler::processInvalidateTilesEvent(int type, CallbackData& a
             // If fully overlapping.
             if (rcOld.m_aRectangle.Contains(rcNew.m_aRectangle))
             {
-                SAL_INFO("lok", "Skipping queue [" << type << "]: [" << aCallbackData.getPayload()
-                                                   << "] since overlaps existing all-parts.");
+                // SAL_INFO("lok", "Skipping queue [" << type << "]: [" << aCallbackData.getPayload()
+                //                                    << "] since overlaps existing all-parts.");
                 return true;
             }
         }
@@ -2051,38 +2050,38 @@ bool CallbackFlushHandler::processInvalidateTilesEvent(int type, CallbackData& a
     {
         const auto rcOrig = rcNew;
 
-        SAL_INFO("lok", "Have [" << type << "]: [" << aCallbackData.getPayload() << "] so merging overlapping.");
+        // SAL_INFO("lok", "Have [" << type << "]: [" << aCallbackData.getPayload() << "] so merging overlapping.");
         removeAll(LOK_CALLBACK_INVALIDATE_TILES,[&rcNew](const CallbackData& elemData) {
             const RectangleAndPart& rcOld = elemData.getRectangleAndPart();
             if (rcNew.m_nPart != -1 && rcOld.m_nPart != -1 &&
                 (rcOld.m_nPart != rcNew.m_nPart || rcOld.m_nMode != rcNew.m_nMode))
             {
-                SAL_INFO("lok", "Nothing to merge between new: "
-                                    << rcNew.toString() << ", and old: " << rcOld.toString());
+                // SAL_INFO("lok", "Nothing to merge between new: "
+                //                     << rcNew.toString() << ", and old: " << rcOld.toString());
                 return false;
             }
 
             if (rcNew.m_nPart == -1)
             {
                 // Don't merge unless fully overlapped.
-                SAL_INFO("lok", "New " << rcNew.toString() << " has " << rcOld.toString()
-                                       << "?");
+                // SAL_INFO("lok", "New " << rcNew.toString() << " has " << rcOld.toString()
+                //                        << "?");
                 if (rcNew.m_aRectangle.Contains(rcOld.m_aRectangle) && rcOld.m_nMode == rcNew.m_nMode)
                 {
-                    SAL_INFO("lok", "New " << rcNew.toString() << " engulfs old "
-                                           << rcOld.toString() << ".");
+                    // SAL_INFO("lok", "New " << rcNew.toString() << " engulfs old "
+                    //                        << rcOld.toString() << ".");
                     return true;
                 }
             }
             else if (rcOld.m_nPart == -1)
             {
                 // Don't merge unless fully overlapped.
-                SAL_INFO("lok", "Old " << rcOld.toString() << " has " << rcNew.toString()
-                                       << "?");
+                // SAL_INFO("lok", "Old " << rcOld.toString() << " has " << rcNew.toString()
+                //                        << "?");
                 if (rcOld.m_aRectangle.Contains(rcNew.m_aRectangle) && rcOld.m_nMode == rcNew.m_nMode)
                 {
-                    SAL_INFO("lok", "New " << rcNew.toString() << " engulfs old "
-                                           << rcOld.toString() << ".");
+                    // SAL_INFO("lok", "New " << rcNew.toString() << " engulfs old "
+                    //                        << rcOld.toString() << ".");
                     return true;
                 }
             }
@@ -2091,13 +2090,13 @@ bool CallbackFlushHandler::processInvalidateTilesEvent(int type, CallbackData& a
                 const tools::Rectangle rcOverlap
                     = rcNew.m_aRectangle.GetIntersection(rcOld.m_aRectangle);
                 const bool bOverlap = !rcOverlap.IsEmpty() && rcOld.m_nMode == rcNew.m_nMode;
-                SAL_INFO("lok", "Merging " << rcNew.toString() << " & " << rcOld.toString()
-                                           << " => " << rcOverlap.toString()
-                                           << " Overlap: " << bOverlap);
+                // SAL_INFO("lok", "Merging " << rcNew.toString() << " & " << rcOld.toString()
+                //                            << " => " << rcOverlap.toString()
+                //                            << " Overlap: " << bOverlap);
                 if (bOverlap)
                 {
                     rcNew.m_aRectangle.Union(rcOld.m_aRectangle);
-                    SAL_INFO("lok", "Merged: " << rcNew.toString());
+                    // SAL_INFO("lok", "Merged: " << rcNew.toString());
                     return true;
                 }
             }
@@ -2108,11 +2107,11 @@ bool CallbackFlushHandler::processInvalidateTilesEvent(int type, CallbackData& a
 
         if (rcNew.m_aRectangle != rcOrig.m_aRectangle)
         {
-            SAL_INFO("lok", "Replacing: " << rcOrig.toString() << " by " << rcNew.toString());
+            // SAL_INFO("lok", "Replacing: " << rcOrig.toString() << " by " << rcNew.toString());
             if (rcNew.m_aRectangle.GetWidth() < rcOrig.m_aRectangle.GetWidth()
                 || rcNew.m_aRectangle.GetHeight() < rcOrig.m_aRectangle.GetHeight())
             {
-                SAL_WARN("lok", "Error: merged rect smaller.");
+                // SAL_WARN("lok", "Error: merged rect smaller.");
             }
         }
     }
@@ -2402,6 +2401,54 @@ void CallbackFlushHandler::Invoke()
     for (; it1 != m_queue1.end(); ++it1, ++it2)
     {
         const int type = *it1;
+        // MACRO: fire invalidation events directly to the tile renderer {
+        if (type == LOK_CALLBACK_INVALIDATE_TILES)
+        {
+            LibLODocument_Impl *pDocument = static_cast<LibLODocument_Impl*>(m_pDocument);
+            for (auto& data : pDocument->tileRendererData_)
+            {
+                if (data.viewId == m_viewId)
+                {
+                    auto& update = it2->getRectangleAndPart();
+                    if (update.isEmpty()) continue;
+                    if (update.isInfinite()) {
+                        data.reset();
+                        continue;
+                    }
+
+                    int32_t raw_rect[4] = {
+                        update.m_aRectangle.Left(),
+                        update.m_aRectangle.Top(),
+                        update.m_aRectangle.getOpenWidth(),
+                        update.m_aRectangle.getOpenHeight()
+                    };
+                    // there _shouldn't be negative coordinates_ but there might be
+                    uint32_t rect[4] = {
+                        raw_rect[0] < 0 ? 0 : static_cast<uint32_t>(raw_rect[0]),
+                        raw_rect[1] < 0 ? 0 : static_cast<uint32_t>(raw_rect[1]),
+                        raw_rect[2] < 0 ? 0 : static_cast<uint32_t>(raw_rect[2]),
+                        raw_rect[3] < 0 ? 0 : static_cast<uint32_t>(raw_rect[3]),
+                    };
+                    data.pushInvalidation(rect);
+                }
+            }
+            continue;
+        }
+        if (type == LOK_CALLBACK_DOCUMENT_SIZE_CHANGED)
+        {
+            LibLODocument_Impl *pDocument = static_cast<LibLODocument_Impl*>(m_pDocument);
+            for (auto& data : pDocument->tileRendererData_)
+            {
+                if (data.viewId == m_viewId)
+                {
+                    long w, h;
+                    pDocument->pClass->getDocumentSize(pDocument, &w, &h);
+                    __c11_atomic_store(&data.docWidthTwips, w, __ATOMIC_SEQ_CST);
+                }
+            }
+        }
+        // MACRO }
+
         const auto& payload = it2->getPayload();
         const int viewId = lcl_isViewCallbackType(type) ? it2->getViewId() : -1;
 
@@ -4179,9 +4226,9 @@ static void doc_paintTile(LibreOfficeKitDocument* pThis,
     SolarMutexGuard aGuard;
     SetLastExceptionMsg();
 
-    SAL_INFO( "lok.tiledrendering", "paintTile: painting [" << nTileWidth << "x" << nTileHeight <<
-              "]@(" << nTilePosX << ", " << nTilePosY << ") to [" <<
-              nCanvasWidth << "x" << nCanvasHeight << "]px" );
+    // SAL_INFO( "lok.tiledrendering", "paintTile: painting [" << nTileWidth << "x" << nTileHeight <<
+    //           "]@(" << nTilePosX << ", " << nTilePosY << ") to [" <<
+    //           nCanvasWidth << "x" << nCanvasHeight << "]px" );
 
     ITiledRenderable* pDoc = getTiledRenderable(pThis);
     if (!pDoc)
@@ -4189,6 +4236,14 @@ static void doc_paintTile(LibreOfficeKitDocument* pThis,
         SetLastExceptionMsg("Document doesn't support tiled rendering");
         return;
     }
+
+    /// MACRO: Enable/disable callbacks during normal paintTile, not just paintPartTile {
+    LibLODocument_Impl* pDocument = static_cast<LibLODocument_Impl*>(pThis);
+    const int nViewId = doc_getView(pThis);
+    const auto handlerIt = pDocument->mpCallbackFlushHandlers.find(nViewId);
+    if (handlerIt != pDocument->mpCallbackFlushHandlers.end())
+        handlerIt->second->disableCallbacks();
+    /// MACRO: }
 
 #if defined(UNX) && !defined(MACOSX) || defined(_WIN32)
 
@@ -4228,6 +4283,7 @@ static void doc_paintTile(LibreOfficeKitDocument* pThis,
 
     CGContextRelease(pCGContext);
 #else
+    // TODO: We setup and destroy this often, can we just reuse this? - @chase
     ScopedVclPtrInstance< VirtualDevice > pDevice(DeviceFormat::DEFAULT);
 
     // Set background to transparent by default.
@@ -4240,18 +4296,10 @@ static void doc_paintTile(LibreOfficeKitDocument* pThis,
     pDoc->paintTile(*pDevice, nCanvasWidth, nCanvasHeight,
                     nTilePosX, nTilePosY, nTileWidth, nTileHeight);
 
-    static bool bDebug = getenv("LOK_DEBUG_TILES") != nullptr;
-    if (bDebug)
-    {
-        // Draw a small red rectangle in the top left corner so that it's easy to see where a new tile begins.
-        tools::Rectangle aRect(0, 0, 5, 5);
-        aRect = pDevice->PixelToLogic(aRect);
-        pDevice->Push(PushFlags::FILLCOLOR | PushFlags::LINECOLOR);
-        pDevice->SetFillColor(COL_LIGHTRED);
-        pDevice->SetLineColor();
-        pDevice->DrawRect(aRect);
-        pDevice->Pop();
-    }
+    /// MACRO: Enable/disable callbacks during normal paintTile, not just paintPartTile {
+    if (handlerIt != pDocument->mpCallbackFlushHandlers.end())
+        handlerIt->second->enableCallbacks();
+    /// MACRO: }
 
 #ifdef _WIN32
     // pBuffer was not used there

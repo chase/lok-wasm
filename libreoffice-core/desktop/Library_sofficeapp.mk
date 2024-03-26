@@ -140,11 +140,13 @@ $(eval $(call gb_Library_add_exception_objects,sofficeapp,\
 $(if $(filter-out $(OS),IOS), \
     $(eval $(call gb_Library_set_componentfile,sofficeapp,desktop/lokclipboard,services)))
 else
+# MACRO: this is the Emscripten entrance for LOK
 ifneq ($(filter TRUE,$(USING_X11) $(DISABLE_GUI))($filter EMSCRIPTEN,$(OS)),)
 $(eval $(call gb_Library_add_exception_objects,sofficeapp,\
 	desktop/source/lib/init \
 	desktop/source/lib/lokinteractionhandler \
 	desktop/source/lib/lokclipboard \
+	desktop/source/lib/wasm_extensions \
 ))
 $(eval $(call gb_Library_set_componentfile,sofficeapp,desktop/lokclipboard,services))
 endif

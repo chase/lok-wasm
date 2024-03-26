@@ -15,6 +15,7 @@ $(eval $(call gb_UnpackedTarball_add_patches,freetype,\
 	external/freetype/freetype-2.6.5.patch.1 \
 	external/freetype/ubsan.patch \
 	external/freetype/freetype-fd-hack.patch.0 \
+	$(if $(filter EMSCRIPTEN,$(OS)),external/freetype/MACRO-freetype-wasm-always-load-to-memory.new.patch.1) \
 ))
 
 $(eval $(call gb_UnpackedTarball_set_patchlevel,freetype,0))

@@ -54,8 +54,11 @@ do                             \
 
 #endif
 
-#define DBG_ASSERT( sCon, aError ) \
-    SAL_DETAIL_WARN_IF_FORMAT(!(sCon), "legacy.tools", "%s", aError)
+// MACRO: None of these warnings are very helpful {
+#define DBG_ASSERT( sCon, aError )
+// #define DBG_ASSERT( sCon, aError ) \
+//     SAL_DETAIL_WARN_IF_FORMAT(!(sCon), "legacy.tools", "%s", aError)
+// }
 
 
 #endif // INCLUDED_TOOLS_DEBUG_HXX

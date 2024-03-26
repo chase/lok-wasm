@@ -149,4 +149,13 @@ $(eval $(call gb_Module_add_screenshot_targets,desktop,\
     CppunitTest_desktop_dialogs_test \
 ))
 
+# MACRO {
+ifeq ($(OS),EMSCRIPTEN)
+$(eval $(call gb_Module_add_targets,desktop, \
+    CustomTarget_wasm \
+    Package_wasm \
+))
+endif
+# MACRO }
+
 # vim: set ts=4 sw=4 et:

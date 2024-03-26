@@ -35,7 +35,7 @@ ifeq ($(OS),MACOSX)
 gb_Executable_FILENAMES := $(patsubst soffice_bin:soffice_bin,soffice_bin:soffice,$(gb_Executable_FILENAMES))
 else
 ifeq ($(OS),EMSCRIPTEN)
-gb_Executable_FILENAMES := $(patsubst soffice_bin:soffice_bin%,soffice_bin:soffice.html,$(gb_Executable_FILENAMES))
+gb_Executable_FILENAMES := $(patsubst soffice_bin:soffice_bin%,soffice_bin:soffice.mjs,$(gb_Executable_FILENAMES))
 else
 gb_Executable_FILENAMES := $(patsubst soffice_bin:soffice_bin%,soffice_bin:soffice.bin,$(gb_Executable_FILENAMES))
 endif

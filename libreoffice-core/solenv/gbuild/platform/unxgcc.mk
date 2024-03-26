@@ -184,7 +184,9 @@ $(if $(filter TRUE,$(ENABLE_QT5)), \
     cp $(QT5_PLATFORMS_SRCDIR)/qtlogo.svg $(QT5_PLATFORMS_SRCDIR)/qtloader.js $(dir $(1)) ; \
 ) \
     cp $(call gb_CustomTarget_get_workdir,static/emscripten_fs_image)/soffice.data $(dir $(1))/soffice.data ; \
-    cp $(call gb_CustomTarget_get_workdir,static/emscripten_fs_image)/soffice.data.js.metadata $(dir $(1))/soffice.data.js.metadata \
+    cp $(call gb_CustomTarget_get_workdir,static/emscripten_fs_image)/soffice.data.js.metadata $(dir $(1))/soffice.data.js.metadata ; \
+    cp $(call gb_CustomTarget_get_workdir,static/emscripten_fs_image)/soffice_fonts.data $(dir $(1))/soffice_fonts.data ; \
+    cp $(call gb_CustomTarget_get_workdir,static/emscripten_fs_image)/soffice_fonts.data.js.metadata $(dir $(1))/soffice_fonts.data.js.metadata \
 )
 endef
 

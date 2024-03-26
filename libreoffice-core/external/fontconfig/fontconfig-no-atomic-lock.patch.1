@@ -1,0 +1,87 @@
+diff -ur fontconfig.org/src/fcatomic.c fontconfig/src/fcatomic.c
+--- fontconfig.org/src/fcatomic.c	2024-03-09 05:01:15.508860837 +0800
++++ fontconfig/src/fcatomic.c	2024-03-09 05:02:49.111808952 +0800
+@@ -105,84 +105,6 @@
+ FcBool
+ FcAtomicLock (FcAtomic *atomic)
+ {
+-    int		ret;
+-    struct stat	lck_stat;
+-
+-#ifdef HAVE_LINK
+-    int		fd = -1;
+-    FILE	*f = 0;
+-    FcBool	no_link = FcFalse;
+-
+-    strcpy ((char *) atomic->tmp, (char *) atomic->file);
+-    strcat ((char *) atomic->tmp, TMP_NAME);
+-    fd = FcMakeTempfile ((char *) atomic->tmp);
+-    if (fd < 0)
+-	return FcFalse;
+-    f = fdopen (fd, "w");
+-    if (!f)
+-    {
+-    	close (fd);
+-	unlink ((char *) atomic->tmp);
+-	return FcFalse;
+-    }
+-    ret = fprintf (f, "%ld\n", (long)getpid());
+-    if (ret <= 0)
+-    {
+-	fclose (f);
+-	unlink ((char *) atomic->tmp);
+-	return FcFalse;
+-    }
+-    if (fclose (f) == EOF)
+-    {
+-	unlink ((char *) atomic->tmp);
+-	return FcFalse;
+-    }
+-    ret = link ((char *) atomic->tmp, (char *) atomic->lck);
+-    if (ret < 0 && (errno == EPERM || errno == ENOTSUP || errno == EACCES))
+-    {
+-	/* the filesystem where atomic->lck points to may not supports
+-	 * the hard link. so better try to fallback
+-	 */
+-	ret = mkdir ((char *) atomic->lck, 0600);
+-	no_link = FcTrue;
+-    }
+-    (void) unlink ((char *) atomic->tmp);
+-#else
+-    ret = mkdir ((char *) atomic->lck, 0600);
+-#endif
+-    if (ret < 0)
+-    {
+-	/*
+-	 * If the file is around and old (> 10 minutes),
+-	 * assume the lock is stale.  This assumes that any
+-	 * machines sharing the same filesystem will have clocks
+-	 * reasonably close to each other.
+-	 */
+-	if (FcStat (atomic->lck, &lck_stat) >= 0)
+-	{
+-	    time_t  now = time (0);
+-	    if ((long int) (now - lck_stat.st_mtime) > 10 * 60)
+-	    {
+-#ifdef HAVE_LINK
+-		if (no_link)
+-		{
+-		    if (rmdir ((char *) atomic->lck) == 0)
+-			return FcAtomicLock (atomic);
+-		}
+-		else
+-		{
+-		    if (unlink ((char *) atomic->lck) == 0)
+-			return FcAtomicLock (atomic);
+-		}
+-#else
+-		if (rmdir ((char *) atomic->lck) == 0)
+-		    return FcAtomicLock (atomic);
+-#endif
+-	    }
+-	}
+-	return FcFalse;
+-    }
+-    (void) unlink ((char *) atomic->new);
+     return FcTrue;
+ }

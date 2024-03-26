@@ -23,11 +23,13 @@ $(eval $(call gb_Executable_use_libraries,soffice_bin,\
     sofficeapp \
 ))
 
+# MACRO: We don't need main for LOK or the pre-JS for starting with default args {
+ifneq ($(OS),EMSCRIPTEN)
 $(eval $(call gb_Executable_add_cobjects,soffice_bin,\
     desktop/source/app/main \
 ))
-
-$(eval $(call gb_Executable_add_prejs,soffice_bin,$(SRCDIR)/static/emscripten/soffice_args.js))
+endif
+# MACRO: }
 
 ifeq ($(OS),WNT)
 
@@ -47,10 +49,35 @@ endif
 
 endif
 
+# MACRO: Export functions using embind, not library flags
+
 ifeq ($(OS),EMSCRIPTEN)
 
+# Allows using <lib/init.hxx>
+$(eval $(call gb_Executable_set_include,soffice_bin,\
+    $$(INCLUDE) \
+    -I$(SRCDIR)/desktop/inc \
+))
+
+$(eval $(call gb_Library_use_custom_headers,soffice_bin,\
+	officecfg/registry \
+))
+$(eval $(call gb_Library_use_api,soffice_bin,\
+	udkapi \
+	offapi \
+))
+
+$(eval $(call gb_Executable_add_exception_objects,soffice_bin,\
+    desktop/source/app/main_wasm \
+))
+
+gb_SOFFICE_BIN_EXPORTED_RUNTIME_METHODS := -s EXPORTED_RUNTIME_METHODS=[]
+
+# See: https://github.com/emscripten-core/emscripten/blob/main/src/settings.js
 $(eval $(call gb_Executable_add_ldflags,soffice_bin,\
-	-s EXPORTED_FUNCTIONS=["_main"$(COMMA)"_libreofficekit_hook"$(COMMA)"_libreofficekit_hook_2"$(COMMA)"_lok_preinit"$(COMMA)"_lok_preinit_2"] \
+    --pre-js $(SRCDIR)/desktop/wasm/pre-js.js \
+    --profiling \
+    -lworkerfs.js -s MODULARIZE=1 -s EXPORT_NAME=LOK -s EXPORT_ES6=1 -s ENVIRONMENT=worker --no-entry \
 ))
 
 endif
