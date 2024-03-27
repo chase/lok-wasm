@@ -408,6 +408,7 @@ public:
     virtual bool ShouldDownscaleIconsAtSurface(double* pScaleOut) const;
 
 
+
 #if ENABLE_CAIRO_CANVAS
 
     /// Check whether cairo will work

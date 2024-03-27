@@ -13666,7 +13666,7 @@ if test "$test_cairo" = "yes"; then
 
     if test "$enable_cairo_canvas" != no; then
         AC_DEFINE(ENABLE_CAIRO_CANVAS)
-        ENABLE_CAIRO_CANVAS=TRUE
+        ENABLE_CAIRO_CANVAS=FALSE
     fi
 fi
 

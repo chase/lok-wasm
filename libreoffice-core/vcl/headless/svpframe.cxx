@@ -25,11 +25,15 @@
 #include <headless/svpframe.hxx>
 #include <headless/svpinst.hxx>
 #ifndef IOS
+#ifndef HEADLESS_SKIA
 #include <headless/svpgdi.hxx>
+#endif
 #endif
 #include <salsys.hxx>
 
 #include <basegfx/vector/b2ivector.hxx>
+
+#define HEADLESS_SKIA 1
 
 #ifndef IOS
 #include <cairo.h>
@@ -39,6 +43,10 @@ SvpSalFrame* SvpSalFrame::s_pFocusFrame = nullptr;
 
 #ifdef IOS
 #define SvpSalGraphics AquaSalGraphics
+#endif
+
+#ifdef HEADLESS_SKIA
+#define SvpSalGraphics SkiaSalGraphics
 #endif
 
 SvpSalFrame::SvpSalFrame( SvpSalInstance* pInstance,
@@ -158,9 +166,9 @@ basegfx::B2IVector SvpSalFrame::GetSurfaceFrameSize() const
 SalGraphics* SvpSalFrame::AcquireGraphics()
 {
     SvpSalGraphics* pGraphics = new SvpSalGraphics();
-#ifndef IOS
-    pGraphics->setSurface(m_pSurface, GetSurfaceFrameSize());
-#endif
+/* #ifndef IOS */
+/*     pGraphics->setSurface(m_pSurface, GetSurfaceFrameSize()); */
+/* #endif */
     m_aGraphics.push_back( pGraphics );
     return pGraphics;
 }

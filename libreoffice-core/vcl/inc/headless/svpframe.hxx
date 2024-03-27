@@ -32,6 +32,15 @@
 #define SvpSalGraphics AquaSalGraphics
 #endif
 
+
+
+#define HEADLESS_SKIA 1
+#ifdef HEADLESS_SKIA
+
+#include <headless/skia/salgdi.hxx>
+#define SvpSalGraphics SkiaSalGraphics
+#endif
+
 class SvpSalInstance;
 class SvpSalGraphics;
 

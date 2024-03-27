@@ -45,8 +45,10 @@
 #  include <quartz/salgdi.h>
 #  include <quartz/salvd.h>
 #else
+#ifndef HEADLESS_SKIA
 #  include <cairo.h>
 #  include <headless/svpgdi.hxx>
+#endif
 #endif
 #include <headless/svpbmp.hxx>
 

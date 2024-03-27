@@ -2200,5 +2200,10 @@ void SkiaSalGraphicsImpl::windowBackingPropertiesChanged()
     performFlush();
     mInWindowBackingPropertiesChanged = false;
 }
+void SkiaSalGraphicsImpl::createWindowSurfaceInternal(bool forceRaster)
+{
+    mSurface = createSkSurface(GetWidth(), GetHeight());
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
+

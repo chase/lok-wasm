@@ -1,13 +1,13 @@
 #include "SkImage.h"
 #include "SkSurfaceProps.h"
 #include "gl/GrGLInterface.h"
-#include "quartz/salgdi.h"
+#include "salgdi.hxx"
 #include <emscripten/html5_webgl.h>
-#include <headless/skia/skiavd.hxx>
+#include <headless/skia/svpvd.hxx>
 #include <SkSurface.h>
 #include <SkCanvas.h>
 #include <headless/svpinst.hxx>
-#include <headless/svpgdi.hxx>
+#include <headless/skia/svpgdi.hxx>
 #include <GrDirectContext.h>
 
 
@@ -27,8 +27,7 @@ public:
         m_grContext = GrDirectContext::MakeGL(glInterface);
 
         SkImageInfo info = SkImageInfo::MakeN32Premul(m_width, m_height);
-        SkSurfaceProps* props = new SkSurfaceProps();
-        m_surface = SkSurface::MakeRenderTarget(m_grContext.get(), SkBudgeted::kNo, info, props, false);
+        m_surface = SkSurface::MakeRenderTarget(m_grContext.get(), SkBudgeted::kNo, info);
     }
 
     virtual ~SkiaVirtualDevice() {
@@ -39,7 +38,8 @@ public:
     virtual SalGraphics* AcquireGraphics() override {
         // Return a new SalGraphics instance associated with the Skia surface
         //
-        /* return new AquaSalGraphics(m_surface->getCanvas()); */
+        SkCanvas* canvas = m_surface->getCanvas();
+        return new SvpSalGraphics(m_surface->getCanvas());
     }
 
     virtual void ReleaseGraphics(SalGraphics* pGraphics) override {

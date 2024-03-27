@@ -1,6 +1,14 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreOffice project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 #pragma once
 
-#include "SkSurface.h"
 #ifdef IOS
 #error This file is not for iOS
 #endif
@@ -10,35 +18,35 @@
 
 #include <osl/endian.h>
 #include <vcl/sysdata.hxx>
-#include <config_cairo_canvas.h>
 
 #include <font/PhysicalFontFace.hxx>
 #include <salgdi.hxx>
 #include <sallayout.hxx>
+#include "headless/skia/svpskiatextrender.hxx"
 #include <impfontmetricdata.hxx>
 
 #include <headless/SvpGraphicsBackend.hxx>
-#include <headless/CairoCommon.hxx>
+
+#include <SkSurface.h>
+#include <SkCanvas.h>
+#include <emscripten.h>
+#include <emscripten/html5.h>
 
 struct BitmapBuffer;
 class FreetypeFont;
 
 class VCL_DLLPUBLIC SvpSalGraphics : public SalGraphicsAutoDelegateToImpl
 {
-    SvpCairoTextRender                  m_aTextRenderImpl;
+    /* SkiaCommon m_aSkiaCommon; */
+    /* SvpSkiaTextRender                   m_aTextRenderImpl; */
     std::unique_ptr<SvpGraphicsBackend> m_pBackend;
 
 public:
-    void setSurface(SkSurface* pSurface, const basegfx::B2IVector& rSize);
-    SkSurface* getSurface() const { return m_aCairoCommon.m_pSurface; }
-    static cairo_user_data_key_t* getDamageKey()
-    {
-        return CairoCommon::getDamageKey();
-    }
+    void setSurface(sk_sp<SkSurface> pSurface, const basegfx::B2IVector& rSize);
+    /* sk_sp<SkSurface> getSurface() const { return m_aSkiaCommon.m_pSurface; } */
 
 protected:
-
-    cairo_t* createTmpCompatibleCairoContext() const;
+    std::unique_ptr<SkCanvas> createTmpCompatibleSkCanvas() const;
 
 public:
     SvpSalGraphics();
@@ -65,32 +73,23 @@ public:
 
     virtual SystemGraphicsData GetGraphicsData() const override;
 
-#if ENABLE_CAIRO_CANVAS
-    virtual bool            SupportsCairo() const override;
-    virtual cairo::SurfaceSharedPtr CreateSurface(const cairo::CairoSurfaceSharedPtr& rSurface) const override;
-    virtual cairo::SurfaceSharedPtr CreateSurface(const OutputDevice& rRefDevice, int x, int y, int width, int height) const override;
-    virtual cairo::SurfaceSharedPtr CreateBitmapSurface(const OutputDevice& rRefDevice, const BitmapSystemData& rData, const Size& rSize) const override;
-    virtual css::uno::Any   GetNativeSurfaceHandle(cairo::SurfaceSharedPtr& rSurface, const basegfx::B2ISize& rSize) const override;
-#endif // ENABLE_CAIRO_CANVAS
+    /* SkCanvas* getSkCanvas() const */
+    /* { */
+    /*     return m_aSkiaCommon.getSkCanvas(); */
+    /* } */
 
-    cairo_t* getCairoContext() const
-    {
-        return m_aCairoCommon.getCairoContext(/*bXorModeAllowed*/false, getAntiAlias());
-    }
+    /* void releaseSkCanvas(SkCanvas* canvas, const basegfx::B2DRange& rExtents) const */
+    /* { */
+    /*     return m_aSkiaCommon.releaseSkCanvas(canvas, rExtents); */
+    /* } */
 
-    void releaseCairoContext(cairo_t* cr, const basegfx::B2DRange& rExtents) const
-    {
-        return m_aCairoCommon.releaseCairoContext(cr, /*bXorModeAllowed*/false, rExtents);
-    }
-
-    void clipRegion(cairo_t* cr)
-    {
-        m_aCairoCommon.clipRegion(cr);
-    }
-    void copySource(const SalTwoRect& rTR, cairo_surface_t* source)
-    {
-        m_aCairoCommon.copySource(rTR, source, getAntiAlias());
-    }
+    /* void clipRegion(SkCanvas* canvas) */
+    /* { */
+    /*     m_aSkiaCommon.clipRegion(canvas); */
+    /* } */
+    /* void copySource(const SalTwoRect& rTR, sk_sp<SkImage> source) */
+    /* { */
+    /*     m_aSkiaCommon.copySource(rTR, source); */
+    /* } */
 };
-
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
