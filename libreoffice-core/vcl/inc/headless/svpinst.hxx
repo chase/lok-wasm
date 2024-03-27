@@ -32,8 +32,16 @@
 
 #include <sys/time.h>
 
+
+#define HEADLESS_SKIA 1
+
 #ifdef IOS
 #define SvpSalInstance AquaSalInstance
+#endif
+
+#ifdef HEADLESS_SKIA
+#include <headless/skia/svpinst.hxx>
+#define SvpSalInstance SkiaSalInstance
 #endif
 
 class SvpSalInstance;

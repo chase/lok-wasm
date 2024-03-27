@@ -554,6 +554,7 @@ vcl_headless_code= \
     vcl/headless/svpinst \
     vcl/headless/svpvd \
 	vcl/headless/skia/salgdi \
+	vcl/headless/skia/svpinst \
     vcl/unx/generic/app/gendisp \
     vcl/unx/generic/app/geninst \
     vcl/unx/generic/app/gensys \

@@ -36,7 +36,6 @@
 #include <vcl/inputtypes.hxx>
 #include <vcl/lok.hxx>
 
-#include <headless/svpinst.hxx>
 #include <headless/svpframe.hxx>
 #include <headless/svpdummies.hxx>
 #include <headless/svpvd.hxx>

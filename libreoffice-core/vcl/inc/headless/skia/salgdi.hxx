@@ -2,6 +2,8 @@
 #include <salgdi.hxx>
 #include <skia/gdiimpl.hxx>
 
+#pragma once
+
 class SkiaSalGraphics; // Forward declaration of SkiaSalGraphics
 
 class VCL_PLUGIN_PUBLIC SkiaSalGraphicsBackend final : public SkiaSalGraphicsImpl
