@@ -7,7 +7,7 @@
 
 class SvpSalGraphics;
 
-class VCL_DLLPUBLIC SvpSalVirtualDevice : public SalVirtualDevice
+class VCL_DLLPUBLIC SkiaSalVirtualDevice : public SalVirtualDevice
 {
     SkSurface*                          m_pRefSurface;
     SkSurface*                          m_pSurface;
@@ -21,8 +21,8 @@ protected:
     SvpSalGraphics* AddGraphics(SvpSalGraphics* aGraphics);
 
 public:
-    SvpSalVirtualDevice(SkSurface* pRefSurface, SkSurface* pPreExistingTarget);
-    virtual ~SvpSalVirtualDevice() override;
+    SkiaSalVirtualDevice(SkSurface* pRefSurface, SkSurface* pPreExistingTarget);
+    virtual ~SkiaSalVirtualDevice() override;
 
     // SalVirtualDevice
     virtual SalGraphics*    AcquireGraphics() override;

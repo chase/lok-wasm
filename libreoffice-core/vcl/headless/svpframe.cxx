@@ -57,7 +57,9 @@ SvpSalFrame::SvpSalFrame( SvpSalInstance* pInstance,
     m_nStyle( nSalFrameStyle ),
     m_bVisible( false ),
 #ifndef IOS
+#ifndef HEADLESS_SKIA
     m_pSurface( nullptr ),
+#endif
 #endif
     m_nMinWidth( 0 ),
     m_nMinHeight( 0 ),
@@ -118,8 +120,10 @@ SvpSalFrame::~SvpSalFrame()
         }
     }
 #ifndef IOS
+#ifndef HEADLESS_SKIA
     if (m_pSurface)
         cairo_surface_destroy(m_pSurface);
+#endif
 #endif
 }
 
@@ -273,6 +277,7 @@ void SvpSalFrame::SetPosSize( tools::Long nX, tools::Long nY, tools::Long nWidth
             maGeometry.setHeight(m_nMinHeight);
     }
 #ifndef IOS
+#ifndef HEADLESS_SKIA
     basegfx::B2IVector aFrameSize = GetSurfaceFrameSize();
     if (!m_pSurface || cairo_image_surface_get_width(m_pSurface) != aFrameSize.getX() ||
                        cairo_image_surface_get_height(m_pSurface) != aFrameSize.getY() )
@@ -292,6 +297,7 @@ void SvpSalFrame::SetPosSize( tools::Long nX, tools::Long nY, tools::Long nWidth
     }
     if( m_bVisible )
         m_pInstance->PostEvent( this, nullptr, SalEvent::Resize );
+#endif
 #endif
 }
 
@@ -446,7 +452,9 @@ void SvpSalFrame::UpdateSettings( AllSettings& rSettings )
         }
         rSettings.SetStyleSettings(aStyleSettings);
 #ifndef IOS // For now...
+#ifndef HEADLESS_SKIA
         pGraphics->UpdateSettings(rSettings);
+#endif
 #endif
         if (bFreeGraphics)
             ReleaseGraphics(pGraphics);

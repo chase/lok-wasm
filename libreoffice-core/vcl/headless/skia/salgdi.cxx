@@ -1,9 +1,11 @@
+#include "vcl/fontcharmap.hxx"
 #include "vcl/sysdata.hxx"
 #include <headless/skia/salgdi.hxx>
 
 SkiaSalGraphics::~SkiaSalGraphics()
 {
 }
+
 void SkiaSalGraphics::GetResolution( sal_Int32& rDPIX, sal_Int32& rDPIY )
 {
 }
@@ -61,9 +63,4 @@ SystemGraphicsData SkiaSalGraphics::GetGraphicsData() const
 SalGraphicsImpl* SkiaSalGraphics::GetImpl() const
 {
     return nullptr;
-}
-
-bool SkiaSalGraphics::SupportsCairo() const
-{
-    return false;
 }

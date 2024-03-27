@@ -45,10 +45,13 @@
 #  include <quartz/salgdi.h>
 #  include <quartz/salvd.h>
 #else
-#ifndef HEADLESS_SKIA
+#ifdef HEADLESS_SKIA
+#  include <headless/skia/svpvd.hxx>
+#else
 #  include <cairo.h>
 #  include <headless/svpgdi.hxx>
 #endif
+
 #endif
 #include <headless/svpbmp.hxx>
 
@@ -78,7 +81,7 @@ do { \
 #define DBG_TESTSVPYIELDMUTEX() ((void)0)
 #endif
 
-#if !defined(ANDROID) && !defined(IOS)
+#if !defined(ANDROID) && !defined(IOS) && !defined(HEADLESS_SKIA)
 
 static void atfork_child()
 {
@@ -102,7 +105,7 @@ SvpSalInstance::SvpSalInstance( std::unique_ptr<SalYieldMutex> pMutex )
     CreateWakeupPipe(true);
     if( s_pDefaultInstance == nullptr )
         s_pDefaultInstance = this;
-#if !defined(ANDROID) && !defined(IOS)
+#if !defined(ANDROID) && !defined(IOS) && !defined(HEADLESS_SKIA)
     pthread_atfork(nullptr, nullptr, atfork_child);
 #endif
 }
@@ -244,6 +247,7 @@ void SvpSalInstance::DestroyObject( SalObject* pObject )
 }
 
 #ifndef IOS
+#ifndef HEADLESS_SKIA
 
 std::unique_ptr<SalVirtualDevice> SvpSalInstance::CreateVirtualDevice(SalGraphics& rGraphics,
                                                        tools::Long &nDX, tools::Long &nDY,
@@ -291,6 +295,7 @@ const cairo_font_options_t* SvpSalInstance::GetCairoFontOptions()
     return nullptr;
 }
 
+#endif
 #endif
 
 SalTimer* SvpSalInstance::CreateSalTimer()

@@ -17,7 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#define HEADLESS_SKIA 1
+
 #ifndef IOS
+#ifndef HEADLESS_SKIA
 
 #include <headless/svpbmp.hxx>
 #include <headless/svpinst.hxx>
@@ -152,6 +155,7 @@ tools::Long SvpSalVirtualDevice::GetHeight() const
     return m_pSurface ? m_aFrameSize.getY() : 0;
 }
 
+#endif // HEADLESS SKIA
 #endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

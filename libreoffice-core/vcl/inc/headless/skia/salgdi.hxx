@@ -20,11 +20,9 @@ private:
     createWindowContext();
 };
 
-class VCL_PLUGIN_PUBLIC SkiaSalGraphics : public SalGraphicsAutoDelegateToImpl
+class VCL_PLUGIN_PUBLIC SkiaSalGraphics final : public SalGraphicsAutoDelegateToImpl
 {
-    sal_Int32                               mnRealDPIX;
-    sal_Int32                               mnRealDPIY;
-
+    SkSurface* m_pSkiaSurface;
 public:
     SkiaSalGraphics()
         : m_pBackend(new SkiaSalGraphicsBackend(*this))
@@ -51,8 +49,7 @@ public:
     virtual void DrawTextLayout( const GenericSalLayout& ) override;
     virtual SystemGraphicsData GetGraphicsData() const override;
     virtual SalGraphicsImpl* GetImpl() const override;
-
-
+    virtual SkSurface* getSurface() const;
 
 private:
     std::unique_ptr<SkiaSalGraphicsBackend> m_pBackend;
