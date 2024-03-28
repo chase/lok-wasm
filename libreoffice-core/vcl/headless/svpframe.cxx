@@ -36,7 +36,9 @@
 #define HEADLESS_SKIA 1
 
 #ifndef IOS
+#ifndef HEADLESS_SKIA
 #include <cairo.h>
+#endif
 #endif
 
 SvpSalFrame* SvpSalFrame::s_pFocusFrame = nullptr;
@@ -46,6 +48,7 @@ SvpSalFrame* SvpSalFrame::s_pFocusFrame = nullptr;
 #endif
 
 #ifdef HEADLESS_SKIA
+#define SvpSalGraphics SkiaSalGraphics
 #define SvpSalGraphics SkiaSalGraphics
 #endif
 

@@ -40,7 +40,6 @@
 #endif
 
 #ifdef HEADLESS_SKIA
-#include <headless/skia/svpinst.hxx>
 #define SvpSalInstance SkiaSalInstance
 #endif
 

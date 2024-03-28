@@ -36,9 +36,9 @@
 
 #define HEADLESS_SKIA 1
 #ifdef HEADLESS_SKIA
-
 #include <headless/skia/salgdi.hxx>
 #define SvpSalGraphics SkiaSalGraphics
+#define SvpSalInstance SkiaSalInstance
 #endif
 
 class SvpSalInstance;
@@ -52,7 +52,9 @@ class SvpSalFrame : public SalFrame
     SalFrameStyleFlags                  m_nStyle;
     bool                                m_bVisible;
 #ifndef IOS
+#ifndef HEADLESS_SKIA
     cairo_surface_t*                    m_pSurface;
+#endif
 #endif
     tools::Long                                m_nMinWidth;
     tools::Long                                m_nMinHeight;

@@ -9,7 +9,6 @@
 #include <emscripten/html5_webgl.h>
 #include <SkSurface.h>
 #include <SkCanvas.h>
-#include <headless/svpinst.hxx>
 #include <GrDirectContext.h>
 #include <memory>
 

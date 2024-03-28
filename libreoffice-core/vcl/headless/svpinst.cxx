@@ -45,7 +45,9 @@
 #  include <quartz/salvd.h>
 #else
 #ifdef HEADLESS_SKIA
-#  include <headless/skia/svpvd.hxx>
+# include <headless/skia/salgdi.hxx>
+# include <headless/skia/svpvd.hxx>
+# include <headless/skia/svpinst.hxx>
 #else
 #  include <cairo.h>
 #  include <headless/svpgdi.hxx>
