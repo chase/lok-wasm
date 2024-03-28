@@ -1735,7 +1735,7 @@ void Window::ImplScroll( const tools::Rectangle& rRect,
             if ( mpWindowImpl->mbTrackVisible && (mpWindowImpl->mpWinData->mnTrackFlags & ShowTrackFlags::TrackWindow) )
                 InvertTracking( *mpWindowImpl->mpWinData->mpTrackRect, mpWindowImpl->mpWinData->mnTrackFlags );
         }
-#ifndef IOS
+#if !defined(IOS) && !defined(EMSCRIPTEN)
         // This seems completely unnecessary with tiled rendering, and
         // causes the "AquaSalGraphics::copyArea() for non-layered
         // graphics" message. Presumably we should bypass this on all

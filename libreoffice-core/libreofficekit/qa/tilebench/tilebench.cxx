@@ -20,7 +20,7 @@
 #include <LibreOfficeKit/LibreOfficeKitInit.h>
 #include <LibreOfficeKit/LibreOfficeKit.hxx>
 
-#ifdef IOS
+#if defined(IOS) || defined(EMSCRIPTEN)
 #include <vcl/svapp.hxx>
 #endif
 

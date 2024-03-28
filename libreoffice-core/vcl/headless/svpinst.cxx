@@ -47,7 +47,7 @@
 #ifdef HEADLESS_SKIA
 # include <headless/skia/salgdi.hxx>
 # include <headless/skia/svpvd.hxx>
-# include <headless/skia/svpinst.hxx>
+#include <headless/skia/HeadlessSalInstance.hxx>
 #else
 #  include <cairo.h>
 #  include <headless/svpgdi.hxx>
@@ -62,6 +62,7 @@
 #include <unx/salunxtime.h>
 #include <comphelper/lok.hxx>
 #include <tools/debug.hxx>
+
 
 SvpSalInstance* SvpSalInstance::s_pDefaultInstance = nullptr;
 

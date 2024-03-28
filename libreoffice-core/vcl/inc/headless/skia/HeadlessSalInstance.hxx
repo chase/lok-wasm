@@ -22,12 +22,3 @@ public:
     SalFrame* CreateFrame(SalFrame* pParent, SalFrameStyleFlags nStyle) override;
     SalFrame* CreateChildFrame(SystemParentData* pParent, SalFrameStyleFlags nStyle) override;
 };
-
-class VCL_PLUGIN_PUBLIC SalData
-{
-protected:
-    SalData();
-
-public:
-    virtual ~SalData();
-};

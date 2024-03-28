@@ -26,14 +26,3 @@ extern "C" SalInstance *create_SalInstance()
     new SvpSalData();
     return pInstance;
 }
-
-
-
-SalData::SalData()
-{
-    new SvpSalData();
-}
-
-SalData::~SalData()
-{
-}

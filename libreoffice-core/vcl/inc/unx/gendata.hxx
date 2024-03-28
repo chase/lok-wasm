@@ -46,6 +46,15 @@ public:
 
 #endif
 
+class VCL_PLUGIN_PUBLIC SalData
+{
+protected:
+    SalData();
+
+public:
+    virtual ~SalData();
+};
+
 
 // This class is kind of a misnomer. What this class is mainly about is the
 // usage of Freetype and Fontconfig, which happens to match all *nix backends;

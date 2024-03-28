@@ -545,8 +545,6 @@ $(eval $(call gb_Library_add_cobjects,vcl,\
 vcl_headless_code= \
     vcl/headless/svpframe \
     $(if $(filter-out iOS,$(OS)), \
-        vcl/headless/svpbmp \
-        vcl/headless/svpgdi \
         vcl/headless/SvpGraphicsBackend \
         vcl/headless/CairoCommon \
         vcl/headless/BitmapHelper \
@@ -563,10 +561,13 @@ vcl_headless_code= \
     vcl/unx/generic/app/gensys \
 
 vcl_headless_freetype_code=\
+	$(if $(filter-out EMSCRIPTEN, $(OS)), \
+		vcl/unx/generic/gdi/cairotextrender \
+		vcl/headless/svpcairotextrender \
+		vcl/headless/svptext \
+	) \
     vcl/headless/svpprn \
-    vcl/headless/svptext \
     vcl/unx/generic/app/gendata \
-    vcl/unx/generic/gdi/cairotextrender \
     vcl/unx/generic/gdi/freetypetextrender \
     vcl/unx/generic/glyphs/freetype_glyphcache \
     vcl/unx/generic/glyphs/glyphcache \
@@ -574,7 +575,6 @@ vcl_headless_freetype_code=\
     vcl/unx/generic/fontmanager/fontconfig \
     vcl/unx/generic/fontmanager/fontmanager \
     vcl/unx/generic/fontmanager/helper \
-    vcl/headless/svpcairotextrender \
     vcl/unx/generic/print/bitmap_gfx \
     vcl/unx/generic/print/common_gfx \
     vcl/unx/generic/print/glyphset \

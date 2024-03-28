@@ -19,8 +19,8 @@
 
 #pragma once
 
-#ifdef IOS
-#error This file is not for iOS
+#if defined(IOS) || defined(EMSCRIPTEN)
+#error This file is not for iOS or EMSCRIPTEN
 #endif
 
 #include <sal/config.h>
