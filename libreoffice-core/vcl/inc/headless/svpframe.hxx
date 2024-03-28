@@ -19,6 +19,7 @@
 
 #ifndef INCLUDED_VCL_INC_HEADLESS_SVPFRAME_HXX
 #define INCLUDED_VCL_INC_HEADLESS_SVPFRAME_HXX
+#define HEADLESS_SKIA 1
 
 #include <vcl/sysdata.hxx>
 
@@ -34,7 +35,6 @@
 
 
 
-#define HEADLESS_SKIA 1
 #ifdef HEADLESS_SKIA
 #include <headless/skia/salgdi.hxx>
 #define SvpSalGraphics SkiaSalGraphics

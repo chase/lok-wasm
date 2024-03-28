@@ -6,15 +6,20 @@
 
 class SkiaSalGraphics; // Forward declaration of SkiaSalGraphics
 
-class VCL_PLUGIN_PUBLIC SkiaSalGraphicsBackend final : public SkiaSalGraphicsImpl
+class VCL_DLLPUBLIC SkiaSalGraphicsBackend final : public SkiaSalGraphicsImpl
 {
 public:
-    SkiaSalGraphicsBackend(SkiaSalGraphics& rParent);
+    SkiaSalGraphicsBackend(SalGraphicsAutoDelegateToImpl& rParent)
+        : SkiaSalGraphicsImpl(rParent, nullptr)
+        , mrParent(rParent)
+    {
+    }
+
     virtual void Init() override;
     virtual void freeResources() override;
 
 private:
-    SkiaSalGraphics& mrParent; // Reference to the parent SkiaSalGraphics instance
+    SalGraphicsAutoDelegateToImpl& mrParent; // Reference to the parent SkiaSalGraphics instance
 
     virtual void createWindowSurfaceInternal(bool forceRaster = false) override;
     virtual bool avoidRecreateByResize() const override;
@@ -22,12 +27,12 @@ private:
     createWindowContext();
 };
 
-class VCL_PLUGIN_PUBLIC SkiaSalGraphics final : public SalGraphicsAutoDelegateToImpl
+class VCL_DLLPUBLIC SkiaSalGraphics final : public SalGraphicsAutoDelegateToImpl
 {
     SkSurface* m_pSkiaSurface;
 public:
     SkiaSalGraphics()
-        : m_pBackend(new SkiaSalGraphicsBackend(*this))
+        : m_pBackend(new SkiaSalGraphicsBackend(static_cast<SalGraphicsAutoDelegateToImpl&>(*this)))
     {
     }
 

@@ -114,10 +114,8 @@ public:
     void                    CloseWakeupPipe(bool log);
     void                    CreateWakeupPipe(bool log);
     void                    Wakeup(SvpRequest request = SvpRequest::NONE);
-
     void                    StartTimer( sal_uInt64 nMS );
     void                    StopTimer();
-
     inline void             registerFrame( SalFrame* pFrame );
     inline void             deregisterFrame( SalFrame* pFrame );
 
@@ -175,8 +173,9 @@ public:
     virtual void            AddToRecentDocumentList(const OUString& rFileUrl, const OUString& rMimeType, const OUString& rDocumentService) override;
 
     virtual std::unique_ptr<GenPspGraphics> CreatePrintGraphics() override;
-
+#ifndef HEADLESS_SKIA
     virtual const cairo_font_options_t* GetCairoFontOptions() override;
+#endif
 };
 
 inline void SvpSalInstance::registerFrame( SalFrame* pFrame )
@@ -189,7 +188,9 @@ inline void SvpSalInstance::deregisterFrame( SalFrame* pFrame )
     eraseFrame( pFrame );
 }
 
+#ifndef HEADLESS_SKIA
 VCL_DLLPUBLIC cairo_surface_t* get_underlying_cairo_surface(const VirtualDevice& rDevice);
+#endif
 
 #endif // INCLUDED_VCL_INC_HEADLESS_SVPINST_HXX
 

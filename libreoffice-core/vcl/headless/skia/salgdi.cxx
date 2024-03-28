@@ -1,6 +1,25 @@
+#include "SkSurface.h"
 #include "vcl/fontcharmap.hxx"
 #include "vcl/sysdata.hxx"
 #include <headless/skia/salgdi.hxx>
+
+void SkiaSalGraphicsBackend::Init()
+{
+
+}
+
+void SkiaSalGraphicsBackend::freeResources()
+{
+}
+
+void SkiaSalGraphicsBackend::createWindowSurfaceInternal(bool forceRaster)
+{
+}
+
+bool SkiaSalGraphicsBackend::avoidRecreateByResize() const
+{
+    return true;
+}
 
 SkiaSalGraphics::~SkiaSalGraphics()
 {
@@ -61,6 +80,11 @@ SystemGraphicsData SkiaSalGraphics::GetGraphicsData() const
 }
 
 SalGraphicsImpl* SkiaSalGraphics::GetImpl() const
+{
+    return nullptr;
+}
+
+SkSurface* SkiaSalGraphics::getSurface() const
 {
     return nullptr;
 }

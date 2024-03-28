@@ -291,10 +291,10 @@ const cairo_font_options_t* SvpSalInstance::GetCairoFontOptions()
 
 #else // IOS
 
-const cairo_font_options_t* SvpSalInstance::GetCairoFontOptions()
-{
-    return nullptr;
-}
+/* const cairo_font_options_t* SvpSalInstance::GetCairoFontOptions() */
+/* { */
+/*     return nullptr; */
+/* } */
 
 #endif
 #endif

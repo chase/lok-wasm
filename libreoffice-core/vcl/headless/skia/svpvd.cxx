@@ -8,6 +8,7 @@
 #include <SkCanvas.h>
 #include <headless/svpinst.hxx>
 #include <GrDirectContext.h>
+#include <headless/skia/HeadlessSalInstance.hxx>
 #include <memory>
 
 

@@ -110,6 +110,7 @@ $(eval $(call gb_Library_use_externals,vcl,\
     mdds_headers \
 ))
 
+
 $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/skia/SkiaHelper \
     vcl/source/rendercontext/drawmode \
@@ -555,6 +556,8 @@ vcl_headless_code= \
     vcl/headless/svpvd \
 	vcl/headless/skia/salgdi \
 	vcl/headless/skia/svpinst \
+	vcl/headless/skia/svpvd \
+	vcl/headless/skia/HeadlessSalInstance \
     vcl/unx/generic/app/gendisp \
     vcl/unx/generic/app/geninst \
     vcl/unx/generic/app/gensys \

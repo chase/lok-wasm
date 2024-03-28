@@ -17,15 +17,19 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifdef IOS
+#define HEADLESS_SKIA 1
+#if defined(IOS)
 #include <ios/iosinst.hxx>
 #endif
 
+#if defined(HEADLESS_SKIA)
+#include <headless/skia/HeadlessSalInstance.hxx>
+#endif
 #include <unx/gendata.hxx>
 
 #include <unx/fontmanager.hxx>
 
-#ifndef IOS
+#if !defined(IOS) && !defined(HEADLESS_SKIA)
 
 #include <unx/glyphcache.hxx>
 #include <printerinfomanager.hxx>
@@ -43,7 +47,7 @@ GenericUnixSalData::GenericUnixSalData()
 
 GenericUnixSalData::~GenericUnixSalData()
 {
-#ifndef IOS
+#if !defined(IOS) && !defined(HEADLESS_SKIA)
     // at least for InitPrintFontManager the sequence is important
     m_pPrintFontManager.reset();
     m_pFreetypeManager.reset();
@@ -53,13 +57,13 @@ GenericUnixSalData::~GenericUnixSalData()
 
 void GenericUnixSalData::Dispose() {}
 
-#ifndef IOS
+#if !defined(IOS) && !defined(HEADLESS_SKIA)
 void GenericUnixSalData::InitFreetypeManager() { m_pFreetypeManager.reset(new FreetypeManager); }
 #endif
 
 void GenericUnixSalData::InitPrintFontManager()
 {
-#ifndef IOS
+#if !defined(IOS) && !defined(HEADLESS_SKIA)
     GetFreetypeManager();
     m_pPrintFontManager.reset(new psp::PrintFontManager);
     m_pPrintFontManager->initialize();

@@ -9,6 +9,7 @@
 
 #ifndef INCLUDED_VCL_INC_GENERIC_GENDATA_HXX
 #define INCLUDED_VCL_INC_GENERIC_GENDATA_HXX
+#define HEADLESS_SKIA 1
 
 #include <osl/socket.hxx>
 
@@ -16,12 +17,12 @@
 
 #include <memory>
 
-#ifndef IOS
+#if !defined(IOS) && !defined(HEADLESS_SKIA)
 class FreetypeManager;
 #endif
 class SalGenericDisplay;
 
-#ifndef IOS
+#if !defined(IOS) && !defined(HEADLESS_SKIA)
 
 namespace psp
 {
@@ -50,7 +51,8 @@ public:
 // except that the osx and ios backends are *nix but don't use this.
 class VCL_PLUGIN_PUBLIC GenericUnixSalData : public SalData
 {
-#ifndef IOS
+
+#if !defined(IOS) && !defined(HEADLESS_SKIA)
     friend class ::psp::PrinterInfoManager;
 #endif
 
@@ -60,7 +62,7 @@ class VCL_PLUGIN_PUBLIC GenericUnixSalData : public SalData
     // for transient storage of unicode strings eg. 'u123' by input methods
     OUString m_aUnicodeEntry;
 
-#ifndef IOS
+#if !defined(IOS) && !defined(HEADLESS_SKIA)
     std::unique_ptr<FreetypeManager> m_pFreetypeManager;
     std::unique_ptr<psp::PrintFontManager> m_pPrintFontManager;
     std::unique_ptr<psp::PrinterInfoManager> m_pPrinterInfoManager;
@@ -86,8 +88,8 @@ public:
 
     OUString& GetUnicodeCommand() { return m_aUnicodeEntry; }
 
-#ifndef IOS
 
+#if !defined(IOS) && !defined(HEADLESS_SKIA)
     FreetypeManager* GetFreetypeManager()
     {
         if (!m_pFreetypeManager)
