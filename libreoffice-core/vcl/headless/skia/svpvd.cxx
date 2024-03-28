@@ -1,5 +1,6 @@
 #include "SkImage.h"
 #include "SkSurfaceProps.h"
+#include "gl/GrGLExtensions.h"
 #include "gl/GrGLInterface.h"
 #include "salgdi.hxx"
 #include <emscripten/html5_webgl.h>
@@ -10,6 +11,8 @@
 #include <GrDirectContext.h>
 #include <headless/skia/HeadlessSalInstance.hxx>
 #include <memory>
+
+
 
 
 SkiaSalVirtualDevice::SkiaSalVirtualDevice(SkiaSalGraphics& rGraphics,  EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context, tools::Long width, tools::Long height)

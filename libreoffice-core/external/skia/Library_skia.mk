@@ -119,6 +119,7 @@ $(eval $(call gb_Library_set_include,skia,\
     -I$(call gb_UnpackedTarball_get_dir,skia)/third_party/vulkanmemoryallocator/ \
     -I$(call gb_UnpackedTarball_get_dir,skia)/include/third_party/vulkan/ \
     -I$(call gb_UnpackedTarball_get_dir,skia)/include/core/ \
+    -I$(call gb_UnpackedTarball_get_dir,skia)/include/gpu/ganesh/gl/ \
     -I$(SRCDIR)/external/skia/inc/ \
 ))
 
@@ -909,6 +910,14 @@ $(eval $(call gb_Library_add_generated_exception_objects,skia,\
     UnpackedTarball/skia/tools/sk_app/unix/RasterWindowContext_unix \
 ))
 endif
+
+$(eval $(call gb_Library_add_generated_exception_objects,skia,\
+	UnpackedTarball/skia/src/gpu/ganesh/gl/webgl/GrGLMakeNativeInterface_webgl \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLAssembleWebGLInterfaceAutogen \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLAssembleInterface \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLAssembleHelpers \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLUtil \
+))
 
 ifeq ($(OS),WNT)
 $(eval $(call gb_Library_add_generated_exception_objects,skia,\
