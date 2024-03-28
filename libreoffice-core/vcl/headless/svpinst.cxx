@@ -47,7 +47,8 @@
 #ifdef HEADLESS_SKIA
 # include <headless/skia/salgdi.hxx>
 # include <headless/skia/svpvd.hxx>
-#include <headless/skia/HeadlessSalInstance.hxx>
+# include <headless/skia/HeadlessSalInstance.hxx>
+# include <skia/salbmp.hxx>
 #else
 #  include <cairo.h>
 #  include <headless/svpgdi.hxx>
@@ -314,6 +315,8 @@ std::shared_ptr<SalBitmap> SvpSalInstance::CreateSalBitmap()
 {
 #ifdef IOS
     return std::make_shared<QuartzSalBitmap>();
+#elif defined HEADLESS_SKIA
+    return std::make_shared<SkiaSalBitmap>();
 #else
     return std::make_shared<SvpSalBitmap>();
 #endif

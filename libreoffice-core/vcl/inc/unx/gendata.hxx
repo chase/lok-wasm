@@ -17,12 +17,12 @@
 
 #include <memory>
 
-#if !defined(IOS) && !defined(HEADLESS_SKIA)
+#if !defined(IOS)
 class FreetypeManager;
 #endif
 class SalGenericDisplay;
 
-#if !defined(IOS) && !defined(HEADLESS_SKIA)
+#if !defined(IOS)
 
 namespace psp
 {
@@ -46,15 +46,6 @@ public:
 
 #endif
 
-class VCL_PLUGIN_PUBLIC SalData
-{
-protected:
-    SalData();
-
-public:
-    virtual ~SalData();
-};
-
 
 // This class is kind of a misnomer. What this class is mainly about is the
 // usage of Freetype and Fontconfig, which happens to match all *nix backends;
@@ -62,7 +53,7 @@ public:
 class VCL_PLUGIN_PUBLIC GenericUnixSalData : public SalData
 {
 
-#if !defined(IOS) && !defined(HEADLESS_SKIA)
+#if !defined(IOS)
     friend class ::psp::PrinterInfoManager;
 #endif
 
@@ -72,7 +63,7 @@ class VCL_PLUGIN_PUBLIC GenericUnixSalData : public SalData
     // for transient storage of unicode strings eg. 'u123' by input methods
     OUString m_aUnicodeEntry;
 
-#if !defined(IOS) && !defined(HEADLESS_SKIA)
+#if !defined(IOS)
     std::unique_ptr<FreetypeManager> m_pFreetypeManager;
     std::unique_ptr<psp::PrintFontManager> m_pPrintFontManager;
     std::unique_ptr<psp::PrinterInfoManager> m_pPrinterInfoManager;
@@ -99,7 +90,7 @@ public:
     OUString& GetUnicodeCommand() { return m_aUnicodeEntry; }
 
 
-#if !defined(IOS) && !defined(HEADLESS_SKIA)
+#if !defined(IOS)
     FreetypeManager* GetFreetypeManager()
     {
         if (!m_pFreetypeManager)

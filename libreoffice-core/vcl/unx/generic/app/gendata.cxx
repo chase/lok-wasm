@@ -29,7 +29,7 @@
 
 #include <unx/fontmanager.hxx>
 
-#if !defined(IOS) && !defined(HEADLESS_SKIA)
+#if !defined(IOS)
 
 #include <unx/glyphcache.hxx>
 #include <printerinfomanager.hxx>
@@ -47,7 +47,7 @@ GenericUnixSalData::GenericUnixSalData()
 
 GenericUnixSalData::~GenericUnixSalData()
 {
-#if !defined(IOS) && !defined(HEADLESS_SKIA)
+#if !defined(IOS)
     // at least for InitPrintFontManager the sequence is important
     m_pPrintFontManager.reset();
     m_pFreetypeManager.reset();
@@ -57,13 +57,13 @@ GenericUnixSalData::~GenericUnixSalData()
 
 void GenericUnixSalData::Dispose() {}
 
-#if !defined(IOS) && !defined(HEADLESS_SKIA)
+#if !defined(IOS)
 void GenericUnixSalData::InitFreetypeManager() { m_pFreetypeManager.reset(new FreetypeManager); }
 #endif
 
 void GenericUnixSalData::InitPrintFontManager()
 {
-#if !defined(IOS) && !defined(HEADLESS_SKIA)
+#if !defined(IOS)
     GetFreetypeManager();
     m_pPrintFontManager.reset(new psp::PrintFontManager);
     m_pPrintFontManager->initialize();
