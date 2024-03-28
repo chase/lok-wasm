@@ -911,12 +911,35 @@ $(eval $(call gb_Library_add_generated_exception_objects,skia,\
 ))
 endif
 
+# EMSCRIPTEN
 $(eval $(call gb_Library_add_generated_exception_objects,skia,\
-	UnpackedTarball/skia/src/gpu/ganesh/gl/webgl/GrGLMakeNativeInterface_webgl \
-	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLAssembleWebGLInterfaceAutogen \
-	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLAssembleInterface \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLAssembleGLInterfaceAutogen \
 	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLAssembleHelpers \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLAssembleInterface \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLAssembleWebGLInterfaceAutogen \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLAttachment \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLBuffer \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLCaps \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLContext \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLExtensions \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLGLSL \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLGpu \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLGpuProgramCache \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLInterfaceAutogen \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLMakeNativeInterface_none \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLOpsRenderPass \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLProgram \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLProgramDataManager \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLRenderTarget \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLSemaphore \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLTexture \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLTextureRenderTarget \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLTypesPriv \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLUniformHandler \
 	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLUtil \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/GrGLVertexArray \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/builders/GrGLProgramBuilder \
+	UnpackedTarball/skia/src/gpu/ganesh/gl/builders/GrGLShaderStringBuilder \
 ))
 
 ifeq ($(OS),WNT)
