@@ -46,6 +46,7 @@ public:
 
 #endif
 
+
 // This class is kind of a misnomer. What this class is mainly about is the
 // usage of Freetype and Fontconfig, which happens to match all *nix backends;
 // except that the osx and ios backends are *nix but don't use this.

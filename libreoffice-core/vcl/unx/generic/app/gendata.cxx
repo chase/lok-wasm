@@ -18,13 +18,13 @@
  */
 
 #define HEADLESS_SKIA 1
+#if defined(HEADLESS_SKIA)
+#include <headless/skia/HeadlessSalInstance.hxx>
+#endif
 #if defined(IOS)
 #include <ios/iosinst.hxx>
 #endif
 
-#if defined(HEADLESS_SKIA)
-#include <headless/skia/HeadlessSalInstance.hxx>
-#endif
 #include <unx/gendata.hxx>
 
 #include <unx/fontmanager.hxx>

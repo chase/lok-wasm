@@ -1,9 +1,12 @@
-#include "vcl/dllapi.h"
+#include <vcl/dllapi.h>
 #include <headless/svpinst.hxx>
+#include <tools/link.hxx>
 #include <headless/svpframe.hxx>
 
 
-class VCL_DLLPUBLIC HeadlessSkiaSalInstance final : public SvpSalInstance
+class SystemFontList;
+
+class VCL_DLLPUBLIC HeadlessSkiaSalInstance : public SvpSalInstance
 {
 public:
     HeadlessSkiaSalInstance(std::unique_ptr<SalYieldMutex> pMutex);
@@ -20,11 +23,11 @@ public:
     SalFrame* CreateChildFrame(SystemParentData* pParent, SalFrameStyleFlags nStyle) override;
 };
 
-class SalData
+class VCL_PLUGIN_PUBLIC SalData
 {
-public:
-    static void ensureThreadAutoreleasePool(){};
+protected:
+    SalData();
 
-    explicit SalData();
+public:
     virtual ~SalData();
 };
