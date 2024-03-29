@@ -12,7 +12,7 @@ TODO: List pre-reqs for each platform
 
 Setup the repo:
 ```bash
-git clone https://github.com/coparse-inc/libreofficekit
+git clone https://github.com/coparse-inc/lok-wasm
 ./scripts/setup.sh
 # if you're using VS Code or clangd in vim, run this
 ./scripts/prepare-clangd.sh
