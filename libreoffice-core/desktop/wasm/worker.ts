@@ -343,11 +343,16 @@ const handler: AsyncMessage = {
     ref: DocumentRef,
     viewId: ViewId,
     command: string,
-    args?: string,
+    args?: any,
     notifyWhenFinished?: boolean
   ): Promise<void> {
     await lokPromise;
-    byRef(ref)?.dispatchCommand(viewId, command, args, notifyWhenFinished);
+    byRef(ref)?.dispatchCommand(
+      viewId,
+      command,
+      typeof args === 'string' ? args : JSON.stringify(args),
+      notifyWhenFinished
+    );
   },
   removeText: async function (
     ref: DocumentRef,
@@ -356,7 +361,12 @@ const handler: AsyncMessage = {
     charsAfter: number
   ): Promise<void> {
     await lokPromise;
-    byRef(ref)?.removeText(viewId, 0 /* window id is pretty much always 0 (the default window) */, charsBefore, charsAfter);
+    byRef(ref)?.removeText(
+      viewId,
+      0 /* window id is pretty much always 0 (the default window) */,
+      charsBefore,
+      charsAfter
+    );
   },
   setClientVisibleArea: async function (
     ref: DocumentRef,

@@ -85,7 +85,7 @@ export type DocumentWithViewMethods = {
   unsubscribe(callbackType: CallbackType): void;
   dispatchCommand(
     command: string,
-    args?: string,
+    args?: any,
     notifyWhenFinished?: boolean
   ): void;
   removeText(charsBefore: number, charsAfter: number): void;
