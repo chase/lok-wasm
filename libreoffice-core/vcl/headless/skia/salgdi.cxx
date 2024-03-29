@@ -2,10 +2,11 @@
 #include "vcl/fontcharmap.hxx"
 #include "vcl/sysdata.hxx"
 #include <headless/skia/salgdi.hxx>
+#include <memory>
 
 void SkiaSalGraphicsBackend::Init()
 {
-
+    SkiaSalGraphicsImpl::Init();
 }
 
 void SkiaSalGraphicsBackend::freeResources()
@@ -44,12 +45,12 @@ void SkiaSalGraphics::GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel 
 
 FontCharMapRef SkiaSalGraphics::GetFontCharMap() const
 {
-    return nullptr;
+    return FontCharMapRef( new FontCharMap() );
 }
 
 bool SkiaSalGraphics::GetFontCapabilities(vcl::FontCapabilities &rFontCapabilities) const
 {
-    return false;
+    return true;
 }
 
 void SkiaSalGraphics::GetDevFontList( vcl::font::PhysicalFontCollection* )
@@ -67,7 +68,6 @@ bool SkiaSalGraphics::AddTempDevFont( vcl::font::PhysicalFontCollection*, const 
 
 std::unique_ptr<GenericSalLayout> SkiaSalGraphics::GetTextLayout(int nFallbackLevel)
 {
-    return nullptr;
 }
 
 void SkiaSalGraphics::DrawTextLayout( const GenericSalLayout& )
@@ -81,10 +81,10 @@ SystemGraphicsData SkiaSalGraphics::GetGraphicsData() const
 
 SalGraphicsImpl* SkiaSalGraphics::GetImpl() const
 {
-    return nullptr;
+    return m_pBackend->GetImpl();
 }
 
 SkSurface* SkiaSalGraphics::getSurface() const
 {
-    return nullptr;
+    return m_pSkiaSurface;
 }

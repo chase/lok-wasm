@@ -33,6 +33,7 @@ SkiaSalVirtualDevice::~SkiaSalVirtualDevice() {
 }
 
 SalGraphics* SkiaSalVirtualDevice::AcquireGraphics() {
+    emscripten_console_log("acquiring graphics");
     return m_pGraphics.get();
 }
 

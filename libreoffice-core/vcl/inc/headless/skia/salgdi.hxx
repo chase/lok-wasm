@@ -18,6 +18,11 @@ public:
     virtual void Init() override;
     virtual void freeResources() override;
 
+    SalGraphicsImpl* GetImpl()
+    {
+        return this;
+    }
+
 private:
     SalGraphicsAutoDelegateToImpl& mrParent; // Reference to the parent SkiaSalGraphics instance
 

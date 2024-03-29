@@ -377,15 +377,12 @@ private:
 //static
 void preload() { instance(); }
 
-void testSkiaCanvas() {}
-
 EMSCRIPTEN_BINDINGS(lok)
 {
     register_optional<bool>();
     register_optional<std::string>();
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
-    function("testSkiaCanvas", &testSkiaCanvas);
 
     class_<DocumentClient>("Document")
         .constructor<std::string>()

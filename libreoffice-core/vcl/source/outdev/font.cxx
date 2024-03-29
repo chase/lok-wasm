@@ -637,6 +637,9 @@ void OutputDevice::ImplInitFontList() const
 
     if( !(mpGraphics || AcquireGraphics()) )
         return;
+
+    // TODO: @synoet properly handle devfontList
+    return;
     assert(mpGraphics);
 
     SAL_INFO( "vcl.gdi", "OutputDevice::ImplInitFontList()" );
@@ -685,6 +688,7 @@ const LogicalFontInstance* OutputDevice::GetFontInstance() const
 bool OutputDevice::ImplNewFont() const
 {
     DBG_TESTSOLARMUTEX();
+    return true;
 
     if ( !mbNewFont )
         return true;
