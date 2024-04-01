@@ -5,6 +5,7 @@ const MOUSE_MOVE_INTERVAL_MS = 200;
 
 // these are true globals, unless the system supports multiple non-gesture pointers
 let mouseIsDown = false;
+let mouseDownButtons = 0;
 
 // Taken from LibreOfficeKitEnums.h
 const VCL_MOUSE_DOWN = 0;
@@ -24,12 +25,13 @@ function domMouseButtonsToVclButtons(evt: MouseEvent) {
 
 export function handleMouseDown(doc: DocumentClient, evt: MouseEvent) {
   mouseIsDown = true;
+  mouseDownButtons = domMouseButtonsToVclButtons(evt);
   doc.postMouseEvent(
     VCL_MOUSE_DOWN,
     evt.offsetX * 15,
     evt.offsetY * 15,
     1,
-    domMouseButtonsToVclButtons(evt),
+    mouseDownButtons,
     eventModifiers(evt)
   );
 }
@@ -41,7 +43,7 @@ export function handleMouseUp(doc: DocumentClient, evt: MouseEvent) {
     evt.offsetX * 15,
     evt.offsetY * 15,
     0,
-    domMouseButtonsToVclButtons(evt),
+    mouseDownButtons,
     eventModifiers(evt)
   );
 }
