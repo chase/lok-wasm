@@ -20,7 +20,7 @@ gb_EMSCRIPTEN_PRE_JS_FILES = \
 
 gb_RUN_CONFIGURE := $(SRCDIR)/solenv/bin/run-configure
 # avoid -s SAFE_HEAP=1 - c.f. gh#8584 this breaks source maps
-gb_EMSCRIPTEN_CPPFLAGS := -pthread -s USE_PTHREADS=1 -D_LARGEFILE64_SOURCE -D_LARGEFILE_SOURCE
+gb_EMSCRIPTEN_CPPFLAGS := -pthread -s USE_PTHREADS=1 -D_LARGEFILE64_SOURCE -D_LARGEFILE_SOURCE -mbulk-memory
 gb_EMSCRIPTEN_LDFLAGS := $(gb_EMSCRIPTEN_CPPFLAGS)
 
 # Initial memory size and worker thread pool
