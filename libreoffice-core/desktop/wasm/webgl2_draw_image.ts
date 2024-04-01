@@ -69,12 +69,12 @@ export function createTexturePool(
 ): TexturePool {
   const pool = new Array(size);
   const freeStack = new Array(size);
-  let freeStackHead = 0;
+  let freeStackHead = size - 1;
   function pushFree(i: number) {
-    freeStack[freeStackHead--] = i;
+    freeStack[++freeStackHead] = i;
   }
   function popFree() {
-    return freeStack[freeStackHead++];
+    return freeStack[freeStackHead--];
   }
   function acquire(): PooledTexture | undefined {
     const i = popFree();

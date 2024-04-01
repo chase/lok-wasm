@@ -170,10 +170,15 @@ function idle() {
     const newVisibleRingTiles = new Set<number>();
 
     if (visibleInvalidations.length != 0) {
+      const tileRangesToPaint = [];
+      // first do a pass and mark the invalid tiles, to prevent uncessary work by invalidating/painting overlapping areas
       for (const visibleInvalidation of visibleInvalidations) {
         const rangesToPaint = rectToTileIndexRanges(visibleInvalidation);
         markInvalid(rangesToPaint);
+        tileRangesToPaint.push(rangesToPaint);
+      }
 
+      for (const rangesToPaint of tileRangesToPaint) {
         // effectively paints by rows of tiles, so there isn't any odd-looking tearing if painting is paused
         for (let y = 0; y < rangesToPaint.length && !shouldPausePaint(); ++y) {
           const [start, endInclusive] = rangesToPaint[y];
@@ -202,7 +207,11 @@ function idle() {
       const [start, endInclusive] = visibleRangesToPaint[y];
       for (let x = start; x <= endInclusive; ++x) {
         const ringIndex = tileIndexToTileRingIndex.get(x);
-        if (ringIndex != null && validTiles.has(x)) {
+        if (
+          ringIndex != null &&
+          validTiles.has(x) &&
+          tileRingIndexToTileIndex.get(ringIndex) === x
+        ) {
           newVisibleRingTiles.add(ringIndex);
         } else {
           newVisibleRingTiles.add(blockingPaintTile(x));
@@ -360,12 +369,14 @@ function stateMachine() {
         self.close();
     }
   }
-  afterInvalidate().then((shouldRun) => {
-    pendingStateChange ||= shouldRun;
-    if (shouldRun && !running) {
-      stateMachine();
-    }
-  });
+  if (!pendingInvalidate) {
+    afterInvalidate().then((shouldRun) => {
+      pendingStateChange ||= shouldRun;
+      if (shouldRun && !running) {
+        stateMachine();
+      }
+    });
+  }
   running = false;
 }
 
@@ -498,9 +509,6 @@ function blockingPaintTile(tileIndex: number): number {
   seekNonVisibleRingIndex();
 
   // retire the previous tile if it exists
-  const tileIndexToRetire = tileRingIndexToTileIndex.get(tileRingIndex);
-  validTiles.delete(tileIndexToRetire);
-  tileIndexToTileRingIndex.delete(tileIndexToRetire);
   tileRing.get(tileRingIndex)?.release();
 
   tileRingIndexToTileIndex.set(tileRingIndex, tileIndex);
@@ -519,6 +527,7 @@ function markInvalid(ranges: TileIndexRange[]) {
     const [start, endInclusive] = range;
     for (let i = start; i <= endInclusive; ++i) {
       validTiles.delete(i);
+      tileIndexToTileRingIndex.delete(i);
     }
   }
 }
