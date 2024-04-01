@@ -552,6 +552,7 @@ vcl_headless_code= \
     vcl/headless/svpdummies \
     vcl/headless/svpinst \
     vcl/headless/svpvd \
+	vcl/headless/skia/svpskiatextrender \
 	vcl/headless/skia/salgdi \
 	vcl/headless/skia/svpinst \
 	vcl/headless/skia/svpvd \

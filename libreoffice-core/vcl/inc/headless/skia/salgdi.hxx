@@ -1,6 +1,7 @@
 #include "vcl/dllapi.h"
 #include <salgdi.hxx>
 #include <skia/gdiimpl.hxx>
+#include <headless/skia/svpskiatextrender.hxx>
 
 #pragma once
 
@@ -35,6 +36,8 @@ private:
 class VCL_DLLPUBLIC SkiaSalGraphics final : public SalGraphicsAutoDelegateToImpl
 {
     SkSurface* m_pSkiaSurface;
+    SvpSkiaTextRender m_aTextRenderImpl;
+
 public:
     SkiaSalGraphics()
         : m_pBackend(new SkiaSalGraphicsBackend(static_cast<SalGraphicsAutoDelegateToImpl&>(*this)))

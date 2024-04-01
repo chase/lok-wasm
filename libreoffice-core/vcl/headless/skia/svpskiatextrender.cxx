@@ -3,3 +3,7 @@
 void SvpSkiaTextRender::DrawTextLayout(const GenericSalLayout&, const SalGraphics&)
 {
 }
+
+void SvpSkiaTextRender::ClearDevFontCache()
+{
+}

@@ -748,16 +748,24 @@ void PrintFontManager::addFontconfigDir( const OString& rDirName )
     const char* pDirName = rDirName.getStr();
     bool bDirOk = (FcConfigAppFontAddDir(FcConfigGetCurrent(), reinterpret_cast<FcChar8 const *>(pDirName) ) == FcTrue);
 
-    SAL_INFO("vcl.fonts", "FcConfigAppFontAddDir( \"" << pDirName << "\") => " << bDirOk);
+    SAL_WARN("vcl.fonts", "FcConfigAppFontAddDir( \"" << pDirName << "\") => " << bDirOk);
 
     if( !bDirOk )
         return;
 
     // load dir-specific fc-config file too if available
     const OString aConfFileName = rDirName + "/fc_local.conf";
-    FILE* pCfgFile = fopen( aConfFileName.getStr(), "rb" );
+    FILE* pCfgFile = nullptr;
+    try {
+        pCfgFile = fopen( aConfFileName.getStr(), "rb" );
+    } catch (const std::exception& e) {
+        SAL_WARN("vcl.fonts", "cannot open " << aConfFileName);
+    }
+
     if( pCfgFile )
     {
+
+        SAL_WARN("vcl.fonts", "loading " << aConfFileName);
         fclose( pCfgFile);
         bool bCfgOk = FcConfigParseAndLoad(FcConfigGetCurrent(),
                         reinterpret_cast<FcChar8 const *>(aConfFileName.getStr()), FcTrue);

@@ -638,8 +638,6 @@ void OutputDevice::ImplInitFontList() const
     if( !(mpGraphics || AcquireGraphics()) )
         return;
 
-    // TODO: @synoet properly handle devfontList
-    return;
     assert(mpGraphics);
 
     SAL_INFO( "vcl.gdi", "OutputDevice::ImplInitFontList()" );
@@ -1249,13 +1247,13 @@ void OutputDevice::ResetNewFontCache()
 
 void OutputDevice::ImplReleaseFonts()
 {
-    mpGraphics->ReleaseFonts();
+    /* mpGraphics->ReleaseFonts(); */
 
-    mbNewFont = true;
-    mbInitFont = true;
+    /* mbNewFont = true; */
+    /* mbInitFont = true; */
 
-    mpFontInstance.clear();
-    mpFontFaceCollection.reset();
+    /* mpFontInstance.clear(); */
+    /* mpFontFaceCollection.reset(); */
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab cinoptions=b1,g0,N-s cinkeys+=0=break: */

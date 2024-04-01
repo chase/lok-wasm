@@ -26,52 +26,58 @@ SkiaSalGraphics::~SkiaSalGraphics()
 {
 }
 
-void SkiaSalGraphics::GetResolution( sal_Int32& rDPIX, sal_Int32& rDPIY )
-{
-}
+void SkiaSalGraphics::GetResolution( sal_Int32& rDPIX, sal_Int32& rDPIY ){}
 
 void SkiaSalGraphics::SetTextColor( Color nColor )
 {
+    m_aTextRenderImpl.SetTextColor( nColor );
 }
 
 
-void SkiaSalGraphics::SetFont( LogicalFontInstance*, int nFallbackLevel )
+void SkiaSalGraphics::SetFont( LogicalFontInstance* , int nFallbackLevel )
 {
+    m_aTextRenderImpl.SetFont( nullptr, nFallbackLevel );
 }
 
-void SkiaSalGraphics::GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel )
+void SkiaSalGraphics::GetFontMetric( ImplFontMetricDataRef& xFontMetric, int nFallbackLevel )
 {
+    m_aTextRenderImpl.GetFontMetric( xFontMetric, nFallbackLevel );
 }
 
 FontCharMapRef SkiaSalGraphics::GetFontCharMap() const
 {
-    return FontCharMapRef( new FontCharMap() );
+
+    return m_aTextRenderImpl.GetFontCharMap();
 }
 
 bool SkiaSalGraphics::GetFontCapabilities(vcl::FontCapabilities &rFontCapabilities) const
 {
-    return true;
+    return m_aTextRenderImpl.GetFontCapabilities(rFontCapabilities);
 }
 
-void SkiaSalGraphics::GetDevFontList( vcl::font::PhysicalFontCollection* )
+void SkiaSalGraphics::GetDevFontList( vcl::font::PhysicalFontCollection* rFontCollection)
 {
+    m_aTextRenderImpl.GetDevFontList(rFontCollection);
 }
 
 void SkiaSalGraphics::ClearDevFontCache()
 {
+    m_aTextRenderImpl.ClearDevFontCache();
 }
 
-bool SkiaSalGraphics::AddTempDevFont( vcl::font::PhysicalFontCollection*, const OUString& rFileURL, const OUString& rFontName )
+bool SkiaSalGraphics::AddTempDevFont( vcl::font::PhysicalFontCollection* pFontCollection, const OUString& rFileURL, const OUString& rFontName )
 {
-    return false;
+    return m_aTextRenderImpl.AddTempDevFont(pFontCollection, rFileURL, rFontName);
 }
 
 std::unique_ptr<GenericSalLayout> SkiaSalGraphics::GetTextLayout(int nFallbackLevel)
 {
+    return m_aTextRenderImpl.GetTextLayout( nFallbackLevel );
 }
 
-void SkiaSalGraphics::DrawTextLayout( const GenericSalLayout& )
+void SkiaSalGraphics::DrawTextLayout( const GenericSalLayout& layout)
 {
+    m_aTextRenderImpl.DrawTextLayout( layout, *this );
 }
 
 SystemGraphicsData SkiaSalGraphics::GetGraphicsData() const

@@ -28,8 +28,6 @@ SkiaSalVirtualDevice::SkiaSalVirtualDevice(SkiaSalGraphics& rGraphics,  EMSCRIPT
 }
 
 SkiaSalVirtualDevice::~SkiaSalVirtualDevice() {
-    m_surface.reset();
-    m_grContext.reset();
 }
 
 SalGraphics* SkiaSalVirtualDevice::AcquireGraphics() {
@@ -39,7 +37,6 @@ SalGraphics* SkiaSalVirtualDevice::AcquireGraphics() {
 
 void SkiaSalVirtualDevice::ReleaseGraphics(SalGraphics* pGraphics) {
     // Delete the SalGraphics instance
-    delete pGraphics;
 }
 
 bool SkiaSalVirtualDevice::SetSize(tools::Long nNewDX, tools::Long nNewDY) {
