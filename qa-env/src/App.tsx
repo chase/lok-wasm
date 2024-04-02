@@ -1,4 +1,4 @@
-import { loadDocument } from '@lok';
+import { acceptCanvasTransfer, loadDocument } from '@lok';
 import type { DocumentClient } from '@lok/shared';
 import './App.css';
 import { Show, createSignal } from 'solid-js';
@@ -18,6 +18,13 @@ async function fileOpen(files: FileList | null) {
   if (oldDoc) {
     cleanup(oldDoc);
   }
+  const offscreen = document?.querySelector("canvas")?.transferControlToOffscreen();
+  console.log('offscreen', offscreen);
+  if (offscreen) {
+    console.log('transfering canvas', offscreen);
+    acceptCanvasTransfer(offscreen, 0)
+  }
+
   const doc = await loadDocument(name, blob);
   if (!doc) {
     console.error('failure!');
@@ -53,9 +60,11 @@ function App() {
           <span class="loader" />
         </div>
       </Show>
-      <Show when={getDoc()} keyed>
-        <OfficeDocument doc={getDoc()!} />
-      </Show>
+      <canvas
+        id="canvas"
+        width="800"
+        height="600"
+      />
     </>
   );
 }

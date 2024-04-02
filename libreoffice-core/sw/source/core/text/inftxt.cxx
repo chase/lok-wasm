@@ -47,6 +47,7 @@
 #include <IDocumentMarkAccess.hxx>
 #include <paratr.hxx>
 #include <rootfrm.hxx>
+#include "TextFrameIndex.hxx"
 #include "inftxt.hxx"
 #include <noteurl.hxx>
 #include "porftn.hxx"
@@ -423,6 +424,7 @@ void SwTextSizeInfo::GetTextSize( const SwScriptInfo* pSI, const TextFrameIndex 
                                 sal_uInt16& nMinSize, sal_uInt16& nMaxSizeDiff,
                                 vcl::text::TextLayoutCache const*const pCache) const
 {
+    return;
     SwDrawTextInfo aDrawInf( m_pVsh, *m_pOut, pSI, *m_pText, nIndex, nLength,
             0, false, pCache);
     aDrawInf.SetFrame( m_pFrame );
@@ -439,6 +441,7 @@ TextFrameIndex SwTextSizeInfo::GetTextBreak( const tools::Long nLineWidth,
                                        const sal_uInt16 nComp,
                                        vcl::text::TextLayoutCache const*const pCache) const
 {
+    return TextFrameIndex();
     const SwScriptInfo& rScriptInfo =
                      const_cast<SwParaPortion*>(GetParaPortion())->GetScriptInfo();
 

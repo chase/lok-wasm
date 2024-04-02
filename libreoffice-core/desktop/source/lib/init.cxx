@@ -16,6 +16,7 @@
 #include <config_cairo_rgba.h>
 #include <config_features.h>
 
+#include <emscripten/html5_webgl.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -4284,21 +4285,24 @@ static void doc_paintTile(LibreOfficeKitDocument* pThis,
     CGContextRelease(pCGContext);
 #else
     // TODO: We setup and destroy this often, can we just reuse this? - @chase
+
     ScopedVclPtrInstance< VirtualDevice > pDevice(DeviceFormat::DEFAULT);
 
-    // Set background to transparent by default.
-    pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
 
-    pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(
-                Size(nCanvasWidth, nCanvasHeight), Fraction(1.0), Point(),
-                pBuffer);
 
-    pDoc->paintTile(*pDevice, nCanvasWidth, nCanvasHeight,
-                    nTilePosX, nTilePosY, nTileWidth, nTileHeight);
+    /* // Set background to transparent by default. */
+    /* pDevice->SetBackground(Wallpaper(COL_TRANSPARENT)); */
 
-    /// MACRO: Enable/disable callbacks during normal paintTile, not just paintPartTile {
-    if (handlerIt != pDocument->mpCallbackFlushHandlers.end())
-        handlerIt->second->enableCallbacks();
+    /* pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer( */
+    /*             Size(nCanvasWidth, nCanvasHeight), Fraction(1.0), Point(), */
+    /*             pBuffer); */
+
+    /* pDoc->paintTile(*pDevice, nCanvasWidth, nCanvasHeight, */
+    /*                 nTilePosX, nTilePosY, nTileWidth, nTileHeight); */
+
+    /* /// MACRO: Enable/disable callbacks during normal paintTile, not just paintPartTile { */
+    /* if (handlerIt != pDocument->mpCallbackFlushHandlers.end()) */
+    /*     handlerIt->second->enableCallbacks(); */
     /// MACRO: }
 
 #ifdef _WIN32

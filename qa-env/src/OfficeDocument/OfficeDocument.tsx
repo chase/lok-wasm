@@ -195,7 +195,9 @@ export function OfficeDocument(props: Props) {
             >
               {containerHeight() && (
                 <canvas
+                  
                   ref={setCanvas}
+                  id="canvas"
                   class="sticky top-0 pointer-events-none"
                   style={{
                     // TODO: object-fit should dynamically set while zooming to use fill so we get "zooming" for free until the render actually finishes

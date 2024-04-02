@@ -41,9 +41,6 @@ public:
     SkiaSalInstance();
     virtual ~SkiaSalInstance() override;
 
-    virtual OpenGLContext*  CreateOpenGLContext() override;
-    virtual void            AddToRecentDocumentList(const OUString& rFileUrl, const OUString& rMimeType,
-                                                    const OUString& rDocumentService) override;
     virtual std::unique_ptr<SalVirtualDevice>
                             CreateVirtualDevice( SalGraphics& rGraphics,
                                                    tools::Long &nDX, tools::Long &nDY,

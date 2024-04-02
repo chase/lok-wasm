@@ -93,7 +93,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
 function initialize(data: ToTileRenderer & { t: 'i' }) {
   d = data.d;
   c = data.c;
-  gl = c.getContext('webgl2');
+  // gl = c.getContext('webgl2');
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, data.s) * LOK_INTERNAL_TWIPS_TO_PX;

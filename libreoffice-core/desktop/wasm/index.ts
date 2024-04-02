@@ -264,6 +264,19 @@ export async function loadDocumentFromArrayBuffer<
   return loadDocument<T>(name, new Blob([arrayBuffer], { type }));
 }
 
+export async function acceptCanvasTransfer(
+  canvas: OffscreenCanvas,
+  viewId: ViewId
+) {
+
+  const [i, future] = registerFuture<DocumentRef | null>();
+  const message: ToWorker = {
+    f: 'acceptCanvasTransfer',
+    i,
+    a: [canvas as any],
+  };
+}
+
 /** imports a script at `url` that registers an extension inside of the worker */
 export async function importScript(url: string) {
   const [i, future] = registerFuture<DocumentRef | null>();

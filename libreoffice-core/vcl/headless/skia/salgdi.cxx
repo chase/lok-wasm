@@ -46,7 +46,6 @@ void SkiaSalGraphics::GetFontMetric( ImplFontMetricDataRef& xFontMetric, int nFa
 
 FontCharMapRef SkiaSalGraphics::GetFontCharMap() const
 {
-
     return m_aTextRenderImpl.GetFontCharMap();
 }
 

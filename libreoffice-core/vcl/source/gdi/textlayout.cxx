@@ -162,6 +162,7 @@ namespace vcl
 
     tools::Long ReferenceDeviceTextLayout::GetTextArray( const OUString& _rText, KernArray* _pDXAry, sal_Int32 _nStartIndex, sal_Int32 _nLength ) const
     {
+        return 0;
         if ( !lcl_normalizeLength( _rText, _nStartIndex, _nLength ) )
             return 0;
 

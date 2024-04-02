@@ -7,6 +7,7 @@ export type GlobalMessage = {
   /** load the document with the file name `name` and content `blob`
   @returns the corresponding document on success, null otherwise */
   load(name: string, blob: Blob): DocumentRef | null;
+  acceptCanvasTransfer(canvas: OffscreenCanvas): void;
   importScript(url: string): void;
   preload(): void;
 };
@@ -61,6 +62,8 @@ export type DocumentMethods = {
   documentSize(): [widthTwips: number, heightTwips: number];
   /** initializes the document for tiled rendering and returns the view ID, must be called immediately after loading */
   initializeForRendering(args?: InitializeForRenderingOptions): ViewId;
+
+  acceptCanvasTransfer(canvas: OffscreenCanvas): void;
 };
 
 export type DocumentWithViewMethods = {

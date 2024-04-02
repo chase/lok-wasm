@@ -141,6 +141,7 @@ interface Module extends EmscriptenModule {
   createFontConfigCache(): void;
 
   getDirectoryFiles(dir: string): Array<{ name: string; buffer: ArrayBuffer }>;
+  setOffscreenCanvas(canvas: OffscreenCanvas): void;
 
   /** handlers for subscribed document events */
   callbackHandlers: {

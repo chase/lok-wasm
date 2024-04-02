@@ -20,6 +20,7 @@ import type { Document } from './soffice';
 const docMap: Record<DocumentRef, Document> = {};
 const byRef = (ref: DocumentRef) => docMap[ref];
 const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
+let gl: WebGL2RenderingContext;
 self.byRef = byRef;
 
 const lokPromise = LOK({
@@ -52,6 +53,13 @@ const handler: AsyncMessage = {
     docMap[ref] = doc;
     return ref;
   },
+
+  acceptCanvasTransfer: async function (
+    canvas: OffscreenCanvas
+  ): Promise<void> {
+    // const gl = canvas.getContext('webgl');
+  } as any,
+
 
   close: async function (ref: DocumentRef): Promise<void> {
     const doc = docMap[ref];
@@ -278,30 +286,38 @@ const handler: AsyncMessage = {
     if (!doc) {
       throw new Error("Doc doesn't exist while trying to render");
     }
-    const result = doc.startTileRenderer(viewId, tileSize);
-    const worker = new Worker(
-      new URL('./tile_renderer_worker.js', import.meta.url),
-      { type: 'module' }
-    );
-    if (!tileRenderer[ref]) {
-      tileRenderer[ref] = {};
-    }
-    tileRenderer[ref][result.viewId] = worker;
+    // const result = doc.startTileRenderer(viewId, tileSize);
+    // const worker = new Worker(
+    //   new URL('./tile_renderer_worker.js', import.meta.url),
+    //   { type: 'module' }
+    // );
+    // if (!tileRenderer[ref]) {
+    //   tileRenderer[ref] = {};
+    // }
+    // tileRenderer[ref][result.viewId] = worker;
 
-    worker.postMessage(
-      {
-        t: 'i',
-        c: canvas,
-        d: result,
-        s: scale,
-        y: yPos,
-      } as ToTileRenderer,
-      { transfer: [canvas] }
-    );
+
+
+    // worker.postMessage(
+    //   {
+    //     t: 'i',
+    //     c: canvas,
+    //     d: result,
+    //     s: scale,
+    //     y: yPos,
+    //   } as ToTileRenderer,
+    //   { transfer: [canvas] }
+    // );
+    //
+    //
+    //
+    //
+    console.log('startRendering', ref, viewId, canvas, tileSize, scale, yPos);
+    gl = canvas.getContext('webgl2');
 
     return {
       docRef: ref,
-      viewId: result.viewId,
+      viewId: 0,
       scale,
     };
   },

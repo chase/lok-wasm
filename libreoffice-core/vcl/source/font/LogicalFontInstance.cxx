@@ -112,20 +112,20 @@ int LogicalFontInstance::GetKashidaWidth() const
 
 void LogicalFontInstance::GetScale(double* nXScale, double* nYScale) const
 {
-    double nUPEM = GetFontFace()->UnitsPerEm();
-    double nHeight(m_aFontSelData.mnHeight);
+    /* double nUPEM = GetFontFace()->UnitsPerEm(); */
+    /* double nHeight(m_aFontSelData.mnHeight); */
 
-    // On Windows, mnWidth is relative to average char width not font height,
-    // and we need to keep it that way for GDI to correctly scale the glyphs.
-    // Here we compensate for this so that HarfBuzz gives us the correct glyph
-    // positions.
-    double nWidth(m_aFontSelData.mnWidth ? m_aFontSelData.mnWidth * m_nAveWidthFactor : nHeight);
+    /* // On Windows, mnWidth is relative to average char width not font height, */
+    /* // and we need to keep it that way for GDI to correctly scale the glyphs. */
+    /* // Here we compensate for this so that HarfBuzz gives us the correct glyph */
+    /* // positions. */
+    /* double nWidth(m_aFontSelData.mnWidth ? m_aFontSelData.mnWidth * m_nAveWidthFactor : nHeight); */
 
-    if (nYScale)
-        *nYScale = nHeight / nUPEM;
+    /* if (nYScale) */
+    /*     *nYScale = nHeight / nUPEM; */
 
-    if (nXScale)
-        *nXScale = nWidth / nUPEM;
+    /* if (nXScale) */
+    /*     *nXScale = nWidth / nUPEM; */
 }
 
 void LogicalFontInstance::AddFallbackForUnicode(sal_UCS4 cChar, FontWeight eWeight,

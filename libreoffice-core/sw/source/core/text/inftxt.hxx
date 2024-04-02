@@ -735,7 +735,9 @@ inline SwPosSize SwTextSizeInfo::GetTextSize( const SwScriptInfo* pSI,
                                             TextFrameIndex const nNewIdx,
                                             TextFrameIndex const nNewLen) const
 {
-    return GetTextSize( m_pOut, pSI, *m_pText, nNewIdx, nNewLen );
+    /* return GetTextSize( m_pOut, pSI, *m_pText, nNewIdx, nNewLen ); */
+    // TODO: @synoet get this to work?
+    return SwPosSize(50, 50);
 }
 
 inline SwTwips SwTextPaintInfo::GetPaintOfst() const

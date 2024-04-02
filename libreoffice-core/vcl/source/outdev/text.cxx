@@ -960,6 +960,7 @@ tools::Long OutputDevice::GetTextArray( const OUString& rStr, KernArray* pKernAr
                                  vcl::text::TextLayoutCache const*const pLayoutCache,
                                  SalLayoutGlyphs const*const pSalLayoutCache) const
 {
+    return 0;
     if( nIndex >= rStr.getLength() )
         return 0; // TODO: this looks like a buggy caller?
 
