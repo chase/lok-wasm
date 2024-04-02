@@ -87,19 +87,18 @@ function observedSize(
     observer.disconnect();
   });
 }
+export const [containerHeight, setContainerHeight] = createSignal<
+    number | undefined
+  >();
 
 export function OfficeDocument(props: Props) {
   let scrollAreaRef: HTMLDivElement | undefined;
   /** TODO: add DPI observer and handle DPI change */
   /** TODO: add context loss for machine if left asleep */
-  const [containerHeight, setContainerHeight] = createSignal<
-    number | undefined
-  >();
   const [docSizeTwips, setDocSizeTwips] = createSignal<
     Dimensions | undefined
   >();
   const [rectsTwips, setRectsTwips] = createSignal<RectanglePx[] | undefined>();
-  const [canvas, setCanvas] = createSignal<HTMLCanvasElement | undefined>();
   const cursorType = createDocEventSignal(
     () => props.doc,
     CallbackType.MOUSE_POINTER
@@ -133,21 +132,20 @@ export function OfficeDocument(props: Props) {
     if (height) props.doc.setVisibleHeight(height);
   });
 
-  createEffect(async () => {
-    const width = docSizePx()?.[0];
-    const height = containerHeight();
-    const canvas_ = canvas();
-    if (!width || !height || rendered || !canvas_ || !props.doc) return;
-    canvas_.width = width;
-    canvas_.height = height;
-    console.log("start rendering")
-    await props.doc.startRendering(
-      canvas_.transferControlToOffscreen(),
-      256,
-      1
-    );
-    rendered = true;
-  });
+  // createEffect(async () => {
+  //   const width = docSizePx()?.[0];
+  //   const height = containerHeight();
+  //   const canvas_ = canvas();
+  //   if (!width || !height || rendered || !canvas_ || !props.doc) return;
+  //   canvas_.width = width;
+  //   canvas_.height = height;
+  //   await props.doc.startRendering(
+  //     canvas_.transferControlToOffscreen(),
+  //     256,
+  //     1
+  //   );
+  //   rendered = true;
+  // });
 
   const [focused, setFocused] = getOrCreateFocusedSignal(() => props.doc);
 
@@ -194,21 +192,6 @@ export function OfficeDocument(props: Props) {
               onKeyUp={keyhandler().handleKeyEvent}
               tabIndex={-1}
             >
-              {containerHeight() && (
-                <canvas
-                  
-                  ref={setCanvas}
-                  id="canvas"
-                  class="sticky top-0 pointer-events-none"
-                  style={{
-                    // TODO: object-fit should dynamically set while zooming to use fill so we get "zooming" for free until the render actually finishes
-                    'object-fit': 'none',
-                    'object-position': 'top left',
-                    width: `${docSizePx()![0]}px`,
-                    'max-height': `${containerHeight()!}px`,
-                  }}
-                />
-              )}
               <Cursor doc={props.doc} class="bg-sky-300" />
               <Selection doc={props.doc} />
               <For each={rectsPx()}>

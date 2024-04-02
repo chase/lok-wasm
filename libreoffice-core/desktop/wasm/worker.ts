@@ -25,7 +25,6 @@ let globalCanvas: OffscreenCanvas;
 globalThis.document = {
   querySelector: (query: string) => {
     if (query === "#canvas") {
-      console.log("hello worlld", globalCanvas);
       return globalCanvas;
     }
   }
@@ -118,7 +117,6 @@ const handler: AsyncMessage = {
   acceptCanvasTransfer: async function (
     canvas: OffscreenCanvas
   ) {
-    console.log("worker received canvas", canvas);
     globalCanvas = canvas;
   },
 

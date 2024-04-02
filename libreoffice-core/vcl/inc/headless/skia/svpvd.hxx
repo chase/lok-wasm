@@ -23,6 +23,7 @@ private:
     sk_sp<GrDirectContext> m_grContext;
     tools::Long m_width;
     tools::Long m_height;
+
     std::unique_ptr<SkiaSalGraphics> m_pGraphics;
 
 public:

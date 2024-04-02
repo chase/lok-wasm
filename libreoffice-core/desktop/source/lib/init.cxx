@@ -4290,19 +4290,19 @@ static void doc_paintTile(LibreOfficeKitDocument* pThis,
 
 
 
-    /* // Set background to transparent by default. */
-    /* pDevice->SetBackground(Wallpaper(COL_TRANSPARENT)); */
+    // Set background to transparent by default.
+    pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
 
-    /* pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer( */
-    /*             Size(nCanvasWidth, nCanvasHeight), Fraction(1.0), Point(), */
-    /*             pBuffer); */
+    pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(
+                Size(nCanvasWidth, nCanvasHeight), Fraction(1.0), Point(),
+                pBuffer);
 
-    /* pDoc->paintTile(*pDevice, nCanvasWidth, nCanvasHeight, */
-    /*                 nTilePosX, nTilePosY, nTileWidth, nTileHeight); */
+    pDoc->paintTile(*pDevice, nCanvasWidth, nCanvasHeight,
+                    nTilePosX, nTilePosY, nTileWidth, nTileHeight);
 
-    /* /// MACRO: Enable/disable callbacks during normal paintTile, not just paintPartTile { */
-    /* if (handlerIt != pDocument->mpCallbackFlushHandlers.end()) */
-    /*     handlerIt->second->enableCallbacks(); */
+    /// MACRO: Enable/disable callbacks during normal paintTile, not just paintPartTile {
+    if (handlerIt != pDocument->mpCallbackFlushHandlers.end())
+        handlerIt->second->enableCallbacks();
     /// MACRO: }
 
 #ifdef _WIN32

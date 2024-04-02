@@ -3,7 +3,7 @@ import type { DocumentClient } from '@lok/shared';
 import './App.css';
 import { Show, createSignal } from 'solid-js';
 import { CallbackType } from '@lok/lok_enums';
-import { OfficeDocument } from './OfficeDocument/OfficeDocument';
+import { OfficeDocument, containerHeight } from './OfficeDocument/OfficeDocument';
 import { cleanup } from './OfficeDocument/cleanup';
 
 const [loading, setLoading] = createSignal(false);
@@ -40,6 +40,8 @@ async function fileOpen(files: FileList | null) {
   // doc.on(CallbackType.STATE_CHANGED, (payload) => console.log(payload));
 }
 
+export const [canvas, setCanvas] = createSignal<HTMLCanvasElement | undefined>();
+
 function App() {
   return (
     <>
@@ -60,10 +62,21 @@ function App() {
           <span class="loader" />
         </div>
       </Show>
+      <Show when={getDoc()} keyed>
+        <OfficeDocument doc={getDoc()!} />
+      </Show>
       <canvas
-      id="canvas"
-      width="800"
-      height="1000"
+        
+        ref={setCanvas}
+        id="canvas"
+        class="sticky top-0 pointer-events-none"
+        style={{
+          // TODO: object-fit should dynamically set while zooming to use fill so we get "zooming" for free until the render actually finishes
+          'object-fit': 'none',
+          'object-position': 'top left',
+          width: `$800px`,
+          'max-height': `${containerHeight()!}px`,
+        }}
       />
     </>
   );
