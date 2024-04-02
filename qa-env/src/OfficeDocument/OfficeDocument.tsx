@@ -140,6 +140,7 @@ export function OfficeDocument(props: Props) {
     if (!width || !height || rendered || !canvas_ || !props.doc) return;
     canvas_.width = width;
     canvas_.height = height;
+    console.log("start rendering")
     await props.doc.startRendering(
       canvas_.transferControlToOffscreen(),
       256,

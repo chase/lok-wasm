@@ -20,7 +20,17 @@ import type { Document } from './soffice';
 const docMap: Record<DocumentRef, Document> = {};
 const byRef = (ref: DocumentRef) => docMap[ref];
 const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
-let gl: WebGL2RenderingContext;
+let globalCanvas: OffscreenCanvas;
+
+globalThis.document = {
+  querySelector: (query: string) => {
+    if (query === "#canvas") {
+      console.log("hello worlld", globalCanvas);
+      return globalCanvas;
+    }
+  }
+}
+
 self.byRef = byRef;
 
 const lokPromise = LOK({
@@ -53,13 +63,6 @@ const handler: AsyncMessage = {
     docMap[ref] = doc;
     return ref;
   },
-
-  acceptCanvasTransfer: async function (
-    canvas: OffscreenCanvas
-  ): Promise<void> {
-    // const gl = canvas.getContext('webgl');
-  } as any,
-
 
   close: async function (ref: DocumentRef): Promise<void> {
     const doc = docMap[ref];
@@ -112,11 +115,21 @@ const handler: AsyncMessage = {
     importScripts(url);
   },
 
+  acceptCanvasTransfer: async function (
+    canvas: OffscreenCanvas
+  ) {
+    console.log("worker received canvas", canvas);
+    globalCanvas = canvas;
+  },
+
   initializeForRendering: async function (
     ref: DocumentRef,
     args: InitializeForRenderingOptions = {}
   ): Promise<number> {
     await lokPromise;
+    if (args.canvas) {
+      globalCanvas = args.canvas
+    }
     const doc = byRef(ref);
     if (!doc) return -1;
     doc.initializeForRendering(
@@ -281,39 +294,9 @@ const handler: AsyncMessage = {
     scale: number,
     yPos: number = 0
   ): Promise<TileRendererData> {
-    await lokPromise;
-    const doc = byRef(ref);
-    if (!doc) {
-      throw new Error("Doc doesn't exist while trying to render");
-    }
-    // const result = doc.startTileRenderer(viewId, tileSize);
-    // const worker = new Worker(
-    //   new URL('./tile_renderer_worker.js', import.meta.url),
-    //   { type: 'module' }
-    // );
-    // if (!tileRenderer[ref]) {
-    //   tileRenderer[ref] = {};
-    // }
-    // tileRenderer[ref][result.viewId] = worker;
+    console.log("startRendering", canvas);
+    globalCanvas = canvas;
 
-
-
-    // worker.postMessage(
-    //   {
-    //     t: 'i',
-    //     c: canvas,
-    //     d: result,
-    //     s: scale,
-    //     y: yPos,
-    //   } as ToTileRenderer,
-    //   { transfer: [canvas] }
-    // );
-    //
-    //
-    //
-    //
-    console.log('startRendering', ref, viewId, canvas, tileSize, scale, yPos);
-    gl = canvas.getContext('webgl2');
 
     return {
       docRef: ref,

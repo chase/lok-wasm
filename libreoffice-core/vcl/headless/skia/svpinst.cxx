@@ -14,8 +14,7 @@ EMSCRIPTEN_WEBGL_CONTEXT_HANDLE createContext(char* id) {
     attr.majorVersion = 2;
     attr.proxyContextToMainThread = EMSCRIPTEN_WEBGL_CONTEXT_PROXY_ALWAYS;
 
-    EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx = emscripten_webgl_get_current_context();
-    /* EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx = emscripten_webgl_create_context(g_offscreenCanvas, &attr); */
+    EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx = emscripten_webgl_create_context("#canvas", &attr);
     EMSCRIPTEN_RESULT nctx = emscripten_webgl_make_context_current(ctx);
     SAL_WARN("vcl.headless", "Created context " << ctx << " and made it current: " << nctx);
     return ctx;

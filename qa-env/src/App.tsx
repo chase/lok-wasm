@@ -22,7 +22,7 @@ async function fileOpen(files: FileList | null) {
   console.log('offscreen', offscreen);
   if (offscreen) {
     console.log('transfering canvas', offscreen);
-    acceptCanvasTransfer(offscreen, 0)
+    acceptCanvasTransfer(offscreen)
   }
 
   const doc = await loadDocument(name, blob);
@@ -61,9 +61,9 @@ function App() {
         </div>
       </Show>
       <canvas
-        id="canvas"
-        width="800"
-        height="600"
+      id="canvas"
+      width="800"
+      height="1000"
       />
     </>
   );

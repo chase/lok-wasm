@@ -266,15 +266,15 @@ export async function loadDocumentFromArrayBuffer<
 
 export async function acceptCanvasTransfer(
   canvas: OffscreenCanvas,
-  viewId: ViewId
 ) {
-
-  const [i, future] = registerFuture<DocumentRef | null>();
+  const [i] = registerFuture<DocumentRef | null>();
   const message: ToWorker = {
     f: 'acceptCanvasTransfer',
     i,
     a: [canvas as any],
   };
+
+  loadWorkerOnce().postMessage(message, [canvas]);
 }
 
 /** imports a script at `url` that registers an extension inside of the worker */

@@ -39,6 +39,7 @@ export type GetClipbaordItem =
 export type InitializeForRenderingOptions = Partial<{
   autoSpellcheck: boolean;
   author: string;
+  canvas: OffscreenCanvas;
 }>;
 
 export type TileRendererData = {
@@ -62,8 +63,6 @@ export type DocumentMethods = {
   documentSize(): [widthTwips: number, heightTwips: number];
   /** initializes the document for tiled rendering and returns the view ID, must be called immediately after loading */
   initializeForRendering(args?: InitializeForRenderingOptions): ViewId;
-
-  acceptCanvasTransfer(canvas: OffscreenCanvas): void;
 };
 
 export type DocumentWithViewMethods = {
