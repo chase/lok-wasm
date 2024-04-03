@@ -145,6 +145,7 @@ const WITH_VIEW_ID: Record<
   setVisibleHeight: true,
   resetRendering: true,
   stopRendering: true,
+  setZoom: true,
 };
 
 const workerProxyHandler: ProxyHandler<{ ref: DocumentRef; viewId: ViewId }> = {

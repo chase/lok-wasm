@@ -108,6 +108,8 @@ export type DocumentWithViewMethods = {
   setScrollTop(yPx: number): void;
   setVisibleHeight(heightPx: number): void;
 
+  setZoom(scale: number, yPx: number): void;
+
   /** TODO: implement, used to set a new scale or set a new offscreen cavnas */
   resetRendering(
     canvas: OffscreenCanvas,
@@ -181,25 +183,34 @@ export type FromWorker<K extends keyof Message = keyof Message> = {
 
 export type ToTileRenderer =
   | {
+      /** initialize */
       t: 'i';
       c: OffscreenCanvas;
       d: TileRenderData;
-      /** scale */
+      /** absolute scale */
       s: number;
       /** top position in pixels */
       y: number;
     }
   | {
-      /** scroll for Firefox because it doesn't support Atomic.waitAsync */
+      /** scroll */
       t: 's';
       /** view height in pixels */
       y: number;
     }
   | {
-      /** resize for Firefox because it doesn't support Atomic.waitAsync */
+      /** resize */
       t: 'r';
       /** height */
       h: number;
+    }
+  | {
+      /** zoom */
+      t: 'z';
+      /** absolute scale */
+      s: number;
+      /** top position in pixels */
+      y: number;
     };
 
 export type Ref<T> = {

@@ -72,34 +72,47 @@ let running = false;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
-    case 'i':
+    case 'i': // initialize
       initialize(data);
       break;
-    case 's':
+    case 's': // scroll
       scheduledTopTwips = data.y * scaledTwips;
       setState(RenderState.IDLE);
       if (!running) stateMachine();
       break;
-    case 'r':
+    case 'r': // resize
       if (!c) return;
       scheduledHeightPx = data.h;
       scheduledHeightTwips = data.h * scaledTwips;
       setState(RenderState.IDLE);
       if (!running) stateMachine();
       break;
+    case 'z': // zoom
+      if (!c) return;
+      zoom(data.s, data.y);
+      setState(RenderState.RESET);
+      Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
+      if (!running) stateMachine();
+      break;
   }
 };
+
+function zoom(scale: number, y: number) {
+  docWidthTwips = Atomics.load(d.docWidthTwips, 0);
+  scaledTwips =
+    clipToNearest8PxZoom(d.tileSize, scale) * LOK_INTERNAL_TWIPS_TO_PX;
+  tileDimTwips = d.tileSize * scaledTwips;
+  widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
+
+  scheduledHeightPx = c.height;
+  scheduledHeightTwips = c.height * scaledTwips;
+  scheduledTopTwips = y * scaledTwips;
+}
 
 function initialize(data: ToTileRenderer & { t: 'i' }) {
   d = data.d;
   c = data.c;
   gl = c.getContext('webgl2');
-  docWidthTwips = Atomics.load(d.docWidthTwips, 0);
-  scaledTwips =
-    clipToNearest8PxZoom(d.tileSize, data.s) * LOK_INTERNAL_TWIPS_TO_PX;
-  tileDimTwips = d.tileSize * scaledTwips;
-  widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
-
   pool = createTexturePool(
     gl,
     POOL_SIZE / (d.tileSize / 256),
@@ -111,9 +124,7 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
   // gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); // pre-multiplied alpha
   clear(gl);
 
-  scheduledHeightPx = c.height;
-  scheduledHeightTwips = c.height * scaledTwips;
-  scheduledTopTwips = data.y * scaledTwips;
+  zoom(data.s, data.y);
 
   pendingStateChange = true;
   stateMachine();

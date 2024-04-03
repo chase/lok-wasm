@@ -339,6 +339,7 @@ const handler: AsyncMessage = {
       h: heightPx,
     } as ToTileRenderer);
   },
+
   dispatchCommand: async function (
     ref: DocumentRef,
     viewId: ViewId,
@@ -354,6 +355,7 @@ const handler: AsyncMessage = {
       notifyWhenFinished
     );
   },
+
   removeText: async function (
     ref: DocumentRef,
     viewId: ViewId,
@@ -368,6 +370,7 @@ const handler: AsyncMessage = {
       charsAfter
     );
   },
+
   setClientVisibleArea: async function (
     ref: DocumentRef,
     viewId: ViewId,
@@ -378,6 +381,19 @@ const handler: AsyncMessage = {
   ): Promise<void> {
     await lokPromise;
     byRef(ref)?.setClientVisibleArea(viewId, x, y, width, height);
+  },
+
+  setZoom: async function (
+    ref: DocumentRef,
+    viewId: ViewId,
+    scale: number,
+    y: number
+  ): Promise<void> {
+    tileRenderer[ref][viewId]?.postMessage({
+      t: 'z',
+      s: scale,
+      y: y,
+    } as ToTileRenderer);
   },
 };
 
