@@ -35,7 +35,8 @@ start_fswatch() {
     "$1" |
     while read -r -d "" event; do
       echo "$event detected in $1. Running 'make'..."
-      make
+      make || echo "Error occurred"
+      echo "== FINISHED =="
     done
   pids+=("$!")
 }
