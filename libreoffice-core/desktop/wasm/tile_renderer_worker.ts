@@ -69,6 +69,7 @@ const nonVisibleInvalidations: Rect[] = [];
 
 let pendingStateChange = false;
 let running = false;
+let idleAreaPaint = false;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -76,12 +77,15 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       initialize(data);
       break;
     case 's': // scroll
+      if (!c) return;
+      idleAreaPaint = false;
       scheduledTopTwips = data.y * scaledTwips;
       setState(RenderState.IDLE);
       if (!running) stateMachine();
       break;
     case 'r': // resize
       if (!c) return;
+      idleAreaPaint = false;
       scheduledHeightPx = data.h;
       scheduledHeightTwips = data.h * scaledTwips;
       setState(RenderState.IDLE);
@@ -89,6 +93,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       break;
     case 'z': // zoom
       if (!c) return;
+      idleAreaPaint = false;
       zoom(data.s, data.y);
       setState(RenderState.RESET);
       Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
@@ -380,15 +385,60 @@ function stateMachine() {
         self.close();
     }
   }
+  idleAreaPaint = true;
   if (!pendingInvalidate) {
     afterInvalidate().then((shouldRun) => {
+      idleAreaPaint = false;
       pendingStateChange ||= shouldRun;
       if (shouldRun && !running) {
         stateMachine();
       }
     });
+    if (idleDebounceTimeout) clearTimeout(idleDebounceTimeout);
   }
   running = false;
+  idleDebounceTimeout = setTimeout(
+    paintNonVisibleAreasWhileIdle,
+    Math.max(trimmedMean(paintTimes), 10)
+  );
+}
+
+let idleDebounceTimeout: number;
+function paintNonVisibleAreasWhileIdle(): void {
+  if (!idleAreaPaint) return;
+  const visibleHeight = renderedHeightTwips;
+  const docHeight = Atomics.load(d.docHeightTwips, 0);
+  const visibleTop = renderedTopTwips;
+  // heuristic is one whole visible area below the fold, primarily for zooming out, but also helps with scrolling a little
+  const lowerFoldTop = visibleTop + visibleHeight;
+  const lowerFoldHeight = Math.min(docHeight - lowerFoldTop, visibleHeight);
+  const rangesToPaint = rectToTileIndexRanges([
+    0,
+    lowerFoldTop,
+    docWidthTwips,
+    lowerFoldHeight,
+  ]);
+
+  let didPaint = false;
+  for (let y = 0; y < rangesToPaint.length; ++y) {
+    const [start, endInclusive] = rangesToPaint[y];
+    for (let x = start; x <= endInclusive; ++x) {
+      if (running || !idleAreaPaint) {
+        return;
+      }
+      if (!validTiles.has(x)) {
+        blockingPaintTile(x);
+        didPaint = true;
+      }
+    }
+  }
+
+  if (didPaint) {
+    idleDebounceTimeout = setTimeout(
+      paintNonVisibleAreasWhileIdle,
+      Math.max(trimmedMean(paintTimes), 10)
+    );
+  }
 }
 
 function shouldPausePaint(): boolean {
@@ -508,9 +558,11 @@ function seekNonVisibleRingIndex() {
   }
 }
 
+let paintTimes: number[] = [];
 /** blocks the worker thread while painting a tile at tileIndex, returning the corresponding tileRingIndex */
 function blockingPaintTile(tileIndex: number): number {
   Atomics.wait(d.state, 0, RenderState.TILE_PAINT); // wait for existing paint to finish if necessary
+  const start = Date.now();
   const rect = tileIndexToTwipsRect(tileIndex);
   for (let i = 0; i < RECT_SIZE; ++i) {
     Atomics.store(d.tileTwips, i, rect[i]);
@@ -529,6 +581,8 @@ function blockingPaintTile(tileIndex: number): number {
     loadImage(pool, d.paintedTile, d.tileSize, d.tileSize).tex
   );
   validTiles.add(tileIndex);
+
+  paintTimes.push(Date.now() - start);
 
   return tileRingIndex;
 }

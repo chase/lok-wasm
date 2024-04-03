@@ -29,7 +29,6 @@ async function fileOpen(files: FileList | null) {
   setDoc(doc);
   setLoading(false);
   doc.on(CallbackType.ERROR, console.error);
-  doc.on(CallbackType.TEXT_SELECTION, console.log);
   // doc.on(CallbackType.STATE_CHANGED, (payload) => console.log(payload));
 }
 

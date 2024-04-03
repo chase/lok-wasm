@@ -291,6 +291,7 @@ public:
         result.set("invalidationStackHead",
                    typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
         result.set("docWidthTwips", typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
+        result.set("docHeightTwips", typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
 
         return result;
     }

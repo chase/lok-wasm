@@ -36,6 +36,8 @@ export type TileRenderData = {
   invalidationStackHead: Int32Array;
   /** `_Atomic uint32_t` */
   docWidthTwips: Uint32Array;
+  /** `_Atomic uint32_t` */
+  docHeightTwips: Uint32Array;
 };
 
 /** Embind Document class, see main_wasm.cxx */

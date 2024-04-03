@@ -21,7 +21,7 @@ enum class RenderState : int32_t
     QUIT = 4
 };
 
-static constexpr size_t MAX_INVALIDATION_STACK = 4096;
+static constexpr int32_t MAX_INVALIDATION_STACK = 4096;
 
 // Used for fast communication between the tile renderer worker and the C++ thread
 struct TileRendererData
@@ -42,6 +42,8 @@ struct TileRendererData
     _Atomic uint32_t invalidationStack[MAX_INVALIDATION_STACK][4];
     _Atomic int32_t invalidationStackHead = -1;
 
+    // changes somewhat frequently
+    _Atomic uint32_t docHeightTwips;
     // changes infrequently
     _Atomic uint32_t docWidthTwips;
 
