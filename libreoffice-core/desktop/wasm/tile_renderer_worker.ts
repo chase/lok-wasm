@@ -1,14 +1,5 @@
-import {
-  createTexturePool,
-  createDrawImageProgram,
-  TexturePool,
-  PooledTexture,
-  drawImageFunc,
-  loadImage,
-  clear,
-} from './webgl2_draw_image';
 import type { TileRenderData } from './soffice';
-import type { TileDim, ToTileRenderer } from './shared';
+import type { ToTileRenderer } from './shared';
 
 /** From lib/wasm_extensions.hxx */
 enum RenderState {
@@ -36,9 +27,10 @@ const LOK_INTERNAL_TWIPS_TO_PX = 15;
 const POOL_SIZE = 2000;
 
 let d: TileRenderData;
-let c: OffscreenCanvas;
-let gl: WebGL2RenderingContext;
-let pool: TexturePool;
+let activeCanvas: OffscreenCanvas;
+let ctx: OffscreenCanvasRenderingContext2D;
+let canvases: OffscreenCanvas[];
+let activeCanvasIndex: number = 0;
 
 /** contains a set of all the valid tile indices */
 const validTiles: Set<number> = new Set();
@@ -47,12 +39,11 @@ const tileIndexToTileRingIndex: Map<number, number> = new Map();
 /** maps a tileRing index to a tile index */
 const tileRingIndexToTileIndex: Map<number, number> = new Map();
 /** a ring buffer that shouldn't allocate more than POOL_SIZE */
-let tileRing: Map<number, PooledTexture> = new Map();
+let tileRing: Map<number, ImageData> = new Map();
 /** contains a set of all visible tile ring indices */
 let visibleRingTiles: Set<number> = new Set();
 /** ring index that wraps on POOL_SIZE */
 let tileRingIndex = 0;
-let drawImage: drawImageFunc;
 let tileDimTwips: number;
 let docWidthTwips: number;
 /** the number of tiles that make up a horizontal stride for the width of the document */
@@ -63,6 +54,8 @@ let scheduledTopTwips: number = -1;
 let scheduledHeightTwips: number = -1;
 let scaledTwips = LOK_INTERNAL_TWIPS_TO_PX;
 let scheduledHeightPx: number = -1;
+let renderedTileTop: number = 0;
+let didScroll = false;
 
 const visibleInvalidations: Rect[] = [];
 const nonVisibleInvalidations: Rect[] = [];
@@ -77,14 +70,22 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       initialize(data);
       break;
     case 's': // scroll
-      if (!c) return;
+      if (!activeCanvas) return;
       idleAreaPaint = false;
       scheduledTopTwips = data.y * scaledTwips;
-      setState(RenderState.IDLE);
-      if (!running) stateMachine();
+      if (Math.floor(scheduledTopTwips / tileDimTwips) !== renderedTileTop) {
+        didScroll = true;
+        activeCanvasIndex ^= 1;
+        activeCanvas = canvases[activeCanvasIndex];
+        ctx = activeCanvas.getContext('2d');
+        setState(RenderState.IDLE);
+        if (!running) stateMachine();
+      } else {
+        if (!didScroll) postMessage({ s: activeCanvasIndex });
+      }
       break;
     case 'r': // resize
-      if (!c) return;
+      if (!activeCanvas) return;
       idleAreaPaint = false;
       scheduledHeightPx = data.h;
       scheduledHeightTwips = data.h * scaledTwips;
@@ -92,7 +93,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       if (!running) stateMachine();
       break;
     case 'z': // zoom
-      if (!c) return;
+      if (!activeCanvas) return;
       idleAreaPaint = false;
       zoom(data.s, data.y);
       setState(RenderState.RESET);
@@ -109,25 +110,18 @@ function zoom(scale: number, y: number) {
   tileDimTwips = d.tileSize * scaledTwips;
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
 
-  scheduledHeightPx = c.height;
-  scheduledHeightTwips = c.height * scaledTwips;
+  scheduledHeightPx = activeCanvas.height;
+  scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledTopTwips = y * scaledTwips;
 }
 
 function initialize(data: ToTileRenderer & { t: 'i' }) {
   d = data.d;
-  c = data.c;
-  gl = c.getContext('webgl2');
-  pool = createTexturePool(
-    gl,
-    POOL_SIZE / (d.tileSize / 256),
-    d.tileSize as TileDim
-  );
-  drawImage = createDrawImageProgram(gl);
+  canvases= data.c;
+  activeCanvas = data.c[0];
+  ctx = activeCanvas.getContext('2d');
 
-  // gl.enable(gl.BLEND); // enable blending
-  // gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); // pre-multiplied alpha
-  clear(gl);
+  ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
 
   zoom(data.s, data.y);
 
@@ -257,9 +251,6 @@ function hasUpdatedVisibleArea(): boolean {
 function rendering() {
   const visibleTop = scheduledTopTwips;
   const visibleHeight = scheduledHeightTwips;
-  const yOffset = Math.floor(
-    ((visibleTop % tileDimTwips) * d.tileSize) / tileDimTwips
-  );
 
   const rangesToRender = rectToTileIndexRanges([
     0,
@@ -268,44 +259,41 @@ function rendering() {
     visibleHeight,
   ]);
   // TODO: mark missing and invalidate
-  clear(gl);
+  ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
   if (renderedHeightTwips !== scheduledHeightTwips) {
-    c.height = scheduledHeightPx;
+    canvases[0].height = scheduledHeightPx;
+    canvases[1].height = scheduledHeightPx;
   }
   renderedHeightTwips = visibleHeight;
   renderedTopTwips = visibleTop;
-  gl.viewport(0, 0, c.width, c.height);
 
   for (let y = 0; y < rangesToRender.length && !shouldPausePaint(); ++y) {
     const [start, endInclusive] = rangesToRender[y];
     for (let x = start; x <= endInclusive; ++x) {
       // TODO: mark missing and invalidate
       const [xCoord] = tileIndexToGridCoord(x);
-      const tex: PooledTexture = tileRing.get(tileIndexToTileRingIndex.get(x));
-      if (!tex) {
+      const img: ImageData = tileRing.get(tileIndexToTileRingIndex.get(x));
+      if (!img) {
         console.error('missing texture at ', x, xCoord, y);
         continue;
       }
       const dstX: number = xCoord * d.tileSize;
       // wraps on the maxTileY
-      const dstY: number = y * d.tileSize - yOffset;
-      drawImage(
-        {
-          tex,
-          width: d.tileSize,
-          height: d.tileSize,
-        },
-        {
-          dstX,
-          dstY,
-        }
-      );
+      const dstY: number = y * d.tileSize;
+      ctx.beginPath();
+      ctx.putImageData(img, dstX, dstY);
+      ctx.closePath();
     }
   }
 
   Atomics.store(d.pendingFullPaint, 0, 0);
 
   setState(RenderState.IDLE);
+  if (didScroll) {
+    renderedTileTop = Math.floor(renderedTopTwips / tileDimTwips);
+    postMessage({ s: activeCanvasIndex });
+    didScroll = false;
+  }
 }
 
 let pendingInvalidate: boolean;
@@ -571,17 +559,21 @@ function blockingPaintTile(tileIndex: number): number {
   Atomics.wait(d.state, 0, RenderState.TILE_PAINT); // wait to finish
   seekNonVisibleRingIndex();
 
-  // retire the previous tile if it exists
-  tileRing.get(tileRingIndex)?.release();
-
   tileRingIndexToTileIndex.set(tileRingIndex, tileIndex);
   tileIndexToTileRingIndex.set(tileIndex, tileRingIndex);
   tileRing.set(
     tileRingIndex,
-    loadImage(pool, d.paintedTile, d.tileSize, d.tileSize).tex
+    new ImageData(
+      new Uint8ClampedArray(
+        d.paintedTile,
+        d.paintedTile.byteOffset,
+        d.paintedTile.byteLength
+      ),
+      d.tileSize,
+      d.tileSize
+    )
   );
   validTiles.add(tileIndex);
-
   paintTimes.push(Date.now() - start);
 
   return tileRingIndex;
@@ -598,14 +590,15 @@ function markInvalid(ranges: TileIndexRange[]) {
 }
 
 function clearNonVisibleTiles() {
-  for (const [tileRingIndex, pooledTexture] of tileRing) {
+  const indices = tileRing.keys();
+  for (const tileRingIndex of indices) {
     // but visible tiles shouldn't be cleared so there is something to paint
     if (visibleRingTiles.has(tileRingIndex)) continue;
 
     tileIndexToTileRingIndex.delete(
       tileRingIndexToTileIndex.get(tileRingIndex)
     );
-    pooledTexture.release();
+    tileRing.delete(tileRingIndex);
     tileRingIndexToTileIndex.delete(tileRingIndex);
   }
 }

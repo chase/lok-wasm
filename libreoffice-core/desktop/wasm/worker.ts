@@ -268,7 +268,7 @@ const handler: AsyncMessage = {
   startRendering: async function (
     ref: DocumentRef,
     viewId: ViewId,
-    canvas: OffscreenCanvas,
+    canvases: OffscreenCanvas[],
     tileSize: TileDim,
     scale: number,
     yPos: number = 0
@@ -291,12 +291,12 @@ const handler: AsyncMessage = {
     worker.postMessage(
       {
         t: 'i',
-        c: canvas,
+        c: canvases,
         d: result,
         s: scale,
         y: yPos,
       } as ToTileRenderer,
-      { transfer: [canvas] }
+      { transfer: [...canvases] }
     );
 
     return {
@@ -309,7 +309,7 @@ const handler: AsyncMessage = {
   resetRendering: function (
     ref: DocumentRef,
     viewId: ViewId,
-    canvas: OffscreenCanvas
+    canvases: OffscreenCanvas[]
   ): Promise<void> {
     throw new Error('Function not implemented.');
   },
@@ -322,11 +322,25 @@ const handler: AsyncMessage = {
     ref: DocumentRef,
     viewId: ViewId,
     yPx: number
-  ): Promise<void> {
-    tileRenderer[ref]?.[viewId]?.postMessage({
+  ): Promise<number> {
+    const worker = tileRenderer[ref]?.[viewId];
+    if (!worker) return;
+    const scrollPromise = new Promise<number>((resolve) => {
+      const handleMessage = ({ data }: MessageEvent) => {
+        if (data.s != null) {
+          resolve(data.s);
+        }
+        worker.removeEventListener('message', handleMessage);
+      };
+      worker.addEventListener('message', handleMessage);
+    });
+
+    worker.postMessage({
       t: 's',
       y: yPx,
     } as ToTileRenderer);
+
+    return scrollPromise;
   },
 
   setVisibleHeight: async function (

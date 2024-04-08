@@ -16,7 +16,7 @@ import {
 } from './shared';
 
 /** rendered tile size in pixels */
-const TILE_DIM_PX = 256;
+export const TILE_DIM_PX = 256;
 /** 15 = 1440 twips-per-inch / 96 dpi */
 const LOK_INTERNAL_TWIPS_TO_PX = 15;
 
@@ -162,7 +162,7 @@ const workerProxyHandler: ProxyHandler<{ ref: DocumentRef; viewId: ViewId }> = {
         if (prop === 'startRendering' || prop === 'resetRendering') {
           transfers = {
             transfer: [
-              (
+              ...(
                 args as
                   | Parameters<DocumentWithViewMethods['startRendering']>
                   | Parameters<DocumentWithViewMethods['resetRendering']>

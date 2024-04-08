@@ -97,7 +97,7 @@ export type DocumentWithViewMethods = {
   ): void;
 
   startRendering(
-    canvas: OffscreenCanvas,
+    canvases: OffscreenCanvas[],
     tileSize: TileDim,
     /** Non-negative float, 1.0 is unchange, less than 1.0 is smaller, greater than 1.0 is larger */
     scale: number,
@@ -105,14 +105,14 @@ export type DocumentWithViewMethods = {
     yPosPx?: number
   ): TileRendererData;
 
-  setScrollTop(yPx: number): void;
+  setScrollTop(yPx: number): number;
   setVisibleHeight(heightPx: number): void;
 
   setZoom(scale: number, yPx: number): void;
 
   /** TODO: implement, used to set a new scale or set a new offscreen cavnas */
   resetRendering(
-    canvas: OffscreenCanvas,
+    canvas: OffscreenCanvas[],
     /** Non-negative float, 1.0 is unchanged, less than 1.0 is smaller, greater than 1.0 is larger */
     scale: number
   ): void;
@@ -185,7 +185,7 @@ export type ToTileRenderer =
   | {
       /** initialize */
       t: 'i';
-      c: OffscreenCanvas;
+      c: OffscreenCanvas[];
       d: TileRenderData;
       /** absolute scale */
       s: number;
