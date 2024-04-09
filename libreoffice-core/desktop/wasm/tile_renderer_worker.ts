@@ -95,7 +95,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 'z': // zoom
       if (!activeCanvas) return;
       idleAreaPaint = false;
-      zoom(data.s, data.y);
+      zoom(data.s);
       setState(RenderState.RESET);
       Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
       if (!running) stateMachine();
@@ -103,7 +103,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
   }
 };
 
-function zoom(scale: number, y: number) {
+function zoom(scale: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, scale) * LOK_INTERNAL_TWIPS_TO_PX;
@@ -112,7 +112,6 @@ function zoom(scale: number, y: number) {
 
   scheduledHeightPx = activeCanvas.height;
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
-  scheduledTopTwips = y * scaledTwips;
 }
 
 function initialize(data: ToTileRenderer & { t: 'i' }) {
@@ -123,7 +122,8 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
 
   ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
 
-  zoom(data.s, data.y);
+  zoom(data.s);
+  scheduledTopTwips = data.y * scaledTwips;
 
   pendingStateChange = true;
   stateMachine();

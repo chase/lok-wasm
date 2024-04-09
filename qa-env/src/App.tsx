@@ -1,13 +1,21 @@
 import { loadDocument } from '@lok';
-import type { DocumentClient } from '@lok/shared';
-import './App.css';
-import { Show, createSignal } from 'solid-js';
 import { CallbackType } from '@lok/lok_enums';
+import type { DocumentClient } from '@lok/shared';
+import { Show, createSignal, onCleanup } from 'solid-js';
+import './App.css';
 import { OfficeDocument } from './OfficeDocument/OfficeDocument';
 import { cleanup } from './OfficeDocument/cleanup';
+import { IS_MAC } from './OfficeDocument/isMac';
+import { Shortcut } from './OfficeDocument/vclKeys';
+import { updateZoom } from './OfficeDocument/zoom';
 
 const [loading, setLoading] = createSignal(false);
 const [getDoc, setDoc] = createSignal<DocumentClient | null>(null);
+const getDocThrows = () => {
+  const doc = getDoc();
+  if (!doc) throw new Error('no doc');
+  return doc;
+};
 
 async function fileOpen(files: FileList | null) {
   if (!files || !files[0]) return;
@@ -29,10 +37,45 @@ async function fileOpen(files: FileList | null) {
   setDoc(doc);
   setLoading(false);
   doc.on(CallbackType.ERROR, console.error);
+
   // doc.on(CallbackType.STATE_CHANGED, (payload) => console.log(payload));
 }
 
+const MOD = IS_MAC ? 'cmd' : 'ctrl';
+const ignoredShortcuts: Shortcut[] = [
+  {
+    key: '=',
+    modifiers: [MOD],
+  },
+  {
+    key: '-',
+    modifiers: [MOD],
+  },
+];
+
+function registerGlobalKeys() {
+  function callback(e: KeyboardEvent) {
+    if ((IS_MAC && !e.metaKey) || !e.ctrlKey) return;
+    switch (e.key) {
+      case '=':
+        e.preventDefault();
+        updateZoom(getDocThrows, 0.1);
+        break;
+      case '-':
+        e.preventDefault();
+        updateZoom(getDocThrows, -0.1);
+        break;
+    }
+  }
+  document.addEventListener('keydown', callback);
+  onCleanup(() => {
+    document.removeEventListener('keydown', callback);
+  });
+}
+
 function App() {
+  registerGlobalKeys();
+
   return (
     <>
       <div class="flex bg-white w-full p-2 rounded-md">
@@ -53,7 +96,7 @@ function App() {
         </div>
       </Show>
       <Show when={getDoc()} keyed>
-        <OfficeDocument doc={getDoc()!} />
+        <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} />
       </Show>
     </>
   );

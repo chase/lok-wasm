@@ -400,13 +400,11 @@ const handler: AsyncMessage = {
   setZoom: async function (
     ref: DocumentRef,
     viewId: ViewId,
-    scale: number,
-    y: number
+    scale: number
   ): Promise<void> {
     tileRenderer[ref][viewId]?.postMessage({
       t: 'z',
       s: scale,
-      y: y,
     } as ToTileRenderer);
   },
 };

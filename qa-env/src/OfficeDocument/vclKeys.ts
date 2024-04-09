@@ -172,6 +172,18 @@ function userCanEdit(doc: Accessor<DocumentClient>) {
   return true;
 }
 
+function keyboardEventToMapKey(evt: KeyboardEvent) {
+  const modifiers: Shortcut['modifiers'] = [];
+  if (evt.metaKey) modifiers.push('cmd');
+  if (evt.ctrlKey) modifiers.push('ctrl');
+  if (evt.altKey) modifiers.push('alt');
+  if (evt.shiftKey) modifiers.push('shift');
+  return shortcutToMapKey({
+    key: evt.key,
+    modifiers,
+  });
+}
+
 export function createKeyHandler(
   doc: Accessor<DocumentClient>,
   textInputFocused: Accessor<boolean>
@@ -199,6 +211,11 @@ export function createKeyHandler(
       }
     },
     handleKeyEvent(evt: KeyboardEvent): void {
+      console.log(ignoredShortcuts_);
+      if (ignoredShortcuts_.has(keyboardEventToMapKey(evt))) {
+        return;
+      }
+
       // Fixes AltGr => Alt + Ctrl on Windows
       if (evt.ctrlKey && evt.altKey) {
         // Ctrl+Alt/(AltGr)+ <char> doesn't give location information

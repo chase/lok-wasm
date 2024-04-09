@@ -17,8 +17,9 @@ import { Selection } from './Selection';
 import * as vclMouse from './vclMouse';
 import { frameThrottle } from './frameThrottle';
 import { createDocEventSignal } from './docEventSignal';
-import { createKeyHandler } from './vclKeys';
+import { Shortcut, createKeyHandler } from './vclKeys';
 import { getOrCreateFocusedSignal } from './focus';
+import { getOrCreateZoomSignal, scale } from './zoom';
 
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
 
@@ -40,6 +41,7 @@ const BORDER_WIDTH = 1;
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
   doc: DocumentClient;
   scrollAreaRef?: (ref: HTMLDivElement) => void;
+  ignoreShortcuts?: Shortcut[];
 }
 
 type Dimensions = [number, number];
@@ -119,8 +121,17 @@ export function OfficeDocument(props: Props) {
     containerHeight() ? calcCanvasHeight(containerHeight()) : undefined;
 
   createEffect(async () => {
-    setDocSizeTwips(await props.doc.documentSize());
-    setRectsTwips(await props.doc.partRectanglesTwips());
+    const [getZoom] = getOrCreateZoomSignal(() => props.doc);
+    const zoom = getZoom();
+    setDocSizeTwips(scale(await props.doc.documentSize(), zoom));
+    setRectsTwips(
+      (await props.doc.partRectanglesTwips()).map<RectangleTwips>((rect) => ({
+        x: rect.x * zoom,
+        y: rect.y * zoom,
+        height: rect.height * zoom,
+        width: rect.width * zoom,
+      }))
+    );
   });
 
   const docSizePx = () =>
@@ -170,9 +181,13 @@ export function OfficeDocument(props: Props) {
 
   const [focused, setFocused] = getOrCreateFocusedSignal(() => props.doc);
 
-  const keyhandler = createMemo(() =>
-    createKeyHandler(() => props.doc, focused)
-  );
+  const keyhandler = createMemo(() => {
+    const result = createKeyHandler(() => props.doc, focused);
+    if (props.ignoreShortcuts) {
+      result.ignoreShortcuts(props.ignoreShortcuts);
+    }
+    return result;
+  });
 
   const handleScroll = frameThrottle(async (yPx) => {
     handleScroll.cancel();
