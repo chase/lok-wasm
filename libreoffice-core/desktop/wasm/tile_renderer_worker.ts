@@ -382,10 +382,9 @@ function stateMachine() {
 
 function shouldPausePaint(): boolean {
   return (
-    Atomics.load(d.state, 0) === RenderState.RESET || false
-    // TODO: fix pause condition
-    // (scheduledTopTwips !== renderedTopTwips && renderedTopTwips !== -1) ||
-    // (scheduledHeightTwips !== renderedHeightTwips && renderedHeightTwips !== -1)
+    Atomics.load(d.state, 0) === RenderState.RESET ||
+    (scheduledTopTwips !== renderedTopTwips && renderedTopTwips !== -1) ||
+    (scheduledHeightTwips !== renderedHeightTwips && renderedHeightTwips !== -1)
   );
 }
 
