@@ -53,16 +53,9 @@ export type PartialMouseEvent = Pick<MouseEvent,
 
 let lastMouseMove = Date.now();
 export function handleMouseMove(doc: DocumentClient, evt: PartialMouseEvent) {
-  console.log(evt.offsetX)
   if (!mouseIsDown && lastMouseMove + MOUSE_MOVE_INTERVAL_MS > Date.now()) {
     return;
   }
-
-  console.log(`
-    mousemove
-    x: ${evt.offsetX}
-    y: ${evt.offsetY}
-  `)
 
   doc.postMouseEvent(
     VCL_MOUSE_MOVE,
