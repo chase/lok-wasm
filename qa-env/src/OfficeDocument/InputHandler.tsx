@@ -1,5 +1,5 @@
 import { DocumentClient } from '@lok/shared';
-import { Accessor, createEffect, onCleanup } from 'solid-js';
+import { Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import { getOrCreateFocusedSignal } from './focus';
 import { eventModifiers, pressKey } from './vclKeys';
 import { CallbackType } from '@lok/lok_enums';
@@ -40,6 +40,7 @@ type TextAreaEvent = InputEvent & {
 export function InputHandler(props: Props) {
   let input: HTMLTextAreaElement;
   const [focus] = getOrCreateFocusedSignal(props.doc);
+  const [textareaFocused, setTextAreaFocused] = createSignal(false);
   let composing = false;
   let lastContent: Array<number> = [];
   let ignoreInputLocks = 0;
@@ -58,11 +59,17 @@ export function InputHandler(props: Props) {
     });
   });
 
-  createEffect(() => {
-    if (focus()) {
+  createEffect((prev) => {
+    if (props.pos && prev !== props.pos) {
       input.focus();
-      if (!isSelectionValid(input) || isCaretAtPreSpace(input)) reset();
-    } else {
+      if (!isSelectionValid(input) || isCaretAtPreSpace(input)) {
+        reset();
+      }
+    }
+  }, props.pos);
+
+  createEffect(() => {
+    if (!textareaFocused()) {
       if (composing) abortComposition();
       composing = false;
     }
@@ -173,7 +180,10 @@ export function InputHandler(props: Props) {
       }}
       ref={(ref) => {
         input = ref;
-        if (focus()) input.focus();
+        if (focus()) {
+          input.focus();
+          setTextAreaFocused(true);
+        }
       }}
       onBeforeInput={() => {
         if (!getSelection()) reset();
@@ -208,6 +218,12 @@ export function InputHandler(props: Props) {
         }
       }}
       onCompositionUpdate={handleInput as any}
+      onFocus={() => {
+        setTextAreaFocused(true);
+      }}
+      onBlur={() => {
+        setTextAreaFocused(false);
+      }}
       value={INITIAL_CONTENT}
     />
   );
