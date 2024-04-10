@@ -194,7 +194,6 @@ export function OfficeDocument(props: Props) {
                       altKey: e.altKey,
                       metaKey: e.metaKey,
                       ctrlKey: e.ctrlKey,
-
                 }
                 const callback = frameThrottle((evt) => {
                     vclMouse.handleMouseMove(props.doc, evt);
