@@ -182,6 +182,10 @@ export function OfficeDocument(props: Props) {
                 vclMouse.handleMouseUp(props.doc, e);
               }}
               oncapture:mousemove={(e: MouseEvent) => {
+                /// Seems like the mousemove event object gets recycled
+                /// We can't pass a ref of the event to frameThrottle because it 
+                /// might get mutated / cleaned up by the time the callback gets invoked
+                /// Instead copying over what we need instead of doing a full clone
                 const partialEvent: vclMouse.PartialMouseEvent = {
                       buttons: e.buttons,
                       offsetX: e.offsetX,
