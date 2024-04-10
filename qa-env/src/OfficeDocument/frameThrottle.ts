@@ -6,6 +6,7 @@ export const frameThrottle = <T extends (...args: any) => any>(
   let lastArgs: any[];
 
   const later = (context: any) => () => {
+    console.log("new frame?")
     requestId = undefined;
     callback.apply(context, lastArgs);
   };
@@ -15,6 +16,7 @@ export const frameThrottle = <T extends (...args: any) => any>(
     ...args: Parameters<T>
   ) {
     lastArgs = args;
+    console.log(args);
     if (requestId == null) {
       requestId = requestAnimationFrame(later(this));
     }

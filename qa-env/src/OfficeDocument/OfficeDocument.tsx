@@ -15,10 +15,10 @@ import { ScrollArea } from './ScrollArea';
 import { Cursor } from './Cursor';
 import { Selection } from './Selection';
 import * as vclMouse from './vclMouse';
-import { frameThrottle } from './frameThrottle';
 import { createDocEventSignal } from './docEventSignal';
 import { createKeyHandler } from './vclKeys';
 import { getOrCreateFocusedSignal } from './focus';
+import { frameThrottle } from './frameThrottle';
 
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
 
@@ -181,9 +181,23 @@ export function OfficeDocument(props: Props) {
               oncapture:mouseup={(e: MouseEvent) => {
                 vclMouse.handleMouseUp(props.doc, e);
               }}
-              oncapture:mousemove={frameThrottle((e: MouseEvent) => {
-                vclMouse.handleMouseMove(props.doc, e);
-              })}
+              oncapture:mousemove={(e: MouseEvent) => {
+                const partialEvent: vclMouse.PartialMouseEvent = {
+                      buttons: e.buttons,
+                      offsetX: e.offsetX,
+                      offsetY: e.offsetY,
+                      shiftKey: e.shiftKey,
+                      altKey: e.altKey,
+                      metaKey: e.metaKey,
+                      ctrlKey: e.ctrlKey,
+
+                }
+                const callback = frameThrottle((evt) => {
+                    vclMouse.handleMouseMove(props.doc, evt);
+                })
+
+                callback(partialEvent);
+              }}
               oncontextmenu={(e) => {
                 e.preventDefault();
               }}

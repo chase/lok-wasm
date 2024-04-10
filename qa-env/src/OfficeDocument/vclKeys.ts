@@ -2,6 +2,7 @@ import { CallbackType } from '@lok/lok_enums';
 import type { DocumentClient, DocumentWithViewMethods } from '@lok/shared';
 import { Accessor, createRenderEffect, onCleanup } from 'solid-js';
 import { IS_MAC } from './isMac';
+import { PartialMouseEvent } from './vclMouse';
 
 declare global {
   interface Navigator {
@@ -141,7 +142,7 @@ export function pressKey(
   doc.postKeyEvent(KEY_UP, 0, code);
 }
 
-export function eventModifiers(evt: MouseEvent | KeyboardEvent): number {
+export function eventModifiers(evt: PartialMouseEvent | KeyboardEvent): number {
   return (
     (evt.shiftKey ? Modifiers.SHIFT : 0) |
     (evt.ctrlKey ? Modifiers.CTRL : 0) |
