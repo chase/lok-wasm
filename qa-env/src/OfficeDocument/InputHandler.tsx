@@ -3,6 +3,7 @@ import { Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import { getOrCreateFocusedSignal } from './focus';
 import { eventModifiers, pressKey } from './vclKeys';
 import { CallbackType } from '@lok/lok_enums';
+import { getOrCreateCursorPosition } from './cursorSignal';
 
 interface Props {
   doc: Accessor<DocumentClient>;
@@ -40,7 +41,6 @@ type TextAreaEvent = InputEvent & {
 export function InputHandler(props: Props) {
   let input: HTMLTextAreaElement;
   const [focus] = getOrCreateFocusedSignal(props.doc);
-  const [textareaFocused, setTextAreaFocused] = createSignal(false);
   let composing = false;
   let lastContent: Array<number> = [];
   let ignoreInputLocks = 0;
@@ -59,21 +59,27 @@ export function InputHandler(props: Props) {
     });
   });
 
-  createEffect((prev) => {
-    if (props.pos && prev !== props.pos) {
+  createEffect(() => {
+    // if we loose focus we need to abort active composition
+    if (!focus()) {
+      if (composing) abortComposition();
+      composing = false;
+      return;
+    }
+  })
+
+  createEffect<void, number[]>((prevPos) => {
+    // Only re-focus if the position has changed already
+    // and the document is focused
+    if (focus() && (prevPos !== props.pos)) {
       input.focus();
       if (!isSelectionValid(input) || isCaretAtPreSpace(input)) {
         reset();
       }
     }
-  }, props.pos);
 
-  createEffect(() => {
-    if (!textareaFocused()) {
-      if (composing) abortComposition();
-      composing = false;
-    }
-  });
+    return props.pos;
+  }, props.pos)
 
   function abortComposition() {
     reset(document.activeElement !== input);
@@ -128,10 +134,12 @@ export function InputHandler(props: Props) {
     lastContent = content;
   }
 
-  function reset(noSelect: boolean = false) {
+  function reset(noSelect: boolean = false, focus: boolean = true) {
     ignoreInputLocks++;
     lastContent = [];
-    input.focus();
+    if (focus) {
+      input.focus();
+    }
     input.value = INITIAL_CONTENT; // pre and post space
     if (!noSelect) input.setSelectionRange(1, 1);
     ignoreInputLocks--;
@@ -182,7 +190,6 @@ export function InputHandler(props: Props) {
         input = ref;
         if (focus()) {
           input.focus();
-          setTextAreaFocused(true);
         }
       }}
       onBeforeInput={() => {
@@ -218,12 +225,6 @@ export function InputHandler(props: Props) {
         }
       }}
       onCompositionUpdate={handleInput as any}
-      onFocus={() => {
-        setTextAreaFocused(true);
-      }}
-      onBlur={() => {
-        setTextAreaFocused(false);
-      }}
       value={INITIAL_CONTENT}
     />
   );
