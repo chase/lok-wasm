@@ -64,7 +64,6 @@ export function InputHandler(props: Props) {
     if (!focus()) {
       if (composing) abortComposition();
       composing = false;
-      return;
     }
   })
 
@@ -134,12 +133,10 @@ export function InputHandler(props: Props) {
     lastContent = content;
   }
 
-  function reset(noSelect: boolean = false, focus: boolean = true) {
+  function reset(noSelect: boolean = false) {
     ignoreInputLocks++;
     lastContent = [];
-    if (focus) {
-      input.focus();
-    }
+    input.focus();
     input.value = INITIAL_CONTENT; // pre and post space
     if (!noSelect) input.setSelectionRange(1, 1);
     ignoreInputLocks--;
