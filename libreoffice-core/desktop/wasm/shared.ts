@@ -9,6 +9,7 @@ export type GlobalMessage = {
   load(name: string, blob: Blob): DocumentRef | null;
   importScript(url: string): void;
   preload(): void;
+  setIsMacOSForConfig(): void;
 };
 
 type Rectangle = {
