@@ -64,8 +64,9 @@ const handler: AsyncMessage = {
   ): Promise<ArrayBuffer> {
     const { readUnlink } = await lokPromise;
     const tmpFile = `/${Date.now()}.${format}`;
-    byRef(ref)?.saveAs(`file://${tmpFile}`, format);
-    return readUnlink(tmpFile);
+    byRef(ref)?.saveAs(`file://${tmpFile}`, format, undefined);
+    // only buffer is transferable
+    return readUnlink(tmpFile).buffer;
   },
 
   parts: async function (ref: DocumentRef): Promise<number> {
