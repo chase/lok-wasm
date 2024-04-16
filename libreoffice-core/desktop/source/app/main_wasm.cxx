@@ -273,6 +273,10 @@ public:
 
     int32_t getViewId() { return doc_->getView(); }
 
+    int32_t newView() {
+        return doc_->createView();
+    }
+
     val startTileRenderer(int32_t viewId, int32_t tileSize)
     {
         desktop::WasmDocumentExtension* ext
@@ -410,5 +414,6 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("dispatchCommand", &DocumentClient::dispatchCommand)
         .function("removeText", &DocumentClient::removeText)
         .function("startTileRenderer", &DocumentClient::startTileRenderer)
-        .function("ref", &DocumentClient::ref);
+        .function("ref", &DocumentClient::ref)
+        .function("newView", &DocumentClient::newView);
 }

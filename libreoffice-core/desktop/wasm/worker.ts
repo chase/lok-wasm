@@ -53,6 +53,11 @@ const handler: AsyncMessage = {
     return ref;
   },
 
+  newView: async function(ref: DocumentRef): Promise<DocumentRef | null> {
+    const doc = byRef(ref);
+    return doc?.newView();
+  },
+
   close: async function (ref: DocumentRef): Promise<void> {
     const doc = docMap[ref];
     doc?.delete();

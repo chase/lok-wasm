@@ -56,6 +56,7 @@ export declare class Document {
   getDocumentSize(): [widthTwips: number, heightTwips: number];
   initializeForRendering(args: string): void;
   getViewId(): number;
+  newView(): number;
   ref(): DocumentRef;
   postKeyEvent(
     viewId: number,
