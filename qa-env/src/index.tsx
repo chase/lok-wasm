@@ -6,10 +6,11 @@ import './index.css'
 import App from './App'
 import { IS_MAC } from './OfficeDocument/isMac';
 
-preload();
 if (IS_MAC) {
-  setIsMacOSForConfig();
+  await setIsMacOSForConfig();
 }
+preload();
+
 const root = document.getElementById('root')
 
 render(() => <App />, root!)
