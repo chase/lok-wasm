@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE:-$0}")" &> /dev/null && pwd)
+BASE_DIR="$(dirname -- "$SCRIPT_DIR")"
+
+SED_CMD="sed -i"
+# macOS uses BSD sed which is slightly odd
+[ $(uname) == "Darwin" ] && SED_CMD="sed -i ''"
+
+"$SCRIPT_DIR"/ssh "~/lok-wasm/scripts/clangd"
+rsync -z -e ssh go@94.130.237.46:~/lok-wasm/libreoffice-core/compile_commands.json "$BASE_DIR/libreoffice-core/compile_commands.json"
+
+# rewrite the paths so they work locally
+$SED_CMD "s|/home/node/lok-wasm|$BASE_DIR|g" "$BASE_DIR/libreoffice-core/compile_commands.json"

@@ -1,0 +1,3 @@
+#!/bin/bash
+
+ssh -t -o ServerAliveInterval=60 go@94.130.237.46 "$@"
