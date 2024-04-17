@@ -53,7 +53,7 @@ export type DocumentMethods = {
   close(): void;
   /** returns a copy of the document in the provided `format` */
   save(format: 'docx' | 'pdf'): ArrayBuffer;
-  /** returns the id of thee new view created */
+  /** returns the id of the new view created */
   newView(): number;
   /** returns the number of pages */
   parts(): number;
