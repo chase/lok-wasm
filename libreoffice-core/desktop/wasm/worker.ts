@@ -64,6 +64,10 @@ const handler: AsyncMessage = {
   ): Promise<ArrayBuffer> {
     const { readUnlink } = await lokPromise;
     const tmpFile = `/${Date.now()}.${format}`;
+    // Optional arguments as emscripten can be undefined,
+    // but the number of parameters must match the binding signature
+    // so for optional parameters, we have to pass undefined
+    // https://github.com/emscripten-core/emscripten/pull/21076/files
     byRef(ref)?.saveAs(`file://${tmpFile}`, format, undefined);
     // only buffer is transferable
     return readUnlink(tmpFile).buffer;

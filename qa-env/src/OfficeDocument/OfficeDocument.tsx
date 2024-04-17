@@ -19,7 +19,6 @@ import { createDocEventSignal } from './docEventSignal';
 import { createKeyHandler } from './vclKeys';
 import { getOrCreateFocusedSignal } from './focus';
 import { frameThrottle } from './frameThrottle';
-import { downloadFile } from './utils';
 
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
 
@@ -155,18 +154,10 @@ export function OfficeDocument(props: Props) {
     createKeyHandler(() => props.doc, focused)
   );
 
-  const saveAsPDF = async () => {
-    const buffer = await props.doc.save("pdf")
-    downloadFile("Pdf Export.pdf", buffer, "application/pdf");
-  };
 
   return (
     <>
-      <div class = "h-[70px] border-b border border-gray-300 flex items-center bg-gray-200 px-2">
-        <button onClick={saveAsPDF}>
-          Save As PDF
-        </button>
-      </div>
+
       <div
         class="flex flex-1 justify-center relative overflow-hidden"
         use:observedSize={[props.doc, setContainerHeight]}
