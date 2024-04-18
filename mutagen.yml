@@ -1,0 +1,208 @@
+# Forward local traffic to the web and API servers.
+forward:
+  lok-wasm:
+    source: 'tcp:localhost:5173'
+    destination: 'go@94.130.237.46:tcp:localhost:5173'
+
+# Synchronize code to the shared Docker volume via the Mutagen service.
+sync:
+  defaults:
+    flushOnCreate: true
+    ignore:
+      vcs: true
+  source:
+    alpha: '.'
+    beta: 'go@94.130.237.46:~/lok-wasm'
+    mode: 'two-way-resolved'
+    ignore:
+      paths:
+        - '.DS_Store'
+        - '.vscode'
+        - '.idea'
+        - 'a.out'
+        - 'a.wasm'
+        - 'a.worker.js'
+        - 'a.out.js'
+        - 'a.out.wasm'
+        - '*.o'
+        - '*.a'
+        - '*.so'
+        - '/emsdk'
+        - 'node_modules'
+        - '/qa-env/dist'
+        - '/qa-env/dist-ssr'
+        - '/qa-env/dist-ssr'
+        - '/qa-env/test-results/'
+        - '/qa-env/playwright-report/'
+        - '/qa-env/blob-report/'
+        - '/qa-env/playwright/.cache/'
+        - '/qa-env/test-examples/'
+        - '/qa-env/workdir/'
+        - '/libreoffice-core/workdir_for_build'
+        - '/libreoffice-core/test-install'
+        - '/libreoffice-core/external'
+        - '/libreoffice-core/instdir/*'
+        - '!/libreoffice-core/instdir/program'
+        - '/libreoffice-core/instdir/program/*.a'
+        - '/libreoffice-core/compile_commands.json'
+        - '/libreoffice-core/workdir/*'
+        - '/libreoffice-core/workdir/**/*.wasm'
+        - '!/libreoffice-core/workdir/CustomTarget'
+        - '/libreoffice-core/workdir/CustomTarget/*'
+        - '!/libreoffice-core/workdir/CustomTarget/editeng'
+        - '/libreoffice-core/workdir/CustomTarget/editeng/*'
+        - '!/libreoffice-core/workdir/CustomTarget/editeng/generated'
+
+        - '!/libreoffice-core/workdir/CustomTarget/filter'
+        - '/libreoffice-core/workdir/CustomTarget/filter/*'
+        - '!/libreoffice-core/workdir/CustomTarget/filter/source'
+        - '/libreoffice-core/workdir/CustomTarget/filter/source/*'
+        - '!/libreoffice-core/workdir/CustomTarget/filter/source/svg'
+
+        - "!/libreoffice-core/workdir/CustomTarget/officecfg"
+        - "/libreoffice-core/workdir/CustomTarget/officecfg/*"
+        - '!/libreoffice-core/workdir/CustomTarget/officecfg/registry'
+
+        - "!/libreoffice-core/workdir/CustomTarget/oox"
+        - "/libreoffice-core/workdir/CustomTarget/oox/*"
+        - '!/libreoffice-core/workdir/CustomTarget/oox/generated'
+
+        - "!/libreoffice-core/workdir/CustomTarget/sw"
+        - "/libreoffice-core/workdir/CustomTarget/sw/*"
+        - '!/libreoffice-core/workdir/CustomTarget/sw/generated'
+
+          
+        - "!/libreoffice-core/workdir/CustomTarget/writerfilter"
+        - "/libreoffice-core/workdir/CustomTarget/writerfilter/*"
+        - '!/libreoffice-core/workdir/CustomTarget/writerfilter/source'
+
+          
+        - "!/libreoffice-core/workdir/CustomTarget/xmloff"
+        - "/libreoffice-core/workdir/CustomTarget/xmloff/*"
+        - '!/libreoffice-core/workdir/CustomTarget/xmloff/generated'
+
+        - '!/libreoffice-core/workdir/SdiTarget'
+        - '/libreoffice-core/workdir/SdiTarget/*'
+          
+        - "!/libreoffice-core/workdir/SdiTarget/sfx2"
+        - "/libreoffice-core/workdir/SdiTarget/sfx2/*"
+        - '!/libreoffice-core/workdir/SdiTarget/sfx2/sdi'
+
+        - "!/libreoffice-core/workdir/SdiTarget/svx"
+        - "/libreoffice-core/workdir/SdiTarget/svx/*"
+        - '!/libreoffice-core/workdir/SdiTarget/svx/sdi'
+
+          
+        - "!/libreoffice-core/workdir/SdiTarget/sw"
+        - "/libreoffice-core/workdir/SdiTarget/sw/*"
+        - '!/libreoffice-core/workdir/SdiTarget/sw/sdi'
+
+        - '!/libreoffice-core/workdir/UnoApiHeadersTarget'
+
+        - "!/libreoffice-core/workdir/UnpackedTarball"
+        - "/libreoffice-core/workdir/UnpackedTarball/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/boost"
+        - "!/libreoffice-core/workdir/UnpackedTarball/cairo"
+        - "/libreoffice-core/workdir/UnpackedTarball/cairo/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/cairo/src"
+        - "!/libreoffice-core/workdir/UnpackedTarball/cppunit"
+        - "/libreoffice-core/workdir/UnpackedTarball/cppunit/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/cppunit/include"
+        - "!/libreoffice-core/workdir/UnpackedTarball/dragonbox"
+        - "/libreoffice-core/workdir/UnpackedTarball/dragonbox/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/dragonbox/include"
+        - "!/libreoffice-core/workdir/UnpackedTarball/dtoa"
+        - "/libreoffice-core/workdir/UnpackedTarball/dtoa/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/dtoa/include"
+        - "!/libreoffice-core/workdir/UnpackedTarball/expat"
+        - "/libreoffice-core/workdir/UnpackedTarball/expat/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/expat/lib"
+        - "!/libreoffice-core/workdir/UnpackedTarball/fontconfig"
+        - "!/libreoffice-core/workdir/UnpackedTarball/graphite"
+        - "/libreoffice-core/workdir/UnpackedTarball/graphite/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/graphite/include"
+        - "!/libreoffice-core/workdir/UnpackedTarball/harfbuzz"
+        - "/libreoffice-core/workdir/UnpackedTarball/harfbuzz/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/harfbuzz/src"
+        - "!/libreoffice-core/workdir/UnpackedTarball/hunspell"
+        - "/libreoffice-core/workdir/UnpackedTarball/hunspell/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/hunspell/src/hunspell"
+        - "!/libreoffice-core/workdir/UnpackedTarball/hyphen"
+        - "!/libreoffice-core/workdir/UnpackedTarball/icu"
+        - "/libreoffice-core/workdir/UnpackedTarball/icu/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/icu/source"
+        - "/libreoffice-core/workdir/UnpackedTarball/icu/source/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/icu/source/common"
+        - "!/libreoffice-core/workdir/UnpackedTarball/icu/source/i18n"
+        - "!/libreoffice-core/workdir/UnpackedTarball/lcms2"
+        - "/libreoffice-core/workdir/UnpackedTarball/lcms2/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/lcms2/include"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libabw"
+        - "/libreoffice-core/workdir/UnpackedTarball/libabw/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libabw/inc"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libebook"
+        - "/libreoffice-core/workdir/UnpackedTarball/libebook/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libebook/inc"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libjpeg-turbo"
+        - "!/libreoffice-core/workdir/UnpackedTarball/liblangtag"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libmwaw"
+        - "/libreoffice-core/workdir/UnpackedTarball/libmwaw/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libmwaw/inc"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libnumbertext"
+        - "/libreoffice-core/workdir/UnpackedTarball/libnumbertext/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libnumbertext/src"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libodfgen"
+        - "/libreoffice-core/workdir/UnpackedTarball/libodfgen/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libodfgen/inc"
+        - "!/libreoffice-core/workdir/UnpackedTarball/liborcus"
+        - "/libreoffice-core/workdir/UnpackedTarball/liborcus/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/liborcus/include"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libpng"
+        - "!/libreoffice-core/workdir/UnpackedTarball/librevenge"
+        - "/libreoffice-core/workdir/UnpackedTarball/librevenge/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/librevenge/inc"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libstaroffice"
+        - "/libreoffice-core/workdir/UnpackedTarball/libstaroffice/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libstaroffice/inc"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libtiff"
+        - "/libreoffice-core/workdir/UnpackedTarball/libtiff/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libtiff/libtiff"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libwebp"
+        - "/libreoffice-core/workdir/UnpackedTarball/libwebp/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libwebp/src"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libwpd"
+        - "/libreoffice-core/workdir/UnpackedTarball/libwpd/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libwpd/inc"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libwpg"
+        - "/libreoffice-core/workdir/UnpackedTarball/libwpg/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libwpg/inc"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libwps"
+        - "/libreoffice-core/workdir/UnpackedTarball/libwps/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libwps/inc"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libxml2"
+        - "/libreoffice-core/workdir/UnpackedTarball/libxml2/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libxml2/include"
+        - "!/libreoffice-core/workdir/UnpackedTarball/libxslt"
+        - "!/libreoffice-core/workdir/UnpackedTarball/mdds"
+        - "/libreoffice-core/workdir/UnpackedTarball/mdds/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/mdds/include"
+        - "!/libreoffice-core/workdir/UnpackedTarball/mythes"
+        - "!/libreoffice-core/workdir/UnpackedTarball/openssl"
+        - "/libreoffice-core/workdir/UnpackedTarball/openssl/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/openssl/include"
+        - "!/libreoffice-core/workdir/UnpackedTarball/pixman"
+        - "/libreoffice-core/workdir/UnpackedTarball/pixman/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/pixman/pixman"
+        - "!/libreoffice-core/workdir/UnpackedTarball/raptor"
+        - "/libreoffice-core/workdir/UnpackedTarball/raptor/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/raptor/src"
+        - "!/libreoffice-core/workdir/UnpackedTarball/rasqal"
+        - "/libreoffice-core/workdir/UnpackedTarball/rasqal/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/rasqal/src"
+        - "!/libreoffice-core/workdir/UnpackedTarball/redland"
+        - "/libreoffice-core/workdir/UnpackedTarball/redland/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/redland/src"
+        - "!/libreoffice-core/workdir/UnpackedTarball/xmlsec"
+        - "/libreoffice-core/workdir/UnpackedTarball/xmlsec/*"
+        - "!/libreoffice-core/workdir/UnpackedTarball/xmlsec/include"
+        - "!/libreoffice-core/workdir/UnpackedTarball/zlib"

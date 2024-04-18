@@ -15,11 +15,11 @@ import { ScrollArea } from './ScrollArea';
 import { Cursor } from './Cursor';
 import { Selection } from './Selection';
 import * as vclMouse from './vclMouse';
-import { frameThrottle } from './frameThrottle';
 import { createDocEventSignal } from './docEventSignal';
 import { Shortcut, createKeyHandler } from './vclKeys';
 import { getOrCreateFocusedSignal } from './focus';
 import { getOrCreateZoomSignal, scale } from './zoom';
+import { frameThrottle } from './frameThrottle';
 
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
 
@@ -207,8 +207,10 @@ export function OfficeDocument(props: Props) {
     }
   });
 
+
   return (
     <>
+
       <div
         class="flex flex-1 justify-center relative overflow-hidden"
         use:observedSize={[props.doc, setContainerHeight]}
@@ -259,9 +261,26 @@ export function OfficeDocument(props: Props) {
               oncapture:mouseup={(e: MouseEvent) => {
                 vclMouse.handleMouseUp(props.doc, e);
               }}
-              oncapture:mousemove={frameThrottle((e: MouseEvent) => {
-                vclMouse.handleMouseMove(props.doc, e);
-              })}
+              oncapture:mousemove={(e: MouseEvent) => {
+                // Seems like on firefox the mousemove event object gets recycled
+                // We can't pass a ref of the event to frameThrottle because it 
+                // might get mutated / cleaned up by the time the callback gets invoked
+                // Instead copying over what we need instead of doing a full clone
+                const partialEvent: vclMouse.PartialMouseEvent = {
+                      buttons: e.buttons,
+                      offsetX: e.offsetX,
+                      offsetY: e.offsetY,
+                      shiftKey: e.shiftKey,
+                      altKey: e.altKey,
+                      metaKey: e.metaKey,
+                      ctrlKey: e.ctrlKey,
+                }
+                const callback = frameThrottle((evt) => {
+                    vclMouse.handleMouseMove(props.doc, evt);
+                })
+
+                callback(partialEvent);
+              }}
               oncontextmenu={(e) => {
                 e.preventDefault();
               }}

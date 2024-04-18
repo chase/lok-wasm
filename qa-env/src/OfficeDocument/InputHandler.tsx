@@ -1,8 +1,9 @@
 import { DocumentClient } from '@lok/shared';
-import { Accessor, createEffect, onCleanup } from 'solid-js';
+import { Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import { getOrCreateFocusedSignal } from './focus';
 import { eventModifiers, pressKey } from './vclKeys';
 import { CallbackType } from '@lok/lok_enums';
+import { getOrCreateCursorPosition } from './cursorSignal';
 
 interface Props {
   doc: Accessor<DocumentClient>;
@@ -59,14 +60,25 @@ export function InputHandler(props: Props) {
   });
 
   createEffect(() => {
-    if (focus()) {
-      input.focus();
-      if (!isSelectionValid(input) || isCaretAtPreSpace(input)) reset();
-    } else {
+    // if we loose focus we need to abort active composition
+    if (!focus()) {
       if (composing) abortComposition();
       composing = false;
     }
-  });
+  })
+
+  createEffect<void, number[]>((prevPos) => {
+    // Only re-focus if the position has changed already
+    // and the document is focused
+    if (focus() && (prevPos !== props.pos)) {
+      input.focus();
+      if (!isSelectionValid(input) || isCaretAtPreSpace(input)) {
+        reset();
+      }
+    }
+
+    return props.pos;
+  }, props.pos)
 
   function abortComposition() {
     reset(document.activeElement !== input);
@@ -173,7 +185,9 @@ export function InputHandler(props: Props) {
       }}
       ref={(ref) => {
         input = ref;
-        if (focus()) input.focus();
+        if (focus()) {
+          input.focus();
+        }
       }}
       onBeforeInput={() => {
         if (!getSelection()) reset();

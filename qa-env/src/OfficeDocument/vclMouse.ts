@@ -17,7 +17,7 @@ const VCL_MOUSE_MOVE = 2;
 const VCL_MOUSE_MIDDLE = 2;
 const VCL_MOUSE_RIGHT = 4;
 
-function domMouseButtonsToVclButtons(evt: MouseEvent) {
+function domMouseButtonsToVclButtons(evt: PartialMouseEvent) {
   const { buttons } = evt;
   let newButtons = buttons & 1; // left is the same
   newButtons |= buttons & 2 ? VCL_MOUSE_RIGHT : 0; // right
@@ -61,8 +61,11 @@ export function handleMouseUp(doc: DocumentClient, evt: MouseEvent) {
   );
 }
 
+export type PartialMouseEvent = Pick<MouseEvent,
+  'metaKey' | 'altKey' | 'shiftKey' | 'ctrlKey' | 'offsetX' | 'offsetY' | 'buttons'>;
+
 let lastMouseMove = Date.now();
-export function handleMouseMove(doc: DocumentClient, evt: MouseEvent) {
+export function handleMouseMove(doc: DocumentClient, evt: PartialMouseEvent) {
   if (!mouseIsDown && lastMouseMove + MOUSE_MOVE_INTERVAL_MS > Date.now()) {
     return;
   }

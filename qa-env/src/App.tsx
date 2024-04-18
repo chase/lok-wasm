@@ -8,6 +8,7 @@ import { cleanup } from './OfficeDocument/cleanup';
 import { IS_MAC } from './OfficeDocument/isMac';
 import { Shortcut } from './OfficeDocument/vclKeys';
 import { updateZoom } from './OfficeDocument/zoom';
+import { downloadFile } from './utils';
 
 const [loading, setLoading] = createSignal(false);
 const [getDoc, setDoc] = createSignal<DocumentClient | null>(null);
@@ -40,6 +41,11 @@ async function fileOpen(files: FileList | null) {
 
   // doc.on(CallbackType.STATE_CHANGED, (payload) => console.log(payload));
 }
+async function saveAsPDF(doc: DocumentClient | null) {
+  if (!doc) return;
+  const buffer = await doc.save("pdf")
+  downloadFile("Pdf Export.pdf", buffer, "application/pdf");
+};
 
 const MOD = IS_MAC ? 'cmd' : 'ctrl';
 const ignoredShortcuts: Shortcut[] = [
@@ -90,6 +96,13 @@ function App() {
           onChange={(evt) => fileOpen(evt.target.files)}
         />
       </div>
+      <Show when={getDoc()}>
+        <div class = "h-[70px] border-b border border-gray-300 flex items-center bg-gray-200 px-2">
+          <button onClick={() => saveAsPDF(getDoc())}>
+            Save As PDF
+          </button>
+        </div>
+      </Show>
       <Show when={loading()}>
         <div class="loadsection">
           <span class="loader" />

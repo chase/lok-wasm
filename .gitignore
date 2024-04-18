@@ -4,9 +4,12 @@
 libreoffice-core/.clangd
 libreoffice-core/diag.json
 libreoffice-core/vs-code-template.code-workspace
+libreoffice-core/.cache
+libreoffice-core/a.worker.js
 
 .DS_Store
 libreoffice-core/debug
 .vscode/**/*
 .idea/**/*
 /emsdk
+mutagen.yml.lock

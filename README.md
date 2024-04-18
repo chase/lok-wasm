@@ -13,18 +13,18 @@ TODO: List pre-reqs for each platform
 Setup the repo:
 ```bash
 git clone https://github.com/coparse-inc/lok-wasm
-./scripts/setup.sh
-# if you're using VS Code or clangd in vim, run this
-./scripts/prepare-clangd.sh
+./scripts/setup
 ```
 
 # Building
 
 ```bash
 # Run configure.sh for the initial build or any configuration changes
-./scripts/configure.sh
+./scripts/configure
+# if you're using VS Code or clangd in vim, run this
+./scripts/clangd
 # Run build.sh for any code changes
-./scripts/build.sh
+./scripts/build
 ```
 
 # QA Env
@@ -42,4 +42,5 @@ npm run dev
 
 # Docs
 
+- [Remote Development](./remote_dev.md)
 - [Important Files](./important_files.md)
