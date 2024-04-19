@@ -66,6 +66,7 @@ const nonVisibleInvalidations: Rect[] = [];
 let pendingStateChange = false;
 let running = false;
 let idleAreaPaint = false;
+let zoomTimeout: number | undefined;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -99,9 +100,15 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       if (!activeCanvas) return;
       idleAreaPaint = false;
       zoom(data.s, data.d);
-      setState(RenderState.RESET);
-      Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
-      if (!running) stateMachine();
+      // Debounce rendering after zoom
+      // If holding down ctrl+/- let the canvas scale
+      // and only render once finished
+      if (zoomTimeout) clearTimeout(zoomTimeout);
+      zoomTimeout = setTimeout(() => {
+       setState(RenderState.RESET);
+       Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
+       if (!running) stateMachine();
+      }, 70)
       break;
   }
 };
@@ -111,11 +118,12 @@ function zoom(in_scale: number, in_dpi: number) {
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
     LOK_INTERNAL_TWIPS_TO_PX;
+
   tileDimTwips = Math.ceil(d.tileSize * scaledTwips);
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
   scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
-  scheduledWidthPx = (((activeCanvas.width * in_scale) / scale) * in_dpi) / dpi;
+  scheduledWidthPx = docWidthTwips / scaledTwips;
   scale = in_scale;
   dpi = in_dpi;
   console.log({
