@@ -3,7 +3,7 @@ import { CallbackType } from '@lok/lok_enums';
 import type { DocumentClient } from '@lok/shared';
 import { Show, createSignal, onCleanup } from 'solid-js';
 import './App.css';
-import { OfficeDocument } from './OfficeDocument/OfficeDocument';
+import { OfficeDocument, setCanvasObjectFit } from './OfficeDocument/OfficeDocument';
 import { cleanup } from './OfficeDocument/cleanup';
 import { IS_MAC } from './OfficeDocument/isMac';
 import { Shortcut } from './OfficeDocument/vclKeys';
@@ -65,10 +65,13 @@ function registerGlobalKeys() {
     switch (e.key) {
       case '=':
         e.preventDefault();
+        setCanvasObjectFit("cover");
         updateZoom(getDocThrows, 0.1);
         break;
       case '-':
         e.preventDefault();
+        console.log("zooming out")
+        setCanvasObjectFit("contain")
         updateZoom(getDocThrows, -0.1);
         break;
     }

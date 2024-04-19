@@ -48,6 +48,8 @@ declare module 'solid-js' {
 }
 false && observedSize; // workaround for "unused" function warning with Solid directives
 
+export const [canvasObjectFit, setCanvasObjectFit] = createSignal<"cover" | "contain" | "fill">("cover");
+
 function calcCanvasHeight(heightPx: number | undefined) {
   return heightPx
     ? (Math.ceil(heightPx / TILE_DIM_PX) + 1) * TILE_DIM_PX
@@ -227,8 +229,7 @@ export function OfficeDocument(props: Props) {
               ref={setCanvas0}
               class="absolute top-0 pointer-events-none"
               style={{
-                // TODO: object-fit should dynamically set while zooming to use fill so we get "zooming" for free until the render actually finishes
-                // 'object-fit': 'cover',
+                'object-fit': canvasObjectFit(),
                 'object-position': 'top left',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
@@ -239,8 +240,7 @@ export function OfficeDocument(props: Props) {
               ref={setCanvas1}
               class="absolute top-0 pointer-events-none"
               style={{
-                // TODO: object-fit should dynamically set while zooming to use fill so we get "zooming" for free until the render actually finishes
-                'object-fit': 'cover',
+                'object-fit': canvasObjectFit(),
                 'object-position': 'top left',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
