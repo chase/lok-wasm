@@ -211,8 +211,8 @@ export function createKeyHandler(
       }
     },
     handleKeyEvent(evt: KeyboardEvent): void {
-      console.log(ignoredShortcuts_);
       if (ignoredShortcuts_.has(keyboardEventToMapKey(evt))) {
+        evt.preventDefault();
         return;
       }
 

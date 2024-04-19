@@ -1,20 +1,11 @@
 import { twipsToCssPx } from '@lok';
 import { DocumentClient } from '@lok/shared';
 import { Accessor, Signal, createSignal } from 'solid-js';
+import { getOrCreateDPISignal } from './twipConversion';
 
-export const DEFAULT_ZOOM = 1;
+export const DEFAULT_ZOOM = 0.8;
 export const MAX_ZOOM = 3;
 export const MIN_ZOOM = 0.4;
-
-// 3 decimal places
-const Epsilon = 0.001;
-function fp_less_than(A: number, B: number) {
-  return A - B < Epsilon && Math.abs(A - B) > Epsilon;
-}
-
-function fp_greater_than(A: number, B: number) {
-  return A - B > Epsilon && Math.abs(A - B) > Epsilon;
-}
 
 const docZooms = new WeakMap<DocumentClient, Signal<number>>();
 
@@ -33,8 +24,10 @@ export function getOrCreateZoomSignal(
 
 export function setZoom(doc: Accessor<DocumentClient>, level: number) {
   const [, set] = getOrCreateZoomSignal(doc);
+  const getDpi = getOrCreateDPISignal();
+  const dpi = getDpi();
   set(level);
-  doc().setZoom(level);
+  doc().setZoom(level, dpi);
 }
 
 /**
@@ -93,6 +86,15 @@ export async function zoomToFit(
   return newZoom;
 }
 
+// 3 decimal places
+const Epsilon = 0.001;
+function fp_less_than(A: number, B: number) {
+  return A - B < Epsilon && Math.abs(A - B) > Epsilon;
+}
+
+function fp_greater_than(A: number, B: number) {
+  return A - B > Epsilon && Math.abs(A - B) > Epsilon;
+}
 export function canZoomIn(doc: Accessor<DocumentClient>) {
   const [zoom] = getOrCreateZoomSignal(doc);
   return fp_less_than(zoom(), MAX_ZOOM);

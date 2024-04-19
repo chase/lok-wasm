@@ -7,6 +7,7 @@ import {
 } from './cursorSignal';
 import { getOrCreateZoomSignal } from './zoom';
 import { InputHandler } from './InputHandler';
+import { getOrCreateDPISignal } from './twipConversion';
 
 const CURSOR_WIDTH_PX = 2;
 
@@ -22,6 +23,7 @@ export function Cursor(props: Props) {
   const cursorVisible = getOrCreateCursorVisible(doc);
   const cursorPosition = getOrCreateCursorPosition(doc);
   const [zoom] = getOrCreateZoomSignal(doc);
+  const dpi = getOrCreateDPISignal();
   const pos = createMemo(() => {
     const zoom_ = zoom();
     return cursorPosition()?.map((x) => twipsToCssPx(x, zoom_));
@@ -36,7 +38,7 @@ export function Cursor(props: Props) {
           visibility: cursorVisible() ? 'visible' : 'hidden',
           transform: `translate(${pos()![0]}px, ${pos()![1]}px)`,
           height: `${pos()![3]}px`,
-          width: `${/** @static */ CURSOR_WIDTH_PX}px`,
+          width: `${CURSOR_WIDTH_PX / dpi()}px`,
           'pointer-events': 'none',
         }}
         ref={local.ref}

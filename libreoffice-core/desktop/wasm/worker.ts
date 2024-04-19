@@ -271,6 +271,7 @@ const handler: AsyncMessage = {
     canvases: OffscreenCanvas[],
     tileSize: TileDim,
     scale: number,
+    dpi: number,
     yPos: number = 0
   ): Promise<TileRendererData> {
     await lokPromise;
@@ -295,6 +296,7 @@ const handler: AsyncMessage = {
         d: result,
         s: scale,
         y: yPos,
+        dpi,
       } as ToTileRenderer,
       { transfer: [...canvases] }
     );
@@ -400,11 +402,13 @@ const handler: AsyncMessage = {
   setZoom: async function (
     ref: DocumentRef,
     viewId: ViewId,
-    scale: number
+    scale: number,
+    dpi: number
   ): Promise<void> {
     tileRenderer[ref][viewId]?.postMessage({
       t: 'z',
       s: scale,
+      d: dpi,
     } as ToTileRenderer);
   },
 };

@@ -55,7 +55,7 @@ const ignoredShortcuts: Shortcut[] = [
 
 function registerGlobalKeys() {
   function callback(e: KeyboardEvent) {
-    if ((IS_MAC && !e.metaKey) || !e.ctrlKey) return;
+    if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
     switch (e.key) {
       case '=':
         e.preventDefault();

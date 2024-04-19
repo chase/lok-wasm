@@ -50,12 +50,12 @@ export function conversionTable(zoom: number, dpi: number) {
 
 /** CSS pixels are DPI indepdendent */
 export function twipsToCssPx(twips: number, zoom: number) {
-  return Math.ceil(twips / zoom / LOK_INTERNAL_TWIPS_TO_PX);
+  return Math.ceil((twips * zoom) / LOK_INTERNAL_TWIPS_TO_PX);
 }
 
 /** CSS pixels are DPI indepdendent */
-export function cssPxToTwips(twips: number, zoom: number) {
-  return Math.ceil(twips * zoom * LOK_INTERNAL_TWIPS_TO_PX);
+export function cssPxToTwips(px: number, zoom: number) {
+  return Math.ceil((px * LOK_INTERNAL_TWIPS_TO_PX) / zoom);
 }
 
 const worker: Ref<Worker> = {};

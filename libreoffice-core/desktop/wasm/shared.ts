@@ -108,7 +108,7 @@ export type DocumentWithViewMethods = {
   setScrollTop(yPx: number): number;
   setVisibleHeight(heightPx: number): void;
 
-  setZoom(scale: number): void;
+  setZoom(scale: number, dpi: number): void;
 
   /** TODO: implement, used to set a new scale or set a new offscreen cavnas */
   resetRendering(
@@ -191,6 +191,8 @@ export type ToTileRenderer =
       s: number;
       /** top position in pixels */
       y: number;
+      /** dpi */
+      dpi: number;
     }
   | {
       /** scroll */
@@ -209,6 +211,8 @@ export type ToTileRenderer =
       t: 'z';
       /** absolute scale */
       s: number;
+      /** dpi */
+      d: number;
     };
 
 export type Ref<T> = {

@@ -1,7 +1,7 @@
 import { splitProps, type JSX, onCleanup } from 'solid-js';
 
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
-  onScroll: (yPx: number) => void;
+  onScroll: (yPx: number, xPx: number) => void;
 }
 
 export function ScrollArea(props_: Props) {
@@ -14,7 +14,8 @@ export function ScrollArea(props_: Props) {
   ]);
   const handleScroll = (evt: Event) => {
     if (!evt.currentTarget) return;
-    local.onScroll((evt.currentTarget as HTMLDivElement).scrollTop);
+    const el = evt.currentTarget as HTMLDivElement;
+    local.onScroll(el.scrollTop, el.scrollLeft);
   };
   onCleanup(() => {
     internalRef.removeEventListener('scroll', handleScroll);
