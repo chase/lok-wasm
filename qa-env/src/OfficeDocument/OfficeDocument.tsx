@@ -1,4 +1,5 @@
 import { TILE_DIM_PX, twipsToCssPx } from '@lok';
+import debounce from 'lodash.debounce';
 import type { DocumentClient, RectanglePx, RectangleTwips } from '@lok/shared';
 import {
   For,

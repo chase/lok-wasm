@@ -50,6 +50,7 @@ let docWidthTwips: number;
 let widthTileStride: number;
 let renderedTopTwips: number = -1;
 let renderedHeightTwips: number = -1;
+let renderedHeightPx: number = -1;
 let scheduledTopTwips: number = -1;
 let scheduledHeightTwips: number = -1;
 let scaledTwips: number = LOK_INTERNAL_TWIPS_TO_PX;
@@ -98,23 +99,34 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       break;
     case 'z': // zoom
       if (!activeCanvas) return;
-      idleAreaPaint = false;
+      // idleAreaPaint = false;
       zoom(data.s, data.d);
       // Debounce rendering after zoom
       // If holding down ctrl+/- let the canvas scale
       // and only render once finished
-      if (zoomTimeout) clearTimeout(zoomTimeout);
-      zoomTimeout = setTimeout(() => {
+      // console.log(renderedHeightPx, scheduledHeightPx);
+
+      const reset = () => {
        setState(RenderState.RESET);
        Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
        if (!running) stateMachine();
-      }, 70)
+      }
+      // if (renderedHeightTwips / scaledTwips < scheduledHeightPx) {
+      //   console.log
+      //   reset();
+      // } else {
+        if (zoomTimeout) clearTimeout(zoomTimeout);
+        zoomTimeout = setTimeout(() => {
+          reset()
+        }, 70)
+      // }
       break;
   }
 };
 
 function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
+  console.log(d.tileSize);
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
     LOK_INTERNAL_TWIPS_TO_PX;
@@ -122,6 +134,7 @@ function zoom(in_scale: number, in_dpi: number) {
   tileDimTwips = Math.ceil(d.tileSize * scaledTwips);
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
   scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
+  console.log("setting scheduledHeight to ", scheduledHeightPx)
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
   scale = in_scale;
@@ -154,6 +167,7 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
 
 // while LOK is idle, paints visible tiles first then non-visible tiles to textures
 function idle() {
+  console.log("idling")
   const invalidations = removeContainedAdjacentRects(drainInvalidations());
   const visibleTop = scheduledTopTwips;
   const visibleHeight = scheduledHeightTwips;
@@ -292,6 +306,8 @@ function rendering() {
     canvases[1].width = scheduledWidthPx;
   }
   renderedHeightTwips = visibleHeight;
+  renderedHeightPx = renderedHeightTwips / scaledTwips;
+  console.log("setting renderedHeight to", renderedHeightPx );
   renderedTopTwips = visibleTop;
 
   for (let y = 0; y < rangesToRender.length && !shouldPausePaint(); ++y) {
