@@ -52,7 +52,10 @@ let renderedTopTwips: number = -1;
 let renderedHeightTwips: number = -1;
 let scheduledTopTwips: number = -1;
 let scheduledHeightTwips: number = -1;
-let scaledTwips = LOK_INTERNAL_TWIPS_TO_PX;
+let scaledTwips: number = LOK_INTERNAL_TWIPS_TO_PX;
+let scale: number = 1;
+let dpi: number = 1;
+let scheduledWidthPx: number = -1;
 let scheduledHeightPx: number = -1;
 let renderedTileTop: number = 0;
 let didScroll = false;
@@ -87,7 +90,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 'r': // resize
       if (!activeCanvas) return;
       idleAreaPaint = false;
-      scheduledHeightPx = data.h;
+      scheduledHeightPx = data.h * dpi;
       scheduledHeightTwips = data.h * scaledTwips;
       setState(RenderState.IDLE);
       if (!running) stateMachine();
@@ -95,7 +98,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 'z': // zoom
       if (!activeCanvas) return;
       idleAreaPaint = false;
-      zoom(data.s);
+      zoom(data.s, data.d);
       setState(RenderState.RESET);
       Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
       if (!running) stateMachine();
@@ -103,26 +106,38 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
   }
 };
 
-function zoom(scale: number) {
+function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   scaledTwips =
-    clipToNearest8PxZoom(d.tileSize, scale) * LOK_INTERNAL_TWIPS_TO_PX;
-  tileDimTwips = d.tileSize * scaledTwips;
+    clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
+    LOK_INTERNAL_TWIPS_TO_PX;
+  tileDimTwips = Math.ceil(d.tileSize * scaledTwips);
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
-
-  scheduledHeightPx = activeCanvas.height;
+  scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
+  scheduledWidthPx = (((activeCanvas.width * in_scale) / scale) * in_dpi) / dpi;
+  scale = in_scale;
+  dpi = in_dpi;
+  console.log({
+    scaledTwips,
+    scale,
+    dpi,
+    scheduledHeightPx,
+    scheduledHeightTwips,
+  });
 }
 
 function initialize(data: ToTileRenderer & { t: 'i' }) {
   d = data.d;
-  canvases= data.c;
+  canvases = data.c;
   activeCanvas = data.c[0];
   ctx = activeCanvas.getContext('2d');
 
   ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
 
-  zoom(data.s);
+  scale = data.s;
+  dpi = data.dpi;
+  zoom(data.s, dpi);
   scheduledTopTwips = data.y * scaledTwips;
 
   pendingStateChange = true;
@@ -263,6 +278,10 @@ function rendering() {
   if (renderedHeightTwips !== scheduledHeightTwips) {
     canvases[0].height = scheduledHeightPx;
     canvases[1].height = scheduledHeightPx;
+  }
+  if (activeCanvas.width !== scheduledWidthPx) {
+    canvases[0].width = scheduledWidthPx;
+    canvases[1].width = scheduledWidthPx;
   }
   renderedHeightTwips = visibleHeight;
   renderedTopTwips = visibleTop;
@@ -680,4 +699,12 @@ function trimmedMean(input: number[]): number {
   const sum = trimmedArray.reduce((acc, val) => acc + val, 0);
 
   return sum / trimmedArray.length;
+}
+
+function twipsToCanvasPx(twips) {
+  return twips / 15 * scale * dpi;
+}
+
+function twipsToCssPx(twips) {
+  return twips / 15 * scale;
 }
