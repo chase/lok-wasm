@@ -60,6 +60,15 @@ const ignoredShortcuts: Shortcut[] = [
   },
 ];
 
+/// This gives us good behavior until the render actually finishes
+/// Cover on Zoom In, will stretch the image to fit as 
+/// the canvas size changes 
+const ZOOM_IN_CANVAS_FIT = "cover";
+/// This gives us good behavior until the render actually finishes
+/// Contain on Zoom Out, squeezes the image to fit as
+/// the canvas size changes 
+const ZOOM_OUT_CANVAS_FIT = "contain";
+
 const throttledUpdateZoom = throttle(updateZoom, 50);
 
 function registerGlobalKeys() {
@@ -68,10 +77,7 @@ function registerGlobalKeys() {
     switch (e.key) {
       case '=':
         e.preventDefault();
-        ///This gives us good behavior until the render actually finishes
-        // Cover on Zoom In, will stretch the image to fit as 
-        // the canvas size changes 
-        setCanvasObjectFit("cover")
+        setCanvasObjectFit(ZOOM_IN_CANVAS_FIT)
         updateZoom(getDocThrows, 0.1);
         break;
       case '-':
@@ -79,7 +85,7 @@ function registerGlobalKeys() {
         ///This gives us good behavior until the render actually finishes
         // Contain on Zoom Out, squeezes the image to fit as
         // the canvas size changes 
-        setCanvasObjectFit("contain")
+        setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
         updateZoom(getDocThrows, -0.1);
         break;
     }
@@ -95,11 +101,13 @@ function registerGlobalKeys() {
     e.preventDefault();
     e.stopPropagation();
 
+    // Scroll Up = Zoom In
     if (e.deltaY < 0) {
-      setCanvasObjectFit("cover");
+      setCanvasObjectFit(ZOOM_IN_CANVAS_FIT);
       throttledUpdateZoom(getDocThrows, 0.1);
-    } else {
-      setCanvasObjectFit("contain")
+    // Scroll Down = Zoom In
+    } else if (e.deltaY > 0) {
+      setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
       throttledUpdateZoom(getDocThrows, -0.1);
     }
   }
