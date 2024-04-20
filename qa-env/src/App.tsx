@@ -1,4 +1,5 @@
 import { loadDocument } from '@lok';
+import throttle from 'lodash.throttle';
 import { CallbackType } from '@lok/lok_enums';
 import type { DocumentClient } from '@lok/shared';
 import { Show, createSignal, onCleanup } from 'solid-js';
@@ -59,26 +60,51 @@ const ignoredShortcuts: Shortcut[] = [
   },
 ];
 
+const throttledUpdateZoom = throttle(updateZoom, 50);
+
 function registerGlobalKeys() {
   function callback(e: KeyboardEvent) {
     if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
     switch (e.key) {
       case '=':
         e.preventDefault();
-        setCanvasObjectFit("cover");
+        setCanvasObjectFit("cover")
         updateZoom(getDocThrows, 0.1);
         break;
       case '-':
         e.preventDefault();
-        console.log("zooming out")
         setCanvasObjectFit("contain")
         updateZoom(getDocThrows, -0.1);
         break;
     }
   }
+
+  function wheelCallback(e: WheelEvent) {
+    if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
+    
+    const isAccelerated = IS_MAC ? e.metaKey : e.ctrlKey;
+
+    if (!isAccelerated) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.deltaY < 0) {
+      setCanvasObjectFit("cover");
+      throttledUpdateZoom(getDocThrows, 0.1);
+    } else {
+      setCanvasObjectFit("contain")
+      throttledUpdateZoom(getDocThrows, -0.1);
+    }
+  }
+
   document.addEventListener('keydown', callback);
+  // By default wheel events are passive and annot be prevented
+  document.addEventListener('wheel', wheelCallback, {passive: false})
+
   onCleanup(() => {
     document.removeEventListener('keydown', callback);
+    document.removeEventListener('wheel', wheelCallback);
   });
 }
 
