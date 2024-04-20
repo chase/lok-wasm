@@ -68,11 +68,17 @@ function registerGlobalKeys() {
     switch (e.key) {
       case '=':
         e.preventDefault();
+        ///This gives us good behavior until the render actually finishes
+        // Cover on Zoom In, will stretch the image to fit as 
+        // the canvas size changes 
         setCanvasObjectFit("cover")
         updateZoom(getDocThrows, 0.1);
         break;
       case '-':
         e.preventDefault();
+        ///This gives us good behavior until the render actually finishes
+        // Contain on Zoom Out, squeezes the image to fit as
+        // the canvas size changes 
         setCanvasObjectFit("contain")
         updateZoom(getDocThrows, -0.1);
         break;
