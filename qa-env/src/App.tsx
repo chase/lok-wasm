@@ -82,9 +82,6 @@ function registerGlobalKeys() {
         break;
       case '-':
         e.preventDefault();
-        ///This gives us good behavior until the render actually finishes
-        // Contain on Zoom Out, squeezes the image to fit as
-        // the canvas size changes 
         setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
         updateZoom(getDocThrows, -0.1);
         break;
