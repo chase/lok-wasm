@@ -1,3 +1,4 @@
+#include "com/sun/star/uno/Reference.h"
 #include "sal/log.hxx"
 #include <algorithm>
 #include <cstdlib>
@@ -68,6 +69,10 @@ static void* tileRendererWorker(void* data_)
         }
     }
     return nullptr;
+}
+
+WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent) : mxComponent(std::move(xComponent)) {
+
 }
 
 TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int32_t tileSize_)

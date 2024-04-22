@@ -18,6 +18,11 @@ $(eval $(call gb_Executable_add_defs,soffice_bin,\
     $(if $(DISABLE_DYNLOADING),$(if $(SYSTEM_LIBXML),,-DNOTEST_xmlCleanupParser)) \
 ))
 
+$(eval $(call gb_Executable_use_api,soffice_bin,\
+	udkapi \
+	offapi \
+))
+
 $(eval $(call gb_Executable_use_libraries,soffice_bin,\
     sal \
     sofficeapp \
@@ -64,10 +69,6 @@ $(eval $(call gb_Executable_set_include,soffice_bin,\
 
 $(eval $(call gb_Library_use_custom_headers,soffice_bin,\
 	officecfg/registry \
-))
-$(eval $(call gb_Library_use_api,soffice_bin,\
-	udkapi \
-	offapi \
 ))
 
 $(eval $(call gb_Executable_add_exception_objects,soffice_bin,\

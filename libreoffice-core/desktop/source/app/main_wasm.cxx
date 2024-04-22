@@ -315,6 +315,11 @@ public:
 
     void setCurrentView(int viewId) { doc_->setView(viewId); }
 
+    css::uno::Reference<css::lang::XComponent> getXComponent()
+    {
+        return static_cast<desktop::WasmDocumentExtension*>(doc_->get())->mxComponent;
+    }
+
 private:
     struct DocWithId
     {
@@ -415,5 +420,6 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("removeText", &DocumentClient::removeText)
         .function("startTileRenderer", &DocumentClient::startTileRenderer)
         .function("ref", &DocumentClient::ref)
+        .function("getXComponent", &DocumentClient::getXComponent)
         .function("newView", &DocumentClient::newView);
 }

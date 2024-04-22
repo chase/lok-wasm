@@ -248,7 +248,7 @@ namespace desktop {
     // MACRO: Allow direct LOK extensions for WASM
     struct DESKTOP_DLLPUBLIC LibLODocument_Impl : public WasmDocumentExtension
     {
-        css::uno::Reference<css::lang::XComponent> mxComponent;
+        // MACRO-2202: mxComponent moved to `wasm_extensions.hxx` to expose the embind directly without pointer mangling
         std::shared_ptr< LibreOfficeKitDocumentClass > m_pDocumentClass;
         std::map<size_t, std::shared_ptr<CallbackFlushHandler>> mpCallbackFlushHandlers;
         const int mnDocumentId;

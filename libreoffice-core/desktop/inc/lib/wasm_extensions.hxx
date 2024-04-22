@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <desktop/dllapi.h>
 #include <vector>
+#include <com/sun/star/lang/XComponent.hpp>
 
 // This makes direct extensions to lib/init.cxx much easier to expose in main_wasm.cxx
 
@@ -65,7 +66,9 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 {
     std::vector<pthread_t> tileRendererThreads_;
     std::vector<TileRendererData> tileRendererData_;
+    css::uno::Reference<css::lang::XComponent> mxComponent;
 
+    WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent);
     TileRendererData& startTileRenderer(int32_t viewId, int32_t tileSize);
 };
 }

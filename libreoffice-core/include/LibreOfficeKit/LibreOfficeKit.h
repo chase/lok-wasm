@@ -124,9 +124,6 @@ struct _LibreOfficeKitClass
     void (*dumpState) (LibreOfficeKit* pThis, const char* pOptions, char** pState);
 
     // MACRO:
-    void* (*getXComponentContext) (LibreOfficeKit* pThis);
-
-    // MACRO:
     LibreOfficeKitDocument* (*loadFromMemory) (LibreOfficeKit* pThis, char *data, size_t size);
 
 
@@ -516,9 +513,6 @@ struct _LibreOfficeKitDocumentClass
                          long nPart,
                          long* pCol,
                          long* pRow);
-
-    // MACRO:
-    void* (*getXComponent) (LibreOfficeKitDocument* pThis);
 
     /// @see lok::Document::getEditMode().
     int (*getEditMode) (LibreOfficeKitDocument* pThis);

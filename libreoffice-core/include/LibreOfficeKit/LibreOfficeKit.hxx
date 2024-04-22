@@ -870,13 +870,6 @@ public:
         mpDoc->pClass->sendContentControlEvent(mpDoc, pArguments);
     }
 
-    // MACRO: {
-    void* getXComponent()
-    {
-        return mpDoc->pClass->getXComponent(mpDoc);
-    }
-    // MACRO: }
-
     /**
      * Set the timezone of the window with the specified nId.
      *
@@ -1216,13 +1209,6 @@ public:
     {
         mpThis->pClass->dumpState(mpThis, pOption, pState);
     }
-
-    // MACRO: {
-    void* getXComponentContext()
-    {
-        return mpThis->pClass->getXComponentContext(mpThis);
-    }
-    // MACRO: }
 
     char* extractRequest(const char* pFilePath)
     {

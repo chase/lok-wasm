@@ -1406,8 +1406,6 @@ static bool doc_renderSearchResult(LibreOfficeKitDocument* pThis,
                                  int* pWidth, int* pHeight, size_t* pByteSize);
 
 static void doc_sendContentControlEvent(LibreOfficeKitDocument* pThis, const char* pArguments);
-// MACRO:
-static void* doc_getXComponent(LibreOfficeKitDocument* pThis);
 
 static void doc_setViewTimezone(LibreOfficeKitDocument* pThis, int nId, const char* timezone);
 
@@ -1514,7 +1512,7 @@ int getDocumentType (LibreOfficeKitDocument* pThis)
 } // anonymous namespace
 
 LibLODocument_Impl::LibLODocument_Impl(uno::Reference <css::lang::XComponent> xComponent, int nDocumentId)
-    : mxComponent(std::move(xComponent))
+    : WasmDocumentExtension(std::move(xComponent)) // MACRO-2202: mxComponent moved to `wasm_extensions.hxx` to expose the embind directly without pointer mangling
     , mnDocumentId(nDocumentId)
 {
     assert(nDocumentId != -1 && "Cannot set mnDocumentId to -1");
@@ -1609,8 +1607,6 @@ LibLODocument_Impl::LibLODocument_Impl(uno::Reference <css::lang::XComponent> xC
         m_pDocumentClass->setBlockedCommandList = doc_setBlockedCommandList;
 
         m_pDocumentClass->sendContentControlEvent = doc_sendContentControlEvent;
-        // MACRO:
-        m_pDocumentClass->getXComponent = doc_getXComponent;
 
         m_pDocumentClass->setViewTimezone = doc_setViewTimezone;
 
@@ -2810,9 +2806,6 @@ static void lo_setOption(LibreOfficeKit* pThis, const char* pOption, const char*
 
 static void lo_dumpState(LibreOfficeKit* pThis, const char* pOptions, char** pState);
 
-// MACRO:
-static void* lo_getXComponentContext(LibreOfficeKit* pThis);
-
 // MACRO
 static LibreOfficeKitDocument* lo_loadFromMemory(LibreOfficeKit* pThis, char *data, size_t size);
 
@@ -2845,7 +2838,6 @@ LibLibreOffice_Impl::LibLibreOffice_Impl()
         m_pOfficeClass->dumpState = lo_dumpState;
 
         // MACRO: {
-        m_pOfficeClass->getXComponentContext = lo_getXComponentContext;
         m_pOfficeClass->loadFromMemory = lo_loadFromMemory;
         // MACRO: }
 
@@ -5453,12 +5445,6 @@ static void lo_dumpState (LibreOfficeKit* pThis, const char* /* pOptions */, cha
     *pState = convertOString(aState.makeStringAndClear());
 }
 
-// MACRO:
-static void* lo_getXComponentContext(LibreOfficeKit* /*pThis*/)
-{
-    return xContext.is() ? xContext.get() : nullptr;
-}
-
 void LibLibreOffice_Impl::dumpState(rtl::OStringBuffer &rState)
 {
     rState.append("LibreOfficeKit state:"
@@ -7950,16 +7936,6 @@ static void doc_sendContentControlEvent(LibreOfficeKitDocument* pThis, const cha
 
     pDoc->executeContentControlEvent(aMap);
 }
-
-// MACRO: {
-static void* doc_getXComponent(LibreOfficeKitDocument* pThis)
-{
-    SolarMutexGuard aGaurd;
-    LibLODocument_Impl* pDocument = static_cast<LibLODocument_Impl*>(pThis);
-
-    return pDocument->mxComponent.get();
-}
-// MACRO: }
 
 static void doc_setViewTimezone(SAL_UNUSED_PARAMETER LibreOfficeKitDocument* /*pThis*/, int nId,
                                 const char* pTimezone)
