@@ -69,8 +69,6 @@ const ZOOM_IN_CANVAS_FIT = "cover";
 /// the canvas size changes 
 const ZOOM_OUT_CANVAS_FIT = "contain";
 
-const throttledUpdateZoom = throttle(updateZoom, 50);
-
 function registerGlobalKeys() {
   function callback(e: KeyboardEvent) {
     if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
@@ -101,11 +99,11 @@ function registerGlobalKeys() {
     // Scroll Up = Zoom In
     if (e.deltaY < 0) {
       setCanvasObjectFit(ZOOM_IN_CANVAS_FIT);
-      throttledUpdateZoom(getDocThrows, 0.1);
+      updateZoom(getDocThrows, 0.1);
     // Scroll Down = Zoom In
     } else if (e.deltaY > 0) {
       setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
-      throttledUpdateZoom(getDocThrows, -0.1);
+      updateZoom(getDocThrows, -0.1);
     }
   }
 
