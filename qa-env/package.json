@@ -10,8 +10,6 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.0.0-alpha.9",
-    "@types/lodash.debounce": "^4.0.9",
-    "@types/lodash.throttle": "^4.1.9",
     "prettier": "^3.2.5",
     "solid-js": "^1.8.15",
     "tailwindcss": "^4.0.0-alpha.9"
