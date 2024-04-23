@@ -50,7 +50,6 @@ let docWidthTwips: number;
 let widthTileStride: number;
 let renderedTopTwips: number = -1;
 let renderedHeightTwips: number = -1;
-let renderedHeightPx: number = -1;
 let scheduledTopTwips: number = -1;
 let scheduledHeightTwips: number = -1;
 let scaledTwips: number = LOK_INTERNAL_TWIPS_TO_PX;
@@ -67,7 +66,6 @@ const nonVisibleInvalidations: Rect[] = [];
 let pendingStateChange = false;
 let running = false;
 let idleAreaPaint = false;
-let zoomTimeout: number | undefined;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -291,8 +289,6 @@ function rendering() {
     canvases[1].width = scheduledWidthPx;
   }
   renderedHeightTwips = visibleHeight;
-  renderedHeightPx = renderedHeightTwips / scaledTwips;
-  console.log("setting renderedHeight to", renderedHeightPx );
   renderedTopTwips = visibleTop;
 
   for (let y = 0; y < rangesToRender.length && !shouldPausePaint(); ++y) {
@@ -327,7 +323,7 @@ function rendering() {
 let pendingInvalidate: boolean;
 // TODO: Drop the polyfill when Firefox supports it: https://bugzilla.mozilla.org/show_bug.cgi?id=1884148
 const afterInvalidate: () => Promise<boolean> = Atomics.waitAsync
-  ? function () {
+  ? async function () {
       if (pendingInvalidate) return Promise.resolve(false);
       const res = Atomics.waitAsync(d.hasInvalidations, 0, 0);
       if (res.async) {
@@ -707,12 +703,4 @@ function trimmedMean(input: number[]): number {
   const sum = trimmedArray.reduce((acc, val) => acc + val, 0);
 
   return sum / trimmedArray.length;
-}
-
-function twipsToCanvasPx(twips) {
-  return twips / 15 * scale * dpi;
-}
-
-function twipsToCssPx(twips) {
-  return twips / 15 * scale;
 }
