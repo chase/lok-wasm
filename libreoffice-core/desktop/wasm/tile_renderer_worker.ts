@@ -99,27 +99,12 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       break;
     case 'z': // zoom
       if (!activeCanvas) return;
-      // idleAreaPaint = false;
+      idleAreaPaint = false;
       zoom(data.s, data.d);
-      // Debounce rendering after zoom
-      // If holding down ctrl+/- let the canvas scale
-      // and only render once finished
-      // console.log(renderedHeightPx, scheduledHeightPx);
 
-      const reset = () => {
-       setState(RenderState.RESET);
-       Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
-       if (!running) stateMachine();
-      }
-      // if (renderedHeightTwips / scaledTwips < scheduledHeightPx) {
-      //   console.log
-      //   reset();
-      // } else {
-        if (zoomTimeout) clearTimeout(zoomTimeout);
-        zoomTimeout = setTimeout(() => {
-          reset()
-        }, 70)
-      // }
+      setState(RenderState.RESET);
+      Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
+      if (!running) stateMachine();
       break;
   }
 };
@@ -474,10 +459,9 @@ function paintNonVisibleAreasWhileIdle(): void {
 
 function shouldPausePaint(): boolean {
   return (
-    Atomics.load(d.state, 0) === RenderState.RESET || false
-    // TODO: fix pause condition
-    // (scheduledTopTwips !== renderedTopTwips && renderedTopTwips !== -1) ||
-    // (scheduledHeightTwips !== renderedHeightTwips && renderedHeightTwips !== -1)
+    Atomics.load(d.state, 0) === RenderState.RESET ||
+    (scheduledTopTwips !== renderedTopTwips && renderedTopTwips !== -1) ||
+    (scheduledHeightTwips !== renderedHeightTwips && renderedHeightTwips !== -1)
   );
 }
 
