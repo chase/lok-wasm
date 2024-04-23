@@ -231,7 +231,7 @@ export function OfficeDocument(props: Props) {
               class="absolute top-0 pointer-events-none"
               style={{
                 'object-fit': canvasObjectFit(),
-                'object-position': 'top left',
+                'object-position': 'top center',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
                 height: `${canvasHeight()!}px`,
@@ -242,7 +242,7 @@ export function OfficeDocument(props: Props) {
               class="absolute top-0 pointer-events-none"
               style={{
                 'object-fit': canvasObjectFit(),
-                'object-position': 'top left',
+                'object-position': 'top center',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
                 height: `${canvasHeight()}px`,

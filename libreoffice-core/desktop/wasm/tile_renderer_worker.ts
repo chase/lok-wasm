@@ -66,6 +66,7 @@ const nonVisibleInvalidations: Rect[] = [];
 let pendingStateChange = false;
 let running = false;
 let idleAreaPaint = false;
+let zoomResetTimeout: number | undefined;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -97,19 +98,24 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       break;
     case 'z': // zoom
       if (!activeCanvas) return;
+      // Clear the previously scheduled zoom reset
+      if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
+
       idleAreaPaint = false;
       zoom(data.s, data.d);
 
-      setState(RenderState.RESET);
-      Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
-      if (!running) stateMachine();
+      // Ensure we debounce a reset in combination with shouldStopPaint
+      zoomResetTimeout = setTimeout(() => {
+        setState(RenderState.RESET);
+        Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
+        if (!running) stateMachine();
+      });
       break;
   }
 };
 
 function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
-  console.log(d.tileSize);
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
     LOK_INTERNAL_TWIPS_TO_PX;
@@ -117,18 +123,10 @@ function zoom(in_scale: number, in_dpi: number) {
   tileDimTwips = Math.ceil(d.tileSize * scaledTwips);
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
   scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
-  console.log("setting scheduledHeight to ", scheduledHeightPx)
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
   scale = in_scale;
   dpi = in_dpi;
-  console.log({
-    scaledTwips,
-    scale,
-    dpi,
-    scheduledHeightPx,
-    scheduledHeightTwips,
-  });
 }
 
 function initialize(data: ToTileRenderer & { t: 'i' }) {
@@ -150,7 +148,6 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
 
 // while LOK is idle, paints visible tiles first then non-visible tiles to textures
 function idle() {
-  console.log("idling")
   const invalidations = removeContainedAdjacentRects(drainInvalidations());
   const visibleTop = scheduledTopTwips;
   const visibleHeight = scheduledHeightTwips;
