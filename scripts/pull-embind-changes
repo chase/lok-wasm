@@ -1,12 +1,30 @@
 #!/bin/bash
-COMMIT_DATE="2024-01-10"
+BASE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE:-$0}")"/.. &>/dev/null && pwd)
+COMMIT_DATE="2024-04-22"
+
+OLD_HEAD_FILE="$BASE_DIR"/.git/EMBIND_OLD_HEAD
+COMMIT_LOG_FILE="$BASE_DIR"/.git/EMBIND_LOG
+OLD_HEAD=
+HERE="$(pwd)"
+function squash() {
+  git reset --soft HEAD~"$OLD_HEAD" &&
+    git commit -m "Squashed embind changes:" &&
+    echo >>.git/COMMIT_EDITMSG &&
+    cat "$COMMIT_LOG_FILE" >>.git/COMMIT_EDITMSG
+}
+if [ -e "$OLD_HEAD_FILE" ]; then
+  OLD_HEAD=$(cat "$OLD_HEAD_FILE")
+  squash
+  exit 0
+else
+  OLD_HEAD=$(git log --format='%H' HEAD -1)
+fi
 
 if [ ! -e "$1" ]; then
   echo "Usage: $0 LIBREOFFICE_CORE_LOCAL_REPO"
   exit 1
 fi
 LO_CORE=$1
-HERE="$(pwd)"
 
 cd "$LO_CORE" || exit 1
 # find all the commits after the initial commit date that update embind
@@ -16,7 +34,13 @@ git fetch origin master &&
     "static/source/unoembindhelpers" \
     "unotest/source/embindtest" \
     "static/Executable_embindmaker.mk" \
-    "static/CustomTarget_unoembind.mk")
+    "static/CustomTarget_unoembind.mk") &&
+  git log --pretty="%h %s" --after=$COMMIT_DATE --reverse FETCH_HEAD -- \
+    "static/source/embindmaker" \
+    "static/source/unoembindhelpers" \
+    "unotest/source/embindtest" \
+    "static/Executable_embindmaker.mk" \
+    "static/CustomTarget_unoembind.mk" >"$COMMIT_LOG_FILE"
 
 if [ -z "$COMMITS" ]; then
   echo 'No commits found'
@@ -24,7 +48,6 @@ if [ -z "$COMMITS" ]; then
 fi
 
 for i in $COMMITS; do
-  echo 'Preparing patch for:'
   git log -1 --pretty="%ai %s" "$i"
 done
 
@@ -32,7 +55,6 @@ TMP_DIR=$(mktemp -d)
 PATCHES=()
 for commit in $COMMITS; do
   PATCH="$TMP_DIR/${commit}.patch"
-  echo "Preparing $PATCH"
   git format-patch -1 "$commit" --stdout >"$PATCH"
   PATCHES+=("$PATCH")
 done
@@ -41,8 +63,9 @@ cd "$HERE" || exit 1
 
 echo "Temp dir: $TMP_DIR"
 
-OLD_HEAD=$(git log --format='%H' HEAD -1)
-git am --3way --empty=drop --directory=libreoffice-core "${PATCHES[@]}"
-git reset --soft HEAD~"$OLD_HEAD"
-git commit -m "Squashed embind changes:"
-git log --format="%h %s" "HEAD@{1}..HEAD@{0}" >> .git/COMMIT_EDITMSG
+echo "$OLD_HEAD" >"$OLD_HEAD_FILE"
+if git am --3way --empty=drop --directory=libreoffice-core "${PATCHES[@]}"; then
+  squash
+else
+  echo "Applying patches failed, after resolving all patches, resume by running $0"
+fi
