@@ -120,7 +120,7 @@ function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
 
-  const renderedTopTwips = scaledTwips;
+  const renderedScaledTwips = scaledTwips;
 
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
@@ -133,7 +133,7 @@ function zoom(in_scale: number, in_dpi: number) {
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
 
-  scheduledTopTwips = (scheduledTopTwips / renderedTopTwips) * scaledTwips;
+  scheduledTopTwips = (scheduledTopTwips / renderedScaledTwips) * scaledTwips;
 
   scale = in_scale;
   dpi = in_dpi;
