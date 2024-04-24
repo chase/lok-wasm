@@ -292,15 +292,17 @@ function rendering() {
     const [start, endInclusive] = rangesToRender[y];
     for (let x = start; x <= endInclusive; ++x) {
       // TODO: mark missing and invalidate
-      const [xCoord] = tileIndexToGridCoord(x);
+      const [xCoord, yCoord] = tileIndexToGridCoord(x);
       const img: ImageData = tileRing.get(tileIndexToTileRingIndex.get(x));
       if (!img) {
         console.error('missing texture at ', x, xCoord, y);
         continue;
       }
       const dstX: number = xCoord * d.tileSize;
-      // wraps on the maxTileY
-      const dstY: number = y * d.tileSize;
+      // Need to account for for the position of the visible area
+      // otherwhise the image painted with to the top of the canvas
+      // will not remain consistent across re-sizing the canvas
+      const dstY: number = (yCoord * tileDimTwips - visibleTop) / scaledTwips;
       ctx.beginPath();
       ctx.putImageData(img, dstX, dstY);
       ctx.closePath();
