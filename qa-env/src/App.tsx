@@ -1,5 +1,4 @@
 import { loadDocument } from '@lok';
-import throttle from 'lodash.throttle';
 import { CallbackType } from '@lok/lok_enums';
 import type { DocumentClient } from '@lok/shared';
 import { Show, createSignal, onCleanup } from 'solid-js';
@@ -76,12 +75,12 @@ function registerGlobalKeys() {
       case '=':
         e.preventDefault();
         setCanvasObjectFit(ZOOM_IN_CANVAS_FIT)
-        updateZoom(getDocThrows, 0.1);
+        updateZoom(getDocThrows, 1/8);
         break;
       case '-':
         e.preventDefault();
         setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
-        updateZoom(getDocThrows, -0.1);
+        updateZoom(getDocThrows, -1/8);
         break;
     }
   }

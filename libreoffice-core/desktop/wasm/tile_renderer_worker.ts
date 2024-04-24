@@ -312,6 +312,7 @@ function rendering() {
       // Need to account for for the position of the visible area
       // otherwhise the image position painted to the top of the canvas
       // will not remain consistent across re-sizing the canvas
+      //
       const dstY: number = y * d.tileSize;
       ctx.beginPath();
       ctx.putImageData(img, dstX, dstY);
@@ -645,16 +646,6 @@ function getState(): RenderState {
   return Atomics.load(d.state, 0);
 }
 
-// function clipToNearest8PxZoom(w: number, s: number): number {
-//   const scaledWidth: number = Math.ceil(w * s);
-//   const mod: number = scaledWidth % 8;
-//   if (mod === 0) return s;
-
-//   return Math.abs((scaledWidth - mod) / w - s) <
-//     Math.abs((scaledWidth + 8 - mod) / w - s)
-//     ? (scaledWidth - mod) / w
-//     : (scaledWidth + 8 - mod) / w;
-// }
 function clipToNearest8PxZoom(w: number, s: number): number {
   return Math.round(w * s) / w;
 }
