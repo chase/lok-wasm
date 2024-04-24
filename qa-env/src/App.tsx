@@ -117,7 +117,6 @@ function registerGlobalKeys() {
 }
 
 export const [scrollAreaRef, setScrollAreaRef] = createSignal<HTMLDivElement | null>(null);
-export const [isZooming, setIsZooming] = createSignal(false);
 
 function App() {
   registerGlobalKeys();

@@ -104,7 +104,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
 
       idleAreaPaint = false;
-      zoom(data.s, data.d, data.y);
+      zoom(data.s, data.d);
 
       // Ensure we debounce a reset in combination with shouldStopPaint
       zoomResetTimeout = setTimeout(() => {
@@ -116,24 +116,24 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
   }
 };
 
-function zoom(in_scale: number, in_dpi: number, in_y: number) {
+function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
+
+  const renderedTopTwips = scaledTwips;
 
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
     LOK_INTERNAL_TWIPS_TO_PX;
 
-  console.log("scaledTwips", scaledTwips);
 
-  console.log(in_scale);
   tileDimTwips = Math.ceil(d.tileSize * scaledTwips);
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
   scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
 
-  scheduledTopTwips = in_y * scaledTwips;
+  scheduledTopTwips = (scheduledTopTwips / renderedTopTwips) * scaledTwips;
 
   scale = in_scale;
   dpi = in_dpi;
@@ -149,7 +149,7 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
 
   scale = data.s;
   dpi = data.dpi;
-  zoom(data.s, dpi, data.y);
+  zoom(data.s, dpi);
   scheduledTopTwips = data.y * scaledTwips;
 
   pendingStateChange = true;
@@ -302,7 +302,7 @@ function rendering() {
     const [start, endInclusive] = rangesToRender[y];
     for (let x = start; x <= endInclusive; ++x) {
       // TODO: mark missing and invalidate
-      const [xCoord, yCoord] = tileIndexToGridCoord(x);
+      const [xCoord] = tileIndexToGridCoord(x);
       const img: ImageData = tileRing.get(tileIndexToTileRingIndex.get(x));
       if (!img) {
         console.error('missing texture at ', x, xCoord, y);
