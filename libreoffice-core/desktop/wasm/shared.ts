@@ -118,6 +118,8 @@ export type DocumentWithViewMethods = {
   ): void;
   /** TODO: implement */
   stopRendering(): void;
+  // NOTE: Disabled until unoembind startup cost is under 1s
+  // getXComponent(): void;
 };
 
 type DocumentMessage = {

@@ -22,6 +22,10 @@ $(eval $(call gb_StaticLibrary_use_api,unoembind,\
     udkapi \
 ))
 
+$(eval $(call gb_StaticLibrary_add_ldflags,unoembind,\
+	-s EXPORTED_FUNCTIONS=init_unoembind_uno \
+))
+
 $(call gb_StaticLibrary_get_target,unoembind): $(call gb_CustomTarget_get_target,static/unoembind)
 
 # vim: set noet sw=4 ts=4:

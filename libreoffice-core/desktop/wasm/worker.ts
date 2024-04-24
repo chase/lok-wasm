@@ -16,11 +16,11 @@ import type {
 } from './shared';
 import LOK from './soffice';
 import type { Document } from './soffice';
+import { init_unoembind_uno } from './bindings_uno';
 
 const docMap: Record<DocumentRef, Document> = {};
 const byRef = (ref: DocumentRef) => docMap[ref];
 const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
-self.byRef = byRef;
 
 const lokPromise = LOK({
   withFcCache: true,
@@ -48,14 +48,15 @@ const handler: AsyncMessage = {
       doc.delete();
       return null;
     }
+    lokPromise.then((x: any) => console.log(x.uno_Type_text$XTextDocument));
 
     docMap[ref] = doc;
     return ref;
   },
 
-  newView: async function(ref: DocumentRef): Promise<DocumentRef | null> {
+  newView: async function (ref: DocumentRef): Promise<DocumentRef> {
     const doc = byRef(ref);
-    return doc?.newView();
+    return doc?.newView() ?? -1;
   },
 
   close: async function (ref: DocumentRef): Promise<void> {
@@ -80,7 +81,7 @@ const handler: AsyncMessage = {
 
   parts: async function (ref: DocumentRef): Promise<number> {
     await lokPromise;
-    return self.byRef(ref)?.getParts();
+    return byRef(ref)?.getParts() ?? -1;
   },
 
   partRectanglesTwips: async function (
@@ -391,10 +392,17 @@ const handler: AsyncMessage = {
   },
 };
 
+// NOTE: Disabled until unoembind startup cost is under 1s
+// const extensionHandlers = {};
+
+// let uno: { com: { sun: { star: Record<string, any> } } } | undefined;
+
 // this is used by imported scripts to register their handlers
-self.registerExtension = (newHandlers) => {
-  Object.assign(handler, newHandlers);
-};
+// self.registerExtension = async (newHandlers) => {
+//   const lok = await lokPromise;
+//   if (!uno) uno = init_unoembind_uno(lok);
+//   Object.assign(extensionHandlers, newHandlers);
+// };
 
 type TransferableResult<K extends keyof Message = keyof Message> =
   FromWorker<K> & {
@@ -415,10 +423,25 @@ onmessage = async <K extends keyof Message = keyof Message>({
   data,
 }: MessageEvent<ToWorker<K>>) => {
   const { i, f, a } = data;
+  let r: Awaited<ReturnType<Message[K]>>;
+  /*
+  const extHandler = extensionHandlers[f as string];
+  if (extHandler) {
+    const [ref, ...rest] = a;
+    const doc = byRef(ref as DocumentRef);
+    if (!doc) {
+      console.error('doc ref missing');
+      return;
+    }
+    r = await extHandler[f](doc, ...rest);
+  } else {
+  */
+    r = await handler[f](...a);
+  // }
   const message: FromWorker<K> = {
     f,
     i,
-    r: await handler[f](...a),
+    r,
   };
   if (isTransferable(message)) {
     postMessage(message, { transfer: [message.r] });

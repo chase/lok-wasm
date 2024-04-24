@@ -62,6 +62,14 @@ template <typename T> struct UnoInOutParam
     T value;
 };
 
+inline void checkSequenceSize(sal_Int32 size)
+{
+    if (size < 0)
+    {
+        throw std::invalid_argument("negative size");
+    }
+}
+
 template <typename T>
 void checkSequenceAccess(css::uno::Sequence<T> const& sequence, sal_Int32 index)
 {
@@ -99,15 +107,12 @@ template <typename T> void registerSequence(char const* name)
         })
         .function("resize",
                   +[](css::uno::Sequence<T>& self, sal_Int32 size) {
-                      if (size < 0)
-                      {
-                          throw std::invalid_argument("negative size");
-                      }
+                      checkSequenceSize(size);
                       self.realloc(size);
                   })
         .function("size", &css::uno::Sequence<T>::getLength)
         .function("get",
-                  +[](css::uno::Sequence<T> const& self, sal_Int32 index) {
+                  +[](css::uno::Sequence<T> const& self, sal_Int32 index) -> T const& {
                       checkSequenceAccess(self, index);
                       return self[index];
                   })

@@ -145,6 +145,8 @@ const WITH_VIEW_ID: Record<
   setVisibleHeight: true,
   resetRendering: true,
   stopRendering: true,
+  // NOTE: Disabled until unoembind startup cost is under 1s
+  // getXComponent: true,
 };
 
 const workerProxyHandler: ProxyHandler<{ ref: DocumentRef; viewId: ViewId }> = {
@@ -237,7 +239,7 @@ function documentClient<T extends DocumentClient>(
       const message: ToWorker = {
         f: 'newView',
         i,
-        a: []
+        a: [],
       };
       loadWorkerOnce().postMessage(message);
 

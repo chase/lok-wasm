@@ -315,10 +315,14 @@ public:
 
     void setCurrentView(int viewId) { doc_->setView(viewId); }
 
-    css::uno::Reference<css::lang::XComponent> getXComponent()
+    // NOTE: Disabled until unoembind startup cost is under 1s
+    /*
+    css::uno::Reference<css::lang::XComponent> getXComponent(int viewId)
     {
+        doc_->setView(viewId);
         return static_cast<desktop::WasmDocumentExtension*>(doc_->get())->mxComponent;
     }
+    */
 
 private:
     struct DocWithId
@@ -420,6 +424,8 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("removeText", &DocumentClient::removeText)
         .function("startTileRenderer", &DocumentClient::startTileRenderer)
         .function("ref", &DocumentClient::ref)
+    /* NOTE: Disabled until unoembind startup cost is under 1s
         .function("getXComponent", &DocumentClient::getXComponent)
+    */
         .function("newView", &DocumentClient::newView);
 }

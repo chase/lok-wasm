@@ -104,20 +104,21 @@ export declare class Document {
     charsBefore: number,
     charsAfter: number,
   ): void;
+  // NOTE: Disabled until unoembind startup cost is under 1s
+  // getXComponent(viewId: number): any;
 }
 
-declare global {
-  interface WorkerGlobalScope {
-    /** returns the Document by the associated DocumentRef */
-    byRef(ref: DocumentRef): Document | undefined;
-    /** registers new methods for Document */
-    registerExtension(handlers: {
-      [name: string]: (ref: DocumentRef, ...args: any[]) => Promise<any>;
-    }): void;
-  }
-}
+// NOTE: Disabled until unoembind startup cost is under 1s
+// declare global {
+//   interface WorkerGlobalScope {
+//     /** registers new methods for Document */
+//     registerExtension(handlers: {
+//       [name: string]: (doc: Document, viewId: number, ...args: any[]) => Promise<any>;
+//     }): void;
+//   }
+// }
 
-interface Module extends EmscriptenModule {
+export interface Module extends EmscriptenModule {
   /** indicate whether to load fccache with the module */
   withFcCache?: boolean;
 

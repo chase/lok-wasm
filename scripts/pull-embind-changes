@@ -32,12 +32,14 @@ git fetch origin master &&
   COMMITS=$(git rev-list --after=$COMMIT_DATE --reverse FETCH_HEAD -- \
     "static/source/embindmaker" \
     "static/source/unoembindhelpers" \
+    "include/static/unoembindhelpers" \
     "unotest/source/embindtest" \
     "static/Executable_embindmaker.mk" \
     "static/CustomTarget_unoembind.mk") &&
   git log --pretty="%h %s" --after=$COMMIT_DATE --reverse FETCH_HEAD -- \
     "static/source/embindmaker" \
     "static/source/unoembindhelpers" \
+    "include/static/unoembindhelpers" \
     "unotest/source/embindtest" \
     "static/Executable_embindmaker.mk" \
     "static/CustomTarget_unoembind.mk" >"$COMMIT_LOG_FILE"

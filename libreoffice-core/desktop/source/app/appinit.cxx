@@ -45,10 +45,6 @@
 #include <iostream>
 #include <map>
 
-#if defined EMSCRIPTEN
-#include <bindings_uno.hxx>
-#endif
-
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::beans;
@@ -87,9 +83,6 @@ void Desktop::InitApplicationServiceManager()
         UNO_QUERY_THROW);
 #endif
     comphelper::setProcessServiceFactory(sm);
-#if defined EMSCRIPTEN
-    init_unoembind_uno();
-#endif
 }
 
 void Desktop::RegisterServices()

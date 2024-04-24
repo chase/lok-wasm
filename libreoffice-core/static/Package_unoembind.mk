@@ -13,6 +13,7 @@ $(eval $(call gb_Package_use_custom_target,unoembind,static/unoembind))
 
 $(eval $(call gb_Package_add_files,unoembind,$(LIBO_BIN_FOLDER), \
     bindings_uno.js \
+    bindings_uno.mjs \
 ))
 
 # vim: set noet sw=4 ts=4:

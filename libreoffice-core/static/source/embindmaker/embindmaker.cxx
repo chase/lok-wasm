@@ -47,12 +47,12 @@ void badUsage()
 {
     std::cerr
         << "Usage:\n\n"
-           "  embindmaker <name> <cpp-output> <hpp-output> <js-output> <registries>\n\n"
+           "  embindmaker <name> <cpp-output> <hpp-output> <js-output> <mjs-output> <registries>\n\n"
            "where each <registry> is '+' (primary) or ':' (secondary), followed by: either a\n"
            "new- or legacy-format .rdb file, a single .idl file, or a root directory of an\n"
            ".idl file tree.  For all primary registries, Embind code is written to\n"
            "<cpp-output>/<hpp-output> and corresponding JavaScript scaffolding code is\n"
-           "written to <js-output>.  The <name> is used as part of some of the identifiers\n"
+           "written to <js-output> and <mjs-output>.  The <name> is used as part of some of the identifiers\n"
            "in those generated files.\n";
     std::exit(EXIT_FAILURE);
 }
@@ -128,7 +128,13 @@ getServiceConstructorName(unoidl::SingleInterfaceBasedServiceEntity::Constructor
     return constructor.defaultConstructor ? u"create"_ustr : constructor.name;
 }
 
-OUString jsName(OUString const& name) { return name.replace('.', '$'); }
+// MACRO-2202: Drop com.sun.star prefix, it's useless because the first thing we do alias-away that namespace {
+OUString jsName(OUString const& name) {
+    return name
+    .replaceFirst("com.sun.star.", "")
+    .replace('.', '$');
+}
+// }
 
 OUString
 jsServiceConstructor(OUString const& service,
@@ -916,8 +922,9 @@ SAL_IMPLEMENT_MAIN()
         auto const cppPathname = getPathnameArgument(1);
         auto const hppPathname = getPathnameArgument(2);
         auto const jsPathname = getPathnameArgument(3);
+        auto const mjsPathname = getPathnameArgument(4); // MACRO-2202
         rtl::Reference<TypeManager> mgr(new TypeManager);
-        for (sal_uInt32 i = 4; i != args; ++i)
+        for (sal_uInt32 i = 5; i != args; ++i) // MACRO-2202
         {
             auto const & [ uri, primary ] = parseRegistryArgument(i);
             try
@@ -1198,6 +1205,26 @@ SAL_IMPLEMENT_MAIN()
             std::cerr << "Failed to write \"" << jsPathname << "\"\n";
             std::exit(EXIT_FAILURE);
         }
+        // MACRO-2202: Export init_unoembind_uno as a module {
+        std::ofstream mjsOut(mjsPathname, std::ios_base::out | std::ios_base::trunc);
+        if (!mjsOut)
+        {
+            std::cerr << "Cannot open \"" << mjsPathname << "\" for writing\n";
+            std::exit(EXIT_FAILURE);
+        }
+        mjsOut << "export function init_unoembind_" << name
+              << "(instance) {\n"
+                 "    return {\n";
+        writeJsMap(mjsOut, *module, "        ");
+        mjsOut << "    };\n"
+                 "};\n";
+        mjsOut.close();
+        if (!mjsOut)
+        {
+            std::cerr << "Failed to write \"" << mjsPathname << "\"\n";
+            std::exit(EXIT_FAILURE);
+        }
+        // MACRO-2202: }
         return EXIT_SUCCESS;
     }
     catch (unoidl::FileFormatException const& e)

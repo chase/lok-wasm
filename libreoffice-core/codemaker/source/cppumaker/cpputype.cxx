@@ -598,19 +598,6 @@ void CppuType::dumpHFileContent(
     out << " *);\n\n#endif\n";
 }
 
-<<<<<<< HEAD
-void CppuType::dumpEmbindCppFile(FileStream &out)
-{
-    out << "#ifdef EMSCRIPTEN\n";
-    out << "#include <emscripten/bind.h>\n"
-           "#include <" << name_.replace('.', '/') << ".hpp>\n";
-    out << "using namespace emscripten;\n\n";
-    dumpEmbindDeclaration(out);
-    out << "#endif\n";
-}
-
-=======
->>>>>>> Extract embindmaker from cppumaker into its own tool
 void CppuType::dumpGetCppuType(FileStream & out)
 {
     if (name_ == "com.sun.star.uno.XInterface") {
@@ -1206,56 +1193,6 @@ void InterfaceType::dumpDeclaration(FileStream & out)
     out << "};\n\n";
 }
 
-<<<<<<< HEAD
-void InterfaceType::dumpEmbindDeclaration(FileStream & out)
-{
-    // TODO: This is a temporary workaround that likely causes the Embind UNO
-    // bindings to leak memory. Reference counting and cloning mechanisms of
-    // Embind should be investigated to figure out what exactly we need here.
-    out << "namespace emscripten { namespace internal { \n"
-           "template<> void raw_destructor<" << codemaker::cpp::scopedCppName(u2b(name_))
-        << ">(" << codemaker::cpp::scopedCppName(u2b(name_)) << "*){}\n"
-           "}}\n";
-
-    out << "EMSCRIPTEN_BINDINGS(uno_bindings_";
-    codemaker::cppumaker::dumpTypeFullWithDecorator(out, name_, u"_");
-    codemaker::cppumaker::dumpTypeIdentifier(out, name_);
-    out << ") {\n";
-
-    out << "\nclass_<" << codemaker::cpp::scopedCppName(u2b(name_)) << ">(\"";
-    codemaker::cppumaker::dumpTypeFullWithDecorator(out, name_, u"$");
-    codemaker::cppumaker::dumpTypeIdentifier(out, name_);
-    out << "\")\n";
-
-    inc();
-    // dump bindings for attributes and methods.
-    dumpEmbindAttributeBindings(out);
-    dumpEmbindMethodBindings(out);
-    out << indent() << ";\n";
-    dec();
-
-    // dump reference bindings.
-    out << "\nclass_<::css::uno::Reference<" << codemaker::cpp::scopedCppName(u2b(name_)) << ">, base<::css::uno::BaseReference>>(\"";
-    codemaker::cppumaker::dumpTypeFullWithDecorator(out, name_, u"$");
-    codemaker::cppumaker::dumpTypeIdentifier(out, name_);
-    out << "Ref\")\n";
-    inc();
-    out << indent() << ".constructor<>()\n"
-        << indent() << ".constructor<::css::uno::BaseReference, ::css::uno::UnoReference_Query>()\n"
-        << indent() << ".function(\"is\", &::css::uno::Reference<" << codemaker::cpp::scopedCppName(u2b(name_)) << ">::is)\n"
-        << indent() << ".function(\"get\", &::css::uno::Reference<" << codemaker::cpp::scopedCppName(u2b(name_)) << ">::get, allow_raw_pointers())\n"
-        << indent() << ".function(\"set\", emscripten::select_overload<bool(const ::css::uno::Any&, com::sun::star::uno::UnoReference_Query)>(&::css::uno::Reference<" << codemaker::cpp::scopedCppName(u2b(name_)) << ">::set))\n";
-    dumpEmbindAttributeBindings(out);
-    dumpEmbindMethodBindings(out, true);
-    out << indent() << ";\n";
-    dec();
-
-    out << "}\n";
-}
-
-
-=======
->>>>>>> Extract embindmaker from cppumaker into its own tool
 void InterfaceType::dumpHppFile(
     FileStream & out, codemaker::cppumaker::Includes & includes)
 {
@@ -1347,118 +1284,6 @@ void InterfaceType::dumpMethods(FileStream & out) const
     }
 }
 
-<<<<<<< HEAD
-void InterfaceType::dumpEmbindWrapperFunc(FileStream& out,
-                                          const unoidl::InterfaceTypeEntity::Method& method,
-                                          bool bDumpForReference) const
-{
-    out << indent();
-    out << ".function(\"" << method.name << "\", ";
-    out << indent() << "+[](";
-    if (bDumpForReference)
-        out << "::css::uno::Reference<";
-    out << codemaker::cpp::scopedCppName(u2b(name_));
-    if (bDumpForReference)
-        out << ">";
-    out << "* self";
-    if(!method.parameters.empty())
-        out << ",";
-
-    auto dumpParameters = [&](bool bDumpType)
-    {
-        // dumpParams with references as pointers
-        if (!method.parameters.empty())
-        {
-            out << " ";
-            for (std::vector<unoidl::InterfaceTypeEntity::Method::Parameter>::const_iterator
-                     parameter(method.parameters.begin());
-                 parameter != method.parameters.end();)
-            {
-                bool isConst;
-                bool isRef;
-                if (parameter->direction
-                    == unoidl::InterfaceTypeEntity::Method::Parameter::DIRECTION_IN)
-                {
-                    isConst = passByReference(parameter->type);
-                    isRef = isConst;
-                }
-                else
-                {
-                    isConst = false;
-                    isRef = true;
-                }
-                // for the embind wrapper, we define a pointer instead of a reference.
-                if (bDumpType)
-                    dumpType(out, parameter->type, isConst, /*isRef=*/false);
-                if (isRef)
-                    out << "*";
-
-                out << " " << parameter->name;
-                ++parameter;
-                if (parameter != method.parameters.end())
-                {
-                    out << ", ";
-                }
-            }
-            out << " ";
-        }
-    };
-    dumpParameters(/*bDumpType=*/true);
-
-    if (bDumpForReference)
-    {
-        out << ") { return self->get()->" << method.name << "(";
-    }
-    else
-    {
-        out << ") { return self->" << method.name << "(";
-    }
-
-    dumpParameters(/*bDumpType=*/false);
-    out << "); }, allow_raw_pointers() )\n";
-}
-
-void InterfaceType::dumpEmbindMethodBindings(FileStream & out, bool bDumpForReference) const
-{
-    if (!entity_->getDirectMethods().empty()) {
-        out << indent() << "// Bindings for methods\n";
-    }
-    for (const unoidl::InterfaceTypeEntity::Method& method : entity_->getDirectMethods()) {
-        if( m_isDeprecated || isDeprecated(method.annotations) )
-            continue;
-
-        // if dumping the method binding for a reference implementation
-        // dump wrapper.
-        if(bDumpForReference)
-        {
-            dumpEmbindWrapperFunc(out, method, true);
-            continue;
-        }
-
-        bool bHasOutParams = std::any_of(
-            method.parameters.begin(), method.parameters.end(),
-            [](const auto& parameter) {
-                return parameter.direction
-                       != unoidl::InterfaceTypeEntity::Method::Parameter::DIRECTION_IN;
-            });
-
-        if (bHasOutParams)
-        {
-            dumpEmbindWrapperFunc(out, method, false);
-            continue;
-        }
-
-        out << indent();
-        out << ".function(\"" << method.name << "\", &"
-            << codemaker::cpp::scopedCppName(u2b(name_))
-            << "::" << method.name << ")\n";
-    }
-}
-
-
-
-=======
->>>>>>> Extract embindmaker from cppumaker into its own tool
 void InterfaceType::dumpNormalGetCppuType(FileStream & out)
 {
     dumpGetCppuTypePreamble(out);
