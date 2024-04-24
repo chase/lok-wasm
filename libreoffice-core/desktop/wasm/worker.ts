@@ -3,7 +3,6 @@ import type {
   FromWorker,
   DocumentRef,
   ToWorker,
-  AsyncMessage,
   RectangleTwips,
   SetClipbaordItem,
   GetClipbaordItem,
@@ -13,10 +12,13 @@ import type {
   TileRendererData,
   TileDim,
   ToTileRenderer,
+  AsyncGlobalMethod,
+  AsyncDocumentMethod,
 } from './shared';
 import LOK from './soffice';
 import type { Document } from './soffice';
-import { init_unoembind_uno } from './bindings_uno';
+// NOTE: Disabled until unoembind startup cost is under 1s
+// import { init_unoembind_uno } from './bindings_uno';
 
 const docMap: Record<DocumentRef, Document> = {};
 const byRef = (ref: DocumentRef) => docMap[ref];
@@ -37,7 +39,7 @@ const lokPromise = LOK({
   },
 });
 
-const handler: AsyncMessage = {
+const globalHandler: AsyncGlobalMethod = {
   load: async function (name: string, blob: Blob): Promise<DocumentRef | null> {
     const { mountBlob, unmountBlob, Document } = await lokPromise;
     const doc = new Document(`file://${mountBlob(name, blob)}`);
@@ -48,48 +50,43 @@ const handler: AsyncMessage = {
       doc.delete();
       return null;
     }
-    lokPromise.then((x: any) => console.log(x.uno_Type_text$XTextDocument));
 
     docMap[ref] = doc;
     return ref;
   },
+  preload: async function (): Promise<void> {
+    (await lokPromise).preload();
+  },
+};
 
-  newView: async function (ref: DocumentRef): Promise<DocumentRef> {
-    const doc = byRef(ref);
-    return doc?.newView() ?? -1;
+const handler: AsyncDocumentMethod<Document> = {
+  newView: async function (doc: Document): Promise<DocumentRef> {
+    return doc.newView();
   },
 
-  close: async function (ref: DocumentRef): Promise<void> {
-    const doc = docMap[ref];
-    doc?.delete();
+  close: async function (doc: Document): Promise<void> {
+    doc.delete();
   },
 
-  save: async function (
-    ref: DocumentRef,
-    format: string
-  ): Promise<ArrayBuffer> {
+  save: async function (doc: Document, format: string): Promise<ArrayBuffer> {
     const { readUnlink } = await lokPromise;
     const tmpFile = `/${Date.now()}.${format}`;
     // Optional arguments as emscripten can be undefined,
     // but the number of parameters must match the binding signature
     // so for optional parameters, we have to pass undefined
     // https://github.com/emscripten-core/emscripten/pull/21076/files
-    byRef(ref)?.saveAs(`file://${tmpFile}`, format, undefined);
+    doc.saveAs(`file://${tmpFile}`, format, undefined);
     // only buffer is transferable
     return readUnlink(tmpFile).buffer;
   },
 
-  parts: async function (ref: DocumentRef): Promise<number> {
-    await lokPromise;
-    return byRef(ref)?.getParts() ?? -1;
+  parts: async function (doc: Document): Promise<number> {
+    return doc.getParts();
   },
 
   partRectanglesTwips: async function (
-    ref: DocumentRef
+    doc: Document
   ): Promise<RectangleTwips[]> {
-    await lokPromise;
-    const doc = byRef(ref);
-    if (!doc) return [];
     return doc
       .getPartRectangles()
       .split(/;\s*/)
@@ -105,23 +102,15 @@ const handler: AsyncMessage = {
   },
 
   documentSize: async function (
-    ref: DocumentRef
+    doc: Document
   ): Promise<[widthTwips: number, heightTwips: number]> {
-    await lokPromise;
-    return byRef(ref)?.getDocumentSize();
-  },
-
-  importScript: async function (url: string) {
-    importScripts(url);
+    return doc.getDocumentSize();
   },
 
   initializeForRendering: async function (
-    ref: DocumentRef,
+    doc: Document,
     args: InitializeForRenderingOptions = {}
   ): Promise<number> {
-    await lokPromise;
-    const doc = byRef(ref);
-    if (!doc) return -1;
     doc.initializeForRendering(
       `{".uno:ShowBorderShadow": {
           "type": "boolean",
@@ -144,28 +133,26 @@ const handler: AsyncMessage = {
   },
 
   postKeyEvent: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     type: number,
     charCode: number,
     keyCode: number
   ): Promise<void> {
-    await lokPromise;
-    return byRef(ref)?.postKeyEvent(viewId, type, charCode, keyCode);
+    return doc.postKeyEvent(viewId, type, charCode, keyCode);
   },
 
   postTextInput: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     windowId: number,
     text: string
   ): Promise<void> {
-    await lokPromise;
-    return byRef(ref)?.postTextInputEvent(viewId, windowId, text);
+    return doc.postTextInputEvent(viewId, windowId, text);
   },
 
   postMouseEvent: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     type: number,
     x: number,
@@ -174,110 +161,88 @@ const handler: AsyncMessage = {
     buttons: number,
     modifiers: number
   ): Promise<void> {
-    await lokPromise;
-    return byRef(ref)?.postMouseEvent(
-      viewId,
-      type,
-      x,
-      y,
-      count,
-      buttons,
-      modifiers
-    );
+    return doc.postMouseEvent(viewId, type, x, y, count, buttons, modifiers);
   },
 
   setTextSelection: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     type: number,
     x: number,
     y: Number
   ): Promise<void> {
-    await lokPromise;
-    return byRef(ref)?.setTextSelection(viewId, type, x, y);
+    return doc.setTextSelection(viewId, type, x, y);
   },
 
   setClipboard: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     items: SetClipbaordItem[]
   ): Promise<boolean> {
-    await lokPromise;
-    return byRef(ref)?.setClipboard(viewId, items);
+    return doc.setClipboard(viewId, items);
   },
 
   getClipboard: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     mimeTypes: string[]
   ): Promise<GetClipbaordItem[]> {
-    await lokPromise;
-    return byRef(ref)?.getClipboard(viewId, mimeTypes);
+    return doc.getClipboard(viewId, mimeTypes);
   },
 
   paste: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     mimeType: string,
     data: string | ArrayBuffer
   ): Promise<void> {
-    await lokPromise;
-    return byRef(ref)?.paste(viewId, mimeType, data);
+    return doc.paste(viewId, mimeType, data);
   },
 
   setGraphicSelection: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     type: number,
     x: number,
     y: number
   ): Promise<void> {
-    await lokPromise;
-    return byRef(ref)?.setGraphicSelection(viewId, type, x, y);
+    return doc.setGraphicSelection(viewId, type, x, y);
   },
 
   resetSelection: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId
   ): Promise<void> {
-    await lokPromise;
-    return byRef(ref)?.resetSelection(viewId);
+    return doc.resetSelection(viewId);
   },
 
   getCommandValues: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     command: string
   ): Promise<any> {
-    await lokPromise;
-    const result = byRef(ref)?.getCommandValues(viewId, command);
+    const result = doc.getCommandValues(viewId, command);
     return result.startsWith('{') ? JSON.parse(result) : result;
   },
 
-  preload: async function (): Promise<void> {
-    (await lokPromise).preload();
-  },
-
   subscribe: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     callbacktype: number
   ): Promise<void> {
-    await lokPromise;
-    byRef(ref)?.subscribe(viewId, callbacktype);
+    doc.subscribe(viewId, callbacktype);
   },
 
   unsubscribe: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     callbacktype: number
   ): Promise<void> {
-    await lokPromise;
-    byRef(ref)?.unsubscribe(viewId, callbacktype);
+    doc.unsubscribe(viewId, callbacktype);
   },
 
   startRendering: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     canvas: OffscreenCanvas,
     tileSize: TileDim,
@@ -285,10 +250,7 @@ const handler: AsyncMessage = {
     yPos: number = 0
   ): Promise<TileRendererData> {
     await lokPromise;
-    const doc = byRef(ref);
-    if (!doc) {
-      throw new Error("Doc doesn't exist while trying to render");
-    }
+    const ref = doc.ref();
     const result = doc.startTileRenderer(viewId, tileSize);
     const worker = new Worker(
       new URL('./tile_renderer_worker.js', import.meta.url),
@@ -318,91 +280,79 @@ const handler: AsyncMessage = {
   },
 
   resetRendering: function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     canvas: OffscreenCanvas
   ): Promise<void> {
     throw new Error('Function not implemented.');
   },
 
-  stopRendering: function (ref: DocumentRef, viewId: ViewId): Promise<void> {
+  stopRendering: function (doc: Document, viewId: ViewId): Promise<void> {
     throw new Error('Function not implemented.');
   },
 
   setScrollTop: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     yPx: number
   ): Promise<void> {
-    tileRenderer[ref]?.[viewId]?.postMessage({
+    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
       t: 's',
       y: yPx,
     } as ToTileRenderer);
   },
 
   setVisibleHeight: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     heightPx: number
   ): Promise<void> {
-    tileRenderer[ref]?.[viewId]?.postMessage({
+    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
       t: 'r',
       h: heightPx,
     } as ToTileRenderer);
   },
+
   dispatchCommand: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     command: string,
     args?: any,
     notifyWhenFinished?: boolean
   ): Promise<void> {
-    await lokPromise;
-    byRef(ref)?.dispatchCommand(
+    doc.dispatchCommand(
       viewId,
       command,
       typeof args === 'string' ? args : JSON.stringify(args),
       notifyWhenFinished
     );
   },
+
   removeText: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     charsBefore: number,
     charsAfter: number
   ): Promise<void> {
-    await lokPromise;
-    byRef(ref)?.removeText(
+    doc.removeText(
       viewId,
       0 /* window id is pretty much always 0 (the default window) */,
       charsBefore,
       charsAfter
     );
   },
+
   setClientVisibleArea: async function (
-    ref: DocumentRef,
+    doc: Document,
     viewId: ViewId,
     x: number,
     y: number,
     width: number,
     height: number
   ): Promise<void> {
-    await lokPromise;
-    byRef(ref)?.setClientVisibleArea(viewId, x, y, width, height);
+    doc.setClientVisibleArea(viewId, x, y, width, height);
   },
 };
-
-// NOTE: Disabled until unoembind startup cost is under 1s
-// const extensionHandlers = {};
-
-// let uno: { com: { sun: { star: Record<string, any> } } } | undefined;
-
-// this is used by imported scripts to register their handlers
-// self.registerExtension = async (newHandlers) => {
-//   const lok = await lokPromise;
-//   if (!uno) uno = init_unoembind_uno(lok);
-//   Object.assign(extensionHandlers, newHandlers);
-// };
 
 type TransferableResult<K extends keyof Message = keyof Message> =
   FromWorker<K> & {
@@ -424,20 +374,24 @@ onmessage = async <K extends keyof Message = keyof Message>({
 }: MessageEvent<ToWorker<K>>) => {
   const { i, f, a } = data;
   let r: Awaited<ReturnType<Message[K]>>;
-  /*
-  const extHandler = extensionHandlers[f as string];
-  if (extHandler) {
+  const docHandler: (doc: Document, ...args: any[]) => Promise<any> =
+    handler[f as keyof AsyncDocumentMethod<Document>];
+  if (docHandler) {
     const [ref, ...rest] = a;
     const doc = byRef(ref as DocumentRef);
     if (!doc) {
       console.error('doc ref missing');
       return;
     }
-    r = await extHandler[f](doc, ...rest);
+    await lokPromise;
+    r = await docHandler(doc, ...rest);
   } else {
-  */
-    r = await handler[f](...a);
-  // }
+    r = await (
+      globalHandler[f as keyof AsyncGlobalMethod] as (
+        ...args: any[]
+      ) => Promise<any>
+    )(...a);
+  }
   const message: FromWorker<K> = {
     f,
     i,

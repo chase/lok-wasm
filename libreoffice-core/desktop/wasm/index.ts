@@ -274,18 +274,6 @@ export async function loadDocumentFromArrayBuffer<
   return loadDocument<T>(name, new Blob([arrayBuffer], { type }));
 }
 
-/** imports a script at `url` that registers an extension inside of the worker */
-export async function importScript(url: string) {
-  const [i, future] = registerFuture<DocumentRef | null>();
-  const message: ToWorker = {
-    f: 'importScript',
-    i,
-    a: [url],
-  };
-  loadWorkerOnce().postMessage(message);
-  return future.promise.then(documentClient);
-}
-
 export async function preload() {
   const message: ToWorker = {
     f: 'preload',

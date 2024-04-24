@@ -7,7 +7,8 @@ export type GlobalMessage = {
   /** load the document with the file name `name` and content `blob`
   @returns the corresponding document on success, null otherwise */
   load(name: string, blob: Blob): DocumentRef | null;
-  importScript(url: string): void;
+  // NOTE: Disabled until unoembind startup cost is under 1s
+  // importScript(url: string): void;
   preload(): void;
 };
 
@@ -136,6 +137,23 @@ type DocumentWithViewMessage = {
   ) => ReturnType<DocumentWithViewMethods[K]>;
 };
 export type Message = GlobalMessage & DocumentMessage & DocumentWithViewMessage;
+
+type DocumentMessageUnion = DocumentMessage & DocumentWithViewMessage;
+
+export type AsyncGlobalMethod = {
+  [K in keyof GlobalMessage]: (
+    ...args: Parameters<GlobalMessage[K]>
+  ) => Promise<ReturnType<GlobalMessage[K]>>;
+};
+
+type Tail<T> = T extends [any, ...infer Rest] ? Rest : never;
+
+export type AsyncDocumentMethod<C> = {
+  [K in keyof DocumentMessageUnion]: (
+    doc: C,
+    ...args: Tail<Parameters<DocumentMessageUnion[K]>>
+  ) => Promise<ReturnType<DocumentMessageUnion[K]>>;
+};
 
 export type AsyncMessage = {
   [K in keyof Message]: (
