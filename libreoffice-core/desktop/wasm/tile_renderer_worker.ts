@@ -118,6 +118,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
 function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
+  const renderedScaledTwips = scaledTwips;
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
     LOK_INTERNAL_TWIPS_TO_PX;
@@ -127,6 +128,9 @@ function zoom(in_scale: number, in_dpi: number) {
   scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
+
+  scheduledTopTwips = (renderedTopTwips / renderedScaledTwips) * scaledTwips;
+
   scale = in_scale;
   dpi = in_dpi;
 }
@@ -304,7 +308,8 @@ function rendering() {
       // Need to account for for the position of the visible area
       // otherwhise the image position painted to the top of the canvas
       // will not remain consistent across re-sizing the canvas
-      const dstY: number = (yCoord * tileDimTwips - visibleTop) / scaledTwips;
+      // const dstY: number = (yCoord * tileDimTwips - visibleTop) / scaledTwips;
+      const dstY: number = y * d.tileSize;
       ctx.beginPath();
       ctx.putImageData(img, dstX, dstY);
       ctx.closePath();
