@@ -21,6 +21,7 @@ import { getOrCreateFocusedSignal } from './focus';
 import { frameThrottle } from './frameThrottle';
 import { getOrCreateZoomSignal } from './zoom';
 import { getOrCreateDPISignal } from './twipConversion';
+import { isZooming } from '../App';
 
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
 
@@ -197,6 +198,11 @@ export function OfficeDocument(props: Props) {
   });
 
   const handleScroll = frameThrottle(async (yPx, xPx) => {
+    if (isZooming()) {
+      const c = activeCanvas === 0 ? canvas0() : canvas1();
+      c!.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % TILE_DIM_PX}px, 0)`;
+      return;
+    };
     handleScroll.cancel();
     const c0 = canvas0();
     const c1 = canvas1();

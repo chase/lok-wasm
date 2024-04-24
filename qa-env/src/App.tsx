@@ -68,7 +68,14 @@ const ZOOM_IN_CANVAS_FIT = "cover";
 /// the canvas size changes 
 const ZOOM_OUT_CANVAS_FIT = "contain";
 
+// Helpful to step by 1/8 because of 256 tile size
+// When clipping the zoom we are more likely to get
+// a full tile
+const ZOOM_STEP = .125;
+
 let zoomTimeout: ReturnType<typeof setTimeout> ;
+
+export const [isZooming, setIsZooming] = createSignal(false);
 
 function registerGlobalKeys() {
   async function callback(e: KeyboardEvent) {
@@ -77,15 +84,14 @@ function registerGlobalKeys() {
       case '=':
         e.preventDefault();
         setCanvasObjectFit(ZOOM_IN_CANVAS_FIT)
-        updateZoom(getDocThrows, 1/8);
         if (zoomTimeout) clearTimeout(zoomTimeout);
-        zoomTimeout = setTimeout(() => updateZoom(getDocThrows, 1/8));
+        zoomTimeout = setTimeout(() => updateZoom(getDocThrows, ZOOM_STEP));
         break;
       case '-':
         e.preventDefault();
         setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
         if (zoomTimeout) clearTimeout(zoomTimeout);
-        zoomTimeout = setTimeout(() => updateZoom(getDocThrows, -1/8));
+        zoomTimeout = setTimeout(() => updateZoom(getDocThrows, -ZOOM_STEP));
         break;
     }
   }
@@ -104,12 +110,12 @@ function registerGlobalKeys() {
     if (e.deltaY < 0) {
       setCanvasObjectFit(ZOOM_IN_CANVAS_FIT);
       if (zoomTimeout) clearTimeout(zoomTimeout);
-      zoomTimeout = setTimeout(() => updateZoom(getDocThrows, 1/8));
+      zoomTimeout = setTimeout(() => updateZoom(getDocThrows, ZOOM_STEP));
     // Scroll Down = Zoom In
     } else if (e.deltaY > 0) {
       setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
       if (zoomTimeout) clearTimeout(zoomTimeout);
-      zoomTimeout = setTimeout(() => updateZoom(getDocThrows, -1/8));
+      zoomTimeout = setTimeout(() => updateZoom(getDocThrows, -ZOOM_STEP));
     }
   }
 

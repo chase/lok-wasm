@@ -105,7 +105,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
 
       idleAreaPaint = false;
-      zoom(data.s, data.d);
+      zoom(data.s, data.d, data.y);
 
       // Ensure we debounce a reset in combination with shouldStopPaint
       zoomResetTimeout = setTimeout(() => {
@@ -113,20 +113,18 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
         Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
         if (!running) stateMachine();
       });
+
       break;
   }
 };
 
-function zoom(in_scale: number, in_dpi: number) {
+function zoom(in_scale: number, in_dpi: number, in_y: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
-
-  const renderedScaledTwips = scaledTwips;
 
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
     LOK_INTERNAL_TWIPS_TO_PX;
-
 
   tileDimTwips = Math.ceil(d.tileSize * scaledTwips);
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
@@ -134,7 +132,11 @@ function zoom(in_scale: number, in_dpi: number) {
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
 
-  scheduledTopTwips = (scheduledTopTwips / renderedScaledTwips) * scaledTwips;
+  // Update the top position to the new scale
+  scheduledTopTwips = in_y * scaledTwips;
+
+  // Set this as a reference for the new position for the next scroll event
+  renderedTileTop = Math.floor(scheduledTopTwips / tileDimTwips);
 
   scale = in_scale;
   dpi = in_dpi;
@@ -150,7 +152,7 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
 
   scale = data.s;
   dpi = data.dpi;
-  zoom(data.s, dpi);
+  zoom(data.s, dpi, data.y);
   scheduledTopTwips = data.y * scaledTwips;
 
   pendingStateChange = true;
@@ -310,10 +312,6 @@ function rendering() {
         continue;
       }
       const dstX: number = xCoord * d.tileSize;
-      // Need to account for for the position of the visible area
-      // otherwhise the image position painted to the top of the canvas
-      // will not remain consistent across re-sizing the canvas
-      //
       const dstY: number = y * d.tileSize;
       ctx.beginPath();
       ctx.putImageData(img, dstX, dstY);
@@ -648,7 +646,17 @@ function getState(): RenderState {
 }
 
 function clipToNearest8PxZoom(w: number, s: number): number {
+  // TODO: restore proper 8px clipping, once we figure out
+  // how to deal with mis-aligned page boundaries
   return Math.round(w * s) / w;
+  // const scaledWidth: number = Math.ceil(w * s);
+  // const mod: number = scaledWidth % 8;
+  // if (mod === 0) return s;
+
+  // return Math.abs((scaledWidth - mod) / w - s) <
+  //   Math.abs((scaledWidth + 8 - mod) / w - s)
+  //   ? (scaledWidth - mod) / w
+  //   : (scaledWidth + 8 - mod) / w;
 }
 
 function removeContainedAdjacentRects(rects: Rect[]): Rect[] {

@@ -2,7 +2,7 @@ import { twipsToCssPx } from '@lok';
 import { DocumentClient } from '@lok/shared';
 import { Accessor, Signal, createSignal } from 'solid-js';
 import { getOrCreateDPISignal } from './twipConversion';
-import { scrollAreaRef } from '../App';
+import { scrollAreaRef, setIsZooming } from '../App';
 
 export const DEFAULT_ZOOM = 0.8;
 export const MAX_ZOOM = 3;
@@ -23,11 +23,11 @@ export function getOrCreateZoomSignal(
   return result;
 }
 
-export function setZoom(doc: Accessor<DocumentClient>, level: number) {
+export function setZoom(doc: Accessor<DocumentClient>, level: number, yTop: number) {
   const [, set] = getOrCreateZoomSignal(doc);
   const getDpi = getOrCreateDPISignal();
   const dpi = getDpi();
-  doc().setZoom(level, dpi);
+  doc().setZoom(level, dpi, yTop);
   set(level);
 }
 /**
@@ -44,22 +44,23 @@ export function updateZoom(
   offset: number
 ): number {
   const [zoom] = getOrCreateZoomSignal(doc);
+  setIsZooming(true);
   const roundedZoom = Math.round((zoom() + offset) / Epsilon) * Epsilon;
   const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, roundedZoom));
 
   const scrollArea = scrollAreaRef();
+  let newScrollTop: number | undefined;
   if (scrollArea) {
-    const visibleHeight = scrollArea.clientHeight;
     const scrollTop = scrollArea.scrollTop;
 
-    const centerY = scrollTop + visibleHeight / 2;
 
-    const newScrollTop = centerY * (newZoom / zoom()) - visibleHeight / 2;
+    newScrollTop = scrollTop / zoom() * newZoom;
 
     scrollArea.scrollTop =  newScrollTop
   }
 
-  setZoom(doc, newZoom);
+  setZoom(doc, newZoom, newScrollTop!);
+  setTimeout(() => setIsZooming(false), 100);
   return newZoom;
 }
 
