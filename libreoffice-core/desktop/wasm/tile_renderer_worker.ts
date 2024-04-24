@@ -46,6 +46,7 @@ let visibleRingTiles: Set<number> = new Set();
 let tileRingIndex = 0;
 let tileDimTwips: number;
 let docWidthTwips: number;
+let docHeightTwips: number;
 /** the number of tiles that make up a horizontal stride for the width of the document */
 let widthTileStride: number;
 let renderedTopTwips: number = -1;
@@ -116,6 +117,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
 
 function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
+  docHeightTwips = Atomics.load(d.docHeightTwips, 0);
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
     LOK_INTERNAL_TWIPS_TO_PX;

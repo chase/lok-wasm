@@ -74,7 +74,7 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int3
 {
     long w, h;
     pClass->getDocumentSize(this, &w, &h);
-    TileRendererData& data = tileRendererData_.emplace_back(this, viewId_, tileSize_, w);
+    TileRendererData& data = tileRendererData_.emplace_back(this, viewId_, tileSize_, w, h);
     pthread_t& threadId = tileRendererThreads_.emplace_back();
     if (pthread_create(&threadId, nullptr, tileRendererWorker, &data))
     {

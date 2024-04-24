@@ -50,11 +50,12 @@ struct TileRendererData
     LibreOfficeKitDocument* doc;
 
     TileRendererData(LibreOfficeKitDocument* doc_, int32_t viewId_, int32_t tileSize_,
-                     uint32_t docWidthTwips_)
+                     uint32_t docWidthTwips_, uint32_t docHeightTwips_)
         : viewId(viewId_)
         , tileSize(tileSize_)
         , paintedTileAllocSize(tileSize_ * tileSize_ * 4)
         , paintedTile(new uint8_t[paintedTileAllocSize])
+        , docHeightTwips(docHeightTwips_)
         , docWidthTwips(docWidthTwips_)
         , doc(doc_){};
 
