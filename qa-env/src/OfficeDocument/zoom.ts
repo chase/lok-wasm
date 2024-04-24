@@ -50,12 +50,13 @@ export function updateZoom(
 
   const scrollArea = scrollAreaRef();
   let newScrollTop: number | undefined;
+
+  // We need to adjust the scroll position manually
+  // to keep the relative position of the document the same
+  // after the zoom level changes
   if (scrollArea) {
     const scrollTop = scrollArea.scrollTop;
-
-
     newScrollTop = scrollTop / zoom() * newZoom;
-
     scrollArea.scrollTop =  newScrollTop
   }
 
