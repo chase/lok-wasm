@@ -68,7 +68,6 @@ let pendingStateChange = false;
 let running = false;
 let idleAreaPaint = false;
 let zoomResetTimeout: number | undefined;
-let scrollTimeout: number | undefined;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -80,7 +79,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       idleAreaPaint = false;
       scheduledTopTwips = data.y * scaledTwips;
       if (Math.floor(scheduledTopTwips / tileDimTwips) !== renderedTileTop) {
-        if (scrollTimeout) clearTimeout(scrollTimeout);
         didScroll = true;
         activeCanvasIndex ^= 1;
         activeCanvas = canvases[activeCanvasIndex];
