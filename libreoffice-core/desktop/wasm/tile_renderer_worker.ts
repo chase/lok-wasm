@@ -119,10 +119,14 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
 function zoom(in_scale: number, in_dpi: number, in_y: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
+
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
     LOK_INTERNAL_TWIPS_TO_PX;
 
+  console.log("scaledTwips", scaledTwips);
+
+  console.log(in_scale);
   tileDimTwips = Math.ceil(d.tileSize * scaledTwips);
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
   scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
@@ -641,15 +645,18 @@ function getState(): RenderState {
   return Atomics.load(d.state, 0);
 }
 
-function clipToNearest8PxZoom(w: number, s: number): number {
-  const scaledWidth: number = Math.ceil(w * s);
-  const mod: number = scaledWidth % 8;
-  if (mod === 0) return s;
+// function clipToNearest8PxZoom(w: number, s: number): number {
+//   const scaledWidth: number = Math.ceil(w * s);
+//   const mod: number = scaledWidth % 8;
+//   if (mod === 0) return s;
 
-  return Math.abs((scaledWidth - mod) / w - s) <
-    Math.abs((scaledWidth + 8 - mod) / w - s)
-    ? (scaledWidth - mod) / w
-    : (scaledWidth + 8 - mod) / w;
+//   return Math.abs((scaledWidth - mod) / w - s) <
+//     Math.abs((scaledWidth + 8 - mod) / w - s)
+//     ? (scaledWidth - mod) / w
+//     : (scaledWidth + 8 - mod) / w;
+// }
+function clipToNearest8PxZoom(w: number, s: number): number {
+  return Math.round(w * s) / w;
 }
 
 function removeContainedAdjacentRects(rects: Rect[]): Rect[] {
