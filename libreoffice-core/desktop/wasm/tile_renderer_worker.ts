@@ -68,6 +68,7 @@ let pendingStateChange = false;
 let running = false;
 let idleAreaPaint = false;
 let zoomResetTimeout: number | undefined;
+let scrollTimeout: number | undefined;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -75,11 +76,11 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       initialize(data);
       break;
     case 's': // scroll
-      console.log("scroll");
       if (!activeCanvas) return;
       idleAreaPaint = false;
       scheduledTopTwips = data.y * scaledTwips;
       if (Math.floor(scheduledTopTwips / tileDimTwips) !== renderedTileTop) {
+        if (scrollTimeout) clearTimeout(scrollTimeout);
         didScroll = true;
         activeCanvasIndex ^= 1;
         activeCanvas = canvases[activeCanvasIndex];
@@ -465,9 +466,9 @@ function paintNonVisibleAreasWhileIdle(): void {
 
 function shouldPausePaint(): boolean {
   return (
-    Atomics.load(d.state, 0) === RenderState.RESET || false
-    // (scheduledTopTwips !== renderedTopTwips && renderedTopTwips !== -1) ||
-    // (scheduledHeightTwips !== renderedHeightTwips && renderedHeightTwips !== -1)
+    Atomics.load(d.state, 0) === RenderState.RESET ||
+    (scheduledTopTwips !== renderedTopTwips && renderedTopTwips !== -1) ||
+    (scheduledHeightTwips !== renderedHeightTwips && renderedHeightTwips !== -1)
   );
 }
 

@@ -68,6 +68,8 @@ const ZOOM_IN_CANVAS_FIT = "cover";
 /// the canvas size changes 
 const ZOOM_OUT_CANVAS_FIT = "contain";
 
+let zoomTimeout: ReturnType<typeof setTimeout> ;
+
 function registerGlobalKeys() {
   async function callback(e: KeyboardEvent) {
     if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
@@ -76,11 +78,14 @@ function registerGlobalKeys() {
         e.preventDefault();
         setCanvasObjectFit(ZOOM_IN_CANVAS_FIT)
         updateZoom(getDocThrows, 1/8);
+        if (zoomTimeout) clearTimeout(zoomTimeout);
+        zoomTimeout = setTimeout(() => updateZoom(getDocThrows, 1/8));
         break;
       case '-':
         e.preventDefault();
         setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
-        updateZoom(getDocThrows, -1/8);
+        if (zoomTimeout) clearTimeout(zoomTimeout);
+        zoomTimeout = setTimeout(() => updateZoom(getDocThrows, -1/8));
         break;
     }
   }
@@ -98,11 +103,13 @@ function registerGlobalKeys() {
     // Scroll Up = Zoom In
     if (e.deltaY < 0) {
       setCanvasObjectFit(ZOOM_IN_CANVAS_FIT);
-      updateZoom(getDocThrows, 0.1);
+      if (zoomTimeout) clearTimeout(zoomTimeout);
+      zoomTimeout = setTimeout(() => updateZoom(getDocThrows, 1/8));
     // Scroll Down = Zoom In
     } else if (e.deltaY > 0) {
       setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
-      updateZoom(getDocThrows, -0.1);
+      if (zoomTimeout) clearTimeout(zoomTimeout);
+      zoomTimeout = setTimeout(() => updateZoom(getDocThrows, -1/8));
     }
   }
 
