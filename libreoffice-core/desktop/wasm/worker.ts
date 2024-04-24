@@ -413,12 +413,14 @@ const handler: AsyncMessage = {
     ref: DocumentRef,
     viewId: ViewId,
     scale: number,
-    dpi: number
+    dpi: number,
+    yTop: number,
   ): Promise<void> {
     tileRenderer[ref][viewId]?.postMessage({
       t: 'z',
       s: scale,
       d: dpi,
+      y: yTop
     } as ToTileRenderer);
   },
 };

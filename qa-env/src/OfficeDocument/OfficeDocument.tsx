@@ -1,5 +1,4 @@
 import { TILE_DIM_PX, twipsToCssPx } from '@lok';
-import debounce from 'lodash.debounce';
 import type { DocumentClient, RectanglePx, RectangleTwips } from '@lok/shared';
 import {
   For,
@@ -22,6 +21,7 @@ import { getOrCreateFocusedSignal } from './focus';
 import { frameThrottle } from './frameThrottle';
 import { getOrCreateZoomSignal } from './zoom';
 import { getOrCreateDPISignal } from './twipConversion';
+import { isZooming } from '../App';
 
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
 
@@ -100,7 +100,6 @@ function scaleRectCssPx(rect: RectangleTwips, zoom: number): RectanglePx {
 const didInitialRender = new WeakSet<DocumentClient>();
 
 export function OfficeDocument(props: Props) {
-  let scrollAreaRef: HTMLDivElement | undefined;
 
   /** TODO: add DPI observer and handle DPI change */
   /** TODO: add context loss for machine if left asleep */
@@ -199,6 +198,8 @@ export function OfficeDocument(props: Props) {
   });
 
   const handleScroll = frameThrottle(async (yPx, xPx) => {
+    console.log("checking zooming", isZooming());
+    if (isZooming()) return;
     handleScroll.cancel();
     const c0 = canvas0();
     const c1 = canvas1();
@@ -254,7 +255,7 @@ export function OfficeDocument(props: Props) {
         <ScrollArea
           class="absolute top-0"
           onScroll={handleScroll}
-          ref={scrollAreaRef}
+          ref={props.scrollAreaRef}
         >
           {docSizePx() && (
             <div

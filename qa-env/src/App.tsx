@@ -70,7 +70,7 @@ const ZOOM_IN_CANVAS_FIT = "cover";
 const ZOOM_OUT_CANVAS_FIT = "contain";
 
 function registerGlobalKeys() {
-  function callback(e: KeyboardEvent) {
+  async function callback(e: KeyboardEvent) {
     if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
     switch (e.key) {
       case '=':
@@ -86,7 +86,7 @@ function registerGlobalKeys() {
     }
   }
 
-  function wheelCallback(e: WheelEvent) {
+  async function wheelCallback(e: WheelEvent) {
     if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
     
     const isAccelerated = IS_MAC ? e.metaKey : e.ctrlKey;
@@ -116,6 +116,9 @@ function registerGlobalKeys() {
     document.removeEventListener('wheel', wheelCallback);
   });
 }
+
+export const [scrollAreaRef, setScrollAreaRef] = createSignal<HTMLDivElement | null>(null);
+export const [isZooming, setIsZooming] = createSignal(false);
 
 function App() {
   registerGlobalKeys();
@@ -147,7 +150,7 @@ function App() {
         </div>
       </Show>
       <Show when={getDoc()} keyed>
-        <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} />
+        <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} scrollAreaRef={setScrollAreaRef}/>
       </Show>
     </>
   );

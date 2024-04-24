@@ -75,6 +75,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       initialize(data);
       break;
     case 's': // scroll
+      console.log("scroll");
       if (!activeCanvas) return;
       idleAreaPaint = false;
       scheduledTopTwips = data.y * scaledTwips;
@@ -103,7 +104,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
 
       idleAreaPaint = false;
-      zoom(data.s, data.d);
+      zoom(data.s, data.d, data.y);
 
       // Ensure we debounce a reset in combination with shouldStopPaint
       zoomResetTimeout = setTimeout(() => {
@@ -115,10 +116,9 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
   }
 };
 
-function zoom(in_scale: number, in_dpi: number) {
+function zoom(in_scale: number, in_dpi: number, in_y: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
-  const renderedScaledTwips = scaledTwips;
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
     LOK_INTERNAL_TWIPS_TO_PX;
@@ -129,7 +129,7 @@ function zoom(in_scale: number, in_dpi: number) {
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
 
-  scheduledTopTwips = (renderedTopTwips / renderedScaledTwips) * scaledTwips;
+  scheduledTopTwips = in_y * scaledTwips;
 
   scale = in_scale;
   dpi = in_dpi;
@@ -145,7 +145,7 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
 
   scale = data.s;
   dpi = data.dpi;
-  zoom(data.s, dpi);
+  zoom(data.s, dpi, data.y);
   scheduledTopTwips = data.y * scaledTwips;
 
   pendingStateChange = true;
@@ -308,7 +308,6 @@ function rendering() {
       // Need to account for for the position of the visible area
       // otherwhise the image position painted to the top of the canvas
       // will not remain consistent across re-sizing the canvas
-      // const dstY: number = (yCoord * tileDimTwips - visibleTop) / scaledTwips;
       const dstY: number = y * d.tileSize;
       ctx.beginPath();
       ctx.putImageData(img, dstX, dstY);
@@ -461,9 +460,9 @@ function paintNonVisibleAreasWhileIdle(): void {
 
 function shouldPausePaint(): boolean {
   return (
-    Atomics.load(d.state, 0) === RenderState.RESET ||
-    (scheduledTopTwips !== renderedTopTwips && renderedTopTwips !== -1) ||
-    (scheduledHeightTwips !== renderedHeightTwips && renderedHeightTwips !== -1)
+    Atomics.load(d.state, 0) === RenderState.RESET || false
+    // (scheduledTopTwips !== renderedTopTwips && renderedTopTwips !== -1) ||
+    // (scheduledHeightTwips !== renderedHeightTwips && renderedHeightTwips !== -1)
   );
 }
 
