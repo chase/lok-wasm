@@ -300,7 +300,7 @@ function rendering() {
       }
       const dstX: number = xCoord * d.tileSize;
       // Need to account for for the position of the visible area
-      // otherwhise the image painted with to the top of the canvas
+      // otherwhise the image position painted to the top of the canvas
       // will not remain consistent across re-sizing the canvas
       const dstY: number = (yCoord * tileDimTwips - visibleTop) / scaledTwips;
       ctx.beginPath();
