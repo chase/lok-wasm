@@ -1,6 +1,6 @@
 #!/bin/bash
 
-EMSDK_VERSION=3.1.54
+EMSDK_VERSION=3.1.56
 BASE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE:-$0}")"/.. &>/dev/null && pwd)
 
 # This prevents git from trying to track a massive amount of files, speeding up git status and other commands
