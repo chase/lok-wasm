@@ -645,17 +645,14 @@ function getState(): RenderState {
 }
 
 function clipToNearest8PxZoom(w: number, s: number): number {
-  // TODO: restore proper 8px clipping, once we figure out
-  // how to deal with mis-aligned page boundaries
-  return Math.round(w * s) / w;
-  // const scaledWidth: number = Math.ceil(w * s);
-  // const mod: number = scaledWidth % 8;
-  // if (mod === 0) return s;
+  const scaledWidth: number = Math.ceil(w * s);
+  const mod: number = scaledWidth % 8;
+  if (mod === 0) return s;
 
-  // return Math.abs((scaledWidth - mod) / w - s) <
-  //   Math.abs((scaledWidth + 8 - mod) / w - s)
-  //   ? (scaledWidth - mod) / w
-  //   : (scaledWidth + 8 - mod) / w;
+  return Math.abs((scaledWidth - mod) / w - s) <
+    Math.abs((scaledWidth + 8 - mod) / w - s)
+    ? (scaledWidth - mod) / w
+    : (scaledWidth + 8 - mod) / w;
 }
 
 function removeContainedAdjacentRects(rects: Rect[]): Rect[] {

@@ -135,11 +135,12 @@ export function OfficeDocument(props: Props) {
     const dpi = getDPI()
     return docSizeTwips()?.map((i) => twipsToCssPx(i, zoom, dpi));
   }
+  const [getZoom] = getOrCreateZoomSignal(() => props.doc);
+  const getDPI = getOrCreateDPISignal();
   const rectsPx = () => {
-    const [getZoom] = getOrCreateZoomSignal(() => props.doc);
-    const getDPI = getOrCreateDPISignal();
     const dpi = getDPI()
     const zoom = getZoom();
+    console.log(dpi, zoom);
     return rectsTwips()
       ?.map(rect => scaleRectCssPx(rect, zoom, dpi))
       .filter((rect) => rect.width && rect.height);

@@ -4,6 +4,7 @@ import { DocumentClient } from '@lok/shared';
 import { For, JSX, Show, createMemo, splitProps } from 'solid-js';
 import { createDocEventSignal } from './docEventSignal';
 import { getOrCreateZoomSignal } from './zoom';
+import { getOrCreateDPISignal } from './twipConversion';
 
 interface Props
   extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'ref' | 'style'> {
@@ -27,8 +28,10 @@ export function Selection(props: Props) {
         : undefined
   );
 
+  const getDPI = getOrCreateDPISignal();
+
   const scaledSelection = createMemo(() =>
-    selection()?.map((rect) => rect.map((x) => twipsToCssPx(x, zoom()))));
+    selection()?.map((rect) => rect.map((x) => twipsToCssPx(x, zoom(), getDPI()))));
 
     return (
     <Show when={scaledSelection()}>

@@ -78,18 +78,20 @@ export async function zoomToFit(
   marginPx: number = 20
 ): Promise<number> {
   const [getZoom] = getOrCreateZoomSignal(doc);
+  const getDPI = getOrCreateDPISignal();
+  const dpi = getDPI();
   const zoom = getZoom();
   const { width, height } = container;
   let scaleFactor = 1;
   if (fit === 'width' || fit === 'widthMaxDefault') {
     const [docWidth] = await doc().documentSize();
-    scaleFactor = (width - marginPx) / twipsToCssPx(docWidth, zoom);
+    scaleFactor = (width - marginPx) / twipsToCssPx(docWidth, zoom, dpi);
   } else if (fit === 'height') {
     const rects = await doc().partRectanglesTwips();
     if (rects.length === 0) {
       console.error('no pages?');
     }
-    scaleFactor = height / twipsToCssPx(rects[0].height + rects[0].y * 2, zoom);
+    scaleFactor = height / twipsToCssPx(rects[0].height + rects[0].y * 2, zoom, dpi);
   }
   const newZoom =
     fit === 'widthMaxDefault'

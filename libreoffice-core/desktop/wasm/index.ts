@@ -51,7 +51,6 @@ export function conversionTable(zoom: number, dpi: number) {
 /** CSS pixels are DPI indepdendent */
 export function twipsToCssPx(twips: number, zoom: number, dpi: number) {
   const scaledTwips =  clipToNearest8PxZoom(TILE_DIM_PX, 1 / (zoom * dpi)) * LOK_INTERNAL_TWIPS_TO_PX;
-
   return twips / scaledTwips;
 }
 
