@@ -44,6 +44,8 @@ export function updateZoom(
   offset: number
 ): number {
   const [zoom] = getOrCreateZoomSignal(doc);
+  const getDpi = getOrCreateDPISignal();
+  const dpi = getDpi();
   setIsZooming(true);
   const roundedZoom = Math.round((zoom() + offset) / Epsilon) * Epsilon;
   const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, roundedZoom));
@@ -56,7 +58,7 @@ export function updateZoom(
   // after the zoom level changes
   if (scrollArea) {
     const scrollTop = scrollArea.scrollTop;
-    newScrollTop = scrollTop / zoom() * newZoom;
+    newScrollTop = scrollTop / (zoom() * dpi) * newZoom;
     scrollArea.scrollTop =  newScrollTop
   } else {
     console.error(`tried to update zoom without scrollAreaRef`)
