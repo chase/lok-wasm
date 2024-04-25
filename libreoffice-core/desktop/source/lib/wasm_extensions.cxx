@@ -125,7 +125,7 @@ static std::string OUStringToString(OUString str) {
     return OUStringToOString(str, RTL_TEXTENCODING_UTF8).getStr();
 }
 
-std::string getPageColor()
+std::string WasmDocumentExtension::getPageColor()
 {
     SfxViewShell* pViewShell = SfxViewShell::Current();
     SfxViewFrame* pViewFrm = pViewShell ? pViewShell->GetViewFrame() : nullptr;
@@ -149,7 +149,7 @@ std::string getPageColor()
     return std::string (defaultColorHex);
 }
 
-std::string getPageOrientation ()
+std::string WasmDocumentExtension::getPageOrientation ()
 {
     SfxViewFrame* pViewFrm = SfxViewFrame::Current();
     if (!pViewFrm)
