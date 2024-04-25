@@ -35,7 +35,7 @@ function clipToNearest8PxZoom(w: number, s: number): number {
 
 /** Calculates the conversions for twips provided a `zoom` level and `dpi` */
 export function conversionTable(zoom: number, dpi: number) {
-  const scale = clipToNearest8PxZoom(TILE_DIM_PX, zoom * dpi);
+  const scale = clipToNearest8PxZoom(TILE_DIM_PX, 1 / (zoom * dpi));
   const TILE_DIM_TWIPS = Math.floor(
     TILE_DIM_PX * LOK_INTERNAL_TWIPS_TO_PX * scale
   );
@@ -49,13 +49,16 @@ export function conversionTable(zoom: number, dpi: number) {
 }
 
 /** CSS pixels are DPI indepdendent */
-export function twipsToCssPx(twips: number, zoom: number) {
-  return Math.ceil((twips * zoom) / LOK_INTERNAL_TWIPS_TO_PX);
+export function twipsToCssPx(twips: number, zoom: number, dpi: number) {
+  const scaledTwips =  clipToNearest8PxZoom(TILE_DIM_PX, 1 / (zoom * dpi)) * LOK_INTERNAL_TWIPS_TO_PX;
+
+  return twips / scaledTwips;
 }
 
 /** CSS pixels are DPI indepdendent */
-export function cssPxToTwips(px: number, zoom: number) {
-  return Math.ceil((px * LOK_INTERNAL_TWIPS_TO_PX) / zoom);
+export function cssPxToTwips(px: number, zoom: number, dpi: number) {
+  const scaledTwips = clipToNearest8PxZoom(TILE_DIM_PX, 1 / (zoom * dpi)) * LOK_INTERNAL_TWIPS_TO_PX;
+  return px * scaledTwips;
 }
 
 const worker: Ref<Worker> = {};

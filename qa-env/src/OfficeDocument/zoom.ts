@@ -23,11 +23,15 @@ export function getOrCreateZoomSignal(
   return result;
 }
 
-export function setZoom(doc: Accessor<DocumentClient>, level: number, yTop: number) {
+export async function setZoom(doc: Accessor<DocumentClient>, level: number) {
   const [, set] = getOrCreateZoomSignal(doc);
   const getDpi = getOrCreateDPISignal();
   const dpi = getDpi();
-  doc().setZoom(level, dpi, yTop);
+  setIsZooming(true);
+  doc().setZoom(level, dpi, 0).then((newTop) => {
+    console.log("NEW TOP", newTop);
+    scrollAreaRef()!.scrollTop = newTop;
+  })
   set(level);
 }
 /**
@@ -44,25 +48,10 @@ export function updateZoom(
   offset: number
 ): number {
   const [zoom] = getOrCreateZoomSignal(doc);
-  setIsZooming(true);
   const roundedZoom = Math.round((zoom() + offset) / Epsilon) * Epsilon;
   const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, roundedZoom));
 
-  const scrollArea = scrollAreaRef();
-  let newScrollTop: number = 0;
-
-  // We need to adjust the scroll position manually
-  // to keep the relative position of the document the same
-  // after the zoom level changes
-  if (scrollArea) {
-    const scrollTop = scrollArea.scrollTop;
-    newScrollTop = scrollTop / zoom() * newZoom;
-    scrollArea.scrollTop =  newScrollTop
-  } else {
-    console.error(`tried to update zoom without scrollAreaRef`)
-  }
-
-  setZoom(doc, newZoom, newScrollTop);
+  setZoom(doc, newZoom);
   return newZoom;
 }
 
@@ -77,26 +66,28 @@ export async function zoomToFit(
   fit: 'width' | 'height' | 'widthMaxDefault',
   marginPx: number = 20
 ): Promise<number> {
+  const getDPI = getOrCreateDPISignal();
   const [getZoom] = getOrCreateZoomSignal(doc);
+  const dpi = getDPI();
   const zoom = getZoom();
   const { width, height } = container;
   let scaleFactor = 1;
   if (fit === 'width' || fit === 'widthMaxDefault') {
     const [docWidth] = await doc().documentSize();
-    scaleFactor = (width - marginPx) / twipsToCssPx(docWidth, zoom);
+    scaleFactor = (width - marginPx) / twipsToCssPx(docWidth, zoom, dpi);
   } else if (fit === 'height') {
     const rects = await doc().partRectanglesTwips();
     if (rects.length === 0) {
       console.error('no pages?');
     }
-    scaleFactor = height / twipsToCssPx(rects[0].height + rects[0].y * 2, zoom);
+    scaleFactor = height / twipsToCssPx(rects[0].height + rects[0].y * 2, zoom, dpi);
   }
   const newZoom =
     fit === 'widthMaxDefault'
       ? Math.min(DEFAULT_ZOOM, scaleFactor * zoom)
       : scaleFactor * zoom;
 
-  setZoom(doc, newZoom, scrollAreaRef()?.scrollTop ?? 0);
+  setZoom(doc, newZoom, 0);
 
   return newZoom;
 }

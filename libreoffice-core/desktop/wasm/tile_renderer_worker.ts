@@ -60,6 +60,7 @@ let scheduledWidthPx: number = -1;
 let scheduledHeightPx: number = -1;
 let renderedTileTop: number = 0;
 let didScroll = false;
+let didZoom = false;
 
 const visibleInvalidations: Rect[] = [];
 const nonVisibleInvalidations: Rect[] = [];
@@ -68,6 +69,7 @@ let pendingStateChange = false;
 let running = false;
 let idleAreaPaint = false;
 let zoomResetTimeout: number | undefined;
+let renderedDocPercentage: number  = 0;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -76,8 +78,11 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       break;
     case 's': // scroll
       if (!activeCanvas) return;
+      console.log("scrol")
       idleAreaPaint = false;
+      didZoom = false
       scheduledTopTwips = data.y * scaledTwips;
+      renderedDocPercentage = scheduledTopTwips / Atomics.load(d.docHeightTwips, 0);
       // Checks that the tile row has changed since the last scroll
       if (Math.floor(scheduledTopTwips / tileDimTwips) !== renderedTileTop) {
         didScroll = true;
@@ -101,12 +106,14 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 'z': // zoom
       if (!activeCanvas) return;
       // Clear the previously scheduled zoom reset
-      if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
+      console.log("zoom")
 
+      didZoom = true;
       idleAreaPaint = false;
       zoom(data.s, data.d, data.y);
 
       // Ensure we debounce a reset in combination with shouldStopPaint
+      if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
       zoomResetTimeout = setTimeout(() => {
         setState(RenderState.RESET);
         Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
@@ -120,7 +127,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
 function zoom(in_scale: number, in_dpi: number, in_y: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
-
   scaledTwips =
     clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
     LOK_INTERNAL_TWIPS_TO_PX;
@@ -131,11 +137,11 @@ function zoom(in_scale: number, in_dpi: number, in_y: number) {
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
 
-  // Update the top position to the new scale
-  scheduledTopTwips = in_y * scaledTwips;
+  scheduledTopTwips = docHeightTwips * renderedDocPercentage;
 
-  // Set this as a reference for the new position for the next scroll event
+  //Set this as a reference for the new position for the next scroll event
   renderedTileTop = Math.floor(scheduledTopTwips / tileDimTwips);
+  postMessage({ s: scheduledTopTwips / scaledTwips })
 
   scale = in_scale;
   dpi = in_dpi;
@@ -287,21 +293,28 @@ function rendering() {
     docWidthTwips,
     visibleHeight,
   ]);
-  // TODO: mark missing and invalidate
+
+  if (didZoom) {
+    postMessage({ s: renderedTopTwips / scaledTwips })
+  }
   ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
+
   if (renderedHeightTwips !== scheduledHeightTwips) {
     canvases[0].height = scheduledHeightPx;
     canvases[1].height = scheduledHeightPx;
   }
+
   if (activeCanvas.width !== scheduledWidthPx) {
     canvases[0].width = scheduledWidthPx;
     canvases[1].width = scheduledWidthPx;
   }
+
   renderedHeightTwips = visibleHeight;
   renderedTopTwips = visibleTop;
 
   for (let y = 0; y < rangesToRender.length && !shouldPausePaint(); ++y) {
     const [start, endInclusive] = rangesToRender[y];
+    console.log(start, endInclusive);
     for (let x = start; x <= endInclusive; ++x) {
       // TODO: mark missing and invalidate
       const [xCoord] = tileIndexToGridCoord(x);
@@ -312,6 +325,7 @@ function rendering() {
       }
       const dstX: number = xCoord * d.tileSize;
       const dstY: number = y * d.tileSize;
+
       ctx.beginPath();
       ctx.putImageData(img, dstX, dstY);
       ctx.closePath();
@@ -321,6 +335,7 @@ function rendering() {
   Atomics.store(d.pendingFullPaint, 0, 0);
 
   setState(RenderState.IDLE);
+
   if (didScroll) {
     renderedTileTop = Math.floor(renderedTopTwips / tileDimTwips);
     postMessage({ s: activeCanvasIndex });
@@ -425,6 +440,7 @@ function stateMachine() {
 
 let idleDebounceTimeout: number;
 function paintNonVisibleAreasWhileIdle(): void {
+  console.log("non visible")
   if (!idleAreaPaint) return;
   const visibleHeight = renderedHeightTwips;
   const docHeight = Atomics.load(d.docHeightTwips, 0);
@@ -645,17 +661,14 @@ function getState(): RenderState {
 }
 
 function clipToNearest8PxZoom(w: number, s: number): number {
-  // TODO: restore proper 8px clipping, once we figure out
-  // how to deal with mis-aligned page boundaries
-  return Math.round(w * s) / w;
-  // const scaledWidth: number = Math.ceil(w * s);
-  // const mod: number = scaledWidth % 8;
-  // if (mod === 0) return s;
+  const scaledWidth: number = Math.ceil(w * s);
+  const mod: number = scaledWidth % 8;
+  if (mod === 0) return s;
 
-  // return Math.abs((scaledWidth - mod) / w - s) <
-  //   Math.abs((scaledWidth + 8 - mod) / w - s)
-  //   ? (scaledWidth - mod) / w
-  //   : (scaledWidth + 8 - mod) / w;
+  return Math.abs((scaledWidth - mod) / w - s) <
+    Math.abs((scaledWidth + 8 - mod) / w - s)
+    ? (scaledWidth - mod) / w
+    : (scaledWidth + 8 - mod) / w;
 }
 
 function removeContainedAdjacentRects(rects: Rect[]): Rect[] {

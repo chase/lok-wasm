@@ -88,12 +88,12 @@ function observedSize(
   });
 }
 
-function scaleRectCssPx(rect: RectangleTwips, zoom: number): RectanglePx {
+function scaleRectCssPx(rect: RectangleTwips, zoom: number, dpi: number): RectanglePx {
   return {
-    x: twipsToCssPx(rect.x, zoom),
-    y: twipsToCssPx(rect.y, zoom),
-    height: twipsToCssPx(rect.height, zoom),
-    width: twipsToCssPx(rect.width, zoom),
+    x: twipsToCssPx(rect.x, zoom, dpi),
+    y: twipsToCssPx(rect.y, zoom, dpi),
+    height: twipsToCssPx(rect.height, zoom, dpi),
+    width: twipsToCssPx(rect.width, zoom, dpi),
   }
 }
 
@@ -131,13 +131,17 @@ export function OfficeDocument(props: Props) {
   const docSizePx = () => {
     const [getZoom] = getOrCreateZoomSignal(() => props.doc);
     const zoom = getZoom();
-    return docSizeTwips()?.map((i) => twipsToCssPx(i, zoom));
+    const getDPI = getOrCreateDPISignal();
+    const dpi = getDPI()
+    return docSizeTwips()?.map((i) => twipsToCssPx(i, zoom, dpi));
   }
   const rectsPx = () => {
     const [getZoom] = getOrCreateZoomSignal(() => props.doc);
+    const getDPI = getOrCreateDPISignal();
+    const dpi = getDPI()
     const zoom = getZoom();
     return rectsTwips()
-      ?.map(rect => scaleRectCssPx(rect, zoom))
+      ?.map(rect => scaleRectCssPx(rect, zoom, dpi))
       .filter((rect) => rect.width && rect.height);
   }
 
@@ -197,13 +201,18 @@ export function OfficeDocument(props: Props) {
     return result;
   });
 
+  let previousYPx = 0;
+
   const handleScroll = frameThrottle(async (yPx, xPx) => {
     handleScroll.cancel();
+    if (Math.floor(yPx) === previousYPx) return;
+    previousYPx = Math.floor(yPx);
 
     // We still need to apply a transform to the 
     // canvas when zooming in/out without triggering
     // a render that would be caused by the scroll event
     if (isZooming()) {
+      console.log("is zooming");
       const c = activeCanvas === 0 ? canvas0() : canvas1();
       if (!c) return;
       c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % TILE_DIM_PX}px, 0)`;
