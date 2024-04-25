@@ -201,18 +201,12 @@ export function OfficeDocument(props: Props) {
     return result;
   });
 
-  let previousYPx = 0;
-
   const handleScroll = frameThrottle(async (yPx, xPx) => {
     handleScroll.cancel();
-    if (Math.floor(yPx) === previousYPx) return;
-    previousYPx = Math.floor(yPx);
-
     // We still need to apply a transform to the 
     // canvas when zooming in/out without triggering
     // a render that would be caused by the scroll event
     if (isZooming()) {
-      console.log("is zooming");
       const c = activeCanvas === 0 ? canvas0() : canvas1();
       if (!c) return;
       c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % TILE_DIM_PX}px, 0)`;
