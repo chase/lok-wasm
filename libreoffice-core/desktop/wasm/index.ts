@@ -48,16 +48,21 @@ export function conversionTable(zoom: number, dpi: number) {
   };
 }
 
+function getScaledTwips(zoom: number, dpi: number) {
+  return clipToNearest8PxZoom(
+    TILE_DIM_PX,
+    1 / (zoom * dpi)
+  ) * LOK_INTERNAL_TWIPS_TO_PX;
+}
+
 /** CSS pixels are DPI indepdendent */
 export function twipsToCssPx(twips: number, zoom: number, dpi: number) {
-  const scaledTwips =  clipToNearest8PxZoom(TILE_DIM_PX, 1 / (zoom * dpi)) * LOK_INTERNAL_TWIPS_TO_PX;
-  return twips / scaledTwips;
+  return twips / getScaledTwips(zoom, dpi);
 }
 
 /** CSS pixels are DPI indepdendent */
 export function cssPxToTwips(px: number, zoom: number, dpi: number) {
-  const scaledTwips = clipToNearest8PxZoom(TILE_DIM_PX, 1 / (zoom * dpi)) * LOK_INTERNAL_TWIPS_TO_PX;
-  return px * scaledTwips;
+  return px *  getScaledTwips(zoom, dpi);
 }
 
 const worker: Ref<Worker> = {};
