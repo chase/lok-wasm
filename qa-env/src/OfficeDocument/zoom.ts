@@ -49,7 +49,7 @@ export function updateZoom(
   const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, roundedZoom));
 
   const scrollArea = scrollAreaRef();
-  let newScrollTop: number | undefined;
+  let newScrollTop: number = 0;
 
   // We need to adjust the scroll position manually
   // to keep the relative position of the document the same
@@ -58,10 +58,11 @@ export function updateZoom(
     const scrollTop = scrollArea.scrollTop;
     newScrollTop = scrollTop / zoom() * newZoom;
     scrollArea.scrollTop =  newScrollTop
+  } else {
+    console.error(`tried to update zoom without scrollAreaRef`)
   }
 
-  setZoom(doc, newZoom, newScrollTop!);
-  setTimeout(() => setIsZooming(false), 100);
+  setZoom(doc, newZoom, newScrollTop);
   return newZoom;
 }
 
@@ -95,7 +96,7 @@ export async function zoomToFit(
       ? Math.min(DEFAULT_ZOOM, scaleFactor * zoom)
       : scaleFactor * zoom;
 
-  setZoom(doc, newZoom);
+  setZoom(doc, newZoom, scrollAreaRef()?.scrollTop ?? 0);
 
   return newZoom;
 }

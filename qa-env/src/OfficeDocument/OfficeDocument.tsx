@@ -21,7 +21,7 @@ import { getOrCreateFocusedSignal } from './focus';
 import { frameThrottle } from './frameThrottle';
 import { getOrCreateZoomSignal } from './zoom';
 import { getOrCreateDPISignal } from './twipConversion';
-import { isZooming } from '../App';
+import { isZooming, setIsZooming } from '../App';
 
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
 
@@ -207,6 +207,7 @@ export function OfficeDocument(props: Props) {
       const c = activeCanvas === 0 ? canvas0() : canvas1();
       if (!c) return;
       c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % TILE_DIM_PX}px, 0)`;
+      setIsZooming(false);
       return;
     };
 
