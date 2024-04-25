@@ -27,7 +27,6 @@ export async function setZoom(doc: Accessor<DocumentClient>, level: number) {
   const [, set] = getOrCreateZoomSignal(doc);
   const getDpi = getOrCreateDPISignal();
   const dpi = getDpi();
-  setIsZooming(true);
   doc().setZoom(level, dpi, 0).then((newTop) => {
     console.log("NEW TOP", newTop);
     scrollAreaRef()!.scrollTop = newTop;
@@ -47,9 +46,22 @@ export function updateZoom(
   doc: Accessor<DocumentClient>,
   offset: number
 ): number {
+
+  setIsZooming(true);
   const [zoom] = getOrCreateZoomSignal(doc);
   const roundedZoom = Math.round((zoom() + offset) / Epsilon) * Epsilon;
   const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, roundedZoom));
+  const scrollArea = scrollAreaRef();
+  let newScrollTop: number = 0;
+
+  // We need to adjust the scroll position manually
+  // to keep the relative position of the document the same
+  // after the zoom level changes
+  if (scrollArea) {
+    const scrollTop = scrollArea.scrollTop;
+    newScrollTop = scrollTop / zoom() * newZoom;
+    scrollArea.scrollTop =  newScrollTop
+  }
 
   setZoom(doc, newZoom);
   return newZoom;

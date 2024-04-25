@@ -106,7 +106,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 'z': // zoom
       if (!activeCanvas) return;
       // Clear the previously scheduled zoom reset
-      console.log("zoom")
 
       didZoom = true;
       idleAreaPaint = false;
