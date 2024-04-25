@@ -5923,43 +5923,9 @@ static bool getFromTransferable(
     const css::uno::Reference<css::datatransfer::XTransferable> &xTransferable,
     const OString &aInMimeType, OString &aRet);
 
-// MACRO: {
-namespace {
-    char* leakyStrDup(const std::string_view& view) {
-        char* pMemory = static_cast<char*>(malloc(view.size() + 1));
-        assert(pMemory); // don't tolerate failed allocations.
-        std::memcpy(pMemory, view.data(), view.size());
-        pMemory[view.size()] = '\0';
-        return pMemory;
-    }
-}
-// MACRO: }
 
 
-// MACRO: getters for pagesetup commandValues {
-static char* getPageColor()
-{
-    SfxViewShell* pViewShell = SfxViewShell::Current();
-    SfxViewFrame* pViewFrm = pViewShell ? pViewShell->GetViewFrame() : nullptr;
-    if (!pViewFrm)
-    {
-        return nullptr;
-    }
 
-    static constexpr std::string_view defaultColorHex = "\"#ffffff\"";
-
-    std::unique_ptr<SfxPoolItem> pState;
-    const SfxItemState eState (pViewFrm->GetBindings().QueryState(SID_ATTR_PAGE_COLOR, pState));
-    if (eState < SfxItemState::DEFAULT) {
-        return leakyStrDup(defaultColorHex);
-    }
-    if (pState)
-    {
-        OUString aColorHex = u"\"" + static_cast<XFillColorItem*>(pState->Clone())->GetColorValue().AsRGBHEXString() + u"\"";
-        return convertOUString(aColorHex);
-    }
-    return leakyStrDup(defaultColorHex);
-}
 
 
 static char* getPageSize()
@@ -5983,20 +5949,6 @@ static char* getPageSize()
     return aJson.extractData();
 }
 
-static char* getPageOrientation ()
-{
-    SfxViewFrame* pViewFrm = SfxViewFrame::Current();
-    if (!pViewFrm)
-    {
-        return nullptr;
-    }
-    const SvxSizeItem* pSizeItem;
-    pViewFrm->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_SIZE, pSizeItem);
-
-    bool bIsLandscape = (pSizeItem->GetSize().Width() >= pSizeItem->GetSize().Height());
-
-    return bIsLandscape ? leakyStrDup("\"landscape\"") : leakyStrDup("\"portrait\"");
-}
 
 static char* getPageMargins()
 {
@@ -6904,10 +6856,6 @@ static char* doc_getCommandValues(LibreOfficeKitDocument* pThis, const char* pCo
     }
 
     // MACRO: page setup {
-    if (!strcmp(pCommand, ".uno:PageColor"))
-    {
-        return getPageColor();
-    }
     if (!strcmp(pCommand, ".uno:PageSize"))
     {
         return getPageSize();
@@ -6915,10 +6863,6 @@ static char* doc_getCommandValues(LibreOfficeKitDocument* pThis, const char* pCo
     if (!strcmp(pCommand, ".uno:PageMargins"))
     {
         return getPageMargins();
-    }
-    if (!strcmp(pCommand, ".uno:PageOrientation"))
-    {
-        return getPageOrientation();
     }
     // MACRO: }
 

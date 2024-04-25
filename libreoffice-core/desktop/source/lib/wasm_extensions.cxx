@@ -1,10 +1,22 @@
+#include "editeng/sizeitem.hxx"
 #include "sal/log.hxx"
+#include "sfx2/bindings.hxx"
+#include "sfx2/dispatch.hxx"
+#include "sfx2/viewfrm.hxx"
+#include "sfx2/viewsh.hxx"
+#include "svl/poolitem.hxx"
+#include "svx/rulritem.hxx"
+#include "svx/xflclit.hxx"
+#include "tools/json_writer.hxx"
 #include <algorithm>
 #include <cstdlib>
 #include <lib/wasm_extensions.hxx>
 #include <emscripten/bind.h>
 #include <emscripten/threading.h>
 #include <pthread.h>
+#include <rtl/ustring.hxx>
+#include <rtl/string.hxx>
+#include <svx/svxids.hrc>
 
 namespace desktop
 {
@@ -107,6 +119,49 @@ void TileRendererData::reset()
     __c11_atomic_store(&pendingFullPaint, 1, __ATOMIC_SEQ_CST);
     __c11_atomic_store(&hasInvalidations, 1, __ATOMIC_SEQ_CST);
     __builtin_wasm_memory_atomic_notify((int32_t*)&hasInvalidations, MAX_THREADS_TO_NOTIFY);
+}
+
+static std::string OUStringToString(OUString str) {
+    return OUStringToOString(str, RTL_TEXTENCODING_UTF8).getStr();
+}
+
+std::string getPageColor()
+{
+    SfxViewShell* pViewShell = SfxViewShell::Current();
+    SfxViewFrame* pViewFrm = pViewShell ? pViewShell->GetViewFrame() : nullptr;
+    if (!pViewFrm)
+    {
+        return nullptr;
+    }
+
+    static constexpr std::string_view defaultColorHex = "\"#ffffff\"";
+
+    std::unique_ptr<SfxPoolItem> pState;
+    const SfxItemState eState (pViewFrm->GetBindings().QueryState(SID_ATTR_PAGE_COLOR, pState));
+    if (eState < SfxItemState::DEFAULT) {
+        return std::string (defaultColorHex);
+    }
+    if (pState)
+    {
+        OUString aColorHex = u"\"" + static_cast<XFillColorItem*>(pState->Clone())->GetColorValue().AsRGBHEXString() + u"\"";
+        return OUStringToString(aColorHex);
+    }
+    return std::string (defaultColorHex);
+}
+
+std::string getPageOrientation ()
+{
+    SfxViewFrame* pViewFrm = SfxViewFrame::Current();
+    if (!pViewFrm)
+    {
+        return nullptr;
+    }
+    const SvxSizeItem* pSizeItem;
+    pViewFrm->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_SIZE, pSizeItem);
+
+    bool bIsLandscape = (pSizeItem->GetSize().Width() >= pSizeItem->GetSize().Height());
+
+    return bIsLandscape ? "\"landscape\"" : "\"portrait\"";
 }
 
 }
