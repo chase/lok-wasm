@@ -10,8 +10,6 @@ interface Props
   doc: DocumentClient;
 }
 
-
-
 export function Selection(props: Props) {
   const [local, others] = splitProps(props, ['class', 'doc']);
   const doc = () => local.doc;
@@ -29,7 +27,8 @@ export function Selection(props: Props) {
         : undefined
   );
 
-  const scaledSelection = createMemo(() => selection()?.map((rect) => rect.map((x) => twipsToCssPx(x, zoom()))));
+  const scaledSelection = createMemo(() =>
+    selection()?.map((rect) => rect.map((x) => twipsToCssPx(x, zoom()))));
 
     return (
     <Show when={scaledSelection()}>
