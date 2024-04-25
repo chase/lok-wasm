@@ -215,6 +215,7 @@ export type ToTileRenderer =
       s: number;
       /** dpi */
       d: number;
+      /** scrollTop position in px */
       y: number;
     };
 

@@ -78,6 +78,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       if (!activeCanvas) return;
       idleAreaPaint = false;
       scheduledTopTwips = data.y * scaledTwips;
+      // Checks that the tile row has changed since the last scroll
       if (Math.floor(scheduledTopTwips / tileDimTwips) !== renderedTileTop) {
         didScroll = true;
         activeCanvasIndex ^= 1;
