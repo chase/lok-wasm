@@ -1,7 +1,7 @@
 import { twipsToCssPx } from '@lok';
 import { CallbackType } from '@lok/lok_enums';
 import { DocumentClient } from '@lok/shared';
-import { For, JSX, Show, splitProps } from 'solid-js';
+import { For, JSX, Show, createMemo, splitProps } from 'solid-js';
 import { createDocEventSignal } from './docEventSignal';
 import { getOrCreateZoomSignal } from './zoom';
 
@@ -22,14 +22,18 @@ export function Selection(props: Props) {
         ? payload
             .split('; ')
             .map((x) =>
-              x.split(', ').map((x) => twipsToCssPx(parseInt(x), zoom()))
+              x.split(', ').map((x) => parseInt(x))
             )
         : undefined
   );
-  return (
-    <Show when={selection()}>
+
+  const scaledSelection = createMemo(() =>
+    selection()?.map((rect) => rect.map((x) => twipsToCssPx(x, zoom()))));
+
+    return (
+    <Show when={scaledSelection()}>
       <div class="mix-blend-multiply opacity-20 pointer-events-none absolute top-0">
-        <For each={selection()}>
+        <For each={scaledSelection()}>
           {(rect: number[]) => (
             <div
               class={`bg-blue-400 pointer-events-none absolute top-0 ${local.class ?? ''}`}

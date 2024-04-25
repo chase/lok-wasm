@@ -13,8 +13,6 @@ $(eval $(call gb_Package_add_files,desktop_wasm,$(LIBO_BIN_FOLDER),\
 	shared.d.ts \
 	tile_renderer_worker.js \
 	tile_renderer_worker.d.ts \
-	webgl2_draw_image.js \
-	webgl2_draw_image.d.ts \
 	lok_enums.js \
 	lok_enums.d.ts \
 	soffice.d.ts \

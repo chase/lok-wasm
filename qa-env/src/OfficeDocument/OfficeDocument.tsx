@@ -21,6 +21,7 @@ import { getOrCreateFocusedSignal } from './focus';
 import { frameThrottle } from './frameThrottle';
 import { getOrCreateZoomSignal } from './zoom';
 import { getOrCreateDPISignal } from './twipConversion';
+import { isZooming, setIsZooming } from '../App';
 
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
 
@@ -47,6 +48,8 @@ declare module 'solid-js' {
   }
 }
 false && observedSize; // workaround for "unused" function warning with Solid directives
+
+export const [canvasObjectFit, setCanvasObjectFit] = createSignal<"cover" | "contain" | "fill">("cover");
 
 function calcCanvasHeight(heightPx: number | undefined) {
   return heightPx
@@ -97,7 +100,6 @@ function scaleRectCssPx(rect: RectangleTwips, zoom: number): RectanglePx {
 const didInitialRender = new WeakSet<DocumentClient>();
 
 export function OfficeDocument(props: Props) {
-  let scrollAreaRef: HTMLDivElement | undefined;
 
   /** TODO: add DPI observer and handle DPI change */
   /** TODO: add context loss for machine if left asleep */
@@ -197,6 +199,18 @@ export function OfficeDocument(props: Props) {
 
   const handleScroll = frameThrottle(async (yPx, xPx) => {
     handleScroll.cancel();
+
+    // We still need to apply a transform to the 
+    // canvas when zooming in/out without triggering
+    // a render that would be caused by the scroll event
+    if (isZooming()) {
+      const c = activeCanvas === 0 ? canvas0() : canvas1();
+      if (!c) return;
+      c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % TILE_DIM_PX}px, 0)`;
+      setIsZooming(false);
+      return;
+    };
+
     const c0 = canvas0();
     const c1 = canvas1();
     if (!c0 || !c1) return;
@@ -227,9 +241,8 @@ export function OfficeDocument(props: Props) {
               ref={setCanvas0}
               class="absolute top-0 pointer-events-none"
               style={{
-                // TODO: object-fit should dynamically set while zooming to use fill so we get "zooming" for free until the render actually finishes
-                // 'object-fit': 'cover',
-                'object-position': 'top left',
+                'object-fit': canvasObjectFit(),
+                'object-position': 'top center',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
                 height: `${canvasHeight()!}px`,
@@ -239,9 +252,8 @@ export function OfficeDocument(props: Props) {
               ref={setCanvas1}
               class="absolute top-0 pointer-events-none"
               style={{
-                // TODO: object-fit should dynamically set while zooming to use fill so we get "zooming" for free until the render actually finishes
-                'object-fit': 'cover',
-                'object-position': 'top left',
+                'object-fit': canvasObjectFit(),
+                'object-position': 'top center',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
                 height: `${canvasHeight()}px`,
@@ -253,7 +265,7 @@ export function OfficeDocument(props: Props) {
         <ScrollArea
           class="absolute top-0"
           onScroll={handleScroll}
-          ref={scrollAreaRef}
+          ref={props.scrollAreaRef}
         >
           {docSizePx() && (
             <div

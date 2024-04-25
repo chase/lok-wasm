@@ -2,6 +2,7 @@ import { twipsToCssPx } from '@lok';
 import { DocumentClient } from '@lok/shared';
 import { Accessor, Signal, createSignal } from 'solid-js';
 import { getOrCreateDPISignal } from './twipConversion';
+import { scrollAreaRef, setIsZooming } from '../App';
 
 export const DEFAULT_ZOOM = 0.8;
 export const MAX_ZOOM = 3;
@@ -22,32 +23,46 @@ export function getOrCreateZoomSignal(
   return result;
 }
 
-export function setZoom(doc: Accessor<DocumentClient>, level: number) {
+export function setZoom(doc: Accessor<DocumentClient>, level: number, yTop: number) {
   const [, set] = getOrCreateZoomSignal(doc);
   const getDpi = getOrCreateDPISignal();
   const dpi = getDpi();
+  doc().setZoom(level, dpi, yTop);
   set(level);
-  doc().setZoom(level, dpi);
 }
-
 /**
  * @param offset offset from the current zoom level
  * @returns the new zoom level
  * @example
- *   // zoom out by 10%
- *   updateZoom(doc, -0.1);
- *   // zoom in by 10%
- *   updateZoom(doc, 0.1);
+ * // zoom out by 10%
+ * updateZoom(doc, -0.1);
+ * // zoom in by 10%
+ * updateZoom(doc, 0.1);
  */
 export function updateZoom(
   doc: Accessor<DocumentClient>,
   offset: number
 ): number {
   const [zoom] = getOrCreateZoomSignal(doc);
-
+  setIsZooming(true);
   const roundedZoom = Math.round((zoom() + offset) / Epsilon) * Epsilon;
   const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, roundedZoom));
-  setZoom(doc, newZoom);
+
+  const scrollArea = scrollAreaRef();
+  let newScrollTop: number = 0;
+
+  // We need to adjust the scroll position manually
+  // to keep the relative position of the document the same
+  // after the zoom level changes
+  if (scrollArea) {
+    const scrollTop = scrollArea.scrollTop;
+    newScrollTop = scrollTop / zoom() * newZoom;
+    scrollArea.scrollTop =  newScrollTop
+  } else {
+    console.error(`tried to update zoom without scrollAreaRef`)
+  }
+
+  setZoom(doc, newZoom, newScrollTop);
   return newZoom;
 }
 
@@ -81,7 +96,7 @@ export async function zoomToFit(
       ? Math.min(DEFAULT_ZOOM, scaleFactor * zoom)
       : scaleFactor * zoom;
 
-  setZoom(doc, newZoom);
+  setZoom(doc, newZoom, scrollAreaRef()?.scrollTop ?? 0);
 
   return newZoom;
 }
