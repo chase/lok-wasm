@@ -415,26 +415,13 @@ const handler: AsyncMessage = {
     scale: number,
     dpi: number,
     yTop: number,
-  ): Promise<number> {
-    const worker = tileRenderer[ref]?.[viewId];
-    if (!worker) return;
-    const zoomPromise = new Promise<number>((resolve) => {
-      const handleMessage = ({ data }: MessageEvent) => {
-        if (data.s != null) {
-          resolve(data.s);
-        }
-        worker.removeEventListener('message', handleMessage);
-      };
-      worker.addEventListener('message', handleMessage);
-    });
-    worker.postMessage({
+  ): Promise<void> {
+    tileRenderer[ref][viewId]?.postMessage({
       t: 'z',
       s: scale,
       d: dpi,
       y: yTop,
     } as ToTileRenderer);
-
-    return zoomPromise;
   },
 };
 
