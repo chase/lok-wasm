@@ -27,6 +27,9 @@ async function fileOpen(files: FileList | null) {
   await doc.initializeForRendering({
     author: 'Macro User',
   });
+
+  await doc.initExpandedStorage();
+
   setDoc(doc);
   setLoading(false);
   doc.on(CallbackType.ERROR, console.error);
@@ -38,6 +41,12 @@ async function saveAsPDF(doc: DocumentClient | null) {
   const buffer = await doc.save("pdf")
   downloadFile("Pdf Export.pdf", buffer, "application/pdf");
 };
+
+async function saveToExpanded(doc: DocumentClient | null) {
+  if (!doc) return;
+  const result = await doc.saveToExpandedStorage(0, "")
+  console.log(result);
+}
 
 function App() {
   return (
@@ -58,6 +67,9 @@ function App() {
         <div class = "h-[70px] border-b border border-gray-300 flex items-center bg-gray-200 px-2">
           <button onClick={() => saveAsPDF(getDoc())}>
             Save As PDF
+          </button>
+          <button onClick={() => saveToExpanded(getDoc())}>
+            Save To Expanded
           </button>
         </div>
       </Show>

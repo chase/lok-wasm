@@ -58,6 +58,8 @@ export type DocumentMethods = {
   newView(): number;
   /** returns the number of pages */
   parts(): number;
+  initExpandedStorage(): void;
+  saveToExpandedStorage(part: number, filterOptions: string): Array<{ path: string; sha: string }>;
   /** returns the rectangles of each page in twips (1/12 pt) */
   partRectanglesTwips(): RectangleTwips[];
   /** returns document size in twips */

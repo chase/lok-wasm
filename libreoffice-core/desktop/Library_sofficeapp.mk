@@ -9,12 +9,7 @@
 
 $(eval $(call gb_Library_Library,sofficeapp))
 
-$(eval $(call gb_Library_set_include,sofficeapp,\
-    $$(INCLUDE) \
-    -I$(SRCDIR)/desktop/inc \
-    -I$(SRCDIR)/desktop/source/inc \
-    -I$(SRCDIR)/desktop/source/deployment/inc \
-))
+
 
 $(eval $(call gb_Library_use_externals,sofficeapp, \
 	$(if $(ENABLE_BREAKPAD),breakpad) \
@@ -40,6 +35,13 @@ $(eval $(call gb_Library_use_custom_headers,sofficeapp,\
 $(eval $(call gb_Library_use_api,sofficeapp,\
 	udkapi \
 	offapi \
+))
+
+$(eval $(call gb_Library_set_include,sofficeapp,\
+    $$(INCLUDE) \
+    -I$(SRCDIR)/desktop/inc \
+    -I$(SRCDIR)/desktop/source/inc \
+    -I$(SRCDIR)/desktop/source/deployment/inc \
 ))
 
 $(eval $(call gb_Library_add_defs,sofficeapp,\

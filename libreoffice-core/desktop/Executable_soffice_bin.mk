@@ -65,6 +65,7 @@ $(eval $(call gb_Executable_set_include,soffice_bin,\
 $(eval $(call gb_Library_use_custom_headers,soffice_bin,\
 	officecfg/registry \
 ))
+
 $(eval $(call gb_Library_use_api,soffice_bin,\
 	udkapi \
 	offapi \

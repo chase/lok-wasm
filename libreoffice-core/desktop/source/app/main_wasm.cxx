@@ -52,6 +52,18 @@ public:
         , doc_(instance()->documentLoad(path.c_str()))
     {
     }
+
+    void initExpandedStorage() {
+        expanded_storage = new desktop::ExpandedStorage();
+    }
+
+    val saveToExpandedStorage() {
+        if (expanded_storage == nullptr) {
+            return val::undefined();
+        }
+        return val(expanded_storage->saveToExpandedStorage());
+    }
+
     bool valid() { return doc_ != nullptr; }
 
     bool saveAs(std::string url, std::optional<std::string> format,
@@ -336,6 +348,7 @@ private:
 
     const uint32_t ref_;
     lok::Document* doc_ = nullptr;
+    desktop::ExpandedStorage* expanded_storage = nullptr;
     std::unordered_map<int, std::unordered_set<int>> subscribed_events_;
     std::unordered_map<int, bool> callback_registered_;
     bool rendering_tiles_ = false;
@@ -394,11 +407,17 @@ EMSCRIPTEN_BINDINGS(lok)
 {
     register_optional<bool>();
     register_optional<std::string>();
+    value_object<desktop::ExpandedPart>("ExpandedPart")
+        .field("path", &desktop::ExpandedPart::path)
+        .field("sha", &desktop::ExpandedPart::sha);
+    register_vector<desktop::ExpandedPart>("ExpandedPart");
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
 
     class_<DocumentClient>("Document")
         .constructor<std::string>()
+        .function("initExpandedStorage", &DocumentClient::initExpandedStorage)
+        .function("saveToExpandedStorage", &DocumentClient::saveToExpandedStorage)
         .function("valid", &DocumentClient::valid)
         .function("saveAs", &DocumentClient::saveAs)
         .function("getParts", &DocumentClient::getParts)
@@ -426,3 +445,4 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("ref", &DocumentClient::ref)
         .function("newView", &DocumentClient::newView);
 }
+

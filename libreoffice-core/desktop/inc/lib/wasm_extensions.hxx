@@ -1,14 +1,17 @@
 #pragma once
 
+#include "rtl/ustring.hxx"
+#include <com/sun/star/uno/Reference.h>
 #include <LibreOfficeKit/LibreOfficeKit.h>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 
 #include <cstdint>
 #include <desktop/dllapi.h>
+#include <unordered_map>
 #include <vector>
 
-// This makes direct extensions to lib/init.cxx much easier to expose in main_wasm.cxx
 
+// This makes direct extensions to lib/init.cxx much easier to expose in main_wasm.cxx
 namespace desktop
 {
 
@@ -22,6 +25,7 @@ enum class RenderState : int32_t
 };
 
 static constexpr size_t MAX_INVALIDATION_STACK = 4096;
+
 
 // Used for fast communication between the tile renderer worker and the C++ thread
 struct TileRendererData
@@ -70,5 +74,29 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 
     std::string getPageColor();
     std::string getPageOrientation();
+};
+
+struct ExpandedPart {
+    std::string path;
+    std::string sha;
+};
+
+using namespace com::sun::star;
+
+class ExpandedStorage {
+
+    std::unordered_map<std::string, ExpandedPart> expandedParts;
+    std::chrono::time_point<std::chrono::system_clock> lastModified;
+
+    public:
+        ExpandedStorage();
+        ~ExpandedStorage();
+
+        void initializeExpandedParts();
+        std::vector<ExpandedPart> saveToExpandedStorage();
+        std::string readFileByPath(const std::string &path);
+        std::string readFileBySha(const std::string &sha);
+        bool removeFileByPath(const std::string &path);
+        bool addFileByPath(const std::string &path, const std::string &content);
 };
 }

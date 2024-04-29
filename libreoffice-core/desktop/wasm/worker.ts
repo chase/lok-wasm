@@ -83,6 +83,16 @@ const handler: AsyncMessage = {
     return self.byRef(ref)?.getParts();
   },
 
+  initExpandedStorage: async function (ref: DocumentRef): Promise<void> {
+    await lokPromise;
+    return byRef(ref)?.initExpandedStorage();
+  },
+
+  saveToExpandedStorage: async function (ref: DocumentRef): Promise<Array<{ path: string, sha: string}>> {
+    await lokPromise;
+    return byRef(ref)?.saveToExpandedStorage();
+  },
+
   partRectanglesTwips: async function (
     ref: DocumentRef
   ): Promise<RectangleTwips[]> {
