@@ -20,9 +20,6 @@ async function fileOpen(files: FileList | null) {
     cleanup(oldDoc);
   }
   const doc = await loadDocument(name, blob);
-  doc?.getCommandValues(".uno:PageOrientation").then((value) => {
-    console.log(value);
-    })
   if (!doc) {
     console.error('failure!');
     return;
