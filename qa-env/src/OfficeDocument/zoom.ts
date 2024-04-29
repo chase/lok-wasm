@@ -44,8 +44,6 @@ export function updateZoom(
   offset: number
 ): number {
   const [zoom] = getOrCreateZoomSignal(doc);
-  const getDpi = getOrCreateDPISignal();
-  const dpi = getDpi();
   setIsZooming(true);
   const roundedZoom = Math.round((zoom() + offset) / Epsilon) * Epsilon;
   const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, roundedZoom));

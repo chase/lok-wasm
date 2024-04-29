@@ -25,12 +25,10 @@ function domMouseButtonsToVclButtons(evt: PartialMouseEvent) {
   return newButtons;
 }
 
-
 function handleMouseEvent(
   doc: DocumentClient,
   evt: MouseEvent
 ): [x: number, y: number] {
-
   const [getZoom] = getOrCreateZoomSignal(() => doc);
   const zoom = getZoom();
   return [cssPxToTwips(evt.offsetX, zoom), cssPxToTwips(evt.offsetY, zoom)];
