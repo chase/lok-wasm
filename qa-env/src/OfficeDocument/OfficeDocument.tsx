@@ -134,7 +134,7 @@ export function OfficeDocument(props: Props) {
     return docSizeTwips()?.map((i) => twipsToCssPx(i, zoom));
   }
   const rectsPx = () => {
-  const [getZoom] = getOrCreateZoomSignal(() => props.doc);
+    const [getZoom] = getOrCreateZoomSignal(() => props.doc);
     const zoom = getZoom();
     return rectsTwips()
       ?.map(rect => scaleRectCssPx(rect, zoom))
