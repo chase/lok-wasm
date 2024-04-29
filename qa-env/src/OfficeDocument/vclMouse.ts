@@ -2,7 +2,6 @@ import { DocumentClient } from '@lok/shared';
 import { eventModifiers } from './vclKeys';
 import { getOrCreateZoomSignal } from './zoom';
 import { cssPxToTwips } from '@lok';
-import { getOrCreateDPISignal } from './twipConversion';
 
 const MOUSE_MOVE_INTERVAL_MS = 200;
 
@@ -32,11 +31,9 @@ function handleMouseEvent(
   evt: MouseEvent
 ): [x: number, y: number] {
 
-  const getDPI = getOrCreateDPISignal();
-  const dpi = getDPI();
   const [getZoom] = getOrCreateZoomSignal(() => doc);
   const zoom = getZoom();
-  return [cssPxToTwips(evt.offsetX, zoom, dpi), cssPxToTwips(evt.offsetY, zoom, dpi)];
+  return [cssPxToTwips(evt.offsetX, zoom), cssPxToTwips(evt.offsetY, zoom)];
 }
 
 export function handleMouseDown(doc: DocumentClient, evt: MouseEvent) {

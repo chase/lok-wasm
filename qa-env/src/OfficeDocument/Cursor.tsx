@@ -26,7 +26,7 @@ export function Cursor(props: Props) {
   const dpi = getOrCreateDPISignal();
   const pos = createMemo(() => {
     const zoom_ = zoom();
-    return cursorPosition()?.map((x) => twipsToCssPx(x, zoom_, dpi()));
+    return cursorPosition()?.map((x) => twipsToCssPx(x, zoom_));
   });
 
   return (

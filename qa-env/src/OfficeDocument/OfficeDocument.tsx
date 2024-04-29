@@ -88,12 +88,12 @@ function observedSize(
   });
 }
 
-function scaleRectCssPx(rect: RectangleTwips, zoom: number, dpi: number): RectanglePx {
+function scaleRectCssPx(rect: RectangleTwips, zoom: number): RectanglePx {
   return {
-    x: twipsToCssPx(rect.x, zoom, dpi),
-    y: twipsToCssPx(rect.y, zoom, dpi),
-    height: twipsToCssPx(rect.height, zoom, dpi),
-    width: twipsToCssPx(rect.width, zoom, dpi),
+    x: twipsToCssPx(rect.x, zoom),
+    y: twipsToCssPx(rect.y, zoom),
+    height: twipsToCssPx(rect.height, zoom),
+    width: twipsToCssPx(rect.width, zoom),
   }
 }
 
@@ -131,18 +131,13 @@ export function OfficeDocument(props: Props) {
   const docSizePx = () => {
     const [getZoom] = getOrCreateZoomSignal(() => props.doc);
     const zoom = getZoom();
-    const getDPI = getOrCreateDPISignal();
-    const dpi = getDPI()
-    return docSizeTwips()?.map((i) => twipsToCssPx(i, zoom, dpi));
+    return docSizeTwips()?.map((i) => twipsToCssPx(i, zoom));
   }
   const [getZoom] = getOrCreateZoomSignal(() => props.doc);
-  const getDPI = getOrCreateDPISignal();
   const rectsPx = () => {
-    const dpi = getDPI()
     const zoom = getZoom();
-    console.log(dpi, zoom);
     return rectsTwips()
-      ?.map(rect => scaleRectCssPx(rect, zoom, dpi))
+      ?.map(rect => scaleRectCssPx(rect, zoom))
       .filter((rect) => rect.width && rect.height);
   }
 

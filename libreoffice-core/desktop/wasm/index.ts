@@ -48,21 +48,21 @@ export function conversionTable(zoom: number, dpi: number) {
   };
 }
 
-function getScaledTwips(zoom: number, dpi: number) {
+function getScaledTwips(zoom: number) {
   return clipToNearest8PxZoom(
     TILE_DIM_PX,
-    1 / (zoom * dpi)
+    1 / zoom
   ) * LOK_INTERNAL_TWIPS_TO_PX;
 }
 
 /** CSS pixels are DPI indepdendent */
-export function twipsToCssPx(twips: number, zoom: number, dpi: number) {
-  return twips / getScaledTwips(zoom, dpi);
+export function twipsToCssPx(twips: number, zoom: number) {
+  return twips / getScaledTwips(zoom);
 }
 
 /** CSS pixels are DPI indepdendent */
-export function cssPxToTwips(px: number, zoom: number, dpi: number) {
-  return px *  getScaledTwips(zoom, dpi);
+export function cssPxToTwips(px: number, zoom: number) {
+  return px *  getScaledTwips(zoom);
 }
 
 const worker: Ref<Worker> = {};
