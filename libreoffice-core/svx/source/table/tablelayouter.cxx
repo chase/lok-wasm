@@ -48,7 +48,7 @@ namespace sdr::table {
 
 static SvxBorderLine gEmptyBorder;
 
-constexpr OUStringLiteral gsSize( u"Size" );
+constexpr OUString gsSize( u"Size"_ustr );
 
 TableLayouter::TableLayouter( TableModelRef xTableModel )
 : mxTable(std::move( xTableModel ))
@@ -583,7 +583,7 @@ void TableLayouter::LayoutTableWidth( tools::Rectangle& rArea, bool bFit )
     MergeVector aMergedCells( nColCount );
     std::vector<sal_Int32> aOptimalColumns;
 
-    static const OUStringLiteral sOptimalSize(u"OptimalSize");
+    static constexpr OUStringLiteral sOptimalSize(u"OptimalSize");
 
     if( sal::static_int_cast< sal_Int32 >( maColumns.size() ) != nColCount )
         maColumns.resize( nColCount );
@@ -735,7 +735,7 @@ void TableLayouter::LayoutTableHeight( tools::Rectangle& rArea, bool bFit )
     MergeVector aMergedCells( nRowCount );
     std::vector<sal_Int32> aOptimalRows;
 
-    static const OUStringLiteral sOptimalSize(u"OptimalSize");
+    static constexpr OUStringLiteral sOptimalSize(u"OptimalSize");
 
     // first calculate current height and initial minimum size per column,
     // merged cells will be counted later

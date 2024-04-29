@@ -78,6 +78,7 @@ class SwAccessibleParagraph :
                             // as the cursor is inside this object (protected by
                             // mutex)
 
+    bool m_bIsBlockQuote;
     bool m_bIsHeading;    // protected by base classes mutex
     sal_Int32 m_nHeadingLevel;
 
@@ -195,6 +196,7 @@ protected:
     //helpers for word boundaries
 
     bool GetCharBoundary( css::i18n::Boundary& rBound,
+                              std::u16string_view text,
                               sal_Int32 nPos );
     bool GetWordBoundary( css::i18n::Boundary& rBound,
                               const OUString& rText,
@@ -368,6 +370,7 @@ public:
     // XAccessibleExtendedAttributes
     virtual css::uno::Any SAL_CALL getExtendedAttributes() override ;
     sal_Int32 GetRealHeadingLevel();
+    bool IsBlockQuote();
 
     // #i89175#
     // XAccessibleMultiLineText

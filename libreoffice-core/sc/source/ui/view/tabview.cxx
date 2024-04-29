@@ -169,18 +169,11 @@ bool lcl_HasRowOutline( const ScViewData& rViewData )
     return false;
 }
 
-ScViewRenderingOptions getViewRenderingOptions(ScDocShell& rDocShell)
-{
-    ScTabViewShell* pViewShell = rDocShell.GetBestViewShell();
-    return pViewShell ? pViewShell->GetViewRenderingData() : ScViewRenderingOptions();
-}
-
 } // anonymous namespace
 
 ScTabView::ScTabView( vcl::Window* pParent, ScDocShell& rDocSh, ScTabViewShell* pViewShell ) :
     pFrameWin( pParent ),
     aViewData( rDocSh, pViewShell ),
-    aViewRenderingData(getViewRenderingOptions(rDocSh)),
     aFunctionSet( &aViewData ),
     aHdrFunc( &aViewData ),
     aVScrollTop( VclPtr<ScrollAdaptor>::Create( pFrameWin, false ) ),
@@ -196,6 +189,7 @@ ScTabView::ScTabView( vcl::Window* pParent, ScDocShell& rDocSh, ScTabViewShell* 
     nTipAlign( QuickHelpFlags::NONE ),
     nPrevDragPos( 0 ),
     meBlockMode(None),
+    meHighlightBlockMode(None),
     nBlockStartX( 0 ),
     nBlockStartXOrig( 0 ),
     nBlockEndX( 0 ),
@@ -224,6 +218,12 @@ ScTabView::ScTabView( vcl::Window* pParent, ScDocShell& rDocSh, ScTabViewShell* 
     bBlockRows( false ),
     mbInlineWithScrollbar( false )
 {
+    // copy settings of existing shell for this document
+    if (ScTabViewShell* pExistingViewShell = rDocSh.GetBestViewShell())
+    {
+        aViewRenderingData = pExistingViewShell->GetViewRenderingData();
+        EnableAutoSpell(pExistingViewShell->IsAutoSpell());
+    }
     Init();
 }
 
@@ -238,6 +238,20 @@ void ScTabView::InitScrollBar(ScrollAdaptor& rScrollBar, tools::Long nMaxVal, co
     rScrollBar.SetMouseReleaseHdl(LINK(this, ScTabView, EndScrollHdl));
 
     rScrollBar.EnableRTL( aViewData.GetDocument().IsLayoutRTL( aViewData.GetTabNo() ) );
+
+    // Related: tdf#155266 Eliminate delayed scrollbar redrawing when swiping
+    // By default, the layout idle timer in the InterimWindowItem class
+    // is set to TaskPriority::RESIZE. That is too high of a priority as
+    // it appears that other timers are drawing after the scrollbar has been
+    // redrawn.
+    // As a result, when swiping, the content moves fluidly but the scrollbar
+    // thumb does not move until after swiping stops or pauses. Then, after a
+    // short lag, the scrollbar thumb finally "jumps" to the expected
+    // position.
+    // So, to fix this scrollbar "stickiness" when swiping, setting the
+    // priority to TaskPriority::POST_PAINT causes the scrollbar to be
+    // redrawn after any competing timers.
+    rScrollBar.SetPriority(TaskPriority::POST_PAINT);
 }
 
 //  Scroll-Timer
@@ -746,8 +760,8 @@ void ScTabView::UpdateVarZoom()
         PaintGrid();
         PaintTop();
         PaintLeft();
-        aViewData.GetViewShell()->GetViewFrame()->GetBindings().Invalidate( SID_ATTR_ZOOM );
-        aViewData.GetViewShell()->GetViewFrame()->GetBindings().Invalidate( SID_ATTR_ZOOMSLIDER );
+        aViewData.GetViewShell()->GetViewFrame().GetBindings().Invalidate( SID_ATTR_ZOOM );
+        aViewData.GetViewShell()->GetViewFrame().GetBindings().Invalidate( SID_ATTR_ZOOMSLIDER );
         aViewData.GetBindings().Invalidate(SID_ZOOM_IN);
         aViewData.GetBindings().Invalidate(SID_ZOOM_OUT);
     }
@@ -968,7 +982,7 @@ bool ScTabView::ScrollCommand( const CommandEvent& rCEvt, ScSplitPos ePos )
     const CommandWheelData* pData = rCEvt.GetWheelData();
     if (pData && pData->GetMode() == CommandWheelMode::ZOOM)
     {
-        if ( !aViewData.GetViewShell()->GetViewFrame()->GetFrame().IsInPlace() )
+        if ( !aViewData.GetViewShell()->GetViewFrame().GetFrame().IsInPlace() )
         {
             //  for ole inplace editing, the scale is defined by the visarea and client size
             //  and can't be changed directly
@@ -1008,7 +1022,7 @@ bool ScTabView::GestureZoomCommand(const CommandEvent& rCEvt)
     if (!pData)
         return false;
 
-    if (aViewData.GetViewShell()->GetViewFrame()->GetFrame().IsInPlace())
+    if (aViewData.GetViewShell()->GetViewFrame().GetFrame().IsInPlace())
         return false;
 
     if (pData->meEventType == GestureEventZoomType::Begin)
@@ -1083,7 +1097,7 @@ void ScTabView::ScrollHdl(ScrollAdaptor* pScroll)
         nViewPos = aViewData.GetPosY( (pScroll == aVScrollTop.get()) ?
                                         SC_SPLIT_TOP : SC_SPLIT_BOTTOM );
 
-    bool bLayoutRTL = aViewData.GetDocument().IsLayoutRTL( aViewData.GetTabNo() );
+    bool bLayoutRTL = bHoriz && aViewData.GetDocument().IsLayoutRTL( aViewData.GetTabNo() );
 
     ScrollType eType = pScroll->GetScrollType();
     if ( eType == ScrollType::Drag )
@@ -1121,7 +1135,7 @@ void ScTabView::ScrollHdl(ScrollAdaptor* pScroll)
                 nScrollMin = aViewData.GetFixPosX();
             if ( aViewData.GetVSplitMode()==SC_SPLIT_FIX && pScroll == aVScrollBottom.get() )
                 nScrollMin = aViewData.GetFixPosY();
-            tools::Long nScrollPos = GetScrollBarPos( *pScroll ) + nScrollMin;
+            tools::Long nScrollPos = GetScrollBarPos( *pScroll, bLayoutRTL ) + nScrollMin;
 
             OUString aHelpStr;
             tools::Rectangle aRect;
@@ -1154,6 +1168,22 @@ void ScTabView::ScrollHdl(ScrollAdaptor* pScroll)
     else
         bDragging = false;
 
+    if ( bHoriz && bLayoutRTL )
+    {
+        // change scroll type so visible/previous cells calculation below remains the same
+        switch ( eType )
+        {
+            case ScrollType::LineUp:   eType = ScrollType::LineDown; break;
+            case ScrollType::LineDown: eType = ScrollType::LineUp;   break;
+            case ScrollType::PageUp:   eType = ScrollType::PageDown; break;
+            case ScrollType::PageDown: eType = ScrollType::PageUp;   break;
+            default:
+            {
+                // added to avoid warnings
+            }
+        }
+    }
+
     tools::Long nDelta(0);
     switch ( eType )
     {
@@ -1177,8 +1207,7 @@ void ScTabView::ScrollHdl(ScrollAdaptor* pScroll)
             if ( pScroll == aVScrollBottom.get() ) nDelta = aViewData.VisibleCellsY( SC_SPLIT_BOTTOM );
             if (nDelta==0) nDelta=1;
             break;
-        default: // added to avoid warnings
-        case ScrollType::Drag:
+        default:
             {
                 // only scroll in the correct direction, do not jitter around hidden ranges
                 tools::Long nScrollMin = 0;        // simulate RangeMin
@@ -1187,7 +1216,7 @@ void ScTabView::ScrollHdl(ScrollAdaptor* pScroll)
                 if ( aViewData.GetVSplitMode()==SC_SPLIT_FIX && pScroll == aVScrollBottom.get() )
                     nScrollMin = aViewData.GetFixPosY();
 
-                tools::Long nScrollPos = GetScrollBarPos( *pScroll ) + nScrollMin;
+                tools::Long nScrollPos = GetScrollBarPos( *pScroll, bLayoutRTL ) + nScrollMin;
                 nDelta = nScrollPos - nViewPos;
 
                 // tdf#152406 Disable anti-jitter code for scroll wheel events
@@ -1195,7 +1224,7 @@ void ScTabView::ScrollHdl(ScrollAdaptor* pScroll)
                 // horizontal scroll wheel or trackpad swipe events, most
                 // vertical scroll wheel or trackpad swipe events will trigger
                 // the anti-jitter code because nScrollPos and nPrevDragPos
-                // will be equal and nDelta will be overriden and set to zero.
+                // will be equal and nDelta will be overridden and set to zero.
                 // So, only use the anti-jitter code for mouse drag events.
                 if ( eType == ScrollType::Drag )
                 {
@@ -1209,6 +1238,52 @@ void ScTabView::ScrollHdl(ScrollAdaptor* pScroll)
                     }
                     else
                         nDelta = 0;
+                }
+                else if ( bHoriz )
+                {
+                    // tdf#135478 Reduce sensitivity of horizontal scrollwheel
+                    // Problem: at least on macOS, swipe events are very
+                    // precise. So, when swiping at a slight angle off of
+                    // vertical, swipe events will include a small amount
+                    // of horizontal movement. Since horizontal swipe units
+                    // are measured in cell widths, these small amounts of
+                    // horizontal movement results in shifting many columns
+                    // to the right or left while swiping almost vertically.
+                    // So my hacky fix is to reduce the amount of horizontal
+                    // swipe events to roughly match the "visual distance"
+                    // of vertical swipe events.
+                    // The reduction factor is arbitrary but is set to
+                    // roughly the ratio of default cell width divided by
+                    // default cell height. This hacky fix isn't a perfect
+                    // fix, but hopefully it reduces the amount of
+                    // unexpected horizontal shifting while swiping
+                    // vertically to a tolerable amount for most users.
+                    // Note: the potential downside of doing this is that
+                    // some users might find horizontal swiping to be
+                    // slower than they are used to. If that becomes an
+                    // issue for enough users, the reduction factor may
+                    // need to be lowered to find a good balance point.
+                    static const sal_uInt16 nHScrollReductionFactor = 8;
+                    if ( pScroll == aHScrollLeft.get() )
+                    {
+                        mnPendingaHScrollLeftDelta += nDelta;
+                        nDelta = 0;
+                        if ( abs(mnPendingaHScrollLeftDelta) > nHScrollReductionFactor )
+                        {
+                            nDelta = mnPendingaHScrollLeftDelta / nHScrollReductionFactor;
+                            mnPendingaHScrollLeftDelta = mnPendingaHScrollLeftDelta % nHScrollReductionFactor;
+                        }
+                    }
+                    else if ( pScroll == aHScrollRight.get() )
+                    {
+                        mnPendingaHScrollRightDelta += nDelta;
+                        nDelta = 0;
+                        if ( abs(mnPendingaHScrollRightDelta) > nHScrollReductionFactor )
+                        {
+                            nDelta = mnPendingaHScrollRightDelta / nHScrollReductionFactor;
+                            mnPendingaHScrollRightDelta = mnPendingaHScrollRightDelta % nHScrollReductionFactor;
+                        }
+                    }
                 }
 
                 nPrevDragPos = nScrollPos;
@@ -1428,7 +1503,7 @@ void ScTabView::UpdateHeaderWidth( const ScVSplitPos* pWhich, const SCROW* pPosY
 
     ScDocument& rDoc = aViewData.GetDocument();
     SCROW nEndPos = rDoc.MaxRow();
-    if ( !aViewData.GetViewShell()->GetViewFrame()->GetFrame().IsInPlace() )
+    if ( !aViewData.GetViewShell()->GetViewFrame().GetFrame().IsInPlace() )
     {
         //  for OLE Inplace always MAXROW
 
@@ -1902,10 +1977,10 @@ Point ScTabView::GetChartDialogPos( const Size& rDialogSize, const tools::Rectan
     {
         MapMode aDrawMode = pWin->GetDrawMapMode();
         tools::Rectangle aObjPixel = pWin->LogicToPixel( rLogicChart, aDrawMode );
-        tools::Rectangle aObjAbs( pWin->OutputToAbsoluteScreenPixel( aObjPixel.TopLeft() ),
+        AbsoluteScreenPixelRectangle aObjAbs( pWin->OutputToAbsoluteScreenPixel( aObjPixel.TopLeft() ),
                            pWin->OutputToAbsoluteScreenPixel( aObjPixel.BottomRight() ) );
 
-        tools::Rectangle aDesktop = pWin->GetDesktopRectPixel();
+        AbsoluteScreenPixelRectangle aDesktop = pWin->GetDesktopRectPixel();
         Size aSpace = pWin->LogicToPixel( Size(8, 12), MapMode(MapUnit::MapAppFont));
 
         ScDocument& rDoc = aViewData.GetDocument();
@@ -2253,17 +2328,14 @@ void ScTabView::SetNewVisArea()
             pGridWin[i]->SetMapMode(aOldMode[i]);
         }
 
-    SfxViewFrame* pViewFrame = aViewData.GetViewShell()->GetViewFrame();
-    if (pViewFrame)
+    SfxViewFrame& rViewFrame = aViewData.GetViewShell()->GetViewFrame();
+    SfxFrame& rFrame = rViewFrame.GetFrame();
+    css::uno::Reference<css::frame::XController> xController = rFrame.GetController();
+    if (xController.is())
     {
-        SfxFrame& rFrame = pViewFrame->GetFrame();
-        css::uno::Reference<css::frame::XController> xController = rFrame.GetController();
-        if (xController.is())
-        {
-            ScTabViewObj* pImp = comphelper::getFromUnoTunnel<ScTabViewObj>( xController );
-            if (pImp)
-                pImp->VisAreaChanged();
-        }
+        ScTabViewObj* pImp = dynamic_cast<ScTabViewObj*>( xController.get() );
+        if (pImp)
+            pImp->VisAreaChanged();
     }
     if (aViewData.GetViewShell()->HasAccessibilityObjects())
         aViewData.GetViewShell()->BroadcastAccessibility(SfxHint(SfxHintId::ScAccVisAreaChanged));
@@ -2341,6 +2413,8 @@ void ScTabView::EnableRefInput(bool bFlag)
 
 void ScTabView::EnableAutoSpell( bool bEnable )
 {
+    const bool bWasEnabled = IsAutoSpell();
+
     if (bEnable)
         mpSpellCheckCxt =
             std::make_shared<sc::SpellCheckContext>(&aViewData.GetDocument(),
@@ -2355,6 +2429,20 @@ void ScTabView::EnableAutoSpell( bool bEnable )
 
         pWin->SetAutoSpellContext(mpSpellCheckCxt);
     }
+
+    if (bWasEnabled != bEnable && comphelper::LibreOfficeKit::isActive())
+    {
+        if (ScTabViewShell* pViewSh = aViewData.GetViewShell())
+        {
+            ScModelObj* pModel = comphelper::getFromUnoTunnel<ScModelObj>(pViewSh->GetCurrentDocument());
+            SfxLokHelper::notifyViewRenderState(pViewSh, pModel);
+        }
+    }
+}
+
+bool ScTabView::IsAutoSpell() const
+{
+    return static_cast<bool>(mpSpellCheckCxt);
 }
 
 void ScTabView::ResetAutoSpell()
@@ -2655,8 +2743,7 @@ void lcl_ExtendTiledDimension(bool bColumn, const SCCOLROW nEnd, const SCCOLROW 
         return;
 
     ScDocShell* pDocSh = rViewData.GetDocShell();
-    ScModelObj* pModelObj = pDocSh ?
-        comphelper::getFromUnoTunnel<ScModelObj>( pDocSh->GetModel() ) : nullptr;
+    ScModelObj* pModelObj = pDocSh ? pDocSh->GetModel() : nullptr;
     Size aOldSize(0, 0);
     if (pModelObj)
         aOldSize = pModelObj->getDocumentSize();
@@ -2672,9 +2759,6 @@ void lcl_ExtendTiledDimension(bool bColumn, const SCCOLROW nEnd, const SCCOLROW 
     if (pModelObj)
         aNewSize = pModelObj->getDocumentSize();
 
-    if (aOldSize == aNewSize)
-        return;
-
     if (!pDocSh)
         return;
 
@@ -2684,9 +2768,13 @@ void lcl_ExtendTiledDimension(bool bColumn, const SCCOLROW nEnd, const SCCOLROW 
         if (pGridWindow)
         {
             Size aNewSizePx(aNewSize.Width() * rViewData.GetPPTX(), aNewSize.Height() * rViewData.GetPPTY());
-            pGridWindow->SetOutputSizePixel(aNewSizePx);
+            if (aNewSizePx != pGridWindow->GetOutputSizePixel())
+                pGridWindow->SetOutputSizePixel(aNewSizePx);
         }
     }
+
+    if (aOldSize == aNewSize)
+        return;
 
     // New area extended to the right/bottom of the sheet after last col/row
     tools::Rectangle aNewArea(Point(0, 0), aNewSize);
@@ -2706,7 +2794,7 @@ void lcl_ExtendTiledDimension(bool bColumn, const SCCOLROW nEnd, const SCCOLROW 
     // Provide size in the payload, so clients don't have to query for that.
     std::stringstream ss;
     ss << aNewSize.Width() << ", " << aNewSize.Height();
-    OString sSize = ss.str().c_str();
+    OString sSize( ss.str() );
     ScModelObj* pModel = comphelper::getFromUnoTunnel<ScModelObj>(
         rViewData.GetViewShell()->GetCurrentDocument());
     SfxLokHelper::notifyDocumentSizeChanged(rViewData.GetViewShell(), sSize, pModel, false);
@@ -2963,7 +3051,7 @@ OString ScTabView::getSheetGeometryData(bool bColumns, bool bRows, bool bSizes, 
     if ((!bSizes && !bHidden && !bFiltered && !bGroups) ||
         (!bColumns && !bRows))
     {
-        return getJSONString(aTree).c_str();
+        return OString(getJSONString(aTree));
     }
 
     struct GeomEntry
@@ -3015,7 +3103,7 @@ OString ScTabView::getSheetGeometryData(bool bColumns, bool bRows, bool bSizes, 
         aTree.add_child(rDimEntry.pKey, aDimTree);
     }
 
-    return getJSONString(aTree).c_str();
+    return OString(getJSONString(aTree));
 }
 
 void ScTabView::extendTiledAreaIfNeeded()

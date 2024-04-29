@@ -18,8 +18,8 @@
 #include <rtl/strbuf.hxx>
 #include <osl/socket.hxx>
 #include <osl/thread.hxx>
-#include <svtools/languagetoolcfg.hxx>
 #include <unotest/bootstrapfixturebase.hxx>
+#include <officecfg/Office/Linguistic.hxx>
 
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/connection/XAcceptor.hpp>
@@ -83,7 +83,7 @@ public:
             "{\"check-positions\":[{\"offset\":15,\"length\":6,\"errorcode\":4711,\"type\":"
             "\"orth\","
             "\"severity\":1,\"proposals\":[\"Entwurf\",\"Entw\u00fcrfe\"]},"
-            "{\"offset\":22,\"length\":3,\"errorcode\":8221,\"type\":\"orth\",\"severity\":1}]}");
+            "{\"offset\":22,\"length\":3,\"errorcode\":8221,\"type\":\"orth\",\"severity\":1}]}"_ostr);
 
         m_aStreamSocket.write(aResponse.getStr(), aResponse.getLength());
         m_aStreamSocket.close();
@@ -93,7 +93,7 @@ public:
     {
         OString aResponse("HTTP/1.1 404 Not Found\r\n"
                           "Connection: Closed\r\n"
-                          "\r\n");
+                          "\r\n"_ostr);
 
         m_aStreamSocket.write(aResponse.getStr(), aResponse.getLength());
         m_aStreamSocket.close();
@@ -138,24 +138,28 @@ private:
 void TestRestProtocol::testProofreading()
 {
     css::lang::Locale aLocale("en", "US", "");
-    Sequence<::com::sun::star::beans::PropertyValue> aProperties;
-    SvxLanguageToolOptions& rLanguageOpts = SvxLanguageToolOptions::Get();
-    rLanguageOpts.setBaseURL("http://127.0.0.1:2022/api");
-    rLanguageOpts.setUsername("hcastro");
-    rLanguageOpts.setApiKey("hcvhcvhcv");
-    rLanguageOpts.setEnabled(true);
-    rLanguageOpts.setSSLVerification(false);
-    rLanguageOpts.setRestProtocol("duden");
-    CPPUNIT_ASSERT_EQUAL(OUString("duden"), rLanguageOpts.getRestProtocol());
+    using LanguageToolCfg = officecfg::Office::Linguistic::GrammarChecking::LanguageTool;
+    auto batch(comphelper::ConfigurationChanges::create());
+
+    LanguageToolCfg::BaseURL::set("http://127.0.0.1:2022/api", batch);
+    LanguageToolCfg::Username::set("hcastro", batch);
+    LanguageToolCfg::ApiKey::set("hcvhcvhcv", batch);
+    LanguageToolCfg::IsEnabled::set(true, batch);
+    LanguageToolCfg::SSLCertVerify::set(false, batch);
+    LanguageToolCfg::RestProtocol::set("duden", batch);
+
+    batch->commit();
+
+    CPPUNIT_ASSERT_EQUAL(OUString("duden"), *LanguageToolCfg::RestProtocol::get());
 
     Reference<::com::sun::star::linguistic2::XProofreader> xProofreader(
         m_xSFactory->createInstance("com.sun.star.linguistic2.Proofreader"), UNO_QUERY);
     CPPUNIT_ASSERT(xProofreader.is());
 
     com::sun::star::linguistic2::ProofreadingResult aResult
-        = xProofreader->doProofreading("id", "ths is a tst", aLocale, 0, 0, aProperties);
+        = xProofreader->doProofreading("id", "ths is a tst", aLocale, 0, 0, {});
 
-    CPPUNIT_ASSERT_EQUAL(2, aResult.aErrors.getLength());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), aResult.aErrors.getLength());
 }
 
 void TestRestProtocol::setUp()

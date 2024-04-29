@@ -38,11 +38,12 @@
 #include <X11/keysym.h>
 #include <X11/extensions/shape.h>
 
+#include <headless/BitmapHelper.hxx>
+#include <headless/svpbmp.hxx>
 #include <unx/saldisp.hxx>
 #include <unx/salgdi.h>
 #include <unx/salframe.h>
 #include <unx/wmadaptor.hxx>
-#include <unx/salbmp.h>
 #include <unx/i18n_ic.hxx>
 #include <unx/i18n_keysym.hxx>
 #include <opengl/zone.hxx>
@@ -56,8 +57,11 @@
 #include <o3tl/string_view.hxx>
 #include <com/sun/star/uno/Exception.hpp>
 
+#include <salinst.hxx>
 #include <svdata.hxx>
 #include <bitmaps.hlst>
+
+#include <cairo-xlib.h>
 
 #include <optional>
 
@@ -189,7 +193,7 @@ typedef std::vector< unsigned long > NetWmIconData;
 
 namespace
 {
-    constexpr rtl::OUStringConstExpr SV_ICON_SIZE48[] =
+    constexpr OUString SV_ICON_SIZE48[] =
     {
         MAINAPP_48_8,
         MAINAPP_48_8,
@@ -207,7 +211,7 @@ namespace
         ODF_48_8
     };
 
-    constexpr rtl::OUStringConstExpr SV_ICON_SIZE32[] =
+    constexpr OUString SV_ICON_SIZE32[] =
     {
         MAINAPP_32_8,
         MAINAPP_32_8,
@@ -225,7 +229,7 @@ namespace
         ODF_32_8
     };
 
-    constexpr rtl::OUStringConstExpr SV_ICON_SIZE16[] =
+    constexpr OUString SV_ICON_SIZE16[] =
     {
         MAINAPP_16_8,
         MAINAPP_16_8,
@@ -265,9 +269,9 @@ static void CreateNetWmAppIcon( sal_uInt16 nIcon, NetWmIconData& netwm_icon )
             continue;
         vcl::bitmap::convertBitmap32To24Plus8(aIcon, aIcon);
         Bitmap icon = aIcon.GetBitmap();
-        AlphaMask mask = aIcon.GetAlpha();
-        BitmapReadAccess* iconData = icon.AcquireReadAccess();
-        BitmapReadAccess* maskData = mask.AcquireReadAccess();
+        AlphaMask mask = aIcon.GetAlphaMask();
+        BitmapScopedReadAccess iconData(icon);
+        BitmapScopedReadAccess maskData(mask);
         netwm_icon[ pos++ ] = size; // width
         netwm_icon[ pos++ ] = size; // height
         for( int y = 0; y < size; ++y )
@@ -277,82 +281,8 @@ static void CreateNetWmAppIcon( sal_uInt16 nIcon, NetWmIconData& netwm_icon )
                 BitmapColor alpha = maskData->GetColor( y, x );
                 netwm_icon[ pos++ ] = (((( 255 - alpha.GetBlue()) * 256U ) + col.GetRed()) * 256 + col.GetGreen()) * 256 + col.GetBlue();
             }
-        Bitmap::ReleaseAccess( iconData );
-        mask.ReleaseAccess( maskData );
     }
     netwm_icon.resize( pos );
-}
-
-static bool lcl_SelectAppIconPixmap( SalDisplay const *pDisplay, SalX11Screen nXScreen,
-                                         sal_uInt16 nIcon, sal_uInt16 iconSize,
-                                         Pixmap& icon_pixmap, Pixmap& icon_mask, NetWmIconData& netwm_icon)
-{
-    CreateNetWmAppIcon( nIcon, netwm_icon );
-
-    OUString sIcon;
-
-    if( iconSize >= 48 )
-        sIcon = SV_ICON_SIZE48[nIcon];
-    else if( iconSize >= 32 )
-        sIcon = SV_ICON_SIZE32[nIcon];
-    else if( iconSize >= 16 )
-         sIcon = SV_ICON_SIZE16[nIcon];
-    else
-        return false;
-
-    BitmapEx aIcon = vcl::bitmap::loadFromName(sIcon, ImageLoadFlags::IgnoreScalingFactor);
-
-    if( aIcon.IsEmpty() )
-        return false;
-
-    X11SalBitmap *pBitmap = dynamic_cast < X11SalBitmap * >
-        (aIcon.ImplGetBitmapSalBitmap().get());
-    if (!pBitmap) // FIXME: opengl , TODO SKIA
-        return false;
-
-    icon_pixmap = XCreatePixmap( pDisplay->GetDisplay(),
-                                 pDisplay->GetRootWindow( nXScreen ),
-                                 iconSize, iconSize,
-                                 DefaultDepth( pDisplay->GetDisplay(),
-                                               nXScreen.getXScreen() )
-                                 );
-
-    SalTwoRect aRect(0, 0, iconSize, iconSize, 0, 0, iconSize, iconSize);
-
-    pBitmap->ImplDraw( icon_pixmap,
-                       nXScreen,
-                       DefaultDepth( pDisplay->GetDisplay(),
-                                     nXScreen.getXScreen() ),
-                       aRect,
-                       DefaultGC( pDisplay->GetDisplay(),
-                                  nXScreen.getXScreen() ) );
-
-    icon_mask = None;
-
-    if( aIcon.IsAlpha() )
-    {
-        icon_mask = XCreatePixmap( pDisplay->GetDisplay(),
-                                   pDisplay->GetRootWindow( pDisplay->GetDefaultXScreen() ),
-                                   iconSize, iconSize, 1);
-
-        XGCValues aValues;
-        aValues.foreground = 0xffffffff;
-        aValues.background = 0;
-        aValues.function = GXcopy;
-        GC aMonoGC = XCreateGC( pDisplay->GetDisplay(), icon_mask,
-            GCFunction|GCForeground|GCBackground, &aValues );
-
-        Bitmap aMask = aIcon.GetAlpha();
-        aMask.Invert();
-
-        X11SalBitmap *pMask = static_cast < X11SalBitmap * >
-            (aMask.ImplGetSalBitmap().get());
-
-        pMask->ImplDraw(icon_mask, nXScreen, 1, aRect, aMonoGC);
-        XFreeGC( pDisplay->GetDisplay(), aMonoGC );
-    }
-
-    return true;
 }
 
 void X11SalFrame::Init( SalFrameStyleFlags nSalFrameStyle, SalX11Screen nXScreen, SystemParentData const * pParentData, bool bUseGeometry )
@@ -541,9 +471,9 @@ void X11SalFrame::Init( SalFrameStyleFlags nSalFrameStyle, SalX11Screen nXScreen
                                    GetDisplay()->GetRootWindow( m_nXScreen ),
                                    &aRoot, &aChild,
                                    &root_x, &root_y, &lx, &ly, &mask );
-                    const std::vector< tools::Rectangle >& rScreens = GetDisplay()->GetXineramaScreens();
+                    const std::vector< AbsoluteScreenPixelRectangle >& rScreens = GetDisplay()->GetXineramaScreens();
                     for(const auto & rScreen : rScreens)
-                        if( rScreen.Contains( Point( root_x, root_y ) ) )
+                        if( rScreen.Contains( AbsoluteScreenPixelPoint( root_x, root_y ) ) )
                         {
                             x = rScreen.Left();
                             y = rScreen.Top();
@@ -564,23 +494,14 @@ void X11SalFrame::Init( SalFrameStyleFlags nSalFrameStyle, SalX11Screen nXScreen
         // default icon
         if( !(nStyle_ & SalFrameStyleFlags::INTRO) && !(nStyle_ & SalFrameStyleFlags::NOICON))
         {
-            bool bOk=false;
             try
             {
-                bOk = lcl_SelectAppIconPixmap( pDisplay_, m_nXScreen,
-                                               mnIconID != SV_ICON_ID_OFFICE ? mnIconID :
-                                               (mpParent ? mpParent->mnIconID : SV_ICON_ID_OFFICE), 32,
-                                               Hints.icon_pixmap, Hints.icon_mask, netwm_icon );
+                CreateNetWmAppIcon( mnIconID != SV_ICON_ID_OFFICE ? mnIconID :
+                                    (mpParent ? mpParent->mnIconID : SV_ICON_ID_OFFICE), netwm_icon );
             }
             catch( css::uno::Exception& )
             {
                 // can happen - no ucb during early startup
-            }
-            if( bOk )
-            {
-                Hints.flags     |= IconPixmapHint;
-                if( Hints.icon_mask )
-                    Hints.flags |= IconMaskHint;
             }
         }
 
@@ -634,6 +555,10 @@ void X11SalFrame::Init( SalFrameStyleFlags nSalFrameStyle, SalX11Screen nXScreen
                               rVis.GetVisual(),
                               nAttrMask,
                               &Attributes );
+    mpSurface = cairo_xlib_surface_create(GetXDisplay(), mhWindow,
+                                          rVis.GetVisual(),
+                                          w, h);
+
     // FIXME: see above: fake shell window for now to own window
     if( pParentData == nullptr )
     {
@@ -799,6 +724,7 @@ X11SalFrame::X11SalFrame( SalFrame *pParent, SalFrameStyleFlags nSalFrameStyle,
     pDisplay_->registerFrame( this );
 
     mhWindow                    = None;
+    mpSurface                   = nullptr;
     mhShellWindow               = None;
     mhStackingWindow            = None;
     mhForeignParent             = None;
@@ -910,6 +836,9 @@ X11SalFrame::~X11SalFrame()
         pContext = pContext->mpPrevContext;
     }
 
+    if (mpSurface)
+        cairo_surface_destroy(mpSurface);
+
     XDestroyWindow( GetXDisplay(), mhWindow );
 }
 
@@ -949,7 +878,7 @@ SalGraphics *X11SalFrame::AcquireGraphics()
     else
     {
         pGraphics_.reset(new X11SalGraphics());
-        pGraphics_->Init( this, GetWindow(), m_nXScreen );
+        pGraphics_->Init(*this, GetWindow(), m_nXScreen);
     }
 
     return pGraphics_.get();
@@ -969,9 +898,9 @@ void X11SalFrame::updateGraphics( bool bClear )
 {
     Drawable aDrawable = bClear ? None : GetWindow();
     if( pGraphics_ )
-        pGraphics_->SetDrawable( aDrawable, nullptr, m_nXScreen );
+        pGraphics_->SetDrawable( aDrawable, mpSurface, m_nXScreen );
     if( pFreeGraphics_ )
-        pFreeGraphics_->SetDrawable( aDrawable, nullptr, m_nXScreen );
+        pFreeGraphics_->SetDrawable( aDrawable, mpSurface, m_nXScreen );
 }
 
 void X11SalFrame::SetIcon( sal_uInt16 nIcon )
@@ -985,108 +914,13 @@ void X11SalFrame::SetIcon( sal_uInt16 nIcon )
 
     mnIconID = nIcon;
 
-    XIconSize *pIconSize = nullptr;
-    int nSizes = 0;
-    int iconSize = 32;
-    if ( XGetIconSizes( GetXDisplay(), GetDisplay()->GetRootWindow( m_nXScreen ), &pIconSize, &nSizes ) )
-    {
-#if OSL_DEBUG_LEVEL > 1
-        SAL_INFO("vcl.window", "X11SalFrame::SetIcon(): found "
-                << nSizes
-                << " IconSizes:");
-#endif
-        int i;
-        for( i=0; i<nSizes; i++)
-        {
-           // select largest supported icon
-            if( pIconSize[i].max_width > iconSize )
-            {
-                iconSize = pIconSize[i].max_width;
-            }
-
-#if OSL_DEBUG_LEVEL > 1
-            SAL_INFO("vcl.window", "min: "
-                    << pIconSize[i].min_width
-                    << ", "
-                    << pIconSize[i].min_height);
-            SAL_INFO("vcl.window", "max: "
-                    << pIconSize[i].max_width
-                    << ", "
-                    << pIconSize[i].max_height);
-            SAL_INFO("vcl.window", "inc: "
-                    << pIconSize[i].width_inc
-                    << ", "
-                    << pIconSize[i].height_inc);
-#endif
-        }
-
-        XFree( pIconSize );
-    }
-    else
-    {
-        const OUString& rWM( pDisplay_->getWMAdaptor()->getWindowManagerName() );
-        if( rWM == "KWin" )         // assume KDE is running
-            iconSize = 48;
-        static bool bGnomeIconSize = false;
-        static bool bGnomeChecked = false;
-        if( ! bGnomeChecked )
-        {
-            bGnomeChecked=true;
-            int nCount = 0;
-            Atom* pProps = XListProperties( GetXDisplay(),
-                                            GetDisplay()->GetRootWindow( m_nXScreen ),
-                                            &nCount );
-            for( int i = 0; i < nCount && !bGnomeIconSize; i++ )
-            {
-                char* pName = XGetAtomName( GetXDisplay(), pProps[i] );
-                if( pName )
-                {
-                    if( !strcmp( pName, "GNOME_PANEL_DESKTOP_AREA" ) )
-                        bGnomeIconSize = true;
-                    XFree( pName );
-                }
-            }
-            if( pProps )
-                XFree( pProps );
-        }
-        if( bGnomeIconSize )
-            iconSize = 48;
-    }
-
-    XWMHints Hints;
-    Hints.flags = 0;
-    XWMHints *pHints = XGetWMHints( GetXDisplay(), GetShellWindow() );
-    if( pHints )
-    {
-        memcpy(&Hints, pHints, sizeof( XWMHints ));
-        XFree( pHints );
-    }
-    pHints = &Hints;
-
     NetWmIconData netwm_icon;
-    bool bOk = lcl_SelectAppIconPixmap( GetDisplay(), m_nXScreen,
-                                            nIcon, iconSize,
-                                            pHints->icon_pixmap, pHints->icon_mask, netwm_icon );
-    if ( !bOk )
-    {
-        // load default icon (0)
-        bOk = lcl_SelectAppIconPixmap( GetDisplay(), m_nXScreen,
-                                       0, iconSize,
-                                       pHints->icon_pixmap, pHints->icon_mask, netwm_icon );
-    }
-    if( bOk )
-    {
-        pHints->flags    |= IconPixmapHint;
-        if( pHints->icon_mask )
-            pHints->flags |= IconMaskHint;
+    CreateNetWmAppIcon( nIcon, netwm_icon );
 
-        XSetWMHints( GetXDisplay(), GetShellWindow(), pHints );
-        if( !netwm_icon.empty() && GetDisplay()->getWMAdaptor()->getAtom( WMAdaptor::NET_WM_ICON ))
-            XChangeProperty( GetXDisplay(), mhWindow,
-                GetDisplay()->getWMAdaptor()->getAtom( WMAdaptor::NET_WM_ICON ),
-                XA_CARDINAL, 32, PropModeReplace, reinterpret_cast<unsigned char*>(netwm_icon.data()), netwm_icon.size());
-    }
-
+    if( !netwm_icon.empty() && GetDisplay()->getWMAdaptor()->getAtom( WMAdaptor::NET_WM_ICON ))
+        XChangeProperty( GetXDisplay(), mhWindow,
+            GetDisplay()->getWMAdaptor()->getAtom( WMAdaptor::NET_WM_ICON ),
+            XA_CARDINAL, 32, PropModeReplace, reinterpret_cast<unsigned char*>(netwm_icon.data()), netwm_icon.size());
 }
 
 void X11SalFrame::SetMaxClientSize( tools::Long nWidth, tools::Long nHeight )
@@ -1397,7 +1231,7 @@ void X11SalFrame::ToTop( SalFrameToTop nFlags )
     }
 }
 
-void X11SalFrame::GetWorkArea( tools::Rectangle& rWorkArea )
+void X11SalFrame::GetWorkArea( AbsoluteScreenPixelRectangle& rWorkArea )
 {
     rWorkArea = pDisplay_->getWMAdaptor()->getWorkArea( 0 );
 }
@@ -1428,8 +1262,8 @@ void X11SalFrame::GetClientSize( tools::Long &rWidth, tools::Long &rHeight )
 void X11SalFrame::Center( )
 {
     int             nX, nY;
-    Size aRealScreenSize(GetDisplay()->getDataForScreen(m_nXScreen).m_aSize);
-    tools::Rectangle aScreen({ 0, 0 }, aRealScreenSize);
+    AbsoluteScreenPixelSize aRealScreenSize(GetDisplay()->getDataForScreen(m_nXScreen).m_aSize);
+    AbsoluteScreenPixelRectangle aScreen({ 0, 0 }, aRealScreenSize);
 
     if( GetDisplay()->IsXinerama() )
     {
@@ -1451,9 +1285,9 @@ void X11SalFrame::Center( )
                            &root_x, &root_y,
                            &x, &y,
                            &mask );
-        const std::vector< tools::Rectangle >& rScreens = GetDisplay()->GetXineramaScreens();
+        const std::vector< AbsoluteScreenPixelRectangle >& rScreens = GetDisplay()->GetXineramaScreens();
         for(const auto & rScreen : rScreens)
-            if( rScreen.Contains( Point( root_x, root_y ) ) )
+            if( rScreen.Contains( AbsoluteScreenPixelPoint( root_x, root_y ) ) )
             {
                 aScreen.SetPos(rScreen.GetPos());
                 aRealScreenSize = rScreen.GetSize();
@@ -1468,9 +1302,9 @@ void X11SalFrame::Center( )
             pFrame = pFrame->mpParent;
         if( pFrame->maGeometry.width() < 1  || pFrame->maGeometry.height() < 1 )
         {
-            tools::Rectangle aRect;
+            AbsoluteScreenPixelRectangle aRect;
             pFrame->GetPosSize( aRect );
-            pFrame->maGeometry.setPosSize(aRect);
+            pFrame->maGeometry.setPosSize(tools::Rectangle(aRect));
         }
 
         if( pFrame->nStyle_ & SalFrameStyleFlags::PLUG )
@@ -1487,7 +1321,7 @@ void X11SalFrame::Center( )
             aScreen = {{ nScreenX, nScreenY }, Size(nScreenWidth, nScreenHeight)};
         }
         else
-            aScreen = pFrame->maGeometry.posSize();
+            aScreen = AbsoluteScreenPixelRectangle(pFrame->maGeometry.posSize());
     }
 
     if( mpParent && mpParent->nShowState_ == X11ShowState::Normal )
@@ -1528,8 +1362,8 @@ void X11SalFrame::updateScreenNumber()
 {
     if( GetDisplay()->IsXinerama() && GetDisplay()->GetXineramaScreens().size() > 1 )
     {
-        Point aPoint( maGeometry.x(), maGeometry.y() );
-        const std::vector<tools::Rectangle>& rScreenRects( GetDisplay()->GetXineramaScreens() );
+        AbsoluteScreenPixelPoint aPoint( maGeometry.x(), maGeometry.y() );
+        const std::vector<AbsoluteScreenPixelRectangle>& rScreenRects( GetDisplay()->GetXineramaScreens() );
         size_t nScreens = rScreenRects.size();
         for( size_t i = 0; i < nScreens; i++ )
         {
@@ -1550,7 +1384,7 @@ void X11SalFrame::SetPosSize( tools::Long nX, tools::Long nY, tools::Long nWidth
         return;
 
     // relative positioning in X11SalFrame::SetPosSize
-    tools::Rectangle aPosSize( Point( maGeometry.x(), maGeometry.y() ), Size( maGeometry.width(), maGeometry.height() ) );
+    AbsoluteScreenPixelRectangle aPosSize( AbsoluteScreenPixelPoint( maGeometry.x(), maGeometry.y() ), AbsoluteScreenPixelSize( maGeometry.width(), maGeometry.height() ) );
     aPosSize.Normalize();
 
     if( ! ( nFlags & SAL_FRAME_POSSIZE_X ) )
@@ -1570,13 +1404,13 @@ void X11SalFrame::SetPosSize( tools::Long nX, tools::Long nY, tools::Long nWidth
     if( ! ( nFlags & SAL_FRAME_POSSIZE_HEIGHT ) )
         nHeight = aPosSize.GetHeight();
 
-    aPosSize = tools::Rectangle( Point( nX, nY ), Size( nWidth, nHeight ) );
+    aPosSize = AbsoluteScreenPixelRectangle( AbsoluteScreenPixelPoint( nX, nY ), AbsoluteScreenPixelSize( nWidth, nHeight ) );
 
     if( ! ( nFlags & ( SAL_FRAME_POSSIZE_X | SAL_FRAME_POSSIZE_Y ) ) )
     {
         if( bDefaultPosition_ )
         {
-            maGeometry.setSize(aPosSize.GetSize());
+            maGeometry.setSize(Size(aPosSize.GetSize()));
             Center();
         }
         else
@@ -1637,12 +1471,13 @@ void X11SalFrame::SetWindowState( const vcl::WindowData *pState )
             // guess maximized geometry from last time
             maGeometry.setPos({ pState->GetMaximizedX(), pState->GetMaximizedY() });
             maGeometry.setSize({ pState->GetMaximizedWidth(), pState->GetMaximizedHeight() });
+            cairo_xlib_surface_set_size(mpSurface,  pState->GetMaximizedWidth(), pState->GetMaximizedHeight());
             updateScreenNumber();
         }
         else
         {
             bool bDoAdjust = false;
-            tools::Rectangle aPosSize;
+            AbsoluteScreenPixelRectangle aPosSize;
             // initialize with current geometry
             if ((pState->mask() & vcl::WindowDataMask::PosSize) != vcl::WindowDataMask::PosSize)
                 GetPosSize(aPosSize);
@@ -1673,7 +1508,7 @@ void X11SalFrame::SetWindowState( const vcl::WindowData *pState )
                 bDoAdjust = true;
             }
 
-            const Size& aScreenSize = pDisplay_->getDataForScreen( m_nXScreen ).m_aSize;
+            const AbsoluteScreenPixelSize& aScreenSize = pDisplay_->getDataForScreen( m_nXScreen ).m_aSize;
 
             if( bDoAdjust && aPosSize.GetWidth() <= aScreenSize.Width()
                 && aPosSize.GetHeight() <= aScreenSize.Height() )
@@ -1726,7 +1561,7 @@ void X11SalFrame::SetWindowState( const vcl::WindowData *pState )
             bool bVert(pState->state() & vcl::WindowState::MaximizedVert);
             GetDisplay()->getWMAdaptor()->maximizeFrame( this, bHorz, bVert );
         }
-        maRestorePosSize = pState->posSize();
+        maRestorePosSize = AbsoluteScreenPixelRectangle(pState->posSize());
     }
     else if( mbMaximizedHorz || mbMaximizedVert )
         GetDisplay()->getWMAdaptor()->maximizeFrame( this, false, false );
@@ -1751,7 +1586,7 @@ bool X11SalFrame::GetWindowState( vcl::WindowData* pState )
     else
         pState->setState(vcl::WindowState::Normal);
 
-    tools::Rectangle aPosSize;
+    AbsoluteScreenPixelRectangle aPosSize;
     if( maRestorePosSize.IsEmpty() )
         GetPosSize( aPosSize );
     else
@@ -1762,7 +1597,7 @@ bool X11SalFrame::GetWindowState( vcl::WindowData* pState )
     if( mbMaximizedVert )
         pState->rState() |= vcl::WindowState::MaximizedVert;
 
-    pState->setPosSize(aPosSize);
+    pState->setPosSize(tools::Rectangle(aPosSize));
     pState->setMask(vcl::WindowDataMask::PosSizeState);
 
     if (! maRestorePosSize.IsEmpty() )
@@ -1783,19 +1618,19 @@ void X11SalFrame::SetMenu( SalMenu* )
 {
 }
 
-void X11SalFrame::GetPosSize( tools::Rectangle &rPosSize )
+void X11SalFrame::GetPosSize( AbsoluteScreenPixelRectangle &rPosSize )
 {
     if( maGeometry.width() < 1 || maGeometry.height() < 1 )
     {
-        const Size& aScreenSize = pDisplay_->getDataForScreen( m_nXScreen ).m_aSize;
+        const AbsoluteScreenPixelSize& aScreenSize = pDisplay_->getDataForScreen( m_nXScreen ).m_aSize;
         tools::Long w = aScreenSize.Width()  - maGeometry.leftDecoration() - maGeometry.rightDecoration();
         tools::Long h = aScreenSize.Height() - maGeometry.topDecoration() - maGeometry.bottomDecoration();
 
-        rPosSize = tools::Rectangle( Point( maGeometry.x(), maGeometry.y() ), Size( w, h ) );
+        rPosSize = AbsoluteScreenPixelRectangle( AbsoluteScreenPixelPoint( maGeometry.x(), maGeometry.y() ), AbsoluteScreenPixelSize( w, h ) );
     }
     else
-        rPosSize = tools::Rectangle( Point( maGeometry.x(), maGeometry.y() ),
-                              Size( maGeometry.width(), maGeometry.height() ) );
+        rPosSize = AbsoluteScreenPixelRectangle( AbsoluteScreenPixelPoint( maGeometry.x(), maGeometry.y() ),
+                              AbsoluteScreenPixelSize( maGeometry.width(), maGeometry.height() ) );
 }
 
 void X11SalFrame::SetSize( const Size &rSize )
@@ -1833,6 +1668,7 @@ void X11SalFrame::SetSize( const Size &rSize )
             XResizeWindow( GetXDisplay(), GetWindow(), rSize.Width(), rSize.Height() );
     }
 
+    cairo_xlib_surface_set_size(mpSurface, rSize.Width(), rSize.Height());
     maGeometry.setSize(rSize);
 
     // allow the external status window to reposition
@@ -1840,7 +1676,7 @@ void X11SalFrame::SetSize( const Size &rSize )
         mpInputContext->SetICFocus ( this );
 }
 
-void X11SalFrame::SetPosSize( const tools::Rectangle &rPosSize )
+void X11SalFrame::SetPosSize( const AbsoluteScreenPixelRectangle &rPosSize )
 {
     XWindowChanges values;
     values.x        = rPosSize.Left();
@@ -1929,6 +1765,7 @@ void X11SalFrame::SetPosSize( const tools::Rectangle &rPosSize )
             XMoveResizeWindow( GetXDisplay(), GetWindow(), values.x, values.y, values.width, values.height );
     }
 
+    cairo_xlib_surface_set_size(mpSurface, values.width, values.height);
     maGeometry.setPosSize({ values.x, values.y }, { values.width, values.height });
     if( IsSysChildWindow() && mpParent )
         // translate back to root coordinates
@@ -2068,17 +1905,17 @@ void X11SalFrame::ShowFullScreen( bool bFullScreen, sal_Int32 nScreen )
             return;
         if( bFullScreen )
         {
-            maRestorePosSize = maGeometry.posSize();
-            tools::Rectangle aRect;
+            maRestorePosSize = AbsoluteScreenPixelRectangle(maGeometry.posSize());
+            AbsoluteScreenPixelRectangle aRect;
             if( nScreen < 0 || o3tl::make_unsigned(nScreen) >= GetDisplay()->GetXineramaScreens().size() )
-                aRect = tools::Rectangle( Point(0,0), GetDisplay()->GetScreenSize( m_nXScreen ) );
+                aRect = AbsoluteScreenPixelRectangle( AbsoluteScreenPixelPoint(0,0), GetDisplay()->GetScreenSize( m_nXScreen ) );
             else
                 aRect = GetDisplay()->GetXineramaScreens()[nScreen];
             m_bIsPartialFullScreen = true;
             bool bVisible = bMapped_;
             if( bVisible )
                 Show( false );
-            maGeometry.setPosSize(aRect);
+            maGeometry.setPosSize(tools::Rectangle(aRect));
             mbMaximizedHorz = mbMaximizedVert = false;
             mbFullScreen = true;
             createNewWindow( None, m_nXScreen );
@@ -2095,8 +1932,8 @@ void X11SalFrame::ShowFullScreen( bool bFullScreen, sal_Int32 nScreen )
             mbFullScreen = false;
             m_bIsPartialFullScreen = false;
             bool bVisible = bMapped_;
-            tools::Rectangle aRect = maRestorePosSize;
-            maRestorePosSize = tools::Rectangle();
+            AbsoluteScreenPixelRectangle aRect = maRestorePosSize;
+            maRestorePosSize = AbsoluteScreenPixelRectangle();
             if( bVisible )
                 Show( false );
             createNewWindow( None, m_nXScreen );
@@ -2134,9 +1971,9 @@ void X11SalFrame::ShowFullScreen( bool bFullScreen, sal_Int32 nScreen )
 
 void X11SalFrame::StartPresentation( bool bStart )
 {
-    maScreenSaverInhibitor.inhibit( bStart,
+    maSessionManagerInhibitor.inhibit( bStart,
                                     u"presentation",
-                                    true, // isX11
+                                    APPLICATION_INHIBIT_IDLE,
                                     mhWindow,
                                     GetXDisplay() );
 
@@ -2374,6 +2211,11 @@ void X11SalFrame::createNewWindow( ::Window aNewParent, SalX11Screen nXScreen )
     {
         hPresentationWindow = None;
         doReparentPresentationDialogues( GetDisplay() );
+    }
+    if (mpSurface)
+    {
+        cairo_surface_destroy(mpSurface);
+        mpSurface = nullptr;
     }
     XDestroyWindow( GetXDisplay(), mhWindow );
     mhWindow = None;
@@ -3421,10 +3263,13 @@ bool X11SalFrame::HandleSizeEvent( XConfigureEvent *pEvent )
     }
 
     if( pEvent->window == GetForeignParent() )
+    {
         XResizeWindow( GetXDisplay(),
                        GetWindow(),
                        pEvent->width,
                        pEvent->height );
+        cairo_xlib_surface_set_size(mpSurface, pEvent->width, pEvent->height);
+    }
 
     ::Window hDummy;
     XTranslateCoordinates( GetXDisplay(),
@@ -3464,6 +3309,7 @@ bool X11SalFrame::HandleSizeEvent( XConfigureEvent *pEvent )
     bool bMoved = ( pEvent->x != maGeometry.x() || pEvent->y != maGeometry.y() );
     bool bSized = ( pEvent->width != static_cast<int>(maGeometry.width()) || pEvent->height != static_cast<int>(maGeometry.height()) );
 
+    cairo_xlib_surface_set_size(mpSurface, pEvent->width, pEvent->height);
     maGeometry.setPosSize({ pEvent->x, pEvent->y }, { pEvent->width, pEvent->height });
     updateScreenNumber();
 
@@ -3641,7 +3487,7 @@ bool X11SalFrame::HandleReparentEvent( XReparentEvent *pEvent )
     // #i81311# do this only for sizable frames
     if( nStyle_ & SalFrameStyleFlags::SIZEABLE )
     {
-        Size aScreenSize = GetDisplay()->GetScreenSize( m_nXScreen );
+        AbsoluteScreenPixelSize aScreenSize = GetDisplay()->GetScreenSize( m_nXScreen );
         int nScreenWidth  = aScreenSize.Width();
         int nScreenHeight = aScreenSize.Height();
         int nFrameWidth   = maGeometry.width() + maGeometry.leftDecoration() + maGeometry.rightDecoration();

@@ -18,6 +18,7 @@
 namespace SkiaHelper
 {
 bool isVCLSkiaEnabled() { return false; }
+bool isAlphaMaskBlendingEnabled() { return false; }
 
 } // namespace
 
@@ -46,12 +47,49 @@ bool isVCLSkiaEnabled() { return false; }
 #include <SkGraphics.h>
 #include <GrDirectContext.h>
 #include <SkRuntimeEffect.h>
-#include <SkOpts_spi.h>
+#include <SkStream.h>
+#include <SkTileMode.h>
 #include <skia_compiler.hxx>
 #include <skia_opts.hxx>
+#if defined(MACOSX)
+#include <premac.h>
+#endif
 #include <tools/sk_app/VulkanWindowContext.h>
 #include <tools/sk_app/MetalWindowContext.h>
+#if defined(MACOSX)
+#include <postmac.h>
+#endif
+#include <src/core/SkOpts.h>
+#include <src/core/SkChecksum.h>
+#include <include/encode/SkPngEncoder.h>
+#include <ganesh/SkSurfaceGanesh.h>
+#if defined _MSC_VER
+#pragma warning(disable : 4100) // "unreferenced formal parameter"
+#pragma warning(disable : 4324) // "structure was padded due to alignment specifier"
+#endif
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#endif
+#if defined __GNUC__ && !defined __clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
+#include <src/image/SkImage_Base.h>
+#if defined __GNUC__ && !defined __clang__
+#pragma GCC diagnostic pop
+#endif
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+
 #include <fstream>
+
+#ifdef SK_METAL
+#ifdef MACOSX
+#include <quartz/cgutils.h>
+#endif
+#endif
 
 namespace SkiaHelper
 {
@@ -66,10 +104,22 @@ static OUString getCacheFolder()
 
 static void writeToLog(SvStream& stream, const char* key, const char* value)
 {
-    stream.WriteCharPtr(key);
-    stream.WriteCharPtr(": ");
-    stream.WriteCharPtr(value);
+    stream.WriteOString(key);
+    stream.WriteOString(": ");
+    stream.WriteOString(value);
     stream.WriteChar('\n');
+}
+
+OUString readLog()
+{
+    SvFileStream logFile(getCacheFolder() + "/skia.log", StreamMode::READ);
+
+    OUString sResult;
+    OString sLine;
+    while (logFile.ReadLine(sLine))
+        sResult += OStringToOUString(sLine, RTL_TEXTENCODING_UTF8) + "\n";
+
+    return sResult;
 }
 
 uint32_t vendorId = 0;
@@ -232,10 +282,19 @@ static void checkDeviceDenylisted(bool blockDisable = false)
             }
             if (grDirectContext) // Metal was initialized properly
             {
-                // Try to assume Metal always works, given that Mac doesn't have such as wide range of HW vendors as PC.
-                // If there turns out to be problems, handle it similarly to Vulkan.
-                SAL_INFO("vcl.skia", "Using Skia Metal mode");
-                writeSkiaMetalInfo();
+#ifdef MACOSX
+                if (!blockDisable && !DefaultMTLDeviceIsSupported())
+                {
+                    SAL_INFO("vcl.skia", "Metal default device not supported");
+                    disableRenderMethod(RenderMetal);
+                    useRaster = true;
+                }
+                else
+#endif
+                {
+                    SAL_INFO("vcl.skia", "Using Skia Metal mode");
+                    writeSkiaMetalInfo();
+                }
             }
             else
             {
@@ -285,6 +344,13 @@ bool isVCLSkiaEnabled()
     static bool bSet = false;
     static bool bEnable = false;
     static bool bForceSkia = false;
+
+    // allow global disable when testing SystemPrimitiveRenderer since current Skia on Win does not
+    // harmonize with using Direct2D and D2DPixelProcessor2D
+    static const bool bTestSystemPrimitiveRenderer(
+        nullptr != std::getenv("TEST_SYSTEM_PRIMITIVE_RENDERER"));
+    if (bTestSystemPrimitiveRenderer)
+        return false;
 
     // No hardware rendering, so no Skia
     // TODO SKIA
@@ -349,6 +415,8 @@ bool isVCLSkiaEnabled()
 
     return bRet;
 }
+
+bool isAlphaMaskBlendingEnabled() { return false; }
 
 static RenderMethod methodToUse = RenderRaster;
 
@@ -494,9 +562,9 @@ sk_sp<SkSurface> createSkSurface(int width, int height, SkColorType type, SkAlph
         {
             if (GrDirectContext* grDirectContext = getSharedGrDirectContext())
             {
-                surface = SkSurface::MakeRenderTarget(grDirectContext, SkBudgeted::kNo,
-                                                      SkImageInfo::Make(width, height, type, alpha),
-                                                      0, surfaceProps());
+                surface = SkSurfaces::RenderTarget(grDirectContext, skgpu::Budgeted::kNo,
+                                                   SkImageInfo::Make(width, height, type, alpha), 0,
+                                                   surfaceProps());
                 if (surface)
                 {
 #ifdef DBG_UTIL
@@ -515,7 +583,7 @@ sk_sp<SkSurface> createSkSurface(int width, int height, SkColorType type, SkAlph
             break;
     }
     // Create raster surface as a fallback.
-    surface = SkSurface::MakeRaster(SkImageInfo::Make(width, height, type, alpha), surfaceProps());
+    surface = SkSurfaces::Raster(SkImageInfo::Make(width, height, type, alpha), surfaceProps());
     assert(surface);
     if (surface)
     {
@@ -540,8 +608,8 @@ sk_sp<SkImage> createSkImage(const SkBitmap& bitmap)
         {
             if (GrDirectContext* grDirectContext = getSharedGrDirectContext())
             {
-                sk_sp<SkSurface> surface = SkSurface::MakeRenderTarget(
-                    grDirectContext, SkBudgeted::kNo,
+                sk_sp<SkSurface> surface = SkSurfaces::RenderTarget(
+                    grDirectContext, skgpu::Budgeted::kNo,
                     bitmap.info().makeAlphaType(kPremul_SkAlphaType), 0, surfaceProps());
                 if (surface)
                 {
@@ -563,7 +631,7 @@ sk_sp<SkImage> createSkImage(const SkBitmap& bitmap)
             break;
     }
     // Create raster image as a fallback.
-    sk_sp<SkImage> image = SkImage::MakeFromBitmap(bitmap);
+    sk_sp<SkImage> image = SkImages::RasterFromBitmap(bitmap);
     assert(image);
     return image;
 }
@@ -665,14 +733,14 @@ static o3tl::lru_map<uint32_t, uint32_t> checksumCache(256);
 
 static uint32_t computeSkPixmapChecksum(const SkPixmap& pixmap)
 {
-    // Use uint32_t because that's what SkOpts::hash_fn() returns.
-    static_assert(std::is_same_v<uint32_t, decltype(SkOpts::hash_fn(nullptr, 0, 0))>);
+    // Use uint32_t because that's what SkChecksum::Hash32() returns.
+    static_assert(std::is_same_v<uint32_t, decltype(SkChecksum::Hash32(nullptr, 0, 0))>);
     const size_t dataRowBytes = pixmap.width() << pixmap.shiftPerPixel();
     if (dataRowBytes == pixmap.rowBytes())
-        return SkOpts::hash_fn(pixmap.addr(), pixmap.height() * dataRowBytes, 0);
+        return SkChecksum::Hash32(pixmap.addr(), pixmap.height() * dataRowBytes, 0);
     uint32_t sum = 0;
     for (int row = 0; row < pixmap.height(); ++row)
-        sum = SkOpts::hash_fn(pixmap.addr(0, row), dataRowBytes, sum);
+        sum = SkChecksum::Hash32(pixmap.addr(0, row), dataRowBytes, sum);
     return sum;
 }
 
@@ -741,7 +809,7 @@ void setBlenderXor(SkPaint* paint)
         // Skia does not allow binary operators in the default ES2Strict mode, but that's only
         // because of OpenGL support. We don't use OpenGL, and it's safe for all modes that we do use.
         // https://groups.google.com/g/skia-discuss/c/EPLuQbg64Kc/m/2uDXFIGhAwAJ
-        opts.enforceES2Restrictions = false;
+        opts.maxVersionAllowed = SkSL::Version::k300;
         auto effect = SkRuntimeEffect::MakeForBlender(SkString(diff), opts);
         if (!effect.effect)
         {
@@ -787,7 +855,10 @@ void prepareSkia(std::unique_ptr<sk_app::WindowContext> (*createGpuWindowContext
     skiaSupportedByBackend = true;
 }
 
-void dump(const SkBitmap& bitmap, const char* file) { dump(SkImage::MakeFromBitmap(bitmap), file); }
+void dump(const SkBitmap& bitmap, const char* file)
+{
+    dump(SkImages::RasterFromBitmap(bitmap), file);
+}
 
 void dump(const sk_sp<SkSurface>& surface, const char* file)
 {
@@ -797,7 +868,19 @@ void dump(const sk_sp<SkSurface>& surface, const char* file)
 
 void dump(const sk_sp<SkImage>& image, const char* file)
 {
-    sk_sp<SkData> data = image->encodeToData(SkEncodedImageFormat::kPNG, 1);
+    SkBitmap bm;
+    if (!as_IB(image)->getROPixels(getSharedGrDirectContext(), &bm))
+        return;
+    SkPixmap pixmap;
+    if (!bm.peekPixels(&pixmap))
+        return;
+    SkPngEncoder::Options opts;
+    opts.fFilterFlags = SkPngEncoder::FilterFlag::kNone;
+    opts.fZLibLevel = 1;
+    SkDynamicMemoryWStream stream;
+    if (!SkPngEncoder::Encode(&stream, pixmap, opts))
+        return;
+    sk_sp<SkData> data = stream.detachAsData();
     std::ofstream ostream(file, std::ios::binary);
     ostream.write(static_cast<const char*>(data->data()), data->size());
 }

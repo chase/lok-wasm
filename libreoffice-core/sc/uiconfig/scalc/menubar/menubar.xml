@@ -165,6 +165,7 @@
       </menu:menu>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:ViewValueHighlighting"/>
+      <menu:menuitem menu:id=".uno:ViewColumnRowHighlighting"/>
       <menu:menuitem menu:id=".uno:ViewHiddenColRow"/>
       <menu:menuitem menu:id=".uno:ToggleFormula"/>
       <menu:menuitem menu:id=".uno:ShowAnnotations"/>
@@ -256,7 +257,6 @@
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:DrawText"/>
       <menu:menuitem menu:id=".uno:InsertAnnotation"/>
-      <menu:menuitem menu:id=".uno:InsertObjectFloatingFrame" menu:style="text"/>
       <menu:menuitem menu:id=".uno:FontworkGalleryFloater"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:HyperlinkDialog"/>
@@ -410,14 +410,7 @@
       <menu:menuitem menu:id=".uno:FontDialog"/>
       <menu:menuitem menu:id=".uno:ParagraphDialog"/>
       <menu:menuitem menu:id=".uno:PageFormatDialog"/>
-      <menu:menu menu:id=".uno:PrintRangesMenu">
-        <menu:menupopup>
-          <menu:menuitem menu:id=".uno:DefinePrintArea"/>
-          <menu:menuitem menu:id=".uno:AddPrintArea"/>
-          <menu:menuitem menu:id=".uno:EditPrintArea"/>
-          <menu:menuitem menu:id=".uno:DeletePrintArea"/>
-        </menu:menupopup>
-      </menu:menu>
+      <menu:menuitem menu:id=".uno:PrintRangesMenu"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:ConditionalFormatMenu"/>
       <menu:menuitem menu:id=".uno:AutoFormat"/>
@@ -441,15 +434,7 @@
           <menu:menuitem menu:id=".uno:ExportAsGraphic"/>
         </menu:menupopup>
       </menu:menu>
-      <menu:menu menu:id=".uno:FormatSparklineMenu">
-        <menu:menupopup>
-          <menu:menuitem menu:id=".uno:EditSparklineGroup"/>
-          <menu:menuitem menu:id=".uno:DeleteSparkline"/>
-          <menu:menuitem menu:id=".uno:DeleteSparklineGroup"/>
-          <menu:menuitem menu:id=".uno:GroupSparklines"/>
-          <menu:menuitem menu:id=".uno:UngroupSparklines"/>
-        </menu:menupopup>
-      </menu:menu>
+      <menu:menu menu:id=".uno:FormatSparklineMenu"/>
       <menu:menu menu:id=".uno:FormatObjectMenu">
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:TransformDialog"/>
@@ -663,23 +648,7 @@
           <menu:menuitem menu:id=".uno:ShowDetail"/>
         </menu:menupopup>
       </menu:menu>
-      <menu:menu menu:id=".uno:StatisticsMenu">
-        <menu:menupopup>
-          <menu:menuitem menu:id=".uno:SamplingDialog"/>
-          <menu:menuitem menu:id=".uno:DescriptiveStatisticsDialog"/>
-          <menu:menuitem menu:id=".uno:AnalysisOfVarianceDialog"/>
-          <menu:menuitem menu:id=".uno:CorrelationDialog"/>
-          <menu:menuitem menu:id=".uno:CovarianceDialog"/>
-          <menu:menuitem menu:id=".uno:ExponentialSmoothingDialog"/>
-          <menu:menuitem menu:id=".uno:MovingAverageDialog"/>
-          <menu:menuitem menu:id=".uno:RegressionDialog"/>
-          <menu:menuitem menu:id=".uno:TTestDialog"/>
-          <menu:menuitem menu:id=".uno:FTestDialog"/>
-          <menu:menuitem menu:id=".uno:ZTestDialog"/>
-          <menu:menuitem menu:id=".uno:ChiSquareTestDialog"/>
-          <menu:menuitem menu:id=".uno:FourierAnalysisDialog"/>
-        </menu:menupopup>
-      </menu:menu>
+      <menu:menu menu:id=".uno:StatisticsMenu"/>
     </menu:menupopup>
   </menu:menu>
   <menu:menu menu:id=".uno:ToolsMenu">

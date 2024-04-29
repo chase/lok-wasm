@@ -187,9 +187,9 @@ static OUString lcl_ConvertTabsToSpaces( const OUString& sLine )
     return aRet;
 }
 
-SwSrcView::SwSrcView(SfxViewFrame* pViewFrame, SfxViewShell*) :
-    SfxViewShell( pViewFrame, SWSRCVIEWFLAGS ),
-    m_aEditWin( VclPtr<SwSrcEditWindow>::Create( &pViewFrame->GetWindow(), this ) ),
+SwSrcView::SwSrcView(SfxViewFrame& rViewFrame, SfxViewShell*) :
+    SfxViewShell( rViewFrame, SWSRCVIEWFLAGS ),
+    m_aEditWin( VclPtr<SwSrcEditWindow>::Create( &rViewFrame.GetWindow(), this ) ),
     m_bSourceSaved(false),
     m_eLoadEncoding(RTL_TEXTENCODING_DONTKNOW)
 {
@@ -244,7 +244,7 @@ void SwSrcView::Init()
 
 SwDocShell*     SwSrcView::GetDocShell()
 {
-    SfxObjectShell* pObjShell = GetViewFrame()->GetObjectShell();
+    SfxObjectShell* pObjShell = GetViewFrame().GetObjectShell();
     return dynamic_cast<SwDocShell*>( pObjShell );
 }
 
@@ -311,7 +311,8 @@ void SwSrcView::Execute(SfxRequest& rReq)
                 pMed = pDocShell->GetMedium();
             else
             {
-                const SfxBoolItem* pItem = static_cast<const SfxBoolItem*>(pDocShell->ExecuteSlot(rReq, pDocShell->GetInterface()));
+                const SfxPoolItemHolder& rResult(pDocShell->ExecuteSlot(rReq, pDocShell->GetInterface()));
+                const SfxBoolItem* pItem(static_cast<const SfxBoolItem*>(rResult.getItem()));
                 if(pItem && pItem->GetValue())
                     pMed = pDocShell->GetMedium();
             }
@@ -334,7 +335,7 @@ void SwSrcView::Execute(SfxRequest& rReq)
         {
             const SfxItemSet* pTmpArgs = rReq.GetArgs();
 
-            const sal_uInt16 nWhich = pTmpArgs->GetWhichByPos( 0 );
+            const sal_uInt16 nWhich = pTmpArgs->GetWhichByOffset( 0 );
             OSL_ENSURE( nWhich, "Which for SearchItem ?" );
             const SfxPoolItem& rItem = pTmpArgs->Get( nWhich );
             SetSearchItem( static_cast<const SvxSearchItem&>(rItem));
@@ -366,11 +367,11 @@ void SwSrcView::Execute(SfxRequest& rReq)
         break;
         case SID_UNDO:
             pTextView->Undo();
-            GetViewFrame()->GetBindings().InvalidateAll(false);
+            GetViewFrame().GetBindings().InvalidateAll(false);
         break;
         case SID_REDO:
             pTextView->Redo();
-            GetViewFrame()->GetBindings().InvalidateAll(false);
+            GetViewFrame().GetBindings().InvalidateAll(false);
         break;
         case SID_REPEAT:
         break;
@@ -421,12 +422,13 @@ void SwSrcView::GetState(SfxItemSet& rSet)
             break;
             case SID_TABLE_CELL:
             {
-                OUString aPos( SwResId(STR_SRCVIEW_ROW) );
                 TextSelection aSel = pTextView->GetSelection();
-                aPos += OUString::number( aSel.GetEnd().GetPara()+1 );
-                aPos += " : " +
-                    SwResId(STR_SRCVIEW_COL);
-                aPos += OUString::number( aSel.GetEnd().GetIndex()+1 );
+                OUString aPos =
+                    SwResId(STR_SRCVIEW_ROW)
+                    + OUString::number( aSel.GetEnd().GetPara()+1 )
+                    + " : "
+                    + SwResId(STR_SRCVIEW_COL)
+                    + OUString::number( aSel.GetEnd().GetIndex()+1 );
                 SvxStatusItem aItem( SID_TABLE_CELL, aPos, StatusCategory::RowColumn );
                 rSet.Put( aItem );
             }
@@ -436,7 +438,7 @@ void SwSrcView::GetState(SfxItemSet& rSet)
                 SearchOptionFlags nOpt = SRC_SEARCHOPTIONS;
                 SwDocShell* pDocShell = GetDocShell();
                 assert(pDocShell);
-                if (pDocShell->IsReadOnly())
+                if (pDocShell->IsReadOnly() || SfxViewShell::IsCurrentLokViewReadOnly())
                     nOpt &= ~SearchOptionFlags(SearchOptionFlags::REPLACE|SearchOptionFlags::REPLACE_ALL);
 
                 rSet.Put( SfxUInt16Item( SID_SEARCH_OPTIONS,  static_cast<sal_uInt16>(nOpt) ) );
@@ -475,8 +477,7 @@ void SwSrcView::GetState(SfxItemSet& rSet)
                     nCount = rMgr.GetUndoActionCount();
                     if(nCount)
                     {
-                        OUString aStr(SvtResId( STR_UNDO));
-                        aStr += rMgr.GetUndoActionComment(--nCount);
+                        OUString aStr = SvtResId( STR_UNDO) + rMgr.GetUndoActionComment(--nCount);
                         rSet.Put(SfxStringItem(nWhich, aStr));
                     }
                     else
@@ -487,8 +488,7 @@ void SwSrcView::GetState(SfxItemSet& rSet)
                     nCount = rMgr.GetRedoActionCount();
                     if(nCount)
                     {
-                        OUString aStr(SvtResId( STR_REDO));
-                        aStr += rMgr.GetRedoActionComment(--nCount);
+                        OUString aStr = SvtResId( STR_REDO) + rMgr.GetRedoActionComment(--nCount);
                         rSet.Put(SfxStringItem(nWhich,aStr));
                     }
                     else
@@ -676,7 +676,7 @@ sal_Int32 SwSrcView::PrintSource(
     aFont.SetColor( COL_BLACK );
     pOutDev->SetFont( aFont );
 
-    OUString aTitle( GetViewFrame()->GetWindow().GetText() );
+    OUString aTitle( GetViewFrame().GetWindow().GetText() );
 
     const tools::Long nLineHeight = pOutDev->GetTextHeight(); // slightly more
     const tools::Long nParaSpace = 10;
@@ -787,7 +787,7 @@ void SwSrcView::Load(SwDocShell* pDocShell)
         }
         else
         {
-            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetViewFrame()->GetFrameWeld(),
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetViewFrame().GetFrameWeld(),
                                                       VclMessageType::Info, VclButtonsType::Ok,
                                                       SwResId(STR_ERR_SRCSTREAM)));
             xBox->run();
@@ -807,7 +807,7 @@ void SwSrcView::Load(SwDocShell* pDocShell)
             const OUString sWriteName = pDocShell->HasName()
                 ? pMedium->GetName()
                 : sFileURL;
-            ErrCode nRes = aWriter.Write(xWriter, &sWriteName);
+            ErrCodeMsg nRes = aWriter.Write(xWriter, &sWriteName);
             if(nRes)
             {
                 ErrorHandler::HandleError(nRes);

@@ -58,17 +58,22 @@ namespace {
  * Custom string trait struct to tell mdds::multi_type_matrix about the
  * custom string type and how to handle blocks storing them.
  */
-struct matrix_trait
+struct matrix_traits
 {
     typedef sc::string_block string_element_block;
     typedef sc::uint16_block integer_element_block;
+};
 
-    typedef mdds::mtv::custom_block_func1<sc::string_block> element_block_func;
+struct matrix_flag_traits
+{
+    typedef sc::string_block string_element_block;
+    typedef mdds::mtv::uint8_element_block integer_element_block;
 };
 
 }
 
-typedef mdds::multi_type_matrix<matrix_trait> MatrixImplType;
+typedef mdds::multi_type_matrix<matrix_traits> MatrixImplType;
+typedef mdds::multi_type_matrix<matrix_flag_traits> MatrixFlagImplType;
 
 namespace {
 
@@ -219,16 +224,14 @@ Comp CompareMatrixElemFunc<Comp>::maComp;
 
 }
 
-/* TODO: it would be good if mdds had get/set<sal_uInt8> additionally to
- * get/set<bool>, we're abusing double here. */
-typedef double TMatFlag;
-const TMatFlag SC_MATFLAG_EMPTYRESULT = 1.0;
-const TMatFlag SC_MATFLAG_EMPTYPATH   = 2.0;
+typedef uint8_t TMatFlag;
+const TMatFlag SC_MATFLAG_EMPTYRESULT = 1;
+const TMatFlag SC_MATFLAG_EMPTYPATH   = 2;
 
 class ScMatrixImpl
 {
     MatrixImplType maMat;
-    MatrixImplType maMatFlag;
+    MatrixFlagImplType maMatFlag;
     ScInterpreter* pErrorInterpreter;
 
 public:
@@ -257,10 +260,12 @@ public:
 
     void PutDouble(double fVal, SCSIZE nC, SCSIZE nR);
     void PutDouble( double fVal, SCSIZE nIndex);
+    void PutDoubleTrans( double fVal, SCSIZE nIndex);
     void PutDouble(const double* pArray, size_t nLen, SCSIZE nC, SCSIZE nR);
 
     void PutString(const svl::SharedString& rStr, SCSIZE nC, SCSIZE nR);
     void PutString(const svl::SharedString& rStr, SCSIZE nIndex);
+    void PutStringTrans(const svl::SharedString& rStr, SCSIZE nIndex);
     void PutString(const svl::SharedString* pArray, size_t nLen, SCSIZE nC, SCSIZE nR);
 
     void PutEmpty(SCSIZE nC, SCSIZE nR);
@@ -352,6 +357,7 @@ public:
 
 private:
     void CalcPosition(SCSIZE nIndex, SCSIZE& rC, SCSIZE& rR) const;
+    void CalcTransPosition(SCSIZE nIndex, SCSIZE& rC, SCSIZE& rR) const;
 };
 
 static std::once_flag bElementsMaxFetched;
@@ -534,6 +540,13 @@ void ScMatrixImpl::PutDouble( double fVal, SCSIZE nIndex)
     PutDouble(fVal, nC, nR);
 }
 
+void ScMatrixImpl::PutDoubleTrans(double fVal, SCSIZE nIndex)
+{
+    SCSIZE nC, nR;
+    CalcTransPosition(nIndex, nC, nR);
+    PutDouble(fVal, nC, nR);
+}
+
 void ScMatrixImpl::PutString(const svl::SharedString& rStr, SCSIZE nC, SCSIZE nR)
 {
     if (ValidColRow( nC, nR))
@@ -561,6 +574,13 @@ void ScMatrixImpl::PutString(const svl::SharedString& rStr, SCSIZE nIndex)
     PutString(rStr, nC, nR);
 }
 
+void ScMatrixImpl::PutStringTrans(const svl::SharedString& rStr, SCSIZE nIndex)
+{
+    SCSIZE nC, nR;
+    CalcTransPosition(nIndex, nC, nR);
+    PutString(rStr, nC, nR);
+}
+
 void ScMatrixImpl::PutEmpty(SCSIZE nC, SCSIZE nR)
 {
     if (ValidColRow( nC, nR))
@@ -579,7 +599,14 @@ void ScMatrixImpl::PutEmptyPath(SCSIZE nC, SCSIZE nR)
     if (ValidColRow( nC, nR))
     {
         maMat.set_empty(nR, nC);
+#if defined __GNUC__ && !defined __clang__ && __GNUC__ == 12 && __cplusplus == 202002L
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
         maMatFlag.set(nR, nC, SC_MATFLAG_EMPTYPATH);
+#if defined __GNUC__ && !defined __clang__ && __GNUC__ == 12 && __cplusplus == 202002L
+#pragma GCC diagnostic pop
+#endif
     }
     else
     {
@@ -707,7 +734,7 @@ svl::SharedString ScMatrixImpl::GetString( SvNumberFormatter& rFormatter, SCSIZE
             return maMat.get_string(aPos);
         case mdds::mtm::element_empty:
         {
-            if (maMatFlag.get_numeric(nR, nC) != SC_MATFLAG_EMPTYPATH)
+            if (maMatFlag.get<uint8_t>(nR, nC) != SC_MATFLAG_EMPTYPATH)
                 // not an empty path.
                 return svl::SharedString::getEmptyString();
 
@@ -770,8 +797,8 @@ ScMatrixValue ScMatrixImpl::Get(SCSIZE nC, SCSIZE nR) const
                     case mdds::mtm::element_empty:
                         aVal.nType = ScMatValType::Empty;
                     break;
-                    case mdds::mtm::element_numeric:
-                        aVal.nType = maMatFlag.get<TMatFlag>(nR, nC)
+                    case mdds::mtm::element_integer:
+                        aVal.nType = maMatFlag.get<uint8_t>(nR, nC)
                             == SC_MATFLAG_EMPTYPATH ? ScMatValType::EmptyPath : ScMatValType::Empty;
                     break;
                     default:
@@ -799,7 +826,9 @@ bool ScMatrixImpl::IsStringOrEmpty( SCSIZE nIndex ) const
 
 bool ScMatrixImpl::IsStringOrEmpty( SCSIZE nC, SCSIZE nR ) const
 {
-    ValidColRowReplicated( nC, nR );
+    if (!ValidColRowOrReplicated( nC, nR ))
+        return false;
+
     switch (maMat.get_type(nR, nC))
     {
         case mdds::mtm::element_empty:
@@ -813,29 +842,35 @@ bool ScMatrixImpl::IsStringOrEmpty( SCSIZE nC, SCSIZE nR ) const
 
 bool ScMatrixImpl::IsEmpty( SCSIZE nC, SCSIZE nR ) const
 {
+    if (!ValidColRowOrReplicated( nC, nR ))
+        return false;
+
     // Flag must indicate an 'empty' or 'empty cell' or 'empty result' element,
     // but not an 'empty path' element.
-    ValidColRowReplicated( nC, nR );
     return maMat.get_type(nR, nC) == mdds::mtm::element_empty &&
-        maMatFlag.get_numeric(nR, nC) != SC_MATFLAG_EMPTYPATH;
+        maMatFlag.get_integer(nR, nC) != SC_MATFLAG_EMPTYPATH;
 }
 
 bool ScMatrixImpl::IsEmptyCell( SCSIZE nC, SCSIZE nR ) const
 {
+    if (!ValidColRowOrReplicated( nC, nR ))
+        return false;
+
     // Flag must indicate an 'empty cell' element instead of an
     // 'empty' or 'empty result' or 'empty path' element.
-    ValidColRowReplicated( nC, nR );
     return maMat.get_type(nR, nC) == mdds::mtm::element_empty &&
         maMatFlag.get_type(nR, nC) == mdds::mtm::element_empty;
 }
 
 bool ScMatrixImpl::IsEmptyResult( SCSIZE nC, SCSIZE nR ) const
 {
+    if (!ValidColRowOrReplicated( nC, nR ))
+        return false;
+
     // Flag must indicate an 'empty result' element instead of an
     // 'empty' or 'empty cell' or 'empty path' element.
-    ValidColRowReplicated( nC, nR );
     return maMat.get_type(nR, nC) == mdds::mtm::element_empty &&
-        maMatFlag.get_numeric(nR, nC) == SC_MATFLAG_EMPTYRESULT;
+        maMatFlag.get_integer(nR, nC) == SC_MATFLAG_EMPTYRESULT;
 }
 
 bool ScMatrixImpl::IsEmptyPath( SCSIZE nC, SCSIZE nR ) const
@@ -843,7 +878,7 @@ bool ScMatrixImpl::IsEmptyPath( SCSIZE nC, SCSIZE nR ) const
     // Flag must indicate an 'empty path' element.
     if (ValidColRowOrReplicated( nC, nR ))
         return maMat.get_type(nR, nC) == mdds::mtm::element_empty &&
-            maMatFlag.get_numeric(nR, nC) == SC_MATFLAG_EMPTYPATH;
+            maMatFlag.get_integer(nR, nC) == SC_MATFLAG_EMPTYPATH;
     else
         return true;
 }
@@ -857,7 +892,9 @@ bool ScMatrixImpl::IsValue( SCSIZE nIndex ) const
 
 bool ScMatrixImpl::IsValue( SCSIZE nC, SCSIZE nR ) const
 {
-    ValidColRowReplicated(nC, nR);
+    if (!ValidColRowOrReplicated( nC, nR ))
+        return false;
+
     switch (maMat.get_type(nR, nC))
     {
         case mdds::mtm::element_boolean:
@@ -871,7 +908,9 @@ bool ScMatrixImpl::IsValue( SCSIZE nC, SCSIZE nR ) const
 
 bool ScMatrixImpl::IsValueOrEmpty( SCSIZE nC, SCSIZE nR ) const
 {
-    ValidColRowReplicated(nC, nR);
+    if (!ValidColRowOrReplicated( nC, nR ))
+        return false;
+
     switch (maMat.get_type(nR, nC))
     {
         case mdds::mtm::element_boolean:
@@ -886,7 +925,9 @@ bool ScMatrixImpl::IsValueOrEmpty( SCSIZE nC, SCSIZE nR ) const
 
 bool ScMatrixImpl::IsBoolean( SCSIZE nC, SCSIZE nR ) const
 {
-    ValidColRowReplicated( nC, nR );
+    if (!ValidColRowOrReplicated( nC, nR ))
+        return false;
+
     return maMat.get_type(nR, nC) == mdds::mtm::element_boolean;
 }
 
@@ -974,7 +1015,7 @@ void ScMatrixImpl::PutEmptyResultVector( SCSIZE nCount, SCSIZE nC, SCSIZE nR )
     {
         maMat.set_empty(nR, nC, nCount);
         // Flag to indicate that this is 'empty result', not 'empty' or 'empty path'.
-        std::vector<TMatFlag> aVals(nCount, SC_MATFLAG_EMPTYRESULT);
+        std::vector<uint8_t> aVals(nCount, SC_MATFLAG_EMPTYRESULT);
         maMatFlag.set(nR, nC, aVals.begin(), aVals.end());
     }
     else
@@ -989,7 +1030,7 @@ void ScMatrixImpl::PutEmptyPathVector( SCSIZE nCount, SCSIZE nC, SCSIZE nR )
     {
         maMat.set_empty(nR, nC, nCount);
         // Flag to indicate 'empty path'.
-        std::vector<TMatFlag> aVals(nCount, SC_MATFLAG_EMPTYPATH);
+        std::vector<uint8_t> aVals(nCount, SC_MATFLAG_EMPTYPATH);
         maMatFlag.set(nR, nC, aVals.begin(), aVals.end());
     }
     else
@@ -2617,6 +2658,14 @@ void ScMatrixImpl::CalcPosition(SCSIZE nIndex, SCSIZE& rC, SCSIZE& rR) const
     rR = nIndex - rC*nRowSize;
 }
 
+void ScMatrixImpl::CalcTransPosition(SCSIZE nIndex, SCSIZE& rC, SCSIZE& rR) const
+{
+    SCSIZE nColSize = maMat.size().column;
+    SAL_WARN_IF(!nColSize, "sc.core", "ScMatrixImpl::CalcPosition: 0 cols!");
+    rR = nColSize > 1 ? nIndex / nColSize : nIndex;
+    rC = nIndex - rR * nColSize;
+}
+
 namespace {
 
 size_t get_index(SCSIZE nMaxRow, size_t nRow, size_t nCol, size_t nRowOffset, size_t nColOffset)
@@ -3158,6 +3207,11 @@ void ScMatrix::PutDouble( double fVal, SCSIZE nIndex)
     pImpl->PutDouble(fVal, nIndex);
 }
 
+void ScMatrix::PutDoubleTrans(double fVal, SCSIZE nIndex)
+{
+    pImpl->PutDoubleTrans(fVal, nIndex);
+}
+
 void ScMatrix::PutDouble(const double* pArray, size_t nLen, SCSIZE nC, SCSIZE nR)
 {
     pImpl->PutDouble(pArray, nLen, nC, nR);
@@ -3171,6 +3225,11 @@ void ScMatrix::PutString(const svl::SharedString& rStr, SCSIZE nC, SCSIZE nR)
 void ScMatrix::PutString(const svl::SharedString& rStr, SCSIZE nIndex)
 {
     pImpl->PutString(rStr, nIndex);
+}
+
+void ScMatrix::PutStringTrans(const svl::SharedString& rStr, SCSIZE nIndex)
+{
+    pImpl->PutStringTrans(rStr, nIndex);
 }
 
 void ScMatrix::PutString(const svl::SharedString* pArray, size_t nLen, SCSIZE nC, SCSIZE nR)

@@ -286,7 +286,7 @@ bool SwDoc::SortText(const SwPaM& rPaM, const SwSortOptions& rOpt)
     auto [pStart, pEnd] = rPaM.StartEnd(); // SwPosition*
 
     // Set index to the Selection's start
-    for ( const auto *pFormat : *GetSpzFrameFormats() )
+    for(sw::SpzFrameFormat* pFormat: *GetSpzFrameFormats())
     {
         SwFormatAnchor const*const pAnchor = &pFormat->GetAnchor();
         SwNode const*const pAnchorNode = pAnchor->GetAnchorNode();
@@ -506,10 +506,7 @@ bool SwDoc::SortTable(const SwSelBoxes& rBoxes, const SwSortOptions& rOpt)
             nStart = 0;
     }
 
-    // Switch to relative Formulas
-    SwTableFormulaUpdate aMsgHint( &pTableNd->GetTable() );
-    aMsgHint.m_eFlags = TBL_RELBOXNAME;
-    getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+    pTableNd->GetTable().SwitchFormulasToRelativeRepresentation();
 
     // Table as a flat array structure
     FlatFndBox aFlatBox(this, aFndBox);

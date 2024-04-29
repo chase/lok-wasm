@@ -28,22 +28,15 @@
 namespace framework
 {
 
-class MenuBarWrapper final : public UIConfigElementWrapperBase,
-                       public css::container::XNameAccess
+typedef cppu::ImplInheritanceHelper< UIConfigElementWrapperBase, css::container::XNameAccess> MenuBarWrapper_Base;
+class MenuBarWrapper final : public MenuBarWrapper_Base
 
 {
     public:
         MenuBarWrapper( css::uno::Reference< css::uno::XComponentContext > xContext );
         virtual ~MenuBarWrapper() override;
 
-        //  XInterface, XTypeProvider
-        virtual css::uno::Any  SAL_CALL queryInterface( const css::uno::Type& aType ) override;
-        virtual void SAL_CALL acquire() noexcept override;
-        virtual void SAL_CALL release() noexcept override;
-        virtual css::uno::Sequence< css::uno::Type >  SAL_CALL getTypes() override;
-        virtual css::uno::Sequence< sal_Int8 > SAL_CALL getImplementationId() override;
-
-        MenuBarManager* GetMenuBarManager() const { return static_cast< MenuBarManager* >( m_xMenuBarManager.get() ); }
+        MenuBarManager* GetMenuBarManager() const { return m_xMenuBarManager.get(); }
 
         // XComponent
         virtual void SAL_CALL dispose() override;
@@ -71,7 +64,7 @@ class MenuBarWrapper final : public UIConfigElementWrapperBase,
         void fillPopupControllerCache();
 
         bool                                                            m_bRefreshPopupControllerCache : 1;
-        css::uno::Reference< css::lang::XComponent >                    m_xMenuBarManager;
+        rtl::Reference< MenuBarManager >                                m_xMenuBarManager;
         PopupControllerCache                                            m_aPopupControllerCache;
         css::uno::Reference< css::uno::XComponentContext >              m_xContext;
 };

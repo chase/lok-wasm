@@ -157,9 +157,10 @@ void ChartTypePanel::Initialize()
     if (!m_xChartModel.is())
         return;
     rtl::Reference<::chart::ChartTypeManager> xChartTypeManager = m_xChartModel->getTypeManager();
-    rtl::Reference<Diagram> xDiagram = ChartModelHelper::findDiagram(m_xChartModel);
-    DiagramHelper::tTemplateWithServiceName aTemplate
-        = DiagramHelper::getTemplateForDiagram(xDiagram, xChartTypeManager);
+    rtl::Reference<Diagram> xDiagram = m_xChartModel->getFirstChartDiagram();
+    Diagram::tTemplateWithServiceName aTemplate;
+    if (xDiagram)
+        aTemplate = xDiagram->getTemplate(xChartTypeManager);
     OUString aServiceName(aTemplate.sServiceName);
 
     bool bFound = false;
@@ -181,7 +182,7 @@ void ChartTypePanel::Initialize()
             m_pCurrentMainType = getSelectedMainType();
 
             //set ThreeDLookScheme
-            aParameter.eThreeDLookScheme = ThreeDHelper::detectScheme(xDiagram);
+            aParameter.eThreeDLookScheme = xDiagram->detectScheme();
             if (!aParameter.b3DLook
                 && aParameter.eThreeDLookScheme != ThreeDLookScheme::ThreeDLookScheme_Realistic)
                 aParameter.eThreeDLookScheme = ThreeDLookScheme::ThreeDLookScheme_Realistic;
@@ -221,9 +222,10 @@ void ChartTypePanel::updateData()
     if (!m_xChartModel.is())
         return;
     rtl::Reference<::chart::ChartTypeManager> xChartTypeManager = m_xChartModel->getTypeManager();
-    rtl::Reference<Diagram> xDiagram = ChartModelHelper::findDiagram(m_xChartModel);
-    DiagramHelper::tTemplateWithServiceName aTemplate
-        = DiagramHelper::getTemplateForDiagram(xDiagram, xChartTypeManager);
+    rtl::Reference<Diagram> xDiagram = m_xChartModel->getFirstChartDiagram();
+    Diagram::tTemplateWithServiceName aTemplate;
+    if (xDiagram)
+        aTemplate = xDiagram->getTemplate(xChartTypeManager);
     OUString aServiceName(aTemplate.sServiceName);
 
     //sal_uInt16 nM = 0;
@@ -259,7 +261,7 @@ void ChartTypePanel::HandleContextChange(const vcl::EnumContext& rContext)
 
 void ChartTypePanel::modelInvalid() { mbModelValid = false; }
 
-void ChartTypePanel::doUpdateModel(rtl::Reference<::chart::ChartModel> xModel)
+void ChartTypePanel::doUpdateModel(const rtl::Reference<::chart::ChartModel>& xModel)
 {
     if (mbModelValid)
     {
@@ -367,8 +369,8 @@ void ChartTypePanel::stateChanged()
     commitToModel(aParameter);
 
     //detect the new ThreeDLookScheme
-    rtl::Reference<Diagram> xDiagram = ChartModelHelper::findDiagram(m_xChartModel);
-    aParameter.eThreeDLookScheme = ThreeDHelper::detectScheme(xDiagram);
+    rtl::Reference<Diagram> xDiagram = m_xChartModel->getFirstChartDiagram();
+    aParameter.eThreeDLookScheme = xDiagram->detectScheme();
     try
     {
         xDiagram->getPropertyValue(CHART_UNONAME_SORT_BY_XVALUES) >>= aParameter.bSortByXValues;
@@ -411,13 +413,12 @@ void ChartTypePanel::selectMainType()
     m_pCurrentMainType->adjustParameterToMainType(aParameter);
     commitToModel(aParameter);
     //detect the new ThreeDLookScheme
-    aParameter.eThreeDLookScheme
-        = ThreeDHelper::detectScheme(ChartModelHelper::findDiagram(m_xChartModel));
+    aParameter.eThreeDLookScheme = m_xChartModel->getFirstChartDiagram()->detectScheme();
     if (!aParameter.b3DLook
         && aParameter.eThreeDLookScheme != ThreeDLookScheme::ThreeDLookScheme_Realistic)
         aParameter.eThreeDLookScheme = ThreeDLookScheme::ThreeDLookScheme_Realistic;
 
-    rtl::Reference<Diagram> xDiagram = ChartModelHelper::findDiagram(m_xChartModel);
+    rtl::Reference<Diagram> xDiagram = m_xChartModel->getFirstChartDiagram();
     try
     {
         xDiagram->getPropertyValue(CHART_UNONAME_SORT_BY_XVALUES) >>= aParameter.bSortByXValues;

@@ -24,6 +24,7 @@
 
 #include <com/sun/star/uno/Reference.hxx>
 #include <comphelper/accessibleselectionhelper.hxx>
+#include <cppuhelper/implbase.hxx>
 
 #include <rtl/ref.hxx>
 #include <tools/gen.hxx>
@@ -38,10 +39,9 @@ namespace com::sun::star::awt {
 class SvxPixelCtl;
 class SvxPixelCtlAccessible;
 
-typedef ::cppu::ImplHelper1<css::accessibility::XAccessible> OAccessibleHelper_Base;
-
-class SvxPixelCtlAccessibleChild final : public ::comphelper::OAccessibleComponentHelper,
-                                         public OAccessibleHelper_Base
+class SvxPixelCtlAccessibleChild final : public cppu::ImplInheritanceHelper<
+                                             ::comphelper::OAccessibleComponentHelper,
+                                             css::accessibility::XAccessible>
 {
 public:
     SvxPixelCtlAccessibleChild(
@@ -50,9 +50,6 @@ public:
                 const tools::Rectangle& rBounds,
                 rtl::Reference<SvxPixelCtlAccessible> xParent,
                 tools::Long nIndexInParent );
-
-    DECLARE_XINTERFACE( )
-    DECLARE_XTYPEPROVIDER( )
 
     //XAccessibleComponent
     virtual void SAL_CALL grabFocus(  ) override;
@@ -96,14 +93,12 @@ private:
     tools::Long mnIndexInParent;
 };
 
-class SvxPixelCtlAccessible final : public ::comphelper::OAccessibleSelectionHelper,
-                                    public OAccessibleHelper_Base
+class SvxPixelCtlAccessible final : public cppu::ImplInheritanceHelper<
+                                        ::comphelper::OAccessibleSelectionHelper,
+                                        css::accessibility::XAccessible>
 {
 public:
     SvxPixelCtlAccessible(SvxPixelCtl* pPixelCtl);
-
-    DECLARE_XINTERFACE( )
-    DECLARE_XTYPEPROVIDER( )
 
     //XAccessibleComponent
     virtual void SAL_CALL grabFocus(  ) override;
@@ -124,7 +119,7 @@ public:
     virtual sal_Int32 SAL_CALL getForeground(  ) override;
     virtual sal_Int32 SAL_CALL getBackground(  ) override;
 
-    css::uno::Reference< css::accessibility::XAccessible >
+    rtl::Reference<SvxPixelCtlAccessibleChild>
          CreateChild (tools::Long nIndex, Point mPoint);
 
 private:
@@ -143,7 +138,7 @@ private:
     virtual void SAL_CALL disposing() override;
 
     SvxPixelCtl* mpPixelCtl;
-    css::uno::Reference< css::accessibility::XAccessible> m_xCurChild;
+    rtl::Reference<SvxPixelCtlAccessibleChild> m_xCurChild;
 
 public:
     void NotifyChild(tools::Long nIndex, bool bSelect, bool bCheck);

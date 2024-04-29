@@ -16,6 +16,7 @@ endif
 $(eval $(call gb_Module_add_moduledirs,external,\
 	$(call gb_Helper_optional,XMLSEC,xmlsec) \
 	$(call gb_Helper_optional,ABW,libabw) \
+	$(call gb_Helper_optional,ARGON2,argon2) \
 	$(call gb_Helper_optional,BOOST,boost) \
 	$(call gb_Helper_optional,BOX2D,box2d) \
 	$(call gb_Helper_optional,BREAKPAD,breakpad) \
@@ -41,6 +42,7 @@ $(eval $(call gb_Module_add_moduledirs,external,\
 	$(call gb_Helper_optional,FONTCONFIG,fontconfig) \
 	$(call gb_Helper_optional,FREEHAND,libfreehand) \
 	$(call gb_Helper_optional,FREETYPE,freetype) \
+	$(call gb_Helper_optional,FROZEN,frozen) \
 	$(call gb_Helper_optional,GLM,glm) \
 	$(call gb_Helper_optional,GPGMEPP,gpgmepp) \
 	$(call gb_Helper_optional,GRAPHITE,graphite) \
@@ -48,6 +50,7 @@ $(eval $(call gb_Module_add_moduledirs,external,\
 	$(call gb_Helper_optional,HSQLDB,hsqldb) \
 	$(call gb_Helper_optional,HUNSPELL,hunspell) \
 	$(call gb_Helper_optional,HYPHEN,hyphen) \
+	$(if $(filter WNT,$(OS)),IAccessible2) \
 	$(call gb_Helper_optional,ICU,icu) \
 	$(call gb_Helper_optional,JAVA_WEBSOCKET,java_websocket) \
 	$(call gb_Helper_optional,JFREEREPORT,jfreereport) \
@@ -84,11 +87,13 @@ $(eval $(call gb_Module_add_moduledirs,external,\
 	$(call gb_Helper_optional,OPENSSL,openssl) \
 	$(call gb_Helper_optional,ORCUS,liborcus) \
 	$(call gb_Helper_optional,PAGEMAKER,libpagemaker) \
+	$(if $(ENABLE_ONLINE_UPDATE_MAR),onlineupdate) \
 	$(call gb_Helper_optional,PDFIUM,pdfium) \
 	$(call gb_Helper_optional,POPPLER,poppler) \
 	$(call gb_Helper_optional,POSTGRESQL,postgresql) \
 	$(call gb_Helper_optional,PYTHON,python3) \
 	$(call gb_Helper_optional,QXP,libqxp) \
+	$(call gb_Helper_optional,ZXCVBN,zxcvbn-c) \
 	$(call gb_Helper_optional,ZXING,zxing) \
 	$(call gb_Helper_optional,REDLAND,redland) \
 	$(call gb_Helper_optional,REVENGE,librevenge) \

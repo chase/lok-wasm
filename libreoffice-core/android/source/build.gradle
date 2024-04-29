@@ -5,6 +5,9 @@ apply from: 'liboSettings.gradle'
 allprojects {
     repositories {
         mavenCentral()
+        maven {
+            url "https://ipv6.repo1.maven.org/maven2"
+        }
         google()
     }
 }
@@ -12,10 +15,13 @@ allprojects {
 buildscript {
     repositories {
         mavenCentral()
+        maven {
+            url "https://ipv6.repo1.maven.org/maven2"
+        }
         google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.2.2'
+        classpath 'com.android.tools.build:gradle:8.2.0'
     }
 }
 
@@ -26,12 +32,14 @@ dependencies {
             "libreoffice.jar",
             "unoloader.jar"
     ])
-    implementation 'com.google.android.material:material:1.6.1'
+    implementation 'com.google.android.material:material:1.10.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation "androidx.multidex:multidex:2.0.1"
 }
 
 android {
-    compileSdkVersion 32
+    namespace 'org.libreoffice'
+    compileSdk 34
     // uses non-conventional source layout, so need to reconfigure accordingly
     // ToDo move to conventional layout, so stuff can be stripped down.
     sourceSets {
@@ -46,8 +54,11 @@ android {
         strippedUIEditing.assets.srcDirs 'assets_strippedUI'
     }
     defaultConfig {
-        minSdkVersion 16
-        targetSdkVersion 32
+        // minSdkVersion is set in liboSettings.gradle
+        targetSdkVersion 34
+        // multidex needed when > 65,536 methods referenced with minSdKVersion < 21
+        // s. https://developer.android.com/studio/build/multidex
+        multiDexEnabled true
         vectorDrawables.useSupportLibrary = true
     }
     buildTypes {
@@ -71,7 +82,6 @@ android {
         strippedUIEditing {
             dimension "default"
             buildConfigField 'boolean', 'ALLOW_EDITING', 'true'
-            versionNameSuffix "-editing"
         }
         fullUI.dimension "default"
     }
@@ -79,6 +89,11 @@ android {
         // don't error-out on missing translations
         warning 'MissingTranslation'
     }
+}
+
+// show warnings about use of deprecated API
+tasks.withType(JavaCompile).configureEach {
+    options.deprecation = true
 }
 
 /* remark inherited from makefile:
@@ -139,11 +154,20 @@ task copyAssets(type: Copy) {
     description "copies assets that can be accessed within the installed apk"
     into 'assets'
 
-    // include icons
+    // include icons, Impress styles and required .ui files
     into ('share') {
         into ('config') {
             from ("${liboInstdir}/share/config")
-            includes = ['images_**.zip']
+            includes = ['images_**.zip',
+                        '**/simpress/**.xml',
+                        '**/annotation.ui',
+                        '**/hfmenubutton.ui',
+                        '**/inforeadonlydialog.ui',
+                        '**/pbmenubutton.ui',
+                        '**/scrollbars.ui',
+                        '**/tabbuttons.ui',
+                        '**/tabviewbar.ui'
+                        ]
         }
     }
 
@@ -168,16 +192,6 @@ task copyAssets(type: Copy) {
             include '*.data'
         }
     }
-    // include required .ui files
-    into('config') {
-        from "${liboInstdir}/share/config"
-        include '**/annotation.ui',
-                '**/hfmenubutton.ui',
-                '**/inforeadonlydialog.ui',
-                '**/pbmenubutton.ui',
-                '**/scrollbars.ui',
-                '**/tabbuttons.ui', '**/tabviewbar.ui'
-    }
 }
 
 task copyAppResources(type: Copy) {
@@ -187,9 +201,6 @@ task copyAppResources(type: Copy) {
         includes = ["LICENSE", "NOTICE"]
         rename "LICENSE", "license.txt"
         rename "NOTICE", "notice.txt"
-    }
-    from("${liboExampleDocument}") {
-        rename ".*", "example.odt"
     }
 }
 
@@ -259,6 +270,7 @@ task createRCfiles {
             [Bootstrap]
             LO_LIB_DIR=file://$APP_DATA_DIR/lib/
             BRAND_BASE_DIR=file:///assets
+            BRAND_SHARE_SUBDIR=share
             CONFIGURATION_LAYERS=xcsxcu:${BRAND_BASE_DIR}/share/registry res:${BRAND_BASE_DIR}/share/registry
             URE_BIN_DIR=file:///assets/ure/bin/dir/nothing-here/we-can/exec-anyway
             '''.stripIndent()

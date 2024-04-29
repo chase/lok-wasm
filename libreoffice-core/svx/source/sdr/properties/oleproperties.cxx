@@ -36,6 +36,7 @@ namespace sdr::properties
             }
             else
             {
+                RectangleProperties::applyDefaultStyleSheetFromSdrModel();
                 SetMergedItem(XFillStyleItem(com::sun::star::drawing::FillStyle_NONE));
                 SetMergedItem(XLineStyleItem(com::sun::star::drawing::LineStyle_NONE));
             }
@@ -58,15 +59,6 @@ namespace sdr::properties
         std::unique_ptr<BaseProperties> OleProperties::Clone(SdrObject& rObj) const
         {
             return std::unique_ptr<BaseProperties>(new OleProperties(*this, rObj));
-        }
-
-        void OleProperties::ForceDefaultAttributes()
-        {
-            // call parent
-            RectangleProperties::ForceDefaultAttributes();
-
-            // force ItemSet
-            GetObjectItemSet();
         }
 } // end of namespace
 

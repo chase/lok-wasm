@@ -8,6 +8,7 @@
  */
 #pragma once
 
+#include <vcl/builder.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/syswin.hxx>
@@ -21,6 +22,7 @@
 #include <vcl/toolkit/fixedhyper.hxx>
 #include <vcl/toolkit/lstbox.hxx>
 #include <vcl/toolkit/menubtn.hxx>
+#include <vcl/toolkit/prgsbar.hxx>
 #include <vcl/toolkit/combobox.hxx>
 #include <vcl/tabctrl.hxx>
 #include <vcl/layout.hxx>
@@ -29,7 +31,6 @@
 #include <o3tl/sorted_vector.hxx>
 #include "calendar.hxx"
 #include "iconview.hxx"
-#include "listbox.hxx"
 #include "messagedialog.hxx"
 #include "verticaltabctrl.hxx"
 
@@ -49,96 +50,98 @@ public:
                        const css::uno::Reference<css::frame::XFrame>& rFrame
                        = css::uno::Reference<css::frame::XFrame>());
 
-    virtual std::unique_ptr<weld::MessageDialog> weld_message_dialog(const OString& id) override;
+    virtual std::unique_ptr<weld::MessageDialog> weld_message_dialog(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Dialog> weld_dialog(const OString& id) override;
+    virtual std::unique_ptr<weld::Dialog> weld_dialog(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Assistant> weld_assistant(const OString& id) override;
+    virtual std::unique_ptr<weld::Assistant> weld_assistant(const OUString& id) override;
 
     virtual std::unique_ptr<weld::Window> create_screenshot_window() override;
 
-    virtual std::unique_ptr<weld::Widget> weld_widget(const OString& id) override;
+    virtual std::unique_ptr<weld::Widget> weld_widget(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Container> weld_container(const OString& id) override;
+    virtual std::unique_ptr<weld::Container> weld_container(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Box> weld_box(const OString& id) override;
+    virtual std::unique_ptr<weld::Box> weld_box(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Paned> weld_paned(const OString& id) override;
+    virtual std::unique_ptr<weld::Paned> weld_paned(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Frame> weld_frame(const OString& id) override;
+    virtual std::unique_ptr<weld::Frame> weld_frame(const OUString& id) override;
 
     virtual std::unique_ptr<weld::ScrolledWindow>
-    weld_scrolled_window(const OString& id, bool bUserManagedScrolling = false) override;
+    weld_scrolled_window(const OUString& id, bool bUserManagedScrolling = false) override;
 
-    virtual std::unique_ptr<weld::Notebook> weld_notebook(const OString& id) override;
+    virtual std::unique_ptr<weld::Notebook> weld_notebook(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Button> weld_button(const OString& id) override;
+    virtual std::unique_ptr<weld::Button> weld_button(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::MenuButton> weld_menu_button(const OString& id) override;
+    virtual std::unique_ptr<weld::MenuButton> weld_menu_button(const OUString& id) override;
 
     virtual std::unique_ptr<weld::MenuToggleButton>
-    weld_menu_toggle_button(const OString& id) override;
+    weld_menu_toggle_button(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::LinkButton> weld_link_button(const OString& id) override;
+    virtual std::unique_ptr<weld::LinkButton> weld_link_button(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::ToggleButton> weld_toggle_button(const OString& id) override;
+    virtual std::unique_ptr<weld::ToggleButton> weld_toggle_button(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::RadioButton> weld_radio_button(const OString& id) override;
+    virtual std::unique_ptr<weld::RadioButton> weld_radio_button(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::CheckButton> weld_check_button(const OString& id) override;
+    virtual std::unique_ptr<weld::CheckButton> weld_check_button(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Scale> weld_scale(const OString& id) override;
+    virtual std::unique_ptr<weld::Scale> weld_scale(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::ProgressBar> weld_progress_bar(const OString& id) override;
+    virtual std::unique_ptr<weld::ProgressBar> weld_progress_bar(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Spinner> weld_spinner(const OString& id) override;
+    virtual std::unique_ptr<weld::LevelBar> weld_level_bar(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Image> weld_image(const OString& id) override;
+    virtual std::unique_ptr<weld::Spinner> weld_spinner(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Calendar> weld_calendar(const OString& id) override;
+    virtual std::unique_ptr<weld::Image> weld_image(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Entry> weld_entry(const OString& id) override;
+    virtual std::unique_ptr<weld::Calendar> weld_calendar(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::SpinButton> weld_spin_button(const OString& id) override;
+    virtual std::unique_ptr<weld::Entry> weld_entry(const OUString& id) override;
+
+    virtual std::unique_ptr<weld::SpinButton> weld_spin_button(const OUString& id) override;
 
     virtual std::unique_ptr<weld::MetricSpinButton>
-    weld_metric_spin_button(const OString& id, FieldUnit eUnit) override;
+    weld_metric_spin_button(const OUString& id, FieldUnit eUnit) override;
 
     virtual std::unique_ptr<weld::FormattedSpinButton>
-    weld_formatted_spin_button(const OString& id) override;
+    weld_formatted_spin_button(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::ComboBox> weld_combo_box(const OString& id) override;
+    virtual std::unique_ptr<weld::ComboBox> weld_combo_box(const OUString& id) override;
 
     virtual std::unique_ptr<weld::EntryTreeView>
-    weld_entry_tree_view(const OString& containerid, const OString& entryid,
-                         const OString& treeviewid) override;
+    weld_entry_tree_view(const OUString& containerid, const OUString& entryid,
+                         const OUString& treeviewid) override;
 
-    virtual std::unique_ptr<weld::TreeView> weld_tree_view(const OString& id) override;
+    virtual std::unique_ptr<weld::TreeView> weld_tree_view(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::IconView> weld_icon_view(const OString& id) override;
+    virtual std::unique_ptr<weld::IconView> weld_icon_view(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Label> weld_label(const OString& id) override;
+    virtual std::unique_ptr<weld::Label> weld_label(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::TextView> weld_text_view(const OString& id) override;
+    virtual std::unique_ptr<weld::TextView> weld_text_view(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Expander> weld_expander(const OString& id) override;
+    virtual std::unique_ptr<weld::Expander> weld_expander(const OUString& id) override;
 
     virtual std::unique_ptr<weld::DrawingArea>
-    weld_drawing_area(const OString& id, const a11yref& rA11yImpl = nullptr,
+    weld_drawing_area(const OUString& id, const a11yref& rA11yImpl = nullptr,
                       FactoryFunction pUITestFactoryFunction = nullptr,
                       void* pUserData = nullptr) override;
 
-    virtual std::unique_ptr<weld::Menu> weld_menu(const OString& id) override;
+    virtual std::unique_ptr<weld::Menu> weld_menu(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Popover> weld_popover(const OString& id) override;
+    virtual std::unique_ptr<weld::Popover> weld_popover(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Toolbar> weld_toolbar(const OString& id) override;
+    virtual std::unique_ptr<weld::Toolbar> weld_toolbar(const OUString& id) override;
 
-    virtual std::unique_ptr<weld::Scrollbar> weld_scrollbar(const OString& id) override;
+    virtual std::unique_ptr<weld::Scrollbar> weld_scrollbar(const OUString& id) override;
 
     virtual std::unique_ptr<weld::SizeGroup> create_size_group() override;
 
-    OString get_current_page_help_id() const;
+    OUString get_current_page_help_id() const;
 
     virtual ~SalInstanceBuilder() override;
 };
@@ -155,23 +158,24 @@ private:
 
 public:
     SalInstanceMenu(PopupMenu* pMenu, bool bTakeOwnership);
-    virtual OString popup_at_rect(weld::Widget* pParent, const tools::Rectangle& rRect,
-                                  weld::Placement ePlace = weld::Placement::Under) override;
-    virtual void set_sensitive(const OString& rIdent, bool bSensitive) override;
-    virtual bool get_sensitive(const OString& rIdent) const override;
-    virtual void set_active(const OString& rIdent, bool bActive) override;
-    virtual bool get_active(const OString& rIdent) const override;
-    virtual void set_label(const OString& rIdent, const OUString& rLabel) override;
-    virtual OUString get_label(const OString& rIdent) const override;
-    virtual void set_visible(const OString& rIdent, bool bShow) override;
+    virtual OUString popup_at_rect(weld::Widget* pParent, const tools::Rectangle& rRect,
+                                   weld::Placement ePlace = weld::Placement::Under) override;
+    virtual void set_sensitive(const OUString& rIdent, bool bSensitive) override;
+    virtual bool get_sensitive(const OUString& rIdent) const override;
+    virtual void set_active(const OUString& rIdent, bool bActive) override;
+    virtual bool get_active(const OUString& rIdent) const override;
+    virtual void set_label(const OUString& rIdent, const OUString& rLabel) override;
+    virtual OUString get_label(const OUString& rIdent) const override;
+    virtual void set_visible(const OUString& rIdent, bool bShow) override;
     virtual void clear() override;
     virtual void insert(int pos, const OUString& rId, const OUString& rStr,
                         const OUString* pIconName, VirtualDevice* pImageSurface,
                         const css::uno::Reference<css::graphic::XGraphic>& rImage,
                         TriState eCheckRadioFalse) override;
     virtual void insert_separator(int pos, const OUString& rId) override;
-    virtual void remove(const OString& rId) override;
-    virtual OString get_id(int pos) const override;
+    virtual void set_item_help_id(const OUString& rIdent, const OUString& rHelpId) override;
+    virtual void remove(const OUString& rId) override;
+    virtual OUString get_id(int pos) const override;
     virtual int n_children() const override;
     PopupMenu* getMenu() const;
     virtual ~SalInstanceMenu() override;
@@ -190,6 +194,7 @@ private:
     DECL_LINK(EventListener, VclWindowEvent&, void);
     DECL_LINK(KeyEventListener, VclWindowEvent&, bool);
     DECL_LINK(MouseEventListener, VclWindowEvent&, void);
+    DECL_LINK(SettingsChangedHdl, VclWindowEvent&, void);
     DECL_LINK(MnemonicActivateHdl, vcl::Window&, bool);
 
     static void DoRecursivePaint(vcl::Window* pWindow, const Point& rPos, OutputDevice& rOutput);
@@ -259,13 +264,13 @@ public:
 
     virtual vcl::Font get_font() override;
 
-    virtual OString get_buildable_name() const override;
+    virtual OUString get_buildable_name() const override;
 
-    virtual void set_buildable_name(const OString& rId) override;
+    virtual void set_buildable_name(const OUString& rId) override;
 
-    virtual void set_help_id(const OString& rId) override;
+    virtual void set_help_id(const OUString& rId) override;
 
-    virtual OString get_help_id() const override;
+    virtual OUString get_help_id() const override;
 
     virtual void set_grid_left_attach(int nAttach) override;
 
@@ -335,6 +340,8 @@ public:
 
     virtual void connect_key_release(const Link<const KeyEvent&, bool>& rLink) override;
 
+    virtual void connect_style_updated(const Link<Widget&, void>& rLink) override;
+
     virtual bool get_extents_relative_to(const Widget& rRelative, int& x, int& y, int& width,
                                          int& height) const override;
 
@@ -368,7 +375,7 @@ public:
 
     virtual void queue_resize() override;
 
-    virtual void help_hierarchy_foreach(const std::function<bool(const OString&)>& func) override;
+    virtual void help_hierarchy_foreach(const std::function<bool(const OUString&)>& func) override;
 
     virtual OUString strip_mnemonic(const OUString& rLabel) const override;
 
@@ -475,7 +482,7 @@ public:
 
     virtual Point get_position() const override;
 
-    virtual tools::Rectangle get_monitor_workarea() const override;
+    virtual AbsoluteScreenPixelRectangle get_monitor_workarea() const override;
 
     virtual void set_centered_on_parent(bool /*bTrackGeometryRequests*/) override;
 
@@ -489,9 +496,9 @@ public:
 
     virtual bool is_default_widget(const weld::Widget* pCandidate) const override;
 
-    virtual void set_window_state(const OString& rStr) override;
+    virtual void set_window_state(const OUString& rStr) override;
 
-    virtual OString get_window_state(vcl::WindowDataMask nMask) const override;
+    virtual OUString get_window_state(vcl::WindowDataMask nMask) const override;
 
     virtual SystemEnvData get_system_data() const override;
 
@@ -539,7 +546,7 @@ public:
     virtual void response(int nResponse) override;
 
     virtual void add_button(const OUString& rText, int nResponse,
-                            const OString& rHelpId = OString()) override;
+                            const OUString& rHelpId = {}) override;
 
     virtual void set_modal(bool bModal) override;
 
@@ -564,7 +571,7 @@ private:
     std::vector<VclPtr<VclGrid>> m_aAddedGrids;
     Idle m_aUpdateRoadmapIdle;
 
-    int find_page(std::string_view rIdent) const;
+    int find_page(std::u16string_view rIdent) const;
     int find_id(int nId) const;
 
     DECL_LINK(OnRoadmapItemSelected, LinkParamNone*, void);
@@ -575,16 +582,16 @@ public:
                          bool bTakeOwnership);
     virtual int get_current_page() const override;
     virtual int get_n_pages() const override;
-    virtual OString get_page_ident(int nPage) const override;
-    virtual OString get_current_page_ident() const override;
+    virtual OUString get_page_ident(int nPage) const override;
+    virtual OUString get_current_page_ident() const override;
     virtual void set_current_page(int nPage) override;
-    virtual void set_current_page(const OString& rIdent) override;
-    virtual void set_page_index(const OString& rIdent, int nNewIndex) override;
-    virtual weld::Container* append_page(const OString& rIdent) override;
-    virtual OUString get_page_title(const OString& rIdent) const override;
-    virtual void set_page_title(const OString& rIdent, const OUString& rTitle) override;
-    virtual void set_page_sensitive(const OString& rIdent, bool bSensitive) override;
-    virtual void set_page_side_help_id(const OString& rHelpId) override;
+    virtual void set_current_page(const OUString& rIdent) override;
+    virtual void set_page_index(const OUString& rIdent, int nNewIndex) override;
+    virtual weld::Container* append_page(const OUString& rIdent) override;
+    virtual OUString get_page_title(const OUString& rIdent) const override;
+    virtual void set_page_title(const OUString& rIdent, const OUString& rTitle) override;
+    virtual void set_page_sensitive(const OUString& rIdent, bool bSensitive) override;
+    virtual void set_page_side_help_id(const OUString& rHelpId) override;
     virtual void set_page_side_image(const OUString& rImage) override;
     weld::Button* weld_widget_for_response(int nResponse) override;
 
@@ -784,6 +791,10 @@ public:
 
     virtual void set_active(int pos) override
     {
+        assert(m_xComboBox->IsUpdateMode()
+               && "don't set_active when frozen, set_active after thaw. Note selection doesn't "
+                  "survive a "
+                  "freeze");
         if (pos == -1)
         {
             m_xComboBox->SetNoSelection();
@@ -891,7 +902,7 @@ public:
         return xRet;
     }
 
-    virtual void set_item_menu(const OString& rIdent, weld::Menu* pMenu) override
+    virtual void set_item_menu(const OUString& rIdent, weld::Menu* pMenu) override
     {
         SalInstanceMenu* pInstanceMenu = dynamic_cast<SalInstanceMenu*>(pMenu);
 
@@ -903,7 +914,7 @@ public:
 
         m_xMenuButton->SetPopupMenu(pPopup);
         m_xMenuButton->Show(pPopup != nullptr);
-        m_sMenuButtonRow = OUString::fromUtf8(rIdent);
+        m_sMenuButtonRow = rIdent;
     }
 
     int get_menu_button_width() const override
@@ -1073,9 +1084,6 @@ private:
 
     DECL_LINK(ClickHdl, ::Button*, void);
 
-protected:
-    void set_label_wrap(bool bWrap);
-
 public:
     SalInstanceButton(::Button* pButton, SalInstanceBuilder* pBuilder, bool bTakeOwnership);
 
@@ -1152,7 +1160,7 @@ class SalInstanceNotebook : public SalInstanceWidget, public virtual weld::Noteb
 private:
     VclPtr<TabControl> m_xNotebook;
     mutable std::vector<std::shared_ptr<SalInstanceContainer>> m_aPages;
-    std::map<OString, std::pair<VclPtr<TabPage>, VclPtr<VclGrid>>> m_aAddedPages;
+    std::map<OUString, std::pair<VclPtr<TabPage>, VclPtr<VclGrid>>> m_aAddedPages;
 
     DECL_LINK(DeactivatePageHdl, TabControl*, bool);
     DECL_LINK(ActivatePageHdl, TabControl*, void);
@@ -1162,27 +1170,27 @@ public:
 
     virtual int get_current_page() const override;
 
-    virtual int get_page_index(const OString& rIdent) const override;
+    virtual int get_page_index(const OUString& rIdent) const override;
 
-    virtual OString get_page_ident(int nPage) const override;
+    virtual OUString get_page_ident(int nPage) const override;
 
-    virtual OString get_current_page_ident() const override;
+    virtual OUString get_current_page_ident() const override;
 
-    virtual weld::Container* get_page(const OString& rIdent) const override;
+    virtual weld::Container* get_page(const OUString& rIdent) const override;
 
     virtual void set_current_page(int nPage) override;
 
-    virtual void set_current_page(const OString& rIdent) override;
+    virtual void set_current_page(const OUString& rIdent) override;
 
-    virtual void remove_page(const OString& rIdent) override;
+    virtual void remove_page(const OUString& rIdent) override;
 
-    virtual void insert_page(const OString& rIdent, const OUString& rLabel, int nPos) override;
+    virtual void insert_page(const OUString& rIdent, const OUString& rLabel, int nPos) override;
 
     virtual int get_n_pages() const override;
 
-    virtual OUString get_tab_label_text(const OString& rIdent) const override;
+    virtual OUString get_tab_label_text(const OUString& rIdent) const override;
 
-    virtual void set_tab_label_text(const OString& rIdent, const OUString& rText) override;
+    virtual void set_tab_label_text(const OUString& rIdent, const OUString& rText) override;
 
     virtual void set_show_tabs(bool bShow) override;
 
@@ -1235,6 +1243,8 @@ public:
 
     virtual OUString get_uri() const override { return m_xButton->GetURL(); }
 
+    virtual void set_label_wrap(bool wrap) override;
+
     virtual ~SalInstanceLinkButton() override { m_xButton->SetClickHdl(m_aOrigClickHdl); }
 };
 
@@ -1260,7 +1270,7 @@ public:
 
     virtual OUString get_label() const override { return SalInstanceButton::get_label(); }
 
-    virtual void set_label_wrap(bool wrap) override { SalInstanceButton::set_label_wrap(wrap); }
+    virtual void set_label_wrap(bool wrap) override;
 
     virtual ~SalInstanceCheckButton() override;
 };
@@ -1309,6 +1319,8 @@ public:
 
     virtual void connect_key_release(const Link<const KeyEvent&, bool>& rLink) override;
 
+    virtual void connect_style_updated(const Link<Widget&, void>& rLink) override;
+
     virtual void set_cursor(PointerStyle ePointerStyle) override;
 
     virtual Point get_pointer_position() const override;
@@ -1322,7 +1334,7 @@ public:
 
     virtual a11yrelationset get_accessible_relation_set() override;
 
-    virtual Point get_accessible_location_on_screen() override;
+    virtual AbsoluteScreenPixelPoint get_accessible_location_on_screen() override;
 
     virtual void enable_drag_source(rtl::Reference<TransferDataContainer>& rHelper,
                                     sal_uInt8 eDNDConstants) override;
@@ -1349,7 +1361,7 @@ protected:
     std::map<ToolBoxItemId, VclPtr<vcl::Window>> m_aFloats;
     std::map<ToolBoxItemId, VclPtr<PopupMenu>> m_aMenus;
 
-    OString m_sStartShowIdent;
+    OUString m_sStartShowIdent;
 
     DECL_LINK(ClickHdl, ToolBox*, void);
     DECL_LINK(DropdownClick, ToolBox*, void);
@@ -1358,27 +1370,27 @@ protected:
 public:
     SalInstanceToolbar(ToolBox* pToolBox, SalInstanceBuilder* pBuilder, bool bTakeOwnership);
 
-    virtual void set_item_sensitive(const OString& rIdent, bool bSensitive) override;
+    virtual void set_item_sensitive(const OUString& rIdent, bool bSensitive) override;
 
-    virtual bool get_item_sensitive(const OString& rIdent) const override;
+    virtual bool get_item_sensitive(const OUString& rIdent) const override;
 
-    virtual void set_item_visible(const OString& rIdent, bool bVisible) override;
+    virtual void set_item_visible(const OUString& rIdent, bool bVisible) override;
 
-    virtual void set_item_help_id(const OString& rIdent, const OString& rHelpId) override;
+    virtual void set_item_help_id(const OUString& rIdent, const OUString& rHelpId) override;
 
-    virtual bool get_item_visible(const OString& rIdent) const override;
+    virtual bool get_item_visible(const OUString& rIdent) const override;
 
-    virtual void set_item_active(const OString& rIdent, bool bActive) override;
+    virtual void set_item_active(const OUString& rIdent, bool bActive) override;
 
-    virtual bool get_item_active(const OString& rIdent) const override;
+    virtual bool get_item_active(const OUString& rIdent) const override;
 
-    void set_menu_item_active(const OString& rIdent, bool bActive) override;
+    void set_menu_item_active(const OUString& rIdent, bool bActive) override;
 
-    bool get_menu_item_active(const OString& rIdent) const override;
+    bool get_menu_item_active(const OUString& rIdent) const override;
 
-    virtual void set_item_popover(const OString& rIdent, weld::Widget* pPopover) override;
+    virtual void set_item_popover(const OUString& rIdent, weld::Widget* pPopover) override;
 
-    virtual void set_item_menu(const OString& rIdent, weld::Menu* pMenu) override;
+    virtual void set_item_menu(const OUString& rIdent, weld::Menu* pMenu) override;
 
     virtual void insert_item(int pos, const OUString& rId) override;
 
@@ -1386,33 +1398,33 @@ public:
 
     virtual int get_n_items() const override;
 
-    virtual OString get_item_ident(int nIndex) const override;
+    virtual OUString get_item_ident(int nIndex) const override;
 
-    virtual void set_item_ident(int nIndex, const OString& rIdent) override;
+    virtual void set_item_ident(int nIndex, const OUString& rIdent) override;
 
     virtual void set_item_label(int nIndex, const OUString& rLabel) override;
 
-    virtual OUString get_item_label(const OString& rIdent) const override;
+    virtual OUString get_item_label(const OUString& rIdent) const override;
 
-    virtual void set_item_label(const OString& rIdent, const OUString& rLabel) override;
+    virtual void set_item_label(const OUString& rIdent, const OUString& rLabel) override;
 
-    virtual void set_item_icon_name(const OString& rIdent, const OUString& rIconName) override;
+    virtual void set_item_icon_name(const OUString& rIdent, const OUString& rIconName) override;
 
-    virtual void set_item_image_mirrored(const OString& rIdent, bool bMirrored) override;
+    virtual void set_item_image_mirrored(const OUString& rIdent, bool bMirrored) override;
 
-    virtual void set_item_image(const OString& rIdent,
+    virtual void set_item_image(const OUString& rIdent,
                                 const css::uno::Reference<css::graphic::XGraphic>& rIcon) override;
 
-    virtual void set_item_image(const OString& rIdent, VirtualDevice* pDevice) override;
+    virtual void set_item_image(const OUString& rIdent, VirtualDevice* pDevice) override;
 
     virtual void set_item_image(int nIndex,
                                 const css::uno::Reference<css::graphic::XGraphic>& rIcon) override;
 
     virtual void set_item_tooltip_text(int nIndex, const OUString& rTip) override;
 
-    virtual void set_item_tooltip_text(const OString& rIdent, const OUString& rTip) override;
+    virtual void set_item_tooltip_text(const OUString& rIdent, const OUString& rTip) override;
 
-    virtual OUString get_item_tooltip_text(const OString& rIdent) const override;
+    virtual OUString get_item_tooltip_text(const OUString& rIdent) const override;
 
     virtual vcl::ImageType get_icon_size() const override;
 
@@ -1761,7 +1773,7 @@ public:
 
     virtual bool get_iter_first(weld::TreeIter& rIter) const override;
 
-    virtual bool get_iter_abs_pos(weld::TreeIter& rIter, int nPos) const;
+    bool get_iter_abs_pos(weld::TreeIter& rIter, int nPos) const;
 
     virtual bool iter_next_sibling(weld::TreeIter& rIter) const override;
 
@@ -2004,7 +2016,7 @@ public:
 
     virtual OUString get_label() const override { return SalInstanceButton::get_label(); }
 
-    virtual void set_label_wrap(bool wrap) override { SalInstanceButton::set_label_wrap(wrap); }
+    virtual void set_label_wrap(bool wrap) override;
 
     virtual ~SalInstanceRadioButton() override;
 };
@@ -2050,19 +2062,19 @@ public:
 
     virtual void insert_separator(int pos, const OUString& rId) override;
 
-    virtual void set_item_sensitive(const OString& rIdent, bool bSensitive) override;
+    virtual void set_item_sensitive(const OUString& rIdent, bool bSensitive) override;
 
-    virtual void remove_item(const OString& rId) override;
+    virtual void remove_item(const OUString& rId) override;
 
     virtual void clear() override;
 
-    virtual void set_item_active(const OString& rIdent, bool bActive) override;
+    virtual void set_item_active(const OUString& rIdent, bool bActive) override;
 
-    virtual void set_item_label(const OString& rIdent, const OUString& rText) override;
+    virtual void set_item_label(const OUString& rIdent, const OUString& rText) override;
 
-    virtual OUString get_item_label(const OString& rIdent) const override;
+    virtual OUString get_item_label(const OUString& rIdent) const override;
 
-    virtual void set_item_visible(const OString& rIdent, bool bShow) override;
+    virtual void set_item_visible(const OUString& rIdent, bool bShow) override;
 
     virtual void set_popover(weld::Widget* pPopover) override;
 
@@ -2171,6 +2183,24 @@ public:
     virtual ~SalInstanceScrolledWindow() override;
 };
 
+class SalInstanceLevelBar : public SalInstanceWidget, public virtual weld::LevelBar
+{
+private:
+    VclPtr<::ProgressBar> m_xLevelBar;
+
+public:
+    SalInstanceLevelBar(::ProgressBar* pLevelBar, SalInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : SalInstanceWidget(pLevelBar, pBuilder, bTakeOwnership)
+        , m_xLevelBar(pLevelBar)
+    {
+    }
+
+    virtual void set_percentage(double fPercentage) override
+    {
+        m_xLevelBar->SetValue(static_cast<sal_uInt16>(fPercentage));
+    }
+};
+
 class SalInstanceCalendar : public SalInstanceWidget, public virtual weld::Calendar
 {
 private:
@@ -2257,27 +2287,27 @@ public:
 
     virtual int get_current_page() const override;
 
-    virtual OString get_page_ident(int nPage) const override;
+    virtual OUString get_page_ident(int nPage) const override;
 
-    virtual OString get_current_page_ident() const override;
+    virtual OUString get_current_page_ident() const override;
 
-    virtual int get_page_index(const OString& rIdent) const override;
+    virtual int get_page_index(const OUString& rIdent) const override;
 
-    virtual weld::Container* get_page(const OString& rIdent) const override;
+    virtual weld::Container* get_page(const OUString& rIdent) const override;
 
     virtual void set_current_page(int nPage) override;
 
-    virtual void set_current_page(const OString& rIdent) override;
+    virtual void set_current_page(const OUString& rIdent) override;
 
-    virtual void remove_page(const OString& rIdent) override;
+    virtual void remove_page(const OUString& rIdent) override;
 
-    virtual void insert_page(const OString& rIdent, const OUString& rLabel, int nPos) override;
+    virtual void insert_page(const OUString& rIdent, const OUString& rLabel, int nPos) override;
 
     virtual int get_n_pages() const override;
 
-    virtual void set_tab_label_text(const OString& rIdent, const OUString& rText) override;
+    virtual void set_tab_label_text(const OUString& rIdent, const OUString& rText) override;
 
-    virtual OUString get_tab_label_text(const OString& rIdent) const override;
+    virtual OUString get_tab_label_text(const OUString& rIdent) const override;
 
     virtual void set_show_tabs(bool /*bShow*/) override;
 

@@ -389,8 +389,6 @@ SvTreeListBox::SvTreeListBox(vcl::Window* pParent, WinBits nWinStyle) :
     DragSourceHelper(this),
     mpImpl(new SvTreeListBoxImpl(*this)),
     mbContextBmpExpanded(false),
-    mbAlternatingRowColors(false),
-    mbUpdateAlternatingRows(false),
     mbQuickSearch(false),
     mbActivateOnSingleClick(false),
     mbHoverSelection(false),
@@ -430,16 +428,12 @@ IMPL_LINK( SvTreeListBox, CloneHdl_Impl, SvTreeListEntry*, pEntry, SvTreeListEnt
 sal_uInt32 SvTreeListBox::Insert( SvTreeListEntry* pEntry, SvTreeListEntry* pParent, sal_uInt32 nPos )
 {
     sal_uInt32 nInsPos = pModel->Insert( pEntry, pParent, nPos );
-    pEntry->SetBackColor( GetBackground().GetColor() );
-    SetAlternatingRowColors( mbAlternatingRowColors );
     return nInsPos;
 }
 
 sal_uInt32 SvTreeListBox::Insert( SvTreeListEntry* pEntry,sal_uInt32 nRootPos )
 {
     sal_uInt32 nInsPos = pModel->Insert( pEntry, nRootPos );
-    pEntry->SetBackColor( GetBackground().GetColor() );
-    SetAlternatingRowColors( mbAlternatingRowColors );
     return nInsPos;
 }
 
@@ -1458,6 +1452,9 @@ void SvTreeListBox::SetTabs()
             else
                 nStartPos += nContextWidthDIV2;
             AddTab( nStartPos, TABFLAGS_CONTEXTBMP );
+            // add an indent if the context bitmap can't be centered without touching the expander
+            if (nContextBmpWidthMax > nIndent + (nNodeWidthPixel / 2))
+                nStartPos += nIndent;
             nStartPos += nContextWidthDIV2;  // right edge of context bitmap
             // only set a distance if there are bitmaps
             if( nContextBmpWidthMax )
@@ -2056,7 +2053,6 @@ bool SvTreeListBox::Expand( SvTreeListEntry* pParent )
             pImpl->EntryExpanded( pParent );
             pHdlEntry = pParent;
             ExpandedHdl();
-            SetAlternatingRowColors( mbAlternatingRowColors );
         }
         nFlags = pParent->GetFlags();
         nFlags &= ~SvTLEntryFlags::NO_NODEBMP;
@@ -2093,7 +2089,6 @@ bool SvTreeListBox::Collapse( SvTreeListEntry* pParent )
         pImpl->EntryCollapsed( pParent );
         pHdlEntry = pParent;
         ExpandedHdl();
-        SetAlternatingRowColors( mbAlternatingRowColors );
     }
 
     // #i92103#
@@ -2308,8 +2303,6 @@ void SvTreeListBox::MouseMove( const MouseEvent& rMEvt )
 void SvTreeListBox::SetUpdateMode( bool bUpdate )
 {
     pImpl->SetUpdateMode( bUpdate );
-    mbUpdateAlternatingRows = bUpdate;
-    SetAlternatingRowColors( mbAlternatingRowColors );
 }
 
 void SvTreeListBox::SetSpaceBetweenEntries( short nOffsLogic )
@@ -2466,7 +2459,7 @@ void SvTreeListBox::EditedText( const OUString& rStr )
     {
         if( EditedEntry( pEdEntry, rStr ) )
         {
-            static_cast<SvLBoxString*>(pEdItem)->SetText( rStr );
+            pEdItem->SetText( rStr );
             pModel->InvalidateEntry( pEdEntry );
         }
         if( GetSelectionCount() == 0 )
@@ -2594,6 +2587,10 @@ void SvTreeListBox::PaintEntry1(SvTreeListEntry& rEntry, tools::Long nLine, vcl:
     SvViewDataEntry* pViewDataEntry = GetViewDataEntry( &rEntry );
     const bool bSeparator(rEntry.GetFlags() & SvTLEntryFlags::IS_SEPARATOR);
 
+    const auto nMaxContextBmpWidthBeforeIndentIsNeeded =
+            nIndent + GetExpandedNodeBmp().GetSizePixel().Width() / 2;
+    const bool bHasButtonsAtRoot = nWindowStyle & WB_HASBUTTONSATROOT;
+
     const size_t nTabCount = aTabs.size();
     const size_t nItemCount = rEntry.ItemCount();
     size_t nCurTab = 0;
@@ -2627,6 +2624,13 @@ void SvTreeListBox::PaintEntry1(SvTreeListEntry& rEntry, tools::Long nLine, vcl:
             nX = nTabPos + pTab->CalcOffset(aSize.Width(), (nNextTabPos - SV_TAB_BORDER - 1) - nTabPos);
         else
             nX = nTabPos + pTab->CalcOffset(aSize.Width(), nNextTabPos - nTabPos);
+
+        // add an indent if the context bitmap can't be centered without touching the expander
+        if (nCurTab == 0 && !(nTreeFlags & SvTreeFlags::CHKBTN) && bHasButtonsAtRoot &&
+                pTab->nFlags & SvLBoxTabFlags::ADJUST_CENTER &&
+                !(pTab->nFlags & SvLBoxTabFlags::FORCE) &&
+                aSize.Width() > nMaxContextBmpWidthBeforeIndentIsNeeded)
+            nX += nIndent;
 
         aEntryPos.setX( nX );
         aEntryPos.setY( nLine );
@@ -2666,10 +2670,6 @@ void SvTreeListBox::PaintEntry1(SvTreeListEntry& rEntry, tools::Long nLine, vcl:
                 else
                     rRenderContext.SetTextColor(aBackupTextColor);
                 rRenderContext.SetFont(aBackupFont);
-            }
-            else
-            {
-                aWallpaper.SetColor(rEntry.GetBackColor());
             }
         }
 
@@ -3127,40 +3127,6 @@ Size SvTreeListBox::GetOptimalSize() const
     return aRet;
 }
 
-void SvTreeListBox::SetAlternatingRowColors( bool bEnable )
-{
-    if( !mbUpdateAlternatingRows )
-    {
-        mbAlternatingRowColors = bEnable;
-        return;
-    }
-
-    if( bEnable )
-    {
-        SvTreeListEntry* pEntry = pModel->First();
-        for(size_t i = 0; pEntry; ++i)
-        {
-            pEntry->SetBackColor( i % 2 == 0 ? GetBackground().GetColor() : GetSettings().GetStyleSettings().GetAlternatingRowColor());
-            SvTreeListEntry *pNextEntry = nullptr;
-            if( IsExpanded( pEntry ) )
-                pNextEntry = pModel->FirstChild( pEntry );
-            else
-                pNextEntry = pEntry->NextSibling();
-
-            if( !pNextEntry )
-                pEntry = pModel->Next( pEntry );
-            else
-                pEntry = pNextEntry;
-        }
-    }
-    else if( mbAlternatingRowColors )
-        for(SvTreeListEntry* pEntry = pModel->First(); pEntry; pEntry = pModel->Next(pEntry))
-            pEntry->SetBackColor( GetBackground().GetColor() );
-
-    mbAlternatingRowColors = bEnable;
-    pImpl->UpdateAll(true);
-}
-
 void SvTreeListBox::SetForceMakeVisible( bool bEnable )
 {
     pImpl->SetForceMakeVisible(bEnable);
@@ -3241,7 +3207,7 @@ void SvTreeListBox::NotifyScrolled()
     aScrolledHdl.Call( this );
 }
 
-void SvTreeListBox::Invalidate( InvalidateFlags nInvalidateFlags )
+void SvTreeListBox::ImplInvalidate( const vcl::Region* pRegion, InvalidateFlags nInvalidateFlags )
 {
     if (!pImpl)
         return;
@@ -3249,19 +3215,9 @@ void SvTreeListBox::Invalidate( InvalidateFlags nInvalidateFlags )
         // to make sure that the control doesn't show the wrong focus rectangle
         // after painting
         pImpl->RecalcFocusRect();
-    Control::Invalidate( nInvalidateFlags );
+    Control::ImplInvalidate( pRegion, nInvalidateFlags );
     pImpl->Invalidate();
 }
-
-void SvTreeListBox::Invalidate( const tools::Rectangle& rRect, InvalidateFlags nInvalidateFlags )
-{
-    if( nFocusWidth == -1 )
-        // to make sure that the control doesn't show the wrong focus rectangle
-        // after painting
-        pImpl->RecalcFocusRect();
-    Control::Invalidate( rRect, nInvalidateFlags );
-}
-
 
 void SvTreeListBox::SetHighlightRange( sal_uInt16 nStart, sal_uInt16 nEnd)
 {
@@ -3491,7 +3447,7 @@ css::uno::Reference< XAccessible > SvTreeListBox::CreateAccessible()
         if ( xAccParent.is() )
         {
             // need to be done here to get the vclxwindow later on in the accessible
-            css::uno::Reference< css::awt::XWindowPeer > xHoldAlive(GetComponentInterface());
+            css::uno::Reference< css::awt::XVclWindowPeer > xHoldAlive(GetComponentInterface());
             xAccessible = pImpl->m_aFactoryAccess.getFactory().createAccessibleTreeListBox( *this, xAccParent );
         }
     }
@@ -3509,6 +3465,8 @@ void SvTreeListBox::FillAccessibleEntryStateSet( SvTreeListEntry* pEntry, sal_In
             rStateSet |= AccessibleStateType::EXPANDED;
     }
 
+    if (nTreeFlags & SvTreeFlags::CHKBTN)
+        rStateSet |= AccessibleStateType::CHECKABLE;
     if ( GetCheckButtonState( pEntry ) == SvButtonState::Checked )
         rStateSet |= AccessibleStateType::CHECKED;
     if ( IsEntryVisible( pEntry ) )
@@ -3571,7 +3529,7 @@ void SvTreeListBox::set_min_width_in_chars(sal_Int32 nChars)
     queue_resize();
 }
 
-bool SvTreeListBox::set_property(const OString &rKey, const OUString &rValue)
+bool SvTreeListBox::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "min-width-chars")
     {

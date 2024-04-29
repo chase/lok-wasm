@@ -78,6 +78,7 @@
 #include <attrhint.hxx>
 #include <memory>
 #include <unoparagraph.hxx>
+#include <unotext.hxx>
 #include <wrtsh.hxx>
 #include <fmtpdsc.hxx>
 #include <svx/sdr/attribute/sdrallfillattributeshelper.hxx>
@@ -411,12 +412,12 @@ void MoveMergedFlysAndFootnotes(std::vector<SwTextFrame*> const& rFrames,
             }
             for (SwAnchoredObject *const pObj : objs)
             {
-                SwFrameFormat & rFormat(pObj->GetFrameFormat());
-                SwFormatAnchor const& rAnchor(rFormat.GetAnchor());
+                SwFrameFormat* pFormat(pObj->GetFrameFormat());
+                SwFormatAnchor const& rAnchor(pFormat->GetAnchor());
                 if (rFirstNode.GetIndex() < rAnchor.GetAnchorNode()->GetIndex())
                 {
                     // move it to the new frame of "this"
-                    rFormat.CallSwClientNotify(sw::LegacyModifyHint(&rAnchor, &rAnchor));
+                    pFormat->CallSwClientNotify(sw::LegacyModifyHint(&rAnchor, &rAnchor));
                     // note pObjs will be deleted if it becomes empty
                     assert(!pFrame->GetDrawObjs() || !pObjs->Contains(*pObj));
                 }
@@ -2587,7 +2588,7 @@ void SwTextNode::CutImpl( SwTextNode * const pDest, const SwContentIndex & rDest
                 {
                     // check current item
                     const sal_uInt16 nWhich = IsInvalidItem( pItem )
-                        ? pDest->GetpSwAttrSet()->GetWhichByPos( aIter.GetCurPos() )
+                        ? pDest->GetpSwAttrSet()->GetWhichByOffset( aIter.GetCurPos() )
                         : pItem->Which();
                     if( RES_FRMATR_STYLE_NAME != nWhich &&
                         RES_FRMATR_CONDITIONAL_STYLE_NAME != nWhich &&
@@ -2997,7 +2998,7 @@ void SwTextNode::NumRuleChgd()
     // in the list tree reflected in the layout.
     // Important note:
     {
-        SvxLRSpaceItem& rLR = const_cast<SvxLRSpaceItem&>(GetSwAttrSet().GetLRSpace());
+        SvxTextLeftMarginItem & rLR = const_cast<SvxTextLeftMarginItem&>(GetSwAttrSet().GetTextLeftMargin());
         CallSwClientNotify(sw::LegacyModifyHint(&rLR, &rLR));
     }
 
@@ -3316,21 +3317,35 @@ tools::Long SwTextNode::GetLeftMarginWithNum( bool bTextLeft ) const
             }
 
             if( pRule->IsAbsSpaces() )
-                nRet = nRet - GetSwAttrSet().GetLRSpace().GetLeft();
+            {
+                SvxFirstLineIndentItem const& rFirst(GetSwAttrSet().GetFirstLineIndent());
+                nRet = nRet - GetSwAttrSet().GetTextLeftMargin().GetLeft(rFirst);
+            }
         }
         else if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )
         {
-            if ( AreListLevelIndentsApplicable() )
+            ::sw::ListLevelIndents const indents(AreListLevelIndentsApplicable());
+            // note: the result is *always* added to either the left-margin
+            // or the text-left-margin of the node itself by the caller.
+            // so first, subtract what the caller has computed anyway,
+            // and then add the value according to combination of
+            // list/paragraph items. (this is rather inelegant)
+            SvxFirstLineIndentItem firstLine(GetSwAttrSet().GetFirstLineIndent());
+            SvxTextLeftMarginItem leftMargin(GetSwAttrSet().GetTextLeftMargin());
+            nRet = bTextLeft
+                ? - leftMargin.GetTextLeft()
+                : - leftMargin.GetLeft(firstLine);
+            if (indents & ::sw::ListLevelIndents::LeftMargin)
             {
-                nRet = rFormat.GetIndentAt();
-                // #i90401#
-                // Only negative first line indents have consider for the left margin
-                if ( !bTextLeft &&
-                     rFormat.GetFirstLineIndent() < 0 )
-                {
-                    nRet = nRet + rFormat.GetFirstLineIndent();
-                }
+                leftMargin.SetTextLeft(rFormat.GetIndentAt());
             }
+            if (indents & ::sw::ListLevelIndents::FirstLine)
+            {
+                firstLine.SetTextFirstLineOffset(rFormat.GetFirstLineIndent());
+            }
+            nRet += bTextLeft
+                ? leftMargin.GetTextLeft()
+                : leftMargin.GetLeft(firstLine);
         }
     }
 
@@ -3355,19 +3370,19 @@ bool SwTextNode::GetFirstLineOfsWithNum( short& rFLOffset ) const
 
                 if (!getIDocumentSettingAccess()->get(DocumentSettingId::IGNORE_FIRST_LINE_INDENT_IN_NUMBERING))
                 {
-                    SvxLRSpaceItem aItem = GetSwAttrSet().GetLRSpace();
+                    SvxFirstLineIndentItem const aItem(GetSwAttrSet().GetFirstLineIndent());
                     rFLOffset = rFLOffset + aItem.GetTextFirstLineOffset();
                 }
             }
             else if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )
             {
-                if ( AreListLevelIndentsApplicable() )
+                if (AreListLevelIndentsApplicable() & ::sw::ListLevelIndents::FirstLine)
                 {
                     rFLOffset = rFormat.GetFirstLineIndent();
                 }
                 else if (!getIDocumentSettingAccess()->get(DocumentSettingId::IGNORE_FIRST_LINE_INDENT_IN_NUMBERING))
                 {
-                    SvxLRSpaceItem aItem = GetSwAttrSet().GetLRSpace();
+                    SvxFirstLineIndentItem const aItem(GetSwAttrSet().GetFirstLineIndent());
                     rFLOffset = aItem.GetTextFirstLineOffset();
                 }
             }
@@ -3376,7 +3391,7 @@ bool SwTextNode::GetFirstLineOfsWithNum( short& rFLOffset ) const
         return true;
     }
 
-    rFLOffset = GetSwAttrSet().GetLRSpace().GetTextFirstLineOffset();
+    rFLOffset = GetSwAttrSet().GetFirstLineIndent().GetTextFirstLineOffset();
     return false;
 }
 
@@ -3390,54 +3405,46 @@ SwTwips SwTextNode::GetAdditionalIndentForStartingNewList() const
         const SwNumFormat& rFormat = pRule->Get(lcl_BoundListLevel(GetActualListLevel()));
         if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
         {
-            nAdditionalIndent = GetSwAttrSet().GetLRSpace().GetLeft();
+            SvxFirstLineIndentItem const& rFirst(GetSwAttrSet().GetFirstLineIndent());
+            nAdditionalIndent = GetSwAttrSet().GetTextLeftMargin().GetLeft(rFirst);
 
             if (getIDocumentSettingAccess()->get(DocumentSettingId::IGNORE_FIRST_LINE_INDENT_IN_NUMBERING))
             {
                 nAdditionalIndent = nAdditionalIndent -
-                                    GetSwAttrSet().GetLRSpace().GetTextFirstLineOffset();
+                    GetSwAttrSet().GetFirstLineIndent().GetTextFirstLineOffset();
             }
         }
         else if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )
         {
-            if ( AreListLevelIndentsApplicable() )
+            // note: there was an apparent bug here, list GetIndentAt()
+            // was interpreted as left-margin not text-left-margin unlike every
+            // other use of it.
+            ::sw::ListLevelIndents const indents(AreListLevelIndentsApplicable());
+            SvxFirstLineIndentItem const& rFirst(
+                    indents & ::sw::ListLevelIndents::FirstLine
+                    ? SvxFirstLineIndentItem(rFormat.GetFirstLineIndent(), RES_MARGIN_FIRSTLINE)
+                    : GetSwAttrSet().GetFirstLineIndent());
+            SvxTextLeftMarginItem const& rLeft(
+                    indents & ::sw::ListLevelIndents::LeftMargin
+                    ? SvxTextLeftMarginItem(rFormat.GetIndentAt(), RES_MARGIN_TEXTLEFT)
+                    : GetSwAttrSet().GetTextLeftMargin());
+            nAdditionalIndent = rLeft.GetLeft(rFirst);
+            if (!(indents & ::sw::ListLevelIndents::FirstLine))
             {
-                nAdditionalIndent = rFormat.GetIndentAt() + rFormat.GetFirstLineIndent();
-            }
-            else
-            {
-                nAdditionalIndent = GetSwAttrSet().GetLRSpace().GetLeft();
                 if (getIDocumentSettingAccess()->get(DocumentSettingId::IGNORE_FIRST_LINE_INDENT_IN_NUMBERING))
                 {
-                    nAdditionalIndent = nAdditionalIndent -
-                                        GetSwAttrSet().GetLRSpace().GetTextFirstLineOffset();
+                    nAdditionalIndent = nAdditionalIndent - rFirst.GetTextFirstLineOffset();
                 }
             }
         }
     }
     else
     {
-        nAdditionalIndent = GetSwAttrSet().GetLRSpace().GetLeft();
+        SvxFirstLineIndentItem const& rFirst(GetSwAttrSet().GetFirstLineIndent());
+        nAdditionalIndent = GetSwAttrSet().GetTextLeftMargin().GetLeft(rFirst);
     }
 
     return nAdditionalIndent;
-}
-
-// #i96772#
-void SwTextNode::ClearLRSpaceItemDueToListLevelIndents( std::shared_ptr<SvxLRSpaceItem>& o_rLRSpaceItem ) const
-{
-    if ( AreListLevelIndentsApplicable() )
-    {
-        const SwNumRule* pRule = GetNumRule();
-        if ( pRule && GetActualListLevel() >= 0 )
-        {
-            const SwNumFormat& rFormat = pRule->Get(lcl_BoundListLevel(GetActualListLevel()));
-            if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )
-            {
-                o_rLRSpaceItem = std::make_shared<SvxLRSpaceItem>(RES_LR_SPACE);
-            }
-        }
-    }
 }
 
 // #i91133#
@@ -3452,7 +3459,7 @@ tools::Long SwTextNode::GetLeftMarginForTabCalculation() const
         const SwNumFormat& rFormat = pRule->Get(lcl_BoundListLevel(GetActualListLevel()));
         if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )
         {
-            if ( AreListLevelIndentsApplicable() )
+            if (AreListLevelIndentsApplicable() & ::sw::ListLevelIndents::LeftMargin)
             {
                 nLeftMarginForTabCalc = rFormat.GetIndentAt();
                 bLeftMarginForTabCalcSetToListLevelIndent = true;
@@ -3461,7 +3468,7 @@ tools::Long SwTextNode::GetLeftMarginForTabCalculation() const
     }
     if ( !bLeftMarginForTabCalcSetToListLevelIndent )
     {
-        nLeftMarginForTabCalc = GetSwAttrSet().GetLRSpace().GetTextLeft();
+        nLeftMarginForTabCalc = GetSwAttrSet().GetTextLeftMargin().GetTextLeft();
     }
 
     return nLeftMarginForTabCalc;
@@ -3861,19 +3868,27 @@ void SwTextNode::ReplaceText( const SwContentIndex& rStart, const sal_Int32 nDel
     bool bOldExpFlg = IsIgnoreDontExpand();
     SetIgnoreDontExpand( true );
 
-    if (nLen && sInserted.getLength())
+    const sal_Int32 nInsLen = sInserted.getLength();
+    if (nLen && nInsLen)
     {
-        // Replace the 1st char, then delete the rest and insert.
-        // This way the attributes of the 1st char are expanded!
-        m_Text = m_Text.replaceAt(nStartPos, 1, sInserted.subView(0, 1));
+        m_Text = m_Text.replaceAt(nStartPos, nLen, sInserted);
 
-        ++const_cast<SwContentIndex&>(rStart);
-        m_Text = m_Text.replaceAt(rStart.GetIndex(), nLen - 1, u"");
-        Update(rStart, nLen - 1, UpdateMode::Negative);
+        if (nLen > nInsLen) // short insert
+        {
+            // delete up to the point that the user specified
+            const SwContentIndex aNegIdx(rStart, nInsLen);
+            Update(aNegIdx, nLen - nInsLen, UpdateMode::Negative);
+        }
+        else if (nLen < nInsLen) // long insert
+        {
+            const SwContentIndex aIdx(rStart, nLen);
+            Update(aIdx, nInsLen - nLen, UpdateMode::Replace);
+        }
 
-        std::u16string_view aTmpText( sInserted.subView(1) );
-        m_Text = m_Text.replaceAt(rStart.GetIndex(), 0, aTmpText);
-        Update(rStart, aTmpText.size(), UpdateMode::Replace);
+        for (sal_Int32 i = 0; i < nInsLen; i++)
+        {
+            ++const_cast<SwContentIndex&>(rStart);
+        }
     }
     else
     {
@@ -4623,9 +4638,23 @@ OUString SwTextNode::GetListId() const
       style hierarchy from the paragraph to the paragraph style with the
       list style no indent attributes are found.
 
-    @return boolean
+    @return bitmask
 */
-bool SwTextNode::AreListLevelIndentsApplicable() const
+::sw::ListLevelIndents SwTextNode::AreListLevelIndentsApplicable() const
+{
+    ::sw::ListLevelIndents ret(::sw::ListLevelIndents::No);
+    if (AreListLevelIndentsApplicableImpl(RES_MARGIN_FIRSTLINE))
+    {
+        ret |= ::sw::ListLevelIndents::FirstLine;
+    }
+    if (AreListLevelIndentsApplicableImpl(RES_MARGIN_TEXTLEFT))
+    {
+        ret |= ::sw::ListLevelIndents::LeftMargin;
+    }
+    return ret;
+}
+
+bool SwTextNode::AreListLevelIndentsApplicableImpl(sal_uInt16 const nWhich) const
 {
     bool bAreListLevelIndentsApplicable( true );
 
@@ -4635,7 +4664,7 @@ bool SwTextNode::AreListLevelIndentsApplicable() const
         bAreListLevelIndentsApplicable = false;
     }
     else if ( HasSwAttrSet() &&
-              GetpSwAttrSet()->GetItemState( RES_LR_SPACE, false ) == SfxItemState::SET )
+             GetpSwAttrSet()->GetItemState(nWhich, false) == SfxItemState::SET)
     {
         // paragraph has hard-set indent attributes
         bAreListLevelIndentsApplicable = false;
@@ -4656,7 +4685,7 @@ bool SwTextNode::AreListLevelIndentsApplicable() const
         const SwTextFormatColl* pColl = GetTextColl();
         while ( pColl )
         {
-            if ( pColl->GetAttrSet().GetItemState( RES_LR_SPACE, false ) == SfxItemState::SET )
+            if (pColl->GetAttrSet().GetItemState(nWhich, false) == SfxItemState::SET)
             {
                 // indent attributes found in the paragraph style hierarchy.
                 bAreListLevelIndentsApplicable = false;
@@ -4706,13 +4735,13 @@ bool SwTextNode::GetListTabStopPosition( tools::Long& nListTabStopPosition ) con
             {
                 // tab stop position are treated to be relative to the "before text"
                 // indent value of the paragraph. Thus, adjust <nListTabStopPos>.
-                if ( AreListLevelIndentsApplicable() )
+                if (AreListLevelIndentsApplicable() & ::sw::ListLevelIndents::LeftMargin)
                 {
                     nListTabStopPosition -= rFormat.GetIndentAt();
                 }
                 else if (!getIDocumentSettingAccess()->get(DocumentSettingId::IGNORE_FIRST_LINE_INDENT_IN_NUMBERING))
                 {
-                    SvxLRSpaceItem aItem = GetSwAttrSet().GetLRSpace();
+                    SvxTextLeftMarginItem const aItem(GetSwAttrSet().GetTextLeftMargin());
                     nListTabStopPosition -= aItem.GetTextLeft();
                 }
             }
@@ -5368,9 +5397,6 @@ void SwTextNode::dumpAsXml(xmlTextWriterPtr pWriter) const
         (void)xmlTextWriterEndElement(pWriter);
     }
 
-    if (GetNumRule())
-        GetNumRule()->dumpAsXml(pWriter);
-
     (void)xmlTextWriterEndElement(pWriter);
 }
 
@@ -5443,6 +5469,12 @@ void SwTextNode::HandleNonLegacyHint(const SfxHint& rHint)
     }
 }
 
+void SwTextNode::UpdateDocPos(const SwTwips nDocPos, const sal_uInt32 nIndex)
+{
+    const sw::DocPosUpdateAtIndex aHint(nDocPos, *this, nIndex);
+    CallSwClientNotify(aHint);
+}
+
 void SwTextNode::TriggerNodeUpdate(const sw::LegacyModifyHint& rHint)
 {
     const auto pOldValue = rHint.m_pOld;
@@ -5511,7 +5543,12 @@ void SwTextNode::TriggerNodeUpdate(const sw::LegacyModifyHint& rHint)
 
 void SwTextNode::SwClientNotify( const SwModify& rModify, const SfxHint& rHint )
 {
-    if (rHint.GetId() == SfxHintId::SwLegacyModify)
+    if(rHint.GetId() == SfxHintId::SwAutoFormatUsedHint)
+    {
+        static_cast<const sw::AutoFormatUsedHint&>(rHint).CheckNode(this);
+        return;
+    }
+    else if (rHint.GetId() == SfxHintId::SwLegacyModify)
     {
         auto pLegacyHint = static_cast<const sw::LegacyModifyHint*>(&rHint);
         TriggerNodeUpdate(*pLegacyHint);
@@ -5527,7 +5564,7 @@ uno::Reference< rdf::XMetadatable >
 SwTextNode::MakeUnoObject()
 {
     const uno::Reference<rdf::XMetadatable> xMeta(
-            SwXParagraph::CreateXParagraph(GetDoc(), this));
+            SwXParagraph::CreateXParagraph(GetDoc(), this, nullptr));
     return xMeta;
 }
 

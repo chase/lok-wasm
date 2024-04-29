@@ -241,7 +241,7 @@ IMPL_LINK( Window, ImplTrackTimerHdl, Timer*, pTimer, void )
         const OutputDevice *pOutDev = GetOutDev();
         pOutDev->ReMirror( aMousePos );
     }
-    MouseEvent      aMEvt( ImplFrameToOutput( aMousePos ),
+    MouseEvent      aMEvt( ScreenToOutputPixel( aMousePos ),
                            mpWindowImpl->mpFrameData->mnClickCount, MouseEventModifiers::NONE,
                            mpWindowImpl->mpFrameData->mnMouseCode,
                            mpWindowImpl->mpFrameData->mnMouseCode );
@@ -271,10 +271,12 @@ void Window::StartTracking( StartTrackingFlags nFlags )
             pTrackWin->EndTracking( TrackingEventFlags::Cancel );
     }
 
+    SAL_WARN_IF(pSVData->mpWinData->mpTrackTimer, "vcl", "StartTracking called while TrackerTimer still running");
+
     if ( !mpWindowImpl->mbUseFrameData &&
          (nFlags & (StartTrackingFlags::ScrollRepeat | StartTrackingFlags::ButtonRepeat)) )
     {
-        pSVData->mpWinData->mpTrackTimer = new AutoTimer("vcl::Window pSVData->mpWinData->mpTrackTimer");
+        pSVData->mpWinData->mpTrackTimer.reset(new AutoTimer("vcl::Window pSVData->mpWinData->mpTrackTimer"));
 
         if ( nFlags & StartTrackingFlags::ScrollRepeat )
             pSVData->mpWinData->mpTrackTimer->SetTimeout( MouseSettings::GetScrollRepeat() );
@@ -310,10 +312,7 @@ void Window::EndTracking( TrackingEventFlags nFlags )
         return;
 
     if ( !mpWindowImpl->mbUseFrameData && pSVData->mpWinData->mpTrackTimer )
-    {
-        delete pSVData->mpWinData->mpTrackTimer;
-        pSVData->mpWinData->mpTrackTimer = nullptr;
-    }
+        pSVData->mpWinData->mpTrackTimer.reset();
 
     mpWindowImpl->mpFrameData->mpTrackWin = pSVData->mpWinData->mpTrackWin = nullptr;
     pSVData->mpWinData->mnTrackFlags  = StartTrackingFlags::NONE;
@@ -330,7 +329,7 @@ void Window::EndTracking( TrackingEventFlags nFlags )
             pOutDev->ReMirror( aMousePos );
         }
 
-        MouseEvent      aMEvt( ImplFrameToOutput( aMousePos ),
+        MouseEvent      aMEvt( ScreenToOutputPixel( aMousePos ),
                                mpWindowImpl->mpFrameData->mnClickCount, MouseEventModifiers::NONE,
                                mpWindowImpl->mpFrameData->mnMouseCode,
                                mpWindowImpl->mpFrameData->mnMouseCode );
@@ -860,12 +859,12 @@ void Window::EnableDocking( bool bEnable )
     return ImplGetTopmostFrameWindow()->mpWindowImpl->mpFrameData->maOwnerDrawList;
 }
 
-void Window::SetHelpId( const OString& rHelpId )
+void Window::SetHelpId( const OUString& rHelpId )
 {
     mpWindowImpl->maHelpId = rHelpId;
 }
 
-const OString& Window::GetHelpId() const
+const OUString& Window::GetHelpId() const
 {
     return mpWindowImpl->maHelpId;
 }
@@ -979,16 +978,6 @@ void Window::ImplSetMouseTransparent( bool bTransparent )
         mpWindowImpl->mbMouseTransparent = bTransparent;
 }
 
-Point Window::ImplOutputToFrame( const Point& rPos )
-{
-    return Point( rPos.X()+GetOutDev()->mnOutOffX, rPos.Y()+GetOutDev()->mnOutOffY );
-}
-
-Point Window::ImplFrameToOutput( const Point& rPos )
-{
-    return Point( rPos.X()-GetOutDev()->mnOutOffX, rPos.Y()-GetOutDev()->mnOutOffY );
-}
-
 void Window::SetCompoundControl( bool bCompound )
 {
     if (mpWindowImpl)
@@ -1057,6 +1046,18 @@ bool Window::IsMenuFloatingWindow() const
 bool Window::IsToolbarFloatingWindow() const
 {
     return mpWindowImpl && mpWindowImpl->mbToolbarFloatingWindow;
+}
+
+bool Window::IsNativeFrame() const
+{
+    if( mpWindowImpl->mbFrame )
+        // #101741 do not check for WB_CLOSEABLE because undecorated floaters (like menus!) are closeable
+        if( mpWindowImpl->mnStyle & (WB_MOVEABLE | WB_SIZEABLE) )
+            return true;
+        else
+            return false;
+    else
+        return false;
 }
 
 void Window::EnableAllResize()
@@ -1428,7 +1429,7 @@ namespace
     }
 }
 
-bool Window::set_font_attribute(const OString &rKey, std::u16string_view rValue)
+bool Window::set_font_attribute(const OUString &rKey, std::u16string_view rValue)
 {
     if (rKey == "weight")
     {
@@ -1494,7 +1495,7 @@ bool Window::set_font_attribute(const OString &rKey, std::u16string_view rValue)
     return true;
 }
 
-bool Window::set_property(const OString &rKey, const OUString &rValue)
+bool Window::set_property(const OUString &rKey, const OUString &rValue)
 {
     if ((rKey == "label") || (rKey == "title") || (rKey == "text") )
     {
@@ -1628,7 +1629,7 @@ bool Window::set_property(const OString &rKey, const OUString &rValue)
     }
     else if (rKey == "accessible-role")
     {
-        sal_Int16 role = BuilderUtils::getRoleFromName(rValue.toUtf8());
+        sal_Int16 role = BuilderUtils::getRoleFromName(rValue);
         if (role != com::sun::star::accessibility::AccessibleRole::UNKNOWN)
             SetAccessibleRole(role);
     }

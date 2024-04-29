@@ -32,7 +32,7 @@
 \**********************************************************************/
 
 IconChoicePage::IconChoicePage(weld::Container* pParent,
-                               const OUString& rUIXMLDescription, const OString& rID,
+                               const OUString& rUIXMLDescription, const OUString& rID,
                                const SfxItemSet* pItemSet)
     : xBuilder(Application::CreateBuilder(pParent, rUIXMLDescription))
     , xContainer(xBuilder->weld_container(rID))
@@ -71,7 +71,7 @@ bool IconChoicePage::QueryClose()
 | add new page
 |
 \**********************************************************************/
-void SvxHpLinkDlg::AddTabPage(const OString& rId, CreatePage pCreateFunc /* != 0 */)
+void SvxHpLinkDlg::AddTabPage(const OUString& rId, CreatePage pCreateFunc /* != 0 */)
 {
     weld::Container* pPage = m_xIconCtrl->get_page(rId);
     maPageList.emplace_back(new IconChoicePageData(rId, pCreateFunc(pPage, this, pSet)));
@@ -84,9 +84,9 @@ void SvxHpLinkDlg::AddTabPage(const OString& rId, CreatePage pCreateFunc /* != 0
 | Show / Hide page or button
 |
 \**********************************************************************/
-void SvxHpLinkDlg::ShowPage(const OString& rId)
+void SvxHpLinkDlg::ShowPage(const OUString& rId)
 {
-    OString sOldPageId = GetCurPageId();
+    OUString sOldPageId = GetCurPageId();
     bool bInvalidate = sOldPageId != rId;
     if (bInvalidate)
     {
@@ -105,7 +105,7 @@ void SvxHpLinkDlg::ShowPage(const OString& rId)
 | select a page
 |
 \**********************************************************************/
-IMPL_LINK(SvxHpLinkDlg, ChosePageHdl_Impl, const OString&, rId, void)
+IMPL_LINK(SvxHpLinkDlg, ChosePageHdl_Impl, const OUString&, rId, void)
 {
     if (rId != msCurrentPageId)
     {
@@ -148,6 +148,9 @@ void SvxHpLinkDlg::ActivatePageImpl()
     if ( pExampleSet )
         pData->xPage->ActivatePage( *pExampleSet );
     m_xDialog->set_help_id(pData->xPage->GetHelpId());
+
+    // tdf#90496 - remember last used view in hyperlink dialog
+    msRememberedPageId = msCurrentPageId;
 
     if (!comphelper::LibreOfficeKit::isActive())
         m_xResetBtn->show();
@@ -282,7 +285,7 @@ void SvxHpLinkDlg::Start()
 |
 \**********************************************************************/
 
-IconChoicePageData* SvxHpLinkDlg::GetPageData ( std::string_view rId )
+IconChoicePageData* SvxHpLinkDlg::GetPageData ( std::u16string_view rId )
 {
     IconChoicePageData *pRet = nullptr;
     for (const auto & pData : maPageList)
@@ -302,7 +305,7 @@ IconChoicePageData* SvxHpLinkDlg::GetPageData ( std::string_view rId )
 |
 \**********************************************************************/
 
-void SvxHpLinkDlg::SwitchPage( const OString& rId )
+void SvxHpLinkDlg::SwitchPage( const OUString& rId )
 {
     m_xIconCtrl->set_current_page(rId);
 }

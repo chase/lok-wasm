@@ -52,6 +52,12 @@
     <h1 style="text-align: center;"><a id="thirdparty" name="thirdparty">Third Party Code Additional Copyright
     Notices and License Terms</a></h1>
     <h1><a id="a__Libraries" name="a__Libraries">Libraries</a></h1>
+    <div class="ARGON2">
+        <h2>Argon2</h2>
+        <p>The following software may be included in this product: Argon2. Use of any of this software is governed
+        by the terms of the license below:</p>
+        <p><a href="#a__Apache_License_version_2_0">Jump to Apache License Version 2.0</a></p>
+    </div>
     <div class="BSH">
         <h2>beanshell</h2>
         <p>The following software may be included in this product: beanshell. Use of any of this software is governed
@@ -407,6 +413,12 @@
         CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
         ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
         PERFORMANCE OF THIS SOFTWARE.</p>
+    </div>
+    <div class="FROZEN">
+        <h2>frozen</h2>
+        <p>The following software may be included in this product: frozen. Use of any of this software is governed
+        by the terms of the license below:</p>
+        <p><a href="#a__Apache_License_version_2_0">Jump to Apache License Version 2.0</a></p>
     </div>
     <div class="GLM">
         <h2>GLM</h2>
@@ -1809,6 +1821,30 @@
         PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION
         WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.</p>
     </div>
+    <h2>zxcvbn-c</h2>
+    <p>The following software may be included in this product: zxcvbn-c.</p>
+    <p>zxcvbn-c code is covered by the MIT license:</p>
+    <blockquote>
+      <p>Copyright (c) 2015-2017 Tony Evans </p>
+
+      <p>Permission is hereby granted, free of charge, to any person obtaining a copy
+      of this software and associated documentation files (the "Software"), to deal
+      in the Software without restriction, including without limitation the rights
+      to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+      copies of the Software, and to permit persons to whom the Software is
+      furnished to do so, subject to the following conditions:</p>
+
+      <p>The above copyright notice and this permission notice shall be included in
+      all copies or substantial portions of the Software.</p>
+
+      <p>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+      IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+      FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+      AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+      LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+      OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+      THE SOFTWARE.</p>
+    </blockquote>
     <h2>Dragonbox</h2>
     <p>The following software may be included in this product: Dragonbox.</p>
     <p>Dragonbox code is covered by the following license:</p>
@@ -2655,15 +2691,6 @@
         <p>This Font Software is licensed under the SIL Open Font License, Version 1.1, with Reserved Font Names
         "Scheherazade" and "SIL". This license is copied below, and is also available with a FAQ at:
         <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
-        <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
-        <h2>Source Sans Pro</h2>
-        <p>The following software may be included in this product: Source Sans Pro fonts. Use of any of this software
-        is governed by the terms of the license below:</p>
-        <p>Copyright 2010, 2012 Adobe Systems Incorporated (<a href="http://www.adobe.com/">http://www.adobe.com/</a>),
-        with Reserved Font Name 'Source'. All Rights Reserved. Source is a trademark of Adobe Systems Incorporated in
-        the United States and/or other countries.</p>
-        <p>This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below,
-        and is also available with a FAQ at: <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
         <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
     </div>
     <div class="DICTIONARIES">

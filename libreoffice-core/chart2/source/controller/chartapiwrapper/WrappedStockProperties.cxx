@@ -79,13 +79,15 @@ void WrappedStockProperty::setPropertyValue( const css::uno::Any& rOuterValue, c
 
     rtl::Reference< ChartModel > xChartDoc( m_spChart2ModelContact->getDocumentModel() );
     rtl::Reference< ::chart::Diagram > xDiagram( m_spChart2ModelContact->getDiagram() );
-    sal_Int32 nDimension = ::chart::DiagramHelper::getDimension( xDiagram );
-    if( !(xChartDoc.is() && xDiagram.is() && nDimension==2) )
+    if( !xChartDoc || !xDiagram )
+        return;
+    sal_Int32 nDimension = xDiagram->getDimension();
+    if( nDimension != 2 )
         return;
 
     rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager = xChartDoc->getTypeManager();
-    DiagramHelper::tTemplateWithServiceName aTemplateAndService =
-            DiagramHelper::getTemplateForDiagram( xDiagram, xChartTypeManager );
+    Diagram::tTemplateWithServiceName aTemplateAndService =
+            xDiagram->getTemplate( xChartTypeManager );
 
     rtl::Reference< ::chart::ChartTypeTemplate > xTemplate =
             getNewTemplate( bNewValue, aTemplateAndService.sServiceName, xChartTypeManager );
@@ -136,12 +138,12 @@ css::uno::Any WrappedVolumeProperty::getPropertyValue( const css::uno::Reference
     if( xDiagram.is() && xChartDoc.is() )
     {
         std::vector< rtl::Reference< DataSeries > > aSeriesVector =
-            DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+            xDiagram->getDataSeries();
         if( !aSeriesVector.empty() )
         {
             rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager = xChartDoc->getTypeManager();
-            DiagramHelper::tTemplateWithServiceName aTemplateAndService =
-                    DiagramHelper::getTemplateForDiagram( xDiagram, xChartTypeManager );
+            Diagram::tTemplateWithServiceName aTemplateAndService =
+                    xDiagram->getTemplate( xChartTypeManager );
 
             if(    aTemplateAndService.sServiceName == "com.sun.star.chart2.template.StockVolumeLowHighClose"
                 || aTemplateAndService.sServiceName == "com.sun.star.chart2.template.StockVolumeOpenLowHighClose" )
@@ -205,12 +207,12 @@ css::uno::Any WrappedUpDownProperty::getPropertyValue( const css::uno::Reference
     if( xDiagram.is() && xChartDoc.is() )
     {
         std::vector< rtl::Reference< DataSeries > > aSeriesVector =
-            DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+            xDiagram->getDataSeries();
         if( !aSeriesVector.empty() )
         {
             rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager = xChartDoc->getTypeManager();
-            DiagramHelper::tTemplateWithServiceName aTemplateAndService =
-                    DiagramHelper::getTemplateForDiagram( xDiagram, xChartTypeManager );
+            Diagram::tTemplateWithServiceName aTemplateAndService =
+                    xDiagram->getTemplate( xChartTypeManager );
 
             if(    aTemplateAndService.sServiceName == "com.sun.star.chart2.template.StockOpenLowHighClose"
                 || aTemplateAndService.sServiceName == "com.sun.star.chart2.template.StockVolumeOpenLowHighClose" )

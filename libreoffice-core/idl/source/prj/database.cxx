@@ -88,7 +88,7 @@ SvRefMemberList<SvMetaType *>& SvIdlDataBase::GetTypeList()
 void SvIdlDataBase::SetError( const OString& rError, SvToken const & rTok )
 {
     if( rTok.GetLine() > 10000 )
-        aError.SetText( "line count overflow" );
+        aError.SetText( "line count overflow"_ostr );
 
     if( aError.nLine < rTok.GetLine()
       || (aError.nLine == rTok.GetLine() && aError.nColumn < rTok.GetColumn()) )
@@ -161,7 +161,7 @@ bool SvIdlDataBase::ReadIdFile( std::string_view rOFileName )
                 rTok = aTokStm.GetToken_Next();
                 OString aDefName;
                 if( !rTok.IsIdentifier() )
-                    throw SvParseException( "unexpected token after define", rTok );
+                    throw SvParseException( "unexpected token after define"_ostr, rTok );
                 aDefName = rTok.GetString();
 
                 sal_uInt32 nVal = 0;
@@ -173,24 +173,24 @@ bool SvIdlDataBase::ReadIdFile( std::string_view rOFileName )
                     {
                         rTok = aTokStm.GetToken_Next();
                         if( !rTok.IsChar() || rTok.GetChar() != '<')
-                            throw SvParseException( "expected '<'", rTok );
+                            throw SvParseException( "expected '<'"_ostr, rTok );
                         rTok = aTokStm.GetToken_Next();
                         if (rTok.IsChar() && rTok.GetChar() == ':')
                         {
                             // add support for "::avmedia::MediaItem" namespaced identifier
                             rTok = aTokStm.GetToken_Next();
                             if( !rTok.IsChar() || rTok.GetChar() != ':')
-                                throw SvParseException( "expected ':'", rTok );
+                                throw SvParseException( "expected ':'"_ostr, rTok );
                             // the lexer reads "avmedia::MediaItem" as an identifier
                             rTok = aTokStm.GetToken_Next();
                             if( !rTok.IsIdentifier() )
-                                throw SvParseException( "expected identifier", rTok );
+                                throw SvParseException( "expected identifier"_ostr, rTok );
                         }
                         else if( !rTok.IsIdentifier() )
-                                throw SvParseException( "expected identifier", rTok );
+                                throw SvParseException( "expected identifier"_ostr, rTok );
                         rTok = aTokStm.GetToken_Next();
                         if( !rTok.IsChar() || rTok.GetChar() != '>')
-                            throw SvParseException( "expected '<'", rTok );
+                            throw SvParseException( "expected '<'"_ostr, rTok );
                         rTok = aTokStm.GetToken_Next();
                     }
                     else if( rTok.IsIdentifier() )
@@ -249,7 +249,7 @@ bool SvIdlDataBase::ReadIdFile( std::string_view rOFileName )
                     }
                     if( rTok.IsEof() )
                     {
-                        throw SvParseException("unexpected eof in #include", rTok);
+                        throw SvParseException("unexpected eof in #include"_ostr, rTok);
                     }
                 }
                 OString aName(aNameBuf.makeStringAndClear());
@@ -417,8 +417,7 @@ void SvIdlDataBase::WriteError( SvTokenStream & rInStm )
         // error text
         if( !aError.GetText().isEmpty() )
         {
-            aErrorText.append("may be <");
-            aErrorText.append(aError.GetText());
+            aErrorText.append("may be <" + aError.GetText());
         }
         SvToken * pPrevTok = nullptr;
         while( &rTok != pPrevTok )
@@ -431,11 +430,11 @@ void SvIdlDataBase::WriteError( SvTokenStream & rInStm )
         }
 
         // error position
-        aErrorText.append("> at ( ");
-        aErrorText.append(static_cast<sal_Int64>(aError.nLine));
-        aErrorText.append(", ");
-        aErrorText.append(static_cast<sal_Int64>(aError.nColumn));
-        aErrorText.append(" )");
+        aErrorText.append("> at ( "
+            + OString::number(static_cast<sal_Int64>(aError.nLine))
+            + ", "
+            + OString::number(static_cast<sal_Int64>(aError.nColumn))
+            + " )");
 
         // reset error
         aError = SvIdlError();
@@ -520,7 +519,7 @@ struct WriteDep
     explicit WriteDep(SvFileStream & rStream) : m_rStream(rStream) { }
     void operator() (std::u16string_view rItem)
     {
-        m_rStream.WriteCharPtr( " \\\n " );
+        m_rStream.WriteOString( " \\\n " );
         m_rStream.WriteOString( OUStringToOString(rItem, RTL_TEXTENCODING_UTF8) );
     }
 };
@@ -534,7 +533,7 @@ struct WriteDummy
     void operator() (std::u16string_view rItem)
     {
         m_rStream.WriteOString( OUStringToOString(rItem, RTL_TEXTENCODING_UTF8) );
-        m_rStream.WriteCharPtr( " :\n\n" );
+        m_rStream.WriteOString( " :\n\n" );
     }
 };
 
@@ -544,9 +543,9 @@ void SvIdlDataBase::WriteDepFile(
         SvFileStream & rStream, std::u16string_view rTarget)
 {
     rStream.WriteOString( OUStringToOString(rTarget, RTL_TEXTENCODING_UTF8) );
-    rStream.WriteCharPtr( " :" );
+    rStream.WriteOString( " :" );
     ::std::for_each(m_DepFiles.begin(), m_DepFiles.end(), WriteDep(rStream));
-    rStream.WriteCharPtr( "\n\n" );
+    rStream.WriteOString( "\n\n" );
     ::std::for_each(m_DepFiles.begin(), m_DepFiles.end(), WriteDummy(rStream));
 }
 

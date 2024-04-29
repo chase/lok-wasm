@@ -18,6 +18,7 @@
  */
 
 #include <o3tl/any.hxx>
+#include <o3tl/string_view.hxx>
 #include <oox/token/tokens.hxx>
 #include "epptooxml.hxx"
 #include <sax/fshelper.hxx>
@@ -33,8 +34,6 @@
 #include <com/sun/star/animations/AnimationTransformType.hpp>
 #include <com/sun/star/animations/AnimationValueType.hpp>
 #include <com/sun/star/animations/AnimationColorSpace.hpp>
-#include <com/sun/star/animations/Event.hpp>
-#include <com/sun/star/animations/EventTrigger.hpp>
 #include <com/sun/star/animations/Timing.hpp>
 #include <com/sun/star/animations/ValuePair.hpp>
 #include <com/sun/star/animations/XAnimateMotion.hpp>
@@ -61,7 +60,8 @@
 
 #include "pptexanimations.hxx"
 #include "pptx-animations.hxx"
-#include "../ppt/pptanimations.hxx"
+#include "pptx-animations-cond.hxx"
+#include "pptx-animations-nodectx.hxx"
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::animations;
@@ -258,48 +258,6 @@ void WriteAnimationCondListForSeq(const FSHelperPtr& pFS, sal_Int32 nToken)
     pFS->endElementNS(XML_p, nToken);
 }
 
-const char* convertEventTrigger(sal_Int16 nTrigger)
-{
-    const char* pEvent = nullptr;
-    switch (nTrigger)
-    {
-        case EventTrigger::ON_NEXT:
-            pEvent = "onNext";
-            break;
-        case EventTrigger::ON_PREV:
-            pEvent = "onPrev";
-            break;
-        case EventTrigger::BEGIN_EVENT:
-            pEvent = "begin";
-            break;
-        case EventTrigger::END_EVENT:
-            pEvent = "end";
-            break;
-        case EventTrigger::ON_BEGIN:
-            pEvent = "onBegin";
-            break;
-        case EventTrigger::ON_END:
-            pEvent = "onEnd";
-            break;
-        case EventTrigger::ON_CLICK:
-            pEvent = "onClick";
-            break;
-        case EventTrigger::ON_DBL_CLICK:
-            pEvent = "onDblClick";
-            break;
-        case EventTrigger::ON_STOP_AUDIO:
-            pEvent = "onStopAudio";
-            break;
-        case EventTrigger::ON_MOUSE_ENTER:
-            pEvent = "onMouseOver"; // not exact?
-            break;
-        case EventTrigger::ON_MOUSE_LEAVE:
-            pEvent = "onMouseOut";
-            break;
-    }
-    return pEvent;
-}
-
 void WriteAnimationAttributeName(const FSHelperPtr& pFS, const OUString& rAttributeName)
 {
     if (rAttributeName.isEmpty())
@@ -348,18 +306,6 @@ void WriteAnimationAttributeName(const FSHelperPtr& pFS, const OUString& rAttrib
     }
 
     pFS->endElementNS(XML_p, XML_attrNameLst);
-}
-
-bool isValidTarget(const Any& rTarget)
-{
-    Reference<XShape> xShape;
-
-    if ((rTarget >>= xShape) && xShape.is())
-        return true;
-
-    ParagraphTarget aParagraphTarget;
-
-    return (rTarget >>= aParagraphTarget) && aParagraphTarget.Shape.is();
 }
 
 /// extract ooxml node type from a XAnimationNode.
@@ -533,98 +479,6 @@ const char* convertTextAnimationType(sal_Int16 nType)
     return sType;
 }
 
-class NodeContext;
-
-typedef std::unique_ptr<NodeContext> NodeContextPtr;
-
-class NodeContext
-{
-    const Reference<XAnimationNode> mxNode;
-    const bool mbMainSeqChild;
-
-    std::vector<NodeContextPtr> maChildNodes;
-    // if the node has valid target or contains at least one valid target.
-    bool mbValid;
-
-    // Attributes initialized from mxNode->getUserData().
-    sal_Int16 mnEffectNodeType;
-    sal_Int16 mnEffectPresetClass;
-    OUString msEffectPresetId;
-    OUString msEffectPresetSubType;
-
-    /// constructor helper for initializing user data.
-    void initUserData();
-
-    /// constructor helper to initialize maChildNodes.
-    /// return true if at least one childnode is valid.
-    bool initChildNodes();
-
-    /// constructor helper to initialize mbValid
-    void initValid(bool bHasValidChild, bool bIsIterateChild);
-
-public:
-    NodeContext(const Reference<XAnimationNode>& xNode, bool bMainSeqChild, bool bIsIterateChild);
-    const Reference<XAnimationNode>& getNode() const { return mxNode; }
-    bool isMainSeqChild() const { return mbMainSeqChild; }
-    sal_Int16 getEffectNodeType() const { return mnEffectNodeType; }
-    sal_Int16 getEffectPresetClass() const { return mnEffectPresetClass; }
-    const OUString& getEffectPresetId() const { return msEffectPresetId; }
-    const OUString& getEffectPresetSubType() const { return msEffectPresetSubType; }
-    bool isValid() const { return mbValid; }
-    const std::vector<NodeContextPtr>& getChildNodes() const { return maChildNodes; };
-    Any getCondition(bool bBegin) const;
-};
-
-struct Cond
-{
-    OString msDelay;
-    const char* mpEvent;
-    Reference<XShape> mxShape;
-    Reference<XAnimationNode> mxNode;
-
-    Cond(const Any& rAny, bool bIsMainSeqChild);
-
-    bool isValid() const { return msDelay.getLength() || mpEvent; }
-    const char* getDelay() const { return msDelay.getLength() ? msDelay.getStr() : nullptr; }
-};
-
-Cond::Cond(const Any& rAny, bool bIsMainSeqChild)
-    : mpEvent(nullptr)
-{
-    bool bHasFDelay = false;
-    double fDelay = 0;
-    Timing eTiming;
-    Event aEvent;
-
-    if (rAny >>= eTiming)
-    {
-        if (eTiming == Timing_INDEFINITE)
-            msDelay = "indefinite";
-    }
-    else if (rAny >>= aEvent)
-    {
-        if (aEvent.Trigger == EventTrigger::ON_NEXT && bIsMainSeqChild)
-            msDelay = "indefinite";
-        else
-        {
-            mpEvent = convertEventTrigger(aEvent.Trigger);
-            if (!(aEvent.Source >>= mxShape))
-                aEvent.Source >>= mxNode;
-
-            if (aEvent.Offset >>= fDelay)
-                bHasFDelay = true;
-        }
-    }
-    else if (rAny >>= fDelay)
-        bHasFDelay = true;
-
-    if (bHasFDelay)
-    {
-        sal_Int32 nDelay = static_cast<sal_uInt32>(fDelay * 1000.0);
-        msDelay = OString::number(nDelay);
-    }
-}
-
 class PPTXAnimationExport
 {
     void WriteAnimationNode(const NodeContextPtr& pContext);
@@ -637,9 +491,8 @@ class PPTXAnimationExport
     void WriteAnimationNodeMedia();
     void WriteAnimationNodeCommonPropsStart();
     void WriteAnimationTarget(const Any& rTarget);
-    void WriteAnimationCondList(const Any& rAny, sal_Int32 nToken);
+    void WriteAnimationCondList(const std::vector<Cond>& rList, sal_Int32 nToken);
     void WriteAnimationCond(const Cond& rCond);
-    bool isMainSeqChild() const;
     const Reference<XAnimationNode>& getCurrentNode() const;
 
     PowerPointExport& mrPowerPointExport;
@@ -656,13 +509,14 @@ public:
 };
 
 /// Returns if rURL has an extension which is an audio format.
-bool IsAudioURL(const OUString& rURL)
+bool IsAudioURL(std::u16string_view rURL)
 {
-    return rURL.endsWithIgnoreAsciiCase(".wav") || rURL.endsWithIgnoreAsciiCase(".m4a");
+    return o3tl::endsWithIgnoreAsciiCase(rURL, ".wav")
+           || o3tl::endsWithIgnoreAsciiCase(rURL, ".m4a");
 }
 
 /// Returns if rURL has an extension which is a video format.
-bool IsVideoURL(const OUString& rURL) { return rURL.endsWithIgnoreAsciiCase(".mp4"); }
+bool IsVideoURL(std::u16string_view rURL) { return o3tl::endsWithIgnoreAsciiCase(rURL, ".mp4"); }
 }
 
 namespace oox::core
@@ -680,12 +534,6 @@ PPTXAnimationExport::PPTXAnimationExport(PowerPointExport& rExport, const FSHelp
     , mpFS(pFS)
     , mpContext(nullptr)
 {
-}
-
-bool PPTXAnimationExport::isMainSeqChild() const
-{
-    assert(mpContext);
-    return mpContext->isMainSeqChild();
 }
 
 const Reference<XAnimationNode>& PPTXAnimationExport::getCurrentNode() const
@@ -736,37 +584,13 @@ void PPTXAnimationExport::WriteAnimationTarget(const Any& rTarget)
     mpFS->endElementNS(XML_p, XML_tgtEl);
 }
 
-void PPTXAnimationExport::WriteAnimationCondList(const Any& rAny, sal_Int32 nToken)
+void PPTXAnimationExport::WriteAnimationCondList(const std::vector<Cond>& rList, sal_Int32 nToken)
 {
-    if (!rAny.hasValue())
-        return;
-
-    std::vector<Cond> aList;
-
-    bool bIsMainSeqChild = isMainSeqChild();
-
-    Sequence<Any> aCondSeq;
-    if (rAny >>= aCondSeq)
-    {
-        for (const auto& rCond : std::as_const(aCondSeq))
-        {
-            Cond aCond(rCond, bIsMainSeqChild);
-            if (aCond.isValid())
-                aList.push_back(aCond);
-        }
-    }
-    else
-    {
-        Cond aCond(rAny, bIsMainSeqChild);
-        if (aCond.isValid())
-            aList.push_back(aCond);
-    }
-
-    if (aList.size() > 0)
+    if (rList.size() > 0)
     {
         mpFS->startElementNS(XML_p, nToken);
 
-        for (const Cond& rCond : aList)
+        for (const Cond& rCond : rList)
             WriteAnimationCond(rCond);
 
         mpFS->endElementNS(XML_p, nToken);
@@ -1045,7 +869,7 @@ void PPTXAnimationExport::WriteAnimationNodeCommonPropsStart()
         sDuration = OString::number(static_cast<sal_Int32>(fDuration * 1000.0));
 
     sal_uInt32 nPresetClass = mpContext->getEffectPresetClass();
-    if (nPresetClass != DFF_ANIM_PRESS_CLASS_USER_DEFINED)
+    if (nPresetClass != EffectPresetClass::CUSTOM)
         pPresetClass = convertEffectPresetClass(nPresetClass);
 
     sal_uInt32 nPresetId = 0;
@@ -1101,8 +925,8 @@ void PPTXAnimationExport::WriteAnimationNodeCommonPropsStart()
         sax_fastparser::UseIf(OString::number(nPresetSubType), bPresetSubType), XML_repeatCount,
         sRepeatCount);
 
-    WriteAnimationCondList(mpContext->getCondition(true), XML_stCondLst);
-    WriteAnimationCondList(mpContext->getCondition(false), XML_endCondLst);
+    WriteAnimationCondList(mpContext->getBeginCondList(), XML_stCondLst);
+    WriteAnimationCondList(mpContext->getEndCondList(), XML_endCondLst);
 
     if (rXNode->getType() == AnimationNodeType::ITERATE)
     {
@@ -1121,13 +945,30 @@ void PPTXAnimationExport::WriteAnimationNodeCommonPropsStart()
     const std::vector<NodeContextPtr>& aChildNodes = mpContext->getChildNodes();
     if (!aChildNodes.empty())
     {
+        bool bSubTnLst = false;
         mpFS->startElementNS(XML_p, XML_childTnLst);
         for (const NodeContextPtr& pChildContext : aChildNodes)
         {
             if (pChildContext->isValid())
-                WriteAnimationNode(pChildContext);
+            {
+                if (pChildContext->isOnSubTnLst())
+                    bSubTnLst = true;
+                else
+                    WriteAnimationNode(pChildContext);
+            }
         }
         mpFS->endElementNS(XML_p, XML_childTnLst);
+
+        if (bSubTnLst)
+        {
+            mpFS->startElementNS(XML_p, XML_subTnLst);
+            for (const NodeContextPtr& pChildContext : aChildNodes)
+            {
+                if (pChildContext->isValid() && pChildContext->isOnSubTnLst())
+                    WriteAnimationNode(pChildContext);
+            }
+            mpFS->endElementNS(XML_p, XML_subTnLst);
+        }
     }
     mpFS->endElementNS(XML_p, XML_cTn);
 }
@@ -1176,11 +1017,11 @@ void PPTXAnimationExport::WriteAnimationNodeCommand()
     {
         case EffectCommands::VERB:
             pType = "verb";
-            aCommand = "1"; /* FIXME hardcoded viewing */
+            aCommand = "1"_ostr; /* FIXME hardcoded viewing */
             break;
         case EffectCommands::PLAY:
         {
-            aCommand = "play";
+            aCommand = "play"_ostr;
             uno::Sequence<beans::NamedValue> aParamSeq;
             xCommand->getParameter() >>= aParamSeq;
             comphelper::SequenceAsHashMap aMap(aParamSeq);
@@ -1197,10 +1038,10 @@ void PPTXAnimationExport::WriteAnimationNodeCommand()
             break;
         }
         case EffectCommands::TOGGLEPAUSE:
-            aCommand = "togglePause";
+            aCommand = "togglePause"_ostr;
             break;
         case EffectCommands::STOP:
-            aCommand = "stop";
+            aCommand = "stop"_ostr;
             break;
         default:
             SAL_WARN("sd.eppt", "unknown command: " << xCommand->getCommand());
@@ -1287,8 +1128,8 @@ void PPTXAnimationExport::WriteAnimationNodeMedia()
     {
         mpFS->startElementNS(XML_p, XML_cTn);
     }
-    WriteAnimationCondList(mpContext->getCondition(true), XML_stCondLst);
-    WriteAnimationCondList(mpContext->getCondition(false), XML_endCondLst);
+    WriteAnimationCondList(mpContext->getBeginCondList(), XML_stCondLst);
+    WriteAnimationCondList(mpContext->getEndCondList(), XML_endCondLst);
     mpFS->endElementNS(XML_p, XML_cTn);
 
     mpFS->startElementNS(XML_p, XML_tgtEl);
@@ -1408,133 +1249,6 @@ sal_Int32 PPTXAnimationExport::GetAnimationNodeId(const Reference<XAnimationNode
         nId = aIter->second;
     }
     return nId;
-}
-
-NodeContext::NodeContext(const Reference<XAnimationNode>& xNode, bool bMainSeqChild,
-                         bool bIsIterateChild)
-    : mxNode(xNode)
-    , mbMainSeqChild(bMainSeqChild)
-    , mbValid(true)
-    , mnEffectNodeType(-1)
-    , mnEffectPresetClass(DFF_ANIM_PRESS_CLASS_USER_DEFINED)
-{
-    assert(xNode.is());
-
-    initUserData();
-
-    initValid(initChildNodes(), bIsIterateChild);
-}
-
-void NodeContext::initUserData()
-{
-    assert(mxNode.is());
-
-    Sequence<NamedValue> aUserData = mxNode->getUserData();
-    const Any* aIndexedData[DFF_ANIM_PROPERTY_ID_COUNT];
-    AnimationExporter::GetUserData(aUserData, aIndexedData, sizeof(aIndexedData));
-
-    const Any* pAny = aIndexedData[DFF_ANIM_NODE_TYPE];
-    if (pAny)
-        *pAny >>= mnEffectNodeType;
-
-    pAny = aIndexedData[DFF_ANIM_PRESET_CLASS];
-    if (pAny)
-        *pAny >>= mnEffectPresetClass;
-
-    pAny = aIndexedData[DFF_ANIM_PRESET_ID];
-    if (pAny)
-        *pAny >>= msEffectPresetId;
-
-    pAny = aIndexedData[DFF_ANIM_PRESET_SUB_TYPE];
-    if (pAny)
-        *pAny >>= msEffectPresetSubType;
-}
-
-void NodeContext::initValid(bool bHasValidChild, bool bIsIterateChild)
-{
-    sal_Int16 nType = mxNode->getType();
-
-    if (nType == AnimationNodeType::ITERATE)
-    {
-        Reference<XIterateContainer> xIterate(mxNode, UNO_QUERY);
-        mbValid = xIterate.is() && (bIsIterateChild || isValidTarget(xIterate->getTarget()))
-                  && !maChildNodes.empty();
-    }
-    else if (nType == AnimationNodeType::COMMAND)
-    {
-        Reference<XCommand> xCommand(mxNode, UNO_QUERY);
-        mbValid = xCommand.is() && (bIsIterateChild || isValidTarget(xCommand->getTarget()));
-    }
-    else if (nType == AnimationNodeType::PAR || nType == AnimationNodeType::SEQ)
-    {
-        mbValid = bHasValidChild;
-    }
-    else if (nType == AnimationNodeType::AUDIO)
-    {
-        Reference<XAudio> xAudio(mxNode, UNO_QUERY);
-        OUString sURL;
-        uno::Reference<drawing::XShape> xShape;
-        mbValid = false;
-        if (xAudio.is())
-        {
-            if (xAudio->getSource() >>= sURL)
-            {
-                mbValid = IsAudioURL(sURL);
-            }
-            else if (xAudio->getSource() >>= xShape)
-            {
-                uno::Reference<beans::XPropertySet> xShapeProps(xShape, uno::UNO_QUERY);
-                bool bHasMediaURL
-                    = xShapeProps->getPropertySetInfo()->hasPropertyByName("MediaURL");
-                if (bHasMediaURL && (xShapeProps->getPropertyValue("MediaURL") >>= sURL))
-                {
-                    mbValid = IsAudioURL(sURL) || IsVideoURL(sURL);
-                }
-            }
-        }
-    }
-    else
-    {
-        Reference<XAnimate> xAnimate(mxNode, UNO_QUERY);
-        mbValid = xAnimate.is() && (bIsIterateChild || isValidTarget(xAnimate->getTarget()));
-    }
-}
-
-bool NodeContext::initChildNodes()
-{
-    bool bValid = false;
-    Reference<XEnumerationAccess> xEnumerationAccess(mxNode, UNO_QUERY);
-    if (xEnumerationAccess.is())
-    {
-        Reference<XEnumeration> xEnumeration = xEnumerationAccess->createEnumeration();
-        bool bIsMainSeq = mnEffectNodeType == EffectNodeType::MAIN_SEQUENCE;
-        bool bIsIterateChild = mxNode->getType() == AnimationNodeType::ITERATE;
-        if (xEnumeration.is())
-        {
-            while (xEnumeration->hasMoreElements())
-            {
-                Reference<XAnimationNode> xChildNode(xEnumeration->nextElement(), UNO_QUERY);
-                if (xChildNode.is())
-                {
-                    auto pChildContext
-                        = std::make_unique<NodeContext>(xChildNode, bIsMainSeq, bIsIterateChild);
-                    if (pChildContext->isValid())
-                        bValid = true;
-                    maChildNodes.push_back(std::move(pChildContext));
-                }
-            }
-        }
-    }
-    return bValid;
-}
-
-Any NodeContext::getCondition(bool bBegin) const
-{
-    const bool bParent
-        = (mnEffectNodeType != EffectNodeType::INTERACTIVE_SEQUENCE || maChildNodes.empty());
-    const Reference<XAnimationNode>& rNode = bParent ? mxNode : maChildNodes[0]->getNode();
-
-    return bBegin ? rNode->getBegin() : rNode->getEnd();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

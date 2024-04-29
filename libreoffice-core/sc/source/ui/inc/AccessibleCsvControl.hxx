@@ -29,9 +29,7 @@
 #include <rtl/ref.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <comphelper/accessiblecomponenthelper.hxx>
-#include <cppuhelper/implbase1.hxx>
-#include <cppuhelper/implbase2.hxx>
-#include <cppuhelper/implbase3.hxx>
+#include <cppuhelper/implbase.hxx>
 #include <editeng/AccessibleStaticTextBase.hxx>
 #include <comphelper/uno3.hxx>
 #include <map>
@@ -83,11 +81,11 @@ protected:
 
 class ScCsvRuler;
 
-typedef ::cppu::ImplHelper2<css::accessibility::XAccessible,
-                            css::accessibility::XAccessibleText> ScAccessibleCsvRulerImpl;
-
 /** Accessible class representing the CSV ruler control. */
-class ScAccessibleCsvRuler : public ScAccessibleCsvControl, public ScAccessibleCsvRulerImpl
+class ScAccessibleCsvRuler : public cppu::ImplInheritanceHelper<
+                                     ScAccessibleCsvControl,
+                                     css::accessibility::XAccessible,
+                                     css::accessibility::XAccessibleText>
 {
 private:
     OUStringBuffer       maBuffer;   /// Contains the text representation of the ruler.
@@ -175,14 +173,6 @@ public:
 
     virtual sal_Bool SAL_CALL scrollSubstringTo( sal_Int32 nStartIndex, sal_Int32 nEndIndex, css::accessibility::AccessibleScrollType aScrollType) override;
 
-    // XInterface -------------------------------------------------------------
-
-    DECLARE_XINTERFACE()
-
-    // XTypeProvider ----------------------------------------------------------
-
-    DECLARE_XTYPEPROVIDER()
-
     // events -----------------------------------------------------------------
 public:
     /** Sends a caret changed event to all listeners. */
@@ -222,14 +212,12 @@ private:
 class ScCsvGrid;
 class ScAccessibleCsvCell;
 
-typedef ::cppu::ImplHelper3<
-        css::accessibility::XAccessible,
-        css::accessibility::XAccessibleTable,
-        css::accessibility::XAccessibleSelection >
-    ScAccessibleCsvGridImpl;
-
 /** Accessible class representing the CSV grid control. */
-class ScAccessibleCsvGrid : public ScAccessibleCsvControl, public ScAccessibleCsvGridImpl
+class ScAccessibleCsvGrid : public cppu::ImplInheritanceHelper<
+                                ScAccessibleCsvControl,
+                                css::accessibility::XAccessible,
+                                css::accessibility::XAccessibleTable,
+                                css::accessibility::XAccessibleSelection>
 {
 protected:
     typedef std::map< sal_Int64, rtl::Reference<ScAccessibleCsvCell> > XAccessibleSet;
@@ -357,22 +345,6 @@ public:
     /** Deselects the child with the specified index in all selected children. */
     virtual void SAL_CALL deselectAccessibleChild( sal_Int64 nSelectedChildIndex ) override;
 
-    // XInterface -------------------------------------------------------------
-
-    virtual css::uno::Any SAL_CALL queryInterface( const css::uno::Type& rType ) override;
-
-    virtual void SAL_CALL acquire() noexcept override;
-
-    virtual void SAL_CALL release() noexcept override;
-
-    // XTypeProvider ----------------------------------------------------------
-
-    /** Returns a sequence with all supported interface types. */
-    virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes() override;
-
-    /** Returns an implementation ID. */
-    virtual css::uno::Sequence< sal_Int8 > SAL_CALL getImplementationId() override;
-
     // events -----------------------------------------------------------------
 public:
     /** Sends a GetFocus or LoseFocus event to all listeners. */
@@ -427,8 +399,9 @@ private:
 };
 
 /** Accessible class representing a cell of the CSV grid control. */
-class ScAccessibleCsvCell : public ScAccessibleCsvControl
-                          , public cppu::ImplHelper1<css::accessibility::XAccessible>
+class ScAccessibleCsvCell : public cppu::ImplInheritanceHelper<
+                                ScAccessibleCsvControl,
+                                css::accessibility::XAccessible>
                           , public ::accessibility::AccessibleStaticTextBase
 {
 protected:

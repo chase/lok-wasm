@@ -540,7 +540,7 @@ static void lcl_CpyBox( const SwTable& rCpyTable, const SwTableBox* pCpyBox,
         }
 
         // If we still have FlyFrames hanging around, delete them too
-        for( const auto pFly : *pDoc->GetSpzFrameFormats() )
+        for(sw::SpzFrameFormat* pFly: *pDoc->GetSpzFrameFormats())
         {
             SwFormatAnchor const*const pAnchor = &pFly->GetAnchor();
             SwNode const*const pAnchorNode = pAnchor->GetAnchorNode();
@@ -673,10 +673,7 @@ bool SwTable::InsNewTable( const SwTable& rCpyTable, const SwSelBoxes& rSelBoxes
     aTarget.assignBoxes( aCopyStruct );
 
     {
-        // Change table formulas into relative representation
-        SwTableFormulaUpdate aMsgHint( &rCpyTable );
-        aMsgHint.m_eFlags = TBL_RELBOXNAME;
-        pCpyDoc->getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+        const_cast<SwTable*>(&rCpyTable)->SwitchFormulasToRelativeRepresentation();
     }
 
     // delete frames
@@ -722,12 +719,7 @@ bool SwTable::InsTable( const SwTable& rCpyTable, const SwNodeIndex& rSttBox,
 
     SwDoc* pCpyDoc = rCpyTable.GetFrameFormat()->GetDoc();
 
-    {
-        // Convert Table formulas to their relative representation
-        SwTableFormulaUpdate aMsgHint( &rCpyTable );
-        aMsgHint.m_eFlags = TBL_RELBOXNAME;
-        pCpyDoc->getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
-    }
+    const_cast<SwTable*>(&rCpyTable)->SwitchFormulasToRelativeRepresentation();
 
     SwTableNumFormatMerge aTNFM( *pCpyDoc, *pDoc );
 
@@ -966,10 +958,7 @@ bool SwTable::InsTable( const SwTable& rCpyTable, const SwSelBoxes& rSelBoxes,
     }
 
     {
-        // Convert Table formulas to their relative representation
-        SwTableFormulaUpdate aMsgHint( &rCpyTable );
-        aMsgHint.m_eFlags = TBL_RELBOXNAME;
-        pCpyDoc->getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+        const_cast<SwTable*>(&rCpyTable)->SwitchFormulasToRelativeRepresentation();
     }
 
     // Delete the Frames

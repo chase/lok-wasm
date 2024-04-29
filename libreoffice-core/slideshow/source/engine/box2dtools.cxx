@@ -284,7 +284,9 @@ void box2DWorld::createStaticFrameAroundSlide(const ::basegfx::B2DVector& rSlide
 void box2DWorld::setShapePosition(const css::uno::Reference<com::sun::star::drawing::XShape> xShape,
                                   const basegfx::B2DPoint& rOutPos)
 {
-    Box2DBodySharedPtr pBox2DBody = mpXShapeToBodyMap.find(xShape)->second;
+    const auto iter = mpXShapeToBodyMap.find(xShape);
+    assert(iter != mpXShapeToBodyMap.end());
+    Box2DBodySharedPtr pBox2DBody = iter->second;
     pBox2DBody->setPosition(rOutPos);
 }
 
@@ -295,7 +297,9 @@ void box2DWorld::setShapePositionByLinearVelocity(
     assert(mpBox2DWorld);
     if (fPassedTime > 0) // this only makes sense if there was an advance in time
     {
-        Box2DBodySharedPtr pBox2DBody = mpXShapeToBodyMap.find(xShape)->second;
+        const auto iter = mpXShapeToBodyMap.find(xShape);
+        assert(iter != mpXShapeToBodyMap.end());
+        Box2DBodySharedPtr pBox2DBody = iter->second;
         pBox2DBody->setPositionByLinearVelocity(rOutPos, fPassedTime);
     }
 }
@@ -305,14 +309,18 @@ void box2DWorld::setShapeLinearVelocity(
     const basegfx::B2DVector& rVelocity)
 {
     assert(mpBox2DWorld);
-    Box2DBodySharedPtr pBox2DBody = mpXShapeToBodyMap.find(xShape)->second;
+    const auto iter = mpXShapeToBodyMap.find(xShape);
+    assert(iter != mpXShapeToBodyMap.end());
+    Box2DBodySharedPtr pBox2DBody = iter->second;
     pBox2DBody->setLinearVelocity(rVelocity);
 }
 
 void box2DWorld::setShapeAngle(const css::uno::Reference<com::sun::star::drawing::XShape> xShape,
                                const double fAngle)
 {
-    Box2DBodySharedPtr pBox2DBody = mpXShapeToBodyMap.find(xShape)->second;
+    const auto iter = mpXShapeToBodyMap.find(xShape);
+    assert(iter != mpXShapeToBodyMap.end());
+    Box2DBodySharedPtr pBox2DBody = iter->second;
     pBox2DBody->setAngle(fAngle);
 }
 
@@ -323,7 +331,9 @@ void box2DWorld::setShapeAngleByAngularVelocity(
     assert(mpBox2DWorld);
     if (fPassedTime > 0) // this only makes sense if there was an advance in time
     {
-        Box2DBodySharedPtr pBox2DBody = mpXShapeToBodyMap.find(xShape)->second;
+        const auto iter = mpXShapeToBodyMap.find(xShape);
+        assert(iter != mpXShapeToBodyMap.end());
+        Box2DBodySharedPtr pBox2DBody = iter->second;
         pBox2DBody->setAngleByAngularVelocity(fAngle, fPassedTime);
     }
 }
@@ -333,7 +343,9 @@ void box2DWorld::setShapeAngularVelocity(
     const double fAngularVelocity)
 {
     assert(mpBox2DWorld);
-    Box2DBodySharedPtr pBox2DBody = mpXShapeToBodyMap.find(xShape)->second;
+    const auto iter = mpXShapeToBodyMap.find(xShape);
+    assert(iter != mpXShapeToBodyMap.end());
+    Box2DBodySharedPtr pBox2DBody = iter->second;
     pBox2DBody->setAngularVelocity(fAngularVelocity);
 }
 
@@ -341,7 +353,9 @@ void box2DWorld::setShapeCollision(
     const css::uno::Reference<com::sun::star::drawing::XShape> xShape, bool bCanCollide)
 {
     assert(mpBox2DWorld);
-    Box2DBodySharedPtr pBox2DBody = mpXShapeToBodyMap.find(xShape)->second;
+    const auto iter = mpXShapeToBodyMap.find(xShape);
+    assert(iter != mpXShapeToBodyMap.end());
+    Box2DBodySharedPtr pBox2DBody = iter->second;
     pBox2DBody->setCollision(bCanCollide);
 }
 
@@ -411,13 +425,11 @@ void box2DWorld::initiateAllShapesAsStaticBodies(
             {
                 // if it is a group object iterate over its children and flag them
                 SdrObjList* aObjList = pTemp->GetSubList();
-                const size_t nObjCount(aObjList->GetObjCount());
 
-                for (size_t nObjIndex = 0; nObjIndex < nObjCount; ++nObjIndex)
+                for (const rtl::Reference<SdrObject>& pGroupMember : *aObjList)
                 {
-                    SdrObject* pGroupMember(aObjList->GetObj(nObjIndex));
                     aXShapeBelongsToAGroup.insert(
-                        std::make_pair(GetXShapeForSdrObject(pGroupMember), true));
+                        std::make_pair(GetXShapeForSdrObject(pGroupMember.get()), true));
                 }
             }
         }
@@ -563,7 +575,9 @@ void box2DWorld::queueShapeAnimationEndUpdate(
 
 void box2DWorld::alertPhysicsAnimationEnd(const slideshow::internal::ShapeSharedPtr& pShape)
 {
-    Box2DBodySharedPtr pBox2DBody = mpXShapeToBodyMap.find(pShape->getXShape())->second;
+    const auto iter = mpXShapeToBodyMap.find(pShape->getXShape());
+    assert(iter != mpXShapeToBodyMap.end());
+    Box2DBodySharedPtr pBox2DBody = iter->second;
     // since the animation ended make the body static
     makeBodyStatic(pBox2DBody);
     pBox2DBody->setRestitution(fDefaultStaticBodyBounciness);
@@ -669,7 +683,10 @@ Box2DBodySharedPtr makeBodyDynamic(const Box2DBodySharedPtr& pBox2DBody)
 Box2DBodySharedPtr box2DWorld::makeShapeStatic(const slideshow::internal::ShapeSharedPtr& pShape)
 {
     assert(mpBox2DWorld);
-    Box2DBodySharedPtr pBox2DBody = mpXShapeToBodyMap.find(pShape->getXShape())->second;
+    assert(pShape && pShape->getXShape());
+    const auto iter = mpXShapeToBodyMap.find(pShape->getXShape());
+    assert(iter != mpXShapeToBodyMap.end());
+    Box2DBodySharedPtr pBox2DBody = iter->second;
     return makeBodyStatic(pBox2DBody);
 }
 

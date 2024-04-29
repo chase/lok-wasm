@@ -31,13 +31,14 @@
 #include <textcontentcontrol.hxx>
 #include <doc.hxx>
 #include <unocontentcontrol.hxx>
+#include <unoport.hxx>
 #include <wrtsh.hxx>
 
 using namespace com::sun::star;
 
 namespace
 {
-inline constexpr OUStringLiteral CURRENT_DATE_FORMAT = u"YYYY-MM-DD";
+inline constexpr OUString CURRENT_DATE_FORMAT = u"YYYY-MM-DD"_ustr;
 }
 
 SwFormatContentControl* SwFormatContentControl::CreatePoolDefault(sal_uInt16 nWhich)
@@ -66,7 +67,9 @@ SwFormatContentControl::SwFormatContentControl(
 
 SwFormatContentControl::~SwFormatContentControl()
 {
-    if (m_pContentControl && (m_pContentControl->GetFormatContentControl() == this))
+    if (m_pContentControl
+        // SwFormatContentControl is not shareable, so ptr compare is OK
+        && areSfxPoolItemPtrsEqual(m_pContentControl->GetFormatContentControl(), this))
     {
         NotifyChangeTextNode(nullptr);
         m_pContentControl->SetFormatContentControl(nullptr);
@@ -115,7 +118,8 @@ void SwFormatContentControl::SetTextAttr(SwTextContentControl* pTextAttr)
         {
             m_pContentControl->SetFormatContentControl(this);
         }
-        else if (m_pContentControl->GetFormatContentControl() == this)
+        // SwFormatContentControl is not shareable, so ptr compare is OK
+        else if (areSfxPoolItemPtrsEqual(m_pContentControl->GetFormatContentControl(), this))
         {
             // The text attribute is gone, so de-register from text node.
             NotifyChangeTextNode(nullptr);
@@ -131,7 +135,9 @@ void SwFormatContentControl::NotifyChangeTextNode(SwTextNode* pTextNode)
     {
         SAL_WARN("sw.core", "SwFormatContentControl::NotifyChangeTextNode: no content control?");
     }
-    if (m_pContentControl && (m_pContentControl->GetFormatContentControl() == this))
+    if (m_pContentControl
+        // SwFormatContentControl is not shareable, so ptr compare is OK
+        && areSfxPoolItemPtrsEqual(m_pContentControl->GetFormatContentControl(), this))
     {
         // Not calling Modify, that would call SwXContentControl::SwClientNotify.
         m_pContentControl->NotifyChangeTextNode(pTextNode);
@@ -224,9 +230,9 @@ SwContentControl::SwContentControl(SwFormatContentControl* pFormat)
 
 SwContentControl::~SwContentControl() {}
 
-void SwContentControl::SetXContentControl(const rtl::Reference<SwXContentControl>& xContentCnotrol)
+void SwContentControl::SetXContentControl(const rtl::Reference<SwXContentControl>& xContentControl)
 {
-    m_wXContentControl = xContentCnotrol.get();
+    m_wXContentControl = xContentControl.get();
 }
 
 SwTextContentControl* SwContentControl::GetTextAttr() const
@@ -502,7 +508,7 @@ std::optional<bool> SwContentControl::GetLock(bool bControl) const
     else if (m_aLock.equalsIgnoreAsciiCase("contentLocked"))
         oLock = !bControl;
 
-    assert(oLock && "invalid or unknown lock state");
+    assert(oLock.has_value() && "invalid or unknown lock state");
     return oLock;
 }
 
@@ -824,9 +830,7 @@ void SwContentControlManager::Insert(SwTextContentControl* pTextContentControl)
 
 void SwContentControlManager::Erase(SwTextContentControl* pTextContentControl)
 {
-    m_aContentControls.erase(
-        std::remove(m_aContentControls.begin(), m_aContentControls.end(), pTextContentControl),
-        m_aContentControls.end());
+    std::erase(m_aContentControls, pTextContentControl);
 }
 
 SwTextContentControl* SwContentControlManager::Get(size_t nIndex)

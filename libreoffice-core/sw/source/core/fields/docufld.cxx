@@ -157,8 +157,9 @@ void SwPageNumberFieldType::ChangeExpansion( SwDoc* pDoc,
             }
             else if( dynamic_cast< const SwFormat* >(pDesc->GetDefinedIn()) !=  nullptr)
             {
-                SwAutoFormatGetDocNode aGetHt( &pDoc->GetNodes() );
-                m_bVirtual = !pDesc->GetDefinedIn()->GetInfo( aGetHt );
+                m_bVirtual = false;
+                sw::AutoFormatUsedHint aHint(m_bVirtual, pDoc->GetNodes());
+                pDesc->GetDefinedIn()->CallSwClientNotify(aHint);
                 break;
             }
         }
@@ -945,8 +946,11 @@ OUString SwDocInfoFieldType::Expand( sal_uInt16 nSub, sal_uInt32 nFormat,
             else if( nSub == DI_PRINT )
             {
                 aName = xDocProps->getPrintedBy();
-                uDT = xDocProps->getPrintDate();
-                aDate = DateTime(uDT);
+                if ( !std::getenv("STABLE_FIELDS_HACK") )
+                {
+                    uDT = xDocProps->getPrintDate();
+                    aDate = DateTime(uDT);
+                }
             }
             else
                 break;
@@ -1385,9 +1389,6 @@ void SwHiddenTextField::Evaluate(SwDoc& rDoc)
                     GetLanguage(), m_aContent, &fNumber );
                 m_bValid = true;
             }
-            else if( !sDBName.isEmpty() && !sDataSource.isEmpty() &&
-                     !sDataTableOrQuery.isEmpty() )
-                m_bValid = true;
         }
 #endif
     }
@@ -1854,6 +1855,12 @@ sal_Int32 SwPostItField::GetNumberOfParagraphs() const
     return mpText ? mpText->Count() : 1;
 }
 
+void SwPostItField::ChangeStyleSheetName(std::u16string_view rOldName, const SfxStyleSheetBase* pStyleSheet)
+{
+    if (mpText && pStyleSheet)
+        mpText->ChangeStyleSheetName(pStyleSheet->GetFamily(), rOldName, pStyleSheet->GetName());
+}
+
 void SwPostItField::SetPostItId(const sal_uInt32 nPostItId)
 {
     m_nPostItId = nPostItId == 0 ? s_nLastPostItId++ : nPostItId;
@@ -1892,7 +1899,7 @@ bool SwPostItField::QueryValue( uno::Any& rAny, sal_uInt16 nWhichId ) const
     case FIELD_PROP_PAR4:
         rAny <<= m_sName;
         break;
-    case FIELD_PROP_PAR7: // PAR5 (Parent Para Id) and PAR6 (Para Id) are skipped - they are not written into xml. Used for file convertion.
+    case FIELD_PROP_PAR7: // PAR5 (Parent Para Id) and PAR6 (Para Id) are skipped - they are not written into xml. Used for file conversion.
         rAny <<= m_sParentName;
         break;
     case FIELD_PROP_BOOL1:
@@ -1929,20 +1936,12 @@ bool SwPostItField::QueryValue( uno::Any& rAny, sal_uInt16 nWhichId ) const
         break;
     case FIELD_PROP_PAR5:
         {
-            OUString sTemp;
-            std::stringstream ss;
-            ss << std::uppercase << std::hex << m_nParentId;
-            sTemp = OUString::createFromAscii(ss.str().c_str());
-            rAny <<= sTemp;
+            rAny <<= OUString(OUString::number(m_nParentId, 16).toAsciiUpperCase());
         }
         break;
     case FIELD_PROP_PAR6:
         {
-            OUString sTemp;
-            std::stringstream ss;
-            ss << std::uppercase << std::hex << m_nPostItId;
-            sTemp = OUString::createFromAscii(ss.str().c_str());
-            rAny <<= sTemp;
+            rAny <<= OUString(OUString::number(m_nPostItId, 16).toAsciiUpperCase());
         }
         break;
     default:
@@ -1969,7 +1968,7 @@ bool SwPostItField::PutValue( const uno::Any& rAny, sal_uInt16 nWhichId )
     case FIELD_PROP_PAR4:
         rAny >>= m_sName;
         break;
-    case FIELD_PROP_PAR7: // PAR5 (Parent Para Id) and PAR6 (Para Id) are skipped - they are not written into xml. Used for file convertion.
+    case FIELD_PROP_PAR7: // PAR5 (Parent Para Id) and PAR6 (Para Id) are skipped - they are not written into xml. Used for file conversion.
         rAny >>= m_sParentName;
         break;
     case FIELD_PROP_BOOL1:
@@ -2390,7 +2389,7 @@ void SwRefPageGetFieldType::UpdateField( SwTextField const * pTextField,
         }
     }
     // start formatting
-    const_cast<SwFormatField&>(pTextField->GetFormatField()).UpdateTextNode(nullptr, nullptr);
+    const_cast<SwFormatField&>(pTextField->GetFormatField()).ForceUpdateTextNode();
 }
 
 // queries for relative page numbering

@@ -40,6 +40,7 @@
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
 #include <svx/msdffdef.hxx>
+#include <svx/svdobj.hxx>
 #include <tools/color.hxx>
 #include <tools/fontenum.hxx>
 #include <tools/gen.hxx>
@@ -130,7 +131,7 @@ struct MSFILTER_DLLPUBLIC PptInteractiveInfoAtom
 
 public:
 
-    MSFILTER_DLLPUBLIC friend SvStream& ReadPptInteractiveInfoAtom( SvStream& rIn, PptInteractiveInfoAtom& rAtom );
+    MSFILTER_DLLPUBLIC friend bool ReadPptInteractiveInfoAtom( SvStream& rIn, PptInteractiveInfoAtom& rAtom );
 };
 
 enum PptPageKind { PPT_MASTERPAGE, PPT_SLIDEPAGE, PPT_NOTEPAGE };
@@ -652,8 +653,7 @@ public:
     rtl::Reference<SdrObject> CreateTable(
                                 SdrObject* pGroupObject,
                                 const sal_uInt32* pTableArry,
-                                SvxMSDffSolverContainer* pSolverContainer,
-                                std::vector<rtl::Reference<SdrObject>>& rBackgroundColoredObjects
+                                SvxMSDffSolverContainer* pSolverContainer
                             );
     virtual bool ReadFormControl( tools::SvRef<SotStorage>& rSrc1, css::uno::Reference< css::form::XFormComponent > & rFormComp ) const = 0;
 };
@@ -1202,7 +1202,7 @@ struct ImplPPTTextObj final : public salhelper::SimpleReferenceObject
 {
     sal_uInt32                  mnShapeId;
     sal_uInt32                  mnShapeMaster;
-    std::unique_ptr<PptOEPlaceholderAtom> mpPlaceHolderAtom;
+    std::optional<PptOEPlaceholderAtom> moPlaceHolderAtom;
     TSS_Type                    mnInstance;
     TSS_Type                    mnDestinationInstance;
     MSO_SPT                     meShapeType;
@@ -1256,7 +1256,7 @@ public:
     void                    SetDestinationInstance( TSS_Type nInstance )
                             { mxImplTextObj->mnDestinationInstance = nInstance; }
 
-    PptOEPlaceholderAtom*   GetOEPlaceHolderAtom() const { return mxImplTextObj->mpPlaceHolderAtom.get(); }
+    const std::optional<PptOEPlaceholderAtom> & GetOEPlaceHolderAtom() const { return mxImplTextObj->moPlaceHolderAtom; }
     sal_uInt32              GetTextFlags() const { return mxImplTextObj->mnTextFlags; }
     void                    SetVertical( bool bVertical )
                             {

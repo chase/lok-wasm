@@ -31,6 +31,7 @@
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 #include <comphelper/lok.hxx>
+#include <PostItMgr.hxx>
 
 #define IS_MOBILE_PHONE (comphelper::LibreOfficeKit::isActive() && SfxViewShell::Current() && SfxViewShell::Current()->isLOKMobilePhone())
 
@@ -64,10 +65,12 @@ void SwWordCountFloatDlg::SetValues(const SwDocStat& rCurrent, const SwDocStat& 
     setValue(*m_xDocCharacterFT, rDoc.nChar, rLocaleData);
     setValue(*m_xDocCharacterExcludingSpacesFT, rDoc.nCharExcludingSpaces, rLocaleData);
     setValue(*m_xDocCjkcharsFT, rDoc.nAsianWord, rLocaleData);
+    setValue(*m_xDocComments, rCurrent.nComments, rLocaleData);
 
-    if (m_xStandardizedPagesLabelFT->get_visible())
+    const sal_Int64 nCharsPerStandardizedPage = m_xStandardizedPagesLabelFT->get_visible() ?
+        officecfg::Office::Writer::WordCount::StandardizedPageSize::get() : 0;
+    if (nCharsPerStandardizedPage)
     {
-        sal_Int64 nCharsPerStandardizedPage = officecfg::Office::Writer::WordCount::StandardizedPageSize::get();
         setDoubleValue(*m_xCurrentStandardizedPagesFT,
             static_cast<double>(rCurrent.nChar) / nCharsPerStandardizedPage);
         setDoubleValue(*m_xDocStandardizedPagesFT,
@@ -120,6 +123,7 @@ SwWordCountFloatDlg::SwWordCountFloatDlg(SfxBindings* _pBindings,
     , m_xCjkcharsLabelFT2(m_xBuilder->weld_label("cjkcharsft2"))
     , m_xStandardizedPagesLabelFT(m_xBuilder->weld_label("standardizedpages"))
     , m_xStandardizedPagesLabelFT2(m_xBuilder->weld_label("standardizedpages2"))
+    , m_xDocComments(m_xBuilder->weld_label("docComments"))
 {
     showCJK(SvtCJKOptions::IsAnyEnabled());
     showStandardizedPages(officecfg::Office::Writer::WordCount::ShowStandardizedPageCount::get());
@@ -143,6 +147,8 @@ void SwWordCountFloatDlg::UpdateCounts()
             aDocStat = rSh.GetUpdatedDocStat();
             rSh.EndAction();
         }
+        SwPostItMgr* pPostItMgr = rSh.GetPostItMgr();
+        aCurrCnt.nComments = pPostItMgr->end() - pPostItMgr->begin();
         SetValues(aCurrCnt, aDocStat);
     }
 }

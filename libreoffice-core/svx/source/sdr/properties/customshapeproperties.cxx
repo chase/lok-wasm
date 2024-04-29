@@ -95,7 +95,7 @@ namespace sdr::properties
         {
             if ( !nWhich )
             {
-                SfxWhichIter aIter( *mxItemSet );
+                SfxWhichIter aIter( *moItemSet );
                 sal_uInt16 nWhich2 = aIter.FirstWhich();
                 while( nWhich2 )
                 {
@@ -112,7 +112,7 @@ namespace sdr::properties
         {
             if ( !nWhich )
             {
-                SfxWhichIter aIter( *mxItemSet );
+                SfxWhichIter aIter( *moItemSet );
                 sal_uInt16 nWhich2 = aIter.FirstWhich();
                 while( nWhich2 )
                 {
@@ -124,7 +124,7 @@ namespace sdr::properties
                 TextProperties::ClearObjectItemDirect( nWhich );
         }
 
-        void CustomShapeProperties::ItemSetChanged(o3tl::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
+        void CustomShapeProperties::ItemSetChanged(std::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
         {
             // call parent
             TextProperties::ItemSetChanged(aChangedItems, nDeletedWhich);

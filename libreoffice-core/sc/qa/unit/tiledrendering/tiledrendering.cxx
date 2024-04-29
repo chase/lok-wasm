@@ -21,6 +21,7 @@
 #include <com/sun/star/util/URLTransformer.hpp>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
+#include <comphelper/servicehelper.hxx>
 #include <osl/conditn.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -57,7 +58,6 @@
 #include <drwlayer.hxx>
 #include <editutil.hxx>
 #include <undomanager.hxx>
-#include <columnspanset.hxx>
 
 using namespace css;
 
@@ -66,6 +66,7 @@ static std::ostream& operator<<(std::ostream& os, ViewShellId const & id)
     os << static_cast<sal_Int32>(id); return os;
 }
 
+namespace {
 // for passing data to testInvalidateOnTextEditWithDifferentZoomLevels
 struct ColRowZoom
 {
@@ -73,6 +74,7 @@ struct ColRowZoom
     SCROW row;
     int zoom;
 };
+}
 
 CPPUNIT_NS_BEGIN
 namespace StringHelper
@@ -83,18 +85,16 @@ inline std::string toString(const ColRowZoom& item)
 {
     std::ostringstream ss;
     ss << "zoom level: " << item.zoom << ", "
-       << "col: " << item.col << ", "
-       << "row: " << item.row;
+          "col: " << item.col << ", "
+          "row: " << item.row;
     return ss.str();
 }
-
 }
 CPPUNIT_NS_END
 
-namespace
-{
-
+namespace {
 class ViewCallback;
+}
 
 class ScTiledRenderingTest : public UnoApiXmlTest
 {
@@ -108,160 +108,6 @@ public:
                                 const ScAddress& rAdr, bool bAddText,
                                 bool bFullRow);
 
-    void testRowColumnHeaders();
-    void testRowColumnSelections();
-    void testPartHash();
-    void testDocumentSize();
-    void testEmptyColumnSelection();
-    void testViewCursors();
-    void testTextViewSelection();
-    void testDocumentSizeChanged();
-    void testViewLock();
-    void testColRowResize();
-    void testUndoShells();
-    void testCreateViewGraphicSelection();
-    void testTextEditViews();
-    void testTextEditViewInvalidations();
-    void testGraphicInvalidate();
-    void testAutoSum();
-    void testHideColRow();
-    void testInvalidateOnCopyPasteCells();
-    void testInvalidateOnInserRowCol();
-    void testCommentCallback();
-    void testUndoLimiting();
-    void testUndoRepairDispatch();
-    void testInsertGraphicInvalidations();
-    void testDocumentSizeWithTwoViews();
-    void testDisableUndoRepair();
-    void testDocumentRepair();
-    void testLanguageStatus();
-    void testMultiViewCopyPaste();
-    void testIMESupport();
-    void testFilterDlg();
-    void testVbaRangeCopyPaste();
-    void testInvalidationLoop();
-    void testPageDownInvalidation();
-    void testSheetChangeNoInvalidation();
-    void testInsertDeletePageInvalidation();
-    void testGetRowColumnHeadersInvalidation();
-    void testJumpHorizontallyInvalidation();
-    void testJumpToLastRowInvalidation();
-    void testSheetGeometryDataInvariance();
-    void testSheetGeometryDataCorrectness();
-    void testDeleteCellMultilineContent();
-    void testFunctionDlg();
-    void testSpellOnlineParameter();
-    void testSpellOnlineRenderParameter();
-    void testPasteIntoWrapTextCell();
-    void testSortAscendingDescending();
-    void testAutoInputStringBlock();
-    void testAutoInputExactMatch();
-    void testMoveShapeHandle();
-    void testEditCursorBounds();
-    void testTextSelectionBounds();
-    void testSheetViewDataCrash();
-    void testTextBoxInsert();
-    void testCommentCellCopyPaste();
-    void testInvalidEntrySave();
-    void testUndoReordering();
-    void testUndoReorderingRedo();
-    void testUndoReorderingMulti();
-    void testGetViewRenderState();
-    void testInvalidateOnTextEditWithDifferentZoomLevels(const ColRowZoom& rData);
-    void testOpenURL();
-    void testInvalidateForSplitPanes();
-    void testStatusBarLocale();
-    void testLongFirstColumnMouseClick();
-    void testSidebarLocale();
-    void testNoInvalidateOnSave();
-    void testCellMinimalInvalidations();
-    void testCellInvalidationDocWithExistingZoom();
-    void testOptimalRowHeight();
-    void testExtendedAreasDontOverlap();
-    void testEditShapeText();
-
-    CPPUNIT_TEST_SUITE(ScTiledRenderingTest);
-    CPPUNIT_TEST(testRowColumnHeaders);
-    CPPUNIT_TEST(testRowColumnSelections);
-    CPPUNIT_TEST(testPartHash);
-    CPPUNIT_TEST(testDocumentSize);
-    CPPUNIT_TEST(testEmptyColumnSelection);
-    CPPUNIT_TEST(testViewCursors);
-    CPPUNIT_TEST(testTextViewSelection);
-    CPPUNIT_TEST(testDocumentSizeChanged);
-    CPPUNIT_TEST(testViewLock);
-    CPPUNIT_TEST(testColRowResize);
-    CPPUNIT_TEST(testUndoShells);
-    CPPUNIT_TEST(testCreateViewGraphicSelection);
-    CPPUNIT_TEST(testTextEditViews);
-    CPPUNIT_TEST(testTextEditViewInvalidations);
-    CPPUNIT_TEST(testGraphicInvalidate);
-    CPPUNIT_TEST(testAutoSum);
-    CPPUNIT_TEST(testHideColRow);
-    CPPUNIT_TEST(testInvalidateOnCopyPasteCells);
-    CPPUNIT_TEST(testInvalidateOnInserRowCol);
-    CPPUNIT_TEST(testCommentCallback);
-    CPPUNIT_TEST(testUndoLimiting);
-    CPPUNIT_TEST(testUndoRepairDispatch);
-    CPPUNIT_TEST(testInsertGraphicInvalidations);
-    CPPUNIT_TEST(testDocumentSizeWithTwoViews);
-    CPPUNIT_TEST(testDisableUndoRepair);
-    CPPUNIT_TEST(testDocumentRepair);
-    CPPUNIT_TEST(testLanguageStatus);
-    CPPUNIT_TEST(testMultiViewCopyPaste);
-    CPPUNIT_TEST(testIMESupport);
-    CPPUNIT_TEST(testFilterDlg);
-    CPPUNIT_TEST(testVbaRangeCopyPaste);
-    CPPUNIT_TEST(testInvalidationLoop);
-    CPPUNIT_TEST(testPageDownInvalidation);
-    CPPUNIT_TEST(testSheetChangeNoInvalidation);
-    CPPUNIT_TEST(testInsertDeletePageInvalidation);
-    CPPUNIT_TEST(testGetRowColumnHeadersInvalidation);
-    CPPUNIT_TEST(testJumpHorizontallyInvalidation);
-    CPPUNIT_TEST(testJumpToLastRowInvalidation);
-    CPPUNIT_TEST(testSheetGeometryDataInvariance);
-    CPPUNIT_TEST(testSheetGeometryDataCorrectness);
-    CPPUNIT_TEST(testDeleteCellMultilineContent);
-    CPPUNIT_TEST(testFunctionDlg);
-    CPPUNIT_TEST(testSpellOnlineParameter);
-    CPPUNIT_TEST(testSpellOnlineRenderParameter);
-    CPPUNIT_TEST(testPasteIntoWrapTextCell);
-    CPPUNIT_TEST(testSortAscendingDescending);
-    CPPUNIT_TEST(testAutoInputStringBlock);
-    CPPUNIT_TEST(testAutoInputExactMatch);
-    CPPUNIT_TEST(testMoveShapeHandle);
-    CPPUNIT_TEST(testEditCursorBounds);
-    CPPUNIT_TEST(testTextSelectionBounds);
-    CPPUNIT_TEST(testSheetViewDataCrash);
-    CPPUNIT_TEST(testTextBoxInsert);
-    CPPUNIT_TEST(testCommentCellCopyPaste);
-    CPPUNIT_TEST(testInvalidEntrySave);
-    CPPUNIT_TEST(testUndoReordering);
-    CPPUNIT_TEST(testUndoReorderingRedo);
-    CPPUNIT_TEST(testUndoReorderingMulti);
-    CPPUNIT_TEST(testGetViewRenderState);
-    CPPUNIT_TEST_PARAMETERIZED(testInvalidateOnTextEditWithDifferentZoomLevels,
-                               std::initializer_list<ColRowZoom>
-                               {
-                                   // zoom level 120%
-                                   {0, 999, 1}, {99, 0, 1},
-                                   // zoom level 40%
-                                   {0, 999, -5}, {99, 0, -5}
-                               });
-    CPPUNIT_TEST(testOpenURL);
-    CPPUNIT_TEST(testInvalidateForSplitPanes);
-    CPPUNIT_TEST(testStatusBarLocale);
-    CPPUNIT_TEST(testLongFirstColumnMouseClick);
-    CPPUNIT_TEST(testSidebarLocale);
-    CPPUNIT_TEST(testNoInvalidateOnSave);
-    CPPUNIT_TEST(testCellMinimalInvalidations);
-    CPPUNIT_TEST(testCellInvalidationDocWithExistingZoom);
-    CPPUNIT_TEST(testOptimalRowHeight);
-    CPPUNIT_TEST(testExtendedAreasDontOverlap);
-    CPPUNIT_TEST(testEditShapeText);
-    CPPUNIT_TEST_SUITE_END();
-
-private:
     ScModelObj* createDoc(const char* pName);
     void setupLibreOfficeKitViewCallback(SfxViewShell* pViewShell);
     static void callback(int nType, const char* pPayload, void* pData);
@@ -296,6 +142,9 @@ void ScTiledRenderingTest::tearDown()
     }
 
     m_callbackWrapper.clear();
+
+    comphelper::LibreOfficeKit::resetCompatFlag();
+
     comphelper::LibreOfficeKit::setActive(false);
 
     UnoApiXmlTest::tearDown();
@@ -303,9 +152,9 @@ void ScTiledRenderingTest::tearDown()
 
 ScModelObj* ScTiledRenderingTest::createDoc(const char* pName)
 {
-    loadFromURL(OUString::createFromAscii(pName));
+    loadFromFile(OUString::createFromAscii(pName));
 
-    ScModelObj* pModelObj = dynamic_cast<ScModelObj*>(mxComponent.get());
+    ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>(mxComponent);
     CPPUNIT_ASSERT(pModelObj);
     pModelObj->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
     return pModelObj;
@@ -321,35 +170,6 @@ void ScTiledRenderingTest::callback(int nType, const char* pPayload, void* pData
 {
     static_cast<ScTiledRenderingTest*>(pData)->callbackImpl(nType, pPayload);
 }
-
-/* TODO when needed...
-static std::vector<OUString> lcl_convertSeparated(const OUString& rString, sal_Unicode nSeparator)
-{
-    std::vector<OUString> aRet;
-
-    sal_Int32 nIndex = 0;
-    do
-    {
-        OUString aToken = rString.getToken(0, nSeparator, nIndex);
-        aToken = aToken.trim();
-        if (!aToken.isEmpty())
-            aRet.push_back(aToken);
-    }
-    while (nIndex >= 0);
-
-    return aRet;
-}
-
-static void lcl_convertRectangle(const OUString& rString, Rectangle& rRectangle)
-{
-    uno::Sequence<OUString> aSeq = comphelper::string::convertCommaSeparated(rString);
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(4), aSeq.getLength());
-    rRectangle.SetLeft(aSeq[0].toInt32());
-    rRectangle.SetTop(aSeq[1].toInt32());
-    rRectangle.setWidth(aSeq[2].toInt32());
-    rRectangle.setHeight(aSeq[3].toInt32());
-}
-*/
 
 void ScTiledRenderingTest::callbackImpl(int nType, const char* pPayload)
 {
@@ -369,7 +189,7 @@ void ScTiledRenderingTest::callbackImpl(int nType, const char* pPayload)
     }
 }
 
-void ScTiledRenderingTest::testRowColumnSelections()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testRowColumnSelections)
 {
     ScModelObj* pModelObj = createDoc("select-row-cols.ods");
 
@@ -381,8 +201,8 @@ void ScTiledRenderingTest::testRowColumnSelections()
     dispatchCommand(mxComponent, ".uno:SelectRow", aArgs);
 
     // Check if it is selected
-    OString aResult = apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8");
-    OString aExpected("1\t2\t3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\n");
+    OString aResult = apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8"_ostr);
+    OString aExpected("1\t2\t3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\n"_ostr);
     CPPUNIT_ASSERT_EQUAL(aExpected, aResult);
 
     // Select the 10th row with shift modifier
@@ -391,8 +211,8 @@ void ScTiledRenderingTest::testRowColumnSelections()
     dispatchCommand(mxComponent, ".uno:SelectRow", aArgs);
 
     // Check if all the rows from 5th to 10th get selected
-    aResult = apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8");
-    aExpected = "1\t2\t3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\n2\t3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\t22\n3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\t22\t23\n4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\t22\t23\t24\n5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\t22\t23\t24\t25\n6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\t22\t23\t24\t25\t26\n";
+    aResult = apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8"_ostr);
+    aExpected = "1\t2\t3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\n2\t3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\t22\n3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\t22\t23\n4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\t22\t23\t24\n5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\t22\t23\t24\t25\n6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\t22\t23\t24\t25\t26\n"_ostr;
     CPPUNIT_ASSERT_EQUAL(aExpected, aResult);
 
     // Select the 10th row with ctrl modifier
@@ -402,7 +222,7 @@ void ScTiledRenderingTest::testRowColumnSelections()
 
     // When we copy this, we don't get anything useful, but we must not crash
     // (used to happen)
-    aResult = apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8");
+    aResult = apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8"_ostr);
     CPPUNIT_ASSERT_EQUAL(OString(), aResult);
 
     // TODO check that we really selected what we wanted here
@@ -414,7 +234,7 @@ void ScTiledRenderingTest::testRowColumnSelections()
 
     // When we copy this, we don't get anything useful, but we must not crash
     // (used to happen)
-    aResult = apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8");
+    aResult = apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8"_ostr);
     CPPUNIT_ASSERT_EQUAL(OString(), aResult);
 
     // TODO check that we really selected what we wanted here
@@ -436,12 +256,12 @@ void ScTiledRenderingTest::testRowColumnSelections()
     dispatchCommand(mxComponent, ".uno:SelectRow", aArgs);
 
     //  only row 5 should remain selected
-    aResult = apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8");
-    aExpected = "1\t2\t3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\n";
+    aResult = apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8"_ostr);
+    aExpected = "1\t2\t3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14\t15\t16\t17\t18\t19\t20\t21\n"_ostr;
     CPPUNIT_ASSERT_EQUAL(aExpected, aResult);
 }
 
-void ScTiledRenderingTest::testPartHash()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testPartHash)
 {
     ScModelObj* pModelObj = createDoc("sort-range.ods");
 
@@ -455,7 +275,7 @@ void ScTiledRenderingTest::testPartHash()
     CPPUNIT_ASSERT(pModelObj->getPartHash(100).isEmpty());
 }
 
-void ScTiledRenderingTest::testDocumentSize()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testDocumentSize)
 {
     ScModelObj* pModelObj = createDoc("sort-range.ods");
     ScDocShell* pDocSh = dynamic_cast< ScDocShell* >( pModelObj->GetEmbeddedObject() );
@@ -484,7 +304,7 @@ void ScTiledRenderingTest::testDocumentSize()
     CPPUNIT_ASSERT_EQUAL(osl::Condition::result_ok, aResult);
 }
 
-void ScTiledRenderingTest::testEmptyColumnSelection()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testEmptyColumnSelection)
 {
     ScModelObj* pModelObj = createDoc("select-row-cols.ods");
 
@@ -496,9 +316,11 @@ void ScTiledRenderingTest::testEmptyColumnSelection()
     dispatchCommand(mxComponent, ".uno:SelectColumn", aArgs);
 
     // should be an empty string
-    CPPUNIT_ASSERT_EQUAL(OString(), apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8"));
+    CPPUNIT_ASSERT_EQUAL(OString(), apitest::helper::transferable::getTextSelection(pModelObj->getSelection(), "text/plain;charset=utf-8"_ostr));
 }
 
+namespace
+{
 struct EditCursorMessage final {
     tools::Rectangle m_aRelRect;
     Point m_aRefPoint;
@@ -534,13 +356,13 @@ struct EditCursorMessage final {
         else
             return; // happens in testTextBoxInsert test
 
-        uno::Sequence<OUString> aSeq = comphelper::string::convertCommaSeparated(OUString::createFromAscii(aVal.c_str()));
+        uno::Sequence<OUString> aSeq = comphelper::string::convertCommaSeparated(OUString::createFromAscii(aVal));
         CPPUNIT_ASSERT_EQUAL(sal_Int32(2), aSeq.getLength());
         m_aRefPoint.setX(aSeq[0].toInt32());
         m_aRefPoint.setY(aSeq[1].toInt32());
 
         aVal = aTree.get_child("relrect").get_value<std::string>();
-        aSeq = comphelper::string::convertCommaSeparated(OUString::createFromAscii(aVal.c_str()));
+        aSeq = comphelper::string::convertCommaSeparated(OUString::createFromAscii(aVal));
         CPPUNIT_ASSERT_EQUAL(sal_Int32(4), aSeq.getLength());
         m_aRelRect.SetLeft(aSeq[0].toInt32());
         m_aRelRect.SetTop(aSeq[1].toInt32());
@@ -586,7 +408,7 @@ struct TextSelectionMessage
         std::string aRefPointString = (nRefDelimStart == std::string::npos) ?
             std::string("0, 0") :
             aStr.substr(nRefDelimStart + 2, aStr.length() - 2 - nRefDelimStart);
-        uno::Sequence<OUString> aSeq = comphelper::string::convertCommaSeparated(OUString::createFromAscii(aRefPointString.c_str()));
+        uno::Sequence<OUString> aSeq = comphelper::string::convertCommaSeparated(OUString::createFromAscii(aRefPointString));
         CPPUNIT_ASSERT_EQUAL(sal_Int32(2), aSeq.getLength());
         m_aRefPoint.setX(aSeq[0].toInt32());
         m_aRefPoint.setY(aSeq[1].toInt32());
@@ -599,7 +421,7 @@ struct TextSelectionMessage
         {
             std::string aRectString = aRectListString.substr(nStart, nEnd - nStart);
             {
-                aSeq = comphelper::string::convertCommaSeparated(OUString::createFromAscii(aRectString.c_str()));
+                aSeq = comphelper::string::convertCommaSeparated(OUString::createFromAscii(aRectString));
                 CPPUNIT_ASSERT_EQUAL(sal_Int32(4), aSeq.getLength());
                 tools::Rectangle aRect;
                 aRect.SetLeft(aSeq[0].toInt32());
@@ -802,25 +624,38 @@ public:
         break;
         case LOK_CALLBACK_STATE_CHANGED:
         {
-            OString aPayload(pPayload);
-            if (!aPayload.startsWith("{"))
+            std::stringstream aStream(pPayload);
+            if (!aStream.str().starts_with("{"))
             {
                 break;
             }
 
-            std::stringstream aStream(pPayload);
             boost::property_tree::ptree aTree;
             boost::property_tree::read_json(aStream, aTree);
-            std::string aCommandName = aTree.get<std::string>("commandName");
+            auto it = aTree.find("commandName");
+            if (it == aTree.not_found())
+            {
+                break;
+            }
+
+            std::string aCommandName = it->second.get_value<std::string>();
             m_aStateChanges[aCommandName] = aTree;
         }
         break;
         }
     }
+
+    void ClearAllInvalids()
+    {
+        m_bInvalidateTiles = false;
+        m_aInvalidations.clear();
+        m_aInvalidationsParts.clear();
+        m_aInvalidationsMode.clear();
+    }
 };
+} //namespace
 
-
-void ScTiledRenderingTest::testViewCursors()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testViewCursors)
 {
     ScModelObj* pModelObj = createDoc("select-row-cols.ods");
     ViewCallback aView1;
@@ -837,11 +672,14 @@ void ScTiledRenderingTest::testViewCursors()
     CPPUNIT_ASSERT(aView1.m_bViewCursorInvalidated);
 }
 
-void ScTiledRenderingTest::testSpellOnlineRenderParameter()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testSpellOnlineRenderParameter)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
-    ScDocument* pDoc = pModelObj->GetDocument();
-    bool bSet = pDoc->GetDocOptions().IsAutoSpell();
+
+    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+    CPPUNIT_ASSERT(pView);
+
+    bool bSet = pView->IsAutoSpell();
 
     uno::Sequence<beans::PropertyValue> aPropertyValues =
     {
@@ -849,10 +687,10 @@ void ScTiledRenderingTest::testSpellOnlineRenderParameter()
     };
     pModelObj->initializeForTiledRendering(aPropertyValues);
 
-    CPPUNIT_ASSERT_EQUAL(!bSet, pDoc->GetDocOptions().IsAutoSpell());
+    CPPUNIT_ASSERT_EQUAL(!bSet, pView->IsAutoSpell());
 }
 
-void ScTiledRenderingTest::testTextViewSelection()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testTextViewSelection)
 {
     // Create two views, and leave the second one current.
     ScModelObj* pModelObj = createDoc("select-row-cols.ods");
@@ -864,12 +702,11 @@ void ScTiledRenderingTest::testTextViewSelection()
     // Create a selection on two cells in the second view, that's a text selection in LOK terms.
     aView1.m_bTextViewSelectionInvalidated = false;
     dispatchCommand(mxComponent, ".uno:GoRightSel", {});
-    Scheduler::ProcessEventsToIdle();
     // Make sure the first view got its notification.
     CPPUNIT_ASSERT(aView1.m_bTextViewSelectionInvalidated);
 }
 
-void ScTiledRenderingTest::testDocumentSizeChanged()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testDocumentSizeChanged)
 {
     // Load a document that doesn't have much content.
     createDoc("small.ods");
@@ -881,13 +718,12 @@ void ScTiledRenderingTest::testDocumentSizeChanged()
         comphelper::makePropertyValue("ToPoint", OUString("$A$30")),
     };
     dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
-    Scheduler::ProcessEventsToIdle();
     // Assert that the size in the payload is not 0.
     CPPUNIT_ASSERT(m_aDocumentSize.getWidth() > 0);
     CPPUNIT_ASSERT(m_aDocumentSize.getHeight() > 0);
 }
 
-void ScTiledRenderingTest::testViewLock()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testViewLock)
 {
     // Load a document that has a shape and create two views.
     ScModelObj* pModelObj = createDoc("shape.ods");
@@ -915,10 +751,12 @@ void ScTiledRenderingTest::testViewLock()
     CPPUNIT_ASSERT(!aView1.m_bViewLock);
 }
 
+namespace
+{
 void lcl_extractHandleParameters(std::string_view selection, sal_uInt32& id, sal_uInt32& x, sal_uInt32& y)
 {
     OString extraInfo( selection.substr(selection.find("{")) );
-    std::stringstream aStream(extraInfo.getStr());
+    std::stringstream aStream((std::string(extraInfo)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     boost::property_tree::ptree
@@ -932,8 +770,9 @@ void lcl_extractHandleParameters(std::string_view selection, sal_uInt32& id, sal
     x = handle0.get_child("point").get_child("x").get_value<int>();
     y = handle0.get_child("point").get_child("y").get_value<int>();
 }
+} //namespace
 
-void ScTiledRenderingTest::testMoveShapeHandle()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testMoveShapeHandle)
 {
     ScModelObj* pModelObj = createDoc("shape.ods");
     ViewCallback aView1;
@@ -954,7 +793,6 @@ void ScTiledRenderingTest::testMoveShapeHandle()
             {"NewPosY", uno::Any(y+1)}
         }));
         dispatchCommand(mxComponent, ".uno:MoveShapeHandle", aPropertyValues);
-        Scheduler::ProcessEventsToIdle();
         CPPUNIT_ASSERT(!aView1.m_ShapeSelection.isEmpty());
         lcl_extractHandleParameters(aView1.m_ShapeSelection, id, x ,y);
         CPPUNIT_ASSERT_EQUAL(x-1, oldX);
@@ -962,7 +800,7 @@ void ScTiledRenderingTest::testMoveShapeHandle()
     }
 }
 
-void ScTiledRenderingTest::testColRowResize()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testColRowResize)
 {
     ScModelObj* pModelObj = createDoc("sort-range.ods");
     ScDocShell* pDocSh = dynamic_cast< ScDocShell* >( pModelObj->GetEmbeddedObject() );
@@ -996,7 +834,7 @@ void ScTiledRenderingTest::testColRowResize()
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(2000), nHeight);
 }
 
-void ScTiledRenderingTest::testUndoShells()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testUndoShells)
 {
     ScModelObj* pModelObj = createDoc("small.ods");
     // Clear the currently selected cell.
@@ -1013,6 +851,8 @@ void ScTiledRenderingTest::testUndoShells()
     CPPUNIT_ASSERT_EQUAL(ViewShellId(nView1), pUndoManager->GetUndoAction()->GetViewShellId());
 }
 
+namespace
+{
 bool lcl_hasEditView(const ScViewData& rViewData)
 {
     bool bResult = false;
@@ -1023,8 +863,9 @@ bool lcl_hasEditView(const ScViewData& rViewData)
     }
     return bResult;
 }
+} // namespace
 
-void ScTiledRenderingTest::testTextEditViews()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testTextEditViews)
 {
     ScModelObj* pModelObj = createDoc("small.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -1055,7 +896,7 @@ void ScTiledRenderingTest::testTextEditViews()
     CPPUNIT_ASSERT(lcl_hasEditView(*pViewData));
 }
 
-void ScTiledRenderingTest::testTextEditViewInvalidations()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testTextEditViewInvalidations)
 {
     ScModelObj* pModelObj = createDoc("small.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -1112,7 +953,7 @@ void ScTiledRenderingTest::testTextEditViewInvalidations()
     CPPUNIT_ASSERT(aView3.m_bInvalidateTiles);
 }
 
-void ScTiledRenderingTest::testCreateViewGraphicSelection()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testCreateViewGraphicSelection)
 {
     // Load a document that has a shape and create two views.
     ScModelObj* pModelObj = createDoc("shape.ods");
@@ -1143,7 +984,7 @@ void ScTiledRenderingTest::testCreateViewGraphicSelection()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testGraphicInvalidate()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testGraphicInvalidate)
 {
     // Load a document that has a shape and create two views.
     ScModelObj* pModelObj = createDoc("shape.ods");
@@ -1169,7 +1010,7 @@ void ScTiledRenderingTest::testGraphicInvalidate()
     CPPUNIT_ASSERT(!aView.m_bFullInvalidateTiles);
 }
 
-void ScTiledRenderingTest::testAutoSum()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testAutoSum)
 {
     createDoc("small.ods");
 
@@ -1177,11 +1018,10 @@ void ScTiledRenderingTest::testAutoSum()
 
     uno::Sequence<beans::PropertyValue> aArgs;
     dispatchCommand(mxComponent, ".uno:AutoSum", aArgs);
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView.m_sCellFormula.startsWith("=SUM("));
 }
 
-void ScTiledRenderingTest::testHideColRow()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testHideColRow)
 {
     createDoc("small.ods");
     {
@@ -1197,7 +1037,6 @@ void ScTiledRenderingTest::testHideColRow()
             }));
 
         dispatchCommand(mxComponent, ".uno:SelectColumn", aArgs2);
-        Scheduler::ProcessEventsToIdle();
     }
 
     SCCOL nOldCurX = ScDocShell::GetViewData()->GetCurX();
@@ -1205,7 +1044,6 @@ void ScTiledRenderingTest::testHideColRow()
     {
         uno::Sequence<beans::PropertyValue> aArgs;
         dispatchCommand(mxComponent, ".uno:HideColumn", aArgs);
-        Scheduler::ProcessEventsToIdle();
     }
 
     SCCOL nNewCurX = ScDocShell::GetViewData()->GetCurX();
@@ -1224,7 +1062,6 @@ void ScTiledRenderingTest::testHideColRow()
                 { "Modifier", uno::Any(sal_uInt16(0)) }
             }));
         dispatchCommand(mxComponent, ".uno:SelectRow", aArgs2);
-        Scheduler::ProcessEventsToIdle();
     }
 
     nOldCurX = ScDocShell::GetViewData()->GetCurX();
@@ -1232,7 +1069,6 @@ void ScTiledRenderingTest::testHideColRow()
     {
         uno::Sequence<beans::PropertyValue> aArgs;
         dispatchCommand(mxComponent, ".uno:HideRow", aArgs);
-        Scheduler::ProcessEventsToIdle();
     }
     nNewCurX = ScDocShell::GetViewData()->GetCurX();
     nNewCurY = ScDocShell::GetViewData()->GetCurY();
@@ -1240,7 +1076,7 @@ void ScTiledRenderingTest::testHideColRow()
     CPPUNIT_ASSERT_EQUAL(nOldCurX, nNewCurX);
 }
 
-void ScTiledRenderingTest::testInvalidateOnCopyPasteCells()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testInvalidateOnCopyPasteCells)
 {
     ScModelObj* pModelObj = createDoc("small.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -1271,11 +1107,10 @@ void ScTiledRenderingTest::testInvalidateOnCopyPasteCells()
     // paste cells
     aView.m_bInvalidateTiles = false;
     dispatchCommand(mxComponent, ".uno:Paste", aArgs);
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView.m_bInvalidateTiles);
 }
 
-void ScTiledRenderingTest::testInvalidateOnInserRowCol()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testInvalidateOnInserRowCol)
 {
     ScModelObj* pModelObj = createDoc("small.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -1296,7 +1131,6 @@ void ScTiledRenderingTest::testInvalidateOnInserRowCol()
     aView.m_bInvalidateTiles = false;
     aView.m_aInvalidations.clear();
     dispatchCommand(mxComponent, ".uno:InsertRows", aArgs);
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView.m_bInvalidateTiles);
     CPPUNIT_ASSERT_EQUAL(size_t(1), aView.m_aInvalidations.size());
     CPPUNIT_ASSERT_EQUAL(tools::Rectangle(-75, 51240, 32212230, 63990), aView.m_aInvalidations[0]);
@@ -1313,13 +1147,12 @@ void ScTiledRenderingTest::testInvalidateOnInserRowCol()
     aView.m_bInvalidateTiles = false;
     aView.m_aInvalidations.clear();
     dispatchCommand(mxComponent, ".uno:InsertColumns", aArgs);
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView.m_bInvalidateTiles);
     CPPUNIT_ASSERT_EQUAL(size_t(1), aView.m_aInvalidations.size());
     CPPUNIT_ASSERT_EQUAL(tools::Rectangle(254925, -15, 32212230, 63990), aView.m_aInvalidations[0]);
 }
 
-void ScTiledRenderingTest::testCommentCallback()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testCommentCallback)
 {
     // Comments callback are emitted only if tiled annotations are off
     comphelper::LibreOfficeKit::setTiledAnnotations(false);
@@ -1350,7 +1183,6 @@ void ScTiledRenderingTest::testCommentCallback()
             {"Author", uno::Any(OUString("LOK User1"))},
         }));
         dispatchCommand(mxComponent, ".uno:InsertAnnotation", aArgs);
-        Scheduler::ProcessEventsToIdle();
 
         // We received a LOK_CALLBACK_COMMENT callback with comment 'Add' action
         CPPUNIT_ASSERT_EQUAL(std::string("Add"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
@@ -1393,12 +1225,11 @@ void ScTiledRenderingTest::testCommentCallback()
             pTabViewShell->SetCursor(3, 100);
         aArgs = comphelper::InitPropertySequence(
         {
-            {"Id", uno::Any(OUString::createFromAscii(aCommentId.c_str()))},
+            {"Id", uno::Any(OUString::createFromAscii(aCommentId))},
             {"Text", uno::Any(OUString("Edited comment"))},
             {"Author", uno::Any(OUString("LOK User2"))},
         });
         dispatchCommand(mxComponent, ".uno:EditAnnotation", aArgs);
-        Scheduler::ProcessEventsToIdle();
 
         // We received a LOK_CALLBACK_COMMENT callback with comment 'Modify' action
         CPPUNIT_ASSERT_EQUAL(std::string("Modify"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
@@ -1417,10 +1248,9 @@ void ScTiledRenderingTest::testCommentCallback()
             pTabViewShell->SetCursor(4, 43);
         aArgs = comphelper::InitPropertySequence(
         {
-            {"Id", uno::Any(OUString::createFromAscii(aCommentId.c_str()))}
+            {"Id", uno::Any(OUString::createFromAscii(aCommentId))}
         });
         dispatchCommand(mxComponent, ".uno:DeleteNote", aArgs);
-        Scheduler::ProcessEventsToIdle();
 
         // We received a LOK_CALLBACK_COMMENT callback with comment 'Remove' action
         CPPUNIT_ASSERT_EQUAL(std::string("Remove"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
@@ -1431,7 +1261,7 @@ void ScTiledRenderingTest::testCommentCallback()
     comphelper::LibreOfficeKit::setTiledAnnotations(true);
 }
 
-void ScTiledRenderingTest::testUndoLimiting()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testUndoLimiting)
 {
     ScModelObj* pModelObj = createDoc("small.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -1464,14 +1294,12 @@ void ScTiledRenderingTest::testUndoLimiting()
     // try to execute undo in view #2
     SfxLokHelper::setView(nView2);
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     // check that undo has not been executed on view #2
     CPPUNIT_ASSERT_EQUAL(std::size_t(1), pUndoManager->GetUndoActionCount());
 
     // try to execute undo in view #1
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     // check that undo has been executed on view #1
     CPPUNIT_ASSERT_EQUAL(std::size_t(0), pUndoManager->GetUndoActionCount());
 
@@ -1481,19 +1309,17 @@ void ScTiledRenderingTest::testUndoLimiting()
     // try to execute redo in view #2
     SfxLokHelper::setView(nView2);
     dispatchCommand(mxComponent, ".uno:Redo", {});
-    Scheduler::ProcessEventsToIdle();
     // check that redo has not been executed on view #2
     CPPUNIT_ASSERT_EQUAL(std::size_t(1), pUndoManager->GetRedoActionCount());
 
     // try to execute redo in view #1
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:Redo", {});
-    Scheduler::ProcessEventsToIdle();
     // check that redo has been executed on view #1
     CPPUNIT_ASSERT_EQUAL(std::size_t(0), pUndoManager->GetRedoActionCount());
 }
 
-void ScTiledRenderingTest::testUndoRepairDispatch()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testUndoRepairDispatch)
 {
     ScModelObj* pModelObj = createDoc("small.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -1526,7 +1352,6 @@ void ScTiledRenderingTest::testUndoRepairDispatch()
     // try to execute undo in view #2
     SfxLokHelper::setView(nView2);
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     // check that undo has not been executed on view #2
     CPPUNIT_ASSERT_EQUAL(std::size_t(1), pUndoManager->GetUndoActionCount());
 
@@ -1537,12 +1362,11 @@ void ScTiledRenderingTest::testUndoRepairDispatch()
         {"Repair", uno::Any(true)}
     }));
     dispatchCommand(mxComponent, ".uno:Undo", aPropertyValues);
-    Scheduler::ProcessEventsToIdle();
     // check that undo has been executed on view #2 in repair mode
     CPPUNIT_ASSERT_EQUAL(std::size_t(0), pUndoManager->GetUndoActionCount());
 }
 
-void ScTiledRenderingTest::testInsertGraphicInvalidations()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testInsertGraphicInvalidations)
 {
     ScModelObj* pModelObj = createDoc("small.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -1556,7 +1380,7 @@ void ScTiledRenderingTest::testInsertGraphicInvalidations()
     int nCanvasWidth = 256;
     int nCanvasHeight = 256;
     std::vector<unsigned char> aBuffer(nCanvasWidth * nCanvasHeight * 4);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight), Fraction(1.0), Point(), aBuffer.data());
     pModelObj->paintTile(*pDevice, nCanvasWidth, nCanvasHeight, /*nTilePosX=*/0, /*nTilePosY=*/0, /*nTileWidth=*/3840, /*nTileHeight=*/3840);
     Scheduler::ProcessEventsToIdle();
@@ -1567,18 +1391,16 @@ void ScTiledRenderingTest::testInsertGraphicInvalidations()
             { "FileName", uno::Any(createFileURL(u"smile.png")) }
         }));
     dispatchCommand(mxComponent, ".uno:InsertGraphic", aArgs);
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView.m_bInvalidateTiles);
 
     // undo image insertion in view and see if both views are invalidated
     aView.m_bInvalidateTiles = false;
     uno::Sequence<beans::PropertyValue> aArgs2;
     dispatchCommand(mxComponent, ".uno:Undo", aArgs2);
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView.m_bInvalidateTiles);
 }
 
-void ScTiledRenderingTest::testDocumentSizeWithTwoViews()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testDocumentSizeWithTwoViews)
 {
     // Open a document that has the cursor far away & paint a tile
     ScModelObj* pModelObj = createDoc("cursor-away.ods");
@@ -1592,7 +1414,7 @@ void ScTiledRenderingTest::testDocumentSizeWithTwoViews()
     int nCanvasWidth = 256;
     int nCanvasHeight = 256;
     std::vector<unsigned char> aBuffer1(nCanvasWidth * nCanvasHeight * 4);
-    ScopedVclPtrInstance<VirtualDevice> pDevice1(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice1(DeviceFormat::WITHOUT_ALPHA);
     pDevice1->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight), Fraction(1.0), Point(), aBuffer1.data());
     pModelObj->paintTile(*pDevice1, nCanvasWidth, nCanvasHeight, /*nTilePosX=*/0, /*nTilePosY=*/291840, /*nTileWidth=*/3840, /*nTileHeight=*/3840);
     Scheduler::ProcessEventsToIdle();
@@ -1602,7 +1424,7 @@ void ScTiledRenderingTest::testDocumentSizeWithTwoViews()
     SfxLokHelper::createView();
 
     std::vector<unsigned char> aBuffer2(nCanvasWidth * nCanvasHeight * 4);
-    ScopedVclPtrInstance<VirtualDevice> pDevice2(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice2(DeviceFormat::WITHOUT_ALPHA);
     pDevice2->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight), Fraction(1.0), Point(), aBuffer2.data());
     pModelObj->paintTile(*pDevice2, nCanvasWidth, nCanvasHeight, /*nTilePosX=*/0, /*nTilePosY=*/291840, /*nTileWidth=*/3840, /*nTileHeight=*/3840);
     Scheduler::ProcessEventsToIdle();
@@ -1616,7 +1438,7 @@ void ScTiledRenderingTest::testDocumentSizeWithTwoViews()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testDisableUndoRepair()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testDisableUndoRepair)
 {
     ScModelObj* pModelObj = createDoc("cursor-away.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -1688,7 +1510,7 @@ void ScTiledRenderingTest::testDisableUndoRepair()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testDocumentRepair()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testDocumentRepair)
 {
     // Create two views.
     ScModelObj* pModelObj = createDoc("cursor-away.ods");
@@ -1706,8 +1528,8 @@ void ScTiledRenderingTest::testDocumentRepair()
     {
         std::unique_ptr<SfxBoolItem> pItem1;
         std::unique_ptr<SfxBoolItem> pItem2;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
         CPPUNIT_ASSERT(pItem1);
         CPPUNIT_ASSERT(pItem2);
         CPPUNIT_ASSERT_EQUAL(false, pItem1->GetValue());
@@ -1725,8 +1547,8 @@ void ScTiledRenderingTest::testDocumentRepair()
     {
         std::unique_ptr<SfxBoolItem> pItem1;
         std::unique_ptr<SfxBoolItem> pItem2;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
         CPPUNIT_ASSERT(pItem1);
         CPPUNIT_ASSERT(pItem2);
         CPPUNIT_ASSERT_EQUAL(true, pItem1->GetValue());
@@ -1738,7 +1560,7 @@ void ScTiledRenderingTest::testDocumentRepair()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testLanguageStatus()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testLanguageStatus)
 {
     ScModelObj* pModelObj = createDoc("small.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -1756,8 +1578,8 @@ void ScTiledRenderingTest::testLanguageStatus()
     {
         std::unique_ptr<SfxPoolItem> xItem1;
         std::unique_ptr<SfxPoolItem> xItem2;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem1);
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem2);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem1);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem2);
         const SfxStringItem* pItem1 = dynamic_cast<const SfxStringItem*>(xItem1.get());
         const SfxStringItem* pItem2 = dynamic_cast<const SfxStringItem*>(xItem2.get());
         CPPUNIT_ASSERT(pItem1);
@@ -1768,20 +1590,20 @@ void ScTiledRenderingTest::testLanguageStatus()
 
     {
         SfxStringItem aLangString(SID_LANGUAGE_STATUS, "Default_Spanish (Bolivia)");
-        pView1->GetViewFrame()->GetDispatcher()->ExecuteList(SID_LANGUAGE_STATUS,
+        pView1->GetViewFrame().GetDispatcher()->ExecuteList(SID_LANGUAGE_STATUS,
             SfxCallMode::SYNCHRON, { &aLangString });
     }
 
     {
         std::unique_ptr<SfxPoolItem> xItem1;
         std::unique_ptr<SfxPoolItem> xItem2;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem1);
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem2);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem1);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem2);
         const SfxStringItem* pItem1 = dynamic_cast<const SfxStringItem*>(xItem1.get());
         const SfxStringItem* pItem2 = dynamic_cast<const SfxStringItem*>(xItem2.get());
         CPPUNIT_ASSERT(pItem1);
         CPPUNIT_ASSERT(pItem2);
-        const OUString aLangBolivia("Spanish (Bolivia);es-BO");
+        constexpr OUString aLangBolivia(u"Spanish (Bolivia);es-BO"_ustr);
         CPPUNIT_ASSERT_EQUAL(aLangBolivia, pItem1->GetValue());
         CPPUNIT_ASSERT_EQUAL(aLangBolivia, pItem2->GetValue());
     }
@@ -1791,7 +1613,7 @@ void ScTiledRenderingTest::testLanguageStatus()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testMultiViewCopyPaste()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testMultiViewCopyPaste)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     ScDocument* pDoc = pModelObj->GetDocument();
@@ -1818,19 +1640,19 @@ void ScTiledRenderingTest::testMultiViewCopyPaste()
 
     // copy text view 1
     pView1->SetCursor(0, 0);
-    pView1->GetViewFrame()->GetBindings().Execute(SID_COPY);
+    pView1->GetViewFrame().GetBindings().Execute(SID_COPY);
 
     // copy text view 2
     pView2->SetCursor(1, 0);
-    pView2->GetViewFrame()->GetBindings().Execute(SID_COPY);
+    pView2->GetViewFrame().GetBindings().Execute(SID_COPY);
 
      // paste text view 1
     pView1->SetCursor(0, 1);
-    pView1->GetViewFrame()->GetBindings().Execute(SID_PASTE);
+    pView1->GetViewFrame().GetBindings().Execute(SID_PASTE);
 
     // paste text view 2
     pView2->SetCursor(1, 1);
-    pView2->GetViewFrame()->GetBindings().Execute(SID_PASTE);
+    pView2->GetViewFrame().GetBindings().Execute(SID_PASTE);
 
     CPPUNIT_ASSERT_EQUAL(OUString("TestCopy1"), pDoc->GetString(ScAddress(0, 1, 0)));
     CPPUNIT_ASSERT_EQUAL(OUString("TestCopy2"), pDoc->GetString(ScAddress(1, 1, 0)));
@@ -1840,7 +1662,7 @@ void ScTiledRenderingTest::testMultiViewCopyPaste()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testIMESupport()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testIMESupport)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     VclPtr<vcl::Window> pDocWindow = pModelObj->getDocWindow();
@@ -1851,7 +1673,7 @@ void ScTiledRenderingTest::testIMESupport()
 
     pView->SetCursor(0, 0);
     // sequence of chinese IME compositions when 'nihao' is typed in an IME
-    const std::vector<OString> aUtf8Inputs{ "年", "你", "你好", "你哈", "你好", "你好" };
+    const std::vector<OString> aUtf8Inputs{ "年"_ostr, "你"_ostr, "你好"_ostr, "你哈"_ostr, "你好"_ostr, "你好"_ostr };
     std::vector<OUString> aInputs;
     std::transform(aUtf8Inputs.begin(), aUtf8Inputs.end(),
                    std::back_inserter(aInputs), [](OString aInput) {
@@ -1871,7 +1693,7 @@ void ScTiledRenderingTest::testIMESupport()
     CPPUNIT_ASSERT_EQUAL(aInputs[aInputs.size() - 1], pDoc->GetString(ScAddress(0, 0, 0)));
 }
 
-void ScTiledRenderingTest::testFilterDlg()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testFilterDlg)
 {
     createDoc("empty.ods");
 
@@ -1884,30 +1706,30 @@ void ScTiledRenderingTest::testFilterDlg()
     SfxViewShell* pView2 = SfxViewShell::Current();
     CPPUNIT_ASSERT(pView1 != pView2);
     {
-        pView2->GetViewFrame()->GetDispatcher()->Execute(SID_FILTER,
+        pView2->GetViewFrame().GetDispatcher()->Execute(SID_FILTER,
             SfxCallMode::SLOT|SfxCallMode::RECORD);
     }
 
     Scheduler::ProcessEventsToIdle();
-    SfxChildWindow* pRefWindow = pView2->GetViewFrame()->GetChildWindow(SID_FILTER);
+    SfxChildWindow* pRefWindow = pView2->GetViewFrame().GetChildWindow(SID_FILTER);
     CPPUNIT_ASSERT(pRefWindow);
 
     // switch to view 1
     SfxLokHelper::setView(nView1);
-    CPPUNIT_ASSERT_EQUAL(true, pView2->GetViewFrame()->GetDispatcher()->IsLocked());
-    CPPUNIT_ASSERT_EQUAL(false, pView1->GetViewFrame()->GetDispatcher()->IsLocked());
+    CPPUNIT_ASSERT_EQUAL(true, pView2->GetViewFrame().GetDispatcher()->IsLocked());
+    CPPUNIT_ASSERT_EQUAL(false, pView1->GetViewFrame().GetDispatcher()->IsLocked());
 
     pRefWindow->GetController()->response(RET_CANCEL);
 
-    CPPUNIT_ASSERT_EQUAL(false, pView2->GetViewFrame()->GetDispatcher()->IsLocked());
-    CPPUNIT_ASSERT_EQUAL(false, pView1->GetViewFrame()->GetDispatcher()->IsLocked());
+    CPPUNIT_ASSERT_EQUAL(false, pView2->GetViewFrame().GetDispatcher()->IsLocked());
+    CPPUNIT_ASSERT_EQUAL(false, pView1->GetViewFrame().GetDispatcher()->IsLocked());
 
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
     SfxLokHelper::setView(nView1);
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testFunctionDlg()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testFunctionDlg)
 {
     createDoc("empty.ods");
 
@@ -1915,11 +1737,11 @@ void ScTiledRenderingTest::testFunctionDlg()
     SfxViewShell* pView1 = SfxViewShell::Current();
     int nView1 = SfxLokHelper::getView();
     {
-        pView1->GetViewFrame()->GetDispatcher()->Execute(SID_OPENDLG_FUNCTION,
+        pView1->GetViewFrame().GetDispatcher()->Execute(SID_OPENDLG_FUNCTION,
             SfxCallMode::SLOT|SfxCallMode::RECORD);
     }
     Scheduler::ProcessEventsToIdle();
-    SfxChildWindow* pRefWindow = pView1->GetViewFrame()->GetChildWindow(SID_OPENDLG_FUNCTION);
+    SfxChildWindow* pRefWindow = pView1->GetViewFrame().GetChildWindow(SID_OPENDLG_FUNCTION);
     CPPUNIT_ASSERT(pRefWindow);
 
     // view #2
@@ -1928,32 +1750,35 @@ void ScTiledRenderingTest::testFunctionDlg()
     CPPUNIT_ASSERT(pView1 != pView2);
 
     // check locking
-    CPPUNIT_ASSERT_EQUAL(true, pView1->GetViewFrame()->GetDispatcher()->IsLocked());
-    CPPUNIT_ASSERT_EQUAL(false, pView2->GetViewFrame()->GetDispatcher()->IsLocked());
+    CPPUNIT_ASSERT_EQUAL(true, pView1->GetViewFrame().GetDispatcher()->IsLocked());
+    CPPUNIT_ASSERT_EQUAL(false, pView2->GetViewFrame().GetDispatcher()->IsLocked());
 
     SfxLokHelper::setView(nView1);
     pRefWindow->GetController()->response(RET_CANCEL);
 
-    CPPUNIT_ASSERT_EQUAL(false, pView1->GetViewFrame()->GetDispatcher()->IsLocked());
-    CPPUNIT_ASSERT_EQUAL(false, pView2->GetViewFrame()->GetDispatcher()->IsLocked());
+    CPPUNIT_ASSERT_EQUAL(false, pView1->GetViewFrame().GetDispatcher()->IsLocked());
+    CPPUNIT_ASSERT_EQUAL(false, pView2->GetViewFrame().GetDispatcher()->IsLocked());
 
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
     SfxLokHelper::setView(nView2);
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testSpellOnlineParameter()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testSpellOnlineParameter)
 {
-    ScModelObj* pModelObj = createDoc("empty.ods");
-    ScDocument* pDoc = pModelObj->GetDocument();
-    bool bSet = pDoc->GetDocOptions().IsAutoSpell();
+    createDoc("empty.ods");
+
+    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+    CPPUNIT_ASSERT(pView);
+
+    bool bSet = pView->IsAutoSpell();
 
     uno::Sequence<beans::PropertyValue> params =
     {
         comphelper::makePropertyValue("Enable", uno::Any(!bSet)),
     };
     dispatchCommand(mxComponent, ".uno:SpellOnline", params);
-    CPPUNIT_ASSERT_EQUAL(!bSet, pDoc->GetDocOptions().IsAutoSpell());
+    CPPUNIT_ASSERT_EQUAL(!bSet, pView->IsAutoSpell());
 
     // set the same state as now and we don't expect any change (no-toggle)
     params =
@@ -1961,10 +1786,10 @@ void ScTiledRenderingTest::testSpellOnlineParameter()
         comphelper::makePropertyValue("Enable", uno::Any(!bSet)),
     };
     dispatchCommand(mxComponent, ".uno:SpellOnline", params);
-    CPPUNIT_ASSERT_EQUAL(!bSet, pDoc->GetDocOptions().IsAutoSpell());
+    CPPUNIT_ASSERT_EQUAL(!bSet, pView->IsAutoSpell());
 }
 
-void ScTiledRenderingTest::testVbaRangeCopyPaste()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testVbaRangeCopyPaste)
 {
     ScModelObj* pModelObj = createDoc("RangeCopyPaste.ods");
     ScDocShell* pDocShell = dynamic_cast< ScDocShell* >( pModelObj->GetEmbeddedObject() );
@@ -1983,7 +1808,7 @@ void ScTiledRenderingTest::testVbaRangeCopyPaste()
     CPPUNIT_ASSERT(!pDocShell->GetClipData().is());
 }
 
-void ScTiledRenderingTest::testInvalidationLoop()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testInvalidationLoop)
 {
     // Load the document with a form control.
     createDoc("invalidation-loop.fods");
@@ -1992,7 +1817,7 @@ void ScTiledRenderingTest::testInvalidationLoop()
     Scheduler::ProcessEventsToIdle();
 }
 
-void ScTiledRenderingTest::testPageDownInvalidation()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testPageDownInvalidation)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     ScViewData* pViewData = ScDocShell::GetViewData();
@@ -2013,7 +1838,45 @@ void ScTiledRenderingTest::testPageDownInvalidation()
     CPPUNIT_ASSERT_EQUAL(tools::Rectangle(15, 15, 1230, 225), aView1.m_aInvalidations[0]);
 }
 
-void ScTiledRenderingTest::testSheetChangeNoInvalidation()
+static Bitmap getTile(ScModelObj* pModelObj, int nTilePosX, int nTilePosY, tools::Long nTileWidth, tools::Long nTileHeight)
+{
+    size_t nCanvasSize = 1024;
+    size_t nTileSize = 256;
+    std::vector<unsigned char> aPixmap(nCanvasSize * nCanvasSize * 4, 0);
+    ScopedVclPtrInstance<VirtualDevice> xDevice(DeviceFormat::WITHOUT_ALPHA);
+    xDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
+    xDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasSize, nCanvasSize),
+            Fraction(1.0), Point(), aPixmap.data());
+    pModelObj->paintTile(*xDevice, nCanvasSize, nCanvasSize, nTilePosX, nTilePosY, nTileWidth, nTileHeight);
+    xDevice->EnableMapMode(false);
+    return xDevice->GetBitmap(Point(0, 0), Size(nTileSize, nTileSize));
+}
+
+namespace
+{
+void lcl_typeCharsInCell(const std::string& aStr, SCCOL nCol, SCROW nRow, ScTabViewShell* pView,
+    ScModelObj* pModelObj, bool bInEdit = false, bool bCommit = true)
+{
+    if (!bInEdit)
+        pView->SetCursor(nCol, nRow);
+
+    for (const char& cChar : aStr)
+    {
+        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, cChar, 0);
+        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, cChar, 0);
+        Scheduler::ProcessEventsToIdle();
+    }
+
+    if (bCommit)
+    {
+        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::RETURN);
+        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::RETURN);
+        Scheduler::ProcessEventsToIdle();
+    }
+}
+} //namespace
+
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testSheetChangeNoInvalidation)
 {
     const bool oldPartInInvalidation = comphelper::LibreOfficeKit::isPartInInvalidation();
     comphelper::LibreOfficeKit::setPartInInvalidation(true);
@@ -2022,24 +1885,74 @@ void ScTiledRenderingTest::testSheetChangeNoInvalidation()
     ScViewData* pViewData = ScDocShell::GetViewData();
     CPPUNIT_ASSERT(pViewData);
 
+    // Set View to initial 100%
+    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 28050, 10605));
+    pModelObj->setClientZoom(256, 256, 1920, 1920);
+
+    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+    CPPUNIT_ASSERT(pView);
+
     int nView1 = SfxLokHelper::getView();
     ViewCallback aView1;
     CPPUNIT_ASSERT(!lcl_hasEditView(*pViewData));
 
     SfxLokHelper::setView(nView1);
-    aView1.m_bInvalidateTiles = false;
-    aView1.m_aInvalidations.clear();
-    aView1.m_aInvalidationsParts.clear();
-    aView1.m_aInvalidationsMode.clear();
+
+    aView1.ClearAllInvalids();
+
     pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::PAGEDOWN | KEY_MOD1);
     pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::PAGEDOWN | KEY_MOD1);
     Scheduler::ProcessEventsToIdle();
-    // switching sheets should trigger no invalidations
+    // switching sheets should trigger no unnecessary invalidations
     CPPUNIT_ASSERT(!aView1.m_bInvalidateTiles);
+
+    // Get the known columns/rows of this sheet 2 now we have switched to it so
+    // it knows what range to broadcast invalidations for if it knows cells need
+    // to be redrawn.
+    tools::JsonWriter aJsonWriter1;
+    pModelObj->getRowColumnHeaders(tools::Rectangle(0, 15, 19650, 5400), aJsonWriter1);
+    aJsonWriter1.finishAndGetAsOString();
+    Scheduler::ProcessEventsToIdle();
+    aView1.ClearAllInvalids();
+
+    // switching back should also trigger no unnecessary invalidations
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::PAGEUP | KEY_MOD1);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::PAGEUP | KEY_MOD1);
+    Scheduler::ProcessEventsToIdle();
+    CPPUNIT_ASSERT(!aView1.m_bInvalidateTiles);
+
+    // The 2nd sheet has formulas that depend on B1 in the first sheet. So if
+    // we change B1 there should be an invalidation in the second sheet for the
+    // range that depends on it. Because this is a single user document with no
+    // active view on the 2nd sheet this will happen on switching back to sheet 2
+    lcl_typeCharsInCell("101", 1, 0, pView, pModelObj); // Type '101' in B1
+    aView1.ClearAllInvalids();
+
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::PAGEDOWN | KEY_MOD1);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::PAGEDOWN | KEY_MOD1);
+    Scheduler::ProcessEventsToIdle();
+    CPPUNIT_ASSERT(aView1.m_bInvalidateTiles);
+    aView1.ClearAllInvalids();
+
+    // Paint it to make it valid again
+    getTile(pModelObj, 0, 0, 3840, 3840);
+
+    // switching back to sheet 1 should trigger no unnecessary invalidations
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::PAGEUP | KEY_MOD1);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::PAGEUP | KEY_MOD1);
+    Scheduler::ProcessEventsToIdle();
+    CPPUNIT_ASSERT(!aView1.m_bInvalidateTiles);
+
+    // switching to sheet 2 should trigger no unnecessary invalidations this time
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::PAGEDOWN | KEY_MOD1);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::PAGEDOWN | KEY_MOD1);
+    Scheduler::ProcessEventsToIdle();
+    CPPUNIT_ASSERT(!aView1.m_bInvalidateTiles);
+
     comphelper::LibreOfficeKit::setPartInInvalidation(oldPartInInvalidation);
 }
 
-void ScTiledRenderingTest::testInsertDeletePageInvalidation()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testInsertDeletePageInvalidation)
 {
     ScModelObj* pModelObj = createDoc("insert_delete_sheet.ods");
     // the document has 1 sheet
@@ -2060,7 +1973,6 @@ void ScTiledRenderingTest::testInsertDeletePageInvalidation()
             { "Index", uno::Any(sal_Int32(1)) }
         }));
     dispatchCommand(mxComponent, ".uno:Insert", aArgs);
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView1.m_bInvalidateTiles);
     CPPUNIT_ASSERT_EQUAL(size_t(2), aView1.m_aInvalidations.size());
     CPPUNIT_ASSERT_EQUAL(tools::Rectangle(0, 0, 1000000000, 1000000000), aView1.m_aInvalidations[0]);
@@ -2073,14 +1985,13 @@ void ScTiledRenderingTest::testInsertDeletePageInvalidation()
             { "Index", uno::Any(sal_Int32(1)) }
         }));
     dispatchCommand(mxComponent, ".uno:Remove", aArgs2);
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView1.m_bInvalidateTiles);
     CPPUNIT_ASSERT_EQUAL(size_t(1), aView1.m_aInvalidations.size());
     CPPUNIT_ASSERT_EQUAL(tools::Rectangle(0, 0, 1000000000, 1000000000), aView1.m_aInvalidations[0]);
     CPPUNIT_ASSERT_EQUAL(1, pModelObj->getParts());
 }
 
-void ScTiledRenderingTest::testGetRowColumnHeadersInvalidation()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testGetRowColumnHeadersInvalidation)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     ScViewData* pViewData = ScDocShell::GetViewData();
@@ -2095,7 +2006,7 @@ void ScTiledRenderingTest::testGetRowColumnHeadersInvalidation()
     aView1.m_aInvalidations.clear();
     tools::JsonWriter aJsonWriter1;
     pModelObj->getRowColumnHeaders(tools::Rectangle(0, 15, 19650, 5400), aJsonWriter1);
-    free(aJsonWriter1.extractData());
+    aJsonWriter1.finishAndGetAsOString();
     Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView1.m_bInvalidateTiles);
     CPPUNIT_ASSERT_EQUAL(size_t(1), aView1.m_aInvalidations.size());
@@ -2106,7 +2017,7 @@ void ScTiledRenderingTest::testGetRowColumnHeadersInvalidation()
     aView1.m_aInvalidations.clear();
     tools::JsonWriter aJsonWriter2;
     pModelObj->getRowColumnHeaders(tools::Rectangle(0, 5400, 19650, 9800), aJsonWriter2);
-    free(aJsonWriter2.extractData());
+    aJsonWriter2.finishAndGetAsOString();
     Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView1.m_bInvalidateTiles);
     CPPUNIT_ASSERT_EQUAL(size_t(1), aView1.m_aInvalidations.size());
@@ -2117,14 +2028,14 @@ void ScTiledRenderingTest::testGetRowColumnHeadersInvalidation()
     aView1.m_aInvalidations.clear();
     tools::JsonWriter aJsonWriter3;
     pModelObj->getRowColumnHeaders(tools::Rectangle(5400, 5400, 25050, 9800), aJsonWriter3);
-    free(aJsonWriter3.extractData());
+    aJsonWriter3.finishAndGetAsOString();
     Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView1.m_bInvalidateTiles);
     CPPUNIT_ASSERT_EQUAL(size_t(1), aView1.m_aInvalidations.size());
     CPPUNIT_ASSERT_EQUAL(tools::Rectangle(Point(49725, 0), Size(25500, 19380)), aView1.m_aInvalidations[0]);
 }
 
-void ScTiledRenderingTest::testJumpHorizontallyInvalidation()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testJumpHorizontallyInvalidation)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     ScViewData* pViewData = ScDocShell::GetViewData();
@@ -2148,7 +2059,7 @@ void ScTiledRenderingTest::testJumpHorizontallyInvalidation()
     CPPUNIT_ASSERT_EQUAL(tools::Rectangle(26775, 0, 39525, 13005), aView1.m_aInvalidations[0]);
 }
 
-void ScTiledRenderingTest::testJumpToLastRowInvalidation()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testJumpToLastRowInvalidation)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     ScViewData* pViewData = ScDocShell::GetViewData();
@@ -2171,7 +2082,7 @@ void ScTiledRenderingTest::testJumpToLastRowInvalidation()
 }
 
 // We need to ensure that views are not perterbed by rendering (!?) hmm ...
-void ScTiledRenderingTest::testRowColumnHeaders()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testRowColumnHeaders)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     ScViewData* pViewData = ScDocShell::GetViewData();
@@ -2192,7 +2103,7 @@ void ScTiledRenderingTest::testRowColumnHeaders()
     SfxLokHelper::setView(nView1);
     tools::JsonWriter aJsonWriter1;
     pModelObj->getRowColumnHeaders(tools::Rectangle(65,723,10410,4695), aJsonWriter1);
-    OString aHeaders1 = aJsonWriter1.extractAsOString();
+    OString aHeaders1 = aJsonWriter1.finishAndGetAsOString();
 
     SfxLokHelper::setView(nView2);
     // 50% zoom
@@ -2200,20 +2111,20 @@ void ScTiledRenderingTest::testRowColumnHeaders()
     pModelObj->setClientZoom(256, 256, 6636, 6636);
     tools::JsonWriter aJsonWriter2;
     pModelObj->getRowColumnHeaders(tools::Rectangle(65,723,10410,4695), aJsonWriter2);
-    OString aHeaders2 = aJsonWriter2.extractAsOString();
+    OString aHeaders2 = aJsonWriter2.finishAndGetAsOString();
 
     // Check vs. view #1
     SfxLokHelper::setView(nView1);
     tools::JsonWriter aJsonWriter3;
     pModelObj->getRowColumnHeaders(tools::Rectangle(65,723,10410,4695), aJsonWriter3);
-    OString aHeaders1_2 = aJsonWriter3.extractAsOString();
+    OString aHeaders1_2 = aJsonWriter3.finishAndGetAsOString();
     CPPUNIT_ASSERT_EQUAL(aHeaders1, aHeaders1_2);
 
     // Check vs. view #2
     SfxLokHelper::setView(nView2);
     tools::JsonWriter aJsonWriter4;
     pModelObj->getRowColumnHeaders(tools::Rectangle(65,723,10410,4695), aJsonWriter4);
-    OString aHeaders2_2 = aJsonWriter4.extractAsOString();
+    OString aHeaders2_2 = aJsonWriter4.finishAndGetAsOString();
     CPPUNIT_ASSERT_EQUAL(aHeaders2, aHeaders2_2);
 
     SfxLokHelper::setView(nView1);
@@ -2222,6 +2133,8 @@ void ScTiledRenderingTest::testRowColumnHeaders()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
+namespace
+{
 // Helper structs for setup and testing of ScModelObj::getSheetGeometryData()
 struct SpanEntry
 {
@@ -2289,9 +2202,9 @@ struct SheetDimData
         };
 
         const SpanListWithKey aPairList[] = {
-            { "sizes",    aSizes    },
-            { "hidden",   aHidden   },
-            { "filtered", aFiltered }
+            { "sizes"_ostr,    aSizes    },
+            { "hidden"_ostr,   aHidden   },
+            { "filtered"_ostr, aFiltered }
         };
 
         for (const auto& rEntry : aPairList)
@@ -2316,7 +2229,7 @@ struct SheetDimData
             }
 
             // Get the tree's value for the property key ("sizes"/"hidden"/"filtered").
-            OString aTreeValue = rTree.get<std::string>(rEntry.aKey.getStr()).c_str();
+            OString aTreeValue(rTree.get<std::string>(rEntry.aKey.getStr()));
 
             CPPUNIT_ASSERT_EQUAL(aExpectedEncoding, aTreeValue);
         }
@@ -2344,20 +2257,21 @@ public:
     {
         // Assumes all flags passed to getSheetGeometryData() are true.
         boost::property_tree::ptree aTree;
-        std::stringstream aStream(rJSON.getStr());
+        std::stringstream aStream((std::string(rJSON)));
         boost::property_tree::read_json(aStream, aTree);
 
-        CPPUNIT_ASSERT_EQUAL(OString(".uno:SheetGeometryData"), OString(aTree.get<std::string>("commandName").c_str()));
+        CPPUNIT_ASSERT_EQUAL(".uno:SheetGeometryData"_ostr, OString(aTree.get<std::string>("commandName")));
 
         aCols.testPropertyTree(aTree.get_child("columns"), true);
         aRows.testPropertyTree(aTree.get_child("rows"), false);
     }
 };
+} //namespace
 
 // getSheetGeometryData() should return the exact same message
 // irrespective of client zoom and view-area. Switching views
 // should also not alter it.
-void ScTiledRenderingTest::testSheetGeometryDataInvariance()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testSheetGeometryDataInvariance)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     ScDocument* pDoc = pModelObj->GetDocument();
@@ -2460,7 +2374,7 @@ void ScTiledRenderingTest::testSheetGeometryDataInvariance()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testSheetGeometryDataCorrectness()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testSheetGeometryDataCorrectness)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     ScDocument* pDoc = pModelObj->GetDocument();
@@ -2556,7 +2470,7 @@ void ScTiledRenderingTest::testSheetGeometryDataCorrectness()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testDeleteCellMultilineContent()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testDeleteCellMultilineContent)
 {
     ScModelObj* pModelObj = createDoc("multiline.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -2569,7 +2483,7 @@ void ScTiledRenderingTest::testDeleteCellMultilineContent()
     ViewCallback aView1;
     CPPUNIT_ASSERT(!lcl_hasEditView(*pViewData));
 
-    aView1.m_sInvalidateHeader = "";
+    aView1.m_sInvalidateHeader = ""_ostr;
     ScDocument& rDoc = pDocSh->GetDocument();
     sal_uInt16 nRow1Height = rDoc.GetRowHeight(static_cast<SCROW>(0), static_cast<SCTAB>(0), false);
 
@@ -2581,13 +2495,13 @@ void ScTiledRenderingTest::testDeleteCellMultilineContent()
     Scheduler::ProcessEventsToIdle();
 
     // check if the row header has been invalidated and if the involved row is of the expected height
-    CPPUNIT_ASSERT_EQUAL(OString("row"), aView1.m_sInvalidateHeader);
+    CPPUNIT_ASSERT_EQUAL("row"_ostr, aView1.m_sInvalidateHeader);
     sal_uInt16 nRow2Height = rDoc.GetRowHeight(static_cast<SCROW>(0), static_cast<SCTAB>(0), false);
     CPPUNIT_ASSERT_EQUAL(nRow1Height, nRow2Height);
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testPasteIntoWrapTextCell()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testPasteIntoWrapTextCell)
 {
     comphelper::LibreOfficeKit::setCompatFlag(
         comphelper::LibreOfficeKit::Compat::scPrintTwipsMsgs);
@@ -2617,7 +2531,7 @@ void ScTiledRenderingTest::testPasteIntoWrapTextCell()
     // copy A1
     pView->SetCursor(0, 0);
     Scheduler::ProcessEventsToIdle();
-    pView->GetViewFrame()->GetBindings().Execute(SID_COPY);
+    pView->GetViewFrame().GetBindings().Execute(SID_COPY);
     Scheduler::ProcessEventsToIdle();
 
     // verify clipboard
@@ -2634,12 +2548,12 @@ void ScTiledRenderingTest::testPasteIntoWrapTextCell()
     // Go to A2 and paste.
     pView->SetCursor(0, 1);
     Scheduler::ProcessEventsToIdle();
-    aView.m_sInvalidateSheetGeometry = "";
-    pView->GetViewFrame()->GetBindings().Execute(SID_PASTE);
+    aView.m_sInvalidateSheetGeometry = ""_ostr;
+    pView->GetViewFrame().GetBindings().Execute(SID_PASTE);
     Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sCopyContent, pDoc->GetString(0, 1, 0));
-    CPPUNIT_ASSERT_EQUAL(OString("rows sizes"), aView.m_sInvalidateSheetGeometry);
+    CPPUNIT_ASSERT_EQUAL("rows sizes"_ostr, aView.m_sInvalidateSheetGeometry);
 
     // create new source text in A2
     OUString sCopyContent2("Very long text to copy 2");
@@ -2647,7 +2561,7 @@ void ScTiledRenderingTest::testPasteIntoWrapTextCell()
     Scheduler::ProcessEventsToIdle();
 
     // cut from A2
-    pView->GetViewFrame()->GetBindings().Execute(SID_CUT);
+    pView->GetViewFrame().GetBindings().Execute(SID_CUT);
     Scheduler::ProcessEventsToIdle();
 
     // verify clipboard
@@ -2663,18 +2577,18 @@ void ScTiledRenderingTest::testPasteIntoWrapTextCell()
     // Go to A3 and paste.
     pView->SetCursor(0, 2);
     Scheduler::ProcessEventsToIdle();
-    aView.m_sInvalidateSheetGeometry = "";
-    pView->GetViewFrame()->GetBindings().Execute(SID_PASTE);
+    aView.m_sInvalidateSheetGeometry = ""_ostr;
+    pView->GetViewFrame().GetBindings().Execute(SID_PASTE);
     Scheduler::ProcessEventsToIdle();
 
     // SG invalidations for all
     CPPUNIT_ASSERT_EQUAL(sCopyContent2, pDoc->GetString(0, 1, 0));
-    CPPUNIT_ASSERT_EQUAL(OString("all"), aView.m_sInvalidateSheetGeometry);
+    CPPUNIT_ASSERT_EQUAL("all"_ostr, aView.m_sInvalidateSheetGeometry);
 
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testSortAscendingDescending()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testSortAscendingDescending)
 {
     comphelper::LibreOfficeKit::setCompatFlag(
         comphelper::LibreOfficeKit::Compat::scPrintTwipsMsgs);
@@ -2688,7 +2602,7 @@ void ScTiledRenderingTest::testSortAscendingDescending()
     pModelObj->postMouseEvent(LOK_MOUSEEVENT_MOUSEMOVE, 820, 1336, 1, MOUSE_LEFT, 0);
     pModelObj->postMouseEvent(LOK_MOUSEEVENT_MOUSEBUTTONUP, 820, 1359, 1, MOUSE_LEFT, 0);
     Scheduler::ProcessEventsToIdle();
-    aView.m_sInvalidateSheetGeometry = "";
+    aView.m_sInvalidateSheetGeometry = ""_ostr;
 
     // sort ascending
     uno::Sequence<beans::PropertyValue> aArgs;
@@ -2701,9 +2615,9 @@ void ScTiledRenderingTest::testSortAscendingDescending()
     }
 
     Scheduler::ProcessEventsToIdle();
-    CPPUNIT_ASSERT_EQUAL(OString("rows"), aView.m_sInvalidateSheetGeometry);
+    CPPUNIT_ASSERT_EQUAL("rows"_ostr, aView.m_sInvalidateSheetGeometry);
 
-    aView.m_sInvalidateSheetGeometry = "";
+    aView.m_sInvalidateSheetGeometry = ""_ostr;
     // sort descending
     dispatchCommand(mxComponent, ".uno:SortDescending", aArgs);
 
@@ -2719,31 +2633,10 @@ void ScTiledRenderingTest::testSortAscendingDescending()
     CPPUNIT_ASSERT_EQUAL(double(2), pDoc->GetValue(ScAddress(1, 2, 0)));
 
     Scheduler::ProcessEventsToIdle();
-    CPPUNIT_ASSERT_EQUAL(OString("rows"), aView.m_sInvalidateSheetGeometry);
+    CPPUNIT_ASSERT_EQUAL("rows"_ostr, aView.m_sInvalidateSheetGeometry);
 }
 
-void lcl_typeCharsInCell(const std::string& aStr, SCCOL nCol, SCROW nRow, ScTabViewShell* pView,
-    ScModelObj* pModelObj, bool bInEdit = false, bool bCommit = true)
-{
-    if (!bInEdit)
-        pView->SetCursor(nCol, nRow);
-
-    for (const char& cChar : aStr)
-    {
-        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, cChar, 0);
-        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, cChar, 0);
-        Scheduler::ProcessEventsToIdle();
-    }
-
-    if (bCommit)
-    {
-        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::RETURN);
-        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::RETURN);
-        Scheduler::ProcessEventsToIdle();
-    }
-}
-
-void ScTiledRenderingTest::testAutoInputStringBlock()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testAutoInputStringBlock)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -2776,7 +2669,7 @@ void ScTiledRenderingTest::testAutoInputStringBlock()
     CPPUNIT_ASSERT_EQUAL_MESSAGE("A11 should autocomplete", OUString("XYZ"), pDoc->GetString(aA11));
 }
 
-void ScTiledRenderingTest::testAutoInputExactMatch()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testAutoInputExactMatch)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -2823,7 +2716,7 @@ void ScTiledRenderingTest::testAutoInputExactMatch()
     CPPUNIT_ASSERT_EQUAL_MESSAGE("7: A8 should autocomplete", OUString("Time"), pDoc->GetString(aA8));
 }
 
-void ScTiledRenderingTest::testEditCursorBounds()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testEditCursorBounds)
 {
     comphelper::LibreOfficeKit::setCompatFlag(
         comphelper::LibreOfficeKit::Compat::scPrintTwipsMsgs);
@@ -2866,7 +2759,7 @@ void ScTiledRenderingTest::testEditCursorBounds()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testTextSelectionBounds()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testTextSelectionBounds)
 {
     comphelper::LibreOfficeKit::setCompatFlag(
         comphelper::LibreOfficeKit::Compat::scPrintTwipsMsgs);
@@ -2914,7 +2807,7 @@ void ScTiledRenderingTest::testTextSelectionBounds()
     SfxViewShell::Current()->setLibreOfficeKitViewCallback(nullptr);
 }
 
-void ScTiledRenderingTest::testSheetViewDataCrash()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testSheetViewDataCrash)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
 
@@ -2929,7 +2822,6 @@ void ScTiledRenderingTest::testSheetViewDataCrash()
             { "Index", uno::Any(sal_Int32(2)) }
         }));
     dispatchCommand(mxComponent, ".uno:Insert", aArgs);
-    Scheduler::ProcessEventsToIdle();
     pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::PAGEDOWN | KEY_MOD1);
     pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::PAGEDOWN | KEY_MOD1);
     Scheduler::ProcessEventsToIdle();
@@ -2953,7 +2845,7 @@ void ScTiledRenderingTest::testSheetViewDataCrash()
     Scheduler::ProcessEventsToIdle();
 }
 
-void ScTiledRenderingTest::testTextBoxInsert()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testTextBoxInsert)
 {
     createDoc("empty.ods");
     ViewCallback aView1;
@@ -2964,7 +2856,6 @@ void ScTiledRenderingTest::testTextBoxInsert()
             { "CreateDirectly",  uno::Any(true) }
         }));
     dispatchCommand(mxComponent, ".uno:DrawText", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // check if we have textbox selected
     CPPUNIT_ASSERT(!aView1.m_ShapeSelection.isEmpty());
@@ -2973,7 +2864,7 @@ void ScTiledRenderingTest::testTextBoxInsert()
     Scheduler::ProcessEventsToIdle();
 }
 
-void ScTiledRenderingTest::testCommentCellCopyPaste()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testCommentCellCopyPaste)
 {
     // Comments callback are emitted only if tiled annotations are off
     comphelper::LibreOfficeKit::setTiledAnnotations(false);
@@ -3002,7 +2893,6 @@ void ScTiledRenderingTest::testCommentCellCopyPaste()
             {"Author", uno::Any(OUString("LOK Client"))},
         }));
         dispatchCommand(mxComponent, ".uno:InsertAnnotation", aArgs);
-        Scheduler::ProcessEventsToIdle();
 
         // We received a LOK_CALLBACK_COMMENT callback with comment 'Add' action
         CPPUNIT_ASSERT_EQUAL(std::string("Add"), aView.m_aCommentCallbackResult.get<std::string>("action"));
@@ -3019,12 +2909,10 @@ void ScTiledRenderingTest::testCommentCellCopyPaste()
         // Single cell(with comment) copy paste test
         {
             dispatchCommand(mxComponent, ".uno:Copy", aCopyPasteArgs);
-            Scheduler::ProcessEventsToIdle();
 
             pTabViewShell->SetCursor(1, 49);
             Scheduler::ProcessEventsToIdle();
             dispatchCommand(mxComponent, ".uno:Paste", aCopyPasteArgs); // Paste to cell B50
-            Scheduler::ProcessEventsToIdle();
 
             // We received a LOK_CALLBACK_COMMENT callback with comment 'Add' action
             CPPUNIT_ASSERT_EQUAL(std::string("Add"), aView.m_aCommentCallbackResult.get<std::string>("action"));
@@ -3051,12 +2939,10 @@ void ScTiledRenderingTest::testCommentCellCopyPaste()
             Scheduler::ProcessEventsToIdle();
 
             dispatchCommand(mxComponent, ".uno:Copy", aCopyPasteArgs);
-            Scheduler::ProcessEventsToIdle();
 
             pTabViewShell->SetCursor(3, 49);
             Scheduler::ProcessEventsToIdle();
             dispatchCommand(mxComponent, ".uno:Paste", aCopyPasteArgs); // Paste to cell D50
-            Scheduler::ProcessEventsToIdle();
 
             // We received a LOK_CALLBACK_COMMENT callback with comment 'Add' action
             CPPUNIT_ASSERT_EQUAL(std::string("Add"), aView.m_aCommentCallbackResult.get<std::string>("action"));
@@ -3070,13 +2956,13 @@ void ScTiledRenderingTest::testCommentCellCopyPaste()
     comphelper::LibreOfficeKit::setTiledAnnotations(true);
 }
 
-void ScTiledRenderingTest::testInvalidEntrySave()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testInvalidEntrySave)
 {
-    loadFromURL(u"validity.xlsx");
+    loadFromFile(u"validity.xlsx");
 
     // .uno:Save modifies the original file, make a copy first
     saveAndReload("Calc Office Open XML");
-    ScModelObj* pModelObj = dynamic_cast<ScModelObj*>(mxComponent.get());
+    ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>(mxComponent);
     CPPUNIT_ASSERT(pModelObj);
     pModelObj->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
     const ScDocument* pDoc = pModelObj->GetDocument();
@@ -3096,7 +2982,6 @@ void ScTiledRenderingTest::testInvalidEntrySave()
 
     uno::Sequence<beans::PropertyValue> aArgs;
     dispatchCommand(mxComponent, ".uno:Save", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_MESSAGE("Should not be marked modified after save", !pDocSh->IsModified());
 
@@ -3111,7 +2996,7 @@ void ScTiledRenderingTest::testInvalidEntrySave()
     CPPUNIT_ASSERT_EQUAL(double(41463), pDoc->GetValue(ScAddress(0, 7, 0)));
 }
 
-void ScTiledRenderingTest::testUndoReordering()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testUndoReordering)
 {
     ScModelObj* pModelObj = createDoc("small.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -3160,19 +3045,17 @@ void ScTiledRenderingTest::testUndoReordering()
     // try to execute undo in view #1
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     // check that undo has been executed on view #1
     CPPUNIT_ASSERT_EQUAL(std::size_t(1), pUndoManager->GetUndoActionCount());
 
     // try to execute undo in view #2
     SfxLokHelper::setView(nView2);
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     // check that undo has been executed on view #2
     CPPUNIT_ASSERT_EQUAL(std::size_t(0), pUndoManager->GetUndoActionCount());
 }
 
-void ScTiledRenderingTest::testUndoReorderingRedo()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testUndoReorderingRedo)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -3237,7 +3120,6 @@ void ScTiledRenderingTest::testUndoReorderingRedo()
     // View 1 presses undo, and the second cell is erased
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT_EQUAL(std::size_t(2), pUndoManager->GetUndoActionCount());
     CPPUNIT_ASSERT_EQUAL(OUString("xx"), pDoc->GetString(ScAddress(0, 0, 0)));
     CPPUNIT_ASSERT_EQUAL(OUString(""), pDoc->GetString(ScAddress(0, 1, 0)));
@@ -3257,14 +3139,13 @@ void ScTiledRenderingTest::testUndoReorderingRedo()
 
     // View 1 presses undo again, and the first cell is erased
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT_EQUAL(std::size_t(1), pUndoManager->GetUndoActionCount());
     CPPUNIT_ASSERT_EQUAL(OUString(""), pDoc->GetString(ScAddress(0, 0, 0)));
     CPPUNIT_ASSERT_EQUAL(OUString(""), pDoc->GetString(ScAddress(0, 1, 0)));
     CPPUNIT_ASSERT_EQUAL(OUString("CC"), pDoc->GetString(ScAddress(0, 2, 0)));
 }
 
-void ScTiledRenderingTest::testUndoReorderingMulti()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testUndoReorderingMulti)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -3327,29 +3208,28 @@ void ScTiledRenderingTest::testUndoReorderingMulti()
     // View 1 presses undo
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT_EQUAL(std::size_t(2), pUndoManager->GetUndoActionCount());
     CPPUNIT_ASSERT_EQUAL(OUString(""), pDoc->GetString(ScAddress(0, 0, 0)));
     CPPUNIT_ASSERT_EQUAL(OUString("CC"), pDoc->GetString(ScAddress(0, 2, 0)));
     CPPUNIT_ASSERT_EQUAL(OUString("DD"), pDoc->GetString(ScAddress(0, 3, 0)));
 }
 
-void ScTiledRenderingTest::testGetViewRenderState()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testGetViewRenderState)
 {
     // Add a pair of schemes, last added is the default
     svtools::EditableColorConfig aColorConfig;
-    aColorConfig.AddScheme(u"Dark");
-    aColorConfig.AddScheme(u"Light");
+    aColorConfig.AddScheme(u"Dark"_ustr);
+    aColorConfig.AddScheme(u"Light"_ustr);
 
     ScModelObj* pModelObj = createDoc("empty.ods");
     int nFirstViewId = SfxLokHelper::getView();
     ViewCallback aView1;
 
-    CPPUNIT_ASSERT_EQUAL(OString(";Default"), pModelObj->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("S;Default"_ostr, pModelObj->getViewRenderState());
     // Create a second view
     SfxLokHelper::createView();
     ViewCallback aView2;
-    CPPUNIT_ASSERT_EQUAL(OString(";Default"), pModelObj->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("S;Default"_ostr, pModelObj->getViewRenderState());
     // Set second view to dark scheme
     {
         uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
@@ -3359,11 +3239,11 @@ void ScTiledRenderingTest::testGetViewRenderState()
         );
         dispatchCommand(mxComponent, ".uno:ChangeTheme", aPropertyValues);
     }
-    CPPUNIT_ASSERT_EQUAL(OString(";Dark"), pModelObj->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("S;Dark"_ostr, pModelObj->getViewRenderState());
 
     // Switch back to first view and make sure it's the same
     SfxLokHelper::setView(nFirstViewId);
-    CPPUNIT_ASSERT_EQUAL(OString(";Default"), pModelObj->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("S;Default"_ostr, pModelObj->getViewRenderState());
 }
 
 /*
@@ -3379,13 +3259,29 @@ void ScTiledRenderingTest::testGetViewRenderState()
  * get invalidation rectangle for view 1
  * check if the invalidation rectangle is equal to the one stored previously
 */
-void ScTiledRenderingTest::testInvalidateOnTextEditWithDifferentZoomLevels(const ColRowZoom& rData)
+class testInvalidateOnTextEditWithDifferentZoomLevels : public ScTiledRenderingTest
+{
+public:
+    void TestBody(const ColRowZoom& rData);
+    CPPUNIT_TEST_SUITE(testInvalidateOnTextEditWithDifferentZoomLevels);
+    CPPUNIT_TEST_PARAMETERIZED(TestBody,
+                               std::initializer_list<ColRowZoom>
+                               {
+                                   // zoom level 120%
+                                   {0, 999, 1}, {99, 0, 1},
+                                   // zoom level 40%
+                                   {0, 999, -5}, {99, 0, -5}
+                               });
+    CPPUNIT_TEST_SUITE_END();
+};
+CPPUNIT_TEST_SUITE_REGISTRATION(testInvalidateOnTextEditWithDifferentZoomLevels);
+
+void testInvalidateOnTextEditWithDifferentZoomLevels::TestBody(const ColRowZoom& rData)
 {
     ScModelObj* pModelObj = createDoc("empty.ods");
     CPPUNIT_ASSERT(pModelObj);
     ScDocument* pDoc = pModelObj->GetDocument();
     CPPUNIT_ASSERT(pDoc);
-
     OUString sZoomUnoCmd = ".uno:ZoomPlus";
     int nZoomLevel = rData.zoom;
     if (nZoomLevel < 0)
@@ -3393,17 +3289,14 @@ void ScTiledRenderingTest::testInvalidateOnTextEditWithDifferentZoomLevels(const
         nZoomLevel = -nZoomLevel;
         sZoomUnoCmd = ".uno:ZoomMinus";
     }
-
     // view #1
     ViewCallback aView1;
     // set zoom level
     for (int i = 0; i < nZoomLevel; ++i)
         dispatchCommand(mxComponent, sZoomUnoCmd, {});
     Scheduler::ProcessEventsToIdle();
-
     auto* pTabViewShell1 = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
     CPPUNIT_ASSERT(pTabViewShell1);
-
     // enable in place editing in view 1
     auto& rInvalidations = aView1.m_aInvalidations;
     pTabViewShell1->SetCursor(rData.col, rData.row);
@@ -3416,23 +3309,19 @@ void ScTiledRenderingTest::testInvalidateOnTextEditWithDifferentZoomLevels(const
     CPPUNIT_ASSERT(aView1.m_bInvalidateTiles);
     CPPUNIT_ASSERT(!rInvalidations.empty());
     tools::Rectangle aInvRect1 = rInvalidations[0];
-
     // end editing
     pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::ESCAPE);
     pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::ESCAPE);
     Scheduler::ProcessEventsToIdle();
-
     // view #2
     SfxLokHelper::createView();
     pModelObj->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
     ViewCallback aView2;
     Scheduler::ProcessEventsToIdle();
-
     auto* pTabViewShell2 = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
     CPPUNIT_ASSERT(pTabViewShell2);
     pTabViewShell2->SetCursor(rData.col, rData.row);
     Scheduler::ProcessEventsToIdle();
-
     // text edit in view #2
     aView1.m_bInvalidateTiles = false;
     rInvalidations.clear();
@@ -3442,11 +3331,10 @@ void ScTiledRenderingTest::testInvalidateOnTextEditWithDifferentZoomLevels(const
     CPPUNIT_ASSERT(aView1.m_bInvalidateTiles);
     CPPUNIT_ASSERT(!rInvalidations.empty());
     tools::Rectangle aInvRect2 = rInvalidations[0];
-
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Invalidation rectangle is wrong.", aInvRect1, aInvRect2);
 }
 
-void ScTiledRenderingTest::testOpenURL()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testOpenURL)
 {
     // Given a document that has 2 views:
     createDoc("empty.ods");
@@ -3456,7 +3344,7 @@ void ScTiledRenderingTest::testOpenURL()
     ViewCallback aView2;
 
     // When clicking on a link in view 2, but switching to view 1 before processing async events:
-    ScGlobal::OpenURL(/*aUrl=*/u"http://www.example.com/", /*aTarget=*/u"",
+    ScGlobal::OpenURL(/*aUrl=*/u"http://www.example.com/"_ustr, /*aTarget=*/u""_ustr,
                       /*bIgnoreSettings=*/true);
     SfxLokHelper::setView(nView1);
     Scheduler::ProcessEventsToIdle();
@@ -3468,7 +3356,7 @@ void ScTiledRenderingTest::testOpenURL()
     CPPUNIT_ASSERT(!aView2.m_aHyperlinkClicked.isEmpty());
 }
 
-void ScTiledRenderingTest::testInvalidateForSplitPanes()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testInvalidateForSplitPanes)
 {
     comphelper::LibreOfficeKit::setCompatFlag(
         comphelper::LibreOfficeKit::Compat::scPrintTwipsMsgs);
@@ -3511,7 +3399,296 @@ void ScTiledRenderingTest::testInvalidateForSplitPanes()
     CPPUNIT_ASSERT_MESSAGE("The cell visible in the bottom left pane should be redrawn", bFoundBottomLeftPane);
 }
 
-void ScTiledRenderingTest::testStatusBarLocale()
+// Saving shouldn't trigger an invalidation
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testNoInvalidateOnSave)
+{
+    comphelper::LibreOfficeKit::setCompatFlag(
+        comphelper::LibreOfficeKit::Compat::scPrintTwipsMsgs);
+
+    loadFromFile(u"invalidate-on-save.ods");
+
+    // .uno:Save modifies the original file, make a copy first
+    saveAndReload("calc8");
+    ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>(mxComponent);
+    CPPUNIT_ASSERT(pModelObj);
+    pModelObj->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+
+    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+    CPPUNIT_ASSERT(pView);
+
+    Scheduler::ProcessEventsToIdle();
+
+    // track invalidations
+    ViewCallback aView;
+
+    uno::Sequence<beans::PropertyValue> aArgs;
+    dispatchCommand(mxComponent, ".uno:Save", aArgs);
+
+    Scheduler::ProcessEventsToIdle();
+
+    CPPUNIT_ASSERT(!aView.m_bInvalidateTiles);
+}
+
+void ScTiledRenderingTest::checkSampleInvalidation(const ViewCallback& rView, bool bFullRow)
+{
+    // we expect invalidations, but that isn't really important
+    CPPUNIT_ASSERT(rView.m_bInvalidateTiles);
+    tools::Rectangle aInvalidation;
+    for (const auto& rRect : rView.m_aInvalidations)
+        aInvalidation.Union(rRect);
+    if (!bFullRow)
+    {
+        // What matters is that we expect that the invalidation does not extend all the
+        // way to the max right of the sheet.
+        // Here we originally got 32212306 and now ~5056 for a single cell case
+        CPPUNIT_ASSERT_LESSEQUAL(tools::Long(8000), aInvalidation.GetWidth());
+    }
+    else
+    {
+        // We expect RTL to continue to invalidate the entire row
+        // from 0 to end of sheet (see ScDocShell::PostPaint, 'Extend to whole rows'),
+        // which is different to the adjusted LTR case which
+        // invalidated the row from left of edited cell to right of end
+        // of sheet.
+        CPPUNIT_ASSERT_LESSEQUAL(tools::Long(0), aInvalidation.Left());
+        CPPUNIT_ASSERT_EQUAL(tools::Long(32212230), aInvalidation.Right());
+    }
+}
+
+void ScTiledRenderingTest::cellInvalidationHelper(ScModelObj* pModelObj, ScTabViewShell* pView, const ScAddress& rAdr,
+                                                  bool bAddText, bool bFullRow)
+{
+    // view
+    ViewCallback aView;
+
+    if (bAddText)
+    {
+        // Type "Hello World" in D8, process events to idle and don't commit yet
+        lcl_typeCharsInCell("Hello World", rAdr.Col(), rAdr.Row(), pView, pModelObj, false, false);
+
+        aView.m_bInvalidateTiles = false;
+        aView.m_aInvalidations.clear();
+
+        // commit text and process events to idle
+        lcl_typeCharsInCell("", rAdr.Col(), rAdr.Row(), pView, pModelObj, true, true);
+    }
+    else // DeleteText
+    {
+        pView->SetCursor(rAdr.Col(), rAdr.Row());
+        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::DELETE);
+        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::DELETE);
+        Scheduler::ProcessEventsToIdle();
+    }
+
+    checkSampleInvalidation(aView, bFullRow);
+}
+
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testCellMinimalInvalidations)
+{
+    ScAddress aA8(0, 7, 0);
+    ScAddress aD4(3, 7, 0);
+    ScAddress aD13(3, 12, 0);
+    ScAddress aD17(3, 16, 0);
+
+    ScModelObj* pModelObj = createDoc("cell-invalidations.ods");
+    CPPUNIT_ASSERT(pModelObj);
+    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+    CPPUNIT_ASSERT(pView);
+
+    // Changed: Minimized invalidations (bFullRow: false)
+
+    // Common case, LTR, default cell formatting
+    cellInvalidationHelper(pModelObj, pView, aA8, true, false);
+    cellInvalidationHelper(pModelObj, pView, aD4, true, false);
+    // Left-aligned merged cells
+    cellInvalidationHelper(pModelObj, pView, aD17, true, false);
+    // Delete single cell text case
+    cellInvalidationHelper(pModelObj, pView, aA8, false, false);
+    // Paste into a single cell
+    {
+        pView->SetCursor(aD4.Col(), aD4.Row());
+        uno::Sequence<beans::PropertyValue> aArgs;
+        dispatchCommand(mxComponent, ".uno:Copy", aArgs);
+        pView->SetCursor(aA8.Col(), aA8.Row());
+        Scheduler::ProcessEventsToIdle();
+
+        ViewCallback aView;
+        dispatchCommand(mxComponent, ".uno:Paste", aArgs);
+        Scheduler::ProcessEventsToIdle();
+
+        checkSampleInvalidation(aView, false);
+    }
+
+    // Unchanged: Non-minimized invalidations (bFullRow: true)
+
+    // Centered merged cells;
+    cellInvalidationHelper(pModelObj, pView, aD13, true, true);
+
+    // switch to RTL sheet
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::PAGEDOWN | KEY_MOD1);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::PAGEDOWN | KEY_MOD1);
+    Scheduler::ProcessEventsToIdle();
+
+    cellInvalidationHelper(pModelObj, pView, aA8, true, true);
+    cellInvalidationHelper(pModelObj, pView, aD4, true, true);
+    // Delete Text
+    cellInvalidationHelper(pModelObj, pView, aA8, false, true);
+}
+
+// That we don't end up with two views on different zooms that invalidate different
+// rectangles, each should invalidate the same rectangle
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testCellInvalidationDocWithExistingZoom)
+{
+    ScAddress aB7(1, 6, 0);
+    ScopedVclPtrInstance<VirtualDevice> xDevice(DeviceFormat::WITHOUT_ALPHA);
+
+    ScModelObj* pModelObj = createDoc("cell-invalidations-200zoom-settings.ods");
+    CPPUNIT_ASSERT(pModelObj);
+    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+    CPPUNIT_ASSERT(pView);
+
+    // Set View #1 to initial 100% and generate a paint
+    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 19845, 6405));
+    pModelObj->setClientZoom(256, 256, 1536, 1536);
+    pModelObj->paintTile(*xDevice, 3328, 512, 0, 0, 19968, 3072);
+
+    Scheduler::ProcessEventsToIdle();
+
+    int nView1 = SfxLokHelper::getView();
+    // register to track View #1 invalidations
+    ViewCallback aView1;
+
+    // Create a View #2
+    SfxLokHelper::createView();
+    int nView2 = SfxLokHelper::getView();
+    pModelObj->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+    // register to track View #1 invalidations
+    ViewCallback aView2;
+
+    // Set View #2 to initial 100% and generate a paint
+    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 19845, 6405));
+    pModelObj->setClientZoom(256, 256, 1536, 1536);
+    pModelObj->paintTile(*xDevice, 3328, 512, 0, 0, 19968, 3072);
+
+    // Set View #1 to 50% zoom and generate a paint
+    SfxLokHelper::setView(nView1);
+    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 41150, 13250));
+    pModelObj->setClientZoom(256, 256, 3185, 3185);
+    pModelObj->paintTile(*xDevice, 3328, 512, 0, 0, 41405, 6370);
+
+    Scheduler::ProcessEventsToIdle();
+
+    // Set View #2 to 200% zoom and generate a paint
+    SfxLokHelper::setView(nView2);
+    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 9574, 3090));
+    pModelObj->setClientZoom(256, 256, 741, 741);
+    pModelObj->paintTile(*xDevice, 3328, 512, 0, 0, 19968, 3072);
+
+    Scheduler::ProcessEventsToIdle();
+    aView1.m_bInvalidateTiles = false;
+    aView1.m_aInvalidations.clear();
+    aView2.m_bInvalidateTiles = false;
+    aView2.m_aInvalidations.clear();
+
+    ScTabViewShell* pView2 = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+    CPPUNIT_ASSERT(pView2);
+    pView2->SetCursor(aB7.Col(), aB7.Row());
+
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::DELETE);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::DELETE);
+    Scheduler::ProcessEventsToIdle();
+
+    // The problem tested for here is with two views at different zooms then a
+    // single cell invalidation resulted in the same rectangle reported as two
+    // different invalidations rectangles of different scales. While we should
+    // get the same invalidation rectangle reported.
+    //
+    // (B7 is a good choice to use in the real world to see the effect, to both
+    // avoid getting the two rects combined into one bigger one, or to have the
+    // two separated by so much space the 2nd is off-screen and not seen
+    CPPUNIT_ASSERT_EQUAL(size_t(1), aView1.m_aInvalidations.size());
+    CPPUNIT_ASSERT_EQUAL(size_t(1), aView2.m_aInvalidations.size());
+
+    // That they don't exactly match doesn't matter, we're not checking rounding issues,
+    // what matters is that they are not utterly different rectangles
+    // Without fix result is originally:
+    // Comparing invalidation rectangles Width expected 6214742 actual 26716502 Tolerance 50
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aView2.m_aInvalidations[0],
+                                                  aView1.m_aInvalidations[0],
+                                                  50);
+}
+
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testInputHandlerSyncedZoom)
+{
+    ScModelObj* pModelObj = createDoc("cell-edit-300zoom-settings.ods");
+
+    // Set View #1 to initial 150%
+    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 17933, 4853));
+    // Before the fix, this zoom would leave the EditEngine reference device
+    // at the zoom level stored in the document, so normal rendering and
+    // editing rendering happened with different MapModes
+    pModelObj->setClientZoom(256, 256, 1333, 1333);
+
+    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+    CPPUNIT_ASSERT(pView);
+    pView->SetCursor(0, 4); // A5
+
+    Scheduler::ProcessEventsToIdle();
+
+    // Activate edit mode in that A5 cell
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::F2);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::F2);
+    Scheduler::ProcessEventsToIdle();
+
+    const ScViewData* pViewData1 = ScDocShell::GetViewData();
+    CPPUNIT_ASSERT(pViewData1);
+
+    // Get that active EditView
+    EditView* pEditView1 = pViewData1->GetEditView(SC_SPLIT_BOTTOMLEFT);
+    CPPUNIT_ASSERT(pEditView1);
+    EditEngine* pEditEngine1 = pEditView1->GetEditEngine();
+    CPPUNIT_ASSERT(pEditEngine1);
+    // These must match, if they don't then text will have a different width in edit and view modes
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("EditEngine Ref Dev Zoom and ViewData Zoom should match",
+                                 pViewData1->GetZoomX(), pEditEngine1->GetRefMapMode().GetScaleX());
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("EditEngine Ref Dev Zoom and ViewData Zoom should match",
+                                 pViewData1->GetZoomY(), pEditEngine1->GetRefMapMode().GetScaleY());
+
+    // Create a View #2
+    SfxLokHelper::createView();
+    pModelObj->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+
+    // Set View #2 to the same zoom as View #1
+    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 17933, 4853));
+    pModelObj->setClientZoom(256, 256, 1333, 1333);
+
+    ScTabViewShell* pView2 = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+    CPPUNIT_ASSERT(pView2);
+    pView2->SetCursor(0, 5); // A6
+
+    Scheduler::ProcessEventsToIdle();
+
+    // Activate edit mode in that A6 cell
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::F2);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::F2);
+    Scheduler::ProcessEventsToIdle();
+
+    const ScViewData* pViewData2 = ScDocShell::GetViewData();
+    CPPUNIT_ASSERT(pViewData2);
+
+    // Get the View #2 EditView
+    EditView* pEditView2 = pViewData2->GetEditView(SC_SPLIT_BOTTOMLEFT);
+    CPPUNIT_ASSERT(pEditView2);
+    EditEngine* pEditEngine2 = pEditView2->GetEditEngine();
+    CPPUNIT_ASSERT(pEditEngine2);
+    CPPUNIT_ASSERT(pEditEngine1 != pEditEngine2);
+    // Before the fix, these had different settings, resulting in the text
+    // dancing for the second user as they toggle in and out of edit mode, but
+    // each user should have the same settings.
+    CPPUNIT_ASSERT_EQUAL(pEditEngine1->GetControlWord(), pEditEngine2->GetControlWord());
+}
+
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testStatusBarLocale)
 {
     // Given 2 views, the second's locale is set to German:
     createDoc("empty.ods");
@@ -3522,14 +3699,14 @@ void ScTiledRenderingTest::testStatusBarLocale()
     SfxViewShell* pView2 = SfxViewShell::Current();
     pView2->SetLOKLocale("de-DE");
     {
-        SfxViewFrame* pFrame = pView2->GetViewFrame();
-        SfxSlotPool& rSlotPool = SfxSlotPool::GetSlotPool(pFrame);
+        SfxViewFrame& rFrame = pView2->GetViewFrame();
+        SfxSlotPool& rSlotPool = SfxSlotPool::GetSlotPool(&rFrame);
         uno::Reference<util::XURLTransformer> xParser(util::URLTransformer::create(m_xContext));
         util::URL aCommandURL;
         aCommandURL.Complete = ".uno:RowColSelCount";
         xParser->parseStrict(aCommandURL);
         const SfxSlot* pSlot = rSlotPool.GetUnoSlot(aCommandURL.Path);
-        pFrame->GetBindings().GetDispatch(pSlot, aCommandURL, false);
+        rFrame.GetBindings().GetDispatch(pSlot, aCommandURL, false);
     }
     aView2.m_aStateChanges.clear();
 
@@ -3537,9 +3714,9 @@ void ScTiledRenderingTest::testStatusBarLocale()
     // active:
     comphelper::dispatchCommand(".uno:GoDownSel", {});
     SfxLokHelper::setView(nView1);
-    pView2->GetViewFrame()->GetBindings().GetTimer().Invoke();
+    pView2->GetViewFrame().GetBindings().GetTimer().Invoke();
     // Once more to hit the pImpl->bMsgDirty = false case in SfxBindings::NextJob_Impl().
-    pView2->GetViewFrame()->GetBindings().GetTimer().Invoke();
+    pView2->GetViewFrame().GetBindings().GetTimer().Invoke();
 
     // Then make sure that the locale is taken into account while producing the state changed
     // callback:
@@ -3553,7 +3730,7 @@ void ScTiledRenderingTest::testStatusBarLocale()
     CPPUNIT_ASSERT_EQUAL(std::string("de-DE"), aLocale);
 }
 
-void ScTiledRenderingTest::testLongFirstColumnMouseClick()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testLongFirstColumnMouseClick)
 {
     // Document has a long first column. We want to mouse-click on the column and
     // check the selection changed to this column.
@@ -3561,6 +3738,9 @@ void ScTiledRenderingTest::testLongFirstColumnMouseClick()
     // The issue we want to reproduce is that the click on a cell in the first column that is
     // very long (longer than ~800px default size of GridWindow) triggers a code-path where the cell
     // selected is the neighbouring cell even when we clicked on the area of the first cell.
+
+    comphelper::LibreOfficeKit::setCompatFlag(
+        comphelper::LibreOfficeKit::Compat::scPrintTwipsMsgs);
 
     ScModelObj* pModelObj = createDoc("DocumentWithLongFirstColumn.ods");
     CPPUNIT_ASSERT(pModelObj);
@@ -3639,284 +3819,21 @@ void ScTiledRenderingTest::testLongFirstColumnMouseClick()
     CPPUNIT_ASSERT_EQUAL(SCROW(0), ScDocShell::GetViewData()->GetCurY());
 }
 
-void ScTiledRenderingTest::testSidebarLocale()
-{
-    ScModelObj* pModelObj = createDoc("chart.ods");
-    int nView1 = SfxLokHelper::getView();
-    ViewCallback aView1;
-    SfxViewShell* pView1 = SfxViewShell::Current();
-    pView1->SetLOKLocale("en-US");
-    SfxLokHelper::createView();
-    ViewCallback aView2;
-    SfxViewShell* pView2 = SfxViewShell::Current();
-    pView2->SetLOKLocale("de-DE");
-    TestLokCallbackWrapper::InitializeSidebar();
-    Scheduler::ProcessEventsToIdle();
-    aView2.m_aStateChanges.clear();
-
-    pModelObj->postMouseEvent(LOK_MOUSEEVENT_MOUSEBUTTONDOWN, /*x=*/1,/*y=*/1,/*count=*/2, /*buttons=*/1, /*modifier=*/0);
-    pModelObj->postMouseEvent(LOK_MOUSEEVENT_MOUSEBUTTONUP, /*x=*/1, /*y=*/1, /*count=*/2, /*buttons=*/1, /*modifier=*/0);
-    SfxLokHelper::setView(nView1);
-    Scheduler::ProcessEventsToIdle();
-
-    auto it = aView2.m_aStateChanges.find(".uno:Sidebar");
-    CPPUNIT_ASSERT(it != aView2.m_aStateChanges.end());
-    std::string aLocale = it->second.get<std::string>("locale");
-    CPPUNIT_ASSERT_EQUAL(std::string("de-DE"), aLocale);
-}
-
-// Saving shouldn't trigger an invalidation
-void ScTiledRenderingTest::testNoInvalidateOnSave()
+// if we extend the tiled area to the right and bottom we want two resulting area
+// that don't overlap. If they overlap that typically creates an unnecessary full
+// screen invalidation.
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testExtendedAreasDontOverlap)
 {
     comphelper::LibreOfficeKit::setCompatFlag(
         comphelper::LibreOfficeKit::Compat::scPrintTwipsMsgs);
 
-    loadFromURL(u"invalidate-on-save.ods");
-
-    // .uno:Save modifies the original file, make a copy first
-    saveAndReload("calc8");
-    ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>(mxComponent);
-    CPPUNIT_ASSERT(pModelObj);
-    pModelObj->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
-
-    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
-    CPPUNIT_ASSERT(pView);
-
-    Scheduler::ProcessEventsToIdle();
-
-    // track invalidations
-    ViewCallback aView;
-
-    uno::Sequence<beans::PropertyValue> aArgs;
-    dispatchCommand(mxComponent, ".uno:Save", aArgs);
-
-    Scheduler::ProcessEventsToIdle();
-
-    CPPUNIT_ASSERT(!aView.m_bInvalidateTiles);
-}
-
-void ScTiledRenderingTest::checkSampleInvalidation(const ViewCallback& rView, bool bFullRow)
-{
-    // we expect invalidations, but that isn't really important
-    CPPUNIT_ASSERT(rView.m_bInvalidateTiles);
-    tools::Rectangle aInvalidation;
-    for (const auto& rRect : rView.m_aInvalidations)
-        aInvalidation.Union(rRect);
-    if (!bFullRow)
-    {
-        // What matters is that we expect that the invalidation does not extend all the
-        // way to the max right of the sheet.
-        // Here we originally got 32212306 and now ~5056 for a single cell case
-        CPPUNIT_ASSERT_LESSEQUAL(tools::Long(8000), aInvalidation.GetWidth());
-    }
-    else
-    {
-        // We expect RTL to continue to invalidate the entire row
-        // from 0 to end of sheet (see ScDocShell::PostPaint, 'Extend to whole rows'),
-        // which is different to the adjusted LTR case which
-        // invalidated the row from left of edited cell to right of end
-        // of sheet.
-        CPPUNIT_ASSERT_LESSEQUAL(tools::Long(0), aInvalidation.Left());
-        CPPUNIT_ASSERT_EQUAL(tools::Long(32212230), aInvalidation.Right());
-    }
-}
-
-void ScTiledRenderingTest::cellInvalidationHelper(ScModelObj* pModelObj, ScTabViewShell* pView, const ScAddress& rAdr,
-                                                  bool bAddText, bool bFullRow)
-{
-    // view
-    ViewCallback aView;
-
-    if (bAddText)
-    {
-        // Type "Hello World" in D8, process events to idle and don't commit yet
-        lcl_typeCharsInCell("Hello World", rAdr.Col(), rAdr.Row(), pView, pModelObj, false, false);
-
-        aView.m_bInvalidateTiles = false;
-        aView.m_aInvalidations.clear();
-
-        // commit text and process events to idle
-        lcl_typeCharsInCell("", rAdr.Col(), rAdr.Row(), pView, pModelObj, true, true);
-    }
-    else // DeleteText
-    {
-        pView->SetCursor(rAdr.Col(), rAdr.Row());
-        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::DELETE);
-        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::DELETE);
-        Scheduler::ProcessEventsToIdle();
-    }
-
-    checkSampleInvalidation(aView, bFullRow);
-}
-
-void ScTiledRenderingTest::testCellMinimalInvalidations()
-{
-    ScAddress aA8(0, 7, 0);
-    ScAddress aD4(3, 7, 0);
-    ScAddress aD13(3, 12, 0);
-    ScAddress aD17(3, 16, 0);
-
-    ScModelObj* pModelObj = createDoc("cell-invalidations.ods");
-    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
-    CPPUNIT_ASSERT(pModelObj && pView);
-
-    // Changed: Minimized invalidations (bFullRow: false)
-
-    // Common case, LTR, default cell formatting
-    cellInvalidationHelper(pModelObj, pView, aA8, true, false);
-    cellInvalidationHelper(pModelObj, pView, aD4, true, false);
-    // Left-aligned merged cells
-    cellInvalidationHelper(pModelObj, pView, aD17, true, false);
-    // Delete single cell text case
-    cellInvalidationHelper(pModelObj, pView, aA8, false, false);
-    // Paste into a single cell
-    {
-        pView->SetCursor(aD4.Col(), aD4.Row());
-        uno::Sequence<beans::PropertyValue> aArgs;
-        dispatchCommand(mxComponent, ".uno:Copy", aArgs);
-        pView->SetCursor(aA8.Col(), aA8.Row());
-        Scheduler::ProcessEventsToIdle();
-
-        ViewCallback aView;
-        dispatchCommand(mxComponent, ".uno:Paste", aArgs);
-        Scheduler::ProcessEventsToIdle();
-
-        checkSampleInvalidation(aView, false);
-    }
-
-    // Unchanged: Non-minimized invalidations (bFullRow: true)
-
-    // Centered merged cells;
-    cellInvalidationHelper(pModelObj, pView, aD13, true, true);
-
-    // switch to RTL sheet
-    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::PAGEDOWN | KEY_MOD1);
-    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::PAGEDOWN | KEY_MOD1);
-    Scheduler::ProcessEventsToIdle();
-
-    cellInvalidationHelper(pModelObj, pView, aA8, true, true);
-    cellInvalidationHelper(pModelObj, pView, aD4, true, true);
-    // Delete Text
-    cellInvalidationHelper(pModelObj, pView, aA8, false, true);
-}
-
-void ScTiledRenderingTest::testCellInvalidationDocWithExistingZoom()
-{
-    ScAddress aB7(1, 6, 0);
-    ScopedVclPtrInstance<VirtualDevice> xDevice(DeviceFormat::DEFAULT);
-
-    ScModelObj* pModelObj = createDoc("cell-invalidations-200zoom-settings.ods");
-    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
-    CPPUNIT_ASSERT(pModelObj && pView);
-
-    // Set View #1 to initial 100% and generate a paint
-    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 19845, 6405));
-    pModelObj->setClientZoom(256, 256, 1536, 1536);
-    pModelObj->paintTile(*xDevice, 3328, 512, 0, 0, 19968, 3072);
-
-    Scheduler::ProcessEventsToIdle();
-
-    int nView1 = SfxLokHelper::getView();
-    // register to track View #1 invalidations
-    ViewCallback aView1;
-
-    // Create a View #2
-    SfxLokHelper::createView();
-    int nView2 = SfxLokHelper::getView();
-    pModelObj->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
-    // register to track View #1 invalidations
-    ViewCallback aView2;
-
-    // Set View #2 to initial 100% and generate a paint
-    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 19845, 6405));
-    pModelObj->setClientZoom(256, 256, 1536, 1536);
-    pModelObj->paintTile(*xDevice, 3328, 512, 0, 0, 19968, 3072);
-
-    // Set View #1 to 50% zoom and generate a paint
-    SfxLokHelper::setView(nView1);
-    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 41150, 13250));
-    pModelObj->setClientZoom(256, 256, 3185, 3185);
-    pModelObj->paintTile(*xDevice, 3328, 512, 0, 0, 41405, 6370);
-
-    Scheduler::ProcessEventsToIdle();
-
-    // Set View #2 to 200% zoom and generate a paint
-    SfxLokHelper::setView(nView2);
-    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 9574, 3090));
-    pModelObj->setClientZoom(256, 256, 741, 741);
-    pModelObj->paintTile(*xDevice, 3328, 512, 0, 0, 19968, 3072);
-
-    Scheduler::ProcessEventsToIdle();
-    aView1.m_bInvalidateTiles = false;
-    aView1.m_aInvalidations.clear();
-    aView2.m_bInvalidateTiles = false;
-    aView2.m_aInvalidations.clear();
-
-    ScTabViewShell* pView2 = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
-    CPPUNIT_ASSERT(pView2);
-    pView2->SetCursor(aB7.Col(), aB7.Row());
-
-    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::DELETE);
-    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::DELETE);
-    Scheduler::ProcessEventsToIdle();
-
-    // The problem tested for here is with two views at different zooms then a
-    // single cell invalidation resulted in the same rectangle reported as two
-    // different invalidations rectangles of different scales. While we should
-    // get the same invalidation rectangle reported.
-    //
-    // (B7 is a good choice to use in the real world to see the effect, to both
-    // avoid getting the two rects combined into one bigger one, or to have the
-    // two separated by so much space the 2nd is off-screen and not seen
-    CPPUNIT_ASSERT_EQUAL(size_t(1), aView1.m_aInvalidations.size());
-    CPPUNIT_ASSERT_EQUAL(size_t(1), aView2.m_aInvalidations.size());
-
-    // That they don't exactly match doesn't matter, we're not checking rounding issues,
-    // what matters is that they are not utterly different rectangles
-    // Without fix result is originally:
-    // Comparing invalidation rectangles Width expected 6214742 actual 26716502 Tolerance 50
-    CppUnit::AssertRectEqualWithTolerance("Comparing invalidation rectangles",
-                                          aView2.m_aInvalidations[0],
-                                          aView1.m_aInvalidations[0],
-                                          50);
-}
-
-void ScTiledRenderingTest::testOptimalRowHeight()
-{
-    ScModelObj* pModelObj = createDoc("rowheight.ods");
-    CPPUNIT_ASSERT(pModelObj);
-    ScDocument* pDoc = pModelObj->GetDocument();
-    CPPUNIT_ASSERT(pDoc);
-
-    ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
-    CPPUNIT_ASSERT(pView);
-
-    pModelObj->setClientVisibleArea(tools::Rectangle(0, 82545, 22290, 7380));
-    pModelObj->setClientZoom(256, 256, 3072, 3072);
-    Scheduler::ProcessEventsToIdle();
-
-    constexpr SCROW nRow = 305;
-    pView->SetCursor(0, nRow);
-    Scheduler::ProcessEventsToIdle();
-
-    CPPUNIT_ASSERT_EQUAL_MESSAGE("Before setOptimalHeight: Row#306 height is invalid!", sal_uInt16(300), pDoc->GetRowHeight(nRow, 0));
-
-    std::vector<sc::ColRowSpan> aRowArr(1, sc::ColRowSpan(nRow, nRow));
-    pView->SetWidthOrHeight(false, aRowArr, SC_SIZE_OPTIMAL, 0);
-
-    Scheduler::ProcessEventsToIdle();
-
-    CPPUNIT_ASSERT_EQUAL_MESSAGE("After setOptimalHeight: Row#306 height is invalid!", sal_uInt16(504), pDoc->GetRowHeight(nRow, 0));
-}
-
-// if we extend the tiled area to the right and bottom we want two resulting area
-// that don't overlap. If they overlap that typically creates an unnecessary full
-// screen invalidation.
-void ScTiledRenderingTest::testExtendedAreasDontOverlap()
-{
     ScModelObj* pModelObj = createDoc("empty.ods");
+    CPPUNIT_ASSERT(pModelObj);
     ScTabViewShell* pView = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
-    CPPUNIT_ASSERT(pModelObj && pView);
+    CPPUNIT_ASSERT(pView);
+
+    // Set an arbitrary initial size smaller than the final size
+    pModelObj->setClientVisibleArea(tools::Rectangle(0, 0, 1000, 1000));
 
     Scheduler::ProcessEventsToIdle();
 
@@ -3943,23 +3860,9 @@ void ScTiledRenderingTest::testExtendedAreasDontOverlap()
                          aView1.m_aInvalidations[1].Top());
 }
 
-Bitmap getTile(ScModelObj* pModelObj, int nTilePosX, int nTilePosY, tools::Long nTileWidth, tools::Long nTileHeight)
-{
-    size_t nCanvasSize = 1024;
-    size_t nTileSize = 256;
-    std::vector<unsigned char> aPixmap(nCanvasSize * nCanvasSize * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
-    pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
-    pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasSize, nCanvasSize),
-            Fraction(1.0), Point(), aPixmap.data());
-    pModelObj->paintTile(*pDevice, nCanvasSize, nCanvasSize, nTilePosX, nTilePosY, nTileWidth, nTileHeight);
-    pDevice->EnableMapMode(false);
-    return pDevice->GetBitmap(Point(0, 0), Size(nTileSize, nTileSize));
-}
-
 // Ensure that editing a shape not in the topleft tile has its text shown inside the shape
 // center while editing
-void ScTiledRenderingTest::testEditShapeText()
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testEditShapeText)
 {
     ScModelObj* pModelObj = createDoc("edit-shape-text.ods");
 
@@ -3997,9 +3900,33 @@ void ScTiledRenderingTest::testEditShapeText()
     CPPUNIT_ASSERT_MESSAGE("Text is not visible", aBitmapBefore != aBitmapAfter);
 }
 
-}
+CPPUNIT_TEST_FIXTURE(ScTiledRenderingTest, testCopyMultiSelection)
+{
+    // Given a document with A1 and A3 as selected cells:
+    ScModelObj* pModelObj = createDoc("multi-selection.ods");
+    ViewCallback aView1;
+    // Get the center of A3:
+    uno::Sequence<beans::PropertyValue> aPropertyValues = {
+        comphelper::makePropertyValue("ToPoint", OUString("$A$3")),
+    };
+    dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
+    Point aPoint = aView1.m_aCellCursorBounds.Center();
+    // Go to A1:
+    aPropertyValues = {
+        comphelper::makePropertyValue("ToPoint", OUString("$A$1")),
+    };
+    dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
+    // Ctrl-click on A3:
+    int nCtrl = KEY_MOD1;
+    pModelObj->postMouseEvent(LOK_MOUSEEVENT_MOUSEBUTTONDOWN, aPoint.getX(), aPoint.getY(), 1,
+                              MOUSE_LEFT, nCtrl);
 
-CPPUNIT_TEST_SUITE_REGISTRATION(ScTiledRenderingTest);
+    // When getting the selection:
+    uno::Reference<datatransfer::XTransferable> xTransferable = pModelObj->getSelection();
+
+    // Make sure we get A1+A3 instead of an error:
+    CPPUNIT_ASSERT(xTransferable.is());
+}
 
 CPPUNIT_PLUGIN_IMPLEMENT();
 

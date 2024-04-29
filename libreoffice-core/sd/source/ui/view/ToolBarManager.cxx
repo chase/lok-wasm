@@ -31,6 +31,7 @@
 #include <o3tl/deleter.hxx>
 #include <o3tl/enumrange.hxx>
 #include <sfx2/docfile.hxx>
+#include <sfx2/notebookbar/SfxNotebookBar.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/toolbarids.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -547,9 +548,7 @@ void ToolBarManager::Implementation::SetValid (bool bValid)
     mbIsValid = bValid;
     if (mbIsValid)
     {
-        Reference<frame::XFrame> xFrame;
-        if (mrBase.GetViewFrame() != nullptr)
-            xFrame = mrBase.GetViewFrame()->GetFrame().GetFrameInterface();
+        Reference<frame::XFrame> xFrame = mrBase.GetViewFrame().GetFrame().GetFrameInterface();
         try
         {
             Reference<beans::XPropertySet> xFrameProperties (xFrame, UNO_QUERY_THROW);
@@ -874,7 +873,7 @@ bool ToolBarManager::Implementation::CheckPlugInMode (std::u16string_view rsName
         if (pMedium == nullptr)
             break;
 
-        const SfxBoolItem* pViewOnlyItem = SfxItemSet::GetItem<SfxBoolItem>(pMedium->GetItemSet(), SID_VIEWONLY, false);
+        const SfxBoolItem* pViewOnlyItem = pMedium->GetItemSet().GetItem(SID_VIEWONLY, false);
         if (pViewOnlyItem == nullptr)
             break;
 
@@ -1045,42 +1044,47 @@ void ToolBarRules::SelectionHasChanged (
 
     mpToolBarManager->ResetToolBars(ToolBarManager::ToolBarGroup::Function);
 
-    switch (rView.GetContext())
+    if (!sfx2::SfxNotebookBar::IsActive())
     {
-        case SdrViewContext::Graphic:
-            if( !bTextEdit )
-                mpToolBarManager->SetToolBarShell(ToolBarManager::ToolBarGroup::Function, ToolbarId::Draw_Graf_Toolbox);
-            break;
-
-        case SdrViewContext::Media:
-            if( !bTextEdit )
-                mpToolBarManager->SetToolBarShell(ToolBarManager::ToolBarGroup::Function, ToolbarId::Draw_Media_Toolbox);
-            break;
-
-        case SdrViewContext::Table:
-            mpToolBarManager->SetToolBarShell(ToolBarManager::ToolBarGroup::Function, ToolbarId::Draw_Table_Toolbox);
-            bTextEdit = true;
-            break;
-
-        case SdrViewContext::Standard:
-        default:
-            if( !bTextEdit )
-            {
-                switch(rViewShell.GetShellType())
-                {
-                    case ::sd::ViewShell::ST_IMPRESS:
-                    case ::sd::ViewShell::ST_DRAW:
-                    case ::sd::ViewShell::ST_NOTES:
-                    case ::sd::ViewShell::ST_HANDOUT:
-                        mpToolBarManager->SetToolBar(
-                            ToolBarManager::ToolBarGroup::Function,
-                            ToolBarManager::msDrawingObjectToolBar);
-                        break;
-                    default:
-                        break;
-                }
+        switch (rView.GetContext())
+        {
+            case SdrViewContext::Graphic:
+                if (!bTextEdit)
+                    mpToolBarManager->SetToolBarShell(ToolBarManager::ToolBarGroup::Function,
+                                                      ToolbarId::Draw_Graf_Toolbox);
                 break;
-            }
+
+            case SdrViewContext::Media:
+                if (!bTextEdit)
+                    mpToolBarManager->SetToolBarShell(ToolBarManager::ToolBarGroup::Function,
+                                                      ToolbarId::Draw_Media_Toolbox);
+                break;
+
+            case SdrViewContext::Table:
+                mpToolBarManager->SetToolBarShell(ToolBarManager::ToolBarGroup::Function,
+                                                  ToolbarId::Draw_Table_Toolbox);
+                bTextEdit = true;
+                break;
+
+            case SdrViewContext::Standard:
+            default:
+                if (!bTextEdit)
+                {
+                    switch(rViewShell.GetShellType())
+                    {
+                        case ::sd::ViewShell::ST_IMPRESS:
+                        case ::sd::ViewShell::ST_DRAW:
+                        case ::sd::ViewShell::ST_NOTES:
+                        case ::sd::ViewShell::ST_HANDOUT:
+                            mpToolBarManager->SetToolBar(ToolBarManager::ToolBarGroup::Function,
+                                                         ToolBarManager::msDrawingObjectToolBar);
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+                }
+        }
     }
 
     if( bTextEdit )
@@ -1125,7 +1129,9 @@ void ToolBarRules::SubShellAdded (
             break;
 
         case ToolbarId::Draw_Table_Toolbox:
-            mpToolBarManager->AddToolBar(eGroup, ToolBarManager::msTableObjectBar);
+            // tdf#142489 Do not show the table toolbar when the Notebookbar UI is active
+            if (!sfx2::SfxNotebookBar::IsActive(true))
+                mpToolBarManager->AddToolBar(eGroup, ToolBarManager::msTableObjectBar);
             break;
 
         default:

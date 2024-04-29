@@ -130,7 +130,7 @@ SdTransferable::~SdTransferable()
         delete mpSdDrawDocumentIntern;
 
     moGraphic.reset();
-    mpBookmark.reset();
+    moBookmark.reset();
     mpImageMap.reset();
 
     mpVDev.disposeAndClear();
@@ -147,7 +147,7 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
 
     mpOLEDataHelper.reset();
     moGraphic.reset();
-    mpBookmark.reset();
+    moBookmark.reset();
     mpImageMap.reset();
 
     if( auto pOleObj = dynamic_cast< SdrOle2Obj* >( pObj ) )
@@ -200,7 +200,7 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
                 xPropSet->getPropertyValue( "Label" ) >>= aLabel;
                 xPropSet->getPropertyValue( "TargetURL" ) >>= aURL;
 
-                mpBookmark.reset( new INetBookmark( aURL, aLabel ) );
+                moBookmark.emplace( aURL, aLabel );
             }
         }
     }
@@ -226,7 +226,7 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
                     // when both are unused
                     if(!pObj->HasFillStyle() && !pObj->HasLineStyle())
                     {
-                        mpBookmark.reset( new INetBookmark( pURL->GetURL(), pURL->GetRepresentation() ) );
+                        moBookmark.emplace( pURL->GetURL(), pURL->GetRepresentation() );
                     }
                 }
             }
@@ -251,7 +251,7 @@ void SdTransferable::CreateData()
             CreateObjectReplacement( pPage->GetObj( 0 ) );
 
         mpVDev = VclPtr<VirtualDevice>::Create( *Application::GetDefaultDevice() );
-        mpVDev->SetMapMode( MapMode( mpSdDrawDocumentIntern->GetScaleUnit(), Point(), mpSdDrawDocumentIntern->GetScaleFraction(), mpSdDrawDocumentIntern->GetScaleFraction() ) );
+        mpVDev->SetMapMode(MapMode(mpSdDrawDocumentIntern->GetScaleUnit()));
         mpSdViewIntern = new ::sd::View( *mpSdDrawDocumentIntern, mpVDev );
         mpSdViewIntern->EndListening(*mpSdDrawDocumentIntern );
         mpSdViewIntern->hideMarkHandles();
@@ -283,8 +283,7 @@ void SdTransferable::CreateData()
         // Use dimension of source page
         SdrPageView*        pPgView = mpSdView->GetSdrPageView();
         SdPage*             pOldPage = static_cast<SdPage*>( pPgView->GetPage() );
-        SdrModel*           pOldModel = mpSdView->GetModel();
-        SdStyleSheetPool*   pOldStylePool = static_cast<SdStyleSheetPool*>( pOldModel->GetStyleSheetPool() );
+        SdStyleSheetPool*   pOldStylePool = static_cast<SdStyleSheetPool*>(mpSdView->GetModel().GetStyleSheetPool());
         SdStyleSheetPool*   pNewStylePool = static_cast<SdStyleSheetPool*>( mpSdDrawDocumentIntern->GetStyleSheetPool() );
         SdPage*             pPage = mpSdDrawDocumentIntern->GetSdPage( 0, PageKind::Standard );
         OUString            aOldLayoutName( pOldPage->GetLayoutName() );
@@ -317,11 +316,8 @@ void SdTransferable::CreateData()
         Point   aOrigin( maVisArea.TopLeft() );
         Size    aVector( -aOrigin.X(), -aOrigin.Y() );
 
-        for( size_t nObj = 0, nObjCount = pPage->GetObjCount(); nObj < nObjCount; ++nObj )
-        {
-            SdrObject* pObj = pPage->GetObj( nObj );
+        for (const rtl::Reference<SdrObject>& pObj : *pPage)
             pObj->NbcMove( aVector );
-        }
     }
     else
         maVisArea.SetSize( pPage->GetSize() );
@@ -414,7 +410,7 @@ void SdTransferable::AddSupportedFormats()
             AddFormat( SotClipboardFormatId::BITMAP );
         }
     }
-    else if( mpBookmark )
+    else if( moBookmark )
     {
         AddFormat( SotClipboardFormatId::NETSCAPE_BOOKMARK );
         AddFormat( SotClipboardFormatId::STRING );
@@ -519,9 +515,9 @@ bool SdTransferable::GetData( const DataFlavor& rFlavor, const OUString& rDestDo
                     mpSdDrawDocumentIntern->SetOnlineSpell(true);
             }
         }
-        else if( ( nFormat == SotClipboardFormatId::STRING ) && mpBookmark )
+        else if( ( nFormat == SotClipboardFormatId::STRING ) && moBookmark )
         {
-            bOK = SetString( mpBookmark->GetURL() );
+            bOK = SetString( moBookmark->GetURL() );
         }
         else if( ( nFormat == SotClipboardFormatId::SVXB ) && moGraphic )
         {
@@ -531,9 +527,9 @@ bool SdTransferable::GetData( const DataFlavor& rFlavor, const OUString& rDestDo
         {
             bOK = SetImageMap( *mpImageMap );
         }
-        else if( mpBookmark )
+        else if( moBookmark )
         {
-            bOK = SetINetBookmark( *mpBookmark, rFlavor );
+            bOK = SetINetBookmark( *moBookmark, rFlavor );
         }
         else if( nFormat == SotClipboardFormatId::EMBED_SOURCE )
         {
@@ -575,8 +571,8 @@ bool SdTransferable::WriteObject( tools::SvRef<SotTempStream>& rxOStm, void* pOb
                     pDoc->BurnInStyleSheetAttributes();
                 rxOStm->SetBufferSize( 16348 );
 
-                Reference< XComponent > xComponent( new SdXImpressDocument( pDoc, true ) );
-                pDoc->setUnoModel( Reference< XInterface >::query( xComponent ) );
+                rtl::Reference< SdXImpressDocument > xComponent( new SdXImpressDocument( pDoc, true ) );
+                pDoc->setUnoModel( xComponent );
 
                 {
                     css::uno::Reference<css::io::XOutputStream> xDocOut( new utl::OOutputStreamWrapper( *rxOStm ) );
@@ -704,11 +700,6 @@ void SdTransferable::SetPageBookmarks( std::vector<OUString> && rPageBookmarks, 
     mbPageTransferablePersistent = bPersistent;
 }
 
-sal_Int64 SAL_CALL SdTransferable::getSomething( const css::uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
 void SdTransferable::AddUserData (const std::shared_ptr<UserData>& rpData)
 {
     maUserData.push_back(rpData);
@@ -727,22 +718,9 @@ std::shared_ptr<SdTransferable::UserData> SdTransferable::GetUserData (const sal
         return std::shared_ptr<UserData>();
 }
 
-const css::uno::Sequence< sal_Int8 >& SdTransferable::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSdTransferableUnoTunnelId;
-    return theSdTransferableUnoTunnelId.getSeq();
-}
-
 SdTransferable* SdTransferable::getImplementation( const Reference< XInterface >& rxData ) noexcept
 {
-    try
-    {
-        return comphelper::getFromUnoTunnel<SdTransferable>(rxData);
-    }
-    catch( const css::uno::Exception& )
-    {
-    }
-    return nullptr;
+    return dynamic_cast<SdTransferable*>(rxData.get());
 }
 
 void SdTransferable::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )

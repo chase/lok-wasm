@@ -21,10 +21,12 @@
 #include <svl/ctloptions.hxx>
 
 #include <unotools/configitem.hxx>
+#include <unotools/configmgr.hxx>
 #include <com/sun/star/uno/Any.h>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <osl/mutex.hxx>
 #include "itemholder2.hxx"
+#include <officecfg/Office/Common.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -60,24 +62,16 @@ public:
 
     bool            IsLoaded() const { return m_bIsLoaded; }
     void            SetCTLFontEnabled( bool _bEnabled );
-    bool            IsCTLFontEnabled() const { return m_bCTLFontEnabled; }
 
     void            SetCTLSequenceChecking( bool _bEnabled );
-    bool            IsCTLSequenceChecking() const { return m_bCTLSequenceChecking;}
 
     void            SetCTLSequenceCheckingRestricted( bool _bEnable );
-    bool            IsCTLSequenceCheckingRestricted() const   { return m_bCTLRestricted; }
 
     void            SetCTLSequenceCheckingTypeAndReplace( bool _bEnable );
-    bool            IsCTLSequenceCheckingTypeAndReplace() const { return m_bCTLTypeAndReplace; }
 
     void            SetCTLCursorMovement( SvtCTLOptions::CursorMovement _eMovement );
-    SvtCTLOptions::CursorMovement
-                    GetCTLCursorMovement() const { return m_eCTLCursorMovement; }
 
     void            SetCTLTextNumerals( SvtCTLOptions::TextNumerals _eNumerals );
-    SvtCTLOptions::TextNumerals
-                    GetCTLTextNumerals() const { return m_eCTLTextNumerals; }
 
     bool            IsReadOnly(SvtCTLOptions::EOption eOption) const;
 };
@@ -338,13 +332,17 @@ namespace {
     // global
     std::weak_ptr<SvtCTLOptions_Impl> g_pCTLOptions;
 
-    struct CTLMutex : public rtl::Static< osl::Mutex, CTLMutex > {};
+    osl::Mutex& CTLMutex()
+    {
+        static osl::Mutex aMutex;
+        return aMutex;
+    }
 }
 
 SvtCTLOptions::SvtCTLOptions( bool bDontLoad )
 {
     // Global access, must be guarded (multithreading)
-    ::osl::MutexGuard aGuard( CTLMutex::get() );
+    ::osl::MutexGuard aGuard( CTLMutex() );
 
     m_pImpl = g_pCTLOptions.lock();
     if ( !m_pImpl )
@@ -364,7 +362,7 @@ SvtCTLOptions::SvtCTLOptions( bool bDontLoad )
 SvtCTLOptions::~SvtCTLOptions()
 {
     // Global access, must be guarded (multithreading)
-    ::osl::MutexGuard aGuard( CTLMutex::get() );
+    ::osl::MutexGuard aGuard( CTLMutex() );
 
     m_pImpl->RemoveListener(this);
     m_pImpl.reset();
@@ -376,10 +374,9 @@ void SvtCTLOptions::SetCTLFontEnabled( bool _bEnabled )
     m_pImpl->SetCTLFontEnabled( _bEnabled );
 }
 
-bool SvtCTLOptions::IsCTLFontEnabled() const
+bool SvtCTLOptions::IsCTLFontEnabled()
 {
-    assert(m_pImpl->IsLoaded());
-    return m_pImpl->IsCTLFontEnabled();
+    return officecfg::Office::Common::I18N::CTL::CTLFont::get();
 }
 
 void SvtCTLOptions::SetCTLSequenceChecking( bool _bEnabled )
@@ -388,10 +385,9 @@ void SvtCTLOptions::SetCTLSequenceChecking( bool _bEnabled )
     m_pImpl->SetCTLSequenceChecking(_bEnabled);
 }
 
-bool SvtCTLOptions::IsCTLSequenceChecking() const
+bool SvtCTLOptions::IsCTLSequenceChecking()
 {
-    assert(m_pImpl->IsLoaded());
-    return m_pImpl->IsCTLSequenceChecking();
+    return officecfg::Office::Common::I18N::CTL::CTLSequenceChecking::get();
 }
 
 void SvtCTLOptions::SetCTLSequenceCheckingRestricted( bool _bEnable )
@@ -400,10 +396,9 @@ void SvtCTLOptions::SetCTLSequenceCheckingRestricted( bool _bEnable )
     m_pImpl->SetCTLSequenceCheckingRestricted(_bEnable);
 }
 
-bool SvtCTLOptions::IsCTLSequenceCheckingRestricted() const
+bool SvtCTLOptions::IsCTLSequenceCheckingRestricted()
 {
-    assert(m_pImpl->IsLoaded());
-    return m_pImpl->IsCTLSequenceCheckingRestricted();
+    return officecfg::Office::Common::I18N::CTL::CTLSequenceCheckingRestricted::get();
 }
 
 void SvtCTLOptions::SetCTLSequenceCheckingTypeAndReplace( bool _bEnable )
@@ -412,10 +407,9 @@ void SvtCTLOptions::SetCTLSequenceCheckingTypeAndReplace( bool _bEnable )
     m_pImpl->SetCTLSequenceCheckingTypeAndReplace(_bEnable);
 }
 
-bool SvtCTLOptions::IsCTLSequenceCheckingTypeAndReplace() const
+bool SvtCTLOptions::IsCTLSequenceCheckingTypeAndReplace()
 {
-    assert(m_pImpl->IsLoaded());
-    return m_pImpl->IsCTLSequenceCheckingTypeAndReplace();
+    return officecfg::Office::Common::I18N::CTL::CTLSequenceCheckingTypeAndReplace::get();
 }
 
 void SvtCTLOptions::SetCTLCursorMovement( SvtCTLOptions::CursorMovement _eMovement )
@@ -424,10 +418,9 @@ void SvtCTLOptions::SetCTLCursorMovement( SvtCTLOptions::CursorMovement _eMoveme
     m_pImpl->SetCTLCursorMovement( _eMovement );
 }
 
-SvtCTLOptions::CursorMovement SvtCTLOptions::GetCTLCursorMovement() const
+SvtCTLOptions::CursorMovement SvtCTLOptions::GetCTLCursorMovement()
 {
-    assert(m_pImpl->IsLoaded());
-    return m_pImpl->GetCTLCursorMovement();
+    return static_cast<SvtCTLOptions::CursorMovement>(officecfg::Office::Common::I18N::CTL::CTLCursorMovement::get());
 }
 
 void SvtCTLOptions::SetCTLTextNumerals( SvtCTLOptions::TextNumerals _eNumerals )
@@ -436,10 +429,11 @@ void SvtCTLOptions::SetCTLTextNumerals( SvtCTLOptions::TextNumerals _eNumerals )
     m_pImpl->SetCTLTextNumerals( _eNumerals );
 }
 
-SvtCTLOptions::TextNumerals SvtCTLOptions::GetCTLTextNumerals() const
+SvtCTLOptions::TextNumerals SvtCTLOptions::GetCTLTextNumerals()
 {
-    assert(m_pImpl->IsLoaded());
-    return m_pImpl->GetCTLTextNumerals();
+    if (utl::ConfigManager::IsFuzzing())
+        return SvtCTLOptions::NUMERALS_ARABIC;
+    return static_cast<SvtCTLOptions::TextNumerals>(officecfg::Office::Common::I18N::CTL::CTLTextNumerals::get());
 }
 
 bool SvtCTLOptions::IsReadOnly(EOption eOption) const

@@ -1417,7 +1417,7 @@ void ScDocFunc::ReplaceNote( const ScAddress& rPos, const OUString& rNoteText, c
         if (pNewNote)
         {
             ScDocShell::LOKCommentNotify(hadOldNote ? LOKCommentNotificationType::Modify : LOKCommentNotificationType::Add,
-                                         &rDoc, rPos, pNewNote);
+                                         rDoc, rPos, pNewNote);
         }
     }
     else if (!bApi)
@@ -2275,12 +2275,12 @@ bool ScDocFunc::InsertCells( const ScRange& rRange, const ScMarkData* pTabMark, 
 
         if (bInsertCols)
         {
-            pViewSh->OnLOKInsertDeleteColumn(rRange.aStart.Col() - (eCmd == INS_INSCOLS_BEFORE ? 1: 0), 1);
+            pViewSh->OnLOKInsertDeleteColumn(rRange.aStart.Col(), 1);
         }
 
         if (bInsertRows)
         {
-            pViewSh->OnLOKInsertDeleteRow(rRange.aStart.Row() - (eCmd == INS_INSROWS_BEFORE ? 1: 0), 1);
+            pViewSh->OnLOKInsertDeleteRow(rRange.aStart.Row(), 1);
         }
     }
 
@@ -2856,11 +2856,11 @@ bool ScDocFunc::DeleteCells( const ScRange& rRange, const ScMarkData* pTabMark, 
     {
         if (eCmd == DelCellCmd::Cols)
         {
-            pViewSh->OnLOKInsertDeleteColumn(rRange.aStart.Col(), -1 * (rRange.aEnd.Col() - rRange.aStart.Col() + 1));
+            pViewSh->OnLOKInsertDeleteColumn(rRange.aStart.Col(), -1);
         }
         if (eCmd == DelCellCmd::Rows)
         {
-            pViewSh->OnLOKInsertDeleteRow(rRange.aStart.Row(), -1 * (rRange.aEnd.Row() - rRange.aStart.Row() + 1));
+            pViewSh->OnLOKInsertDeleteRow(rRange.aStart.Row(), -1);
         }
     }
 
@@ -3218,7 +3218,7 @@ static script::ModuleInfo lcl_InitModuleInfo( const SfxObjectShell& rDocSh, cons
 
 void VBA_InsertModule( ScDocument& rDoc, SCTAB nTab, const OUString& sSource )
 {
-    SfxObjectShell& rDocSh = *rDoc.GetDocumentShell();
+    ScDocShell& rDocSh = *rDoc.GetDocumentShell();
     uno::Reference< script::XLibraryContainer > xLibContainer = rDocSh.GetBasicContainer();
     OSL_ENSURE( xLibContainer.is(), "No BasicContainer!" );
 
@@ -5632,26 +5632,12 @@ void ScDocFunc::ReplaceConditionalFormat( sal_uLong nOldFormat, std::unique_ptr<
     bool bUndo = rDoc.IsUndoEnabled();
     ScDocumentUniquePtr pUndoDoc;
     ScRange aCombinedRange = rRanges.Combine();
-    ScRange aCompleteRange;
     if(bUndo)
     {
         pUndoDoc.reset(new ScDocument(SCDOCMODE_UNDO));
         pUndoDoc->InitUndo( rDoc, nTab, nTab );
-
-        if(pFormat)
-        {
-            aCompleteRange = aCombinedRange;
-        }
-        if(nOldFormat)
-        {
-            ScConditionalFormat* pOldFormat = rDoc.GetCondFormList(nTab)->GetFormat(nOldFormat);
-            if(pOldFormat)
-                aCompleteRange.ExtendTo(pOldFormat->GetRange().Combine());
-        }
-
-        rDoc.CopyToDocument(aCompleteRange.aStart.Col(),aCompleteRange.aStart.Row(),nTab,
-                            aCompleteRange.aEnd.Col(),aCompleteRange.aEnd.Row(),nTab,
-                            InsertDeleteFlags::ALL, false, *pUndoDoc);
+        if (const auto* pList = rDoc.GetCondFormList(nTab))
+            pUndoDoc->SetCondFormList(new ScConditionalFormatList(*pUndoDoc, *pList), nTab);
     }
 
     std::unique_ptr<ScRange> pRepaintRange;
@@ -5684,15 +5670,14 @@ void ScDocFunc::ReplaceConditionalFormat( sal_uLong nOldFormat, std::unique_ptr<
     {
         ScDocumentUniquePtr pRedoDoc(new ScDocument(SCDOCMODE_UNDO));
         pRedoDoc->InitUndo( rDoc, nTab, nTab );
-        rDoc.CopyToDocument(aCompleteRange.aStart.Col(),aCompleteRange.aStart.Row(),nTab,
-                            aCompleteRange.aEnd.Col(),aCompleteRange.aEnd.Row(),nTab,
-                            InsertDeleteFlags::ALL, false, *pRedoDoc);
+        if (const auto* pList = rDoc.GetCondFormList(nTab))
+            pRedoDoc->SetCondFormList(new ScConditionalFormatList(*pRedoDoc, *pList), nTab);
         rDocShell.GetUndoManager()->AddUndoAction(
-                std::make_unique<ScUndoConditionalFormat>(&rDocShell, std::move(pUndoDoc), std::move(pRedoDoc), aCompleteRange));
+                std::make_unique<ScUndoConditionalFormat>(&rDocShell, std::move(pUndoDoc), std::move(pRedoDoc), nTab));
     }
 
     if(pRepaintRange)
-        rDocShell.PostPaint(*pRepaintRange, PaintPartFlags::Grid);
+        rDocShell.PostPaint(*pRepaintRange, PaintPartFlags::Grid, SC_PF_TESTMERGE);
 
     aModificator.SetDocumentModified();
     SfxGetpApp()->Broadcast(SfxHint(SfxHintId::ScAreasChanged));

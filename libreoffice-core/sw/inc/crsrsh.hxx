@@ -88,15 +88,16 @@ enum class IsAttrAtPos
     SmartTag         = 0x0800,
     FormControl      = 0x1000,
     TableRedline     = 0x2000,
+    TableColRedline  = 0x4000,
 #ifdef DBG_UTIL
-    CurrAttrs       = 0x4000,        ///< only for debugging
-    TableBoxValue   = 0x8000,        ///< only for debugging
+    CurrAttrs       = 0x8000,        ///< only for debugging
+    TableBoxValue   = 0x10000,       ///< only for debugging
 #endif
-    ContentControl = 0x10000,
-    AllowContaining = 0x20000, // With Outline, finds an outline node for non-outline position
+    ContentControl = 0x20000,
+    AllowContaining = 0x40000, // With Outline, finds an outline node for non-outline position
 };
 namespace o3tl {
-    template<> struct typed_flags<IsAttrAtPos> : is_typed_flags<IsAttrAtPos, 0x3ffff> {};
+    template<> struct typed_flags<IsAttrAtPos> : is_typed_flags<IsAttrAtPos, 0x7ffff> {};
 }
 
 struct SwContentAtPos
@@ -266,7 +267,7 @@ private:
     SAL_DLLPRIVATE bool LRMargin( bool, bool bAPI = false );
     SAL_DLLPRIVATE bool IsAtLRMargin( bool, bool bAPI = false ) const;
 
-    SAL_DLLPRIVATE bool isInHiddenTextFrame(SwShellCursor* pShellCursor);
+    SAL_DLLPRIVATE bool isInHiddenFrame(SwShellCursor* pShellCursor);
 
     SAL_DLLPRIVATE bool GoStartWordImpl();
     SAL_DLLPRIVATE bool GoEndWordImpl();
@@ -333,7 +334,7 @@ public:
     void ExtendedSelectAll(bool bFootnotes = true);
     /// If ExtendedSelectAll() was called and selection didn't change since then.
     ::std::optional<::std::pair<SwNode const*, ::std::vector<SwTableNode*>>> ExtendedSelectedAll() const;
-    enum class StartsWith { None, Table, HiddenPara };
+    enum class StartsWith { None, Table, HiddenPara, HiddenSection };
     /// If document body starts with a table or starts/ends with hidden paragraph.
     StartsWith StartsWith_();
 
@@ -487,6 +488,7 @@ public:
     // Cursor is placed in something that is protected or selection contains
     // something that is protected.
     bool HasReadonlySel(bool isReplace = false) const;
+    bool HasHiddenSections() const;
 
     // Can the cursor be set to read only ranges?
     bool IsReadOnlyAvailable() const { return m_bSetCursorInReadOnly; }
@@ -602,6 +604,8 @@ public:
     bool IsCursorInFootnote() const;
 
     inline Point& GetCursorDocPos() const;
+    // get cursor position relative to the page it is in
+    Point GetCursorPagePos() const;
     inline bool IsCursorPtAtEnd() const;
 
     inline const  SwPaM* GetTableCrs() const;
@@ -855,9 +859,9 @@ public:
     bool   bColumnChange();
     static void FireSectionChangeEvent(sal_uInt16 nOldSection, sal_uInt16 nNewSection);
     static void FireColumnChangeEvent(sal_uInt16 nOldColumn, sal_uInt16 nNewColumn);
-    // If the current cursor position is inside a hidden range, the hidden range
-    // is selected and true is returned:
-    bool SelectHiddenRange();
+    // If the current cursor position is inside a hidden range true is returned. If bSelect is
+    // true, the hidden range is selected. If bSelect is false, the hidden range is not selected.
+    bool IsInHiddenRange(const bool bSelect);
 
     // remove all invalid cursors
     void ClearUpCursors();

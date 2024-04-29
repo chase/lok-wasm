@@ -178,13 +178,11 @@ namespace psp
         aKey.append( i_rKey );
         if( !i_rOption.empty() || !i_rValue.empty() )
         {
-            aKey.append( ':' );
-            aKey.append( i_rOption );
+            aKey.append( OUString::Concat(":") + i_rOption );
         }
         if( !i_rValue.empty() )
         {
-            aKey.append( ':' );
-            aKey.append( i_rValue );
+            aKey.append( OUString::Concat(":") + i_rValue );
         }
         if( !aKey.isEmpty() && !i_rTranslation.isEmpty() )
         {
@@ -209,8 +207,7 @@ namespace psp
         aKey.append( i_rKey );
         if( !i_rOption.empty() )
         {
-            aKey.append( ':' );
-            aKey.append( i_rOption );
+            aKey.append( OUString::Concat(":") + i_rOption );
         }
         if( !aKey.isEmpty() )
         {
@@ -595,9 +592,6 @@ const PPDParser* PPDParser::getParser( const OUString& rFile )
 
 PPDParser::PPDParser(OUString aFile, const std::vector<PPDKey*>& keys)
     : m_aFile(std::move(aFile))
-    , m_bColorDevice(false)
-    , m_bType42Capable(false)
-    , m_nLanguageLevel(0)
     , m_aFileEncoding(RTL_TEXTENCODING_MS_1252)
     , m_pImageableAreas(nullptr)
     , m_pDefaultPaperDimension(nullptr)
@@ -637,9 +631,9 @@ PPDParser::PPDParser(OUString aFile, const std::vector<PPDKey*>& keys)
                     OUString::number(PWG_TO_POINTS(pPWGMedia -> length));
                 if ( pImageableAreaValue )
                     pImageableAreaValue->m_aValue = aBuf.makeStringAndClear();
-                aBuf.append( PWG_TO_POINTS(pPWGMedia -> width) );
-                aBuf.append( " " );
-                aBuf.append( PWG_TO_POINTS(pPWGMedia -> length) );
+                aBuf.append( OUString::number(PWG_TO_POINTS(pPWGMedia -> width))
+                    + " "
+                    + OUString::number(PWG_TO_POINTS(pPWGMedia -> length) ));
                 if ( pPaperDimensionValue )
                     pPaperDimensionValue->m_aValue = aBuf.makeStringAndClear();
                 if (aValueName.equals(pKey -> getDefaultValue() -> m_aOption)) {
@@ -679,7 +673,7 @@ PPDParser::PPDParser(OUString aFile, const std::vector<PPDKey*>& keys)
     if( pResolutions )
         m_pDefaultResolution = pResolutions->getDefaultValue();
     if (pResolutions == nullptr) {
-        SAL_WARN( "vcl.unx.print", "no Resolution in " << m_aFile);
+        SAL_INFO( "vcl.unx.print", "no Resolution in " << m_aFile);
     }
     SAL_INFO_IF(!m_pDefaultResolution, "vcl.unx.print", "no DefaultResolution in " + m_aFile);
 
@@ -688,22 +682,10 @@ PPDParser::PPDParser(OUString aFile, const std::vector<PPDKey*>& keys)
         m_pDefaultInputSlot = pInputSlots->getDefaultValue();
     SAL_INFO_IF(!pInputSlots, "vcl.unx.print", "no InputSlot in " << m_aFile);
     SAL_INFO_IF(!m_pDefaultInputSlot, "vcl.unx.print", "no DefaultInputSlot in " << m_aFile);
-
-    auto pFontList = getKey( "Font" );
-    if (pFontList == nullptr) {
-        SAL_WARN( "vcl.unx.print", "no Font in " << m_aFile);
-    }
-
-    // fill in direct values
-    if( (pKey = getKey( "print-color-mode" )) )
-        m_bColorDevice = pKey->countValues() > 1;
 }
 
 PPDParser::PPDParser( OUString aFile ) :
         m_aFile(std::move( aFile )),
-        m_bColorDevice( false ),
-        m_bType42Capable( false ),
-        m_nLanguageLevel( 0 ),
         m_aFileEncoding( RTL_TEXTENCODING_MS_1252 ),
         m_pImageableAreas( nullptr ),
         m_pDefaultPaperDimension( nullptr ),
@@ -814,9 +796,6 @@ PPDParser::PPDParser( OUString aFile ) :
     }
 #endif
 
-    // fill in shortcuts
-    const PPDKey* pKey;
-
     m_pImageableAreas = getKey( "ImageableArea" );
     const PPDValue * pDefaultImageableArea = nullptr;
     if( m_pImageableAreas )
@@ -842,7 +821,7 @@ PPDParser::PPDParser( OUString aFile ) :
     if( pResolutions )
         m_pDefaultResolution = pResolutions->getDefaultValue();
     if (pResolutions == nullptr) {
-        SAL_WARN( "vcl.unx.print", "no Resolution in " << m_aFile);
+        SAL_INFO( "vcl.unx.print", "no Resolution in " << m_aFile);
     }
     SAL_INFO_IF(!m_pDefaultResolution, "vcl.unx.print", "no DefaultResolution in " + m_aFile);
 
@@ -851,29 +830,6 @@ PPDParser::PPDParser( OUString aFile ) :
         m_pDefaultInputSlot = pInputSlots->getDefaultValue();
     SAL_INFO_IF(!pInputSlots, "vcl.unx.print", "no InputSlot in " << m_aFile);
     SAL_INFO_IF(!m_pDefaultInputSlot, "vcl.unx.print", "no DefaultInputSlot in " << m_aFile);
-
-    auto pFontList = getKey( "Font" );
-    if (pFontList == nullptr) {
-        SAL_WARN( "vcl.unx.print", "no Font in " << m_aFile);
-    }
-
-    // fill in direct values
-    if ((pKey = getKey("ColorDevice")))
-    {
-        if (const PPDValue* pValue = pKey->getValue(0))
-            m_bColorDevice = pValue->m_aValue.startsWithIgnoreAsciiCase("true");
-    }
-
-    if ((pKey = getKey("LanguageLevel")))
-    {
-        if (const PPDValue* pValue = pKey->getValue(0))
-            m_nLanguageLevel = pValue->m_aValue.toInt32();
-    }
-    if ((pKey = getKey("TTRasterizer")))
-    {
-        if (const PPDValue* pValue = pKey->getValue(0))
-            m_bType42Capable = pValue->m_aValue.equalsIgnoreAsciiCase( "Type42" );
-    }
 }
 
 PPDParser::~PPDParser()
@@ -965,7 +921,7 @@ void PPDParser::parse( ::std::vector< OString >& rLines )
     // ppd_group_t structure. Groups can be specified in the PPD file; if an
     // option is not associated with a group, it is put in a "General" or
     // "Extra" group depending on the option.
-    static constexpr OStringLiteral aDefaultPPDGroupName("General");
+    static constexpr OString aDefaultPPDGroupName("General"_ostr);
 
     std::vector< OString >::iterator line = rLines.begin();
     PPDParser::hash_type::const_iterator keyit;
@@ -1123,8 +1079,7 @@ void PPDParser::parse( ::std::vector< OString >& rLines )
                 while (line != rLines.end() && oddDoubleQuoteCount(aBuffer))
                 {
                     // copy the newlines also
-                    aBuffer.append('\n');
-                    aBuffer.append(*line);
+                    aBuffer.append("\n" + *line);
                     ++line;
                 }
                 aLine = aBuffer.makeStringAndClear();
@@ -1318,7 +1273,6 @@ void PPDParser::parseOrderDependency(const OString& rLine)
         aLine = aLine.copy( nPos+1 );
 
     sal_Int32 nOrder = GetCommandLineToken( 0, aLine ).toInt32();
-    OString aSetup = GetCommandLineToken( 1, aLine );
     OUString aKey(OStringToOUString(GetCommandLineToken(2, aLine), RTL_TEXTENCODING_MS_1252));
     if( aKey[ 0 ] != '*' )
         return; // invalid order dependency
@@ -1335,18 +1289,6 @@ void PPDParser::parseOrderDependency(const OString& rLine)
         pKey = keyit->second.get();
 
     pKey->m_nOrderDependency = nOrder;
-    if( aSetup == "ExitServer" )
-        pKey->m_eSetupType = PPDKey::SetupType::ExitServer;
-    else if( aSetup == "Prolog" )
-        pKey->m_eSetupType = PPDKey::SetupType::Prolog;
-    else if( aSetup == "DocumentSetup" )
-        pKey->m_eSetupType = PPDKey::SetupType::DocumentSetup;
-    else if( aSetup == "PageSetup" )
-        pKey->m_eSetupType = PPDKey::SetupType::PageSetup;
-    else if( aSetup == "JCLSetup" )
-        pKey->m_eSetupType = PPDKey::SetupType::JCLSetup;
-    else
-        pKey->m_eSetupType = PPDKey::SetupType::AnySetup;
 }
 
 void PPDParser::parseConstraint( const OString& rLine )
@@ -1591,8 +1533,7 @@ PPDKey::PPDKey( OUString aKey ) :
         m_pDefaultValue( nullptr ),
         m_bQueryValue( false ),
         m_bUIOption( false ),
-        m_nOrderDependency( 100 ),
-        m_eSetupType( SetupType::AnySetup )
+        m_nOrderDependency( 100 )
 {
 }
 
@@ -1912,7 +1853,7 @@ char* PPDContext::getStreamableBuffer( sal_uLong& rBytes ) const
         if( elem.second )
             aCopy = OUStringToOString(elem.second->m_aOption, RTL_TEXTENCODING_MS_1252);
         else
-            aCopy = "*nil";
+            aCopy = "*nil"_ostr;
         nBytes = aCopy.getLength();
         memcpy( pRun, aCopy.getStr(), nBytes );
         pRun += nBytes;

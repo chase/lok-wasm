@@ -286,8 +286,8 @@ void SwFEShell::UnfloatFlyFrame()
         return;
     }
 
-    SwFrameFormat& rFlyFormat = pFly->GetFrameFormat();
-    const SwFormatContent& rContent = rFlyFormat.GetContent();
+    SwFrameFormat* pFlyFormat = pFly->GetFrameFormat();
+    const SwFormatContent& rContent = pFlyFormat->GetContent();
     const SwNodeIndex* pFlyStart = rContent.GetContentIdx();
     if (!pFlyStart)
     {
@@ -315,7 +315,7 @@ void SwFEShell::UnfloatFlyFrame()
     }
 
     SwNodeRange aRange(pFlyStart->GetNode(), SwNodeOffset(1), *pFlyEnd, SwNodeOffset(-1));
-    const SwFormatAnchor& rAnchor = rFlyFormat.GetAnchor();
+    const SwFormatAnchor& rAnchor = pFlyFormat->GetAnchor();
     SwNode* pAnchor = rAnchor.GetAnchorNode();
     if (!pAnchor)
     {
@@ -327,8 +327,8 @@ void SwFEShell::UnfloatFlyFrame()
     rIDCO.MoveNodeRange(aRange, aInsertPos.GetNode(), SwMoveFlags::CREATEUNDOOBJ);
 
     // Remove the fly frame frame.
-    IDocumentLayoutAccess& rIDLA = rFlyFormat.getIDocumentLayoutAccess();
-    rIDLA.DelLayoutFormat(&rFlyFormat);
+    IDocumentLayoutAccess& rIDLA = pFlyFormat->getIDocumentLayoutAccess();
+    rIDLA.DelLayoutFormat(pFlyFormat);
 }
 
 // Get selected fly
@@ -496,8 +496,8 @@ Point SwFEShell::FindAnchorPos( const Point& rAbsPos, bool bMoveIt )
 
     // #i28701#
     SwAnchoredObject* pAnchoredObj = ::GetUserCall( pObj )->GetAnchoredObj( pObj );
-    SwFrameFormat& rFormat = pAnchoredObj->GetFrameFormat();
-    const RndStdIds nAnchorId = rFormat.GetAnchor().GetAnchorId();
+    SwFrameFormat* pFormat = pAnchoredObj->GetFrameFormat();
+    const RndStdIds nAnchorId = pFormat->GetAnchor().GetAnchorId();
 
     if ( RndStdIds::FLY_AS_CHAR == nAnchorId )
         return aRet;
@@ -505,9 +505,9 @@ Point SwFEShell::FindAnchorPos( const Point& rAbsPos, bool bMoveIt )
     bool bFlyFrame = dynamic_cast<SwVirtFlyDrawObj *>(pObj) != nullptr;
 
     bool bTextBox = false;
-    if (rFormat.Which() == RES_DRAWFRMFMT)
+    if (pFormat->Which() == RES_DRAWFRMFMT)
     {
-        bTextBox = SwTextBoxHelper::isTextBox(&rFormat, RES_DRAWFRMFMT, pObj);
+        bTextBox = SwTextBoxHelper::isTextBox(pFormat, RES_DRAWFRMFMT, pObj);
     }
 
     SwFlyFrame* pFly = nullptr;
@@ -534,7 +534,7 @@ Point SwFEShell::FindAnchorPos( const Point& rAbsPos, bool bMoveIt )
     {
         auto pFlyFormat
             = dynamic_cast<const SwFlyFrameFormat*>(SwTextBoxHelper::getOtherTextBoxFormat(
-                &rFormat, RES_DRAWFRMFMT, pObj));
+                pFormat, RES_DRAWFRMFMT, pObj));
         if (pFlyFormat)
         {
             pFly = pFlyFormat->GetFrame();
@@ -608,7 +608,7 @@ Point SwFEShell::FindAnchorPos( const Point& rAbsPos, bool bMoveIt )
 
             if ( bMoveIt || (nAnchorId == RndStdIds::FLY_AT_CHAR) )
             {
-                SwFormatAnchor aAnch( rFormat.GetAnchor() );
+                SwFormatAnchor aAnch( pFormat->GetAnchor() );
                 switch ( nAnchorId )
                 {
                     case RndStdIds::FLY_AT_PARA:
@@ -665,26 +665,24 @@ Point SwFEShell::FindAnchorPos( const Point& rAbsPos, bool bMoveIt )
                     // anchor attribute is change and re-create them afterwards.
                     {
                         std::unique_ptr<SwHandleAnchorNodeChg> pHandleAnchorNodeChg;
-                        SwFlyFrameFormat* pFlyFrameFormat( dynamic_cast<SwFlyFrameFormat*>(&rFormat) );
+                        SwFlyFrameFormat* pFlyFrameFormat( dynamic_cast<SwFlyFrameFormat*>(pFormat) );
                         if ( pFlyFrameFormat )
                         {
                             pHandleAnchorNodeChg.reset(
                                 new SwHandleAnchorNodeChg( *pFlyFrameFormat, aAnch ));
                         }
-                        rFormat.GetDoc()->SetAttr( aAnch, rFormat );
-                        if (SwTextBoxHelper::getOtherTextBoxFormat(&rFormat, RES_DRAWFRMFMT,
+                        pFormat->GetDoc()->SetAttr( aAnch, *pFormat );
+                        if (SwTextBoxHelper::getOtherTextBoxFormat(pFormat, RES_DRAWFRMFMT,
                             pObj))
                         {
-                            if (pObj->getChildrenOfSdrObject())
+                            if (SdrObjList* pObjList = pObj->getChildrenOfSdrObject())
                             {
-                                for (size_t i = 0;
-                                     i < pObj->getChildrenOfSdrObject()->GetObjCount(); ++i)
-                                    SwTextBoxHelper::changeAnchor(
-                                        &rFormat, pObj->getChildrenOfSdrObject()->GetObj(i));
+                                for (const rtl::Reference<SdrObject>& pChild : *pObjList)
+                                    SwTextBoxHelper::changeAnchor(pFormat, pChild.get());
                             }
                             else
                                 SwTextBoxHelper::syncFlyFrameAttr(
-                                    rFormat, rFormat.GetAttrSet(), pObj);
+                                    *pFormat, pFormat->GetAttrSet(), pObj);
                         }
                     }
                     // #i28701# - no call of method
@@ -1062,7 +1060,7 @@ void SwFEShell::GetPageObjs( std::vector<SwFrameFormat*>& rFillArr )
 {
     rFillArr.clear();
 
-    for( auto pFormat : *mxDoc->GetSpzFrameFormats() )
+    for(sw::SpzFrameFormat* pFormat : *mxDoc->GetSpzFrameFormats() )
     {
         if (RndStdIds::FLY_AT_PAGE == pFormat->GetAnchor().GetAnchorId())
         {
@@ -1084,7 +1082,7 @@ void SwFEShell::SetPageObjsNewPage( std::vector<SwFrameFormat*>& rFillArr )
     bool bTmpAssert = false;
     for( auto pFormat : rFillArr )
     {
-        if (mxDoc->GetSpzFrameFormats()->IsAlive(pFormat))
+        if (mxDoc->GetSpzFrameFormats()->IsAlive(static_cast<sw::SpzFrameFormat*>(pFormat)))
         {
             // FlyFormat is still valid, therefore process
 
@@ -1501,7 +1499,7 @@ SwFrameFormat* SwFEShell::WizardGetFly()
 {
     // do not search the Fly via the layout. Now we can delete a frame
     // without a valid layout. ( e.g. for the wizards )
-    SwFrameFormats& rSpzArr = *mxDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormats& rSpzArr = *mxDoc->GetSpzFrameFormats();
     if( !rSpzArr.empty() )
     {
         SwNode& rCursorNd = GetCursor()->GetPoint()->GetNode();
@@ -2102,6 +2100,55 @@ void SwFEShell::SetObjDescription( const OUString& rDescription )
         pObj->SetDescription( rDescription );
     }
 }
+
+bool SwFEShell::IsObjDecorative() const
+{
+    if (!Imp()->HasDrawView())
+    {
+        return false;
+    }
+
+    SdrMarkList const& rMarkList(Imp()->GetDrawView()->GetMarkedObjectList());
+    if (rMarkList.GetMarkCount() != 1)
+    {
+        return false;
+    }
+
+    SdrObject const*const pObj(rMarkList.GetMark(0)->GetMarkedSdrObj());
+    SwFrameFormat const*const pFormat(FindFrameFormat(pObj));
+    if (pFormat->Which() == RES_FLYFRMFMT)
+    {
+        return dynamic_cast<const SwFlyFrameFormat&>(*pFormat).GetAttrSet().Get(RES_DECORATIVE).GetValue();
+    }
+    return pObj->IsDecorative();
+}
+
+void SwFEShell::SetObjDecorative(bool const isDecorative)
+{
+    if (!Imp()->HasDrawView())
+    {
+        return;
+    }
+
+    SdrMarkList const& rMarkList(Imp()->GetDrawView()->GetMarkedObjectList());
+    if (rMarkList.GetMarkCount() != 1)
+    {
+        return;
+    }
+
+    SdrObject *const pObj(rMarkList.GetMark(0)->GetMarkedSdrObj());
+    SwFrameFormat *const pFormat(FindFrameFormat(pObj));
+    if (pFormat->Which() == RES_FLYFRMFMT)
+    {
+        GetDoc()->SetFlyFrameDecorative(dynamic_cast<SwFlyFrameFormat&>(*pFormat),
+                                       isDecorative);
+    }
+    else
+    {
+        pObj->SetDecorative(isDecorative);
+    }
+}
+
 
 void SwFEShell::AlignFormulaToBaseline( const uno::Reference < embed::XEmbeddedObject >& xObj )
 {

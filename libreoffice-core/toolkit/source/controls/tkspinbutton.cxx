@@ -26,7 +26,7 @@
 #include <cppuhelper/implbase2.hxx>
 #include <toolkit/controls/unocontrolmodel.hxx>
 #include <toolkit/controls/unocontrolbase.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 
 #include <helper/unopropertyarrayhelper.hxx>
 
@@ -41,10 +41,11 @@ class UnoSpinButtonModel : public UnoControlModel
 {
 protected:
     css::uno::Any      ImplGetDefaultValue( sal_uInt16 nPropId ) const override;
-    ::cppu::IPropertyArrayHelper&   SAL_CALL getInfoHelper() override;
+    ::cppu::IPropertyArrayHelper& getInfoHelper() override;
 
 public:
     explicit UnoSpinButtonModel( const css::uno::Reference< css::uno::XComponentContext >& i_factory );
+    UnoSpinButtonModel(const UnoSpinButtonModel & rOther) : UnoControlModel(rOther) {}
 
     rtl::Reference<UnoControlModel> Clone() const override { return new UnoSpinButtonModel( *this ); }
 

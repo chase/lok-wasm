@@ -232,11 +232,11 @@ SwDoc::SwDoc()
     mpDfltCharFormat( new SwCharFormat( GetAttrPool(), DEFAULT_CHAR_FORMAT_NAME, nullptr ) ),
     mpDfltTextFormatColl( new SwTextFormatColl( GetAttrPool(), "Paragraph style" ) ),
     mpDfltGrfFormatColl( new SwGrfFormatColl( GetAttrPool(), "Graphikformatvorlage" ) ),
-    mpFrameFormatTable( new SwFrameFormats() ),
+    mpFrameFormatTable( new sw::FrameFormats<SwFrameFormat*>() ),
     mpCharFormatTable( new SwCharFormats ),
-    mpSpzFrameFormatTable( new SwFrameFormats() ),
+    mpSpzFrameFormatTable( new sw::FrameFormats<sw::SpzFrameFormat*>() ),
     mpSectionFormatTable( new SwSectionFormats ),
-    mpTableFrameFormatTable( new SwFrameFormats() ),
+    mpTableFrameFormatTable( new sw::TableFrameFormats() ),
     mpTextFormatCollTable( new SwTextFormatColls() ),
     mpGrfFormatCollTable( new SwGrfFormatColls() ),
     mpTOXTypes( new SwTOXTypes ),
@@ -389,6 +389,8 @@ SwDoc::SwDoc()
     }
 
     getIDocumentState().ResetModified();
+
+    s_pLast = this;
 }
 
 /**
@@ -398,6 +400,8 @@ SwDoc::SwDoc()
  */
 SwDoc::~SwDoc()
 {
+    s_pLast = nullptr;
+
     mxVbaFind.clear();
 
     // nothing here should create Undo actions!
@@ -1033,15 +1037,15 @@ SwNodeIndex SwDoc::AppendDoc(const SwDoc& rSource, sal_uInt16 const nStartPageNu
 #ifdef DBG_UTIL
     SAL_INFO( "sw.docappend", "NodeType 0x" << std::hex << static_cast<int>(aSourceIdx.GetNode().GetNodeType())
                               << std::dec << " " << aSourceIdx.GetNode().GetIndex() );
-    aSourceIdx++;
+    ++aSourceIdx;
     SAL_INFO( "sw.docappend", "NodeType 0x" << std::hex << static_cast<int>(aSourceIdx.GetNode().GetNodeType())
                                             << std::dec << " " << aSourceIdx.GetNode().GetIndex() );
     if ( aSourceIdx.GetNode().GetNodeType() != SwNodeType::End ) {
-        aSourceIdx++;
+        ++aSourceIdx;
         SAL_INFO( "sw.docappend", "NodeType 0x" << std::hex << static_cast<int>(aSourceIdx.GetNode().GetNodeType()) << std::dec );
-        aSourceIdx--;
+        --aSourceIdx;
     }
-    aSourceIdx--;
+    --aSourceIdx;
     SAL_INFO( "sw.docappend", ".." );
     SAL_INFO( "sw.docappend", "NodeType 0x" << std::hex << static_cast<int>(aSourceEndIdx.GetNode().GetNodeType())
                               << std::dec << " " << aSourceEndIdx.GetNode().GetIndex() );
@@ -1177,7 +1181,7 @@ SwNodeIndex SwDoc::AppendDoc(const SwDoc& rSource, sal_uInt16 const nStartPageNu
         {
             SwNodeIndex aIndexBefore(rInsPos.GetNode());
 
-            aIndexBefore--;
+            --aIndexBefore;
 #ifdef DBG_UTIL
             SAL_INFO( "sw.docappend", "CopyRange In: " << CNTNT_DOC( this ) );
 #endif
@@ -1218,7 +1222,7 @@ SwNodeIndex SwDoc::AppendDoc(const SwDoc& rSource, sal_uInt16 const nStartPageNu
 
                 // find the first node allowed to contain a RES_PAGEDESC
                 while (true) {
-                    aFixupIdx++;
+                    ++aFixupIdx;
 
                     SwNode &node = aFixupIdx.GetNode();
                     if ( node.IsTextNode() ) {
@@ -1287,7 +1291,7 @@ SwNodeIndex SwDoc::AppendDoc(const SwDoc& rSource, sal_uInt16 const nStartPageNu
         }
 
         // finally copy page bound frames
-        for ( auto pCpyFormat : *rSource.GetSpzFrameFormats() )
+        for(sw::SpzFrameFormat* pCpyFormat: *rSource.GetSpzFrameFormats())
         {
             const SwFrameFormat& rCpyFormat = *pCpyFormat;
             SwFormatAnchor aAnchor( rCpyFormat.GetAnchor() );

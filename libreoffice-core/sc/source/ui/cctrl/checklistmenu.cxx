@@ -171,16 +171,9 @@ void ScCheckListMenuControl::CreateDropDown()
 {
     const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
 
-    // tdf#151820 The color used for the arrow head depends on the background color
-    Color aBackgroundColor = rStyleSettings.GetWindowColor();
-    Color aSpinColor;
-    if (aBackgroundColor.IsDark())
-        aSpinColor = rStyleSettings.GetLightColor();
-    else
-        aSpinColor = rStyleSettings.GetDarkShadowColor();
-
+    Color aSpinColor = rStyleSettings.GetDialogTextColor();
     int nWidth = (mxMenu->get_text_height() * 3) / 4;
-    mxDropDown->SetOutputSizePixel(Size(nWidth, nWidth));
+    mxDropDown->SetOutputSizePixel(Size(nWidth, nWidth), /*bErase*/true, /*bAlphaMaskTransparent*/true);
     DecorationView aDecoView(mxDropDown.get());
     aDecoView.DrawSymbol(tools::Rectangle(Point(0, 0), Size(nWidth, nWidth)),
                          SymbolType::SPIN_RIGHT, aSpinColor,
@@ -530,6 +523,7 @@ ScCheckListMenuControl::ScCheckListMenuControl(weld::Widget* pParent, ScViewData
     , mbIsPoppedUp(false)
     , maOpenTimer(this)
     , maCloseTimer(this)
+    , maSearchEditTimer("ScCheckListMenuControl maSearchEditTimer")
     , mbIsMultiField(bIsMultiField)
 {
     mxTreeChecks->set_clicks_to_toggle(1);
@@ -619,11 +613,16 @@ ScCheckListMenuControl::ScCheckListMenuControl(weld::Widget* pParent, ScViewData
     // bulk_insert_for_each
     mxTreeChecks->set_size_request(mnCheckWidthReq, nChecksHeight);
     mxListChecks->set_size_request(mnCheckWidthReq, nChecksHeight);
+
+    maSearchEditTimer.SetTimeout(EDIT_UPDATEDATA_TIMEOUT);
+    maSearchEditTimer.SetInvokeHandler(LINK(this, ScCheckListMenuControl, SearchEditTimeoutHdl));
+
     if (comphelper::LibreOfficeKit::isActive())
     {
         mxBtnSelectSingle->hide();
         mxBtnUnselectSingle->hide();
     }
+
 }
 
 void ScCheckListMenuControl::GrabFocus()
@@ -653,6 +652,7 @@ void ScCheckListMenuControl::DropPendingEvents()
 
 ScCheckListMenuControl::~ScCheckListMenuControl()
 {
+    maSearchEditTimer.Stop();
     EndPopupMode();
     for (auto& rMenuItem : maMenuItems)
         rMenuItem.mxSubMenuWin.reset();
@@ -704,7 +704,7 @@ IMPL_LINK(ScCheckListMenuControl, CommandHdl, const CommandEvent&, rCEvt, bool)
     mxContextMenu->set_sensitive("less", mnCheckListVisibleRows > 4);
     mxContextMenu->set_sensitive("more", mnCheckListVisibleRows < 42);
 
-    OString sCommand = mxContextMenu->popup_at_rect(mpChecks, tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1,1)));
+    OUString sCommand = mxContextMenu->popup_at_rect(mpChecks, tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1,1)));
     if (sCommand.isEmpty())
         return true;
 
@@ -786,7 +786,7 @@ IMPL_LINK_NOARG(ScCheckListMenuControl, ComboChangedHdl, weld::ComboBox&, void)
         mxFieldChangedAction->execute();
 }
 
-IMPL_LINK_NOARG(ScCheckListMenuControl, EdModifyHdl, weld::Entry&, void)
+IMPL_LINK_NOARG(ScCheckListMenuControl, SearchEditTimeoutHdl, Timer*, void)
 {
     OUString aSearchText = mxEdSearch->get_text();
     aSearchText = ScGlobal::getCharClass().lowercase( aSearchText );
@@ -920,6 +920,11 @@ IMPL_LINK_NOARG(ScCheckListMenuControl, EdModifyHdl, weld::Entry&, void)
         mxBtnUnselectSingle->set_sensitive(!bEmptySet);
         mxBtnOk->set_sensitive(!bEmptySet);
     }
+}
+
+IMPL_LINK_NOARG(ScCheckListMenuControl, EdModifyHdl, weld::Entry&, void)
+{
+    maSearchEditTimer.Start();
 }
 
 IMPL_LINK_NOARG(ScCheckListMenuControl, EdActivateHdl, weld::Entry&, bool)

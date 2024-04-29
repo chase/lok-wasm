@@ -345,6 +345,17 @@ JVMFWK_DLLPUBLIC javaFrameworkError jfw_findAndSelectJRE(std::unique_ptr<JavaInf
 JVMFWK_DLLPUBLIC javaFrameworkError
 jfw_findAllJREs(std::vector<std::unique_ptr<JavaInfo>>* parInfo);
 
+/**
+ * Convert colon-separated userClassPath which might contain bootstrap variables
+ * (which also might contain colons) to a list of classPaths, keeping bootstrap variables intact.
+ *
+ * FIXME: Nested or multiple occurrences of ${...:...:...} are currently not supported.
+ *
+ * @param sUserPath colon-separated string of user classpaths
+ * @return list of user classpaths
+ */
+JVMFWK_DLLPUBLIC std::vector<OUString> jfw_convertUserPathList(OUString const& sUserPath);
+
 /** determines if a path points to a Java installation.
 
    <p>If the path belongs to a JRE installation then it returns the
@@ -390,7 +401,7 @@ JVMFWK_DLLPUBLIC javaFrameworkError jfw_getJavaInfoByPath(OUString const& pPath,
     The <code>arOptions</code>
     argument contains start arguments which are passed in JavaVMOption structures
     to the VM during its creation. These
-    could be things, such as language settings, proxy settings or any other
+    could be things, such as language and locale settings, proxy settings or any other
     properties which shall be obtainable by
     <code>java.lang.System.getProperties</code>. One can also pass options which
     have a certain meaning to the runtime behaviour such as -ea or -X... However,

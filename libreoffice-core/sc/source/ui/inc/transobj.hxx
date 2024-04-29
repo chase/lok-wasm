@@ -22,12 +22,14 @@
 #include <vcl/transfer.hxx>
 #include <address.hxx>
 #include <document.hxx>
+#include <rtl/ref.hxx>
 #include <sfx2/objsh.hxx>
 
 
 class ScDocShell;
 class ScMarkData;
 enum class ScDragSrc;
+class ScCellRangesBase;
 
 namespace com::sun::star {
     namespace sheet {
@@ -44,7 +46,7 @@ private:
     TransferableObjectDescriptor    m_aObjDesc;
     SfxObjectShellRef               m_aDocShellRef;
     SfxObjectShellRef               m_aDrawPersistRef;
-    css::uno::Reference<css::sheet::XSheetCellRanges> m_xDragSourceRanges;
+    rtl::Reference<ScCellRangesBase> m_xDragSourceRanges;
     SCCOL                           m_nDragHandleX;
     SCROW                           m_nDragHandleY;
     SCCOL                           m_nSourceCursorX;
@@ -105,8 +107,6 @@ public:
     static  SC_DLLPUBLIC ScTransferObj* GetOwnClipboard(const css::uno::Reference<css::datatransfer::XTransferable2>&);
 
     static SfxObjectShell* SetDrawClipDoc(bool bAnyOle, const std::shared_ptr<ScDocument>& = {} );     // update ScGlobal::xDrawClipDocShellRef
-    virtual sal_Int64 SAL_CALL getSomething( const com::sun::star::uno::Sequence< sal_Int8 >& rId ) override;
-    static const com::sun::star::uno::Sequence< sal_Int8 >& getUnoTunnelId();
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

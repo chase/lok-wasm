@@ -186,10 +186,9 @@ bool SfxObjectShell::CreatePreview_Impl( bool bFullContent, VirtualDevice* pDevi
     }
 
     LanguageType eLang;
-    SvtCTLOptions aCTLOptions;
-    if ( SvtCTLOptions::NUMERALS_HINDI == aCTLOptions.GetCTLTextNumerals() )
+    if ( SvtCTLOptions::NUMERALS_HINDI == SvtCTLOptions::GetCTLTextNumerals() )
         eLang = LANGUAGE_ARABIC_SAUDI_ARABIA;
-    else if ( SvtCTLOptions::NUMERALS_ARABIC == aCTLOptions.GetCTLTextNumerals() )
+    else if ( SvtCTLOptions::NUMERALS_ARABIC == SvtCTLOptions::GetCTLTextNumerals() )
         eLang = LANGUAGE_ENGLISH;
     else
         eLang = Application::GetSettings().GetLanguageTag().getLanguageType();
@@ -211,7 +210,8 @@ void SfxObjectShell::UpdateDocInfoForSave()
 
     // clear user data if recommend (see 'Tools - Options - LibreOffice - Security')
     if ( SvtSecurityOptions::IsOptionSet(
-            SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo ) )
+            SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo ) && !SvtSecurityOptions::IsOptionSet(
+                SvtSecurityOptions::EOption::DocWarnKeepDocUserInfo))
     {
         xDocProps->resetUserData( OUString() );
     }
@@ -314,6 +314,21 @@ std::shared_ptr<SfxDocumentInfoDialog> SfxObjectShell::CreateDocumentInfoDialog(
                                                                                 const SfxItemSet& rSet)
 {
     return std::make_shared<SfxDocumentInfoDialog>(pParent, rSet);
+}
+
+std::optional<NamedColor> SfxObjectShell::GetRecentColor(sal_uInt16 nSlotId)
+{
+    auto it = pImpl->m_aRecentColors.find(nSlotId);
+    if (it != pImpl->m_aRecentColors.end())
+        return it->second;
+
+    return std::nullopt;
+}
+
+void SfxObjectShell::SetRecentColor(sal_uInt16 nSlotId, const NamedColor& rColor)
+{
+    pImpl->m_aRecentColors[nSlotId] = rColor;
+    Broadcast(SfxHint(SfxHintId::ColorsChanged));
 }
 
 std::set<Color> SfxObjectShell::GetDocColors()
@@ -454,7 +469,7 @@ void SfxObjectShell::UpdateFromTemplate_Impl(  )
     if ( !pFile->GetFilter() || !pFile->GetFilter()->IsOwnFormat() )
         return;
 
-    const SfxUInt16Item* pUpdateDocItem = SfxItemSet::GetItem<SfxUInt16Item>(pFile->GetItemSet(), SID_UPDATEDOCMODE, false);
+    const SfxUInt16Item* pUpdateDocItem = pFile->GetItemSet().GetItem(SID_UPDATEDOCMODE, false);
     sal_Int16 bCanUpdateFromTemplate = pUpdateDocItem ? pUpdateDocItem->GetValue() : document::UpdateDocMode::NO_UPDATE;
 
     // created from template?
@@ -575,7 +590,7 @@ bool SfxObjectShell::IsHelpDocument() const
     return (pFilter && pFilter->GetFilterName() == "writer_web_HTML_help");
 }
 
-void SfxObjectShell::ResetFromTemplate( const OUString& rTemplateName, const OUString& rFileName )
+void SfxObjectShell::ResetFromTemplate( const OUString& rTemplateName, std::u16string_view rFileName )
 {
     // only care about resetting this data for LibreOffice formats otherwise
     if ( !IsOwnStorageFormat( *GetMedium())  )

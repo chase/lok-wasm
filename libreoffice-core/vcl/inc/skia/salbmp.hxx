@@ -64,6 +64,7 @@ public:
     virtual bool ConvertToGreyscale() override;
     virtual bool Erase(const Color& color) override;
     virtual bool AlphaBlendWith(const SalBitmap& rSalBmp) override;
+    virtual bool Invert() override;
 #if defined MACOSX || defined IOS
     virtual CGImageRef CreateWithMask(const SalBitmap& rMask, int nX, int nY, int nWidth,
                                       int nHeight) const override;
@@ -210,6 +211,7 @@ private:
     boost::shared_ptr<sal_uInt8[]> mBuffer;
     int mScanlineSize; // size of one row in mBuffer (based on mPixelsSize)
     sk_sp<SkImage> mImage; // possibly GPU-backed
+    bool mImageImmutable = false;
     sk_sp<SkImage> mAlphaImage; // cached contents as alpha image, possibly GPU-backed
     // Actual scaling triggered by scale() is done on-demand. This is the size of the pixel
     // data in mBuffer, if it differs from mSize, then there is a scaling operation pending.

@@ -92,6 +92,7 @@ enum class ControlType {
 // application but not for the splash
 // screen (used in desktop/)
     IntroProgress      = 132,
+    LevelBar           = 133,
 // tool tips
     Tooltip            = 140,
 // to draw the implemented theme
@@ -444,24 +445,6 @@ class SAL_DLLPUBLIC_RTTI SpinbuttonValue final : public ImplControlValue
         SpinbuttonValue(SpinbuttonValue &&) = default;
         SpinbuttonValue & operator =(SpinbuttonValue const &) = delete; // due to ImplControlValue
         SpinbuttonValue & operator =(SpinbuttonValue &&) = delete; // due to ImplControlValue
-};
-
-/*  MenubarValue:
- *
- *  Value container for menubars specifying height of adjacent docking area
- */
-class MenubarValue final : public ImplControlValue
-{
-public:
-    MenubarValue() : ImplControlValue( ControlType::Menubar, 0 )
-    { maTopDockingAreaHeight=0; }
-    virtual ~MenubarValue() override;
-    virtual MenubarValue* clone() const override;
-    MenubarValue(MenubarValue const &) = default;
-    MenubarValue(MenubarValue &&) = default;
-    MenubarValue & operator =(MenubarValue const &) = delete; // due to ImplControlValue
-    MenubarValue & operator =(MenubarValue &&) = delete; // due to ImplControlValue
-    int             maTopDockingAreaHeight;
 };
 
 /* MenupopupValue:

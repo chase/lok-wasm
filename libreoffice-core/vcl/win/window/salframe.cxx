@@ -76,11 +76,6 @@
 #include <window.h>
 #include <sallayout.hxx>
 
-#define COMPILE_MULTIMON_STUBS
-#pragma warning(push)
-#pragma warning(disable:4996) // 'GetVersionExA': was declared deprecated
-#include <multimon.h>
-#pragma warning(pop)
 #include <vector>
 
 #include <com/sun/star/uno/Exception.hpp>
@@ -108,15 +103,6 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::container;
 using namespace ::com::sun::star::beans;
 
-#ifndef SPI_GETWHEELSCROLLCHARS
-# define SPI_GETWHEELSCROLLCHARS   0x006C
-#endif
-#ifndef SPI_SETWHEELSCROLLCHARS
-# define SPI_SETWHEELSCROLLCHARS   0x006D
-#endif
-#ifndef WM_MOUSEHWHEEL
-# define WM_MOUSEHWHEEL 0x020E
-#endif
 #ifndef IDC_PEN
 # define IDC_PEN MAKEINTRESOURCE(32631)
 #endif
@@ -555,7 +541,7 @@ HWND ImplSalReCreateHWND( HWND hWndParent, HWND oldhWnd, bool bAsChild )
 }
 
 // translation table from System keycodes into StartView keycodes
-#define KEY_TAB_SIZE     146
+#define KEY_TAB_SIZE     168
 
 const sal_uInt16 aImplTranslateKeyTab[KEY_TAB_SIZE] =
 {
@@ -705,7 +691,29 @@ const sal_uInt16 aImplTranslateKeyTab[KEY_TAB_SIZE] =
     0,                    //                                 142
     0,                    //                                 143
     0,                    // NUMLOCK                         144
-    0                     // SCROLLLOCK                      145
+    0,                    // SCROLLLOCK                      145
+    0,                    //                                 146
+    0,                    //                                 147
+    0,                    //                                 148
+    0,                    //                                 149
+    0,                    //                                 150
+    0,                    //                                 151
+    0,                    //                                 152
+    0,                    //                                 153
+    0,                    //                                 154
+    0,                    //                                 155
+    0,                    //                                 156
+    0,                    //                                 157
+    0,                    //                                 158
+    0,                    //                                 159
+    0,                    //                                 160
+    0,                    //                                 161
+    0,                    //                                 162
+    0,                    //                                 163
+    0,                    //                                 164
+    0,                    //                                 165
+    KEY_XF86BACK,         // VK_BROWSER_BACK                 166
+    KEY_XF86FORWARD       // VK_BROWSER_FORWARD              167
 };
 
 static UINT ImplSalGetWheelScrollLines()
@@ -793,7 +801,7 @@ static void ImplSalCalcFullScreenSize( const WinSalFrame* pFrame,
 
     try
     {
-        tools::Rectangle aRect;
+        AbsoluteScreenPixelRectangle aRect;
         sal_Int32 nMonitors = Application::GetScreenCount();
         if( (pFrame->mnDisplay >= 0) && (pFrame->mnDisplay < nMonitors) )
         {
@@ -920,7 +928,7 @@ void WinSalFrame::updateScreenNumber()
     {
         const std::vector<WinSalSystem::DisplayMonitor>& rMonitors =
             pSys->getMonitors();
-        Point aPoint(maGeometry.pos());
+        AbsoluteScreenPixelPoint aPoint(maGeometry.pos());
         size_t nMon = rMonitors.size();
         for( size_t i = 0; i < nMon; i++ )
         {
@@ -984,11 +992,6 @@ WinSalFrame::~WinSalFrame()
         if ( pSalData->mhWantLeaveMsg == mhWnd )
         {
             pSalData->mhWantLeaveMsg = nullptr;
-            if ( pSalData->mpMouseLeaveTimer )
-            {
-                delete pSalData->mpMouseLeaveTimer;
-                pSalData->mpMouseLeaveTimer = nullptr;
-            }
         }
 
         // remove windows properties
@@ -1592,7 +1595,7 @@ void WinSalFrame::SetPluginParent( SystemParentData* pNewParent )
     WinSalFrame::mbInReparent = false;
 }
 
-void WinSalFrame::GetWorkArea( tools::Rectangle &rRect )
+void WinSalFrame::GetWorkArea( AbsoluteScreenPixelRectangle &rRect )
 {
     RECT aRect;
 
@@ -1790,8 +1793,8 @@ void WinSalFrame::SetScreenNumber( unsigned int nNewScreen )
         size_t nMon = rMonitors.size();
         if( nNewScreen < nMon )
         {
-            Point aOldMonPos, aNewMonPos( rMonitors[nNewScreen].m_aArea.TopLeft() );
-            Point aCurPos(maGeometry.pos());
+            AbsoluteScreenPixelPoint aOldMonPos, aNewMonPos( rMonitors[nNewScreen].m_aArea.TopLeft() );
+            AbsoluteScreenPixelPoint aCurPos(maGeometry.pos());
             for( size_t i = 0; i < nMon; i++ )
             {
                 if( rMonitors[i].m_aArea.Contains( aCurPos ) )
@@ -2529,6 +2532,12 @@ OUString WinSalFrame::GetKeyName( sal_uInt16 nKeyCode )
             case KEY_NUMBERSIGN:
                 cSVCode = '#';
                 break;
+            case KEY_XF86FORWARD:
+                cSVCode = VK_BROWSER_FORWARD;
+                break;
+            case KEY_XF86BACK:
+                cSVCode = VK_BROWSER_BACK;
+                break;
             case KEY_COLON:
                 cSVCode = ':';
                 break;
@@ -2723,6 +2732,13 @@ void WinSalFrame::UpdateSettings( AllSettings& rSettings )
         GetThemeColor(hTheme, 0, 0, TMT_FILLCOLOR, &color);
         aStyleSettings.SetFaceColor( ImplWinColorToSal( color ) );
         aStyleSettings.SetWindowColor( ImplWinColorToSal( color ) );
+
+        // tdf#156040 in the absence of a better idea, do like
+        // StyleSettings::Set3DColors does
+        Color aLightColor(ImplWinColorToSal(color));
+        aLightColor.DecreaseLuminance(64);
+        aStyleSettings.SetLightColor(aLightColor);
+
         GetThemeColor(hTheme, 0, 0, TMT_TEXTCOLOR, &color);
         aStyleSettings.SetWindowTextColor( ImplWinColorToSal( color ) );
         aStyleSettings.SetToolTextColor( ImplWinColorToSal( color ) );
@@ -2733,9 +2749,9 @@ void WinSalFrame::UpdateSettings( AllSettings& rSettings )
         CloseThemeData(hTheme);
 
         hTheme = OpenThemeData(mhWnd, L"Button");
-        GetThemeColor(hTheme, BP_PUSHBUTTON, MBI_NORMAL, TMT_TEXTCOLOR, &color);
+        GetThemeColor(hTheme, BP_PUSHBUTTON, PBS_NORMAL, TMT_TEXTCOLOR, &color);
         aControlTextColor = ImplWinColorToSal(color);
-        GetThemeColor(hTheme, BP_CHECKBOX, MBI_NORMAL, TMT_TEXTCOLOR, &color);
+        GetThemeColor(hTheme, BP_CHECKBOX, CBS_CHECKEDNORMAL, TMT_TEXTCOLOR, &color);
         aStyleSettings.SetRadioCheckTextColor( ImplWinColorToSal( color ) );
         CloseThemeData(hTheme);
 
@@ -2756,7 +2772,8 @@ void WinSalFrame::UpdateSettings( AllSettings& rSettings )
         aStyleSettings.SetMenuBarColor( aStyleSettings.GetWindowColor() );
         CloseThemeData(hTheme);
 
-        if (hTheme = OpenThemeData(mhWnd, L"Textstyle"))
+        hTheme = OpenThemeData(mhWnd, L"Textstyle");
+        if (hTheme)
         {
             GetThemeColor(hTheme, TEXT_HYPERLINKTEXT, TS_HYPERLINK_NORMAL, TMT_TEXTCOLOR, &color);
             aStyleSettings.SetLinkColor(ImplWinColorToSal(color));
@@ -2773,6 +2790,7 @@ void WinSalFrame::UpdateSettings( AllSettings& rSettings )
         aStyleSettings.SetWindowColor( ImplWinColorToSal( GetSysColor( COLOR_WINDOW ) ) );
         aStyleSettings.SetWindowTextColor( ImplWinColorToSal( GetSysColor( COLOR_WINDOWTEXT ) ) );
         aStyleSettings.SetToolTextColor( ImplWinColorToSal( GetSysColor( COLOR_WINDOWTEXT ) ) );
+        aStyleSettings.SetLightColor( ImplWinColorToSal( GetSysColor( COLOR_3DHILIGHT ) ) );
         aStyleSettings.SetShadowColor( ImplWinColorToSal( GetSysColor( COLOR_3DSHADOW ) ) );
         aStyleSettings.SetDarkShadowColor( ImplWinColorToSal( GetSysColor( COLOR_3DDKSHADOW ) ) );
         aControlTextColor = ImplWinColorToSal(GetSysColor(COLOR_BTNTEXT));
@@ -2791,13 +2809,13 @@ void WinSalFrame::UpdateSettings( AllSettings& rSettings )
     if ( std::optional<Color> aColor = aStyleSettings.GetPersonaMenuBarTextColor() )
     {
         aMenuBarTextColor = *aColor;
-        aMenuBarRolloverTextColor = *aColor;
+        if (!aStyleSettings.GetHighContrastMode())
+            aMenuBarRolloverTextColor = *aColor;
     }
 
     aStyleSettings.SetMenuBarTextColor( aMenuBarTextColor );
     aStyleSettings.SetMenuBarRolloverTextColor( aMenuBarRolloverTextColor );
 
-    aStyleSettings.SetLightColor( ImplWinColorToSal( GetSysColor( COLOR_3DHILIGHT ) ) );
     aStyleSettings.SetLightBorderColor( ImplWinColorToSal( GetSysColor( COLOR_3DLIGHT ) ) );
     aStyleSettings.SetHelpColor( ImplWinColorToSal( GetSysColor( COLOR_INFOBK ) ) );
     aStyleSettings.SetHelpTextColor( ImplWinColorToSal( GetSysColor( COLOR_INFOTEXT ) ) );
@@ -2843,6 +2861,10 @@ void WinSalFrame::UpdateSettings( AllSettings& rSettings )
     aStyleSettings.SetFieldTextColor( aStyleSettings.GetWindowTextColor() );
     aStyleSettings.SetFieldRolloverTextColor( aStyleSettings.GetFieldTextColor() );
     aStyleSettings.SetListBoxWindowTextColor( aStyleSettings.GetFieldTextColor() );
+
+    aStyleSettings.SetAccentColor( ImplWinColorToSal( GetSysColor( COLOR_HIGHLIGHT ) ) );
+    // https://devblogs.microsoft.com/oldnewthing/20170405-00/?p=95905
+
     aStyleSettings.SetHighlightColor( ImplWinColorToSal( GetSysColor( COLOR_HIGHLIGHT ) ) );
     aStyleSettings.SetHighlightTextColor(aHighlightTextColor);
     aStyleSettings.SetListBoxWindowHighlightColor( aStyleSettings.GetHighlightColor() );
@@ -3124,6 +3146,18 @@ void WinSalFrame::UpdateDarkMode()
     ::UpdateDarkMode(mhWnd);
 }
 
+bool WinSalFrame::GetUseDarkMode() const
+{
+    return UseDarkMode();
+}
+
+bool WinSalFrame::GetUseReducedAnimation() const
+{
+    BOOL bEnableAnimation = FALSE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &bEnableAnimation, 0);
+    return !bEnableAnimation;
+}
+
 static bool ImplHandleMouseMsg( HWND hWnd, UINT nMsg,
                                 WPARAM wParam, LPARAM lParam )
 {
@@ -3194,15 +3228,6 @@ static bool ImplHandleMouseMsg( HWND hWnd, UINT nMsg,
                 SendMessageW( pSalData->mhWantLeaveMsg, SAL_MSG_MOUSELEAVE, 0, GetMessagePos() );
 
             pSalData->mhWantLeaveMsg = hWnd;
-            // Start MouseLeave-Timer
-            if ( !pSalData->mpMouseLeaveTimer )
-            {
-                pSalData->mpMouseLeaveTimer = new AutoTimer( "ImplHandleMouseMsg SalData::mpMouseLeaveTimer" );
-                pSalData->mpMouseLeaveTimer->SetTimeout( SAL_MOUSELEAVE_TIMEOUT );
-                pSalData->mpMouseLeaveTimer->Start();
-                // We don't need to set a timeout handler, because we test
-                // for mouseleave in the timeout callback
-            }
             aMouseEvt.mnButton = 0;
             nEvent = SalEvent::MouseMove;
             }
@@ -3235,11 +3260,6 @@ static bool ImplHandleMouseMsg( HWND hWnd, UINT nMsg,
                     }
                 }
                 pSalData->mhWantLeaveMsg = nullptr;
-                if ( pSalData->mpMouseLeaveTimer )
-                {
-                    delete pSalData->mpMouseLeaveTimer;
-                    pSalData->mpMouseLeaveTimer = nullptr;
-                }
                 aMouseEvt.mnX = aPt.x;
                 aMouseEvt.mnY = aPt.y;
                 aMouseEvt.mnButton = 0;
@@ -3502,6 +3522,125 @@ static void FlushIMBeforeShortCut(WinSalFrame* pFrame, SalEvent nEvent, sal_uInt
     }
 }
 
+// When Num Lock is off, the key codes from NumPag come as arrows, PgUp/PgDn, etc.
+static WORD NumPadFromArrows(WORD vk)
+{
+    switch (vk)
+    {
+        case VK_CLEAR:
+            return VK_NUMPAD5;
+        case VK_PRIOR:
+            return VK_NUMPAD9;
+        case VK_NEXT:
+            return VK_NUMPAD3;
+        case VK_END:
+            return VK_NUMPAD1;
+        case VK_HOME:
+            return VK_NUMPAD7;
+        case VK_LEFT:
+            return VK_NUMPAD4;
+        case VK_UP:
+            return VK_NUMPAD8;
+        case VK_RIGHT:
+            return VK_NUMPAD6;
+        case VK_DOWN:
+            return VK_NUMPAD2;
+        case VK_INSERT:
+            return VK_NUMPAD0;
+        default:
+            return vk;
+    }
+}
+
+static bool HandleAltNumPadCode(HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam)
+{
+    struct
+    {
+        bool started = false;
+        //static bool hex = false; // TODO: support HKEY_CURRENT_USER\Control Panel\Input Method\EnableHexNumpad
+        sal_UCS4 ch = 0;
+        bool wait_WM_CHAR = false;
+        void clear()
+        {
+            started = false;
+            ch = 0;
+            wait_WM_CHAR = false;
+        }
+    } static state;
+
+    WORD vk = LOWORD(wParam);
+    WORD keyFlags = HIWORD(lParam);
+
+    switch (nMsg)
+    {
+        case WM_CHAR:
+            if (state.wait_WM_CHAR && MapVirtualKeyW(LOBYTE(keyFlags), MAPVK_VSC_TO_VK) == VK_MENU)
+            {
+                state.clear();
+                // Ignore it - it is synthetized (incorrect, truncated) character from system
+                return true;
+            }
+
+            break;
+
+        case WM_SYSKEYDOWN:
+            if (vk == VK_MENU)
+            {
+                if (!(keyFlags & KF_REPEAT))
+                    state.clear();
+                state.started = true;
+                return false; // This must be processed further - e.g., to show accelerators
+            }
+
+            if (!state.started)
+                break;
+
+            if (keyFlags & KF_EXTENDED)
+                break; // NUMPAD numeric keys are *not* considered extended
+
+            vk = NumPadFromArrows(vk);
+            if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9)
+                return true;
+
+            break;
+
+        case WM_SYSKEYUP:
+            if (!state.started)
+                break;
+
+            if (keyFlags & KF_EXTENDED)
+                break; // NUMPAD numeric keys are *not* considered extended
+
+            vk = NumPadFromArrows(vk);
+            if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9)
+            {
+                state.ch *= 10;
+                state.ch += vk - VK_NUMPAD0;
+                return true;
+            }
+
+            break;
+
+        case WM_KEYUP:
+            if (vk == VK_MENU && state.started && state.ch)
+            {
+                sal_UCS4 ch = state.ch;
+                state.clear();
+                // Let system provide codes for values below 256
+                if (ch >= 256 && rtl::isUnicodeCodePoint(ch))
+                {
+                    PostMessageW(hWnd, WM_UNICHAR, ch, 0);
+                    state.wait_WM_CHAR = true;
+                }
+                return true;
+            }
+            break;
+    }
+
+    state.clear();
+    return false;
+}
+
 static bool ImplHandleKeyMsg( HWND hWnd, UINT nMsg,
                               WPARAM wParam, LPARAM lParam, LRESULT& rResult )
 {
@@ -3511,7 +3650,9 @@ static bool ImplHandleKeyMsg( HWND hWnd, UINT nMsg,
     static sal_uInt16   nLastChar       = 0;
     static ModKeyFlags  nLastModKeyCode = ModKeyFlags::NONE;
     static bool         bWaitForModKeyRelease = false;
-    sal_uInt16          nRepeat         = LOWORD( lParam )-1;
+    sal_uInt16          nRepeat         = LOWORD( lParam );
+    if (nRepeat)
+        --nRepeat;
     sal_uInt16          nModCode        = 0;
 
     // this key might have been relayed by SysChild and thus
@@ -3523,6 +3664,9 @@ static bool ImplHandleKeyMsg( HWND hWnd, UINT nMsg,
         nDeadChar = wParam;
         return false;
     }
+
+    if (HandleAltNumPadCode(hWnd, nMsg, wParam, lParam))
+        return true; // no default processing
 
     WinSalFrame* pFrame = GetWindowPtr( hWnd );
     if ( !pFrame )
@@ -3611,6 +3755,9 @@ static bool ImplHandleKeyMsg( HWND hWnd, UINT nMsg,
             return true;    // ...but this will only avoid calling the defwindowproc
         }
 
+        if (!rtl::isUnicodeCodePoint(wParam))
+            return false;
+
         SalKeyEvent aKeyEvt;
         aKeyEvt.mnCode     = nModCode; // Or should it be 0? - as this is always a character returned
         aKeyEvt.mnRepeat   = 0;
@@ -3618,12 +3765,12 @@ static bool ImplHandleKeyMsg( HWND hWnd, UINT nMsg,
         if( wParam >= Uni_SupplementaryPlanesStart )
         {
             // character is supplementary char in UTF-32 format - must be converted to UTF-16 supplementary pair
-            // sal_Unicode ch = (sal_Unicode) Uni_UTF32ToSurrogate1(wParam);
-             nLastChar = 0;
-             nLastVKChar = 0;
-             pFrame->CallCallback( SalEvent::KeyInput, &aKeyEvt );
-             pFrame->CallCallback( SalEvent::KeyUp, &aKeyEvt );
-             wParam = rtl::getLowSurrogate( wParam );
+            aKeyEvt.mnCharCode = rtl::getHighSurrogate(wParam);
+            nLastChar = 0;
+            nLastVKChar = 0;
+            pFrame->CallCallback(SalEvent::KeyInput, &aKeyEvt);
+            pFrame->CallCallback(SalEvent::KeyUp, &aKeyEvt);
+            wParam = rtl::getLowSurrogate(wParam);
         }
 
         aKeyEvt.mnCharCode = static_cast<sal_Unicode>(wParam);
@@ -5414,30 +5561,43 @@ static void ImplHandleIMENotify( HWND hWnd, WPARAM wParam )
 static bool
 ImplHandleGetObject(HWND hWnd, LPARAM lParam, WPARAM wParam, LRESULT & nRet)
 {
-    if (!Application::GetSettings().GetMiscSettings().GetEnableATToolSupport())
+    uno::Reference<accessibility::XMSAAService> xMSAA;
+    if (ImplSalYieldMutexTryToAcquire())
     {
-        // IA2 should be enabled automatically
-        AllSettings aSettings = Application::GetSettings();
-        MiscSettings aMisc = aSettings.GetMiscSettings();
-        aMisc.SetEnableATToolSupport(true);
-        // The above is enough, since aMisc changes the same shared ImplMiscData as used in global
-        // settings, so no need to call aSettings.SetMiscSettings and Application::SetSettings
-
         if (!Application::GetSettings().GetMiscSettings().GetEnableATToolSupport())
-            return false; // locked down somehow ?
+        {
+            // IA2 should be enabled automatically
+            AllSettings aSettings = Application::GetSettings();
+            MiscSettings aMisc = aSettings.GetMiscSettings();
+            aMisc.SetEnableATToolSupport(true);
+            // The above is enough, since aMisc changes the same shared ImplMiscData as used in global
+            // settings, so no need to call aSettings.SetMiscSettings and Application::SetSettings
+
+            if (!Application::GetSettings().GetMiscSettings().GetEnableATToolSupport())
+                return false; // locked down somehow ?
+        }
+
+        ImplSVData* pSVData = ImplGetSVData();
+
+        // Make sure to launch Accessibility only the following criteria are satisfied
+        // to avoid RFT interrupts regular accessibility processing
+        if ( !pSVData->mxAccessBridge.is() )
+        {
+            if( !InitAccessBridge() )
+                return false;
+        }
+        xMSAA.set(pSVData->mxAccessBridge, uno::UNO_QUERY);
+        ImplSalYieldMutexRelease();
+    }
+    else
+    {   // tdf#155794: access without locking: hopefully this should be fine
+        // as the bridge is typically inited in Desktop::Main() already and the
+        // WM_GETOBJECT is received only on the main thread and by the time in
+        // VCL shutdown when ImplSvData dies there should not be Windows any
+        // more that could receive messages.
+        xMSAA.set(ImplGetSVData()->mxAccessBridge, uno::UNO_QUERY);
     }
 
-    ImplSVData* pSVData = ImplGetSVData();
-
-    // Make sure to launch Accessibility only the following criteria are satisfied
-    // to avoid RFT interrupts regular accessibility processing
-    if ( !pSVData->mxAccessBridge.is() )
-    {
-        if( !InitAccessBridge() )
-            return false;
-    }
-
-    uno::Reference< accessibility::XMSAAService > xMSAA( pSVData->mxAccessBridge, uno::UNO_QUERY );
     if ( xMSAA.is() )
     {
         sal_Int32 lParam32 = static_cast<sal_Int32>(lParam);
@@ -5549,17 +5709,17 @@ static LRESULT ImplHandleIMEQueryCharPosition( HWND hWnd, LPARAM lParam ) {
     {
         // For vertical writing, the base line is left edge of the rectangle
         // and the target position is top-right corner.
-        pQueryCharPosition->pt.x = aEvt.mnCursorBoundX + aEvt.mnCursorBoundWidth;
-        pQueryCharPosition->pt.y = aEvt.mnCursorBoundY;
-        pQueryCharPosition->cLineHeight = aEvt.mnCursorBoundWidth;
+        pQueryCharPosition->pt.x = aEvt.maCursorBound.getX() + aEvt.maCursorBound.GetWidth();
+        pQueryCharPosition->pt.y = aEvt.maCursorBound.getY();
+        pQueryCharPosition->cLineHeight = aEvt.maCursorBound.GetWidth();
     }
     else
     {
         // For horizontal writing, the base line is the bottom edge of the rectangle.
         // and the target position is top-left corner.
-        pQueryCharPosition->pt.x = aEvt.mnCursorBoundX;
-        pQueryCharPosition->pt.y = aEvt.mnCursorBoundY;
-        pQueryCharPosition->cLineHeight = aEvt.mnCursorBoundHeight;
+        pQueryCharPosition->pt.x = aEvt.maCursorBound.getX();
+        pQueryCharPosition->pt.y = aEvt.maCursorBound.getY();
+        pQueryCharPosition->cLineHeight = aEvt.maCursorBound.GetHeight();
     }
 
     // Currently not supported but many IMEs usually ignore them.
@@ -5982,12 +6142,11 @@ static LRESULT CALLBACK SalFrameWndProc( HWND hWnd, UINT nMsg, WPARAM wParam, LP
             break;
 
         case WM_GETOBJECT:
-            ImplSalYieldMutexAcquireWithWait();
+            // tdf#155794: this must complete without taking SolarMutex
             if ( ImplHandleGetObject( hWnd, lParam, wParam, nRet ) )
             {
                 rDef = false;
             }
-            ImplSalYieldMutexRelease();
             break;
 
         case WM_APPCOMMAND:

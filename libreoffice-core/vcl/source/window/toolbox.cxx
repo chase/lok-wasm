@@ -1272,7 +1272,7 @@ ToolBox::ToolBox( vcl::Window* pParent, WinBits nStyle ) :
     ImplInit( pParent, nStyle );
 }
 
-ToolBox::ToolBox(vcl::Window* pParent, const OString& rID,
+ToolBox::ToolBox(vcl::Window* pParent, const OUString& rID,
     const OUString& rUIXMLDescription, const css::uno::Reference<css::frame::XFrame> &rFrame)
     : DockingWindow(WindowType::TOOLBOX, "vcl::ToolBox maLayoutIdle")
 {
@@ -2782,8 +2782,6 @@ void ToolBox::ImplDrawFloatwinBorder(vcl::RenderContext& rRenderContext, ImplToo
     if ( pItem->maRect.IsEmpty() )
         return;
 
-    tools::Rectangle aRect( mpFloatWin->ImplGetItemEdgeClipRect() );
-    aRect.SetPos( AbsoluteScreenToOutputPixel( aRect.TopLeft() ) );
     rRenderContext.SetLineColor(rRenderContext.GetSettings().GetStyleSettings().GetShadowColor());
     Point p1, p2;
 
@@ -3605,7 +3603,7 @@ const OUString& ToolBox::ImplGetHelpText( ToolBoxItemId nItemId ) const
             if (DispatchableCommand(pItem->maCommandStr))
                 pItem->maHelpText = pHelp->GetHelpText( pItem->maCommandStr, this );
             if ( pItem->maHelpText.isEmpty() && !pItem->maHelpId.isEmpty() )
-                pItem->maHelpText = pHelp->GetHelpText( OStringToOUString( pItem->maHelpId, RTL_TEXTENCODING_UTF8 ), this );
+                pItem->maHelpText = pHelp->GetHelpText( pItem->maHelpId, this );
         }
     }
 

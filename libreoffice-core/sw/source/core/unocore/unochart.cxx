@@ -758,28 +758,13 @@ uno::Reference< chart2::data::XDataSource > SwChartDataProvider::Impl_createData
     sal_Int32 nNumLDS = 0;
     if (oiEnd > 0)
     {
-        sal_Int32 nFirstSeqLen = 0;
-        sal_Int32 nFirstSeqLabelIdx = -1;
         for (oi = 0; oi < oiEnd; ++oi)
         {
-            bool bFirstFound = false;
             // row/col used at all?
             if (aDataStartIdx[oi] != -1 &&
                 (!bFirstIsLabel || aLabelIdx[oi] != -1))
             {
                 ++nNumLDS;
-                if (!bFirstFound)
-                {
-                    nFirstSeqLen        = aDataLen[oi];
-                    nFirstSeqLabelIdx   = aLabelIdx[oi];
-                    bFirstFound = true;
-                }
-                else
-                {
-                    if (nFirstSeqLen != aDataLen[oi] ||
-                        nFirstSeqLabelIdx != aLabelIdx[oi])
-                        throw lang::IllegalArgumentException();
-                }
             }
         }
     }
@@ -1425,14 +1410,25 @@ uno::Sequence< OUString > SAL_CALL SwChartDataProvider::getSupportedServiceNames
     return { "com.sun.star.chart2.data.DataProvider"};
 }
 
-void SwChartDataProvider::AddDataSequence( const SwTable &rTable, uno::Reference< chart2::data::XDataSequence > const &rxDataSequence )
+void SwChartDataProvider::AddDataSequence( const SwTable &rTable, rtl::Reference< SwChartDataSequence > const &rxDataSequence )
 {
-    m_aDataSequences[ &rTable ].insert( rxDataSequence );
+    Vec_DataSequenceRef_t& rVec = m_aDataSequences[ &rTable ];
+    assert(std::find_if(rVec.begin(), rVec.end(),
+        [&rxDataSequence](const unotools::WeakReference < SwChartDataSequence >& i)
+        {
+            return i.get() == rxDataSequence;
+        }) == rVec.end() && "duplicate insert");
+    rVec.push_back( rxDataSequence );
 }
 
-void SwChartDataProvider::RemoveDataSequence( const SwTable &rTable, uno::Reference< chart2::data::XDataSequence > const &rxDataSequence )
+void SwChartDataProvider::RemoveDataSequence( const SwTable &rTable, rtl::Reference< SwChartDataSequence > const &rxDataSequence )
 {
-    m_aDataSequences[ &rTable ].erase( rxDataSequence );
+    Vec_DataSequenceRef_t& rVec = m_aDataSequences[ &rTable ];
+    std::erase_if(rVec,
+        [&rxDataSequence](const unotools::WeakReference < SwChartDataSequence >& i)
+        {
+            return i.get() == rxDataSequence;
+        });
 }
 
 void SwChartDataProvider::InvalidateTable( const SwTable *pTable, bool bImmediate )
@@ -1444,11 +1440,10 @@ void SwChartDataProvider::InvalidateTable( const SwTable *pTable, bool bImmediat
     if (!m_bDisposed)
        pTable->GetFrameFormat()->GetDoc()->getIDocumentChartDataProviderAccess().GetChartControllerHelper().StartOrContinueLocking();
 
-    const Set_DataSequenceRef_t &rSet = m_aDataSequences[ pTable ];
-    for (const auto& rItem : rSet)
+    const Vec_DataSequenceRef_t &rVec = m_aDataSequences[ pTable ];
+    for (const unotools::WeakReference<SwChartDataSequence>& rItem : rVec)
     {
-        uno::Reference< chart2::data::XDataSequence > xTemp(rItem);  // temporary needed for g++ 3.3.5
-        uno::Reference< util::XModifiable > xRef( xTemp, uno::UNO_QUERY );
+        rtl::Reference< SwChartDataSequence > xRef(rItem);
         if (xRef.is())
         {
             // mark the sequence as 'dirty' and notify listeners
@@ -1470,48 +1465,39 @@ void SwChartDataProvider::DeleteBox( const SwTable *pTable, const SwTableBox &rB
     if (!m_bDisposed)
         pTable->GetFrameFormat()->GetDoc()->getIDocumentChartDataProviderAccess().GetChartControllerHelper().StartOrContinueLocking();
 
-    Set_DataSequenceRef_t &rSet = m_aDataSequences[ pTable ];
+    Vec_DataSequenceRef_t &rVec = m_aDataSequences[ pTable ];
 
     // iterate over all data-sequences for that table...
-    Set_DataSequenceRef_t::iterator aIt( rSet.begin() );
-    Set_DataSequenceRef_t::iterator aEndIt( rSet.end() );
-    Set_DataSequenceRef_t::iterator aDelIt;     // iterator used for deletion when appropriate
-    while (aIt != aEndIt)
+    auto aIt( rVec.begin() );
+    while (aIt != rVec.end())
     {
-        SwChartDataSequence *pDataSeq = nullptr;
         bool bNowEmpty = false;
         bool bSeqDisposed = false;
 
         // check if weak reference is still valid...
-        uno::Reference< chart2::data::XDataSequence > xTemp(*aIt);
-        if (xTemp.is())
+        rtl::Reference< SwChartDataSequence > pDataSeq(*aIt);
+        if (pDataSeq.is())
         {
             // then delete that table box (check if implementation cursor needs to be adjusted)
-            pDataSeq = static_cast< SwChartDataSequence * >( xTemp.get() );
-            if (pDataSeq)
+            try
             {
-                try
-                {
-                    bNowEmpty = pDataSeq->DeleteBox( rBox );
-                }
-                catch (const lang::DisposedException&)
-                {
-                    bNowEmpty = true;
-                    bSeqDisposed = true;
-                }
-
-                if (bNowEmpty)
-                    aDelIt = aIt;
+                bNowEmpty = pDataSeq->DeleteBox( rBox );
+            }
+            catch (const lang::DisposedException&)
+            {
+                bNowEmpty = true;
+                bSeqDisposed = true;
             }
         }
-        ++aIt;
 
         if (bNowEmpty)
         {
-            rSet.erase( aDelIt );
+            aIt = rVec.erase( aIt );
             if (pDataSeq && !bSeqDisposed)
                 pDataSeq->dispose();    // the current way to tell chart that sth. got removed
         }
+        else
+            ++aIt;
     }
 }
 
@@ -1528,12 +1514,11 @@ void SwChartDataProvider::DisposeAllDataSequences( const SwTable *pTable )
     //! This is necessary since calling 'dispose' will implicitly remove an element
     //! of the original container, and thus any iterator in the original container
     //! would become invalid.
-    const Set_DataSequenceRef_t aSet( m_aDataSequences[ pTable ] );
+    const Vec_DataSequenceRef_t aVec( m_aDataSequences[ pTable ] );
 
-    for (const auto& rItem : aSet)
+    for (const unotools::WeakReference<SwChartDataSequence>& rItem : aVec)
     {
-        uno::Reference< chart2::data::XDataSequence > xTemp(rItem);  // temporary needed for g++ 3.3.5
-        uno::Reference< lang::XComponent > xRef( xTemp, uno::UNO_QUERY );
+        rtl::Reference< SwChartDataSequence > xRef(rItem);
         if (xRef.is())
         {
             xRef->dispose();
@@ -1601,36 +1586,31 @@ void SwChartDataProvider::AddRowCols(
     }
 
     // iterate over all data-sequences for the table
-    const Set_DataSequenceRef_t &rSet = m_aDataSequences[ &rTable ];
-    for (const auto& rItem : rSet)
+    const Vec_DataSequenceRef_t &rVec = m_aDataSequences[ &rTable ];
+    for (const unotools::WeakReference<SwChartDataSequence>& rItem : rVec)
     {
-        uno::Reference< chart2::data::XDataSequence > xTemp(rItem);  // temporary needed for g++ 3.3.5
-        uno::Reference< chart2::data::XTextualDataSequence > xRef( xTemp, uno::UNO_QUERY );
-        if (xRef.is())
+        rtl::Reference< SwChartDataSequence > pDataSeq(rItem);
+        if (pDataSeq.is())
         {
-            const sal_Int32 nLen = xRef->getTextualData().getLength();
+            const sal_Int32 nLen = pDataSeq->getTextualData().getLength();
             if (nLen > 1) // value data-sequence ?
             {
-                auto pDataSeq = comphelper::getFromUnoTunnel<SwChartDataSequence>(xRef);
-                if (pDataSeq)
+                SwRangeDescriptor aDesc;
+                pDataSeq->FillRangeDesc( aDesc );
+
+                chart::ChartDataRowSource eDRSource = chart::ChartDataRowSource_COLUMNS;
+                if (aDesc.nTop == aDesc.nBottom && aDesc.nLeft != aDesc.nRight)
+                    eDRSource = chart::ChartDataRowSource_ROWS;
+
+                if (!bAddCols && eDRSource == chart::ChartDataRowSource_COLUMNS)
                 {
-                    SwRangeDescriptor aDesc;
-                    pDataSeq->FillRangeDesc( aDesc );
-
-                    chart::ChartDataRowSource eDRSource = chart::ChartDataRowSource_COLUMNS;
-                    if (aDesc.nTop == aDesc.nBottom && aDesc.nLeft != aDesc.nRight)
-                        eDRSource = chart::ChartDataRowSource_ROWS;
-
-                    if (!bAddCols && eDRSource == chart::ChartDataRowSource_COLUMNS)
-                    {
-                        // add rows: extend affected columns by newly added row cells
-                        pDataSeq->ExtendTo( true, nFirstNewRow, nLines );
-                    }
-                    else if (bAddCols && eDRSource == chart::ChartDataRowSource_ROWS)
-                    {
-                        // add cols: extend affected rows by newly added column cells
-                        pDataSeq->ExtendTo( false, nFirstNewCol, nLines );
-                    }
+                    // add rows: extend affected columns by newly added row cells
+                    pDataSeq->ExtendTo( true, nFirstNewRow, nLines );
+                }
+                else if (bAddCols && eDRSource == chart::ChartDataRowSource_ROWS)
+                {
+                    // add cols: extend affected rows by newly added column cells
+                    pDataSeq->ExtendTo( false, nFirstNewCol, nLines );
                 }
             }
         }
@@ -1807,8 +1787,7 @@ SwChartDataSequence::SwChartDataSequence(
         const SwTable* pTable = SwTable::FindTable( &rTableFormat );
         if (pTable)
         {
-            uno::Reference< chart2::data::XDataSequence > xRef(this);
-            m_xDataProvider->AddDataSequence( *pTable, xRef );
+            m_xDataProvider->AddDataSequence( *pTable, this );
             m_xDataProvider->addEventListener( static_cast< lang::XEventListener * >(this) );
         }
         else {
@@ -1854,8 +1833,7 @@ SwChartDataSequence::SwChartDataSequence( const SwChartDataSequence &rObj ) :
         const SwTable* pTable = SwTable::FindTable( GetFrameFormat() );
         if (pTable)
         {
-            uno::Reference< chart2::data::XDataSequence > xRef(this);
-            m_xDataProvider->AddDataSequence( *pTable, xRef );
+            m_xDataProvider->AddDataSequence( *pTable, this );
             m_xDataProvider->addEventListener( static_cast< lang::XEventListener * >(this) );
         }
         else {
@@ -1883,18 +1861,6 @@ SwChartDataSequence::SwChartDataSequence( const SwChartDataSequence &rObj ) :
 SwChartDataSequence::~SwChartDataSequence()
 {
 }
-
-const uno::Sequence< sal_Int8 > & SwChartDataSequence::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwChartDataSequenceUnoTunnelId;
-    return theSwChartDataSequenceUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL SwChartDataSequence::getSomething( const uno::Sequence< sal_Int8 > &rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
 
 OUString SAL_CALL SwChartDataSequence::getSourceRangeRepresentation(  )
 {
@@ -2234,7 +2200,7 @@ void SAL_CALL SwChartDataSequence::disposing( const lang::EventObject& rSource )
 {
     if (m_bDisposed)
         throw lang::DisposedException();
-    if (rSource.Source == static_cast<cppu::OWeakObject*>(m_xDataProvider.get()))
+    if (rSource.Source == cppu::getXWeak(m_xDataProvider.get()))
     {
         m_xDataProvider.clear();
     }
@@ -2258,8 +2224,7 @@ void SAL_CALL SwChartDataSequence::dispose(  )
         const SwTable* pTable = SwTable::FindTable( GetFrameFormat() );
         if (pTable)
         {
-            uno::Reference< chart2::data::XDataSequence > xRef(this);
-            m_xDataProvider->RemoveDataSequence( *pTable, xRef );
+            m_xDataProvider->RemoveDataSequence( *pTable, this );
         }
         else {
             OSL_FAIL( "table missing" );

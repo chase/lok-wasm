@@ -42,6 +42,7 @@
 #include <workbooksettings.hxx>
 #include <worksheetbuffer.hxx>
 #include <vcl/svapp.hxx>
+#include <docuno.hxx>
 
 namespace com::sun::star::container { class XNameContainer; }
 
@@ -373,7 +374,7 @@ void SheetViewSettings::finalizeImport()
     {
         /*  Frozen panes: handle split position as row/column positions.
             #i35812# Excel uses number of visible rows/columns in the
-                frozen area (rows/columns scolled outside are not included),
+                frozen area (rows/columns scrolled outside are not included),
                 Calc uses absolute position of first unfrozen row/column. */
         const ScAddress& rMaxApiPos = getAddressConverter().getMaxApiAddress();
         if( (xModel->mfSplitX >= 1.0) && ( xModel->maFirstPos.Col() + xModel->mfSplitX <= rMaxApiPos.Col() ) )
@@ -600,8 +601,7 @@ void ViewSettings::finalizeImport()
         aPropMap.setProperty( PROP_IsOutlineSymbolsSet, rxActiveSheetView->mbShowOutline);
 
         xContainer->insertByIndex( 0, Any( aPropMap.makePropertyValueSequence() ) );
-        Reference< XViewDataSupplier > xViewDataSuppl( getDocument(), UNO_QUERY_THROW );
-        xViewDataSuppl->setViewData( xContainer );
+        getDocument()->setViewData( xContainer );
     }
     catch( Exception& )
     {

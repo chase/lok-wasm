@@ -34,17 +34,14 @@
 using namespace com::sun::star;
 
 const char cURLInsertColumns[] = ".uno:DataSourceBrowser/InsertColumns"; //data into text
-constexpr OUStringLiteral cURLDocDataSource = u".uno:DataSourceBrowser/DocumentDataSource";
+constexpr OUString cURLDocDataSource = u".uno:DataSourceBrowser/DocumentDataSource"_ustr;
 
 static uno::Reference<view::XSelectionSupplier> lcl_GetSelectionSupplier( const SfxViewShell* pViewShell )
 {
     if ( pViewShell )
     {
-        SfxViewFrame* pViewFrame = pViewShell->GetViewFrame();
-        if (pViewFrame)
-        {
-            return uno::Reference<view::XSelectionSupplier>( pViewFrame->GetFrame().GetController(), uno::UNO_QUERY );
-        }
+        SfxViewFrame& rViewFrame = pViewShell->GetViewFrame();
+        return uno::Reference<view::XSelectionSupplier>( rViewFrame.GetFrame().GetController(), uno::UNO_QUERY );
     }
     return uno::Reference<view::XSelectionSupplier>();
 }
@@ -55,7 +52,7 @@ ScDispatchProviderInterceptor::ScDispatchProviderInterceptor(ScTabViewShell* pVi
     if ( !pViewShell )
         return;
 
-    m_xIntercepted.set(uno::Reference<frame::XDispatchProviderInterception>(pViewShell->GetViewFrame()->GetFrame().GetFrameInterface(), uno::UNO_QUERY));
+    m_xIntercepted.set(uno::Reference<frame::XDispatchProviderInterception>(pViewShell->GetViewFrame().GetFrame().GetFrameInterface(), uno::UNO_QUERY));
     if (m_xIntercepted.is())
     {
         osl_atomic_increment( &m_refCount );
@@ -262,7 +259,7 @@ void SAL_CALL ScDispatch::addStatusListener(
     //  initial state
     frame::FeatureStateEvent aEvent;
     aEvent.IsEnabled = true;
-    aEvent.Source.set(static_cast<cppu::OWeakObject*>(this));
+    aEvent.Source = getXWeak();
     aEvent.FeatureURL = aURL;
 
     if ( aURL.Complete == cURLDocDataSource )
@@ -339,7 +336,7 @@ void SAL_CALL ScDispatch::selectionChanged( const css::lang::EventObject& /* aEv
         return;
 
     frame::FeatureStateEvent aEvent;
-    aEvent.Source.set(static_cast<cppu::OWeakObject*>(this));
+    aEvent.Source = getXWeak();
     aEvent.FeatureURL.Complete = cURLDocDataSource;
 
     lcl_FillDataSource( aEvent, aNewImport );       // modifies State, IsEnabled
@@ -359,7 +356,7 @@ void SAL_CALL ScDispatch::disposing( const css::lang::EventObject& rSource )
     bListeningToView = false;
 
     lang::EventObject aEvent;
-    aEvent.Source.set(static_cast<cppu::OWeakObject*>(this));
+    aEvent.Source = getXWeak();
     for (uno::Reference<frame::XStatusListener> & xDataSourceListener : aDataSourceListeners)
         xDataSourceListener->disposing( aEvent );
 

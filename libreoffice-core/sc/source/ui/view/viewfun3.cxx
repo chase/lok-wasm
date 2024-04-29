@@ -225,14 +225,12 @@ bool ScViewFunc::CopyToClipSingleRange( ScDocument* pClipDoc, const ScRangeList&
     if (rDoc.HasSelectedBlockMatrixFragment( aRange.aStart.Col(), aRange.aStart.Row(), aRange.aEnd.Col(), aRange.aEnd.Row(), rMark ) )
         return false;
 
-    bool bSysClip = false;
     std::shared_ptr<ScDocument> pSysClipDoc;
     if ( !pClipDoc )                                    // no clip doc specified
     {
-        // Create one (deleted by ScTransferObj).
+        // Create one (deleted by ScTransferObj), and copy into system.
         pSysClipDoc = std::make_shared<ScDocument>( SCDOCMODE_CLIP );
         pClipDoc = pSysClipDoc.get();
-        bSysClip = true;                                // and copy into system
     }
     if ( !bCut )
     {
@@ -241,7 +239,7 @@ bool ScViewFunc::CopyToClipSingleRange( ScDocument* pClipDoc, const ScRangeList&
             pChangeTrack->ResetLastCut();
     }
 
-    if ( bSysClip && bIncludeObjects )
+    if ( pSysClipDoc && bIncludeObjects )
     {
         bool bAnyOle = rDoc.HasOLEObjectsInArea( aRange );
         // Update ScGlobal::xDrawClipDocShellRef.
@@ -253,7 +251,7 @@ bool ScViewFunc::CopyToClipSingleRange( ScDocument* pClipDoc, const ScRangeList&
     // and lose the 'if' above
     aClipParam.setSourceDocID( rDoc.GetDocumentID() );
 
-    if (SfxObjectShell* pObjectShell = rDoc.GetDocumentShell())
+    if (ScDocShell* pObjectShell = rDoc.GetDocumentShell())
     {
         // Copy document properties from pObjectShell to pClipDoc (to its clip options, as it has no object shell).
         uno::Reference<util::XCloneable> xCloneable(pObjectShell->getDocProperties(), uno::UNO_QUERY_THROW);
@@ -278,14 +276,14 @@ bool ScViewFunc::CopyToClipSingleRange( ScDocument* pClipDoc, const ScRangeList&
         }
     }
 
-    if ( bSysClip )
+    if ( pSysClipDoc )
     {
         ScDrawLayer::SetGlobalDrawPersist(nullptr);
         ScGlobal::SetClipDocName( rDoc.GetDocumentShell()->GetTitle( SFX_TITLE_FULLNAME ) );
     }
     pClipDoc->ExtendMerge( aRange, true );
 
-    if ( bSysClip )
+    if ( pSysClipDoc )
     {
         ScDocShell* pDocSh = GetViewData().GetDocShell();
         TransferableObjectDescriptor aObjDesc;
@@ -460,6 +458,14 @@ rtl::Reference<ScTransferObj> ScViewFunc::CopyToTransferable()
             return new ScTransferObj( std::move(pClipDoc), std::move(aObjDesc) );
         }
     }
+    else if (eMarkType == SC_MARK_MULTI)
+    {
+        ScDocumentUniquePtr pClipDoc(new ScDocument(SCDOCMODE_CLIP));
+        // This takes care of the input line and calls CopyToClipMultiRange() for us.
+        CopyToClip(pClipDoc.get(), /*bCut=*/false, /*bApi=*/true);
+        TransferableObjectDescriptor aObjDesc;
+        return new ScTransferObj(std::move(pClipDoc), std::move(aObjDesc));
+    }
 
     return nullptr;
 }
@@ -624,15 +630,13 @@ void ScViewFunc::PasteFromSystem()
 
 void ScViewFunc::PasteFromTransferable( const uno::Reference<datatransfer::XTransferable>& rxTransferable )
 {
-    uno::Reference<lang::XUnoTunnel> xTunnel( rxTransferable, uno::UNO_QUERY );
-
-    if (auto pOwnClip = comphelper::getFromUnoTunnel<ScTransferObj>(xTunnel))
+    if (auto pOwnClip = dynamic_cast<ScTransferObj*>(rxTransferable.get()))
     {
         PasteFromClip( InsertDeleteFlags::ALL, pOwnClip->GetDocument(),
                         ScPasteFunc::NONE, false, false, false, INS_NONE, InsertDeleteFlags::NONE,
                         true );     // allow warning dialog
     }
-    else if (auto pDrawClip = comphelper::getFromUnoTunnel<ScDrawTransferObj>(xTunnel))
+    else if (auto pDrawClip = dynamic_cast<ScDrawTransferObj*>(rxTransferable.get()))
     {
         ScViewData& rViewData = GetViewData();
         SCCOL nPosX = rViewData.GetCurX();
@@ -1356,7 +1360,7 @@ bool ScViewFunc::PasteFromClip( InsertDeleteFlags nFlags, ScDocument* pClipDoc,
     if ( nFlags & InsertDeleteFlags::OBJECTS )
     {
         ScDrawView* pScDrawView = GetScDrawView();
-        SdrModel* pModel = ( pScDrawView ? pScDrawView->GetModel() : nullptr );
+        SdrModel* pModel = ( pScDrawView ? &pScDrawView->GetModel() : nullptr );
         pPage = ( pModel ? pModel->GetPage( static_cast< sal_uInt16 >( nStartTab ) ) : nullptr );
         if ( pPage )
         {
@@ -1470,7 +1474,7 @@ bool ScViewFunc::PasteFromClip( InsertDeleteFlags nFlags, ScDocument* pClipDoc,
 
     if ( nFlags & InsertDeleteFlags::OBJECTS )
     {
-        ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>( pDocSh->GetModel() );
+        ScModelObj* pModelObj = pDocSh->GetModel();
         if ( pPage && pModelObj )
         {
             bool bSameDoc = ( rClipParam.getSourceDocID() == rDoc.GetDocumentID() );
@@ -1825,7 +1829,7 @@ void ScViewFunc::PostPasteFromClip(const ScRangeList& rPasteRanges, const ScMark
 
     SelectionChanged(true);
 
-    ScModelObj* pModelObj = HelperNotifyChanges::getModel(*pDocSh);
+    ScModelObj* pModelObj = pDocSh->GetModel();
 
     ScRangeList aChangeRanges;
     for (size_t i = 0, n = rPasteRanges.size(); i < n; ++i)

@@ -25,7 +25,8 @@ TemplateDefaultView::TemplateDefaultView(std::unique_ptr<weld::ScrolledWindow> x
                                          std::unique_ptr<weld::Menu> xMenu)
     : TemplateLocalView(std::move(xWindow), std::move(xMenu))
 {
-    tools::Rectangle aScreen = Application::GetScreenPosSizePixel(Application::GetDisplayBuiltInScreen());
+    mbAllowMultiSelection = false;
+    AbsoluteScreenPixelRectangle aScreen = Application::GetScreenPosSizePixel(Application::GetDisplayBuiltInScreen());
     tools::Long nItemMaxSize = std::min(aScreen.GetWidth(),aScreen.GetHeight()) > 800 ? 256 : 192;
     ThumbnailView::setItemDimensions( nItemMaxSize, nItemMaxSize, gnTextHeight, gnItemPadding );
     updateThumbnailDimensions(nItemMaxSize);
@@ -33,9 +34,12 @@ TemplateDefaultView::TemplateDefaultView(std::unique_ptr<weld::ScrolledWindow> x
     // startcenter specific settings
     maFillColor = Color(ColorTransparency, officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsBackgroundColor::get());
     maTextColor = Color(ColorTransparency, officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsTextColor::get());
-    maHighlightColor = Color(ColorTransparency, officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsHighlightColor::get());
-    maHighlightTextColor = Color(ColorTransparency, officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsHighlightTextColor::get());
-    mfHighlightTransparence = 0.25;
+
+    const StyleSettings& rSettings = Application::GetSettings().GetStyleSettings();
+    maHighlightColor = rSettings.GetHighlightColor();
+    maHighlightTextColor = rSettings.GetHighlightTextColor();
+
+    mfHighlightTransparence = 0.75;
 
     UpdateColors();
 }

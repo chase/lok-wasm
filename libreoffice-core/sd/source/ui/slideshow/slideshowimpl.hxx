@@ -23,10 +23,9 @@
 #include <sal/config.h>
 #include <comphelper/compbase.hxx>
 #include <cppuhelper/implbase.hxx>
-#include <cppuhelper/basemutex.hxx>
-#include <comphelper/interfacecontainer3.hxx>
+#include <comphelper/interfacecontainer4.hxx>
 #include <com/sun/star/presentation/ClickAction.hpp>
-#include <com/sun/star/presentation/XSlideShowListener.hpp>
+#include <com/sun/star/presentation/XSlideShowNavigationListener.hpp>
 #include <com/sun/star/presentation/XSlideShowController.hpp>
 #include <com/sun/star/presentation/XShapeEventListener.hpp>
 
@@ -80,8 +79,8 @@ struct WrappedShapeEventImpl
 
 typedef std::shared_ptr< WrappedShapeEventImpl > WrappedShapeEventImplPtr;
 
-class SlideShowListenerProxy : private ::cppu::BaseMutex,
-        public ::cppu::WeakImplHelper< css::presentation::XSlideShowListener, css::presentation::XShapeEventListener >
+class SlideShowListenerProxy :
+        public ::cppu::WeakImplHelper< css::presentation::XSlideShowNavigationListener, css::presentation::XShapeEventListener >
 {
 public:
     SlideShowListenerProxy( rtl::Reference< SlideshowImpl > xController, css::uno::Reference< css::presentation::XSlideShow > xSlideShow );
@@ -110,6 +109,9 @@ public:
     virtual void SAL_CALL slideEnded(sal_Bool bReverse) override;
     virtual void SAL_CALL hyperLinkClicked(const OUString & hyperLink) override;
 
+    // css::presentation::XSlideShowNavigationListener:
+    virtual void SAL_CALL contextMenuShow(const css::awt::Point& point) override;
+
     // css::lang::XEventListener:
     virtual void SAL_CALL disposing(const css::lang::EventObject & Source) override;
 
@@ -117,14 +119,15 @@ public:
     virtual void SAL_CALL click(const css::uno::Reference< css::drawing::XShape > & xShape, const css::awt::MouseEvent & aOriginalEvent) override;
 
 private:
-    ::comphelper::OInterfaceContainerHelper3<css::presentation::XSlideShowListener> maListeners;
+    std::mutex m_aMutex;
+    ::comphelper::OInterfaceContainerHelper4<css::presentation::XSlideShowListener> maListeners;
     rtl::Reference< SlideshowImpl > mxController;
     css::uno::Reference< css::presentation::XSlideShow > mxSlideShow;
 };
 
 typedef comphelper::WeakComponentImplHelper< css::presentation::XSlideShowController, css::container::XIndexAccess > SlideshowImplBase;
 
-class SlideshowImpl final : public SlideshowImplBase
+class SlideshowImpl final : public SlideshowImplBase, public SfxListener
 {
 friend class SlideShow;
 friend class SlideShowView;
@@ -180,8 +183,12 @@ public:
     virtual css::uno::Type SAL_CALL getElementType(  ) override;
     virtual sal_Bool SAL_CALL hasElements(  ) override;
 
+    //  SfxListener
+    virtual void Notify(SfxBroadcaster& rBC, const SfxHint& rHint) override;
+
     // will be called from the SlideShowListenerProxy when this event is fired from the XSlideShow
     void slideEnded(const bool bReverse);
+    void contextMenuShow(const css::awt::Point& point);
     /// @throws css::uno::RuntimeException
     void hyperLinkClicked(const OUString & hyperLink);
     void click(const css::uno::Reference< css::drawing::XShape > & xShape);
@@ -190,6 +197,10 @@ public:
 
     /// ends the presentation async
     void endPresentation();
+
+    // possibly triggered from events @SlideshowImpl::Notify if needed, but make it asynchronous to
+    // allow the noted event to completely finish in the core
+    void AsyncNotifyEvent(const css::uno::Reference< css::drawing::XDrawPage >&, const SdrHintKind);
 
     ViewShell* getViewShell() const { return mpViewShell; }
 
@@ -242,7 +253,7 @@ private:
     DECL_LINK( updateHdl, Timer *, void );
     DECL_LINK( ReadyForNextInputHdl, Timer *, void );
     DECL_LINK( endPresentationHdl, void*, void );
-    void ContextMenuSelectHdl(std::string_view rIdent);
+    void ContextMenuSelectHdl(std::u16string_view rIdent);
     DECL_LINK( ContextMenuHdl, void*, void );
     DECL_LINK( deactivateHdl, Timer *, void );
     DECL_LINK( EventListenerHdl, VclSimpleEvent&, void );
@@ -332,6 +343,8 @@ private:
 
     ImplSVEvent * mnEndShowEvent;
     ImplSVEvent * mnContextMenuEvent;
+    ImplSVEvent * mnEventObjectChange;
+    ImplSVEvent * mnEventPageOrderChange;
 
     css::uno::Reference< css::presentation::XPresentation2 > mxPresentation;
     ::rtl::Reference< SlideShowListenerProxy > mxListenerProxy;

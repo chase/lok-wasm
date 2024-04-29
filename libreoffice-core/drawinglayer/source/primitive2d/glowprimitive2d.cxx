@@ -96,6 +96,12 @@ bool GlowPrimitive2D::prepareValuesAndcheckValidity(
         basegfx::B2DRange aVisibleArea(rViewInformation.getViewport());
         aVisibleArea.grow(getGlowRadius());
 
+        // To do this correctly, it needs to be done in discrete coordinates.
+        // The object may be transformed relative to the original#
+        // ObjectTransformation, e.g. when re-used in shadow
+        aVisibleArea.transform(rViewInformation.getViewTransformation());
+        rClippedRange.transform(rViewInformation.getObjectToViewTransformation());
+
         // calculate ClippedRange
         rClippedRange.intersect(aVisibleArea);
 
@@ -103,6 +109,9 @@ bool GlowPrimitive2D::prepareValuesAndcheckValidity(
         // will be empty and we are done
         if (rClippedRange.isEmpty())
             return false;
+
+        // convert result back to object coordinates
+        rClippedRange.transform(rViewInformation.getInverseObjectToViewTransformation());
     }
 
     // calculate discrete pixel size of GlowRange. If it's too small to visualize, we are done
@@ -196,9 +205,9 @@ void GlowPrimitive2D::create2DDecomposition(
             // When blurring a sharp boundary (our case), it gets 50% of original intensity, and
             // fades to both sides by the blur radius; thus blur radius is half of glow radius.
             // Consider glow transparency (initial transparency near the object edge)
-            const AlphaMask mask(ProcessAndBlurAlphaMask(aAlpha, fDiscreteGlowRadius * fScale / 2.0,
-                                                         fDiscreteGlowRadius * fScale / 2.0,
-                                                         255 - getGlowColor().GetAlpha()));
+            AlphaMask mask(ProcessAndBlurAlphaMask(aAlpha, fDiscreteGlowRadius * fScale / 2.0,
+                                                   fDiscreteGlowRadius * fScale / 2.0,
+                                                   255 - getGlowColor().GetAlpha()));
 
             // The end result is the bitmap filled with glow color and blurred 8-bit alpha mask
             Bitmap bmp(aAlpha.GetSizePixel(), vcl::PixelFormat::N24_BPP);

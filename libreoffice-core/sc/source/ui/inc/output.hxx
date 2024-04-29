@@ -30,6 +30,8 @@
 #include <o3tl/deleter.hxx>
 #include <optional>
 
+struct ScCellInfo;
+
 namespace sc {
     class SpellCheckContext;
 }
@@ -238,6 +240,7 @@ private:
     // #i74769# use SdrPaintWindow direct, remember it during BeginDrawLayers/EndDrawLayers
     SdrPaintWindow*     mpTargetPaintWindow;
     const sc::SpellCheckContext* mpSpellCheckCxt;
+    std::unique_ptr<ScFieldEditEngine> mxOutputEditEngine;
 
                             // private methods
 
@@ -276,7 +279,10 @@ private:
     void DrawEditStacked(DrawEditParam& rParam);
     void DrawEditAsianVertical(DrawEditParam& rParam);
 
-    std::unique_ptr<ScFieldEditEngine> CreateOutputEditEngine();
+    void InitOutputEditEngine();
+
+    void SetClipMarks( OutputAreaParam &aAreaParam, ScCellInfo* pClipMarkCell,
+                       SvxCellHorJustify eOutHorJust, tools::Long nLayoutSign );
 
     void ShowClipMarks( DrawEditParam& rParam, tools::Long nEngineWidth, const Size& aCellSize,
                         bool bMerged, OutputAreaParam& aAreaParam, bool bTop );
@@ -313,14 +319,14 @@ public:
     void    SetSpellCheckContext( const sc::SpellCheckContext* pCxt );
     void    SetContentDevice( OutputDevice* pContentDev );
 
-    void    SetRefDevice( OutputDevice* pRDev ) { mpRefDevice = pFmtDevice = pRDev; }
-    void    SetFmtDevice( OutputDevice* pRDev ) { pFmtDevice = pRDev; }
+    void    SetRefDevice( OutputDevice* pRDev );
+    void    SetFmtDevice( OutputDevice* pRDev );
     void    SetViewShell( ScTabViewShell* pSh ) { pViewShell = pSh; }
 
     void    SetDrawView( FmFormView* pNew )     { pDrawView = pNew; }
 
     void    SetSolidBackground( bool bSet )     { bSolidBackground = bSet; }
-    void    SetUseStyleColor( bool bSet )       { mbUseStyleColor = bSet; }
+    void    SetUseStyleColor( bool bSet );
 
     void    SetEditCell( SCCOL nCol, SCROW nRow );
     void    SetSyntaxMode( bool bNewMode );
@@ -339,8 +345,8 @@ public:
     void    DrawGrid(vcl::RenderContext& rRenderContext, bool bGrid, bool bPage, bool bMergeCover = false);
     void    DrawStrings( bool bPixelToLogic = false );
 
-    /// Draw all strings, or provide Rectangle where the text (defined by rAddress) would be drawn.
-    tools::Rectangle LayoutStrings(bool bPixelToLogic, bool bPaint = true, const ScAddress &rAddress = ScAddress());
+    /// Draw all strings
+    void LayoutStrings(bool bPixelToLogic);
 
     void    DrawDocumentBackground();
     void    DrawBackground(vcl::RenderContext& rRenderContext);
@@ -381,6 +387,7 @@ public:
     void    DrawClipMarks();
 
     void    DrawNoteMarks(vcl::RenderContext& rRenderContext);
+    void    DrawFormulaMarks(vcl::RenderContext& rRenderContext);
     void    AddPDFNotes();
     void    DrawSparklines(vcl::RenderContext& rRenderContext);
 };

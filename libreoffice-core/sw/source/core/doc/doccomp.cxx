@@ -241,7 +241,7 @@ private:
     static void CountDifference( const CompareData& rData, sal_uLong* pCounts );
     static void SetDiscard( const CompareData& rData,
                             char* pDiscard, const sal_uLong* pCounts );
-    static void CheckDiscard( sal_uLong nLen, char* pDiscard );
+    static void CheckDiscard( size_t nLen, char* pDiscard );
     static void ShiftBoundaries( CompareData& rData1, CompareData& rData2 );
 
 public:
@@ -642,17 +642,17 @@ void Compare::SetDiscard( const CompareData& rData,
     }
 }
 
-void Compare::CheckDiscard( sal_uLong nLen, char* pDiscard )
+void Compare::CheckDiscard( size_t nLen, char* pDiscard )
 {
-    for( sal_uLong n = 0; n < nLen; ++n )
+    for( size_t n = 0; n < nLen; ++n )
     {
         if( 2 == pDiscard[ n ] )
             pDiscard[n] = 0;
         else if( pDiscard[ n ] )
         {
-            sal_uLong j;
-            sal_uLong length;
-            sal_uLong provisional = 0;
+            size_t j;
+            size_t length;
+            size_t provisional = 0;
 
             /* Find end of this run of discardable lines.
                 Count how many are provisionally discardable.  */
@@ -685,9 +685,9 @@ void Compare::CheckDiscard( sal_uLong nLen, char* pDiscard )
             }
             else
             {
-                sal_uLong consec;
-                sal_uLong minimum = 1;
-                sal_uLong tem = length / 4;
+                size_t consec;
+                size_t minimum = 1;
+                size_t tem = length / 4;
 
                 /* MINIMUM is approximate square root of LENGTH/4.
                    A subrun of two or more provisionals can stand
@@ -1795,14 +1795,14 @@ namespace
                                   std::make_shared<CompareMainText>(rDestDoc, true));
 
         //if we have the same number of frames then try to compare within them
-        const SwFrameFormats *pSrcFrameFormats = rSrcDoc.GetSpzFrameFormats();
-        const SwFrameFormats *pDestFrameFormats = rDestDoc.GetSpzFrameFormats();
+        const sw::SpzFrameFormats* pSrcFrameFormats = rSrcDoc.GetSpzFrameFormats();
+        const sw::SpzFrameFormats* pDestFrameFormats = rDestDoc.GetSpzFrameFormats();
         if (pSrcFrameFormats->size() == pDestFrameFormats->size())
         {
-            for (size_t i = 0; i < pSrcFrameFormats->size(); ++i)
+            for(sw::FrameFormats<sw::SpzFrameFormat*>::size_type i = 0; i < pSrcFrameFormats->size(); ++i)
             {
-                const SwFrameFormat& rSrcFormat = *(*pSrcFrameFormats)[i];
-                const SwFrameFormat& rDestFormat = *(*pDestFrameFormats)[i];
+                const sw::SpzFrameFormat& rSrcFormat = *(*pSrcFrameFormats)[i];
+                const sw::SpzFrameFormat& rDestFormat = *(*pDestFrameFormats)[i];
                 const SwNodeIndex* pSrcIdx = rSrcFormat.GetContent().GetContentIdx();
                 const SwNodeIndex* pDestIdx = rDestFormat.GetContent().GetContentIdx();
                 if (!pSrcIdx && !pDestIdx)
@@ -2475,9 +2475,7 @@ void LgstCommonSubseq::FindL( int *pL, int nStt1, int nEnd1,
             else
                 currL[j] = std::max( currL[j - 1], prevL[j] );
         }
-        int *tmp = currL;
-        currL = prevL;
-        prevL = tmp;
+        std::swap( currL, prevL );
     }
     memcpy( pL, prevL, ( nLen2 + 1 ) * sizeof( *prevL ) );
 }

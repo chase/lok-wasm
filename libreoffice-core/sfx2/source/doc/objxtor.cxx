@@ -78,6 +78,7 @@
 #include <sfx2/sfxuno.hxx>
 #include <sfx2/notebookbar/SfxNotebookBar.hxx>
 #include <sfx2/infobar.hxx>
+#include <svtools/svparser.hxx>
 
 #include <basic/basicmanagerrepository.hxx>
 
@@ -248,6 +249,7 @@ SfxObjectShell::SfxObjectShell( const SfxModelFlags i_nCreationFlags )
     , bHasName(false)
     , bIsInGenerateThumbnail (false)
     , mbAvoidRecentDocs(false)
+    , bRememberSignature(false)
 {
     if (i_nCreationFlags & SfxModelFlags::EMBEDDED_OBJECT)
         eCreateMode = SfxObjectCreateMode::EMBEDDED;
@@ -277,6 +279,7 @@ SfxObjectShell::SfxObjectShell(SfxObjectCreateMode eMode)
     , bHasName(false)
     , bIsInGenerateThumbnail(false)
     , mbAvoidRecentDocs(false)
+    , bRememberSignature(false)
 {
 }
 
@@ -287,7 +290,7 @@ SfxObjectShell::~SfxObjectShell()
         EnableSetModified( false );
 
     SfxObjectShell::CloseInternal();
-    pImpl->pBaseModel.set( nullptr );
+    pImpl->pBaseModel.clear();
 
     pImpl->pReloadTimer.reset();
 
@@ -301,8 +304,13 @@ SfxObjectShell::~SfxObjectShell()
     if ( pSfxApp && pSfxApp->GetDdeService() )
         pSfxApp->RemoveDdeTopic( this );
 
-    pImpl->pBaseModel.set( nullptr );
+    pImpl->pBaseModel.clear();
 
+    InternalCloseAndRemoveFiles();
+}
+
+void SfxObjectShell::InternalCloseAndRemoveFiles()
+{
     // don't call GetStorage() here, in case of Load Failure it's possible that a storage was never assigned!
     if ( pMedium && pMedium->HasStorage_Impl() && pMedium->GetStorage( false ) == pImpl->m_xDocStorage )
         pMedium->CanDisposeStorage_Impl( false );
@@ -565,24 +573,30 @@ bool SfxObjectShell::PrepareClose
         if ( RET_YES == nRet )
         {
             // Save by each Dispatcher
-            const SfxPoolItem *pPoolItem;
-            if ( IsSaveVersionOnClose() )
+            SfxPoolItemHolder aPoolItem;
+            if (IsReadOnly())
+            {
+                SfxBoolItem aWarnItem( SID_FAIL_ON_WARNING, bUI );
+                const SfxPoolItem* ppArgs[] = { &aWarnItem, nullptr };
+                aPoolItem = pFrame->GetBindings().ExecuteSynchron(SID_SAVEASDOC, ppArgs);
+            }
+            else if (IsSaveVersionOnClose())
             {
                 SfxStringItem aItem( SID_DOCINFO_COMMENTS, SfxResId(STR_AUTOMATICVERSION) );
                 SfxBoolItem aWarnItem( SID_FAIL_ON_WARNING, bUI );
                 const SfxPoolItem* ppArgs[] = { &aItem, &aWarnItem, nullptr };
-                pPoolItem = pFrame->GetBindings().ExecuteSynchron( SID_SAVEDOC, ppArgs );
+                aPoolItem = pFrame->GetBindings().ExecuteSynchron( SID_SAVEDOC, ppArgs );
             }
             else
             {
                 SfxBoolItem aWarnItem( SID_FAIL_ON_WARNING, bUI );
                 const SfxPoolItem* ppArgs[] = { &aWarnItem, nullptr };
-                pPoolItem = pFrame->GetBindings().ExecuteSynchron( SID_SAVEDOC, ppArgs );
+                aPoolItem = pFrame->GetBindings().ExecuteSynchron( SID_SAVEDOC, ppArgs );
             }
 
-            if ( !pPoolItem || pPoolItem->IsVoidItem() )
+            if ( nullptr == aPoolItem.getItem() || aPoolItem.getItem()->isVoidItem() )
                 return false;
-            if ( auto pBoolItem = dynamic_cast< const SfxBoolItem *>( pPoolItem ) )
+            if ( auto pBoolItem = dynamic_cast< const SfxBoolItem *>( aPoolItem.getItem() ) )
                 if ( !pBoolItem->GetValue() )
                     return false;
         }

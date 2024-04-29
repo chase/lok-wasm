@@ -23,7 +23,7 @@
 
 #include <vcl/outdev.hxx>
 
-#include "impfontmetricdata.hxx"
+#include "font/FontMetricData.hxx"
 #include "salgdiimpl.hxx"
 #include "sallayout.hxx"
 #include "SalGradient.hxx"
@@ -32,7 +32,6 @@
 
 #include <config_cairo_canvas.h>
 
-#include <map>
 #include <vector>
 
 class SalBitmap;
@@ -141,7 +140,7 @@ public:
     void                        ReleaseFonts() { SetFont( nullptr, 0 ); }
 
     // get the current font's metrics
-    virtual void                GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) = 0;
+    virtual void                GetFontMetric( FontMetricDataRef&, int nFallbackLevel ) = 0;
 
     // get the repertoire of the current font
     virtual FontCharMapRef      GetFontCharMap() const = 0;
@@ -183,7 +182,7 @@ public:
 
     // non virtual methods; these do possible coordinate mirroring and
     // then delegate to protected virtual methods
-    bool                        SetClipRegion( const vcl::Region&, const OutputDevice& rOutDev );
+    void                        SetClipRegion( const vcl::Region&, const OutputDevice& rOutDev );
 
     // draw --> LineColor and FillColor and RasterOp and ClipRegion
     void                        DrawPixel( tools::Long nX, tools::Long nY, const OutputDevice& rOutDev );
@@ -203,7 +202,7 @@ public:
                                     const Point** pPtAry,
                                     const OutputDevice& rOutDev );
 
-    bool                        DrawPolyPolygon(
+    void                        DrawPolyPolygon(
                                     const basegfx::B2DHomMatrix& rObjectToDevice,
                                     const basegfx::B2DPolyPolygon &i_rPolyPolygon,
                                     double i_fTransparency,
@@ -426,7 +425,7 @@ protected:
 
     friend class vcl::FileDefinitionWidgetDraw;
 
-    virtual bool                setClipRegion( const vcl::Region& ) = 0;
+    virtual void                setClipRegion( const vcl::Region& ) = 0;
 
     // draw --> LineColor and FillColor and RasterOp and ClipRegion
     virtual void                drawPixel( tools::Long nX, tools::Long nY ) = 0;
@@ -442,7 +441,7 @@ protected:
 
     virtual void                drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32* pPoints, const Point** pPtAry ) = 0;
 
-    virtual bool                drawPolyPolygon(
+    virtual void                drawPolyPolygon(
                                     const basegfx::B2DHomMatrix& rObjectToDevice,
                                     const basegfx::B2DPolyPolygon&,
                                     double fTransparency) = 0;
@@ -661,9 +660,9 @@ public:
         GetImpl()->ResetClipRegion();
     }
 
-    bool setClipRegion( const vcl::Region& i_rClip ) override
+    void setClipRegion( const vcl::Region& i_rClip ) override
     {
-        return GetImpl()->setClipRegion(i_rClip);
+        GetImpl()->setClipRegion(i_rClip);
     }
 
     void SetLineColor() override
@@ -736,12 +735,12 @@ public:
         GetImpl()->drawPolyPolygon (nPoly, pPoints, pPtAry);
     }
 
-    bool drawPolyPolygon(
+    void drawPolyPolygon(
         const basegfx::B2DHomMatrix& rObjectToDevice,
         const basegfx::B2DPolyPolygon& rPolyPolygon,
         double fTransparency) override
     {
-        return GetImpl()->drawPolyPolygon(rObjectToDevice, rPolyPolygon, fTransparency);
+        GetImpl()->drawPolyPolygon(rObjectToDevice, rPolyPolygon, fTransparency);
     }
 
     bool drawPolyLine(

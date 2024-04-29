@@ -67,6 +67,16 @@
 #include <i18nlangtag/mslangid.hxx>
 #include <formatlinebreak.hxx>
 
+#include <view.hxx>
+#include <wrtsh.hxx>
+#include <com/sun/star/text/XTextRange.hpp>
+#include <unotextrange.hxx>
+#include <SwStyleNameMapper.hxx>
+#include <unoprnms.hxx>
+#include <editeng/unoprnms.hxx>
+#include <unomap.hxx>
+#include <com/sun/star/awt/FontSlant.hpp>
+
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::linguistic2;
 using namespace ::com::sun::star::uno;
@@ -624,7 +634,7 @@ void SwTextPaintInfo::DrawText_( const OUString &rText, const SwLinePortion &rPo
     aDrawInf.SetUnderFnt( m_pUnderFnt );
 
     const tools::Long nSpaceAdd = ( rPor.IsBlankPortion() || rPor.IsDropPortion() ||
-                             rPor.InNumberGrp() ) ? 0 : GetSpaceAdd();
+                             rPor.InNumberGrp() ) ? 0 : GetSpaceAdd(/*bShrink=*/true);
     if ( nSpaceAdd )
     {
         TextFrameIndex nCharCnt(0);
@@ -1102,12 +1112,15 @@ void SwTextPaintInfo::DrawCheckBox(const SwFieldFormCheckboxPortion &rPor, bool 
     {
         OutputDevice* pOut = const_cast<OutputDevice*>(GetOut());
         pOut->Push( vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR );
-        pOut->SetFillColor( GetOpt().GetFieldShadingsColor() );
+        if( m_pFnt->GetHighlightColor() != COL_TRANSPARENT )
+            pOut->SetFillColor(m_pFnt->GetHighlightColor());
+        else
+            pOut->SetFillColor(GetOpt().GetFieldShadingsColor());
         pOut->SetLineColor();
         pOut->DrawRect( aIntersect.SVRect() );
         pOut->Pop();
     }
-    const int delta=10;
+    const int delta = 25;
     tools::Rectangle r(aIntersect.Left()+delta, aIntersect.Top()+delta, aIntersect.Right()-delta, aIntersect.Bottom()-delta);
     m_pOut->Push( vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR );
     m_pOut->SetLineColor( Color(0, 0, 0));
@@ -1154,7 +1167,7 @@ void SwTextPaintInfo::DrawBackBrush( const SwLinePortion &rPor ) const
         {
             SwPosition const aPosition(m_pFrame->MapViewToModelPos(GetIdx()));
             const ::sw::mark::IMark* pFieldmark =
-                m_pFrame->GetDoc().getIDocumentMarkAccess()->getFieldmarkFor(aPosition);
+                m_pFrame->GetDoc().getIDocumentMarkAccess()->getInnerFieldmarkFor(aPosition);
             bool bIsStartMark = (TextFrameIndex(1) == GetLen()
                     && CH_TXT_ATR_FIELDSTART == GetText()[sal_Int32(GetIdx())]);
             if(pFieldmark) {
@@ -1200,91 +1213,6 @@ void SwTextPaintInfo::DrawBackBrush( const SwLinePortion &rPor ) const
         aFillColor = *m_pFnt->GetBackColor();
     }
 
-    // tdf#104349 do not highlight portions of space chars before end of line if the compatibility option is enabled
-    // for LTR mode only
-    if ( !GetTextFrame()->IsRightToLeft() )
-    {
-        if (GetTextFrame()->GetDoc().getIDocumentSettingAccess().get(DocumentSettingId::MS_WORD_COMP_TRAILING_BLANKS))
-        {
-            bool           draw = false;
-            bool           full = false;
-            SwLinePortion *pPos = const_cast<SwLinePortion *>(&rPor);
-            TextFrameIndex nIdx = GetIdx();
-            TextFrameIndex nLen;
-
-            do
-            {
-                nLen = pPos->GetLen();
-                for (TextFrameIndex i = nIdx; i < (nIdx + nLen); ++i)
-                {
-                    if (i < TextFrameIndex(GetText().getLength())
-                        && GetText()[sal_Int32(i)] == CH_TXTATR_NEWLINE)
-                    {
-                        if ( i >= (GetIdx() + rPor.GetLen()) )
-                        {
-                            goto drawcontinue;
-                        }
-                    }
-                    if (i >= TextFrameIndex(GetText().getLength())
-                        || GetText()[sal_Int32(i)] != CH_BLANK)
-                    {
-                        draw = true;
-                        if ( i >= (GetIdx() + rPor.GetLen()) )
-                        {
-                            full = true;
-                            goto drawcontinue;
-                        }
-                    }
-                }
-                nIdx += nLen;
-                pPos = pPos->GetNextPortion();
-            } while ( pPos );
-
-        drawcontinue:
-
-            if ( !draw )
-                return;
-
-            if ( !full )
-            {
-                pPos = const_cast<SwLinePortion *>(&rPor);
-                nIdx = GetIdx();
-
-                nLen = pPos->GetLen();
-                for (TextFrameIndex i = nIdx + nLen - TextFrameIndex(1);
-                        i >= nIdx; --i)
-                {
-                    if (i < TextFrameIndex(GetText().getLength())
-                        && GetText()[sal_Int32(i)] == CH_TXTATR_NEWLINE)
-                    {
-                        continue;
-                    }
-                    if ((i + TextFrameIndex(1) ).get() > GetText().getLength())
-                        // prevent crash by not passing bad data down to GetTextSize->SwDrawTextInfo
-                        SAL_WARN("sw", "something dodgy, clamping text index to prevent crash");
-                    else if (i >= TextFrameIndex(GetText().getLength())
-                        || GetText()[sal_Int32(i)] != CH_BLANK)
-                    {
-                        sal_uInt16 nOldWidth = rPor.Width();
-                        sal_uInt16 nNewWidth = GetTextSize(m_pOut, nullptr,
-                            GetText(), nIdx, (i + TextFrameIndex(1) - nIdx)).Width();
-
-                        const_cast<SwLinePortion&>(rPor).Width( nNewWidth );
-                        CalcRect( rPor, nullptr, &aIntersect, true );
-                        const_cast<SwLinePortion&>(rPor).Width( nOldWidth );
-
-                        if ( !aIntersect.HasArea() )
-                        {
-                            return;
-                        }
-
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
     pTmpOut->Push( vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR );
 
     pTmpOut->SetFillColor(aFillColor);
@@ -1304,6 +1232,171 @@ void SwTextPaintInfo::DrawBorder( const SwLinePortion &rPor ) const
         PaintCharacterBorder(*m_pFnt, aDrawArea, GetTextFrame()->IsVertical(),
                              GetTextFrame()->IsVertLRBT(), rPor.GetJoinBorderWithPrev(),
                              rPor.GetJoinBorderWithNext());
+    }
+}
+
+namespace {
+
+bool HasValidPropertyValue(const uno::Any& rAny)
+{
+    if (bool bValue; rAny >>= bValue)
+    {
+        return true;
+    }
+    else if (OUString aValue; (rAny >>= aValue) && !(aValue.isEmpty()))
+    {
+        return true;
+    }
+    else if (awt::FontSlant eValue; rAny >>= eValue)
+    {
+        return true;
+    }
+    else if (tools::Long nValueLong; rAny >>= nValueLong)
+    {
+        return true;
+    }
+    else if (double fValue; rAny >>= fValue)
+    {
+        return true;
+    }
+    else if (short nValueShort; rAny >>= nValueShort)
+    {
+        return true;
+    }
+    else
+        return false;
+}
+}
+
+void SwTextPaintInfo::DrawCSDFHighlighting(const SwLinePortion &rPor) const
+{
+    // Don't use GetActiveView() as it does not work as expected when there are multiple open
+    // documents.
+    SwView* pView = SwTextFrame::GetView();
+    if (!pView)
+        return;
+
+    StylesHighlighterColorMap& rCharStylesColorMap = pView->GetStylesHighlighterCharColorMap();
+
+    if (rCharStylesColorMap.empty() && !pView->IsHighlightCharDF())
+        return;
+
+    SwRect aRect;
+    CalcRect(rPor, &aRect, nullptr, true);
+    if(!aRect.HasArea())
+        return;
+
+    SwTextFrame* pFrame = const_cast<SwTextFrame*>(GetTextFrame());
+    if (!pFrame)
+        return;
+
+    SwPosition aPosition(pFrame->MapViewToModelPos(GetIdx()));
+    SwPosition aMarkPosition(pFrame->MapViewToModelPos(GetIdx() + GetLen()));
+
+    rtl::Reference<SwXTextRange> xRange(
+                SwXTextRange::CreateXTextRange(pFrame->GetDoc(), aPosition, &aMarkPosition));
+
+    OUString sCurrentCharStyle;
+    xRange->getPropertyValue("CharStyleName") >>= sCurrentCharStyle;
+
+    std::optional<OUString> sCSNumberOrDF; // CS number or "df" or not used
+    std::optional<Color> aFillColor;
+
+    // check for CS formatting, if not CS formatted check for direct character formatting
+    if (!sCurrentCharStyle.isEmpty())
+    {
+        if (!rCharStylesColorMap.empty())
+        {
+            OUString sCharStyleDisplayName;
+            sCharStyleDisplayName = SwStyleNameMapper::GetUIName(sCurrentCharStyle,
+                                                                 SwGetPoolIdFromName::ChrFmt);
+            if (!sCharStyleDisplayName.isEmpty()
+                    && rCharStylesColorMap.find(sCharStyleDisplayName)
+                    != rCharStylesColorMap.end())
+            {
+                aFillColor = rCharStylesColorMap[sCharStyleDisplayName].first;
+                sCSNumberOrDF = OUString::number(rCharStylesColorMap[sCharStyleDisplayName].second);
+            }
+        }
+    }
+    // not character style formatted
+    else if (pView->IsHighlightCharDF())
+    {
+        const std::vector<OUString> aHiddenProperties{ UNO_NAME_RSID,
+                    UNO_NAME_PARA_IS_NUMBERING_RESTART,
+                    UNO_NAME_PARA_STYLE_NAME,
+                    UNO_NAME_PARA_CONDITIONAL_STYLE_NAME,
+                    UNO_NAME_PAGE_STYLE_NAME,
+                    UNO_NAME_NUMBERING_START_VALUE,
+                    UNO_NAME_NUMBERING_IS_NUMBER,
+                    UNO_NAME_PARA_CONTINUEING_PREVIOUS_SUB_TREE,
+                    UNO_NAME_CHAR_STYLE_NAME,
+                    UNO_NAME_NUMBERING_LEVEL,
+                    UNO_NAME_SORTED_TEXT_ID,
+                    UNO_NAME_PARRSID,
+                    UNO_NAME_CHAR_COLOR_THEME,
+                    UNO_NAME_CHAR_COLOR_TINT_OR_SHADE };
+
+        SfxItemPropertySet const& rPropSet(
+                    *aSwMapProvider.GetPropertySet(PROPERTY_MAP_CHAR_AUTO_STYLE));
+        SfxItemPropertyMap const& rMap(rPropSet.getPropertyMap());
+
+
+        const uno::Sequence<beans::Property> aProperties
+                = xRange->getPropertySetInfo()->getProperties();
+
+        for (const beans::Property& rProperty : aProperties)
+        {
+            const OUString& rPropName = rProperty.Name;
+
+            if (!rMap.hasPropertyByName(rPropName))
+                continue;
+
+            if (std::find(aHiddenProperties.begin(), aHiddenProperties.end(), rPropName)
+                    != aHiddenProperties.end())
+                continue;
+
+            if (xRange->getPropertyState(rPropName) == beans::PropertyState_DIRECT_VALUE)
+            {
+                const uno::Any aAny = xRange->getPropertyValue(rPropName);
+                if (HasValidPropertyValue(aAny))
+                {
+                    sCSNumberOrDF = SwResId(STR_CHARACTER_DIRECT_FORMATTING_TAG);
+                    aFillColor = COL_LIGHTGRAY;
+                    break;
+                }
+            }
+        }
+    }
+    if (sCSNumberOrDF)
+    {
+        OutputDevice* pTmpOut = const_cast<OutputDevice*>(GetOut());
+        pTmpOut->Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR
+                      | vcl::PushFlags::TEXTLAYOUTMODE | vcl::PushFlags::FONT);
+
+        // draw a filled rectangle at the formatted CS or DF text
+        pTmpOut->SetFillColor(aFillColor.value());
+        pTmpOut->SetLineColor(aFillColor.value());
+        tools::Rectangle aSVRect(aRect.SVRect());
+        pTmpOut->DrawRect(aSVRect);
+
+        // calculate size and position for the CS number or "df" text and rectangle
+        tools::Long nWidth = pTmpOut->GetTextWidth(sCSNumberOrDF.value());
+        tools::Long nHeight = pTmpOut->GetTextHeight();
+        aSVRect.SetSize(Size(nWidth, nHeight));
+        aSVRect.Move(-(nWidth / 1.5), -(nHeight / 1.5));
+
+        vcl::Font aFont(pTmpOut->GetFont());
+        aFont.SetOrientation(Degree10(0));
+        pTmpOut->SetFont(aFont);
+
+        pTmpOut->SetLayoutMode(vcl::text::ComplexTextLayoutFlags::TextOriginLeft);
+        //pTmpOut->SetLayoutMode(vcl::text::ComplexTextLayoutFlags::BiDiStrong);
+
+        pTmpOut->SetTextFillColor(aFillColor.value());
+        pTmpOut->DrawText(aSVRect, sCSNumberOrDF.value(), DrawTextFlags::NONE);
+
+        pTmpOut->Pop();
     }
 }
 
@@ -1333,6 +1426,7 @@ void SwTextPaintInfo::DrawViewOpt( const SwLinePortion &rPor,
                   || m_pFrame->GetTextNodeForParaProps()->HasMarkedLabel())) // #i27615#
         {
             bDraw = PortionType::Footnote != nWhich || m_pFrame->IsFootnoteAllowed();
+            bDraw &= GetOpt().IsHardBlank();
         }
         break;
     case PortionType::Bookmark:
@@ -1474,7 +1568,7 @@ void SwTextFormatInfo::CtorInitTextFormatInfo( OutputDevice* pRenderContext, SwT
     SetLineStart(TextFrameIndex(0));
 
     SvtCTLOptions::TextNumerals const nTextNumerals(
-            SW_MOD()->GetCTLOptions().GetCTLTextNumerals());
+            SvtCTLOptions::GetCTLTextNumerals());
     // cannot cache for NUMERALS_CONTEXT because we need to know the string
     // for the whole paragraph now
     if (nTextNumerals != SvtCTLOptions::NUMERALS_CONTEXT)
@@ -1634,6 +1728,37 @@ SwTextFormatInfo::SwTextFormatInfo( const SwTextFormatInfo& rInf,
 {
     SetMulti( true );
     SetFirstMulti( rInf.IsFirstMulti() );
+}
+
+void SwTextFormatInfo::UpdateTabSeen(PortionType type)
+{
+    switch (type)
+    {
+        case PortionType::TabLeft:
+            m_eLastTabsSeen = TabSeen::Left;
+            break;
+        case PortionType::TabRight:
+            m_eLastTabsSeen = TabSeen::Right;
+            break;
+        case PortionType::TabCenter:
+            m_eLastTabsSeen = TabSeen::Center;
+            break;
+        case PortionType::TabDecimal:
+            m_eLastTabsSeen = TabSeen::Decimal;
+            break;
+        case PortionType::Break:
+            m_eLastTabsSeen = TabSeen::None;
+            break;
+        default:
+            break;
+    }
+}
+
+void SwTextFormatInfo::SetLast(SwLinePortion* pNewLast)
+{
+    m_pLast = pNewLast;
+    assert(pNewLast); // We never pass nullptr here. If we start, then a check is needed below.
+    UpdateTabSeen(pNewLast->GetWhichPor());
 }
 
 bool SwTextFormatInfo::CheckFootnotePortion_( SwLineLayout const * pCurr )

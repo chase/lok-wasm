@@ -440,6 +440,7 @@ struct ScChildGone
             aEvent.EventId = AccessibleEventId::CHILD;
             aEvent.Source = uno::Reference< XAccessibleContext >(mpAccDoc);
             aEvent.OldValue <<= xAccessible;
+            aEvent.IndexHint = -1;
 
             mpAccDoc->CommitChange(aEvent); // gone child - event
         }
@@ -458,6 +459,7 @@ struct ScChildNew
             aEvent.EventId = AccessibleEventId::CHILD;
             aEvent.Source = uno::Reference< XAccessibleContext >(mpAccDoc);
             aEvent.NewValue <<= xAccessible;
+            aEvent.IndexHint = -1;
 
             mpAccDoc->CommitChange(aEvent); // new child - event
         }
@@ -718,6 +720,7 @@ void ScShapeChildren::FindChanged(ScShapeChildVec& rOld, ScShapeChildVec& rNew) 
             aEvent.Source = uno::Reference<XAccessibleContext> (mpAccDoc);
             aEvent.EventId = AccessibleEventId::CHILD;
             aEvent.NewValue <<= xAcc;
+            aEvent.IndexHint = -1;
             mpAccDoc->CommitChange(aEvent);
             ++aNewItr;
         }
@@ -728,6 +731,7 @@ void ScShapeChildren::FindChanged(ScShapeChildVec& rOld, ScShapeChildVec& rNew) 
             aEvent.Source = uno::Reference<XAccessibleContext> (mpAccDoc);
             aEvent.EventId = AccessibleEventId::CHILD;
             aEvent.OldValue <<= xAcc;
+            aEvent.IndexHint = -1;
             mpAccDoc->CommitChange(aEvent);
             ++aOldItr;
         }
@@ -739,6 +743,7 @@ void ScShapeChildren::FindChanged(ScShapeChildVec& rOld, ScShapeChildVec& rNew) 
         aEvent.Source = uno::Reference<XAccessibleContext> (mpAccDoc);
         aEvent.EventId = AccessibleEventId::CHILD;
         aEvent.OldValue <<= xAcc;
+        aEvent.IndexHint = -1;
         mpAccDoc->CommitChange(aEvent);
         ++aOldItr;
     }
@@ -749,6 +754,7 @@ void ScShapeChildren::FindChanged(ScShapeChildVec& rOld, ScShapeChildVec& rNew) 
         aEvent.Source = uno::Reference<XAccessibleContext> (mpAccDoc);
         aEvent.EventId = AccessibleEventId::CHILD;
         aEvent.NewValue <<= xAcc;
+        aEvent.IndexHint = -1;
         mpAccDoc->CommitChange(aEvent);
         ++aNewItr;
     }
@@ -1012,40 +1018,36 @@ void ScShapeChildren::FillShapes(const tools::Rectangle& aPixelPaintRect, const 
     }
     ScIAccessibleViewForwarder aViewForwarder(mpViewShell, mpAccDoc, aMapMode);
     maShapeRanges[nRangeId].maViewForwarder = aViewForwarder;
-    const size_t nCount(pPage->GetObjCount());
-    for (size_t i = 0; i < nCount; ++i)
+    for (const rtl::Reference<SdrObject>& pObj : *pPage)
     {
-        SdrObject* pObj = pPage->GetObj(i);
-        if (pObj)
+        uno::Reference< drawing::XShape > xShape(pObj->getUnoShape(), uno::UNO_QUERY);
+        if (xShape.is())
         {
-            uno::Reference< drawing::XShape > xShape(pObj->getUnoShape(), uno::UNO_QUERY);
-            if (xShape.is())
+            tools::Rectangle aRect(pWin->LogicToPixel(
+                tools::Rectangle(VCLPoint(xShape->getPosition()), VCLSize(xShape->getSize())), aMapMode));
+            if(!aClippedPixelPaintRect.GetIntersection(aRect).IsEmpty())
             {
-                tools::Rectangle aRect(pWin->LogicToPixel(VCLPoint(xShape->getPosition()), aMapMode), pWin->LogicToPixel(VCLSize(xShape->getSize()), aMapMode));
-                if(!aClippedPixelPaintRect.GetIntersection(aRect).IsEmpty())
+                ScShapeChild aShape;
+                aShape.mxShape = xShape;
+                aShape.mnRangeId = nRangeId;
+                if (pObj->GetLayer().anyOf(SC_LAYER_INTERN, SC_LAYER_FRONT))
                 {
-                    ScShapeChild aShape;
-                    aShape.mxShape = xShape;
-                    aShape.mnRangeId = nRangeId;
-                    if (pObj->GetLayer().anyOf(SC_LAYER_INTERN, SC_LAYER_FRONT))
-                    {
-                        maShapeRanges[nRangeId].maForeShapes.push_back(std::move(aShape));
-                        bForeAdded = true;
-                    }
-                    else if (pObj->GetLayer() == SC_LAYER_BACK)
-                    {
-                        maShapeRanges[nRangeId].maBackShapes.push_back(std::move(aShape));
-                        bBackAdded = true;
-                    }
-                    else if (pObj->GetLayer() == SC_LAYER_CONTROLS)
-                    {
-                        maShapeRanges[nRangeId].maControls.push_back(std::move(aShape));
-                        bControlAdded = true;
-                    }
-                    else
-                    {
-                        OSL_FAIL("I don't know this layer.");
-                    }
+                    maShapeRanges[nRangeId].maForeShapes.push_back(std::move(aShape));
+                    bForeAdded = true;
+                }
+                else if (pObj->GetLayer() == SC_LAYER_BACK)
+                {
+                    maShapeRanges[nRangeId].maBackShapes.push_back(std::move(aShape));
+                    bBackAdded = true;
+                }
+                else if (pObj->GetLayer() == SC_LAYER_CONTROLS)
+                {
+                    maShapeRanges[nRangeId].maControls.push_back(std::move(aShape));
+                    bControlAdded = true;
+                }
+                else
+                {
+                    OSL_FAIL("I don't know this layer.");
                 }
             }
         }
@@ -1205,6 +1207,7 @@ void ScAccessibleDocumentPagePreview::Notify( SfxBroadcaster& rBC, const SfxHint
                     aEvent.EventId = AccessibleEventId::CHILD;
                     aEvent.Source = uno::Reference< XAccessibleContext >(this);
                     aEvent.OldValue <<= xAcc;
+                    aEvent.IndexHint = -1;
                     CommitChange(aEvent);
                 }
 
@@ -1238,6 +1241,7 @@ void ScAccessibleDocumentPagePreview::Notify( SfxBroadcaster& rBC, const SfxHint
                     aEvent.EventId = AccessibleEventId::CHILD;
                     aEvent.Source = uno::Reference< XAccessibleContext >(this);
                     aEvent.NewValue <<= xAcc;
+                    aEvent.IndexHint = -1;
                     CommitChange(aEvent);
                 }
             }
@@ -1478,14 +1482,14 @@ OUString ScAccessibleDocumentPagePreview::createAccessibleName()
     return sName;
 }
 
-tools::Rectangle ScAccessibleDocumentPagePreview::GetBoundingBoxOnScreen() const
+AbsoluteScreenPixelRectangle ScAccessibleDocumentPagePreview::GetBoundingBoxOnScreen() const
 {
-    tools::Rectangle aRect;
+    AbsoluteScreenPixelRectangle aRect;
     if (mpViewShell)
     {
         vcl::Window* pWindow = mpViewShell->GetWindow();
         if (pWindow)
-            aRect = pWindow->GetWindowExtentsRelative(nullptr);
+            aRect = pWindow->GetWindowExtentsAbsolute();
     }
     return aRect;
 }
@@ -1497,7 +1501,7 @@ tools::Rectangle ScAccessibleDocumentPagePreview::GetBoundingBox() const
     {
         vcl::Window* pWindow = mpViewShell->GetWindow();
         if (pWindow)
-            aRect = pWindow->GetWindowExtentsRelative(pWindow->GetAccessibleParentWindow());
+            aRect = pWindow->GetWindowExtentsRelative(*pWindow->GetAccessibleParentWindow());
     }
     return aRect;
 }
@@ -1541,7 +1545,7 @@ OUString ScAccessibleDocumentPagePreview::getAccessibleName()
     OUString aName = ScResId(STR_ACC_DOC_SPREADSHEET);
     ScDocument& rScDoc = mpViewShell->GetDocument();
 
-    SfxObjectShell* pObjSh = rScDoc.GetDocumentShell();
+    ScDocShell* pObjSh = rScDoc.GetDocumentShell();
     if (!pObjSh)
         return aName;
 

@@ -64,10 +64,8 @@ HRESULT STDMETHODCALLTYPE CEnumVariant::Next(ULONG cElements,VARIANT __RPC_FAR *
     for (l1 = m_nCurrent, l2 = 0; l1 < nChildCount && l2 < cElements; l1++, l2++)
     {
         Reference< XAccessible > pRXAcc = m_pXAccessibleSelection->getSelectedAccessibleChild(l1);
-        IAccessible* pChild = nullptr;
-        bool isGet = CMAccessible::get_IAccessibleFromXAccessible(pRXAcc.get(),
-                        &pChild);
-        if(isGet)
+        IAccessible* pChild = CMAccessible::get_IAccessibleFromXAccessible(pRXAcc.get());
+        if(pChild)
         {
             pvar[l2].vt = VT_DISPATCH;
             pvar[l2].pdispVal = pChild;
@@ -75,11 +73,10 @@ HRESULT STDMETHODCALLTYPE CEnumVariant::Next(ULONG cElements,VARIANT __RPC_FAR *
         }
         else if(pRXAcc.is())
         {
-            if(CMAccessible::g_pAgent)
-                CMAccessible::g_pAgent->InsertAccObj(pRXAcc.get(),pUNOInterface);
-            isGet = CMAccessible::get_IAccessibleFromXAccessible(
-                            pRXAcc.get(), &pChild);
-            if(isGet)
+            if (CMAccessible::g_pAccObjectManager)
+                CMAccessible::g_pAccObjectManager->InsertAccObj(pRXAcc.get(),pUNOInterface);
+            pChild = CMAccessible::get_IAccessibleFromXAccessible(pRXAcc.get());
+            if(pChild)
             {
                 pvar[l2].vt = VT_DISPATCH;
                 pvar[l2].pdispVal = pChild;
@@ -123,7 +120,7 @@ HRESULT STDMETHODCALLTYPE CEnumVariant::Skip(ULONG cElements)
 
 
 /**
-   * reset the enumaration position to initial value
+   * reset the enumeration position to initial value
    * @param
    * @return Result.
    */
@@ -138,7 +135,7 @@ HRESULT STDMETHODCALLTYPE CEnumVariant::Reset()
 
 /**
    *create a new IEnumVariant object,
-   *copy current enumaration container and its state to
+   *copy current enumeration container and its state to
    *the new object
    *AT will use the copy object to get elements
    * @param ppenum On return, pointer to the location of the clone enumerator

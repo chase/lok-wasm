@@ -196,13 +196,14 @@ const workerProxyHandler: ProxyHandler<{ ref: DocumentRef; viewId: ViewId }> = {
 };
 
 function documentClient<T extends DocumentClient>(
-  ref: DocumentRef | null
+  ref: DocumentRef | null,
+  viewId: number | undefined = -1
 ): T | null {
   if (!ref) return null;
   const clientObject: DocumentClientBase = {
     ref,
     // this is set after the first initializeForRendering call
-    viewId: -1,
+    viewId: viewId,
     on(type: CallbackType, handler: CallbackHandler) {
       if (subscribedEvents[ref] == null)
         subscribedEvents[ref] = { [type]: new Set() };
@@ -231,9 +232,16 @@ function documentClient<T extends DocumentClient>(
         } as ToWorker);
       }
     },
-    newView(): DocumentClient {
-      // TODO: implement this
-      throw new Error('Function not implemented.');
+    async newView(): Promise<DocumentClient | null> {
+      const [i, future] = registerFuture<DocumentRef | null>();
+      const message: ToWorker = {
+        f: 'newView',
+        i,
+        a: []
+      };
+      loadWorkerOnce().postMessage(message);
+
+      return await future.promise.then((id) => documentClient(ref, id));
     },
   };
   return new Proxy(clientObject, workerProxyHandler) as T;

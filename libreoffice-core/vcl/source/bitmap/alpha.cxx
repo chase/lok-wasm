@@ -20,19 +20,35 @@
 #include <tools/color.hxx>
 #include <vcl/alpha.hxx>
 
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <salinst.hxx>
 #include <svdata.hxx>
 #include <salbmp.hxx>
 #include <sal/log.hxx>
+#if HAVE_FEATURE_SKIA
+#include <vcl/skia/SkiaHelper.hxx>
+#endif
+
 
 AlphaMask::AlphaMask() = default;
 
 AlphaMask::AlphaMask( const Bitmap& rBitmap ) :
-    Bitmap( rBitmap )
+    maBitmap( rBitmap )
 {
-    if( !rBitmap.IsEmpty() )
-        Convert( BmpConversion::N8BitNoConversion );
+    if ( !rBitmap.IsEmpty() )
+        maBitmap.Convert( BmpConversion::N8BitNoConversion );
+#if HAVE_FEATURE_SKIA
+    // Related tdf#156866 force snapshot of alpha mask when using Skia
+    // In release builds, tdf#156629 and tdf#156630 reappear in many
+    // cases because a BitmapInfoAccess is in a debug block. So, instead
+    // of relying on other code to a create a BitmapInfoAccess instance,
+    // create one here to force the alpha mask to handle any pending
+    // scaling and make the alpha mask immutable.
+    else if ( SkiaHelper::isVCLSkiaEnabled() )
+        BitmapInfoAccess aInfoAccess( maBitmap );
+#endif
+    assert( (IsEmpty() || maBitmap.getPixelFormat() == vcl::PixelFormat::N8_BPP) && "alpha bitmap should be 8bpp" );
+    assert( (IsEmpty() || maBitmap.HasGreyPalette8Bit()) && "alpha bitmap should have greyscale palette" );
 }
 
 AlphaMask::AlphaMask( const AlphaMask& ) = default;
@@ -40,59 +56,56 @@ AlphaMask::AlphaMask( const AlphaMask& ) = default;
 AlphaMask::AlphaMask( AlphaMask&& ) = default;
 
 AlphaMask::AlphaMask( const Size& rSizePixel, const sal_uInt8* pEraseTransparency )
-    : Bitmap(rSizePixel, vcl::PixelFormat::N8_BPP, &Bitmap::GetGreyPalette(256))
+    : maBitmap(rSizePixel, vcl::PixelFormat::N8_BPP, &Bitmap::GetGreyPalette(256))
 {
     if( pEraseTransparency )
-        Bitmap::Erase( Color( *pEraseTransparency, *pEraseTransparency, *pEraseTransparency ) );
+    {
+        sal_uInt8 nAlpha = 255 - *pEraseTransparency;
+        maBitmap.Erase( Color( nAlpha, nAlpha, nAlpha ) );
+    }
+    else
+        maBitmap.Erase( COL_ALPHA_OPAQUE );
 }
 
 AlphaMask::~AlphaMask() = default;
 
 AlphaMask& AlphaMask::operator=( const Bitmap& rBitmap )
 {
-    *static_cast<Bitmap*>(this) = rBitmap;
+    maBitmap = rBitmap;
 
     if( !rBitmap.IsEmpty() )
-        Convert( BmpConversion::N8BitNoConversion );
+        maBitmap.Convert( BmpConversion::N8BitNoConversion );
+
+    assert( maBitmap.getPixelFormat() == vcl::PixelFormat::N8_BPP && "alpha bitmap should be 8bpp" );
+    assert( maBitmap.HasGreyPalette8Bit() && "alpha bitmap should have greyscale palette" );
 
     return *this;
-}
-
-const Bitmap& AlphaMask::ImplGetBitmap() const
-{
-    return *this;
-}
-
-void AlphaMask::ImplSetBitmap( const Bitmap& rBitmap )
-{
-    SAL_WARN_IF(rBitmap.getPixelFormat() != vcl::PixelFormat::N8_BPP, "vcl.gdi", "Bitmap should be 8bpp, not " << vcl::pixelFormatBitCount(rBitmap.getPixelFormat()) << "bpp" );
-    SAL_WARN_IF( !rBitmap.HasGreyPalette8Bit(), "vcl.gdi", "Bitmap isn't greyscale" );
-    *static_cast<Bitmap*>(this) = rBitmap;
-}
-
-Bitmap const & AlphaMask::GetBitmap() const
-{
-    return ImplGetBitmap();
 }
 
 void AlphaMask::Erase( sal_uInt8 cTransparency )
 {
-    Bitmap::Erase( Color( cTransparency, cTransparency, cTransparency ) );
+    sal_uInt8 nAlpha = 255 - cTransparency;
+    maBitmap.Erase( Color( nAlpha, nAlpha, nAlpha ) );
 }
 
-void AlphaMask::BlendWith(const Bitmap& rOther)
+void AlphaMask::BlendWith(const AlphaMask& rOther)
 {
     std::shared_ptr<SalBitmap> xImpBmp(ImplGetSVData()->mpDefInst->CreateSalBitmap());
-    if (xImpBmp->Create(*ImplGetSalBitmap()) && xImpBmp->AlphaBlendWith(*rOther.ImplGetSalBitmap()))
+    if (xImpBmp->Create(*maBitmap.ImplGetSalBitmap()) && xImpBmp->AlphaBlendWith(*rOther.maBitmap.ImplGetSalBitmap()))
     {
-        ImplSetSalBitmap(xImpBmp);
+        maBitmap.ImplSetSalBitmap(xImpBmp);
+        assert( maBitmap.getPixelFormat() == vcl::PixelFormat::N8_BPP && "alpha bitmap should be 8bpp" );
+        assert( maBitmap.HasGreyPalette8Bit() && "alpha bitmap should have greyscale palette" );
         return;
     }
-    AlphaMask aOther(rOther); // to 8 bits
-    Bitmap::ScopedReadAccess pOtherAcc(aOther);
-    AlphaScopedWriteAccess pAcc(*this);
+    BitmapScopedReadAccess pOtherAcc(rOther);
+    BitmapScopedWriteAccess pAcc(*this);
+    assert (pOtherAcc && pAcc && pOtherAcc->GetBitCount() == 8 && pAcc->GetBitCount() == 8 && "cannot BlendWith this combination");
     if (!(pOtherAcc && pAcc && pOtherAcc->GetBitCount() == 8 && pAcc->GetBitCount() == 8))
+    {
+        SAL_WARN("vcl", "cannot BlendWith this combination");
         return;
+    }
 
     const tools::Long nHeight = std::min(pOtherAcc->Height(), pAcc->Height());
     const tools::Long nWidth = std::min(pOtherAcc->Width(), pAcc->Width());
@@ -105,11 +118,23 @@ void AlphaMask::BlendWith(const Bitmap& rOther)
             // Use sal_uInt16 for following multiplication
             const sal_uInt16 nGrey1 = *scanline;
             const sal_uInt16 nGrey2 = *otherScanline;
-            *scanline = static_cast<sal_uInt8>(nGrey1 + nGrey2 - nGrey1 * nGrey2 / 255);
+            // Awkward calculation because the original used transparency, and to replicate
+            // the logic we need to translate into transparency, perform the original logic,
+            // then translate back to alpha.
+            // The original looked like:
+            //   auto tmp = nGrey1 + nGrey2 - (nGrey1 * nGrey2 / 255)
+            // which, when converted to using alpha looks like
+            //   auto tmp = 255 - ((255 - nGrey1) + (255 - nGrey2) - (255 - nGrey1) * (255 - nGrey2) / 255);
+            // which then simplifies to:
+            auto tmp = nGrey1 * nGrey2 / 255;
+            *scanline = static_cast<sal_uInt8>(tmp);
             ++scanline;
             ++otherScanline;
         }
     }
+    pAcc.reset();
+    assert( maBitmap.getPixelFormat() == vcl::PixelFormat::N8_BPP && "alpha bitmap should be 8bpp" );
+    assert( maBitmap.HasGreyPalette8Bit() && "alpha bitmap should have greyscale palette" );
 }
 
 bool AlphaMask::hasAlpha() const
@@ -118,7 +143,7 @@ bool AlphaMask::hasAlpha() const
     if(IsEmpty())
         return false;
 
-    ScopedReadAccess pAcc(const_cast<AlphaMask&>(*this));
+    BitmapScopedReadAccess pAcc(*this);
     const tools::Long nHeight(pAcc->Height());
     const tools::Long nWidth(pAcc->Width());
 
@@ -130,7 +155,7 @@ bool AlphaMask::hasAlpha() const
     {
         for (tools::Long x = 0; x < nWidth; ++x)
         {
-            if (0 != pAcc->GetColor(y, x).GetRed())
+            if (255 != pAcc->GetColor(y, x).GetRed())
             {
                 return true;
             }
@@ -140,13 +165,45 @@ bool AlphaMask::hasAlpha() const
     return false;
 }
 
-void AlphaMask::ReleaseAccess( BitmapReadAccess* pAccess )
+bool AlphaMask::AlphaCombineOr(const AlphaMask& rMask)
 {
-    if( pAccess )
+    BitmapScopedReadAccess pMaskAcc(rMask);
+    BitmapScopedWriteAccess pAcc(*this);
+
+    if (!pMaskAcc || !pAcc)
+        return false;
+
+    assert (pMaskAcc->GetBitCount() == 8 && pAcc->GetBitCount() == 8);
+
+    const tools::Long nWidth = std::min(pMaskAcc->Width(), pAcc->Width());
+    const tools::Long nHeight = std::min(pMaskAcc->Height(), pAcc->Height());
+
+    for (tools::Long nY = 0; nY < nHeight; nY++)
     {
-        Bitmap::ReleaseAccess( pAccess );
-        Convert( BmpConversion::N8BitNoConversion );
+        Scanline pScanline = pAcc->GetScanline(nY);
+        ConstScanline pScanlineMask = pMaskAcc->GetScanline(nY);
+        for (tools::Long nX = 0; nX < nWidth; nX++)
+        {
+            if (*pScanlineMask != 255 || *pScanline != 255)
+                *pScanline = 0;
+            else
+                *pScanline = 255;
+            ++pScanline;
+            ++pScanlineMask;
+        }
     }
+
+    return true;
+}
+
+bool AlphaMask::Invert()
+{
+    if (IsEmpty())
+        return false;
+    bool b = maBitmap.Invert();
+    assert( maBitmap.getPixelFormat() == vcl::PixelFormat::N8_BPP && "alpha bitmap should be 8bpp" );
+    assert( maBitmap.HasGreyPalette8Bit() && "alpha bitmap should have greyscale palette" );
+    return b;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

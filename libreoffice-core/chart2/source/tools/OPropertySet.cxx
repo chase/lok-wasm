@@ -266,7 +266,6 @@ void SAL_CALL OPropertySet::setFastPropertyValue_NoBroadcast
     {
         aDefault.clear();
     }
-    SetPropertyValueByHandle( nHandle, rValue );
     if( !m_bSetNewValuesExplicitlyEvenIfTheyEqualDefault && aDefault.hasValue() && aDefault == rValue ) //#i98893# don't export defaults to file
         SetPropertyToDefault( nHandle );
     else
@@ -408,7 +407,7 @@ Sequence< beans::PropertyState > OPropertySet::GetPropertyStatesByHandle(
 
 void OPropertySet::SetPropertyToDefault( sal_Int32 nHandle )
 {
-    tPropertyMap::iterator aFoundIter( m_aProperties.find( nHandle ) );
+    auto aFoundIter( m_aProperties.find( nHandle ) );
 
     if( m_aProperties.end() != aFoundIter )
     {
@@ -434,7 +433,7 @@ bool OPropertySet::GetPropertyValueByHandle(
 {
     bool bResult = false;
 
-    tPropertyMap::const_iterator aFoundIter( m_aProperties.find( nHandle ) );
+    auto aFoundIter( m_aProperties.find( nHandle ) );
 
     if( m_aProperties.end() != aFoundIter )
     {

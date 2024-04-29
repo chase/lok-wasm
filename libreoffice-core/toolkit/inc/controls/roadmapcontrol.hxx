@@ -83,7 +83,7 @@ namespace toolkit
         sal_Int32                           GetUniqueID();
 
         css::uno::Any      ImplGetDefaultValue( sal_uInt16 nPropId ) const override;
-        ::cppu::IPropertyArrayHelper& SAL_CALL getInfoHelper() override;
+        ::cppu::IPropertyArrayHelper& getInfoHelper() override;
 
     public:
         UnoControlRoadmapModel( const css::uno::Reference< css::uno::XComponentContext >& i_factory );
@@ -168,7 +168,9 @@ namespace toolkit
 
     // XTypeProvider
     DECLARE_XTYPEPROVIDER( )
-    DECLARE_XINTERFACE()
+    DECLARE_UNO3_AGG_DEFAULTS(UnoRoadmapControl, UnoControlRoadmap_Base)
+
+    css::uno::Any SAL_CALL queryAggregation(css::uno::Type const & aType) override;
 
     // css::lang::XServiceInfo
     OUString SAL_CALL getImplementationName() override;

@@ -65,7 +65,7 @@ namespace xmloff
     //= OFormLayerXMLExport_Impl
     const OUString& OFormLayerXMLExport_Impl::getControlNumberStyleNamePrefix()
     {
-        static const OUString s_sControlNumberStyleNamePrefix("C");
+        static constexpr OUString s_sControlNumberStyleNamePrefix(u"C"_ustr);
         return s_sControlNumberStyleNamePrefix;
     }
 
@@ -84,7 +84,7 @@ namespace xmloff
         m_rContext.GetAutoStylePool()->AddFamily(
             XmlStyleFamily::CONTROL_ID, token::GetXMLToken(token::XML_PARAGRAPH),
             m_xStyleExportMapper.get(),
-            OUString(  XML_STYLE_FAMILY_CONTROL_PREFIX )
+            XML_STYLE_FAMILY_CONTROL_PREFIX
         );
 
         // add our event translation table
@@ -561,10 +561,8 @@ namespace xmloff
 
                 // generate a new control id
 
-                // find a free id
-                OUString sCurrentId = lcl_findFreeControlId( m_aControlIds );
-                // add it to the map
-                m_aCurrentPageIds->second[ xColumnProperties ] = sCurrentId;
+                // find a free id and add it to the map
+                m_aCurrentPageIds->second[xColumnProperties] = lcl_findFreeControlId(m_aControlIds);
 
                 // determine a number style, if needed
                 xColumnPropertiesMeta = xColumnProperties->getPropertySetInfo();

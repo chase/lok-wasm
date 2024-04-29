@@ -89,7 +89,7 @@ OUString retrieveToolbarNameFromHelpURL( vcl::Window* pWindow )
         ToolBox* pToolBox = dynamic_cast<ToolBox *>( pWindow );
         if ( pToolBox )
         {
-            aToolbarName = OStringToOUString( pToolBox->GetHelpId(), RTL_TEXTENCODING_UTF8 );
+            aToolbarName = pToolBox->GetHelpId();
             sal_Int32 i = aToolbarName.lastIndexOf( ':' );
             if ( !aToolbarName.isEmpty() && ( i > 0 ) && (( i + 1 ) < aToolbarName.getLength() ))
                 aToolbarName = aToolbarName.copy( i+1 ); // Remove ".HelpId:" protocol from toolbar name
@@ -154,7 +154,7 @@ bool lcl_checkUIElement(const uno::Reference< ui::XUIElement >& xUIElement, awt:
     return bRet;
 }
 
-uno::Reference< awt::XWindowPeer > createToolkitWindow( const uno::Reference< uno::XComponentContext >& rxContext, const uno::Reference< awt::XWindowPeer >& rParent, const char* pService )
+uno::Reference< awt::XVclWindowPeer > createToolkitWindow( const uno::Reference< uno::XComponentContext >& rxContext, const uno::Reference< awt::XVclWindowPeer >& rParent, const char* pService )
 {
     uno::Reference< awt::XToolkit2 > xToolkit = awt::Toolkit::create( rxContext );
 
@@ -169,8 +169,9 @@ uno::Reference< awt::XWindowPeer > createToolkitWindow( const uno::Reference< un
 
     // create an awt window
     uno::Reference< awt::XWindowPeer > xPeer = xToolkit->createWindow( aDescriptor );
-
-    return xPeer;
+    uno::Reference< awt::XVclWindowPeer > xVclPeer(xPeer, uno::UNO_QUERY);
+    assert(xVclPeer || !xPeer);
+    return xVclPeer;
 }
 
 // convert alignment constant to vcl's WindowAlign type

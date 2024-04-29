@@ -75,6 +75,7 @@ private:
 
     bool visitTemporaryObjectExpr(Expr const * expr);
     bool isCastingReference(const Expr* expr);
+    bool isCallingGetOnWeakRef(const Expr* expr);
 };
 
 bool containsXInterfaceSubclass(const clang::Type* pType0);
@@ -377,24 +378,30 @@ static bool containsStaticTypeMethod(const CXXRecordDecl* x)
 
 void RefCounting::checkUnoReference(QualType qt, const Decl* decl, const RecordDecl* parent, const std::string& rDeclName)
 {
-    if (loplugin::TypeCheck(qt).Class("Reference").Namespace("uno").Namespace("star").Namespace("sun").Namespace("com").GlobalNamespace()) {
-        const CXXRecordDecl* pRecordDecl = qt->getAsCXXRecordDecl();
-        const ClassTemplateSpecializationDecl* pTemplate = dyn_cast<ClassTemplateSpecializationDecl>(pRecordDecl);
-        const TemplateArgument& rArg = pTemplate->getTemplateArgs()[0];
-        const CXXRecordDecl* templateParam = rArg.getAsType()->getAsCXXRecordDecl()->getDefinition();
-        if (templateParam && !containsStaticTypeMethod(templateParam)) {
-            report(
-                DiagnosticsEngine::Warning,
-                ("uno::Reference %0 with template parameter that does not"
-                 " contain ::static_type() %1%select{|, parent is %3,}2 should"
-                 " probably be using rtl::Reference instead"),
-                decl->getLocation())
-              << rDeclName << qt << (parent != nullptr)
-              << (parent != nullptr
-                  ? parent->getQualifiedNameAsString() : std::string())
-              << decl->getSourceRange();
-        }
-    }
+    if (!loplugin::TypeCheck(qt).Class("Reference").Namespace("uno").Namespace("star").Namespace("sun").Namespace("com").GlobalNamespace())
+        return;
+    const CXXRecordDecl* pRecordDecl = qt->getAsCXXRecordDecl();
+    const ClassTemplateSpecializationDecl* pTemplate = dyn_cast<ClassTemplateSpecializationDecl>(pRecordDecl);
+    const TemplateArgument& rArg = pTemplate->getTemplateArgs()[0];
+    const CXXRecordDecl* templateParam = rArg.getAsType()->getAsCXXRecordDecl()->getDefinition();
+    if (!templateParam)
+        return;
+    // SwXText is a special case. It is a mixin class that does not inherit from OWeakObject, so
+    // we cannot use rtl::Reference.
+    if (loplugin::DeclCheck(templateParam).Class("SwXText"))
+        return;
+    if (containsStaticTypeMethod(templateParam))
+        return;
+    report(
+        DiagnosticsEngine::Warning,
+        ("uno::Reference %0 with template parameter that does not"
+         " contain ::static_type() %1%select{|, parent is %3,}2 should"
+         " probably be using rtl::Reference instead"),
+        decl->getLocation())
+      << rDeclName << qt << (parent != nullptr)
+      << (parent != nullptr
+          ? parent->getQualifiedNameAsString() : std::string())
+      << decl->getSourceRange();
 }
 
 bool RefCounting::visitTemporaryObjectExpr(Expr const * expr) {
@@ -714,6 +721,17 @@ bool RefCounting::VisitVarDecl(const VarDecl * varDecl) {
                     << pointeeType
                     << varDecl->getSourceRange();
         }
+        if (isCallingGetOnWeakRef(varDecl->getInit()))
+        {
+            auto pointeeType = varDecl->getType()->getPointeeType();
+            if (containsOWeakObjectSubclass(pointeeType))
+                report(
+                    DiagnosticsEngine::Warning,
+                    "weak object being converted to strong, and then the reference dropped, and managed via raw pointer, should be managed via rtl::Reference",
+                    varDecl->getLocation())
+                    << pointeeType
+                    << varDecl->getSourceRange();
+        }
     }
     return true;
 }
@@ -762,6 +780,47 @@ bool RefCounting::isCastingReference(const Expr* expr)
     return true;
 }
 
+/**
+    Look for code like
+        makeFoo().get();
+    or
+        cast<T*>(makeFoo().get().get());
+    or
+        foo.get();
+    where makeFoo() returns a unotools::WeakReference<Foo>
+    and foo is a unotools::WeakReference<Foo> var.
+*/
+bool RefCounting::isCallingGetOnWeakRef(const Expr* expr)
+{
+    expr = expr->IgnoreImplicit();
+    // unwrap the cast (if any)
+    if (auto castExpr = dyn_cast<CastExpr>(expr))
+        expr = castExpr->getSubExpr()->IgnoreImplicit();
+    // unwrap outer get (if any)
+    if (auto memberCallExpr = dyn_cast<CXXMemberCallExpr>(expr))
+    {
+        auto methodDecl = memberCallExpr->getMethodDecl();
+        if (methodDecl && methodDecl->getIdentifier() && methodDecl->getName() == "get")
+        {
+            QualType objectType = memberCallExpr->getImplicitObjectArgument()->getType();
+            if (loplugin::TypeCheck(objectType).Class("Reference").Namespace("rtl"))
+                expr = memberCallExpr->getImplicitObjectArgument()->IgnoreImplicit();
+        }
+    }
+    // check for converting a WeakReference to a strong reference via get()
+    if (auto memberCallExpr = dyn_cast<CXXMemberCallExpr>(expr))
+    {
+        auto methodDecl = memberCallExpr->getMethodDecl();
+        if (methodDecl && methodDecl->getIdentifier() && methodDecl->getName() == "get")
+        {
+            QualType objectType = memberCallExpr->getImplicitObjectArgument()->getType();
+            if (loplugin::TypeCheck(objectType).Class("WeakReference").Namespace("unotools"))
+                return true;
+        }
+    }
+    return false;
+}
+
 bool RefCounting::VisitBinaryOperator(const BinaryOperator * binaryOperator)
 {
     if (ignoreLocation(binaryOperator))
@@ -797,6 +856,21 @@ bool RefCounting::VisitBinaryOperator(const BinaryOperator * binaryOperator)
             report(
                 DiagnosticsEngine::Warning,
                 "cppu::OWeakObject subclass %0 being managed via raw pointer, should be managed via rtl::Reference",
+                binaryOperator->getBeginLoc())
+                << pointeeType
+                << binaryOperator->getSourceRange();
+    }
+    if (isCallingGetOnWeakRef(binaryOperator->getRHS()))
+    {
+        // TODO Very dodgy code, but I see no simple way of fixing it
+        StringRef fileName = getFilenameOfLocation(compiler.getSourceManager().getSpellingLoc(binaryOperator->getBeginLoc()));
+        if (loplugin::isSamePathname(fileName, SRCDIR "/sd/source/ui/view/Outliner.cxx"))
+            return true;
+        auto pointeeType = binaryOperator->getLHS()->getType()->getPointeeType();
+        if (containsOWeakObjectSubclass(pointeeType))
+            report(
+                DiagnosticsEngine::Warning,
+                "weak object being converted to strong, and then the reference dropped, and managed via raw pointer, should be managed via rtl::Reference",
                 binaryOperator->getBeginLoc())
                 << pointeeType
                 << binaryOperator->getSourceRange();

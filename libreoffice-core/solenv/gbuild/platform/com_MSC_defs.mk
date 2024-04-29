@@ -40,6 +40,11 @@ ifneq ($(origin CXX),default)
 gb_CXX := $(CXX)
 endif
 
+# _SILENCE_CXX23_DENORM_DEPRECATION_WARNING is needed at least with Boost 1.82.0 using
+# std::numeric_limits::has_denorm in
+# workdir/UnpackedTarball/boost/boost/spirit/home/classic/core/primitives/impl/numerics.ipp, in turn
+# included from boost/spirit/include/classic_core.hpp as included from various of our code files:
+
 # _SCL_SECURE_NO_WARNINGS avoids deprecation warnings for STL algorithms
 # like std::copy, std::transform (when MSVC_USE_DEBUG_RUNTIME is enabled)
 
@@ -50,6 +55,7 @@ gb_COMPILERDEFS := \
 	-D_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING \
 	-D_SILENCE_CXX17_OLD_ALLOCATOR_MEMBERS_DEPRECATION_WARNING \
 	-D_SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING \
+	-D_SILENCE_CXX23_DENORM_DEPRECATION_WARNING \
 	-D_CRT_NON_CONFORMING_SWPRINTFS \
 	-D_CRT_NONSTDC_NO_DEPRECATE \
 	-D_CRT_SECURE_NO_DEPRECATE \
@@ -202,8 +208,9 @@ gb_STDLIBS := \
 gb_CFLAGS_WERROR = $(if $(ENABLE_WERROR),-WX)
 
 # there does not seem to be a way to force C++03 with MSVC, nor with clang-cl against MSVC system
-# headers
-gb_CXX03FLAGS :=
+# headers; the oldest version that MSVC supports is C++14, so use that as a rather imperfect
+# approximation:
+gb_CXX03FLAGS := -std:c++14
 
 gb_LinkTarget_EXCEPTIONFLAGS := \
 	-EHs \
@@ -265,7 +272,7 @@ gb_LTOFLAGS := $(if $(filter TRUE,$(ENABLE_LTO)),-GL)
 # in CLR meta-data - use of this type may lead to a runtime exception":
 gb_CXXCLRFLAGS := \
 	$(if $(COM_IS_CLANG), \
-	    $(patsubst -std=%,-std:c++17 -Zc:__cplusplus,$(gb_CXXFLAGS)), \
+	    $(patsubst -std=%,-std:c++20 -Zc:__cplusplus,$(gb_CXXFLAGS)), \
 	    $(gb_CXXFLAGS)) \
 	$(gb_LinkTarget_EXCEPTIONFLAGS) \
 	-AI $(INSTDIR)/$(LIBO_URE_LIB_FOLDER) \
@@ -298,26 +305,27 @@ endif
 
 ifeq ($(COM_IS_CLANG),TRUE)
 gb_COMPILER_TEST_FLAGS := -Xclang -plugin-arg-loplugin -Xclang --unit-test-mode
-ifeq ($(COMPILER_PLUGIN_TOOL),)
 gb_COMPILER_PLUGINS := -Xclang -load -Xclang $(BUILDDIR)/compilerplugins/clang/plugin.dll -Xclang -add-plugin -Xclang loplugin
 ifneq ($(COMPILER_PLUGIN_WARNINGS_ONLY),)
 gb_COMPILER_PLUGINS += -Xclang -plugin-arg-loplugin -Xclang \
     --warnings-only='$(COMPILER_PLUGIN_WARNINGS_ONLY)'
 endif
-else
-gb_COMPILER_PLUGINS := -Xclang -load -Xclang $(BUILDDIR)/compilerplugins/clang/plugin.dll -Xclang -plugin -Xclang loplugin $(foreach plugin,$(COMPILER_PLUGIN_TOOL), -Xclang -plugin-arg-loplugin -Xclang $(plugin))
-ifneq ($(UPDATE_FILES),)
-gb_COMPILER_PLUGINS += -Xclang -plugin-arg-loplugin -Xclang --scope=$(UPDATE_FILES)
-endif
-endif
 ifeq ($(COMPILER_PLUGINS_DEBUG),TRUE)
 gb_COMPILER_PLUGINS += -Xclang -plugin-arg-loplugin -Xclang --debug
+endif
+gb_COMPILER_PLUGINS_TOOL := -Xclang -load -Xclang $(BUILDDIR)/compilerplugins/clang/plugin.dll -Xclang -plugin -Xclang loplugin $(foreach plugin,$(COMPILER_PLUGIN_TOOL), -Xclang -plugin-arg-loplugin -Xclang $(plugin))
+ifneq ($(UPDATE_FILES),)
+gb_COMPILER_PLUGINS_TOOL += -Xclang -plugin-arg-loplugin -Xclang --scope=$(UPDATE_FILES)
+endif
+ifeq ($(COMPILER_PLUGINS_DEBUG),TRUE)
+gb_COMPILER_PLUGINS_TOOL += -Xclang -plugin-arg-loplugin -Xclang --debug
 endif
 gb_COMPILER_PLUGINS_WARNINGS_AS_ERRORS := \
     -Xclang -plugin-arg-loplugin -Xclang --warnings-as-errors
 else
 gb_COMPILER_TEST_FLAGS :=
 gb_COMPILER_PLUGINS :=
+gb_COMPILER_PLUGINS_TOOL :=
 gb_COMPILER_PLUGINS_WARNINGS_AS_ERRORS :=
 endif
 

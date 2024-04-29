@@ -48,20 +48,23 @@
 
 class SdrObject;
 class SwView;
+class SwXViewSettings;
+class SwXTextViewCursor;
 
-class SwXTextView final :
-    public css::view::XSelectionSupplier,
-    public css::lang::XServiceInfo,
-    public css::view::XFormLayerAccess,
-    public css::text::XTextViewCursorSupplier,
-    public css::text::XTextViewTextRangeSupplier,
-    public css::text::XRubySelection,
-    public css::view::XViewSettingsSupplier,
-    public css::beans::XPropertySet,
-    public css::datatransfer::XTransferableSupplier,
-    public css::datatransfer::XTransferableTextSupplier,
-    public css::qa::XDumper,
-    public SfxBaseController
+typedef cppu::ImplInheritanceHelper<
+            SfxBaseController,
+            css::view::XSelectionSupplier,
+            css::lang::XServiceInfo,
+            css::view::XFormLayerAccess,
+            css::text::XTextViewCursorSupplier,
+            css::text::XTextViewTextRangeSupplier,
+            css::text::XRubySelection,
+            css::view::XViewSettingsSupplier,
+            css::beans::XPropertySet,
+            css::datatransfer::XTransferableSupplier,
+            css::datatransfer::XTransferableTextSupplier,
+            css::qa::XDumper> SwXTextView_Base;
+class SwXTextView final : public SwXTextView_Base
 {
     ::comphelper::OInterfaceContainerHelper3<css::view::XSelectionChangeListener> m_SelChangedListeners;
 
@@ -69,8 +72,8 @@ class SwXTextView final :
     const SfxItemPropertySet*   m_pPropSet;   // property map for SwXTextView properties
                                         // (not related to mxViewSettings!)
 
-    css::uno::Reference< css::beans::XPropertySet >     mxViewSettings;
-    css::uno::Reference< css::text::XTextViewCursor >   mxTextViewCursor;
+    rtl::Reference< SwXViewSettings >     mxViewSettings;
+    rtl::Reference< SwXTextViewCursor >   mxTextViewCursor;
 
     SdrObject* GetControl(
         const css::uno::Reference< css::awt::XControlModel > & Model,
@@ -79,14 +82,6 @@ class SwXTextView final :
     virtual ~SwXTextView() override;
 public:
     SwXTextView(SwView* pSwView);
-
-    virtual     css::uno::Any SAL_CALL queryInterface( const css::uno::Type& aType ) override;
-    virtual void SAL_CALL acquire(  ) noexcept override;
-    virtual void SAL_CALL release(  ) noexcept override;
-
-    //XTypeProvider
-    virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes(  ) override;
-    virtual css::uno::Sequence< sal_Int8 > SAL_CALL getImplementationId(  ) override;
 
     //XSelectionSupplier
     virtual css::uno::Any SAL_CALL getSelection() override;
@@ -175,8 +170,6 @@ class SwXTextViewCursor final: public SwXTextViewCursor_Base, public OTextCursor
 public:
     SwXTextViewCursor(SwView* pVw);
 
-    DECLARE_XINTERFACE()
-
     //XTextViewCursor
     virtual sal_Bool SAL_CALL isVisible() override;
     virtual void SAL_CALL setVisible(sal_Bool bVisible) override;
@@ -242,11 +235,6 @@ public:
     virtual OUString SAL_CALL getImplementationName() override;
     virtual sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override;
     virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
-
-    static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
-
-    //XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
 
     void    Invalidate(){m_pView = nullptr;}
 

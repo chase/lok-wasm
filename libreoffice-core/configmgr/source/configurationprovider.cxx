@@ -39,8 +39,7 @@
 #include <com/sun/star/util/XRefreshListener.hpp>
 #include <com/sun/star/util/XRefreshable.hpp>
 #include <cppu/unotype.hxx>
-#include <cppuhelper/basemutex.hxx>
-#include <cppuhelper/compbase.hxx>
+#include <comphelper/compbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/weak.hxx>
 #include <osl/mutex.hxx>
@@ -61,10 +60,10 @@ namespace configmgr::configuration_provider {
 
 namespace {
 
-constexpr OUStringLiteral accessServiceName =
-    u"com.sun.star.configuration.ConfigurationAccess";
-constexpr OUStringLiteral updateAccessServiceName =
-    u"com.sun.star.configuration.ConfigurationUpdateAccess";
+constexpr OUString accessServiceName =
+    u"com.sun.star.configuration.ConfigurationAccess"_ustr;
+constexpr OUString updateAccessServiceName =
+    u"com.sun.star.configuration.ConfigurationUpdateAccess"_ustr;
 
 void badNodePath() {
     throw css::uno::Exception(
@@ -74,19 +73,18 @@ void badNodePath() {
 }
 
 typedef
-    cppu::WeakComponentImplHelper<
+    comphelper::WeakComponentImplHelper<
         css::lang::XServiceInfo, css::lang::XMultiServiceFactory,
         css::util::XRefreshable, css::util::XFlushable,
         css::lang::XLocalizable >
     ServiceBase;
 
-class Service:
-    private cppu::BaseMutex, public ServiceBase
+class Service : public ServiceBase
 {
 public:
     explicit Service(
         const css::uno::Reference< css::uno::XComponentContext >& context):
-        ServiceBase(m_aMutex), context_(context), default_(true),
+        context_(context), default_(true),
         lock_( lock() )
     {
         assert(context.is());
@@ -95,7 +93,7 @@ public:
     Service(
         const css::uno::Reference< css::uno::XComponentContext >& context,
         OUString locale):
-        ServiceBase(m_aMutex), context_(context), locale_(std::move(locale)),
+        context_(context), locale_(std::move(locale)),
         default_(false),
         lock_( lock() )
     {
@@ -108,7 +106,7 @@ private:
 
     virtual ~Service() override {}
 
-    virtual void SAL_CALL disposing() override { flushModifications(); }
+    virtual void disposing(std::unique_lock<std::mutex>& rGuard) override;
 
     virtual OUString SAL_CALL getImplementationName() override
     {
@@ -165,6 +163,8 @@ private:
     OUString locale_;
     bool default_;
     std::shared_ptr<osl::Mutex> lock_;
+    comphelper::OInterfaceContainerHelper4<css::util::XRefreshListener> maRefreshListeners;
+    comphelper::OInterfaceContainerHelper4<css::util::XFlushListener> maFlushListeners;
 };
 
 css::uno::Reference< css::uno::XInterface > Service::createInstance(
@@ -248,7 +248,7 @@ Service::createInstanceWithArguments(
         throw css::uno::Exception(
             ("com.sun.star.configuration.ConfigurationProvider does not support"
              " service " + ServiceSpecifier),
-            static_cast< cppu::OWeakObject * >(this));
+            getXWeak());
     }
     osl::MutexGuard guard(*lock_);
     Components & components = Components::getSingleton(context_);
@@ -258,10 +258,10 @@ Service::createInstanceWithArguments(
         throw css::uno::Exception(
             ("com.sun.star.configuration.ConfigurationProvider: there is a leaf"
              " value at nodepath " + nodepath),
-            static_cast< cppu::OWeakObject * >(this));
+            getXWeak());
     }
     components.addRootAccess(root);
-    return static_cast< cppu::OWeakObject * >(root.get());
+    return root->getXWeak();
 }
 
 css::uno::Sequence< OUString > Service::getAvailableServiceNames()
@@ -271,49 +271,48 @@ css::uno::Sequence< OUString > Service::getAvailableServiceNames()
 
 void Service::refresh() {
     //TODO
-    cppu::OInterfaceContainerHelper * cont = rBHelper.getContainer(
-        cppu::UnoType< css::util::XRefreshListener >::get());
-    if (cont != nullptr) {
-        css::lang::EventObject ev(static_cast< cppu::OWeakObject * >(this));
-        cont->notifyEach(&css::util::XRefreshListener::refreshed, ev);
+    std::unique_lock g(m_aMutex);
+    if (maRefreshListeners.getLength(g)) {
+        css::lang::EventObject ev(getXWeak());
+        maRefreshListeners.notifyEach(g, &css::util::XRefreshListener::refreshed, ev);
     }
 }
 
 void Service::addRefreshListener(
     css::uno::Reference< css::util::XRefreshListener > const & l)
 {
-    rBHelper.addListener(
-        cppu::UnoType< css::util::XRefreshListener >::get(), l);
+    std::unique_lock g(m_aMutex);
+    maRefreshListeners.addInterface(g, l);
 }
 
 void Service::removeRefreshListener(
     css::uno::Reference< css::util::XRefreshListener > const & l)
 {
-    rBHelper.removeListener(
-        cppu::UnoType< css::util::XRefreshListener >::get(), l);
+    std::unique_lock g(m_aMutex);
+    maRefreshListeners.removeInterface(g, l);
 }
 
 void Service::flush() {
     flushModifications();
-    cppu::OInterfaceContainerHelper * cont = rBHelper.getContainer(
-        cppu::UnoType< css::util::XFlushListener >::get());
-    if (cont != nullptr) {
-        css::lang::EventObject ev(static_cast< cppu::OWeakObject * >(this));
-        cont->notifyEach(&css::util::XFlushListener::flushed, ev);
+    std::unique_lock g(m_aMutex);
+    if (maFlushListeners.getLength(g)) {
+        css::lang::EventObject ev(getXWeak());
+        maFlushListeners.notifyEach(g, &css::util::XFlushListener::flushed, ev);
     }
 }
 
 void Service::addFlushListener(
     css::uno::Reference< css::util::XFlushListener > const & l)
 {
-    rBHelper.addListener(cppu::UnoType< css::util::XFlushListener >::get(), l);
+    std::unique_lock g(m_aMutex);
+    maFlushListeners.addInterface(g, l);
 }
 
 void Service::removeFlushListener(
     css::uno::Reference< css::util::XFlushListener > const & l)
 {
-    rBHelper.removeListener(
-        cppu::UnoType< css::util::XFlushListener >::get(), l);
+    std::unique_lock g(m_aMutex);
+    maFlushListeners.removeInterface(g, l);
 }
 
 void Service::setLocale(css::lang::Locale const & eLocale)
@@ -329,6 +328,12 @@ css::lang::Locale Service::getLocale() {
         loc = LanguageTag::convertToLocale( locale_, false);
     }
     return loc;
+}
+
+void Service::disposing(std::unique_lock<std::mutex>& rGuard) {
+    rGuard.unlock(); // just in case we call back into Service during dispose()
+    flushModifications();
+    rGuard.lock();
 }
 
 void Service::flushModifications() const {
@@ -395,7 +400,7 @@ com_sun_star_comp_configuration_ConfigurationProvider_get_implementation(
 css::uno::Reference< css::uno::XInterface > createDefault(
     css::uno::Reference< css::uno::XComponentContext > const & context)
 {
-    return static_cast< cppu::OWeakObject * >(new Service(context));
+    return getXWeak(new Service(context));
 }
 
 }

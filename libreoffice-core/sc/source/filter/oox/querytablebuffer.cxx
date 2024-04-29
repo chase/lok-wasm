@@ -34,6 +34,7 @@
 #include <biffhelper.hxx>
 #include <connectionsbuffer.hxx>
 #include <defnamesbuffer.hxx>
+#include <docuno.hxx>
 
 namespace oox::xls {
 
@@ -246,10 +247,10 @@ void QueryTable::finalizeImport()
 
     try
     {
-        PropertySet aDocProps( getDocument() );
+        PropertySet aDocProps(( Reference< css::beans::XPropertySet >(getDocument()) ));
         Reference< XAreaLinks > xAreaLinks( aDocProps.getAnyProperty( PROP_AreaLinks ), UNO_QUERY_THROW );
         CellAddress aDestPos( aDestRange.aStart.Tab(), aDestRange.aStart.Col(), aDestRange.aStart.Row() );
-        static const OUStringLiteral aFilterName = u"calc_HTML_WebQuery";
+        static constexpr OUString aFilterName = u"calc_HTML_WebQuery"_ustr;
         xAreaLinks->insertAtPosition( aDestPos, aFileUrl, aTables, aFilterName, /*aFilterOptions*/"" );
         // set refresh interval (convert minutes to seconds)
         sal_Int32 nRefreshPeriod = xConnection->getModel().mnInterval * 60;

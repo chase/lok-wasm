@@ -11,7 +11,10 @@
 #pragma once
 
 #include <sfx2/dllapi.h>
+
+#include <vcl/weld.hxx>
 #include <rtl/ustring.hxx>
+
 #include <vector>
 #include <memory>
 
@@ -24,6 +27,7 @@ enum class AccessibilityIssueID
     DOCUMENT_LANGUAGE,
     DOCUMENT_BACKGROUND,
     STYLE_LANGUAGE,
+    LINKED_GRAPHIC,
     NO_ALT_OLE,
     NO_ALT_GRAPHIC,
     NO_ALT_SHAPE,
@@ -41,13 +45,23 @@ class SFX2_DLLPUBLIC AccessibilityIssue
 {
 public:
     AccessibilityIssue(AccessibilityIssueID eIssueID = AccessibilityIssueID::UNSPECIFIED);
+    AccessibilityIssue(AccessibilityIssue const&) = default;
     virtual ~AccessibilityIssue();
 
     virtual bool canGotoIssue() const = 0;
     virtual void gotoIssue() const = 0;
 
+    virtual bool canQuickFixIssue() const = 0;
+    virtual void quickFixIssue() const = 0;
+
+    void setParent(weld::Window* pParent) { m_pParent = pParent; }
+
+    AccessibilityIssue& operator=(const AccessibilityIssue&) = default;
+
     AccessibilityIssueID m_eIssueID;
     OUString m_aIssueText;
+
+    weld::Window* m_pParent;
 };
 
 class SFX2_DLLPUBLIC AccessibilityIssueCollection

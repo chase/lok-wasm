@@ -70,8 +70,8 @@ namespace {
 OUString BuildBitmap(bool bProtect, bool bHidden)
 {
     if (bProtect)
-        return bHidden ? OUString(RID_BMP_PROT_HIDE) : OUString(RID_BMP_PROT_NO_HIDE);
-    return bHidden ? OUString(RID_BMP_HIDE) : OUString(RID_BMP_NO_HIDE);
+        return bHidden ? RID_BMP_PROT_HIDE : RID_BMP_PROT_NO_HIDE;
+    return bHidden ? RID_BMP_HIDE : RID_BMP_NO_HIDE;
 }
 
 OUString CollapseWhiteSpaces(std::u16string_view sName)
@@ -780,31 +780,31 @@ IMPL_LINK_NOARG(SwEditRegionDlg, OkHdl, weld::Button&, void)
             size_t nNewPos = rDocFormats.GetPos(pFormat);
             if ( SIZE_MAX != nNewPos )
             {
-                std::unique_ptr<SfxItemSet> pSet(pFormat->GetAttrSet().Clone( false ));
+                SwAttrSet aSet(pFormat->GetAttrSet().CloneAsValue( false ));
                 if( pFormat->GetCol() != pRepr->GetCol() )
-                    pSet->Put( pRepr->GetCol() );
+                    aSet.Put( pRepr->GetCol() );
 
                 std::unique_ptr<SvxBrushItem> aBrush(pFormat->makeBackgroundBrushItem(false));
                 if( pRepr->GetBackground() && *aBrush != *pRepr->GetBackground() )
-                    pSet->Put( *pRepr->GetBackground() );
+                    aSet.Put( *pRepr->GetBackground() );
 
                 if( pFormat->GetFootnoteAtTextEnd(false) != pRepr->GetFootnoteNtAtEnd() )
-                    pSet->Put( pRepr->GetFootnoteNtAtEnd() );
+                    aSet.Put( pRepr->GetFootnoteNtAtEnd() );
 
                 if( pFormat->GetEndAtTextEnd(false) != pRepr->GetEndNtAtEnd() )
-                    pSet->Put( pRepr->GetEndNtAtEnd() );
+                    aSet.Put( pRepr->GetEndNtAtEnd() );
 
                 if( pFormat->GetBalancedColumns() != pRepr->GetBalance() )
-                    pSet->Put( pRepr->GetBalance() );
+                    aSet.Put( pRepr->GetBalance() );
 
                 if( pFormat->GetFrameDir() != *pRepr->GetFrameDir() )
-                    pSet->Put( *pRepr->GetFrameDir() );
+                    aSet.Put( *pRepr->GetFrameDir() );
 
                 if( pFormat->GetLRSpace() != *pRepr->GetLRSpace())
-                    pSet->Put( *pRepr->GetLRSpace());
+                    aSet.Put( *pRepr->GetLRSpace());
 
                 m_rSh.UpdateSection( nNewPos, pRepr->GetSectionData(),
-                                   pSet->Count() ? pSet.get() : nullptr );
+                                   aSet.Count() ? &aSet : nullptr );
             }
         } while (m_xTree->iter_next(*xIter));
     }
@@ -1315,7 +1315,7 @@ IMPL_LINK( SwEditRegionDlg, DlgClosedHdl, sfx2::FileDialogHelper *, _pFileDlg, v
         {
             sFileName = pMedium->GetURLObject().GetMainURL( INetURLObject::DecodeMechanism::NONE );
             sFilterName = pMedium->GetFilter()->GetFilterName();
-            if ( const SfxStringItem* pItem = pMedium->GetItemSet()->GetItemIfSet( SID_PASSWORD, false ) )
+            if ( const SfxStringItem* pItem = pMedium->GetItemSet().GetItemIfSet( SID_PASSWORD, false ) )
                 sPassword = pItem->GetValue();
             ::lcl_ReadSections(*pMedium, *m_xSubRegionED);
         }
@@ -1408,7 +1408,7 @@ SwInsertSectionTabDialog::~SwInsertSectionTabDialog()
 {
 }
 
-void SwInsertSectionTabDialog::PageCreated(const OString& rId, SfxTabPage &rPage)
+void SwInsertSectionTabDialog::PageCreated(const OUString& rId, SfxTabPage &rPage)
 {
     if (rId == "section")
         static_cast<SwInsertSectionTabPage&>(rPage).SetWrtShell(m_rWrtSh);
@@ -1440,12 +1440,12 @@ short SwInsertSectionTabDialog::Ok()
     OSL_ENSURE(m_pSectionData, "SwInsertSectionTabDialog: no SectionData?");
     const SfxItemSet* pOutputItemSet = GetOutputItemSet();
     m_rWrtSh.InsertSection(*m_pSectionData, pOutputItemSet);
-    SfxViewFrame* pViewFrame = m_rWrtSh.GetView().GetViewFrame();
+    SfxViewFrame& rViewFrame = m_rWrtSh.GetView().GetViewFrame();
     uno::Reference< frame::XDispatchRecorder > xRecorder =
-            pViewFrame->GetBindings().GetRecorder();
+            rViewFrame.GetBindings().GetRecorder();
     if ( xRecorder.is() )
     {
-        SfxRequest aRequest( pViewFrame, FN_INSERT_REGION);
+        SfxRequest aRequest(rViewFrame, FN_INSERT_REGION);
         if(const SwFormatCol* pCol = pOutputItemSet->GetItemIfSet(RES_COL, false))
         {
             aRequest.AppendItem(SfxUInt16Item(SID_ATTR_COLUMNS,
@@ -1777,7 +1777,7 @@ IMPL_LINK( SwInsertSectionTabPage, DlgClosedHdl, sfx2::FileDialogHelper *, _pFil
         {
             m_sFileName = pMedium->GetURLObject().GetMainURL( INetURLObject::DecodeMechanism::NONE );
             m_sFilterName = pMedium->GetFilter()->GetFilterName();
-            if ( const SfxStringItem* pItem = pMedium->GetItemSet()->GetItemIfSet( SID_PASSWORD, false ) )
+            if ( const SfxStringItem* pItem = pMedium->GetItemSet().GetItemIfSet( SID_PASSWORD, false ) )
                 m_sFilePasswd = pItem->GetValue();
             m_xFileNameED->set_text( INetURLObject::decode(
                 m_sFileName, INetURLObject::DecodeMechanism::Unambiguous ) );
@@ -2055,7 +2055,7 @@ SwSectionPropertyTabDialog::~SwSectionPropertyTabDialog()
 {
 }
 
-void SwSectionPropertyTabDialog::PageCreated(const OString& rId, SfxTabPage &rPage)
+void SwSectionPropertyTabDialog::PageCreated(const OUString& rId, SfxTabPage &rPage)
 {
     if (rId == "background")
     {
@@ -2093,7 +2093,7 @@ bool SwSectionIndentTabPage::FillItemSet(SfxItemSet* rSet)
     {
         SvxLRSpaceItem aLRSpace(
                 m_xBeforeMF->denormalize(m_xBeforeMF->get_value(FieldUnit::TWIP)) ,
-                m_xAfterMF->denormalize(m_xAfterMF->get_value(FieldUnit::TWIP)), 0, 0, RES_LR_SPACE);
+                m_xAfterMF->denormalize(m_xAfterMF->get_value(FieldUnit::TWIP)), 0, RES_LR_SPACE);
         rSet->Put(aLRSpace);
     }
     return true;

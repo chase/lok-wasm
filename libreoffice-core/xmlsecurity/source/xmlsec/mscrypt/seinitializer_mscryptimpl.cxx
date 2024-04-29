@@ -57,7 +57,7 @@ uno::Reference< cssxc::XXMLSecurityContext > SAL_CALL
     //Initialize the crypto engine
     if( sCertDB.getLength() > 0 )
     {
-        sCertDir = OString(sCertDB.getStr(), sCertDB.getLength(), RTL_TEXTENCODING_ASCII_US);
+        sCertDir = OUStringToOString(sCertDB, RTL_TEXTENCODING_ASCII_US);
         n_pCertStore = sCertDir.getStr();
         n_hStoreHandle = CertOpenSystemStoreW( 0, o3tl::toW(sCertDB.getStr())) ;
         if( n_hStoreHandle == nullptr )
@@ -78,8 +78,7 @@ uno::Reference< cssxc::XXMLSecurityContext > SAL_CALL
         uno::Reference< cssxc::XSecurityEnvironment > xSecEnv = cssxc::SecurityEnvironment::create( mxContext );
 
         /* Setup key slot and certDb */
-        uno::Reference< cssl::XUnoTunnel > xSecEnvTunnel( xSecEnv, uno::UNO_QUERY_THROW );
-        SecurityEnvironment_MSCryptImpl* pSecEnv = comphelper::getFromUnoTunnel<SecurityEnvironment_MSCryptImpl>(xSecEnvTunnel);
+        SecurityEnvironment_MSCryptImpl* pSecEnv = dynamic_cast<SecurityEnvironment_MSCryptImpl*>(xSecEnv.get());
         if( pSecEnv == nullptr )
         {
             if( n_hStoreHandle != nullptr )

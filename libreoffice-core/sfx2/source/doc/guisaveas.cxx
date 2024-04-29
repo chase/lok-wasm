@@ -70,7 +70,9 @@
 #include <vcl/weld.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 #include <unotools/tempfile.hxx>
+#include <unotools/useroptions.hxx>
 
+#include <sfx2/objsh.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/strings.hrc>
 #include <sfx2/sfxresid.hxx>
@@ -117,9 +119,9 @@
 #define STATUS_SAVEAS               2
 #define STATUS_SAVEAS_STANDARDNAME  3
 
-constexpr OUStringLiteral aFilterNameString = u"FilterName";
-constexpr OUStringLiteral aFilterOptionsString = u"FilterOptions";
-constexpr OUStringLiteral aFilterDataString = u"FilterData";
+constexpr OUString aFilterNameString = u"FilterName"_ustr;
+constexpr OUString aFilterOptionsString = u"FilterOptions"_ustr;
+constexpr OUString aFilterDataString = u"FilterData"_ustr;
 
 using namespace ::com::sun::star;
 using namespace css::system;
@@ -441,7 +443,7 @@ OUString ModelData_Impl::GetDocServiceName()
 
 void ModelData_Impl::CheckInteractionHandler()
 {
-    const OUString sInteractionHandler {"InteractionHandler"};
+    static constexpr OUString sInteractionHandler {u"InteractionHandler"_ustr};
     ::comphelper::SequenceAsHashMap::const_iterator aInteractIter =
             m_aMediaDescrHM.find( sInteractionHandler );
 
@@ -675,7 +677,7 @@ IMPL_LINK( ModelData_Impl, OptionsDialogClosedHdl, css::ui::dialogs::DialogClose
     if (pEvt->DialogResult == RET_OK && m_xFilterProperties)
     {
         if ( comphelper::LibreOfficeKit::isActive() && SfxViewShell::Current() )
-            SfxViewShell::Current()->libreOfficeKitViewCallback( LOK_CALLBACK_EXPORT_FILE, "PENDING" );
+            SfxViewShell::Current()->libreOfficeKitViewCallback( LOK_CALLBACK_EXPORT_FILE, "PENDING"_ostr );
 
         const uno::Sequence< beans::PropertyValue > aPropsFromDialog = m_xFilterProperties->getPropertyValues();
         for ( const auto& rProp : aPropsFromDialog )
@@ -685,7 +687,7 @@ IMPL_LINK( ModelData_Impl, OptionsDialogClosedHdl, css::ui::dialogs::DialogClose
     }
     else if ( comphelper::LibreOfficeKit::isActive() && SfxViewShell::Current() )
     {
-        SfxViewShell::Current()->libreOfficeKitViewCallback( LOK_CALLBACK_EXPORT_FILE, "ABORT" );
+        SfxViewShell::Current()->libreOfficeKitViewCallback( LOK_CALLBACK_EXPORT_FILE, "ABORT"_ostr );
     }
 }
 
@@ -724,13 +726,13 @@ sal_Int8 ModelData_Impl::CheckStateForSave()
     // check acceptable entries for media descriptor
     ::comphelper::SequenceAsHashMap aAcceptedArgs;
 
-    static const OUStringLiteral aVersionCommentString(u"VersionComment");
-    static const OUStringLiteral aAuthorString(u"Author");
-    static const OUStringLiteral aDontTerminateEdit(u"DontTerminateEdit");
-    static const OUStringLiteral aInteractionHandlerString(u"InteractionHandler");
-    static const OUStringLiteral aStatusIndicatorString(u"StatusIndicator");
-    static const OUStringLiteral aFailOnWarningString(u"FailOnWarning");
-    static const OUStringLiteral aNoFileSync(u"NoFileSync");
+    static constexpr OUString aVersionCommentString(u"VersionComment"_ustr);
+    static constexpr OUString aAuthorString(u"Author"_ustr);
+    static constexpr OUString aDontTerminateEdit(u"DontTerminateEdit"_ustr);
+    static constexpr OUString aInteractionHandlerString(u"InteractionHandler"_ustr);
+    static constexpr OUString aStatusIndicatorString(u"StatusIndicator"_ustr);
+    static constexpr OUString aFailOnWarningString(u"FailOnWarning"_ustr);
+    static constexpr OUString aNoFileSync(u"NoFileSync"_ustr);
 
     if ( GetMediaDescr().find( aVersionCommentString ) != GetMediaDescr().end() )
         aAcceptedArgs[ aVersionCommentString ] = GetMediaDescr()[ aVersionCommentString ];
@@ -1392,13 +1394,14 @@ OUString ModelData_Impl::GetRecommendedName( const OUString& aSuggestedName, con
     return aRecommendedName;
 }
 
-
-
-
 SfxStoringHelper::SfxStoringHelper()
+    : m_bRemote(false)
+    , m_bPreselectPassword(false)
+    , m_bDialogUsed(false)
+    , m_bSetStandardName(false)
+    , m_nStoreMode(0)
 {
 }
-
 
 uno::Reference< container::XNameAccess > const & SfxStoringHelper::GetFilterConfiguration()
 {
@@ -1411,7 +1414,6 @@ uno::Reference< container::XNameAccess > const & SfxStoringHelper::GetFilterConf
     return m_xFilterCFG;
 }
 
-
 uno::Reference< container::XContainerQuery > const & SfxStoringHelper::GetFilterQuery()
 {
     if ( !m_xFilterQuery.is() )
@@ -1421,7 +1423,6 @@ uno::Reference< container::XContainerQuery > const & SfxStoringHelper::GetFilter
 
     return m_xFilterQuery;
 }
-
 
 uno::Reference< css::frame::XModuleManager2 > const & SfxStoringHelper::GetModuleManager()
 {
@@ -1520,13 +1521,16 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
         }
     }
 
-    if (!comphelper::LibreOfficeKit::isActive() && !( m_nStoreMode & EXPORT_REQUESTED ) )
+    if (!comphelper::LibreOfficeKit::isActive() && !( m_nStoreMode & EXPORT_REQUESTED ) && SfxViewShell::Current() )
     {
+        SfxObjectShell* pDocShell = SfxViewShell::Current()->GetObjectShell();
+
         // if it is no export, warn user that the signature will be removed
-        if (  SignatureState::OK == nDocumentSignatureState
+        if (  !pDocShell->IsRememberingSignature()
+           && (SignatureState::OK == nDocumentSignatureState
            || SignatureState::INVALID == nDocumentSignatureState
            || SignatureState::NOTVALIDATED == nDocumentSignatureState
-           || SignatureState::PARTIAL_OK == nDocumentSignatureState)
+           || SignatureState::PARTIAL_OK == nDocumentSignatureState) )
         {
             std::unique_ptr<weld::MessageDialog> xMessageBox(Application::CreateMessageDialog(SfxStoringHelper::GetModelWindow(xModel),
                                                              VclMessageType::Question, VclButtonsType::YesNo, SfxResId(RID_SVXSTR_XMLSEC_QUERY_LOSINGSIGNATURE)));
@@ -1769,6 +1773,38 @@ bool SfxStoringHelper::FinishGUIStoreModel(::comphelper::SequenceAsHashMap::cons
 
     DocumentSettingsGuard aSettingsGuard( aModelData.GetModel(), aModelData.IsRecommendReadOnly(), nStoreMode & EXPORT_REQUESTED );
 
+    // Treat attempted PDF export like a print: update document print statistics
+    if ((nStoreMode & PDFEXPORT_REQUESTED) && SfxViewShell::Current())
+    {
+        SfxObjectShell* pDocShell = SfxViewShell::Current()->GetObjectShell();
+        const bool bWasEnableSetModified = pDocShell && pDocShell->IsEnableSetModified();
+        bool bResetESM = false;
+
+        if (bWasEnableSetModified
+            && !officecfg::Office::Common::Print::PrintingModifiesDocument::get())
+        {
+            pDocShell->EnableSetModified(false); // don't let export mark document as modified
+            bResetESM = true;
+        }
+
+        uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
+            aModelData.GetModel(), uno::UNO_QUERY_THROW);
+        uno::Reference<document::XDocumentProperties> xDocProps(xDPS->getDocumentProperties());
+        xDocProps->setPrintDate(DateTime(DateTime::SYSTEM).GetUNODateTime());
+
+        OUString sPrintedBy(SfxResId(STR_SFX_FILTERNAME_PDF));
+        if (pDocShell && pDocShell->IsUseUserData())
+        {
+            const OUString& sFullName = SvtUserOptions().GetFullName();
+            if (!sFullName.isEmpty())
+                sPrintedBy += ": " + sFullName;
+        }
+        xDocProps->setPrintedBy(sPrintedBy);
+
+        if (bResetESM)
+            pDocShell->EnableSetModified(true);
+    }
+
     OSL_ENSURE( aModelData.GetMediaDescr().find( OUString( "Password" ) ) == aModelData.GetMediaDescr().end(), "The Password property of MediaDescriptor should not be used here!" );
     if ( officecfg::Office::Common::Save::Document::EditProperty::get()
       && ( !aModelData.GetStorable()->hasLocation()
@@ -1858,8 +1894,7 @@ bool SfxStoringHelper::FinishGUIStoreModel(::comphelper::SequenceAsHashMap::cons
         if ( SfxViewShell* pShell = SfxViewShell::Current() )
         {
             OUString sURL = aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE );
-            pShell->libreOfficeKitViewCallback( LOK_CALLBACK_EXPORT_FILE,
-                OUStringToOString(sURL, RTL_TEXTENCODING_UTF8).getStr() );
+            pShell->libreOfficeKitViewCallback( LOK_CALLBACK_EXPORT_FILE, sURL.toUtf8() );
         }
     }
 

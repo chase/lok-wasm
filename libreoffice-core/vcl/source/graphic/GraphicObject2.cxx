@@ -308,7 +308,7 @@ bool GraphicObject::ImplDrawTiled(OutputDevice& rOut, const tools::Rectangle& rA
                 GraphicObject aAlphaGraphic;
 
                 if( GetGraphic().IsAlpha() )
-                    aAlphaGraphic.SetGraphic(BitmapEx(GetGraphic().GetBitmapEx().GetAlpha().GetBitmap()));
+                    aAlphaGraphic.SetGraphic(BitmapEx(GetGraphic().GetBitmapEx().GetAlphaMask().GetBitmap()));
                 else
                     aAlphaGraphic.SetGraphic(BitmapEx(Bitmap()));
 
@@ -321,7 +321,7 @@ bool GraphicObject::ImplDrawTiled(OutputDevice& rOut, const tools::Rectangle& rA
                                                 AlphaMask( aVDev->GetBitmap( Point(0,0), aVDev->GetOutputSize() ) ) );
                     else
                         aTileBitmap = BitmapEx( aTileBitmap.GetBitmap(),
-                                                aVDev->GetBitmap( Point(0,0), aVDev->GetOutputSize() ).CreateMask( COL_WHITE ) );
+                                                aVDev->GetBitmap( Point(0,0), aVDev->GetOutputSize() ).CreateAlphaMask( COL_WHITE ) );
                 }
             }
 
@@ -457,13 +457,13 @@ void GraphicObject::ImplTransformBitmap( BitmapEx&          rBmpEx,
 
             if( rBmpEx.IsAlpha() )
             {
-                aBmpEx2 = BitmapEx( rBmpEx.GetBitmap(), rBmpEx.GetAlpha() );
+                aBmpEx2 = rBmpEx;
             }
             else
             {
                 // #104115# Generate mask bitmap and init to zero
-                Bitmap aMask(aBmpSize, vcl::PixelFormat::N8_BPP, &Bitmap::GetGreyPalette(256));
-                aMask.Erase( Color(0,0,0) );
+                AlphaMask aMask(aBmpSize);
+                aMask.Erase(255);
 
                 // #104115# Always generate transparent bitmap, we need the border transparent
                 aBmpEx2 = BitmapEx( rBmpEx.GetBitmap(), aMask );
@@ -474,7 +474,7 @@ void GraphicObject::ImplTransformBitmap( BitmapEx&          rBmpEx,
 
             aBmpEx2.Scale(Size(nPadTotalWidth, nPadTotalHeight));
             aBmpEx2.Erase( Color(ColorAlpha,0,0,0,0) );
-            aBmpEx2.CopyPixel( tools::Rectangle( Point(nPadLeft, nPadTop), aBmpSize ), tools::Rectangle( Point(0, 0), aBmpSize ), &rBmpEx );
+            aBmpEx2.CopyPixel( tools::Rectangle( Point(nPadLeft, nPadTop), aBmpSize ), tools::Rectangle( Point(0, 0), aBmpSize ), rBmpEx );
             rBmpEx = aBmpEx2;
         }
     }

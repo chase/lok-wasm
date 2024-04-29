@@ -48,8 +48,6 @@ DrawModelWrapper::DrawModelWrapper()
 {
     m_xChartItemPool = ChartItemPool::CreateChartItemPool();
 
-    SetScaleUnit(MapUnit::Map100thMM);
-    SetScaleFraction(Fraction(1, 1));
     SetDefaultFontHeight(423);     // 12pt
 
     SfxItemPool* pMasterPool = &GetItemPool();
@@ -103,8 +101,11 @@ DrawModelWrapper::DrawModelWrapper()
 
 DrawModelWrapper::~DrawModelWrapper()
 {
+    // normally call from ~SdrModel, but do it here explicitly before we clear m_xChartItemPool
+    implDtorClearModel();
+
     //remove m_pChartItemPool from pool chain
-    if(m_xChartItemPool)
+    if (m_xChartItemPool)
     {
         SfxItemPool* pPool = &GetItemPool();
         for (;;)
@@ -122,16 +123,14 @@ DrawModelWrapper::~DrawModelWrapper()
     m_pRefDevice.disposeAndClear();
 }
 
-uno::Reference< uno::XInterface > DrawModelWrapper::createUnoModel()
+uno::Reference< frame::XModel > DrawModelWrapper::createUnoModel()
 {
-    uno::Reference< lang::XComponent > xComponent = new SvxUnoDrawingModel( this ); //tell Andreas Schluens if SvxUnoDrawingModel is not needed anymore -> remove export from svx to avoid link problems in writer
-    return uno::Reference< uno::XInterface >::query( xComponent );
+    return new SvxUnoDrawingModel( this ); //tell Andreas Schluens if SvxUnoDrawingModel is not needed anymore -> remove export from svx to avoid link problems in writer
 }
 
 uno::Reference< frame::XModel > DrawModelWrapper::getUnoModel()
 {
-    uno::Reference< uno::XInterface > xI = SdrModel::getUnoModel();
-    return uno::Reference<frame::XModel>::query( xI );
+    return SdrModel::getUnoModel();
 }
 
 SdrModel& DrawModelWrapper::getSdrModel()
@@ -294,17 +293,13 @@ SdrObject* DrawModelWrapper::getNamedSdrObject( const OUString& rObjectCID, SdrO
 {
     if(!pSearchList || rObjectCID.isEmpty())
         return nullptr;
-    const size_t nCount = pSearchList->GetObjCount();
-    for( size_t nN=0; nN<nCount; ++nN )
+    for (const rtl::Reference<SdrObject>& pObj : *pSearchList)
     {
-        SdrObject* pObj = pSearchList->GetObj(nN);
-        if(!pObj)
-            continue;
         if( ObjectIdentifier::areIdenticalObjects( rObjectCID, pObj->GetName() ) )
-            return pObj;
-        pObj = DrawModelWrapper::getNamedSdrObject( rObjectCID, pObj->GetSubList() );
-        if(pObj)
-            return pObj;
+            return pObj.get();
+        SdrObject* pNamedObj = DrawModelWrapper::getNamedSdrObject( rObjectCID, pObj->GetSubList() );
+        if(pNamedObj)
+            return pNamedObj;
     }
     return nullptr;
 }

@@ -42,18 +42,14 @@ enum LayerAttribute { VISIBLE, PRINTABLE, LOCKED };
 class SdLayer : public ::cppu::WeakImplHelper< css::drawing::XLayer,
                                                 css::lang::XServiceInfo,
                                                 css::container::XChild,
-                                                css::lang::XUnoTunnel,
                                                 css::lang::XComponent >
 {
 public:
     SdLayer(SdLayerManager* pLayerManager_, SdrLayer* pSdrLayer_);
     virtual ~SdLayer() noexcept override;
 
-    // intern
+    // internal
     SdrLayer* GetSdrLayer() const noexcept { return pLayer; }
-
-    // uno helper
-    UNO3_GETIMPLEMENTATION_DECL( SdLayer )
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
@@ -102,7 +98,6 @@ private:
 class SdLayerManager : public ::cppu::WeakImplHelper< css::drawing::XLayerManager,
                                                        css::container::XNameAccess,
                                                        css::lang::XServiceInfo,
-                                                       css::lang::XUnoTunnel,
                                                        css::lang::XComponent >
 {
     friend class SdLayer;
@@ -110,9 +105,6 @@ class SdLayerManager : public ::cppu::WeakImplHelper< css::drawing::XLayerManage
 public:
     explicit SdLayerManager( SdXImpressDocument& rMyModel ) noexcept;
     virtual ~SdLayerManager() noexcept override;
-
-    // uno helper
-    UNO3_GETIMPLEMENTATION_DECL( SdLayerManager )
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;

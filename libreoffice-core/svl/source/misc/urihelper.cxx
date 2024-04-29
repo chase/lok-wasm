@@ -197,8 +197,7 @@ OUString normalize(
     OUStringBuffer head(ref->getScheme());
     head.append(':');
     if (ref->hasAuthority()) {
-        head.append("//");
-        head.append(ref->getAuthority());
+        head.append("//" + ref->getAuthority());
     }
     for (sal_Int32 i = count - 1; i > 0; --i) {
         OUStringBuffer buf(head);
@@ -746,6 +745,65 @@ OUString URIHelper::FindFirstURLInText(OUString const & rText,
     return OUString();
 }
 
+OUString URIHelper::FindFirstDOIInText(OUString const & rText,
+                                       sal_Int32 & rBegin,
+                                       sal_Int32 & rEnd,
+                                       CharClass const & rCharClass)
+{
+    if (rBegin > rEnd || rEnd > rText.getLength())
+        return OUString();
+
+    sal_Int32 start = 7;
+    sal_Int32 count = rEnd-rBegin;
+    OUString candidate(rText.subView(rBegin, count));
+    // Match with regex "doi:10\.\d{4,9}\/[-._;()\/:a-zA-Z0-9]+"
+    if (candidate.startsWithIgnoreAsciiCase("doi:10."))
+    {
+        bool flag = true;
+        sal_Int32 digit = 0;
+        for (sal_Int32 i=start; i<count; i++)
+        {
+            sal_Unicode c = candidate[i];
+            // Match 4 to 9 digits before slash
+            if (digit >= 0)
+            {
+                if (digit>9)
+                {
+                    flag = false;
+                    break;
+                }
+
+                if ( rCharClass.isDigit(candidate,i) )
+                {
+                    digit++;
+                }
+                else if (c=='/' && digit>=4 && i<count-1)
+                {
+                    digit=-1;
+                }
+                else
+                {
+                    flag = false;
+                    break;
+                }
+            }
+            // Match [-._;()\/:a-zA-Z0-9] after slash
+            else if (!( rCharClass.isAlphaNumeric(candidate, i) || c == '.' || c == '-' || c=='_' ||
+                        c==';' || c=='(' || c==')' || c=='\\' || (c=='/' && i<count-1) || c==':'))
+            {
+                flag = false;
+                break;
+            }
+        }
+        if (flag && digit==-1)
+        {
+            return OUString::Concat("https://doi.org/")+candidate.subView(4);
+        }
+    }
+    rBegin = rEnd;
+    return OUString();
+}
+
 OUString URIHelper::removePassword(OUString const & rURI,
                                    INetURLObject::EncodeMechanism eEncodeMechanism,
                                    INetURLObject::DecodeMechanism eDecodeMechanism,
@@ -792,11 +850,7 @@ OUString URIHelper::resolveIdnaHost(OUString const & url) {
     UErrorCode e = U_ZERO_ERROR;
     std::unique_ptr<icu::IDNA> idna(
         icu::IDNA::createUTS46Instance(
-            (UIDNA_USE_STD3_RULES | UIDNA_CHECK_BIDI | UIDNA_CHECK_CONTEXTJ
-#if U_ICU_VERSION_MAJOR_NUM >= 49
-             | UIDNA_CHECK_CONTEXTO
-#endif
-             ),
+            (UIDNA_USE_STD3_RULES | UIDNA_CHECK_BIDI | UIDNA_CHECK_CONTEXTJ | UIDNA_CHECK_CONTEXTO),
             e));
     if (U_FAILURE(e)) {
         SAL_WARN("vcl.gdi", "icu::IDNA::createUTS46Instance " << e);

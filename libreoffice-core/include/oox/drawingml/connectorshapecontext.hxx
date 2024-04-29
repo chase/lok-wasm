@@ -39,6 +39,21 @@ namespace oox::drawingml {
         sal_Int32 mnDestGlueId;
     };
 
+/// Handles CT_NonVisualConnectorProperties, used for cNvCnPr (Word) and cNvCxnSpPr (PP) elements.
+class ConnectorShapePropertiesContext : public ::oox::core::ContextHandler2
+{
+    std::vector<ConnectorShapeProperties>& mrConnectorShapePropertiesList;
+    ShapePtr mpConnectorShapePtr;
+
+public:
+    ConnectorShapePropertiesContext(
+        ::oox::core::ContextHandler2Helper const& rParent, ShapePtr& pShapePtr,
+        std::vector<ConnectorShapeProperties>& rConnectorShapePropertiesList);
+
+    virtual ::oox::core::ContextHandlerRef onCreateContext(sal_Int32 aElementToken,
+                                                           const AttributeList& rAttribs) override;
+};
+
 class OOX_DLLPUBLIC ConnectorShapeContext final : public ShapeContext
 {
     std::vector<ConnectorShapeProperties>& mrConnectorShapePropertiesList;

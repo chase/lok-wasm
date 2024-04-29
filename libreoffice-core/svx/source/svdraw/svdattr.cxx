@@ -46,6 +46,7 @@
 #include <vcl/settings.hxx>
 
 #include <svl/grabbagitem.hxx>
+#include <svl/voiditem.hxx>
 
 #include <svx/strings.hrc>
 #include <svx/dialmgr.hxx>
@@ -125,8 +126,12 @@ SdrItemPool::SdrItemPool(
     // init the non-persistent items
     for(sal_uInt16 i(SDRATTR_NOTPERSIST_FIRST); i <= SDRATTR_NOTPERSIST_LAST; i++)
     {
-        mpLocalItemInfos[i - SDRATTR_START]._bPoolable = false;
+        mpLocalItemInfos[i - SDRATTR_START]._bNeedsPoolRegistration = false;
     }
+
+    // these slots need _bNeedsPoolRegistration == true, see
+    // text @svl/source/items/itempool.cxx
+    mpLocalItemInfos[SDRATTR_XMLATTRIBUTES -SDRATTR_START]._bNeedsPoolRegistration = true;
 
     // init own PoolDefaults
     std::vector<SfxPoolItem*>& rPoolDefaults = *mpLocalPoolDefaults;
@@ -189,6 +194,7 @@ SdrItemPool::SdrItemPool(
     rPoolDefaults[SDRATTR_EDGELINE1DELTA   -SDRATTR_START]=new SdrMetricItem(SDRATTR_EDGELINE1DELTA, 0);
     rPoolDefaults[SDRATTR_EDGELINE2DELTA   -SDRATTR_START]=new SdrMetricItem(SDRATTR_EDGELINE2DELTA, 0);
     rPoolDefaults[SDRATTR_EDGELINE3DELTA   -SDRATTR_START]=new SdrMetricItem(SDRATTR_EDGELINE3DELTA, 0);
+    rPoolDefaults[SDRATTR_EDGEOOXMLCURVE   -SDRATTR_START]=new SfxBoolItem(SDRATTR_EDGEOOXMLCURVE, false);
     rPoolDefaults[SDRATTR_MEASUREKIND             -SDRATTR_START]=new SdrMeasureKindItem;
     rPoolDefaults[SDRATTR_MEASURETEXTHPOS         -SDRATTR_START]=new SdrMeasureTextHPosItem;
     rPoolDefaults[SDRATTR_MEASURETEXTVPOS         -SDRATTR_START]=new SdrMeasureTextVPosItem;
@@ -333,7 +339,7 @@ SdrItemPool::SdrItemPool(
     rPoolDefaults[ SDRATTR_TABLE_BORDER_TLBR - SDRATTR_START ] = new SvxLineItem( SDRATTR_TABLE_BORDER_TLBR );
     rPoolDefaults[ SDRATTR_TABLE_BORDER_BLTR - SDRATTR_START ] = new SvxLineItem( SDRATTR_TABLE_BORDER_BLTR );
     rPoolDefaults[ SDRATTR_TABLE_TEXT_ROTATION - SDRATTR_START ] = new SvxTextRotateItem(0_deg10, SDRATTR_TABLE_TEXT_ROTATION);
-    rPoolDefaults[ SDRATTR_TABLE_GRABBAG - SDRATTR_START ] = new SfxGrabBagItem(SDRATTR_TABLE_GRABBAG);
+    rPoolDefaults[ SDRATTR_TABLE_CELL_GRABBAG - SDRATTR_START ] = new SfxGrabBagItem(SDRATTR_TABLE_CELL_GRABBAG);
 
     rPoolDefaults[ SDRATTR_GLOW_RADIUS - SDRATTR_START ] = new SdrMetricItem(SDRATTR_GLOW_RADIUS, 0);
     rPoolDefaults[ SDRATTR_GLOW_COLOR - SDRATTR_START ] = new XColorItem(SDRATTR_GLOW_COLOR, aNullCol);
@@ -876,8 +882,7 @@ bool SdrAngleItem::GetPresentation(
     if(ePres == SfxItemPresentation::Complete)
     {
         OUString aStr = SdrItemPool::GetItemName(Which());
-        aText.insert(0, ' ');
-        aText.insert(0, aStr);
+        aText.insert(0, aStr + " ");
     }
 
     rText = aText.makeStringAndClear();
@@ -1016,8 +1021,9 @@ bool SdrTextFitToSizeTypeItem::operator==(const SfxPoolItem& rItem) const
     {
         return false;
     }
-
-    return m_nMaxScale == static_cast<const SdrTextFitToSizeTypeItem&>(rItem).m_nMaxScale;
+    auto& rTextFitToSizeTypeItem = static_cast<const SdrTextFitToSizeTypeItem&>(rItem);
+    return mfFontScale == rTextFitToSizeTypeItem.mfFontScale
+        && mfSpacingScale == rTextFitToSizeTypeItem.mfSpacingScale;
 }
 
 sal_uInt16 SdrTextFitToSizeTypeItem::GetValueCount() const { return 4; }

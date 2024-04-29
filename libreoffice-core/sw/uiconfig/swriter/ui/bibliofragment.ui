@@ -148,5 +148,22 @@
         <property name="top_attach">0</property>
       </packing>
     </child>
+    <child>
+      <object class="GtkComboBoxText" id="listbox-target-type">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="hexpand">True</property>
+        <items>
+          <item id="0" translatable="yes" context="bibliofragment|targettype0">Open Display URL</item>
+          <item id="1" translatable="yes" context="bibliofragment|targettype1">Open Target URL</item>
+          <item id="2" translatable="yes" context="bibliofragment|targettype2">None</item>
+          <item id="3" translatable="yes" context="bibliofragment|targettype3">Jump to Bibliography Table Row</item>
+        </items>
+      </object>
+      <packing>
+        <property name="left_attach">3</property>
+        <property name="top_attach">0</property>
+      </packing>
+    </child>
   </object>
 </interface>

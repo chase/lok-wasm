@@ -132,7 +132,7 @@ inline SvxFont& SvxCharBasePage::GetPreviewCTLFont()
     return m_aPreviewWin.GetCTLFont();
 }
 
-SvxCharBasePage::SvxCharBasePage(weld::Container* pPage, weld::DialogController* pController, const OUString& rUIXMLDescription, const OString& rID, const SfxItemSet& rItemset)
+SvxCharBasePage::SvxCharBasePage(weld::Container* pPage, weld::DialogController* pController, const OUString& rUIXMLDescription, const OUString& rID, const SfxItemSet& rItemset)
     : SfxTabPage(pPage, pController, rUIXMLDescription, rID, &rItemset)
     , m_bPreviewBackgroundToCharacter( false )
 {
@@ -224,7 +224,7 @@ SvxCharNamePage::SvxCharNamePage(weld::Container* pPage, weld::DialogController*
     , m_xCTLFontFeaturesButton(m_xBuilder->weld_button("btnCTLFeatures"))
     , m_xCTLFontTypeFT(m_xBuilder->weld_label("lbCTLFontinfo"))
 
-    , m_xVDev(*Application::GetDefaultDevice(), DeviceFormat::DEFAULT, DeviceFormat::DEFAULT)
+    , m_xVDev(*Application::GetDefaultDevice(), DeviceFormat::WITH_ALPHA)
 {
     m_xPreviewWin.reset(new weld::CustomWeld(*m_xBuilder, "preview", m_aPreviewWin));
 #ifdef IOS
@@ -245,9 +245,8 @@ SvxCharNamePage::SvxCharNamePage(weld::Container* pPage, weld::DialogController*
     m_xEastFontNameLB = std::move(xCJKFontName);
     m_xCTLFontNameLB = std::move(xCTLFontName);
 
-    SvtCTLOptions aCTLLanguageOptions;
     bool bShowCJK = SvtCJKOptions::IsCJKFontEnabled();
-    bool bShowCTL = aCTLLanguageOptions.IsCTLFontEnabled();
+    bool bShowCTL = SvtCTLOptions::IsCTLFontEnabled();
     bool bShowNonWestern = bShowCJK || bShowCTL;
     if (!bShowNonWestern)
     {
@@ -1369,8 +1368,8 @@ void SvxCharEffectsPage::Initialize()
     }
     if (pHtmlModeItem)
     {
-        m_nHtmlMode = pHtmlModeItem->GetValue();
-        if ( ( m_nHtmlMode & HTMLMODE_ON ) == HTMLMODE_ON )
+        sal_uInt16 nHtmlMode = pHtmlModeItem->GetValue();
+        if ( ( nHtmlMode & HTMLMODE_ON ) == HTMLMODE_ON )
         {
             //!!! hide some controls please
         }
@@ -2239,7 +2238,7 @@ bool SvxCharEffectsPage::FillItemSet( SfxItemSet* rSet )
 
     if (bChanged)
     {
-        rSet->Put( SvxEmphasisMarkItem( eMark, nWhich ) );
+        rSet->Put( SvxEmphasisMarkItem( eMark, TypedWhichId<SvxEmphasisMarkItem>(nWhich) ) );
         bModified = true;
     }
     else if ( SfxItemState::DEFAULT == rOldSet.GetItemState( nWhich, false ) )
@@ -2390,10 +2389,7 @@ void SvxCharEffectsPage::PageCreated(const SfxAllItemSet& aSet)
     if (pDisableCtlItem)
         DisableControls(pDisableCtlItem->GetValue());
 
-    if (!pFlagItem)
-        return;
-
-    sal_uInt32 nFlags=pFlagItem->GetValue();
+    sal_uInt32 nFlags = pFlagItem ? pFlagItem->GetValue() : 0;
     if ( ( nFlags & SVX_PREVIEW_CHARACTER ) == SVX_PREVIEW_CHARACTER )
         // the writer uses SID_ATTR_BRUSH as font background
         m_bPreviewBackgroundToCharacter = true;
@@ -2752,6 +2748,8 @@ void SvxCharPositionPage::Reset( const SfxItemSet* rSet )
         m_xHighPosBtn->set_active(false);
         m_xNormalPosBtn->set_active(false);
         m_xLowPosBtn->set_active(false);
+
+        m_xHighLowRB->set_active(true);
     }
 
     // set BspFont
@@ -2808,7 +2806,7 @@ void SvxCharPositionPage::Reset( const SfxItemSet* rSet )
         m_xScaleWidthMF->set_value(100, FieldUnit::PERCENT);
 
     if ( rSet->GetItemState( SID_ATTR_CHAR_WIDTH_FIT_TO_LINE ) >= SfxItemState::DEFAULT )
-        m_nScaleWidthItemSetVal = static_cast<const SfxUInt16Item&>( rSet->Get( SID_ATTR_CHAR_WIDTH_FIT_TO_LINE )).GetValue();
+        m_nScaleWidthItemSetVal = rSet->Get( SID_ATTR_CHAR_WIDTH_FIT_TO_LINE ).GetValue();
 
     // Rotation
     nWhich = GetWhich( SID_ATTR_CHAR_ROTATED );
@@ -2969,7 +2967,7 @@ bool SvxCharPositionPage::FillItemSet( SfxItemSet* rSet )
     nWhich = GetWhich( SID_ATTR_CHAR_SCALEWIDTH );
     if (m_xScaleWidthMF->get_value_changed_from_saved())
     {
-        rSet->Put(SvxCharScaleWidthItem(static_cast<sal_uInt16>(m_xScaleWidthMF->get_value(FieldUnit::PERCENT)), nWhich));
+        rSet->Put(SvxCharScaleWidthItem(static_cast<sal_uInt16>(m_xScaleWidthMF->get_value(FieldUnit::PERCENT)), TypedWhichId<SvxCharScaleWidthItem>(nWhich)));
         bModified = true;
     }
     else if ( SfxItemState::DEFAULT == rOldSet.GetItemState( nWhich, false ) )
@@ -2982,7 +2980,7 @@ bool SvxCharPositionPage::FillItemSet( SfxItemSet* rSet )
          m_x270degRB->get_state_changed_from_saved()  ||
          m_xFitToLineCB->get_state_changed_from_saved() )
     {
-        SvxCharRotateItem aItem( 0_deg10, m_xFitToLineCB->get_active(), nWhich );
+        SvxCharRotateItem aItem( 0_deg10, m_xFitToLineCB->get_active(), TypedWhichId<SvxCharRotateItem>(nWhich) );
         if (m_x90degRB->get_active())
             aItem.SetBottomToTop();
         else if (m_x270degRB->get_active())
@@ -2999,7 +2997,7 @@ bool SvxCharPositionPage::FillItemSet( SfxItemSet* rSet )
 
 void SvxCharPositionPage::FillUserData()
 {
-    static const OUStringLiteral cTok( u";" );
+    static constexpr OUString cTok( u";"_ustr );
 
     OUString sUser = OUString::number( m_nSuperEsc )  + cTok +
                      OUString::number( m_nSubEsc )    + cTok +

@@ -43,10 +43,10 @@ namespace svgio::svgreader
             SvgNumber               maY;
             SvgNumber               maWidth;
             SvgNumber               maHeight;
-            std::unique_ptr<SvgUnits>
-                                    mpPatternUnits;
-            std::unique_ptr<SvgUnits>
-                                    mpPatternContentUnits;
+            std::optional<SvgUnits>
+                                    moPatternUnits;
+            std::optional<SvgUnits>
+                                    moPatternContentUnits;
             std::optional<basegfx::B2DHomMatrix>
                                     mpaPatternTransform;
 
@@ -67,7 +67,7 @@ namespace svgio::svgreader
             virtual ~SvgPatternNode() override;
 
             virtual const SvgStyleAttributes* getSvgStyleAttributes() const override;
-            virtual void parseAttribute(const OUString& rTokenName, SVGToken aSVGToken, const OUString& aContent) override;
+            virtual void parseAttribute(SVGToken aSVGToken, const OUString& aContent) override;
 
             /// global helpers
             void getValuesRelative(double& rfX, double& rfY, double& rfW, double& rfH, const basegfx::B2DRange& rGeoRange, SvgNode const & rUser) const;
@@ -99,11 +99,11 @@ namespace svgio::svgreader
 
             /// PatternUnits content
             const SvgUnits* getPatternUnits() const;
-            void setPatternUnits(const SvgUnits aPatternUnits) { mpPatternUnits.reset( new SvgUnits(aPatternUnits) ); }
+            void setPatternUnits(const SvgUnits aPatternUnits) { moPatternUnits = aPatternUnits; }
 
             /// PatternContentUnits content
             const SvgUnits* getPatternContentUnits() const;
-            void setPatternContentUnits(const SvgUnits aPatternContentUnits) { mpPatternContentUnits.reset( new SvgUnits(aPatternContentUnits) ); }
+            void setPatternContentUnits(const SvgUnits aPatternContentUnits) { moPatternContentUnits = aPatternContentUnits; }
 
             /// PatternTransform content
             std::optional<basegfx::B2DHomMatrix> getPatternTransform() const;

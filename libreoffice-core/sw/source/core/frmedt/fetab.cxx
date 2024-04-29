@@ -37,6 +37,8 @@
 #include <docsh.hxx>
 #include <IDocumentState.hxx>
 #include <IDocumentLayoutAccess.hxx>
+#include <IDocumentRedlineAccess.hxx>
+#include <IDocumentUndoRedo.hxx>
 #include <cntfrm.hxx>
 #include <txtfrm.hxx>
 #include <notxtfrm.hxx>
@@ -184,6 +186,9 @@ void SwFEShell::InsertRow( sal_uInt16 nCnt, bool bBehind )
         return;
     }
 
+    // pending drag & drop?
+    bool bAction = ActionPend();
+
     CurrShell aCurr( this );
     StartAllAction();
 
@@ -203,7 +208,7 @@ void SwFEShell::InsertRow( sal_uInt16 nCnt, bool bBehind )
     TableWait aWait( nCnt, pFrame, *GetDoc()->GetDocShell(), aBoxes.size() );
 
     if ( !aBoxes.empty() )
-        GetDoc()->InsertRow( aBoxes, nCnt, bBehind );
+        GetDoc()->InsertRow( aBoxes, nCnt, bBehind, /*bInsertDummy=*/!bAction );
 
     EndAllActionAndCall();
 }
@@ -231,6 +236,9 @@ void SwFEShell::InsertCol( sal_uInt16 nCnt, bool bBehind )
         return;
     }
 
+    // pending drag & drop?
+    bool bAction = ActionPend();
+
     StartAllAction();
     // search boxes via the layout
     SwSelBoxes aBoxes;
@@ -239,7 +247,7 @@ void SwFEShell::InsertCol( sal_uInt16 nCnt, bool bBehind )
     TableWait aWait( nCnt, pFrame, *GetDoc()->GetDocShell(), aBoxes.size() );
 
     if( !aBoxes.empty() )
-        GetDoc()->InsertCol( aBoxes, nCnt, bBehind );
+        GetDoc()->InsertCol( aBoxes, nCnt, bBehind, /*bInsertDummy=*/!bAction );
 
     EndAllActionAndCall();
 }
@@ -276,6 +284,79 @@ bool SwFEShell::DeleteCol()
     }
 
     CurrShell aCurr( this );
+
+    bool bRecordChanges = GetDoc()->GetDocShell()->IsChangeRecording();
+    bool bRecordAndHideChanges = bRecordChanges &&
+        GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout()->IsHideRedlines();
+
+    // tracked deletion: remove only textbox content,
+    // and set IsNoTracked table box property to false
+    if ( bRecordChanges )
+    {
+        StartUndo(SwUndoId::COL_DELETE);
+        StartAllAction();
+
+        if ( SwWrtShell* pWrtShell = dynamic_cast<SwWrtShell*>(this) )
+            pWrtShell->SelectTableCol();
+
+        // search boxes via the layout
+        SwSelBoxes aBoxes;
+        GetTableSel( *this, aBoxes, SwTableSearchType::Col );
+
+        TableWait aWait( 20, pFrame, *GetDoc()->GetDocShell(), aBoxes.size() );
+
+        SwTableNode* pTableNd = pFrame->IsTextFrame()
+            ? static_cast<SwTextFrame*>(pFrame)->GetTextNodeFirst()->FindTableNode()
+            : static_cast<SwNoTextFrame*>(pFrame)->GetNode()->FindTableNode();
+
+        for (size_t i = 0; i < aBoxes.size(); ++i)
+        {
+            SwTableBox *pBox = aBoxes[i];
+            if ( pBox->GetSttNd() )
+            {
+                SwNodeIndex aIdx( *pBox->GetSttNd(), 1 );
+                SwCursor aCursor( SwPosition(aIdx), nullptr );
+                SvxPrintItem aHasTextChangesOnly(RES_PRINT, false);
+                GetDoc()->SetBoxAttr( aCursor, aHasTextChangesOnly );
+
+                // add dummy text content to the empty box for change tracking
+                if ( pBox->IsEmpty() )
+                {
+                    IDocumentContentOperations& rIDCO = GetDoc()->getIDocumentContentOperations();
+                    IDocumentRedlineAccess& rIDRA = GetDoc()->getIDocumentRedlineAccess();
+                    RedlineFlags eOld = rIDRA.GetRedlineFlags();
+                    rIDRA.SetRedlineFlags_intern(RedlineFlags::NONE);
+                    rIDCO.InsertString( aCursor, OUStringChar(CH_TXT_TRACKED_DUMMY_CHAR) );
+                    aCursor.SetMark();
+                    aCursor.GetMark()->SetContent(0);
+                    rIDRA.SetRedlineFlags_intern( eOld );
+                    rIDCO.DeleteAndJoin( aCursor );
+                }
+
+            }
+        }
+
+        SwEditShell* pEditShell = GetDoc()->GetEditShell();
+        pEditShell->Delete();
+
+        // remove cell frames in Hide Changes mode (and table frames, if needed)
+        if ( bRecordAndHideChanges )
+        {
+            // remove all frames of the table, and make them again without the deleted ones
+            // TODO remove only the deleted frames
+            pTableNd->DelFrames();
+
+            if ( !pTableNd->GetTable().IsDeleted() )
+            {
+                pTableNd->MakeOwnFrames();
+            }
+        }
+
+        EndAllActionAndCall();
+        EndUndo(SwUndoId::COL_DELETE);
+        return true;
+    }
+
     StartAllAction();
 
     // search boxes via the layout
@@ -349,11 +430,13 @@ bool SwFEShell::DeleteRow(bool bCompleteTable)
     StartAllAction();
 
     // tracked deletion: remove only textbox content,
-    // and set IsNoTracked table line property to false
+    // and set HasTextChangesOnly table line property to false
+    SwEditShell* pEditShell = nullptr;
     if ( bRecordChanges )
     {
-        SvxPrintItem aNotTracked(RES_PRINT, false);
-        GetDoc()->SetRowNotTracked( *getShellCursor( false ), aNotTracked );
+        pEditShell = GetDoc()->GetEditShell();
+        SvxPrintItem aHasTextChangesOnly(RES_PRINT, false);
+        GetDoc()->SetRowNotTracked( *getShellCursor( false ), aHasTextChangesOnly );
 
         if ( SwWrtShell* pWrtShell = dynamic_cast<SwWrtShell*>(this) )
             pWrtShell->SelectTableRow();
@@ -361,7 +444,7 @@ bool SwFEShell::DeleteRow(bool bCompleteTable)
         // don't need to remove the row frames in Show Changes mode
         if ( !bRecordAndHideChanges )
         {
-            if (SwEditShell* pEditShell = GetDoc()->GetEditShell())
+            if ( pEditShell )
                 pEditShell->Delete(false);
 
             EndAllActionAndCall();
@@ -465,30 +548,30 @@ bool SwFEShell::DeleteRow(bool bCompleteTable)
             }
 
             // delete row content in Hide Changes mode
-            if ( bRecordAndHideChanges )
+            if ( pEditShell && bRecordAndHideChanges )
             {
-                SwEditShell* pEditShell = GetDoc()->GetEditShell();
-
-                // select the rows deleted with change tracking
-                if ( SwWrtShell* pWrtShell = dynamic_cast<SwWrtShell*>(this) )
+                // select the row deleted with change tracking cell by cell to handle
+                // the already deleted cells
+                SwWrtShell* pWrtShell = dynamic_cast<SwWrtShell*>(this);
+                for (SwSelBoxes::size_type nBox = 0; pWrtShell && nBox < aBoxes.size(); ++nBox)
                 {
                     pWrtShell->SelectTableRow();
-                    SwShellTableCursor* pTableCursor = GetTableCursor();
-                    auto pStt = aBoxes[0];
-                    auto pEnd = aBoxes.back();
-                    pTableCursor->DeleteMark();
+                    SwCursor* pTableCursor = static_cast<SwCursor*>(GetTableCursor());
+                    auto pStt = aBoxes[nBox];
+                    if ( !pTableCursor )
+                        pTableCursor = GetCursor(true);
 
-                    // set start and end of the selection
-                    pTableCursor->GetPoint()->Assign( *pEnd->GetSttNd()->EndOfSectionNode() );
-                    pTableCursor->Move( fnMoveBackward, GoInContent );
-                    pTableCursor->SetMark();
-                    pTableCursor->GetPoint()->Assign( *pStt->GetSttNd()->EndOfSectionNode() );
-                    pTableCursor->Move( fnMoveBackward, GoInContent );
-                    pWrtShell->UpdateCursor();
-                }
+                    if ( pTableCursor )
+                    {
+                        // set start and end of the selection
+                        pTableCursor->DeleteMark();
+                        pTableCursor->GetPoint()->Assign( *pStt->GetSttNd()->EndOfSectionNode() );
+                        pTableCursor->Move( fnMoveBackward, GoInContent );
+                        pWrtShell->UpdateCursor();
+                    }
 
-                if (pEditShell)
                     pEditShell->Delete(false);
+                }
             }
 
             SwNodeOffset nIdx;
@@ -1094,7 +1177,8 @@ bool SwFEShell::CanUnProtectCells() const
         {
             SwFrame *pFrame = GetCurrFrame();
             do {
-                pFrame = pFrame->GetUpper();
+                if ( pFrame )
+                    pFrame = pFrame->GetUpper();
             } while ( pFrame && !pFrame->IsCellFrame() );
             if( pFrame )
             {
@@ -2032,8 +2116,8 @@ SwTab SwFEShell::WhichMouseTabCol( const Point &rPt ) const
     {
         while( pFrame && pFrame->Lower() && pFrame->Lower()->IsRowFrame() )
             pFrame = static_cast<const SwCellFrame*>(static_cast<const SwLayoutFrame*>(pFrame->Lower())->Lower());
-        if( pFrame && pFrame->GetTabBox()->GetSttNd() &&
-            pFrame->GetTabBox()->GetSttNd()->IsInProtectSect() )
+        if( pFrame && ((pFrame->GetTabBox()->GetSttNd() &&
+            pFrame->GetTabBox()->GetSttNd()->IsInProtectSect()) || (pFrame->GetTabBox()->getRowSpan() < 0)))
             pFrame = nullptr;
     }
 

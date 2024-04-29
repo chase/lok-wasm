@@ -30,14 +30,14 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/awt/XControlModel.hpp>
 
-using namespace com::sun::star;
-
 #include <tabvwsh.hxx>
 #include <document.hxx>
 #include <drawview.hxx>
 #include <globstr.hrc>
 #include <gridwin.hxx>
 #include <avmedia/mediawindow.hxx>
+
+using namespace com::sun::star;
 
 void ScTabViewShell::InsertURLButton( const OUString& rName, const OUString& rURL,
                                         const OUString& rTarget,
@@ -58,10 +58,10 @@ void ScTabViewShell::InsertURLButton( const OUString& rName, const OUString& rUR
 
     ScTabView*  pView   = rViewData.GetView();
     ScDrawView* pDrView = pView->GetScDrawView();
-    SdrModel*   pModel  = pDrView->GetModel();
+    SdrModel& rModel = pDrView->GetModel();
 
     rtl::Reference<SdrObject> pObj = SdrObjFactory::MakeNewObject(
-        *pModel,
+        rModel,
         SdrInventor::FmForm,
         SdrObjKind::FormButton);
 

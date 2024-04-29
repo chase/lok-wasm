@@ -17,7 +17,6 @@
 #include <rootfrm.hxx>
 #include <view.hxx>
 #include <wrtsh.hxx>
-#include <frameformats.hxx>
 
 /// Covers sw/source/core/layout/ftnfrm.cxx fixes.
 class Test : public SwModelTestBase
@@ -41,8 +40,8 @@ CPPUNIT_TEST_FIXTURE(Test, testFlySplitFootnoteLayout)
     aMgr.InsertFlyFrame(eAnchor, aMgr.GetPos(), aMgr.GetSize());
     pWrtShell->EndAllAction();
     pWrtShell->StartAllAction();
-    SwFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
-    SwFrameFormat* pFly = rFlys[0];
+    sw::FrameFormats<sw::SpzFrameFormat*>& rFlys = *pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormat* pFly = rFlys[0];
     SwAttrSet aSet(pFly->GetAttrSet());
     aSet.Put(SwFormatFlySplit(true));
     pDoc->SetAttr(aSet, *pFly);

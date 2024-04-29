@@ -54,7 +54,6 @@
 #include <xmloff/xmlerror.hxx>
 
 
-using namespace ::std;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::xml::sax;
@@ -198,7 +197,7 @@ void XMLTextStyleContext::CreateAndInsert( bool bOverwrite )
     Reference< XPropertySetInfo > xPropSetInfo =
                 xPropSet->getPropertySetInfo();
 
-    OUString const sIsAutoUpdate("IsAutoUpdate");
+    static constexpr OUString sIsAutoUpdate(u"IsAutoUpdate"_ustr);
     if( xPropSetInfo->hasPropertyByName( sIsAutoUpdate ) )
     {
         xPropSet->setPropertyValue( sIsAutoUpdate, Any(m_isAutoUpdate) );
@@ -265,7 +264,7 @@ void XMLTextStyleContext::Finish( bool bOverwrite )
     Reference< XPropertySetInfo > xPropSetInfo =
                 xPropSet->getPropertySetInfo();
 
-    OUString const sOutlineLevel("OutlineLevel");
+    static constexpr OUString sOutlineLevel(u"OutlineLevel"_ustr);
     if( xPropSetInfo->hasPropertyByName( sOutlineLevel ))
     {
         if (m_nOutlineLevel >= 0)
@@ -275,7 +274,7 @@ void XMLTextStyleContext::Finish( bool bOverwrite )
     }
 
     // Consider set empty list style (#i69523#)
-    OUString const sNumberingStyleName("NumberingStyleName");
+    static constexpr OUString sNumberingStyleName(u"NumberingStyleName"_ustr);
     if (m_bListStyleSet &&
          xPropSetInfo->hasPropertyByName( sNumberingStyleName ) )
     {
@@ -363,7 +362,7 @@ void XMLTextStyleContext::Finish( bool bOverwrite )
     const Reference < XNameContainer >& rPageStyles =
         GetImport().GetTextImport()->GetPageStyles();
 
-    OUString const sPageDescName("PageDescName");
+    static constexpr OUString sPageDescName(u"PageDescName"_ustr);
     if( ( sDisplayName.isEmpty() ||
           (rPageStyles.is() &&
            rPageStyles->hasByName( sDisplayName )) ) &&
@@ -432,7 +431,7 @@ void XMLTextStyleContext::FillPropertySet(
     {
         bAutomatic = true;
 
-        if( !GetAutoName().isEmpty() )
+        if( GetAutoName().hasValue() )
         {
             OUString sAutoProp = ( GetFamily() == XmlStyleFamily::TEXT_TEXT ) ?
                 OUString( "CharAutoStyleName" ):
@@ -447,7 +446,7 @@ void XMLTextStyleContext::FillPropertySet(
 
                 if ( xInfo->hasPropertyByName( sAutoProp ) )
                 {
-                    rPropSet->setPropertyValue( sAutoProp, Any(GetAutoName()) );
+                    rPropSet->setPropertyValue( sAutoProp, GetAutoName() );
                 }
                 else
                 {

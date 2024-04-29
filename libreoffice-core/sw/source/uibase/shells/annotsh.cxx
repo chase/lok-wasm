@@ -33,6 +33,7 @@
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/request.hxx>
+#include <editeng/editund2.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/flstitem.hxx>
 #include <editeng/spltitem.hxx>
@@ -483,7 +484,7 @@ void SwAnnotationShell::Exec( SfxRequest &rReq )
                 }
                 else if (pItem)
                 {
-                    pDlg->SetCurPageId(OUStringToOString(pItem->GetValue(), RTL_TEXTENCODING_UTF8));
+                    pDlg->SetCurPageId(pItem->GetValue());
                 }
 
                 sal_uInt16 nRet = pDlg->Execute();
@@ -587,11 +588,11 @@ void SwAnnotationShell::Exec( SfxRequest &rReq )
     }
     else if (nEEWhich == EE_CHAR_COLOR)
     {
-        m_rView.GetViewFrame()->GetDispatcher()->Execute(SID_CHAR_DLG_EFFECT);
+        m_rView.GetViewFrame().GetDispatcher()->Execute(SID_CHAR_DLG_EFFECT);
     }
     else if (nEEWhich == EE_CHAR_KERNING)
     {
-        m_rView.GetViewFrame()->GetDispatcher()->Execute(SID_CHAR_DLG_POSITION);
+        m_rView.GetViewFrame().GetDispatcher()->Execute(SID_CHAR_DLG_POSITION);
     }
 
 
@@ -599,7 +600,7 @@ void SwAnnotationShell::Exec( SfxRequest &rReq )
     if (tools::Rectangle() != aOutRect && aNewAttr.Count())
         pOLV->SetAttribs(aNewAttr);
 
-    m_rView.GetViewFrame()->GetBindings().InvalidateAll(false);
+    m_rView.GetViewFrame().GetBindings().InvalidateAll(false);
     if ( pOLV->GetOutliner()->IsModified() )
         m_rView.GetWrtShell().SetModified();
 
@@ -799,9 +800,9 @@ void SwAnnotationShell::GetState(SfxItemSet& rSet)
                 }
             case SID_AUTOSPELL_CHECK:
             {
-                const SfxPoolItem* pState = m_rView.GetSlotState(nWhich);
-                if (pState)
-                    rSet.Put(SfxBoolItem(nWhich, static_cast<const SfxBoolItem*>(pState)->GetValue()));
+                const SfxPoolItemHolder aResult(m_rView.GetSlotState(nWhich));
+                if (nullptr != aResult.getItem())
+                    rSet.Put(SfxBoolItem(nWhich, static_cast<const SfxBoolItem*>(aResult.getItem())->GetValue()));
                 else
                     rSet.DisableItem( nWhich );
                 break;
@@ -809,7 +810,7 @@ void SwAnnotationShell::GetState(SfxItemSet& rSet)
             case SID_ATTR_PARA_LEFT_TO_RIGHT:
             case SID_ATTR_PARA_RIGHT_TO_LEFT:
             {
-                if ( !SvtCTLOptions().IsCTLFontEnabled() )
+                if ( !SvtCTLOptions::IsCTLFontEnabled() )
                     rSet.DisableItem( nWhich );
                 else
                 {
@@ -842,9 +843,8 @@ void SwAnnotationShell::GetState(SfxItemSet& rSet)
             case SID_INSERT_RLM :
             case SID_INSERT_LRM :
             {
-                SvtCTLOptions aCTLOptions;
-                bool bEnabled = aCTLOptions.IsCTLFontEnabled();
-                m_rView.GetViewFrame()->GetBindings().SetVisibleState( nWhich, bEnabled );
+                bool bEnabled = SvtCTLOptions::IsCTLFontEnabled();
+                m_rView.GetViewFrame().GetBindings().SetVisibleState( nWhich, bEnabled );
                 if(!bEnabled)
                     rSet.DisableItem(nWhich);
             }
@@ -1247,7 +1247,7 @@ void SwAnnotationShell::GetNoteState(SfxItemSet &rSet)
 
         if (pPostItMgr && pPostItMgr->HasActiveSidebarWin())
         {
-            if ( (pPostItMgr->GetActiveSidebarWin()->IsProtected()) &&
+            if ( (pPostItMgr->GetActiveSidebarWin()->IsReadOnlyOrProtected()) &&
                     ( (nSlotId==FN_DELETE_COMMENT) || (nSlotId==FN_REPLY) ) )
                 rSet.DisableItem( nWhich );
         }
@@ -1413,11 +1413,10 @@ void SwAnnotationShell::GetLinguState(SfxItemSet &rSet)
             // disable "Thesaurus" if the language is not supported
             case SID_THESAURUS:
             {
-                const SfxPoolItem &rItem = m_rView.GetWrtShell().GetDoc()->GetDefault(
-                            GetWhichOfScript( RES_CHRATR_LANGUAGE,
-                            SvtLanguageOptions::GetI18NScriptTypeOfLanguage( GetAppLanguage())) );
-                LanguageType nLang = static_cast<const SvxLanguageItem &>(
-                                                        rItem).GetLanguage();
+                TypedWhichId<SvxLanguageItem> nLangWhich = GetWhichOfScript( RES_CHRATR_LANGUAGE,
+                            SvtLanguageOptions::GetI18NScriptTypeOfLanguage( GetAppLanguage() ) );
+                const SvxLanguageItem &rItem = m_rView.GetWrtShell().GetDoc()->GetDefault(nLangWhich);
+                LanguageType nLang = rItem.GetLanguage();
                 uno::Reference< linguistic2::XThesaurus >  xThes( ::GetThesaurus() );
                 if (!xThes.is() || nLang == LANGUAGE_NONE ||
                     !xThes->hasLocale( LanguageTag::convertToLocale( nLang ) ))
@@ -1429,11 +1428,11 @@ void SwAnnotationShell::GetLinguState(SfxItemSet &rSet)
             {
                 if (!SvtCJKOptions::IsAnyEnabled())
                 {
-                    m_rView.GetViewFrame()->GetBindings().SetVisibleState( nWhich, false );
+                    m_rView.GetViewFrame().GetBindings().SetVisibleState( nWhich, false );
                     rSet.DisableItem(nWhich);
                 }
                 else
-                    m_rView.GetViewFrame()->GetBindings().SetVisibleState( nWhich, true );
+                    m_rView.GetViewFrame().GetBindings().SetVisibleState( nWhich, true );
             }
             break;
         }
@@ -1522,7 +1521,7 @@ void SwAnnotationShell::ExecUndo(SfxRequest &rReq)
 
     // tdf#147928 get these before "undo" which may delete this SwAnnotationShell
     SwPostItMgr* pPostItMgr = m_rView.GetPostItMgr();
-    SfxBindings& rBindings = m_rView.GetViewFrame()->GetBindings();
+    SfxBindings& rBindings = m_rView.GetViewFrame().GetBindings();
 
     tools::Long aOldHeight = pPostItMgr->HasActiveSidebarWin()
                       ? pPostItMgr->GetActiveSidebarWin()->GetPostItTextHeight()
@@ -1614,7 +1613,7 @@ void SwAnnotationShell::StateUndo(SfxItemSet &rSet)
     SwUndoId nUndoId(SwUndoId::EMPTY);
     sal_uInt16 nWhich = aIter.FirstWhich();
     SfxUndoManager* pUndoManager = GetUndoManager();
-    SfxViewFrame *pSfxViewFrame = m_rView.GetViewFrame();
+    SfxViewFrame& rSfxViewFrame = m_rView.GetViewFrame();
     SwWrtShell &rSh = m_rView.GetWrtShell();
 
     while( nWhich )
@@ -1625,7 +1624,7 @@ void SwAnnotationShell::StateUndo(SfxItemSet &rSet)
             {
                 sal_uInt16 nCount = pUndoManager ? pUndoManager->GetUndoActionCount() : 0;
                 if ( nCount )
-                    pSfxViewFrame->GetSlotState( nWhich, pSfxViewFrame->GetInterface(), &rSet );
+                    rSfxViewFrame.GetSlotState( nWhich, rSfxViewFrame.GetInterface(), &rSet );
                 else if (rSh.GetLastUndoInfo(nullptr, &nUndoId))
                 {
                     rSet.Put( SfxStringItem( nWhich, rSh.GetDoString(SwWrtShell::UNDO)) );
@@ -1642,7 +1641,7 @@ void SwAnnotationShell::StateUndo(SfxItemSet &rSet)
             {
                 sal_uInt16 nCount = pUndoManager ? pUndoManager->GetRedoActionCount() : 0;
                 if ( nCount )
-                    pSfxViewFrame->GetSlotState( nWhich, pSfxViewFrame->GetInterface(), &rSet );
+                    rSfxViewFrame.GetSlotState( nWhich, rSfxViewFrame.GetInterface(), &rSet );
                 else if (rSh.GetFirstRedoInfo(nullptr, &nUndoId))
                 {
                     rSet.Put(SfxStringItem( nWhich, rSh.GetDoString(SwWrtShell::REDO)) );
@@ -1704,7 +1703,7 @@ void SwAnnotationShell::StateUndo(SfxItemSet &rSet)
 
         default:
             {
-                pSfxViewFrame->GetSlotState( nWhich, pSfxViewFrame->GetInterface(), &rSet );
+                rSfxViewFrame.GetSlotState( nWhich, rSfxViewFrame.GetInterface(), &rSet );
                 break;
             }
 
@@ -1791,7 +1790,7 @@ void SwAnnotationShell::InsertSymbol(SfxRequest& rReq)
             aAllSet.Put( SfxStringItem( SID_FONT_NAME, aSetDlgFont->GetFamilyName() ) );
 
         // If character is selected then it can be shown.
-        auto xFrame = m_rView.GetViewFrame()->GetFrame().GetFrameInterface();
+        auto xFrame = m_rView.GetViewFrame().GetFrame().GetFrameInterface();
         ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(m_rView.GetFrameWeld(), aAllSet, xFrame));
         pDlg->Execute();
         return;

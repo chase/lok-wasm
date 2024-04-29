@@ -228,9 +228,10 @@ static void CalculateHorizontalScalingFactor(
     aFont.SetOrientation( 0_deg10 );
     // initializing virtual device
 
-    ScopedVclPtrInstance< VirtualDevice > pVirDev(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance< VirtualDevice > pVirDev(DeviceFormat::WITHOUT_ALPHA);
     pVirDev->SetMapMode(MapMode(MapUnit::Map100thMM));
     pVirDev->SetFont( aFont );
+    pVirDev->SetAntialiasing( AntialiasingFlags::DisableText );
 
     if ( nOutlinesCount2d & 1 )
         bSingleLineMode = true;
@@ -341,9 +342,11 @@ static void GetTextAreaOutline(
             aFont.SetWeight( rWeightItem.GetWeight() );
 
             // initializing virtual device
-            ScopedVclPtrInstance< VirtualDevice > pVirDev(DeviceFormat::DEFAULT);
+            ScopedVclPtrInstance< VirtualDevice > pVirDev(DeviceFormat::WITHOUT_ALPHA);
             pVirDev->SetMapMode(MapMode(MapUnit::Map100thMM));
             pVirDev->SetFont( aFont );
+            pVirDev->SetAntialiasing( AntialiasingFlags::DisableText );
+
             pVirDev->EnableRTL();
             if ( rParagraph.nFrameDirection == SvxFrameDirection::Horizontal_RL_TB )
                 pVirDev->SetLayoutMode( vcl::text::ComplexTextLayoutFlags::BiDiRtl );
@@ -781,7 +784,7 @@ static void FitTextOutlinesToShapeOutlines(const tools::PolyPolygon& aOutlines2d
 
                 if ( !vDistances.empty() )
                 {
-                    // horizontal aligment: how much we have to move text to the right.
+                    // horizontal alignment: how much we have to move text to the right.
                     int nAdjust = -1;
                     switch (eHorzAdjust)
                     {
@@ -792,7 +795,7 @@ static void FitTextOutlinesToShapeOutlines(const tools::PolyPolygon& aOutlines2d
                             nAdjust = 1; // 1 half of the possible
                             break;
                         case SDRTEXTHORZADJUST_BLOCK:
-                            nAdjust = -1; // don't know what it is, so dont even align
+                            nAdjust = -1; // don't know what it is, so don't even align
                             break;
                         case SDRTEXTHORZADJUST_LEFT:
                             nAdjust = 0; // no need to move
@@ -825,12 +828,12 @@ static void FitTextOutlinesToShapeOutlines(const tools::PolyPolygon& aOutlines2d
                         vCurOutline.reserve(nPointCount);
                         vNorm.reserve(nPointCount);
 
-                        // Calculate Normal vectors, and allocate curve datas
+                        // Calculate Normal vectors, and allocate curve data
                         sal_uInt16 i;
                         for (i = 0; i < nPointCount; i++)
                         {
-                            //Normal vector for a point will be calculated from its neightbour points
-                            //except if is in the start/end of the vector
+                            //Normal vector for a point will be calculated from its neighbour points
+                            //except if it is in the start/end of the vector
                             sal_uInt16 nPointIdx1 = i == 0 ? i : i - 1;
                             sal_uInt16 nPointIdx2 = i == nPointCount - 1 ? i : i + 1;
 
@@ -860,11 +863,11 @@ static void FitTextOutlinesToShapeOutlines(const tools::PolyPolygon& aOutlines2d
                             double fAdjust;
                             double fCurWidth;
 
-                            // distance between the original an the current curve
+                            // distance between the original and the current curve
                             double fCurvesDist = rTextArea.aBoundRect.GetHeight() / 2.0
                                                  + rTextArea.aBoundRect.Top()
                                                  - rParagraph.aBoundRect.Center().Y();
-                            // verical alignment adjust
+                            // vertical alignment adjust
                             fCurvesDist -= rTextArea.nHAlignMove;
 
                             for (i = 0; i < nPointCount; i++)
@@ -891,7 +894,7 @@ static void FitTextOutlinesToShapeOutlines(const tools::PolyPolygon& aOutlines2d
                             }
 
                             // if the current outline is longer then the text to fit in,
-                            // then we have to divide the bonus space betweeen the
+                            // then we have to divide the bonus space between the
                             // before-/after- text area.
                             // fAdjust means how much space we put before the text.
                             if (fCurWidth > rParagraph.aBoundRect.GetWidth())
@@ -900,7 +903,7 @@ static void FitTextOutlinesToShapeOutlines(const tools::PolyPolygon& aOutlines2d
                                     = nAdjust * (fCurWidth - rParagraph.aBoundRect.GetWidth()) / 2;
                             }
                             else
-                                fAdjust = -1;   // we neet tho shrink the text to fit the curve
+                                fAdjust = -1;   // we need to shrink the text to fit the curve
 
                             for ( auto& rCharacter : rParagraph.vCharacters )
                             {
@@ -927,8 +930,8 @@ static void FitTextOutlinesToShapeOutlines(const tools::PolyPolygon& aOutlines2d
 
                                     // if fAdjust<0, then it means, the text was longer, as
                                     // the current outline, so we will skip the text scaling, and
-                                    // the text horizontal alignment ajustment
-                                    // so the text will be rendered just as long as the cureve is.
+                                    // the text horizontal alignment adjustment
+                                    // so the text will be rendered just as long as the curve is.
                                     if (fAdjust >= 0)
                                     {
                                         fM1 = (fM1 * fParaRectWidth + fAdjust) / fCurWidth;
@@ -936,7 +939,7 @@ static void FitTextOutlinesToShapeOutlines(const tools::PolyPolygon& aOutlines2d
                                     }
                                     // 0 <= fM1,fM2 <= 1 should be true, but rounding errors can
                                     // make a small mistake.
-                                    // make sure they are >0 becuase GetPoint() need that
+                                    // make sure they are >0 because GetPoint() need that
                                     if (fM1 < 0) fM1 = 0;
                                     if (fM2 < 0) fM2 = 0;
 

@@ -61,7 +61,7 @@ private:
     VclPtr<vcl::Window>     mpFirstPopupModeWin;
     VclPtr<vcl::Window>     mxPrevFocusWin;
     std::unique_ptr<ImplData> mpImplData;
-    tools::Rectangle       maFloatRect;
+    AbsoluteScreenPixelRectangle maFloatRect;
     ImplSVEvent *   mnPostId;
     FloatWinPopupFlags   mnPopupModeFlags;
     FloatWinTitleType    mnTitle;
@@ -96,18 +96,18 @@ public:
                    static Point     ImplCalcPos(vcl::Window* pWindow,
                                                 const tools::Rectangle& rRect, FloatWinPopupFlags nFlags,
                                                 sal_uInt16& rArrangeIndex, Point* pLOKTwipsPos = nullptr);
-                   static Point     ImplConvertToAbsPos(vcl::Window* pReference, const Point& rPos);
-                   static tools::Rectangle ImplConvertToAbsPos(vcl::Window* pReference, const tools::Rectangle& rRect);
-                   static tools::Rectangle ImplConvertToRelPos(vcl::Window* pReference, const tools::Rectangle& rRect);
+                   static AbsoluteScreenPixelPoint ImplConvertToAbsPos(vcl::Window* pReference, const Point& rPos);
+                   static AbsoluteScreenPixelRectangle ImplConvertToAbsPos(vcl::Window* pReference, const tools::Rectangle& rRect);
+                   static tools::Rectangle ImplConvertToRelPos(vcl::Window* pReference, const AbsoluteScreenPixelRectangle& rRect);
     SAL_DLLPRIVATE void             ImplEndPopupMode( FloatWinPopupEndFlags nFlags, const VclPtr<vcl::Window>& xFocusId );
-    SAL_DLLPRIVATE tools::Rectangle&       ImplGetItemEdgeClipRect();
+    SAL_DLLPRIVATE AbsoluteScreenPixelRectangle ImplGetItemEdgeClipRect();
     SAL_DLLPRIVATE bool             ImplIsInPrivatePopupMode() const { return mbInPopupMode; }
     virtual        void             doDeferredInit(WinBits nBits) override;
                    void             PixelInvalidate(const tools::Rectangle* pRectangle) override;
 
 public:
     explicit        FloatingWindow(vcl::Window* pParent, WinBits nStyle);
-    explicit        FloatingWindow(vcl::Window* pParent, const OString& rID, const OUString& rUIXMLDescription,
+    explicit        FloatingWindow(vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription,
                                    const css::uno::Reference<css::frame::XFrame> &rFrame = css::uno::Reference<css::frame::XFrame>());
     virtual         ~FloatingWindow() override;
     virtual void    dispose() override;

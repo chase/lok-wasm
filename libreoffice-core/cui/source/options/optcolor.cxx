@@ -62,7 +62,7 @@ struct
     // group
     Group eGroup;
     // .ui group name
-    const char *pGroup;
+    OUString pGroup;
 }
 const vGroupInfo[] =
 {
@@ -82,9 +82,9 @@ struct
     // group
     Group eGroup;
     //checkbox (or simple text)
-    const char *pText;
+    OUString pText;
     //color listbox
-    const char *pColor;
+    OUString pColor;
     // has checkbox?
     bool bCheckBox;
 }
@@ -130,6 +130,8 @@ const vEntryInfo[] =
     { Group_Calc,    IDS(brkmanual) },
     { Group_Calc,    IDS(brkauto) },
     { Group_Calc,    IDS_CB(hiddencolrow) },
+    { Group_Calc,    IDS_CB(textoverflow) },
+    { Group_Calc,    IDS(comments) },
     { Group_Calc,    IDS(det) },
     { Group_Calc,    IDS(deterror) },
     { Group_Calc,    IDS(ref) },
@@ -141,6 +143,7 @@ const vEntryInfo[] =
 
     { Group_Draw,    IDS(drawgrid) },
 
+    { Group_Basic,   IDS(basiceditor) },
     { Group_Basic,   IDS(basicid) },
     { Group_Basic,   IDS(basiccomment) },
     { Group_Basic,   IDS(basicnumber) },
@@ -234,7 +237,7 @@ private:
         // text
         std::unique_ptr<weld::Label> m_xText;
     public:
-        Chapter(weld::Builder& rBuilder, const char* pLabelWidget, bool bShow);
+        Chapter(weld::Builder& rBuilder, const OUString& pLabelWidget, bool bShow);
         void SetText(const OUString& rLabel) { m_xText->set_label(rLabel); }
     };
 
@@ -242,7 +245,7 @@ private:
     // text (checkbox) + color list box
     struct Entry
     {
-        Entry(weld::Window* pTopLevel, weld::Builder& rBuilder, const char* pTextWidget, const char* pColorWidget,
+        Entry(weld::Window* pTopLevel, weld::Builder& rBuilder, const OUString& pTextWidget, const OUString& pColorWidget,
               const Color& rColor, int nCheckBoxLabelOffset, const ColorListBox* pCache, bool bCheckBox, bool bShow);
         void SetText(const OUString& rLabel) { dynamic_cast<weld::Label&>(*m_xText).set_label(rLabel); }
         int get_height_request() const
@@ -304,7 +307,7 @@ private:
 // ctor for default groups
 // rParent: parent window (ColorConfigWindow_Impl)
 // eGroup: which group is this?
-ColorConfigWindow_Impl::Chapter::Chapter(weld::Builder& rBuilder, const char* pLabelWidget, bool bShow)
+ColorConfigWindow_Impl::Chapter::Chapter(weld::Builder& rBuilder, const OUString& pLabelWidget, bool bShow)
     : m_xText(rBuilder.weld_label(pLabelWidget))
 {
     if (!bShow)
@@ -313,7 +316,7 @@ ColorConfigWindow_Impl::Chapter::Chapter(weld::Builder& rBuilder, const char* pL
 
 // ColorConfigWindow_Impl::Entry
 ColorConfigWindow_Impl::Entry::Entry(weld::Window* pTopLevel, weld::Builder& rBuilder,
-                                     const char* pTextWidget, const char* pColorWidget,
+                                     const OUString& pTextWidget, const OUString& pColorWidget,
                                      const Color& rColor, int nCheckBoxLabelOffset,
                                      const ColorListBox* pCache, bool bCheckBox, bool bShow)
     : m_xColorList(new ColorListBox(rBuilder.weld_menu_button(pColorWidget),
@@ -795,6 +798,21 @@ SvxColorOptionsTabPage::~SvxColorOptionsTabPage()
 std::unique_ptr<SfxTabPage> SvxColorOptionsTabPage::Create(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet)
 {
     return std::make_unique<SvxColorOptionsTabPage>(pPage, pController, *rAttrSet);
+}
+
+OUString SvxColorOptionsTabPage::GetAllStrings()
+{
+    // buttons are excluded
+    OUString sAllStrings;
+    OUString labels[] = { "label2", "label3", "autocolor", "uielements", "colorsetting" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SvxColorOptionsTabPage::FillItemSet( SfxItemSet*  )

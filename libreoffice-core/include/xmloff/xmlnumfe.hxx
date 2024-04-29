@@ -32,7 +32,7 @@ namespace com::sun::star::lang { struct Locale; }
 namespace com::sun::star::uno { template <typename > class Reference; }
 namespace com::sun::star::util { class XNumberFormatsSupplier; }
 
-inline constexpr OUStringLiteral XML_WRITTENNUMBERSTYLES = u"WrittenNumberStyles";
+inline constexpr OUString XML_WRITTENNUMBERSTYLES = u"WrittenNumberStyles"_ustr;
 
 class Color;
 class LocaleDataWrapper;
@@ -47,13 +47,14 @@ class SvXMLEmbeddedTextEntryArr;
 class XMLOFF_DLLPUBLIC SvXMLNumFmtExport final
 {
 private:
-    SvXMLExport&                rExport;
-    OUString                    sPrefix;
-    SvNumberFormatter*          pFormatter;
-    OUStringBuffer              sTextContent;
-    bool                        bHasText;
-    std::unique_ptr<SvXMLNumUsedList_Impl>      pUsedList;
-    std::unique_ptr<LocaleDataWrapper>          pLocaleData;
+    SvXMLExport&                m_rExport;
+    OUString                    m_sPrefix;
+    SvNumberFormatter*          m_pFormatter;
+    OUStringBuffer              m_sTextContent;
+    OUStringBuffer              m_sBlankWidthString;
+    bool                        m_bHasText;
+    std::unique_ptr<SvXMLNumUsedList_Impl>      m_pUsedList;
+    std::unique_ptr<LocaleDataWrapper>          m_pLocaleData;
 
     SAL_DLLPRIVATE void AddCalendarAttr_Impl( const OUString& rCalendar );
     SAL_DLLPRIVATE void AddStyleAttr_Impl( bool bLong );
@@ -63,13 +64,16 @@ private:
     SAL_DLLPRIVATE void FinishTextElement_Impl(bool bUseExtensionNS = false);
 
     SAL_DLLPRIVATE void WriteColorElement_Impl( const Color& rColor );
+    SAL_DLLPRIVATE void WriteIntegerElement_Impl( sal_Int32 nInteger, sal_Int32 nBlankInteger, bool bGrouping );
+    SAL_DLLPRIVATE void WriteEmbeddedEntries_Impl( const SvXMLEmbeddedTextEntryArr& rEmbeddedEntries );
     SAL_DLLPRIVATE void WriteNumberElement_Impl( sal_Int32 nDecimals, sal_Int32 nMinDecimals,
-                                        sal_Int32 nInteger, const OUString& rDashStr,
+                                        sal_Int32 nInteger, sal_Int32 nBlankInteger, const OUString& rDashStr,
                                         bool bGrouping, sal_Int32 nTrailingThousands,
                                         const SvXMLEmbeddedTextEntryArr& rEmbeddedEntries );
-    SAL_DLLPRIVATE void WriteScientificElement_Impl( sal_Int32 nDecimals, sal_Int32 nMinDecimals, sal_Int32 nInteger,
-                                        bool bGrouping, sal_Int32 nExp, sal_Int32 nExpInterval, bool bExpSign );
-    SAL_DLLPRIVATE void WriteFractionElement_Impl( sal_Int32 nInteger, bool bGrouping,
+    SAL_DLLPRIVATE void WriteScientificElement_Impl( sal_Int32 nDecimals, sal_Int32 nMinDecimals, sal_Int32 nInteger, sal_Int32 nBlankInteger,
+                                        bool bGrouping, sal_Int32 nExp, sal_Int32 nExpInterval, bool bExpSign, bool bExponentLowercase, sal_Int32 nBlankExp,
+                                        const SvXMLEmbeddedTextEntryArr& rEmbeddedEntries );
+    SAL_DLLPRIVATE void WriteFractionElement_Impl( sal_Int32 nInteger, sal_Int32 nBlankInteger, bool bGrouping,
                                                    const SvNumberformat& rFormat, sal_uInt16 nPart );
     SAL_DLLPRIVATE void WriteCurrencyElement_Impl( const OUString& rString,
                                         std::u16string_view rExt );

@@ -47,7 +47,6 @@ public:
     OUString get_text(int nIndex) const;
     OUString get_active_text() const;
     void append_text(const OUString& rText);
-    void set_entry_message_type(weld::EntryMessageType eType);
 
 private:
     ImplSVEvent* m_nAsyncGetFocusId;
@@ -64,6 +63,11 @@ private:
 
     void FocusIn();
     void ActivateFind(bool bShift);
+
+    // tdf#154269 - respect FindReplaceRememberedSearches expert option
+    sal_uInt16 m_nRememberSize;
+    // tdf#154818 - remember last search string
+    static OUString m_sRememberedSearchString;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

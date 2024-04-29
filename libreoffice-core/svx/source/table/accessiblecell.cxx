@@ -50,14 +50,14 @@ using namespace ::com::sun::star::container;
 
 namespace accessibility {
 
-AccessibleCell::AccessibleCell( const css::uno::Reference< css::accessibility::XAccessible>& rxParent, sdr::table::CellRef xCell, sal_Int32 nIndex, const AccessibleShapeTreeInfo& rShapeTreeInfo )
+AccessibleCell::AccessibleCell( const rtl::Reference< AccessibleTableShape>& rxParent, sdr::table::CellRef xCell, sal_Int32 nIndex, const AccessibleShapeTreeInfo& rShapeTreeInfo )
 : AccessibleCellBase( rxParent, AccessibleRole::TABLE_CELL )
 , maShapeTreeInfo( rShapeTreeInfo )
 , mnIndexInParent( nIndex )
 , mxCell(std::move( xCell ))
 {
     //Init the pAccTable var
-    pAccTable = dynamic_cast <AccessibleTableShape *> (rxParent.get());
+    pAccTable = rxParent.get();
 }
 
 
@@ -288,7 +288,7 @@ css::awt::Rectangle SAL_CALL AccessibleCell::getBounds()
 
         // Transform coordinates from internal to pixel.
         if (maShapeTreeInfo.GetViewForwarder() == nullptr)
-            throw uno::RuntimeException ("AccessibleCell has no valid view forwarder",static_cast<uno::XWeak*>(this));
+            throw uno::RuntimeException ("AccessibleCell has no valid view forwarder", getXWeak());
 
         ::Size aPixelSize( maShapeTreeInfo.GetViewForwarder()->LogicToPixel(::Size(aCellRect.GetWidth(), aCellRect.GetHeight())) );
         ::Point aPixelPosition( maShapeTreeInfo.GetViewForwarder()->LogicToPixel( aCellRect.TopLeft() ));
@@ -461,7 +461,7 @@ void AccessibleCell::ViewForwarderChanged()
 {
     // Inform all listeners that the graphical representation (i.e. size
     // and/or position) of the shape has changed.
-    CommitChange(AccessibleEventId::VISIBLE_DATA_CHANGED, Any(), Any());
+    CommitChange(AccessibleEventId::VISIBLE_DATA_CHANGED, Any(), Any(), -1);
 
     // update our children that our screen position might have changed
     if( mpText )
@@ -514,10 +514,11 @@ OUString AccessibleCell::getCellName( sal_Int32 nCol, sal_Int32 nRow )
                         static_cast<sal_uInt16>(nCol)));
         else
         {
-            aBuf.append( static_cast<sal_Unicode>( 'A' +
-                        (static_cast<sal_uInt16>(nCol) / 26) - 1));
-            aBuf.append( static_cast<sal_Unicode>( 'A' +
-                        (static_cast<sal_uInt16>(nCol) % 26)));
+            aBuf.append(
+                OUStringChar(static_cast<sal_Unicode>( 'A' +
+                         (static_cast<sal_uInt16>(nCol) / 26) - 1))
+                + OUStringChar( static_cast<sal_Unicode>( 'A' +
+                                (static_cast<sal_uInt16>(nCol) % 26))) );
         }
     }
     else

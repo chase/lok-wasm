@@ -150,13 +150,6 @@ namespace svt
                 return m_sLookup.equalsAscii(rProp.pPropertyName);
             }
         };
-
-
-        void lcl_throwIllegalArgumentException( )
-        {
-            throw IllegalArgumentException();
-            // TODO: error message in the exception
-        }
     }
 
     OControlAccess::OControlAccess(IFilePickerController* pController, SvtFileView* pFileView)
@@ -182,20 +175,19 @@ namespace svt
         if (aHID.GetProtocol() == INetProtocol::Hid)
             sHelpID = aHID.GetURLPath();
 
-        // URLs should always be UTF8 encoded and escaped
-        OString sID( OUStringToOString( sHelpID, RTL_TEXTENCODING_UTF8 ) );
+        // URLs should always be escaped
         if (IsFileViewWidget(pControl))
         {
             // the file view "overrides" the SetHelpId
-            m_pFileView->set_help_id(sID);
+            m_pFileView->set_help_id(sHelpID);
         }
         else
-            pControl->set_help_id(sID);
+            pControl->set_help_id(sHelpID);
     }
 
     OUString OControlAccess::getHelpURL(weld::Widget const * pControl) const
     {
-        OString aHelpId = pControl->get_help_id();
+        OUString aHelpId = pControl->get_help_id();
         if (IsFileViewWidget(pControl))
         {
             // the file view "overrides" the SetHelpId
@@ -203,11 +195,10 @@ namespace svt
         }
 
         OUString sHelpURL;
-        OUString aTmp( OStringToOUString( aHelpId, RTL_TEXTENCODING_UTF8 ) );
-        INetURLObject aHID( aTmp );
+        INetURLObject aHID(aHelpId);
         if ( aHID.GetProtocol() == INetProtocol::NotValid )
             sHelpURL = INET_HID_SCHEME;
-        sHelpURL += aTmp;
+        sHelpURL += aHelpId;
         return sHelpURL;
     }
 
@@ -223,11 +214,11 @@ namespace svt
         ControlPropertyIterator aPropDesc = ::std::find_if( s_pProperties, s_pPropertiesEnd, ControlPropertyLookup( rControlProperty ) );
         if ( aPropDesc == s_pPropertiesEnd )
             // it's a completely unknown property
-            lcl_throwIllegalArgumentException();
+            throw IllegalArgumentException();
 
         if ( !( nPropertyMask & aPropDesc->nPropertyId ) )
             // it's a property which is known, but not allowed for this control
-            lcl_throwIllegalArgumentException();
+            throw IllegalArgumentException();
 
         return implGetControlProperty( pControl, aPropDesc->nPropertyId );
     }
@@ -249,7 +240,7 @@ namespace svt
 
         // if not found 'til here, the name is invalid, or we do not have the control in the current mode
         if ( !pControl )
-            lcl_throwIllegalArgumentException();
+            throw IllegalArgumentException();
 
         // out parameters and outta here
         if ( _pId )
@@ -270,7 +261,7 @@ namespace svt
         // look up the property
         ControlPropertyIterator aPropDesc = ::std::find_if( s_pProperties, s_pPropertiesEnd, ControlPropertyLookup( rControlProperty ) );
         if ( aPropDesc == s_pPropertiesEnd )
-            lcl_throwIllegalArgumentException();
+            throw IllegalArgumentException();
 
         // set the property
         implSetControlProperty( nControlId, pControl, aPropDesc->nPropertyId, rValue, false );
@@ -556,7 +547,7 @@ namespace svt
                 }
                 else if ( !_bIgnoreIllegalArgument )
                 {
-                    lcl_throwIllegalArgumentException();
+                    throw IllegalArgumentException();
                 }
             }
             break;
@@ -570,7 +561,7 @@ namespace svt
                 }
                 else if ( !_bIgnoreIllegalArgument )
                 {
-                    lcl_throwIllegalArgumentException();
+                    throw IllegalArgumentException();
                 }
             }
             break;
@@ -584,7 +575,7 @@ namespace svt
                 }
                 else if ( !_bIgnoreIllegalArgument )
                 {
-                    lcl_throwIllegalArgumentException();
+                    throw IllegalArgumentException();
                 }
             }
             break;
@@ -598,7 +589,7 @@ namespace svt
                 }
                 else if ( !_bIgnoreIllegalArgument )
                 {
-                    lcl_throwIllegalArgumentException();
+                    throw IllegalArgumentException();
                 }
             }
             break;
@@ -623,7 +614,7 @@ namespace svt
                 }
                 else if ( !_bIgnoreIllegalArgument )
                 {
-                    lcl_throwIllegalArgumentException();
+                    throw IllegalArgumentException();
                 }
             }
             break;
@@ -640,7 +631,7 @@ namespace svt
                 }
                 else if ( !_bIgnoreIllegalArgument )
                 {
-                    lcl_throwIllegalArgumentException();
+                    throw IllegalArgumentException();
                 }
             }
             break;
@@ -657,7 +648,7 @@ namespace svt
                 }
                 else if ( !_bIgnoreIllegalArgument )
                 {
-                    lcl_throwIllegalArgumentException();
+                    throw IllegalArgumentException();
                 }
             }
             break;
@@ -674,7 +665,7 @@ namespace svt
                 }
                 else if ( !_bIgnoreIllegalArgument )
                 {
-                    lcl_throwIllegalArgumentException();
+                    throw IllegalArgumentException();
                 }
             }
             break;

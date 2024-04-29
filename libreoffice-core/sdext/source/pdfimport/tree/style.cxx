@@ -79,7 +79,7 @@ sal_Int32 StyleContainer::getStandardStyleId( std::string_view rName )
     aProps[ "style:family" ] = OStringToOUString( rName, RTL_TEXTENCODING_UTF8 );
     aProps[ "style:name" ] = "standard";
 
-    Style aStyle( "style:style", std::move(aProps) );
+    Style aStyle( "style:style"_ostr, std::move(aProps) );
     return getStyleId( aStyle );
 }
 
@@ -167,14 +167,12 @@ OUString StyleContainer::getStyleName( sal_Int32 nStyle ) const
             else
                 aStyleName = OStringToOUString( rStyle.Name, RTL_TEXTENCODING_ASCII_US );
             sal_Int32 nIndex = aStyleName.lastIndexOf( ':' );
-            aRet.append( aStyleName.subView(nIndex+1) );
-            aRet.append( nStyle );
+            aRet.append( aStyleName.subView(nIndex+1) + OUString::number( nStyle ) );
         }
     }
     else
     {
-        aRet.append( "invalid style id " );
-        aRet.append( nStyle );
+        aRet.append( "invalid style id " + OUString::number(nStyle) );
     }
 
     return aRet.makeStringAndClear();

@@ -38,7 +38,7 @@ public final class Marshaling_Test {
         TestObject testObject = new TestObject();
 
         TestPrimitiveSeqStruct x = new TestPrimitiveSeqStruct();
-        x.zAny = new Object[]{Integer.valueOf(1), new Double(2) };
+        x.zAny = new Object[]{Integer.valueOf(1), Double.valueOf(2) };
 
 
         Object data[] = new Object[] {
@@ -46,10 +46,10 @@ public final class Marshaling_Test {
             new com.sun.star.uno.Exception("testException"),
             Boolean.TRUE,
             Byte.valueOf((byte)47),
-            new Character('k'),
-            new Double(0.12345),
+            Character.valueOf('k'),
+            Double.valueOf(0.12345),
             TestEnum.B,
-            new Float(0.5678),
+            Float.valueOf(0.5678f),
             Integer.valueOf(0),
             Integer.valueOf(128),
             Integer.valueOf(0x0f00),

@@ -99,7 +99,7 @@ void MenuFloatingWindow::doShutdown()
     // so this can be taken into account if the commandhandler performs a scroll operation
     if( GetParent() )
     {
-        tools::Rectangle aInvRect( GetWindowExtentsRelative( GetParent() ) );
+        tools::Rectangle aInvRect( GetWindowExtentsRelative( *GetParent() ) );
         GetParent()->Invalidate( aInvRect );
     }
     pMenu = nullptr;
@@ -336,7 +336,7 @@ IMPL_LINK( MenuFloatingWindow, HighlightChanged, Timer*, pTimer, void )
     if ( !(pItemData->bEnabled && pItemData->pSubMenu && pItemData->pSubMenu->GetItemCount() && ( pItemData->pSubMenu != pActivePopup )) )
         return;
 
-    pActivePopup = static_cast<PopupMenu*>(pItemData->pSubMenu.get());
+    pActivePopup = pItemData->pSubMenu.get();
     tools::Long nY = nScrollerHeight+ImplGetStartY();
     MenuItemData* pData = nullptr;
     for ( sal_uLong n = 0; n < nHighlightedItem; n++ )

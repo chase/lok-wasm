@@ -86,7 +86,8 @@ struct EDITENG_DLLPUBLIC SvxSwAutoFormatFlags
     sal_UCS4 cBullet;
     sal_UCS4 cByInputBullet;
 
-    sal_uInt16 nAutoCmpltWordLen, nAutoCmpltListLen;
+    sal_uInt32 nAutoCmpltListLen;
+    sal_uInt16 nAutoCmpltWordLen;
     sal_uInt16 nAutoCmpltExpandKey;
 
     sal_uInt8 nRightMargin;
@@ -101,6 +102,7 @@ struct EDITENG_DLLPUBLIC SvxSwAutoFormatFlags
     bool bAFormatByInput : 1;
     bool bDelEmptyNode : 1;
     bool bSetNumRule : 1;
+    bool bSetNumRuleAfterSpace : 1;
 
     bool bChgOrdinalNumber : 1;
     bool bChgToEnEmDash : 1;
@@ -109,6 +111,7 @@ struct EDITENG_DLLPUBLIC SvxSwAutoFormatFlags
     bool bChgAngleQuotes : 1;
     bool bChgWeightUnderl : 1;
     bool bSetINetAttr : 1;
+    bool bSetDOIAttr : 1;
 
     bool bSetBorder : 1;
     bool bCreateTable : 1;

@@ -39,7 +39,7 @@ private:
     DECL_DLLPRIVATE_LINK(FocusChangeHdl, weld::Container&, void);
 
 public:
-    SfxDialogController(weld::Widget* pParent, const OUString& rUIFile, const OString& rDialogId);
+    SfxDialogController(weld::Widget* pParent, const OUString& rUIFile, const OUString& rDialogId);
     // dialog gets focus
     virtual void Activate() {}
     // dialog loses focus
@@ -49,6 +49,7 @@ public:
     virtual void ChildWinDispose() {} // called from the associated SfxChildWin dtor
     virtual void Close(); // called by the SfxChildWin when the dialog is closed
     virtual void EndDialog(int nResponse); // called by the SfxChildWin to close the dialog
+    virtual bool CloseOnHide() const { return true; } // called from ScValidationDlg
 };
 
 class SfxModelessDialog_Impl;
@@ -65,7 +66,7 @@ class SFX2_DLLPUBLIC SfxModelessDialogController : public SfxDialogController
 
 protected:
     SfxModelessDialogController(SfxBindings*, SfxChildWindow* pChildWin,
-        weld::Window* pParent, const OUString& rUIXMLDescription, const OString& rID);
+        weld::Window* pParent, const OUString& rUIXMLDescription, const OUString& rID);
 
 public:
     virtual ~SfxModelessDialogController() override;
@@ -87,7 +88,7 @@ class SFX2_DLLPUBLIC SfxOkDialogController : public SfxDialogController
 {
 public:
     SfxOkDialogController(weld::Widget* pParent, const OUString& rUIXMLDescription,
-                          const OString& rID)
+                          const OUString& rID)
         : SfxDialogController(pParent, rUIXMLDescription, rID)
     {
     }
@@ -105,11 +106,11 @@ private:
 public:
     SfxSingleTabDialogController(weld::Widget* pParent, const SfxItemSet* pOptionsSet,
         const OUString& rUIXMLDescription = OUString("sfx/ui/singletabdialog.ui"),
-        const OString& rID = OString("SingleTabDialog"));
+        const OUString& rID = OUString("SingleTabDialog"));
 
     SfxSingleTabDialogController(weld::Widget* pParent, const SfxItemSet* pOptionsSet,
-        const OString& rContainerId, const OUString& rUIXMLDescription,
-        const OString& rID);
+        const OUString& rContainerId, const OUString& rUIXMLDescription,
+        const OUString& rID);
 
     weld::Container* get_content_area() { return m_xContainer.get(); }
 

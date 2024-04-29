@@ -95,32 +95,37 @@ sal_Int64 DateTime::GetSecFromDateTime( const Date& rDate ) const
     }
 }
 
+void DateTime::NormalizeTimeRemainderAndApply( tools::Time& rTime )
+{
+    sal_uInt16 nHours = rTime.GetHour();
+    if ( rTime.GetTime() > 0 )
+    {
+        if (nHours >= 24)
+        {
+            AddDays( nHours / 24 );
+            nHours %= 24;
+            rTime.SetHour( nHours );
+        }
+    }
+    else if ( rTime.GetTime() != 0 )
+    {
+        if (nHours >= 24)
+        {
+            AddDays( -static_cast<sal_Int32>(nHours) / 24 );
+            nHours %= 24;
+            rTime.SetHour( nHours );
+        }
+        Date::operator--();
+        rTime = Time( 24, 0, 0 ) + rTime;
+    }
+    tools::Time::operator=( rTime );
+}
+
 DateTime& DateTime::operator +=( const tools::Time& rTime )
 {
     tools::Time aTime = *this;
     aTime += rTime;
-    sal_uInt16 nHours = aTime.GetHour();
-    if ( aTime.GetTime() > 0 )
-    {
-        while ( nHours >= 24 )
-        {
-            Date::operator++();
-            nHours -= 24;
-        }
-        aTime.SetHour( nHours );
-    }
-    else if ( aTime.GetTime() != 0 )
-    {
-        while ( nHours >= 24 )
-        {
-            Date::operator--();
-            nHours -= 24;
-        }
-        Date::operator--();
-        aTime = Time( 24, 0, 0 )+aTime;
-    }
-    tools::Time::operator=( aTime );
-
+    NormalizeTimeRemainderAndApply(aTime);
     return *this;
 }
 
@@ -128,28 +133,7 @@ DateTime& DateTime::operator -=( const tools::Time& rTime )
 {
     tools::Time aTime = *this;
     aTime -= rTime;
-    sal_uInt16 nHours = aTime.GetHour();
-    if ( aTime.GetTime() > 0 )
-    {
-        while ( nHours >= 24 )
-        {
-            Date::operator++();
-            nHours -= 24;
-        }
-        aTime.SetHour( nHours );
-    }
-    else if ( aTime.GetTime() != 0 )
-    {
-        while ( nHours >= 24 )
-        {
-            Date::operator--();
-            nHours -= 24;
-        }
-        Date::operator--();
-        aTime = Time( 24, 0, 0 )+aTime;
-    }
-    tools::Time::operator=( aTime );
-
+    NormalizeTimeRemainderAndApply(aTime);
     return *this;
 }
 
@@ -210,20 +194,21 @@ DateTime operator +( const DateTime& rDateTime, double fTimeInDays )
     return aDateTime;
 }
 
-double operator -( const DateTime& rDateTime1, const DateTime& rDateTime2 )
+tools::Duration operator -( const DateTime& rDateTime1, const DateTime& rDateTime2 )
 {
-    sal_Int32 nDays = static_cast<const Date&>(rDateTime1)
-        - static_cast<const Date&>(rDateTime2);
-    sal_Int64 nTime = rDateTime1.GetNSFromTime() - rDateTime2.GetNSFromTime();
-    if ( nTime )
+    return tools::Duration( rDateTime2, rDateTime1);
+}
+
+// static
+double DateTime::Sub( const DateTime& rDateTime1, const DateTime& rDateTime2 )
+{
+    if (static_cast<const tools::Time&>(rDateTime1) != static_cast<const tools::Time&>(rDateTime2))
     {
-        double fTime = double(nTime);
-        fTime /= ::tools::Time::nanoSecPerDay; // convert from nanoseconds to fraction
-        if ( nDays < 0 && fTime > 0.0 )
-            fTime = 1.0 - fTime;
-        return double(nDays) + fTime;
+        // Use Duration to diminish floating point accuracy errors.
+        const tools::Duration aDuration( rDateTime2, rDateTime1);
+        return aDuration.GetInDays();
     }
-    return double(nDays);
+    return static_cast<const Date&>(rDateTime1) - static_cast<const Date&>(rDateTime2);
 }
 
 void DateTime::GetWin32FileDateTime( sal_uInt32 & rLower, sal_uInt32 & rUpper ) const

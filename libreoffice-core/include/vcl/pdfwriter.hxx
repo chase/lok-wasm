@@ -110,7 +110,7 @@ public:
     enum class Orientation { Portrait, Inherit };
 
     // in case the below enum is added PDF_2_0, please add just after PDF_1_7
-    enum class PDFVersion { PDF_1_2, PDF_1_3, PDF_1_4, PDF_1_5, PDF_1_6, PDF_1_7, PDF_A_1, PDF_A_2, PDF_A_3 };//i59651, PDF/A-1b & -1a, only -1b implemented for now
+    enum class PDFVersion { PDF_1_4, PDF_1_5, PDF_1_6, PDF_1_7, PDF_A_1, PDF_A_2, PDF_A_3 };//i59651, PDF/A-1b & -1a, only -1b implemented for now
     // for the meaning of DestAreaType please look at PDF Reference Manual
     // version 1.4 section 8.2.1, page 475
     enum class DestAreaType { XYZ, FitRectangle };
@@ -132,6 +132,7 @@ public:
 
         // inline level elements
         Span, Quote, Note, Reference, BibEntry, Code, Link, Annot,
+        Ruby, RB, RT, RP, Warichu, WT, WP,
 
         // illustration elements
         Figure, Formula, Form
@@ -146,6 +147,7 @@ public:
         TextIndent, TextAlign, Width, Height, BlockAlign, InlineAlign,
         LineHeight, BaselineShift, TextDecorationType, ListNumbering,
         RowSpan, ColSpan, Scope, Role,
+        RubyAlign, RubyPosition,
 
         // link destination is an artificial attribute that sets
         // the link annotation ID of a Link element
@@ -186,6 +188,10 @@ public:
         Row, Column, Both,
         // Role
         Rb, Cb, Pb, Tv,
+        // RubyAlign
+        RStart, RCenter, REnd, RJustify, RDistribute,
+        // RubyPosition
+        RBefore, RAfter, RWarichu, RInline,
         // ListNumbering
         Disc, Circle, Square, Decimal, UpperRoman, LowerRoman, UpperAlpha, LowerAlpha
     };
@@ -328,7 +334,7 @@ public:
            hyperlink to be executed on pushing the button.
 
            There will be no error checking or any kind of
-           conversion done to the URL parameter execept this:
+           conversion done to the URL parameter except this:
            it will be output as 7bit Ascii. The URL
            will appear literally in the PDF file produced
         */
@@ -559,6 +565,15 @@ The following structure describes the permissions used in PDF security
         OUString          Author;         // document author
         OUString          Subject;        // subject
         OUString          Keywords;       // keywords
+        css::util::DateTime ModificationDate;
+        css::uno::Sequence<OUString> Contributor; // http://purl.org/dc/elements/1.1/contributor
+        OUString          Coverage;       // http://purl.org/dc/elements/1.1/coverage
+        OUString          Identifier;     // http://purl.org/dc/elements/1.1/identifier
+        css::uno::Sequence<OUString> Publisher; // http://purl.org/dc/elements/1.1/publisher
+        css::uno::Sequence<OUString> Relation; // http://purl.org/dc/elements/1.1/relation
+        OUString          Rights;         // http://purl.org/dc/elements/1.1/rights
+        OUString          Source;         // http://purl.org/dc/elements/1.1/source
+        OUString          Type;           // http://purl.org/dc/elements/1.1/type
         OUString          Creator;        // application that created the original document
         OUString          Producer;       // OpenOffice
     };
@@ -647,7 +662,7 @@ The following structure describes the permissions used in PDF security
                 DefaultLinkAction( PDFWriter::URIAction ),
                 ConvertOOoTargetToPDFTarget( false ),
                 ForcePDFAction( false ),
-                Version( PDFWriter::PDFVersion::PDF_1_6 ),
+                Version(PDFWriter::PDFVersion::PDF_1_7),
                 UniversalAccessibilityCompliance( false ),
                 Tagged( false ),
                 SubmitFormat( PDFWriter::FDF ),
@@ -778,10 +793,10 @@ The following structure describes the permissions used in PDF security
                                       FontLineStyle eOverline );
     void                DrawTextArray( const Point& rStartPt, const OUString& rStr,
                                        KernArraySpan aKernArray,
-                                       o3tl::span<const sal_Bool> pKashidaAry,
+                                       std::span<const sal_Bool> pKashidaAry,
                                        sal_Int32 nIndex,
                                        sal_Int32 nLen );
-    void                DrawStretchText( const Point& rStartPt, sal_uLong nWidth,
+    void                DrawStretchText( const Point& rStartPt, sal_Int32 nWidth,
                                          const OUString& rStr,
                                          sal_Int32 nIndex, sal_Int32 nLen );
     void                DrawText( const tools::Rectangle& rRect,
@@ -802,7 +817,7 @@ The following structure describes the permissions used in PDF security
     void                DrawPolyPolygon( const tools::PolyPolygon& rPolyPoly );
     void                DrawRect( const tools::Rectangle& rRect );
     void                DrawRect( const tools::Rectangle& rRect,
-                                  sal_uLong nHorzRount, sal_uLong nVertRound );
+                                  sal_uInt32 nHorzRount, sal_uInt32 nVertRound );
     void                DrawEllipse( const tools::Rectangle& rRect );
     void                DrawArc( const tools::Rectangle& rRect,
                                  const Point& rStartPt, const Point& rEndPt );
@@ -934,7 +949,7 @@ The following structure describes the permissions used in PDF security
     sal_Int32 CreateLink(const tools::Rectangle& rRect, sal_Int32 nPageNr, OUString const& rAltText);
 
     /// Creates a screen annotation.
-    sal_Int32 CreateScreen(const tools::Rectangle& rRect, sal_Int32 nPageNr, OUString const& rAltText);
+    sal_Int32 CreateScreen(const tools::Rectangle& rRect, sal_Int32 nPageNr, OUString const& rAltText, OUString const& rMimeType);
 
     /** creates a destination which is not intended to be referred to by a link, but by a public destination Id.
 
@@ -1056,6 +1071,11 @@ The following structure describes the permissions used in PDF security
     (e.g. a section can contain a heading and a paragraph). The structure hierarchy
     is build automatically from the Begin/EndStructureElement calls.
 
+    The easy way is to call WrapBeginStructureElement, but it's also possible
+    to call EnsureStructureElement/InitStructureElement/BeginStructureElement
+    (its 3 parts) manually for more control; this way a placeholder SE can be
+    inserted and initialised later.
+
     A structural element need not be contained on one page; e.g. paragraphs often
     run from one page to the next. In this case the corresponding EndStructureElement
     must be called while drawing the next page.
@@ -1090,7 +1110,10 @@ The following structure describes the permissions used in PDF security
     @returns
     the new structure element's id for use in SetCurrentStructureElement
      */
-     sal_Int32 BeginStructureElement( enum StructElement eType, std::u16string_view rAlias );
+    void BeginStructureElement(sal_Int32 id);
+    sal_Int32 EnsureStructureElement();
+    void InitStructureElement(sal_Int32 id, PDFWriter::StructElement eType, std::u16string_view rAlias);
+
     /** end the current logical structure element
 
     Close the current structure element. The current element's
@@ -1170,7 +1193,7 @@ The following structure describes the permissions used in PDF security
      */
     void SetActualText( const OUString& rText );
 
-    /** set the Alt attribute of a strutural element
+    /** set the Alt attribute of a structural element
 
     Alt is s replacement text describing the contents of a structural element. This
     is mainly used by accessibility applications; e.g. a screen reader would read
@@ -1210,24 +1233,24 @@ The following structure describes the permissions used in PDF security
      */
     sal_Int32 CreateControl( const AnyWidget& rControlType );
 
-    /** Inserts an additional stream to the PDF file
+    /** Attaches an additional file to the PDF file
 
-    This function adds an arbitrary stream to the produced PDF file. May be called
-    any time before Emit(). The stream will be written during
-    Emit by calling the PDFOutputStream Object's write
-    method. After the call the PDFOutputStream will be deleted.
+    This function adds an arbitrary stream that represents an attached file
+    in the PDF file.
 
-    All additional streams and their mimetypes will be entered into an array
-    in the trailer dictionary.
+    This also adds an additional stream array entry (with the mimetype) in
+    the trailer dictionary for backwards compatibility.
+
+    @param rFileName
+    the filename of the additional file as presented in the stream
 
     @param rMimeType
     the mimetype of the stream
 
     @param pStream
     the interface to the additional stream
-
     */
-    void AddStream( const OUString& rMimeType, PDFOutputStream* pStream );
+    void AddAttachedFile(OUString const& rFileName, OUString const& rMimeType, OUString const& rDescription, std::unique_ptr<PDFOutputStream> pStream);
 
     /// Write rString as a PDF hex string into rBuffer.
     static void AppendUnicodeTextString(const OUString& rString, OStringBuffer& rBuffer);

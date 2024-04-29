@@ -549,7 +549,7 @@ class MessageWithCheck : public weld::MessageDialogController
 private:
     std::unique_ptr<weld::CheckButton> m_xWarningOnBox;
 public:
-    MessageWithCheck(weld::Window *pParent, const OUString& rUIFile, const OString& rDialogId)
+    MessageWithCheck(weld::Window *pParent, const OUString& rUIFile, const OUString& rDialogId)
         : MessageDialogController(pParent, rUIFile, rDialogId, "ask")
         , m_xWarningOnBox(m_xBuilder->weld_check_button("ask"))
     {
@@ -599,6 +599,13 @@ void WorkbookFragment::recalcFormulaCells()
     }
     else if (nRecalcMode == RECALC_ALWAYS)
         bHardRecalc = true;
+    else if (!hasCalculatedFormulaCells())
+    {
+        // Did not encounter any other formula result than 0.0 (or none / no
+        // formula cells at all, in which case recalculation is almost a no-op)
+        // in a non-known-good-generator document.
+        bHardRecalc = true;
+    }
 
     if (bHardRecalc)
         rDocSh.DoHardRecalc();

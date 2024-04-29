@@ -210,7 +210,7 @@
                 <property name="can_focus">False</property>
                 <property name="spacing">12</property>
                 <property name="homogeneous">True</property>
-                <property name="layout_style">spread</property>
+                <property name="layout_style">end</property>
                 <child>
                   <object class="GtkButton" id="view">
                     <property name="label" translatable="yes" context="digitalsignaturesdialog|view">View Certificate...</property>
@@ -224,7 +224,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="expand">False</property>
+                    <property name="expand">True</property>
                     <property name="fill">True</property>
                     <property name="position">0</property>
                   </packing>
@@ -243,7 +243,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="expand">False</property>
+                    <property name="expand">True</property>
                     <property name="fill">True</property>
                     <property name="position">1</property>
                   </packing>
@@ -261,7 +261,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="expand">False</property>
+                    <property name="expand">True</property>
                     <property name="fill">True</property>
                     <property name="position">2</property>
                   </packing>
@@ -481,26 +481,6 @@
               <packing>
                 <property name="left_attach">0</property>
                 <property name="top_attach">5</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkCheckButton" id="adescompliant">
-                <property name="label" translatable="yes" context="digitalsignaturesdialog|adescompliant">Use AdES-compliant signature when there is a choice</property>
-                <property name="visible">True</property>
-                <property name="can_focus">True</property>
-                <property name="receives_default">True</property>
-                <property name="halign">start</property>
-                <property name="use_underline">True</property>
-                <property name="draw_indicator">True</property>
-                <child internal-child="accessible">
-                  <object class="AtkObject" id="adescompliant-atkobject">
-                    <property name="AtkObject::accessible-description" translatable="yes" context="digitalsignaturesdialog|extended_tip|adescompliant">Prefers creating XAdES signatures for ODF and OOXML, PAdES signatures for PDF.</property>
-                  </object>
-                </child>
-              </object>
-              <packing>
-                <property name="left_attach">0</property>
-                <property name="top_attach">6</property>
               </packing>
             </child>
           </object>

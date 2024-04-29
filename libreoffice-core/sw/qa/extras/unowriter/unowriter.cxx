@@ -314,11 +314,11 @@ CPPUNIT_TEST_FIXTURE(SwUnoWriter, testXAutoTextGroup)
 
     uno::Reference<text::XTextRange> xTextRange = getRun(getParagraph(1), 1);
 
-    static const OUStringLiteral sGroupName = u"TestGroup*1";
-    static const OUStringLiteral sTextName = u"TEST";
-    static const OUStringLiteral sTextNameNew = u"TESTRENAMED";
-    static const OUStringLiteral sTextTitle = u"Test Auto Text";
-    static const OUStringLiteral sTextTitleNew = u"Test Auto Text Renamed";
+    static constexpr OUString sGroupName = u"TestGroup*1"_ustr;
+    static constexpr OUString sTextName = u"TEST"_ustr;
+    static constexpr OUString sTextNameNew = u"TESTRENAMED"_ustr;
+    static constexpr OUString sTextTitle = u"Test Auto Text"_ustr;
+    static constexpr OUString sTextTitleNew = u"Test Auto Text Renamed"_ustr;
 
     // Create new temporary group
     uno::Reference<text::XAutoTextGroup> xAutoTextGroup
@@ -695,8 +695,9 @@ CPPUNIT_TEST_FIXTURE(SwUnoWriter, testDeleteFlyAtCharAtStart)
     SfxItemSet grfSet(pDoc->GetAttrPool(), svl::Items<RES_GRFATR_BEGIN, RES_GRFATR_END - 1>);
     SwFormatAnchor anchor(RndStdIds::FLY_AT_CHAR);
     frameSet.Put(anchor);
-    GraphicObject grf;
-    CPPUNIT_ASSERT(rIDCO.InsertGraphicObject(*pWrtShell->GetCursor(), grf, &frameSet, &grfSet));
+    Graphic grf;
+    CPPUNIT_ASSERT(rIDCO.InsertGraphic(*pWrtShell->GetCursor(), OUString(), OUString(), &grf,
+                                       &frameSet, &grfSet, nullptr));
 
     // check fly
     CPPUNIT_ASSERT_EQUAL(1, getShapes());
@@ -964,7 +965,7 @@ CPPUNIT_TEST_FIXTURE(SwUnoWriter, testChapterNumberingCharStyle)
     uno::Reference<beans::XPropertySet> xStyle(
         xDoc->createInstance("com.sun.star.style.CharacterStyle"), uno::UNO_QUERY);
     uno::Reference<container::XNamed> xStyleN(xStyle, uno::UNO_QUERY);
-    xStyle->setPropertyValue("CharColor", uno::Any(sal_Int32(0x00FF0000)));
+    xStyle->setPropertyValue("CharColor", uno::Any(COL_LIGHTRED));
     uno::Reference<style::XStyleFamiliesSupplier> xSFS(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XNameContainer> xStyles(
         xSFS->getStyleFamilies()->getByName("CharacterStyles"), uno::UNO_QUERY);
@@ -1186,18 +1187,39 @@ CPPUNIT_TEST_FIXTURE(SwUnoWriter, testTdf129841)
     // Get SwXCellRange for the same cell
     css::uno::Reference<css::beans::XPropertySet> xCellRange(
         xTableCellRange->getCellRangeByName("A1:A1"), css::uno::UNO_QUERY_THROW);
-    static const OUStringLiteral sBackColor = u"BackColor";
+    static constexpr OUString sBackColor = u"BackColor"_ustr;
     // Apply background color to table cursor, and read background color from cell range
-    css::uno::Any aRefColor(sal_Int32(0x00FF0000));
+    css::uno::Any aRefColor(COL_LIGHTRED);
     xTableCursor->setPropertyValue(sBackColor, aRefColor);
     css::uno::Any aColor = xCellRange->getPropertyValue(sBackColor);
     // This failed
     CPPUNIT_ASSERT_EQUAL(aRefColor, aColor);
     // Now the other way round
-    aRefColor <<= sal_Int32(0x0000FF00);
+    aRefColor <<= COL_LIGHTGREEN;
     xCellRange->setPropertyValue(sBackColor, aRefColor);
     aColor = xTableCursor->getPropertyValue(sBackColor);
     CPPUNIT_ASSERT_EQUAL(aRefColor, aColor);
+}
+
+CPPUNIT_TEST_FIXTURE(SwUnoWriter, testTdf160278)
+{
+    createSwDoc();
+    auto xTextDocument(mxComponent.queryThrow<css::text::XTextDocument>());
+    auto xText(xTextDocument->getText());
+    xText->setString(u"123"_ustr);
+    CPPUNIT_ASSERT_EQUAL(u"123"_ustr, xText->getString());
+    auto xCursor = xText->createTextCursorByRange(xText->getEnd());
+    xCursor->goLeft(1, true);
+    CPPUNIT_ASSERT_EQUAL(u"3"_ustr, xCursor->getString());
+    // Insert an SMP character U+1f702 (so it's two UTF-16 code units, 0xd83d 0xdf02):
+    xCursor->setString(u"🜂"_ustr);
+    // Without the fix, the replacement would expand the cursor one too many characters to the left,
+    // and the cursor text would become "2🜂", failing the next test:
+    CPPUNIT_ASSERT_EQUAL(u"🜂"_ustr, xCursor->getString());
+    xCursor->setString(u"test"_ustr);
+    CPPUNIT_ASSERT_EQUAL(u"test"_ustr, xCursor->getString());
+    // This test would fail, too; the text would be "1test":
+    CPPUNIT_ASSERT_EQUAL(u"12test"_ustr, xText->getString());
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

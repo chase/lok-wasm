@@ -21,7 +21,9 @@
 
 #include <config_options.h>
 #include <basegfx/basegfxdllapi.h>
+#include <basegfx/matrix/b3dhommatrix.hxx>
 #include <basegfx/color/bcolor.hxx>
+#include <rtl/ustring.hxx>
 
 #include <osl/diagnose.h>
 
@@ -80,6 +82,8 @@ namespace basegfx
 
         // compute modified color
         virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const = 0;
+
+        virtual OUString getModifierName() const = 0;
     };
 
     /** convert color to gray
@@ -98,6 +102,7 @@ namespace basegfx
 
         // compute modified color
         SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
     };
 
     /** invert color
@@ -118,6 +123,7 @@ namespace basegfx
 
         // compute modified color
         SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
     };
 
     /** convert to alpha based on luminance
@@ -142,6 +148,7 @@ namespace basegfx
 
         // compute modified color
         SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
     };
 
     /** replace color
@@ -171,6 +178,7 @@ namespace basegfx
 
         // compute modified color
         SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
     };
 
     /** interpolate color
@@ -200,6 +208,84 @@ namespace basegfx
 
         // compute modified color
         SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
+    };
+
+    /** Apply saturation
+        This derivation is used for the svg importer and does exactly what SVG
+        defines for this needed case.
+
+        See:
+        https://www.w3.org/TR/filter-effects/#elementdef-fecolormatrix
+    */
+    class SAL_WARN_UNUSED BASEGFX_DLLPUBLIC BColorModifier_saturate final : public BColorModifier
+    {
+    private:
+        basegfx::B3DHomMatrix       maSatMatrix;
+
+    public:
+        BColorModifier_saturate(double fValue);
+
+        virtual ~BColorModifier_saturate() override;
+
+        // compare operator
+        SAL_DLLPRIVATE virtual bool operator==(const BColorModifier& rCompare) const override;
+
+        // compute modified color
+        SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
+    };
+
+    /** Apply matrix
+        This derivation is used for the svg importer and does exactly what SVG
+        defines for this needed case.
+
+        See:
+        https://www.w3.org/TR/filter-effects/#elementdef-fecolormatrix
+    */
+    class SAL_WARN_UNUSED BASEGFX_DLLPUBLIC BColorModifier_matrix final : public BColorModifier
+    {
+    private:
+        std::vector<double>       maVector;
+
+    public:
+        BColorModifier_matrix(std::vector<double> aVector)
+        :   maVector(aVector)
+        {
+        }
+
+        virtual ~BColorModifier_matrix() override;
+
+        // compare operator
+        SAL_DLLPRIVATE virtual bool operator==(const BColorModifier& rCompare) const override;
+        // compute modified color
+        SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
+    };
+
+    /** Apply hueRotate
+        This derivation is used for the svg importer and does exactly what SVG
+        defines for this needed case.
+
+        See:
+        https://www.w3.org/TR/filter-effects/#elementdef-fecolormatrix
+    */
+    class SAL_WARN_UNUSED BASEGFX_DLLPUBLIC BColorModifier_hueRotate final : public BColorModifier
+    {
+    private:
+        basegfx::B3DHomMatrix       maHueMatrix;
+
+    public:
+        BColorModifier_hueRotate(double fRad);
+
+        virtual ~BColorModifier_hueRotate() override;
+
+        // compare operator
+        SAL_DLLPRIVATE virtual bool operator==(const BColorModifier& rCompare) const override;
+
+        // compute modified color
+        SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
     };
 
     /** convert color to black and white
@@ -207,7 +293,7 @@ namespace basegfx
         returns black when the luminance of the given color is less than
         the given threshold value in the range [0.0 .. 1.0], else white
     */
-    class SAL_WARN_UNUSED UNLESS_MERGELIBS(BASEGFX_DLLPUBLIC) BColorModifier_black_and_white final : public BColorModifier
+    class SAL_WARN_UNUSED BASEGFX_DLLPUBLIC BColorModifier_black_and_white final : public BColorModifier
     {
     private:
         double                      mfValue;
@@ -225,6 +311,7 @@ namespace basegfx
 
         // compute modified color
         SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
     };
 
     /** gamma correction
@@ -252,6 +339,7 @@ namespace basegfx
 
         // compute modified color
         virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
     };
 
     /** Red, Green, Blue, Luminance and Contrast correction
@@ -288,6 +376,29 @@ namespace basegfx
 
         // compute modified color
         SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
+    };
+
+    /** mix a part of the original color with randomized color (mainly for debug visualizations)
+    */
+    class SAL_WARN_UNUSED BASEGFX_DLLPUBLIC BColorModifier_randomize final : public BColorModifier
+    {
+    private:
+        // [0.0 .. 1.0] where 0.0 is no randomize, 1.0 is all random and in-between
+        // describes the mixed part. Default is 0.1 which means to mix with 10% random color
+        double                      mfRandomPart;
+
+    public:
+        BColorModifier_randomize(double fRandomPart = 0.1);
+
+        virtual ~BColorModifier_randomize() override;
+
+        // compare operator
+        SAL_DLLPRIVATE virtual bool operator==(const BColorModifier& rCompare) const override;
+
+        // compute modified color
+        SAL_DLLPRIVATE virtual ::basegfx::BColor getModifiedColor(const ::basegfx::BColor& aSourceColor) const override;
+        SAL_DLLPRIVATE virtual OUString getModifierName() const override;
     };
 
     /// typedef to allow working with shared instances of BColorModifier

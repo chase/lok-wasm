@@ -27,6 +27,7 @@ $(eval $(call gb_ExternalPackage_add_file,python3,$(LIBO_BIN_FOLDER)/python$(PYT
 endif
 python3_EXTENSION_MODULES= \
 	PCbuild/$(python_arch_subdir)_asyncio$(if $(MSVC_USE_DEBUG_RUNTIME),_d).pyd \
+	PCbuild/$(python_arch_subdir)_bz2$(if $(MSVC_USE_DEBUG_RUNTIME),_d).pyd \
 	PCbuild/$(python_arch_subdir)_ctypes$(if $(MSVC_USE_DEBUG_RUNTIME),_d).pyd \
 	PCbuild/$(python_arch_subdir)_decimal$(if $(MSVC_USE_DEBUG_RUNTIME),_d).pyd \
 	PCbuild/$(python_arch_subdir)_elementtree$(if $(MSVC_USE_DEBUG_RUNTIME),_d).pyd \
@@ -48,7 +49,7 @@ else
 $(eval $(call gb_ExternalPackage_add_file,python3,$(LIBO_BIN_FOLDER)/python.bin,python))
 $(eval $(call gb_ExternalPackage_add_file,python3,$(LIBO_BIN_FOLDER)/libpython$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)$(if $(ENABLE_DBGUTIL),d).so,libpython$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)$(if $(ENABLE_DBGUTIL),d).so))
 $(eval $(call gb_ExternalPackage_add_file,python3,$(LIBO_BIN_FOLDER)/libpython$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)$(if $(ENABLE_DBGUTIL),d).so.1.0,libpython$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)$(if $(ENABLE_DBGUTIL),d).so))
-$(eval $(call gb_ExternalPackage_add_file,python3,$(LIBO_BIN_FOLDER)/python.bin-gdb.py,Tools/gdb/libpython.py))
+$(eval $(call gb_ExternalPackage_add_file,python3,$(LIBO_BIN_FOLDER)/libpython$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)$(if $(ENABLE_DBGUTIL),d).so.1.0-gdb.py,Tools/gdb/libpython.py))
 
 # Unfortunately the python build system does not allow to explicitly enable or
 # disable these, it just tries to build them and then prints which did not
@@ -57,7 +58,6 @@ $(eval $(call gb_ExternalPackage_add_file,python3,$(LIBO_BIN_FOLDER)/python.bin-
 # Obviously this list should not contain stuff with external dependencies
 # that may not be available on baseline systems.
 
-ifneq ($(OS),AIX)
 python3_EXTENSION_MODULE_SUFFIX=cpython-$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)$(if $(ENABLE_DBGUTIL),d)
 python3_EXTENSION_MODULES= \
 	LO_lib/array.$(python3_EXTENSION_MODULE_SUFFIX).so \
@@ -66,6 +66,7 @@ python3_EXTENSION_MODULES= \
 	LO_lib/binascii.$(python3_EXTENSION_MODULE_SUFFIX).so \
 	LO_lib/_bisect.$(python3_EXTENSION_MODULE_SUFFIX).so \
 	LO_lib/_blake2.$(python3_EXTENSION_MODULE_SUFFIX).so \
+	LO_lib/_bz2.$(python3_EXTENSION_MODULE_SUFFIX).so \
 	LO_lib/cmath.$(python3_EXTENSION_MODULE_SUFFIX).so \
 	LO_lib/_codecs_cn.$(python3_EXTENSION_MODULE_SUFFIX).so \
 	LO_lib/_codecs_hk.$(python3_EXTENSION_MODULE_SUFFIX).so \
@@ -128,7 +129,6 @@ python3_EXTENSION_MODULES= \
 $(eval $(call gb_ExternalPackage_add_files,python3,$(LIBO_BIN_FOLDER)/python-core-$(PYTHON_VERSION)/lib/lib-dynload,\
 	$(python3_EXTENSION_MODULES) \
 ))
-endif
 endif
 
 # headers are not delivered, but used from unpacked dir Include/

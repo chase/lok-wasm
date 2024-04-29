@@ -40,6 +40,7 @@ namespace sdr::properties
                     SDRATTR_MISC_FIRST, SDRATTR_EDGE_LAST,
                     SDRATTR_TEXTDIRECTION, SDRATTR_TEXTDIRECTION,
                     SDRATTR_TEXTCOLUMNS_FIRST, SDRATTR_TEXTCOLUMNS_LAST,
+                    SDRATTR_EDGEOOXMLCURVE_FIRST, SDRATTR_EDGEOOXMLCURVE_LAST,
                     // Range from SdrTextObj:
                     EE_ITEMS_START, EE_ITEMS_END>);
         }
@@ -63,7 +64,7 @@ namespace sdr::properties
             return std::unique_ptr<BaseProperties>(new ConnectorProperties(*this, rObj));
         }
 
-        void ConnectorProperties::ItemSetChanged(o3tl::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
+        void ConnectorProperties::ItemSetChanged(std::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
         {
             SdrEdgeObj& rObj = static_cast<SdrEdgeObj&>(GetSdrObject());
 

@@ -44,7 +44,7 @@ namespace formula
             virtual void fillVisibleArgumentMapping(::std::vector<sal_uInt16>& ) const override {}
             virtual void initArgumentInfo()  const override {}
             virtual OUString getSignature() const override { return OUString(); }
-            virtual OString getHelpId() const override { return ""; }
+            virtual OUString getHelpId() const override { return ""; }
             virtual bool isHidden() const override { return false; }
             virtual sal_uInt32 getParameterCount() const override { return 0; }
             virtual sal_uInt32 getVarArgsStart() const override { return 0; }
@@ -61,7 +61,7 @@ namespace formula
 #define FUNC_NOTFOUND -1
 
 FormulaHelper::FormulaHelper(const IFunctionManager* _pFunctionManager)
-    :m_pSysLocale(new SvtSysLocale)
+    :m_rCharClass(m_aSysLocale.GetCharClass())
     ,m_pFunctionManager(_pFunctionManager)
     ,open(_pFunctionManager->getSingleToken(IFunctionManager::eOk))
     ,close(_pFunctionManager->getSingleToken(IFunctionManager::eClose))
@@ -69,7 +69,6 @@ FormulaHelper::FormulaHelper(const IFunctionManager* _pFunctionManager)
     ,arrayOpen(_pFunctionManager->getSingleToken(IFunctionManager::eArrayOpen))
     ,arrayClose(_pFunctionManager->getSingleToken(IFunctionManager::eArrayClose))
 {
-    m_pCharClass = &m_pSysLocale->GetCharClass();
 }
 
 sal_Int32 FormulaHelper::GetCategoryCount() const
@@ -185,9 +184,9 @@ void FormulaHelper::GetArgStrings( ::std::vector< OUString >& _rArgs,
 }
 
 
-static bool IsFormulaText( const CharClass* _pCharClass,const OUString& rStr, sal_Int32 nPos )
+static bool IsFormulaText(const CharClass& rCharClass, const OUString& rStr, sal_Int32 nPos)
 {
-    if( _pCharClass->isLetterNumeric( rStr, nPos ) )
+    if( rCharClass.isLetterNumeric( rStr, nPos ) )
         return true;
     else
     {   // In internationalized versions function names may contain a dot
@@ -261,7 +260,7 @@ sal_Int32 FormulaHelper::GetFunctionStart( const OUString&   rFormula,
         {
             nFStart = nParPos-1;
 
-            while ( (nFStart > 0) && IsFormulaText(m_pCharClass, rFormula, nFStart ))
+            while ( (nFStart > 0) && IsFormulaText(m_rCharClass, rFormula, nFStart ))
                 nFStart--;
         }
 
@@ -269,7 +268,7 @@ sal_Int32 FormulaHelper::GetFunctionStart( const OUString&   rFormula,
 
         if ( bFound )
         {
-            if ( IsFormulaText( m_pCharClass,rFormula, nFStart ) )
+            if ( IsFormulaText( m_rCharClass, rFormula, nFStart ) )
             {
                                     //  Function found
                 if ( pFuncName )

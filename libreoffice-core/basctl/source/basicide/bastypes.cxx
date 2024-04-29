@@ -35,11 +35,14 @@
 #include <com/sun/star/script/XLibraryContainerPassword.hpp>
 #include <sal/log.hxx>
 #include <sfx2/dispatch.hxx>
+#include <sfx2/infobar.hxx>
 #include <sfx2/passwd.hxx>
 #include <sfx2/sfxsids.hrc>
+#include <sfx2/viewfrm.hxx>
 #include <svl/intitem.hxx>
 #include <svl/stritem.hxx>
 #include <svl/srchdefs.hxx>
+#include <svl/itemset.hxx>
 #include <utility>
 #include <vcl/commandevent.hxx>
 #include <vcl/event.hxx>
@@ -50,6 +53,9 @@
 
 namespace basctl
 {
+
+// ID used for the read-only infobar
+constexpr OUString BASIC_IDE_READONLY_INFOBAR = u"readonly"_ustr;
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star;
@@ -87,6 +93,12 @@ void BaseWindow::Init()
         pShellVScrollBar->SetScrollHdl( LINK( this, BaseWindow, VertScrollHdl ) );
     if ( pShellHScrollBar )
         pShellHScrollBar->SetScrollHdl( LINK( this, BaseWindow, HorzScrollHdl ) );
+
+    // Show the read-only infobar if the module/dialog is read-only
+    GetShell()->GetViewFrame().RemoveInfoBar(BASIC_IDE_READONLY_INFOBAR);
+    if (IsReadOnly())
+        ShowReadOnlyInfoBar();
+
     DoInit();   // virtual...
 }
 
@@ -220,6 +232,19 @@ bool BaseWindow::IsReadOnly ()
     return false;
 }
 
+// Show the read-only warning messages for module and dialog windows
+void BaseWindow::ShowReadOnlyInfoBar()
+{
+    OUString aMsg;
+    if (dynamic_cast<ModulWindow*>(this))
+        aMsg = IDEResId(RID_STR_MODULE_READONLY);
+    else
+        aMsg = IDEResId(RID_STR_DIALOG_READONLY);
+
+    GetShell()->GetViewFrame().AppendInfoBar(BASIC_IDE_READONLY_INFOBAR, OUString(),
+                                              aMsg, InfobarType::INFO, true);
+}
+
 void BaseWindow::BasicStarted()
 {
 }
@@ -289,7 +314,7 @@ WinBits const DockingWindow::StyleBits =
     WB_BORDER | WB_3DLOOK | WB_CLIPCHILDREN |
     WB_MOVEABLE | WB_SIZEABLE | WB_DOCKABLE;
 
-DockingWindow::DockingWindow(vcl::Window* pParent, const OUString& rUIXMLDescription, const OString& rID)
+DockingWindow::DockingWindow(vcl::Window* pParent, const OUString& rUIXMLDescription, const OUString& rID)
     : ResizableDockingWindow(pParent)
     , m_xBuilder(Application::CreateInterimBuilder(m_xBox.get(), rUIXMLDescription, true))
     , pLayout(nullptr)

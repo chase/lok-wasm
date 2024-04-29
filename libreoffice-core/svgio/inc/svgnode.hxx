@@ -95,6 +95,9 @@ namespace svgio::svgreader
             /// Class svan value
             std::optional<OUString>   mpClass;
 
+            /// systemLanguage values
+            std::vector<OUString>  maSystemLanguage;
+
             /// XmlSpace value
             XmlSpace                    maXmlSpace;
 
@@ -116,14 +119,18 @@ namespace svgio::svgreader
 
         protected:
             /// helper to evtl. link to css style
-            const SvgStyleAttributes* checkForCssStyle(const OUString& rClassStr, const SvgStyleAttributes& rOriginal) const;
+            const SvgStyleAttributes* checkForCssStyle(const SvgStyleAttributes& rOriginal) const;
 
             /// helper for filling the CssStyle vector once dependent on mbCssStyleVectorBuilt
-            void fillCssStyleVector(const OUString& rClassStr, const SvgStyleAttributes& rOriginal);
-            void fillCssStyleVectorUsingHierarchyAndSelectors(
-                const OUString& rClassStr,
-                const SvgNode& rCurrent,
+            void fillCssStyleVector(const SvgStyleAttributes& rOriginal);
+            void addCssStyle(
+                const SvgDocument& rDocument,
                 const OUString& aConcatenated);
+            void fillCssStyleVectorUsingHierarchyAndSelectors(
+                const SvgNode& rCurrent,
+                std::u16string_view aConcatenated);
+            void fillCssStyleVectorUsingParent(
+                const SvgNode& rCurrent);
 
         public:
             SvgNode(
@@ -142,7 +149,7 @@ namespace svgio::svgreader
             /// style helpers
             void parseAttributes(const css::uno::Reference< css::xml::sax::XAttributeList >& xAttribs);
             virtual const SvgStyleAttributes* getSvgStyleAttributes() const;
-            virtual void parseAttribute(const OUString& rTokenName, SVGToken aSVGToken, const OUString& aContent);
+            virtual void parseAttribute(SVGToken aSVGToken, const OUString& aContent);
             virtual void decomposeSvgNode(drawinglayer::primitive2d::Primitive2DContainer& rTarget, bool bReferenced) const;
 
             /// #i125258# tell if this node is allowed to have a parent style (e.g. defs do not)
@@ -156,10 +163,9 @@ namespace svgio::svgreader
 
             /// InfoProvider support for %, em and ex values
             virtual basegfx::B2DRange getCurrentViewPort() const override;
-            virtual double getCurrentFontSizeInherited() const override;
+            virtual double getCurrentFontSize() const override;
             virtual double getCurrentXHeightInherited() const override;
 
-            double getCurrentFontSize() const;
             double getCurrentXHeight() const;
 
             /// Id access
@@ -169,6 +175,10 @@ namespace svgio::svgreader
             /// Class access
             std::optional<OUString> const & getClass() const { return mpClass; }
             void setClass(OUString const &);
+
+            /// SystemLanguage access
+            std::vector<OUString> const & getSystemLanguage() const { return maSystemLanguage; }
+            void setSystemLanguage(OUString const &);
 
             /// XmlSpace access
             XmlSpace getXmlSpace() const;
@@ -180,6 +190,9 @@ namespace svgio::svgreader
 
             /// alternative parent
             void setAlternativeParent(const SvgNode* pAlternativeParent = nullptr) { mpAlternativeParent = pAlternativeParent; }
+
+            /// Check if there is a local css style
+            bool hasLocalCssStyle() { return static_cast<bool>(mpLocalCssStyle); }
         };
 
       class Visitor

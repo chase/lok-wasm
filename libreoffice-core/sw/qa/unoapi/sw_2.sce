@@ -18,12 +18,10 @@
 
 -o sw.SwXDrawPage
 -o sw.SwXEndnoteProperties
--o sw.SwXFieldEnumeration
 -o sw.SwXFieldMaster
 -o sw.SwXFootnote
 -o sw.SwXFootnoteProperties
 -o sw.SwXFootnoteText
--o sw.SwXFootnotes
 -o sw.SwXFrames
 -o sw.SwXHeadFootText
 -o sw.SwXLineNumberingProperties
@@ -31,14 +29,10 @@
 -o sw.SwXModule
 -o sw.SwXNumberingRules
 #i103696 -o sw.SwXParagraph
--o sw.SwXParagraphEnumeration
 -o sw.SwXPrintSettings
 -o sw.SwXPropertySet
 -o sw.SwXPropertySetInfo
--o sw.SwXReferenceMark
--o sw.SwXReferenceMarks
 #i111190 -o sw.SwXShape
--o sw.SwXStyleFamilies
 -o sw.SwXStyleFamily
 -o sw.SwXTableCellText
 -o sw.SwXTableColumns

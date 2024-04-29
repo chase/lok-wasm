@@ -73,7 +73,7 @@ void TestString::testDecimalStringToNumber()
     s1 += u"\u07C6";
     CPPUNIT_ASSERT_EQUAL(sal_uInt32(12346), comphelper::string::decimalStringToNumber(s1));
     // Codepoints on 2 16bits words
-    s1 = u"\U0001D7FE\U0001D7F7"; // MATHEMATICAL MONOSPACE DIGIT EIGHT and ONE
+    s1 = u"\U0001D7FE\U0001D7F7"_ustr; // MATHEMATICAL MONOSPACE DIGIT EIGHT and ONE
     CPPUNIT_ASSERT_EQUAL(sal_uInt32(81), comphelper::string::decimalStringToNumber(s1));
 }
 
@@ -88,80 +88,80 @@ void TestString::testIsdigitAsciiString()
 
 void TestString::testStripStart()
 {
-    OString aIn("abc");
+    OString aIn("abc"_ostr);
     OString aOut;
 
     aOut = ::comphelper::string::stripStart(aIn, 'b');
-    CPPUNIT_ASSERT_EQUAL(OString("abc"), aOut);
+    CPPUNIT_ASSERT_EQUAL("abc"_ostr, aOut);
 
     aOut = ::comphelper::string::stripStart(aIn, 'a');
-    CPPUNIT_ASSERT_EQUAL(OString("bc"), aOut);
+    CPPUNIT_ASSERT_EQUAL("bc"_ostr, aOut);
 
-    aIn = "aaa";
+    aIn = "aaa"_ostr;
     aOut = ::comphelper::string::stripStart(aIn, 'a');
     CPPUNIT_ASSERT(aOut.isEmpty());
 
-    aIn = "aba";
+    aIn = "aba"_ostr;
     aOut = ::comphelper::string::stripStart(aIn, 'a');
-    CPPUNIT_ASSERT_EQUAL(OString("ba"), aOut);
+    CPPUNIT_ASSERT_EQUAL("ba"_ostr, aOut);
 }
 
 void TestString::testStripEnd()
 {
-    OString aIn("abc");
+    OString aIn("abc"_ostr);
     OString aOut;
 
     aOut = ::comphelper::string::stripEnd(aIn, 'b');
-    CPPUNIT_ASSERT_EQUAL(OString("abc"), aOut);
+    CPPUNIT_ASSERT_EQUAL("abc"_ostr, aOut);
 
     aOut = ::comphelper::string::stripEnd(aIn, 'c');
-    CPPUNIT_ASSERT_EQUAL(OString("ab"), aOut);
+    CPPUNIT_ASSERT_EQUAL("ab"_ostr, aOut);
 
-    aIn = "aaa";
+    aIn = "aaa"_ostr;
     aOut = ::comphelper::string::stripEnd(aIn, 'a');
     CPPUNIT_ASSERT(aOut.isEmpty());
 
-    aIn = "aba";
+    aIn = "aba"_ostr;
     aOut = ::comphelper::string::stripEnd(aIn, 'a');
-    CPPUNIT_ASSERT_EQUAL(OString("ab"), aOut);
+    CPPUNIT_ASSERT_EQUAL("ab"_ostr, aOut);
 }
 
 void TestString::testStrip()
 {
-    OString aIn("abc");
+    OString aIn("abc"_ostr);
     OString aOut;
 
     aOut = ::comphelper::string::strip(aIn, 'b');
-    CPPUNIT_ASSERT_EQUAL(OString("abc"), aOut);
+    CPPUNIT_ASSERT_EQUAL("abc"_ostr, aOut);
 
     aOut = ::comphelper::string::strip(aIn, 'c');
-    CPPUNIT_ASSERT_EQUAL(OString("ab"), aOut);
+    CPPUNIT_ASSERT_EQUAL("ab"_ostr, aOut);
 
-    aIn = "aaa";
+    aIn = "aaa"_ostr;
     aOut = ::comphelper::string::strip(aIn, 'a');
     CPPUNIT_ASSERT(aOut.isEmpty());
 
-    aIn = "aba";
+    aIn = "aba"_ostr;
     aOut = ::comphelper::string::strip(aIn, 'a');
-    CPPUNIT_ASSERT_EQUAL(OString("b"), aOut);
+    CPPUNIT_ASSERT_EQUAL("b"_ostr, aOut);
 }
 
 void TestString::testToken()
 {
-    OString aIn("10.11.12");
+    OString aIn("10.11.12"_ostr);
     OString aOut;
 
     aOut = aIn.getToken(-1, '.');
     CPPUNIT_ASSERT(aOut.isEmpty());
 
     aOut = aIn.getToken(0, '.');
-    CPPUNIT_ASSERT_EQUAL(OString("10"), aOut);
+    CPPUNIT_ASSERT_EQUAL("10"_ostr, aOut);
 
     aOut = aIn.getToken(1, '.');
-    CPPUNIT_ASSERT_EQUAL(OString("11"), aOut);
+    CPPUNIT_ASSERT_EQUAL("11"_ostr, aOut);
 
     aOut = aIn.getToken(2, '.');
-    CPPUNIT_ASSERT_EQUAL(OString("12"), aOut);
+    CPPUNIT_ASSERT_EQUAL("12"_ostr, aOut);
 
     aOut = aIn.getToken(3, '.');
     CPPUNIT_ASSERT(aOut.isEmpty());
@@ -169,7 +169,7 @@ void TestString::testToken()
 
 void TestString::testTokenCount()
 {
-    OString aIn("10.11.12");
+    OString aIn("10.11.12"_ostr);
     sal_Int32 nOut;
 
     nOut = ::comphelper::string::getTokenCount(aIn, '.');
@@ -192,7 +192,7 @@ void TestString::testReverseString()
         comphelper::string::reverseString(u"u\U00010000v\U0010FFFFw"));
     static sal_Unicode const malformed[] = {0xDC00, 0xD800};
     CPPUNIT_ASSERT_EQUAL(
-        OUString(u"\U00010000"),
+        u"\U00010000"_ustr,
         comphelper::string::reverseString(std::u16string_view(malformed, std::size(malformed))));
 }
 
@@ -200,11 +200,11 @@ void TestString::testReverseCodePoints() {
     CPPUNIT_ASSERT_EQUAL(OUString(), comphelper::string::reverseCodePoints(""));
     CPPUNIT_ASSERT_EQUAL(OUString("cba"), comphelper::string::reverseCodePoints("abc"));
     CPPUNIT_ASSERT_EQUAL(
-        OUString(u"w\U0010FFFFv\U00010000u"),
-        comphelper::string::reverseCodePoints(u"u\U00010000v\U0010FFFFw"));
+        u"w\U0010FFFFv\U00010000u"_ustr,
+        comphelper::string::reverseCodePoints(u"u\U00010000v\U0010FFFFw"_ustr));
     static sal_Unicode const malformed[] = {0xDC00, 0xD800};
     CPPUNIT_ASSERT_EQUAL(
-        OUString(u"\U00010000"),
+        u"\U00010000"_ustr,
         comphelper::string::reverseCodePoints(OUString(malformed, std::size(malformed))));
 }
 

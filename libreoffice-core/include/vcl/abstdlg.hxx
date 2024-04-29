@@ -77,10 +77,10 @@ public:
     virtual bool StartExecuteAsync(AsyncContext &);
 
     // Screenshot interface
-    virtual std::vector<OString> getAllPageUIXMLDescriptions() const;
-    virtual bool selectPageByUIXMLDescription(const OString& rUIXMLDescription);
+    virtual std::vector<OUString> getAllPageUIXMLDescriptions() const;
+    virtual bool selectPageByUIXMLDescription(const OUString& rUIXMLDescription);
     virtual BitmapEx createScreenshot() const;
-    virtual OString GetScreenshotId() const { return OString(); };
+    virtual OUString GetScreenshotId() const { return {}; };
 };
 
 class VCL_DLLPUBLIC VclAbstractTerminatedDialog : public VclAbstractDialog
@@ -101,6 +101,14 @@ public:
     virtual bool        IsRecommendToOpenReadonly() const = 0;
     virtual void        Response(sal_Int32) = 0;
     virtual void        AllowEmpty() = 0;
+};
+
+class VCL_DLLPUBLIC AbstractSecurityOptionsDialog : public VclAbstractDialog
+{
+protected:
+    virtual             ~AbstractSecurityOptionsDialog() override = default;
+public:
+    virtual bool        SetSecurityOptions() = 0;
 };
 
 class VCL_DLLPUBLIC AbstractScreenshotAnnotationDlg : public VclAbstractDialog

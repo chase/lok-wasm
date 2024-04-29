@@ -49,7 +49,7 @@ const TranslateId aTypeResIds[SC_LINKTARGETTYPE_COUNT] =
     SCSTR_CONTENT_DBAREA        // SC_LINKTARGETTYPE_DBAREA
 };
 
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetLinkTargetMap()
+static std::span<const SfxItemPropertyMapEntry> lcl_GetLinkTargetMap()
 {
     static const SfxItemPropertyMapEntry aLinkTargetMap_Impl[] =
     {
@@ -200,7 +200,7 @@ void SAL_CALL ScLinkTargetTypeObj::setPropertyValue(const OUString& /* aProperty
     //! exception?
 }
 
-constexpr rtl::OUStringConstExpr aContentBmps[]=
+constexpr OUString aContentBmps[]=
 {
     RID_BMP_CONTENT_TABLE,
     RID_BMP_CONTENT_RANGENAME,
@@ -229,7 +229,7 @@ void ScLinkTargetTypeObj::SetLinkTargetBitmap( uno::Any& rRet, sal_uInt16 nType 
     }
     if (nImgId != ScContentId::ROOT)
     {
-        BitmapEx aBitmapEx { OUString(aContentBmps[static_cast<int>(nImgId) -1 ]) };
+        BitmapEx aBitmapEx { aContentBmps[static_cast<int>(nImgId) -1 ] };
         rRet <<= VCLUnoHelper::CreateBitmap(aBitmapEx);
     }
 }

@@ -26,6 +26,7 @@
 #include <ObjectIdentifier.hxx>
 #include <chartview/ExplicitValueProvider.hxx>
 #include <chartview/DrawModelWrapper.hxx>
+#include <Axis.hxx>
 #include <AxisHelper.hxx>
 #include <ChartView.hxx>
 #include <DiagramHelper.hxx>
@@ -138,7 +139,7 @@ rtl::Reference<SvxDrawPage> Chart2ModelContact::getDrawPage() const
 }
 
 void Chart2ModelContact::getExplicitValuesForAxis(
-    const Reference< XAxis > & xAxis,
+    const rtl::Reference< Axis > & xAxis,
     ExplicitScaleData &  rOutExplicitScale,
     ExplicitIncrementData & rOutExplicitIncrement )
 {
@@ -151,11 +152,11 @@ void Chart2ModelContact::getExplicitValuesForAxis(
 }
 
 sal_Int32 Chart2ModelContact::getExplicitNumberFormatKeyForAxis(
-            const Reference< chart2::XAxis >& xAxis )
+            const rtl::Reference< ::chart::Axis >& xAxis )
 {
     rtl::Reference< BaseCoordinateSystem > xCooSys(
         AxisHelper::getCoordinateSystemOfAxis(
-              xAxis, ChartModelHelper::findDiagram( m_xChartModel ) ) );
+              xAxis, m_xChartModel.get()->getFirstChartDiagram() ) );
 
     return ExplicitValueProvider::getExplicitNumberFormatKeyForAxis( xAxis, xCooSys
               , m_xChartModel.get() );
@@ -194,9 +195,9 @@ awt::Rectangle Chart2ModelContact::GetDiagramRectangleIncludingTitle() const
 awt::Rectangle Chart2ModelContact::GetDiagramRectangleIncludingAxes() const
 {
     awt::Rectangle aRect(0,0,0,0);
-    rtl::Reference< Diagram > xDiagram =  ChartModelHelper::findDiagram( m_xChartModel );
+    rtl::Reference< Diagram > xDiagram = m_xChartModel.get()->getFirstChartDiagram();
 
-    if( DiagramHelper::getDiagramPositioningMode( xDiagram ) == DiagramPositioningMode_INCLUDING )
+    if( xDiagram && xDiagram->getDiagramPositioningMode() == DiagramPositioningMode::Including )
         aRect = DiagramHelper::getDiagramRectangleFromModel(m_xChartModel.get());
     else
     {
@@ -210,9 +211,9 @@ awt::Rectangle Chart2ModelContact::GetDiagramRectangleIncludingAxes() const
 awt::Rectangle Chart2ModelContact::GetDiagramRectangleExcludingAxes() const
 {
     awt::Rectangle aRect(0,0,0,0);
-    rtl::Reference< Diagram > xDiagram =  ChartModelHelper::findDiagram( m_xChartModel );
+    rtl::Reference< Diagram > xDiagram = m_xChartModel.get()->getFirstChartDiagram();
 
-    if( DiagramHelper::getDiagramPositioningMode( xDiagram ) == DiagramPositioningMode_EXCLUDING )
+    if( xDiagram && xDiagram->getDiagramPositioningMode() == DiagramPositioningMode::Excluding )
         aRect = DiagramHelper::getDiagramRectangleFromModel(m_xChartModel.get());
     else
     {

@@ -183,9 +183,9 @@ uno::Reference< XAccessible > SAL_CALL ScAccessibleEditObject::getAccessibleAtPo
     return xRet;
 }
 
-tools::Rectangle ScAccessibleEditObject::GetBoundingBoxOnScreen() const
+AbsoluteScreenPixelRectangle ScAccessibleEditObject::GetBoundingBoxOnScreen() const
 {
-    tools::Rectangle aScreenBounds;
+    AbsoluteScreenPixelRectangle aScreenBounds;
 
     if ( mpWindow )
     {
@@ -194,17 +194,17 @@ tools::Rectangle ScAccessibleEditObject::GetBoundingBoxOnScreen() const
             if ( mpEditView && mpEditView->GetEditEngine() )
             {
                 MapMode aMapMode( mpEditView->GetEditEngine()->GetRefMapMode() );
-                aScreenBounds = mpWindow->LogicToPixel( mpEditView->GetOutputArea(), aMapMode );
-                Point aCellLoc = aScreenBounds.TopLeft();
-                tools::Rectangle aWindowRect = mpWindow->GetWindowExtentsRelative( nullptr );
-                Point aWindowLoc = aWindowRect.TopLeft();
-                Point aPos( aCellLoc.getX() + aWindowLoc.getX(), aCellLoc.getY() + aWindowLoc.getY() );
-                aScreenBounds.SetPos( aPos );
+                tools::Rectangle aScreenBoundsLog = mpWindow->LogicToPixel( mpEditView->GetOutputArea(), aMapMode );
+                Point aCellLoc = aScreenBoundsLog.TopLeft();
+                AbsoluteScreenPixelRectangle aWindowRect = mpWindow->GetWindowExtentsAbsolute();
+                AbsoluteScreenPixelPoint aWindowLoc = aWindowRect.TopLeft();
+                AbsoluteScreenPixelPoint aPos( aCellLoc.getX() + aWindowLoc.getX(), aCellLoc.getY() + aWindowLoc.getY() );
+                aScreenBounds = AbsoluteScreenPixelRectangle( aPos, aScreenBoundsLog.GetSize() );
             }
         }
         else
         {
-            aScreenBounds = mpWindow->GetWindowExtentsRelative( nullptr );
+            aScreenBounds = mpWindow->GetWindowExtentsAbsolute();
         }
     }
 
@@ -413,13 +413,13 @@ sal_Int32 ScAccessibleEditObject::GetFgBgColor( const OUString &strPropColor)
     sal_Int32 nColor(0);
     if (m_pScDoc)
     {
-        SfxObjectShell* pObjSh = m_pScDoc->GetDocumentShell();
+        ScDocShell* pObjSh = m_pScDoc->GetDocumentShell();
         if ( pObjSh )
         {
-            uno::Reference <sheet::XSpreadsheetDocument> xSpreadDoc( pObjSh->GetModel(), uno::UNO_QUERY );
-            if ( xSpreadDoc.is() )
+            ScModelObj* pSpreadDoc = pObjSh->GetModel();
+            if ( pSpreadDoc )
             {
-                uno::Reference<sheet::XSpreadsheets> xSheets = xSpreadDoc->getSheets();
+                uno::Reference<sheet::XSpreadsheets> xSheets = pSpreadDoc->getSheets();
                 uno::Reference<container::XIndexAccess> xIndex( xSheets, uno::UNO_QUERY );
                 if ( xIndex.is() )
                 {
@@ -531,13 +531,13 @@ uno::Reference< XAccessibleRelationSet > ScAccessibleEditObject::getAccessibleRe
     return uno::Reference< XAccessibleRelationSet >();
 }
 
-tools::Rectangle ScAccessibleEditControlObject::GetBoundingBoxOnScreen() const
+AbsoluteScreenPixelRectangle ScAccessibleEditControlObject::GetBoundingBoxOnScreen() const
 {
-    tools::Rectangle aScreenBounds;
+    AbsoluteScreenPixelRectangle aScreenBounds;
 
     if (m_pController && m_pController->GetDrawingArea())
     {
-        aScreenBounds = tools::Rectangle(m_pController->GetDrawingArea()->get_accessible_location_on_screen(),
+        aScreenBounds = AbsoluteScreenPixelRectangle(m_pController->GetDrawingArea()->get_accessible_location_on_screen(),
                                          m_pController->GetOutputSizePixel());
     }
 

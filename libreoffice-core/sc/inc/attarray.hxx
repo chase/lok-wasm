@@ -36,7 +36,7 @@ class ScMarkArray;
 class ScStyleSheet;
 class ScFlatBoolRowSegments;
 
-class SfxItemPoolCache;
+class ScItemPoolCache;
 class SfxStyleSheetBase;
 class SvxBoxItem;
 class SvxBoxInfoItem;
@@ -84,7 +84,7 @@ struct ScAttrEntry
     const ScPatternAttr*    pPattern;
     bool operator==( const ScAttrEntry& other ) const
     {
-        return nEndRow == other.nEndRow && pPattern == other.pPattern;
+        return nEndRow == other.nEndRow && SfxPoolItem::areSame(pPattern, other.pPattern);
     }
 };
 
@@ -155,7 +155,7 @@ public:
                             bool bPutToPool = false, ScEditDataArray* pDataArray = nullptr)
     { SetPatternAreaImpl(nStartRow, nEndRow, pPattern, bPutToPool, pDataArray, /*bPassingOwnership*/false); }
     void    ApplyStyleArea( SCROW nStartRow, SCROW nEndRow, const ScStyleSheet& rStyle );
-    void    ApplyCacheArea( SCROW nStartRow, SCROW nEndRow, SfxItemPoolCache* pCache,
+    void    ApplyCacheArea( SCROW nStartRow, SCROW nEndRow, ScItemPoolCache* pCache,
                             ScEditDataArray* pDataArray = nullptr, bool* const pIsChanged = nullptr );
     void    SetAttrEntries(std::vector<ScAttrEntry> && vNewData);
     void    ApplyLineStyleArea( SCROW nStartRow, SCROW nEndRow,
@@ -203,7 +203,7 @@ public:
     bool    IsEmpty() const;
 
     bool    GetFirstVisibleAttr( SCROW& rFirstRow ) const;
-    bool    GetLastVisibleAttr( SCROW& rLastRow, SCROW nLastData ) const;
+    bool    GetLastVisibleAttr( SCROW& rLastRow, SCROW nLastData, bool bSkipEmpty ) const;
     bool    HasVisibleAttrIn( SCROW nStartRow, SCROW nEndRow ) const;
     bool    IsVisibleEqual( const ScAttrArray& rOther,
                             SCROW nStartRow, SCROW nEndRow ) const;

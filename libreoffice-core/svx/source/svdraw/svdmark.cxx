@@ -158,9 +158,7 @@ void SdrMarkList::ImpForceSort()
     // remove invalid
     if(nCount > 0 )
     {
-        maList.erase(std::remove_if(maList.begin(), maList.end(),
-            [](std::unique_ptr<SdrMark>& rItem) { return rItem->GetMarkedSdrObj() == nullptr; }),
-            maList.end());
+        std::erase_if(maList, [](std::unique_ptr<SdrMark>& rItem) { return rItem->GetMarkedSdrObj() == nullptr; });
         nCount = maList.size();
     }
 
@@ -395,16 +393,14 @@ bool SdrMarkList::InsertPageView(const SdrPageView& rPV)
     bool bChgd(false);
     DeletePageView(rPV); // delete all of them, then append the entire page
     const SdrObjList* pOL = rPV.GetObjList();
-    const size_t nObjCount(pOL->GetObjCount());
 
-    for(size_t nO = 0; nO < nObjCount; ++nO)
+    for (const rtl::Reference<SdrObject>& pObj : *pOL)
     {
-        SdrObject* pObj = pOL->GetObj(nO);
-        bool bDoIt(rPV.IsObjMarkable(pObj));
+        bool bDoIt(rPV.IsObjMarkable(pObj.get()));
 
         if(bDoIt)
         {
-            maList.emplace_back(new SdrMark(pObj, const_cast<SdrPageView*>(&rPV)));
+            maList.emplace_back(new SdrMark(pObj.get(), const_cast<SdrPageView*>(&rPV)));
             SetNameDirty();
             bChgd = true;
         }
@@ -709,11 +705,8 @@ namespace sdr
         {
             SdrObjList* pList = pObj->GetSubList();
 
-            for(size_t a = 0; a < pList->GetObjCount(); ++a)
-            {
-                SdrObject* pObj2 = pList->GetObj(a);
-                ImplCollectCompleteSelection(pObj2);
-            }
+            for (const rtl::Reference<SdrObject>& pObj2 : *pList)
+                ImplCollectCompleteSelection(pObj2.get());
         }
 
         maAllMarkedObjects.push_back(pObj);
@@ -736,53 +729,49 @@ namespace sdr
         for(size_t a = 0; a < nMarkCount; ++a)
         {
             SdrObject* pCandidate = maMarkedObjectList.GetMark(a)->GetMarkedSdrObj();
+            if(!pCandidate)
+                continue;
 
-            if(pCandidate)
-            {
-                // build transitive hull
-                ImplCollectCompleteSelection(pCandidate);
+            // build transitive hull
+            ImplCollectCompleteSelection(pCandidate);
 
-                // travel over broadcaster/listener to access edges connected to the selected object
-                const SfxBroadcaster* pBC = pCandidate->GetBroadcaster();
+            // travel over broadcaster/listener to access edges connected to the selected object
+            const SfxBroadcaster* pBC = pCandidate->GetBroadcaster();
+            if(!pBC)
+                continue;
 
-                if(pBC)
+            pBC->ForAllListeners(
+                [this, &pCandidate, &a] (SfxListener* pLst)
                 {
-                    const size_t nLstCnt(pBC->GetSizeOfVector());
+                    SdrEdgeObj* pEdge = dynamic_cast<SdrEdgeObj*>( pLst );
 
-                    for(size_t nl=0; nl < nLstCnt; ++nl)
+                    if(pEdge && pEdge->IsInserted() && pEdge->getSdrPageFromSdrObject() == pCandidate->getSdrPageFromSdrObject())
                     {
-                        SfxListener* pLst = pBC->GetListener(nl);
-                        SdrEdgeObj* pEdge = dynamic_cast<SdrEdgeObj*>( pLst );
+                        SdrMark aM(pEdge, maMarkedObjectList.GetMark(a)->GetPageView());
 
-                        if(pEdge && pEdge->IsInserted() && pEdge->getSdrPageFromSdrObject() == pCandidate->getSdrPageFromSdrObject())
+                        if(pEdge->GetConnectedNode(true) == pCandidate)
                         {
-                            SdrMark aM(pEdge, maMarkedObjectList.GetMark(a)->GetPageView());
+                            aM.SetCon1(true);
+                        }
 
-                            if(pEdge->GetConnectedNode(true) == pCandidate)
-                            {
-                                aM.SetCon1(true);
-                            }
+                        if(pEdge->GetConnectedNode(false) == pCandidate)
+                        {
+                            aM.SetCon2(true);
+                        }
 
-                            if(pEdge->GetConnectedNode(false) == pCandidate)
-                            {
-                                aM.SetCon2(true);
-                            }
-
-                            if(SAL_MAX_SIZE == maMarkedObjectList.FindObject(pEdge))
-                            {
-                                // check if it itself is selected
-                                maEdgesOfMarkedNodes.InsertEntry(aM);
-                            }
-                            else
-                            {
-                                maMarkedEdgesOfMarkedNodes.InsertEntry(aM);
-                            }
+                        if(SAL_MAX_SIZE == maMarkedObjectList.FindObject(pEdge))
+                        {
+                            // check if it itself is selected
+                            maEdgesOfMarkedNodes.InsertEntry(aM);
+                        }
+                        else
+                        {
+                            maMarkedEdgesOfMarkedNodes.InsertEntry(aM);
                         }
                     }
-                }
-            }
+                    return false;
+                });
         }
-
         maEdgesOfMarkedNodes.ForceSort();
         maMarkedEdgesOfMarkedNodes.ForceSort();
     }

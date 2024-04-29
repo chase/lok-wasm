@@ -43,6 +43,7 @@ fuzzer_externals = \
     hyphen \
     hunspell \
     zlib \
+    zxcvbn-c \
 
 fuzzer_statics = \
      findsofficepath \
@@ -65,6 +66,7 @@ fuzzer_core_libraries = \
     dbtools \
     deployment \
     deploymentmisc \
+    docmodel \
     drawinglayer \
     drawinglayercore \
     editeng \
@@ -147,7 +149,6 @@ fuzzer_core_libraries = \
     unoidl \
     reg \
     store \
-    expwrap \
     gcc3_uno \
     salhelper \
     sal \

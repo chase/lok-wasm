@@ -62,7 +62,7 @@ namespace sdr::properties
             return std::unique_ptr<BaseProperties>(new CaptionProperties(*this, rObj));
         }
 
-        void CaptionProperties::ItemSetChanged(o3tl::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
+        void CaptionProperties::ItemSetChanged(std::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
         {
             SdrCaptionObj& rObj = static_cast<SdrCaptionObj&>(GetSdrObject());
 
@@ -89,12 +89,14 @@ namespace sdr::properties
             // call parent
             RectangleProperties::ForceDefaultAttributes();
 
-            // force ItemSet
-            GetObjectItemSet();
-
             // this was set by TextProperties::ForceDefaultAttributes(),
             // reset to default
-            mxItemSet->ClearItem(XATTR_LINESTYLE);
+            if (static_cast<SdrCaptionObj&>(GetSdrObject()).GetSpecialTextBoxShadow())
+            {
+                moItemSet->ClearItem(XATTR_FILLCOLOR);
+                moItemSet->ClearItem(XATTR_FILLSTYLE);
+            }
+            moItemSet->ClearItem(XATTR_LINESTYLE);
         }
 } // end of namespace
 

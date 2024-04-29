@@ -31,6 +31,11 @@
 #include <osl/thread.h>
 #include <sal/log.hxx>
 
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <utime.h>
+
 #ifdef ANDROID
 #include <osl/detail/android-bootstrap.h>
 #endif

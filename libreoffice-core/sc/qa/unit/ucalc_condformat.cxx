@@ -12,6 +12,7 @@
 #include <conditio.hxx>
 #include <colorscale.hxx>
 
+#include <hints.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
 #include <docfunc.hxx>
@@ -24,6 +25,23 @@
 #include <svl/sharedstringpool.hxx>
 
 namespace {
+
+struct PaintListener : public SfxListener
+{
+    bool mbPaintAllMergedCell = false;
+    virtual void Notify(SfxBroadcaster& /*rBC*/, const SfxHint& rHint) override
+    {
+        const ScPaintHint* pPaintHint = dynamic_cast<const ScPaintHint*>(&rHint);
+        if (pPaintHint)
+        {
+            if (pPaintHint->GetStartCol() == 0 && pPaintHint->GetEndCol() == 0
+                && pPaintHint->GetStartRow() == 0 && pPaintHint->GetEndRow() == 1)
+            {
+                mbPaintAllMergedCell = true;
+            }
+        }
+    }
+};
 
 struct ScDataBarLengthData
 {
@@ -85,98 +103,11 @@ sal_uInt32 addSingleCellCondFormat(ScDocument* pDoc, const ScAddress& rAddr, sal
 
 }
 
-
 class TestCondformat : public ScUcalcTestBase
 {
-public:
-    void testCondFormatINSDEL();
-    void testCondFormatInsertRow();
-    void testCondFormatInsertCol();
-    void testCondFormatInsertDeleteSheets();
-    void testDataBarCondCopyPaste();
-    void testColorScaleCondCopyPaste();
-    void testCondCopyPaste();
-    void testCondCopyPasteSingleCell(); //e.g. fdo#82503
-    void testCondCopyPasteSingleCellToRange(); //e.g. fdo#82503
-    void testCondCopyPasteSingleCellIntoSameFormatRange(); // e.g., tdf#95295
-    void testCondCopyPasteSingleRowToRange(); //e.g. tdf#106242
-    void testCondCopyPasteSingleRowToRange2();
-    void testCondCopyPasteSheetBetweenDoc();
-    void testCondCopyPasteSheet();
-
-    void testIconSet();
-    void testDataBarLengthAutomaticAxis();
-    void testDataBarLengthMiddleAxis();
-
-    // Tests for the ScFormulaListener class
-    void testFormulaListenerSingleCellToSingleCell();
-    void testFormulaListenerMultipleCellsToSingleCell();
-    void testFormulaListenerSingleCellToMultipleCells();
-    void testFormulaListenerMultipleCellsToMultipleCells();
-    void testFormulaListenerUpdateInsertTab();
-    void testFormulaListenerUpdateDeleteTab();
-
-    // Check that the Listeners are correctly updated when we
-    // call an operation
-    void testCondFormatUpdateMoveTab();
-    void testCondFormatUpdateDeleteTab();
-    void testCondFormatUpdateInsertTab();
-    void testCondFormatUpdateReference();
-    void testCondFormatUpdateReferenceDelRow();
-    void testCondFormatUpdateReferenceInsRow();
-
-    void testCondFormatEndsWithStr();
-    void testCondFormatEndsWithVal();
-
-    void testCondFormatUndoList();
-    void testMultipleSingleCellCondFormatCopyPaste();
-    void testDeduplicateMultipleCondFormats();
-    void testCondFormatListenToOwnRange();
-    void testCondFormatVolatileFunctionRecalc();
-
-    CPPUNIT_TEST_SUITE(TestCondformat);
-
-    CPPUNIT_TEST(testCondFormatINSDEL);
-    CPPUNIT_TEST(testCondFormatInsertRow);
-    CPPUNIT_TEST(testCondFormatInsertCol);
-    CPPUNIT_TEST(testCondFormatInsertDeleteSheets);
-    CPPUNIT_TEST(testDataBarCondCopyPaste);
-    CPPUNIT_TEST(testColorScaleCondCopyPaste);
-    CPPUNIT_TEST(testCondCopyPaste);
-    CPPUNIT_TEST(testCondCopyPasteSingleCell);
-    CPPUNIT_TEST(testCondCopyPasteSingleCellToRange);
-    CPPUNIT_TEST(testCondCopyPasteSingleCellIntoSameFormatRange);
-    CPPUNIT_TEST(testCondCopyPasteSingleRowToRange);
-    CPPUNIT_TEST(testCondCopyPasteSingleRowToRange2);
-    CPPUNIT_TEST(testCondCopyPasteSheetBetweenDoc);
-    CPPUNIT_TEST(testCondCopyPasteSheet);
-    CPPUNIT_TEST(testCondFormatEndsWithStr);
-    CPPUNIT_TEST(testCondFormatEndsWithVal);
-    CPPUNIT_TEST(testCondFormatUpdateMoveTab);
-    CPPUNIT_TEST(testCondFormatUpdateDeleteTab);
-    CPPUNIT_TEST(testCondFormatUpdateInsertTab);
-    CPPUNIT_TEST(testCondFormatUpdateReference);
-    CPPUNIT_TEST(testCondFormatUpdateReferenceDelRow);
-    CPPUNIT_TEST(testCondFormatUpdateReferenceInsRow);
-    CPPUNIT_TEST(testCondFormatUndoList);
-    CPPUNIT_TEST(testMultipleSingleCellCondFormatCopyPaste);
-    CPPUNIT_TEST(testDeduplicateMultipleCondFormats);
-    CPPUNIT_TEST(testCondFormatListenToOwnRange);
-    CPPUNIT_TEST(testCondFormatVolatileFunctionRecalc);
-    CPPUNIT_TEST(testIconSet);
-    CPPUNIT_TEST(testDataBarLengthAutomaticAxis);
-    CPPUNIT_TEST(testDataBarLengthMiddleAxis);
-    CPPUNIT_TEST(testFormulaListenerSingleCellToSingleCell);
-    CPPUNIT_TEST(testFormulaListenerSingleCellToMultipleCells);
-    CPPUNIT_TEST(testFormulaListenerMultipleCellsToSingleCell);
-    CPPUNIT_TEST(testFormulaListenerMultipleCellsToMultipleCells);
-    CPPUNIT_TEST(testFormulaListenerUpdateInsertTab);
-    CPPUNIT_TEST(testFormulaListenerUpdateDeleteTab);
-
-    CPPUNIT_TEST_SUITE_END();
 };
 
-void TestCondformat::testCondFormatINSDEL()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatINSDEL)
 {
     // fdo#62206
     m_pDoc->InsertTab(0, "Test");
@@ -202,7 +133,7 @@ void TestCondformat::testCondFormatINSDEL()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatInsertCol()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatInsertCol)
 {
     m_pDoc->InsertTab(0, "Test");
     ScConditionalFormatList* pList = m_pDoc->GetCondFormList(0);
@@ -225,7 +156,7 @@ void TestCondformat::testCondFormatInsertCol()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatInsertRow()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatInsertRow)
 {
     m_pDoc->InsertTab(0, "Test");
     ScConditionalFormatList* pList = m_pDoc->GetCondFormList(0);
@@ -248,7 +179,7 @@ void TestCondformat::testCondFormatInsertRow()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatInsertDeleteSheets()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatInsertDeleteSheets)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -355,7 +286,7 @@ void TestCondformat::testCondFormatInsertDeleteSheets()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testDataBarCondCopyPaste()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testDataBarCondCopyPaste)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -406,7 +337,59 @@ void TestCondformat::testDataBarCondCopyPaste()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testColorScaleCondCopyPaste()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testColorScaleInMergedCell)
+{
+    m_pDoc->InsertTab(0, "Test");
+    m_pDoc->SetValue(ScAddress(0, 0, 0), 1.0);
+
+    // Add a conditional format to A1.
+    auto pFormat = std::make_unique<ScConditionalFormat>(1, m_pDoc);
+    pFormat->SetRange(ScRange(0, 0, 0, 0, 0, 0));
+    auto pFormatTmp = pFormat.get();
+    sal_uLong nKey = m_pDoc->AddCondFormat(std::move(pFormat), 0);
+
+    // Add color scale entries.
+    // The coloring is based on the value. (BLUE (x <= 0), GREEN (x == 1), RED (x >= 2))
+    ScColorScaleFormat* pColorScaleFormat = new ScColorScaleFormat(m_pDoc);
+    ScColorScaleEntry* pEntryBlue = new ScColorScaleEntry(0, COL_BLUE);
+    ScColorScaleEntry* pEntryGreen = new ScColorScaleEntry(1, COL_GREEN);
+    ScColorScaleEntry* pEntryRed = new ScColorScaleEntry(2, COL_RED);
+    pColorScaleFormat->AddEntry(pEntryBlue);
+    pColorScaleFormat->AddEntry(pEntryGreen);
+    pColorScaleFormat->AddEntry(pEntryRed);
+
+    pFormatTmp->AddEntry(pColorScaleFormat);
+
+    // Apply the format to the range.
+    m_pDoc->AddCondFormatData(pFormatTmp->GetRange(), 0, nKey);
+
+    m_pDoc->DoMerge(0, 0, 0, 1, 0);  // A1:A2
+    CPPUNIT_ASSERT(m_pDoc->IsMerged(ScAddress(0, 0, 0)));
+
+    ScTableInfo aTabInfo(0, 2, false);
+    m_pDoc->FillInfo(aTabInfo, 0, 0, 0, 1, 0, 1, 1, false, false);
+    RowInfo* pRowInfo = aTabInfo.mpRowInfo.get();
+
+    RowInfo* pRowInfoA1 = &pRowInfo[1];
+    ScCellInfo* pCellInfoA1 = &pRowInfoA1->cellInfo(0);
+    // Check if there is a color scale in A1.
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("There is no color scale in cell A1!", true,
+                                 pCellInfoA1->mxColorScale.has_value());
+
+    RowInfo* pRowInfoA2 = &pRowInfo[2];
+    ScCellInfo* pCellInfoA2 = &pRowInfoA2->cellInfo(0);
+    // Check if there is a color scale in A2.
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("There is no color scale in cell A2!", true,
+                                 pCellInfoA2->mxColorScale.has_value());
+
+    // Check that cells A1 and A2 have the same color scale. (GREEN)
+    CPPUNIT_ASSERT(pCellInfoA1->mxColorScale.value().IsRGBEqual(pCellInfoA2->mxColorScale.value()));
+
+    m_pDoc->DeleteTab(0);
+}
+
+
+CPPUNIT_TEST_FIXTURE(TestCondformat, testColorScaleCondCopyPaste)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -456,7 +439,7 @@ void TestCondformat::testColorScaleCondCopyPaste()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondCopyPaste()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondCopyPaste)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -495,8 +478,9 @@ void TestCondformat::testCondCopyPaste()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondCopyPasteSingleCell()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondCopyPasteSingleCell)
 {
+    //e.g. fdo#82503
     m_pDoc->InsertTab(0, "Test");
 
     auto pFormat = std::make_unique<ScConditionalFormat>(1, m_pDoc);
@@ -534,8 +518,9 @@ void TestCondformat::testCondCopyPasteSingleCell()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondCopyPasteSingleCellToRange()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondCopyPasteSingleCellToRange)
 {
+    //e.g. fdo#82503
     m_pDoc->InsertTab(0, "Test");
 
     auto pFormat = std::make_unique<ScConditionalFormat>(1, m_pDoc);
@@ -579,8 +564,9 @@ void TestCondformat::testCondCopyPasteSingleCellToRange()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondCopyPasteSingleCellIntoSameFormatRange()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondCopyPasteSingleCellIntoSameFormatRange)
 {
+    // e.g., tdf#95295
     m_pDoc->InsertTab(0, "Test");
 
     auto pFormat = std::make_unique<ScConditionalFormat>(1, m_pDoc);
@@ -616,8 +602,9 @@ void TestCondformat::testCondCopyPasteSingleCellIntoSameFormatRange()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondCopyPasteSingleRowToRange()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondCopyPasteSingleRowToRange)
 {
+    //e.g. tdf#106242
     m_pDoc->InsertTab(0, "Test");
 
     auto pFormat = std::make_unique<ScConditionalFormat>(1, m_pDoc);
@@ -648,7 +635,7 @@ void TestCondformat::testCondCopyPasteSingleRowToRange()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondCopyPasteSingleRowToRange2()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondCopyPasteSingleRowToRange2)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -678,7 +665,7 @@ void TestCondformat::testCondCopyPasteSingleRowToRange2()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondCopyPasteSheetBetweenDoc()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondCopyPasteSheetBetweenDoc)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -700,7 +687,7 @@ void TestCondformat::testCondCopyPasteSheetBetweenDoc()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondCopyPasteSheet()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondCopyPasteSheet)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -733,7 +720,7 @@ void TestCondformat::testCondCopyPasteSheet()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testIconSet()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testIconSet)
 {
     m_pDoc->InsertTab(0, "Test");
     ScConditionalFormatList* pList = m_pDoc->GetCondFormList(0);
@@ -772,7 +759,7 @@ void TestCondformat::testIconSet()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testDataBarLengthAutomaticAxis()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testDataBarLengthAutomaticAxis)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -836,7 +823,7 @@ void TestCondformat::testDataBarLengthAutomaticAxis()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testDataBarLengthMiddleAxis()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testDataBarLengthMiddleAxis)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -881,7 +868,7 @@ void TestCondformat::testDataBarLengthMiddleAxis()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatEndsWithStr()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatEndsWithStr)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -900,7 +887,7 @@ void TestCondformat::testCondFormatEndsWithStr()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatEndsWithVal()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatEndsWithVal)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -920,7 +907,7 @@ void TestCondformat::testCondFormatEndsWithVal()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testFormulaListenerSingleCellToSingleCell()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testFormulaListenerSingleCellToSingleCell)
 {
     m_pDoc->InsertTab(0, "test");
 
@@ -938,7 +925,7 @@ void TestCondformat::testFormulaListenerSingleCellToSingleCell()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testFormulaListenerSingleCellToMultipleCells()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testFormulaListenerSingleCellToMultipleCells)
 {
     m_pDoc->InsertTab(0, "test");
 
@@ -956,7 +943,7 @@ void TestCondformat::testFormulaListenerSingleCellToMultipleCells()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testFormulaListenerMultipleCellsToSingleCell()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testFormulaListenerMultipleCellsToSingleCell)
 {
     m_pDoc->InsertTab(0, "test");
 
@@ -974,7 +961,7 @@ void TestCondformat::testFormulaListenerMultipleCellsToSingleCell()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testFormulaListenerMultipleCellsToMultipleCells()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testFormulaListenerMultipleCellsToMultipleCells)
 {
     m_pDoc->InsertTab(0, "test");
 
@@ -992,7 +979,7 @@ void TestCondformat::testFormulaListenerMultipleCellsToMultipleCells()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testFormulaListenerUpdateInsertTab()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testFormulaListenerUpdateInsertTab)
 {
     m_pDoc->InsertTab(0, "test");
 
@@ -1016,7 +1003,7 @@ void TestCondformat::testFormulaListenerUpdateInsertTab()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testFormulaListenerUpdateDeleteTab()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testFormulaListenerUpdateDeleteTab)
 {
     m_pDoc->InsertTab(0, "test");
     m_pDoc->InsertTab(0, "to_delete");
@@ -1037,7 +1024,7 @@ void TestCondformat::testFormulaListenerUpdateDeleteTab()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatUpdateMoveTab()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatUpdateMoveTab)
 {
     m_pDoc->InsertTab(0, "test");
     m_pDoc->InsertTab(1, "Test2");
@@ -1074,7 +1061,7 @@ void TestCondformat::testCondFormatUpdateMoveTab()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatUpdateInsertTab()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatUpdateInsertTab)
 {
     m_pDoc->InsertTab(0, "test");
 
@@ -1113,7 +1100,7 @@ void TestCondformat::testCondFormatUpdateInsertTab()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatUpdateDeleteTab()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatUpdateDeleteTab)
 {
     m_pDoc->InsertTab(0, "test");
     m_pDoc->InsertTab(1, "Test2");
@@ -1146,7 +1133,7 @@ void TestCondformat::testCondFormatUpdateDeleteTab()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatUpdateReference()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatUpdateReference)
 {
     m_pDoc->InsertTab(0, "test");
     m_pDoc->InsertTab(1, "Test2");
@@ -1171,7 +1158,7 @@ void TestCondformat::testCondFormatUpdateReference()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatUpdateReferenceDelRow()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatUpdateReferenceDelRow)
 {
     m_pDoc->InsertTab(0, "test");
 
@@ -1192,7 +1179,7 @@ void TestCondformat::testCondFormatUpdateReferenceDelRow()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatUpdateReferenceInsRow()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatUpdateReferenceInsRow)
 {
     m_pDoc->InsertTab(0, "test");
 
@@ -1213,7 +1200,7 @@ void TestCondformat::testCondFormatUpdateReferenceInsRow()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatUndoList()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatUndoList)
 {
     m_pDoc->InsertTab(0, "test");
 
@@ -1255,7 +1242,7 @@ void TestCondformat::testCondFormatUndoList()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testMultipleSingleCellCondFormatCopyPaste()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testMultipleSingleCellCondFormatCopyPaste)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -1287,7 +1274,7 @@ void TestCondformat::testMultipleSingleCellCondFormatCopyPaste()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testDeduplicateMultipleCondFormats()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testDeduplicateMultipleCondFormats)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -1319,7 +1306,7 @@ void TestCondformat::testDeduplicateMultipleCondFormats()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatListenToOwnRange()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatListenToOwnRange)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -1353,7 +1340,7 @@ void TestCondformat::testCondFormatListenToOwnRange()
     m_pDoc->DeleteTab(0);
 }
 
-void TestCondformat::testCondFormatVolatileFunctionRecalc()
+CPPUNIT_TEST_FIXTURE(TestCondformat, testCondFormatVolatileFunctionRecalc)
 {
     m_pDoc->InsertTab(0, "Test");
 
@@ -1392,7 +1379,39 @@ void TestCondformat::testCondFormatVolatileFunctionRecalc()
     m_pDoc->DeleteTab(0);
 }
 
-CPPUNIT_TEST_SUITE_REGISTRATION(TestCondformat);
+CPPUNIT_TEST_FIXTURE(TestCondformat, testConditionStyleInMergedCell)
+{
+    m_pDoc->InsertTab(0, "Test");
+
+    PaintListener aListener;
+    aListener.StartListening(*m_xDocShell);
+
+    m_pDoc->DoMerge(0, 0, 0, 1, 0); // A1:A2
+    CPPUNIT_ASSERT(m_pDoc->IsMerged(ScAddress(0, 0, 0)));
+
+    m_pDoc->SetValue(ScAddress(0, 0, 0), 1.0);
+
+    // Add a conditional format.
+    auto pFormat = std::make_unique<ScConditionalFormat>(1, m_pDoc);
+    pFormat->SetRange(ScRange(0, 0, 0, 0, 0, 0));
+
+    // Add condition in which if the value equals 1, set the "Good" style.
+    ScCondFormatEntry* pEntry = new ScCondFormatEntry(
+        ScConditionMode::Equal, "=1", "", *m_pDoc, ScAddress(0, 0, 0), ScResId(STR_STYLENAME_GOOD));
+    pFormat->AddEntry(pEntry);
+
+    // Apply the format to the range.
+    m_pDoc->AddCondFormatData(pFormat->GetRange(), 0, 1);
+
+    ScDocFunc& rFunc = m_xDocShell->GetDocFunc();
+    sal_uInt32 nOldFormat = pFormat->GetKey();
+    const ScRangeList& rRangeList = pFormat->GetRange();
+    rFunc.ReplaceConditionalFormat(nOldFormat, std::move(pFormat), 0, rRangeList);
+
+    CPPUNIT_ASSERT_EQUAL(true, aListener.mbPaintAllMergedCell);
+
+    m_pDoc->DeleteTab(0);
+}
 
 CPPUNIT_PLUGIN_IMPLEMENT();
 

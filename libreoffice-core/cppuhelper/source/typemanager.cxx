@@ -19,6 +19,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <algorithm>
 
 #include <com/sun/star/container/NoSuchElementException.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
@@ -1723,12 +1724,8 @@ bool Enumeration::matches(css::uno::TypeClass tc) const {
     if (!types_.hasElements()) {
         return true;
     }
-    for (const auto & i : types_) {
-        if (i == tc) {
-            return true;
-        }
-    }
-    return false;
+
+    return std::any_of(types_.begin(), types_.end(), [&tc](const auto& i) { return i == tc; });
 }
 
 void Enumeration::findNextMatch() {
@@ -1825,7 +1822,6 @@ void Enumeration::findNextMatch() {
 }
 
 cppuhelper::TypeManager::TypeManager():
-    TypeManager_Base(m_aMutex),
     manager_(new unoidl::Manager)
 {}
 
@@ -1905,8 +1901,6 @@ cppuhelper::TypeManager::resolve(OUString const & name) {
 }
 
 cppuhelper::TypeManager::~TypeManager() noexcept {}
-
-void cppuhelper::TypeManager::disposing() {} //TODO
 
 OUString cppuhelper::TypeManager::getImplementationName()
 {

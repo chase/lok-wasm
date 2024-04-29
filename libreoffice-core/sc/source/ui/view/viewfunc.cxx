@@ -77,6 +77,7 @@
 #include <conditio.hxx>
 #include <columnspanset.hxx>
 #include <stringutil.hxx>
+#include <SparklineList.hxx>
 
 #include <memory>
 
@@ -103,6 +104,26 @@ static void lcl_PostRepaintCondFormat( const ScConditionalFormat *pCondFmt, ScDo
     }
 }
 
+static void lcl_PostRepaintSparkLine(sc::SparklineList* pSparklineList, const ScRange& rRange,
+                                     ScDocShell* pDocSh)
+{
+    if (pSparklineList)
+    {
+        for (auto& rSparkLineGroup : pSparklineList->getSparklineGroups())
+        {
+            for (auto& rSparkline : pSparklineList->getSparklinesFor(rSparkLineGroup))
+            {
+                if (rSparkline->getInputRange().Contains(rRange))
+                {
+                    pDocSh->PostPaint(
+                        ScRange(rSparkline->getColumn(), rSparkline->getRow(), rRange.aStart.Tab()),
+                        PaintPartFlags::All, SC_PF_TESTMERGE);
+                }
+            }
+        }
+    }
+}
+
 ScViewFunc::ScViewFunc( vcl::Window* pParent, ScDocShell& rDocSh, ScTabViewShell* pViewShell ) :
     ScTabView( pParent, rDocSh, pViewShell ),
     bFormatValid( false )
@@ -112,6 +133,8 @@ ScViewFunc::ScViewFunc( vcl::Window* pParent, ScDocShell& rDocSh, ScTabViewShell
 ScViewFunc::~ScViewFunc()
 {
 }
+
+namespace {
 
 struct FormulaProcessingContext
 {
@@ -152,8 +175,6 @@ struct FormulaProcessingContext
         return GetViewData().GetDocument();
     }
 };
-
-namespace {
 
 void collectUIInformation(std::map<OUString, OUString>&& aParameters, const OUString& rAction)
 {
@@ -390,7 +411,7 @@ namespace HelperNotifyChanges
     static void NotifyIfChangesListeners(const ScDocShell &rDocShell, const ScMarkData& rMark,
                                          SCCOL nCol, SCROW nRow, const OUString& rType = "cell-change")
     {
-        ScModelObj* pModelObj = getModel(rDocShell);
+        ScModelObj* pModelObj = rDocShell.GetModel();
 
         ScRangeList aChangeRanges;
         for (const auto& rTab : rMark)
@@ -431,7 +452,7 @@ namespace
 {
     void runAutoCorrectQueryAsync(std::shared_ptr<FormulaProcessingContext> context);
 
-    void performAutoFormatAndUpdate(const OUString& rString, const ScMarkData& rMark, SCCOL nCol,
+    void performAutoFormatAndUpdate(std::u16string_view rString, const ScMarkData& rMark, SCCOL nCol,
                                     SCROW nRow, SCTAB nTab, bool bNumFmtChanged, bool bRecord,
                                     const std::shared_ptr<ScDocShellModificator>& pModificator,
                                     ScViewFunc& rViewFunc)
@@ -445,7 +466,7 @@ namespace
         ScDocShell* pDocSh = rViewData.GetDocShell();
         pDocSh->UpdateOle(rViewData);
 
-        const OUString aType(rString.isEmpty() ? u"delete-content" : u"cell-change");
+        const OUString aType(rString.empty() ? u"delete-content" : u"cell-change");
         HelperNotifyChanges::NotifyIfChangesListeners(*pDocSh, rMark, nCol, nRow, aType);
 
         if (bRecord)
@@ -457,6 +478,7 @@ namespace
         pModificator->SetDocumentModified();
         ScDocument& rDoc = rViewData.GetDocument();
         lcl_PostRepaintCondFormat(rDoc.GetCondFormat(nCol, nRow, nTab), pDocSh);
+        lcl_PostRepaintSparkLine(rDoc.GetSparklineList(nTab), ScRange(nCol, nRow, nTab), pDocSh);
     }
 
     void finalizeFormulaProcessing(std::shared_ptr<FormulaProcessingContext> context)
@@ -523,7 +545,7 @@ namespace
             }
         }
 
-        ScFormulaCell aCell(context->GetDoc(), *(context->aPos), std::move( *(context->pArr.get()) ), formula::FormulaGrammar::GRAM_DEFAULT, ScMatrixMode::NONE);
+        ScFormulaCell aCell(context->GetDoc(), *context->aPos, std::move(*context->pArr), formula::FormulaGrammar::GRAM_DEFAULT, ScMatrixMode::NONE);
 
         SCTAB i;
         SvNumberFormatter* pFormatter = context->GetDoc().GetFormatTable();
@@ -586,7 +608,6 @@ namespace
         bool bAddEqual = false;
         context->pArr = context->aComp->CompileString(context->aFormula);
         bool bCorrected = context->aComp->IsCorrected();
-        std::shared_ptr<ScTokenArray> pArrFirst;
 
         if (bCorrected) {
             context->pArrFirst = context->pArr;
@@ -619,7 +640,7 @@ namespace
     void runAutoCorrectQueryAsync(std::shared_ptr<FormulaProcessingContext> context)
     {
         auto aQueryBox = std::make_shared<AutoCorrectQuery>(context->GetViewData().GetDialogParent(), context->aCorrectedFormula);
-        aQueryBox->runAsync(aQueryBox, [context] (int nResult)
+        weld::DialogController::runAsync(aQueryBox, [context] (int nResult)
         {
             if (nResult == RET_YES) {
                 context->aFormula = context->aCorrectedFormula;
@@ -664,8 +685,11 @@ void ScViewFunc::EnterData( SCCOL nCol, SCROW nRow, SCTAB nTab,
 
     bool bFormula = false;
 
+    // do not check formula if it is a text cell
+    sal_uInt32 format = rDoc.GetNumberFormat( nCol, nRow, nTab );
+    SvNumberFormatter* pFormatter = rDoc.GetFormatTable();
     // a single '=' character is handled as string (needed for special filters)
-    if ( rString.getLength() > 1 )
+    if ( pFormatter->GetType(format) != SvNumFormatType::TEXT && rString.getLength() > 1 )
     {
         if ( rString[0] == '=' )
         {
@@ -687,10 +711,8 @@ void ScViewFunc::EnterData( SCCOL nCol, SCROW nRow, SCTAB nTab,
             // is non-empty and not a number, handle as formula
             if ( aString.getLength() > 1 )
             {
-                sal_uInt32 nFormat = rDoc.GetNumberFormat( nCol, nRow, nTab );
-                SvNumberFormatter* pFormatter = rDoc.GetFormatTable();
                 double fNumber = 0;
-                if ( !pFormatter->IsNumberFormat( aString, nFormat, fNumber ) )
+                if ( !pFormatter->IsNumberFormat( aString, format, fNumber ) )
                 {
                     bFormula = true;
                 }
@@ -1063,8 +1085,8 @@ void ScViewFunc::GetSelectionFrame(
 //
 //  complete set ( ATTR_STARTINDEX, ATTR_ENDINDEX )
 
-void ScViewFunc::ApplyAttributes( const SfxItemSet* pDialogSet,
-                                  const SfxItemSet* pOldSet,
+void ScViewFunc::ApplyAttributes( const SfxItemSet& rDialogSet,
+                                  const SfxItemSet& rOldSet,
                                   bool bAdjustBlockHeight)
 {
     // not editable because of matrix only? attribute OK nonetheless
@@ -1075,16 +1097,16 @@ void ScViewFunc::ApplyAttributes( const SfxItemSet* pDialogSet,
         return;
     }
 
-    ScPatternAttr aOldAttrs(( SfxItemSet(*pOldSet) ));
-    ScPatternAttr aNewAttrs(( SfxItemSet(*pDialogSet) ));
+    ScPatternAttr aOldAttrs(( SfxItemSet(rOldSet) ));
+    ScPatternAttr aNewAttrs(( SfxItemSet(rDialogSet) ));
     aNewAttrs.DeleteUnchanged( &aOldAttrs );
 
-    if ( pDialogSet->GetItemState( ATTR_VALUE_FORMAT ) == SfxItemState::SET )
+    if ( rDialogSet.GetItemState( ATTR_VALUE_FORMAT ) == SfxItemState::SET )
     {   // don't reset to default SYSTEM GENERAL if not intended
         sal_uInt32 nOldFormat =
-            pOldSet->Get( ATTR_VALUE_FORMAT ).GetValue();
+            rOldSet.Get( ATTR_VALUE_FORMAT ).GetValue();
         sal_uInt32 nNewFormat =
-            pDialogSet->Get( ATTR_VALUE_FORMAT ).GetValue();
+            rDialogSet.Get( ATTR_VALUE_FORMAT ).GetValue();
         if ( nNewFormat != nOldFormat )
         {
             SvNumberFormatter* pFormatter =
@@ -1109,19 +1131,19 @@ void ScViewFunc::ApplyAttributes( const SfxItemSet* pDialogSet,
         }
     }
 
-    if (pDialogSet->HasItem(ATTR_FONT_LANGUAGE))
+    if (rDialogSet.HasItem(ATTR_FONT_LANGUAGE))
         // font language has changed.  Redo the online spelling.
         ResetAutoSpell();
 
-    const SvxBoxItem&     rOldOuter = pOldSet->Get(ATTR_BORDER);
-    const SvxBoxItem&     rNewOuter = pDialogSet->Get(ATTR_BORDER);
-    const SvxBoxInfoItem& rOldInner = pOldSet->Get(ATTR_BORDER_INNER);
-    const SvxBoxInfoItem& rNewInner = pDialogSet->Get(ATTR_BORDER_INNER);
+    const SvxBoxItem&     rOldOuter = rOldSet.Get(ATTR_BORDER);
+    const SvxBoxItem&     rNewOuter = rDialogSet.Get(ATTR_BORDER);
+    const SvxBoxInfoItem& rOldInner = rOldSet.Get(ATTR_BORDER_INNER);
+    const SvxBoxInfoItem& rNewInner = rDialogSet.Get(ATTR_BORDER_INNER);
     SfxItemSet&           rNewSet   = aNewAttrs.GetItemSet();
     SfxItemPool*          pNewPool  = rNewSet.GetPool();
 
-    pNewPool->Put(rNewOuter);        // don't delete yet
-    pNewPool->Put(rNewInner);
+    pNewPool->DirectPutItemInPool(rNewOuter);        // don't delete yet
+    pNewPool->DirectPutItemInPool(rNewInner);
     rNewSet.ClearItem( ATTR_BORDER );
     rNewSet.ClearItem( ATTR_BORDER_INNER );
 
@@ -1132,10 +1154,10 @@ void ScViewFunc::ApplyAttributes( const SfxItemSet* pDialogSet,
      *
      */
 
-    bool bFrame =    (pDialogSet->GetItemState( ATTR_BORDER ) != SfxItemState::DEFAULT)
-                  || (pDialogSet->GetItemState( ATTR_BORDER_INNER ) != SfxItemState::DEFAULT);
+    bool bFrame =    (rDialogSet.GetItemState( ATTR_BORDER ) != SfxItemState::DEFAULT)
+                  || (rDialogSet.GetItemState( ATTR_BORDER_INNER ) != SfxItemState::DEFAULT);
 
-    if (&rNewOuter == &rOldOuter && &rNewInner == &rOldInner)
+    if (SfxPoolItem::areSame(rNewOuter, rOldOuter) && SfxPoolItem::areSame(rNewInner, rOldInner))
         bFrame = false;
 
     //  this should be intercepted by the pool: ?!??!??
@@ -1165,8 +1187,8 @@ void ScViewFunc::ApplyAttributes( const SfxItemSet* pDialogSet,
                            bDefNewInner ? &rOldInner : &rNewInner );
     }
 
-    pNewPool->Remove(rNewOuter);         // release
-    pNewPool->Remove(rNewInner);
+    pNewPool->DirectRemoveItemFromPool(rNewOuter);         // release
+    pNewPool->DirectRemoveItemFromPool(rNewInner);
 
     //  adjust height only if needed
     if (bAdjustBlockHeight)
@@ -1451,7 +1473,7 @@ void ScViewFunc::ApplySelectionPattern( const ScPatternAttr& rAttr, bool bCursor
         CellContentChanged();
     }
 
-    ScModelObj* pModelObj = HelperNotifyChanges::getModel(*pDocSh);
+    ScModelObj* pModelObj = pDocSh->GetModel();
 
     if (HelperNotifyChanges::getMustPropagateChangesModel(pModelObj))
     {
@@ -1694,17 +1716,11 @@ void ScViewFunc::OnLOKInsertDeleteColumn(SCCOL nStartCol, tools::Long nOffset)
                 if (pTabViewShell->getPart() == nCurrentTabIndex)
                 {
                     SCCOL nX = pTabViewShell->GetViewData().GetCurX();
-                    if (nX > nStartCol)
+                    if (nX > nStartCol || (nX == nStartCol && nOffset > 0))
                     {
-                        tools::Long offset = nOffset;
-                        if (nOffset + nStartCol > nX)
-                            offset = nX - nStartCol;
-                        else if (nOffset < 0 && nStartCol - nOffset > nX)
-                            offset = -1 * (nX - nStartCol);
-
                         ScInputHandler* pInputHdl = pTabViewShell->GetInputHandler();
                         SCROW nY = pTabViewShell->GetViewData().GetCurY();
-                        pTabViewShell->SetCursor(nX + offset, nY);
+                        pTabViewShell->SetCursor(nX + nOffset, nY);
                         if (pInputHdl && pInputHdl->IsInputMode())
                         {
                             pInputHdl->SetModified();
@@ -1713,8 +1729,8 @@ void ScViewFunc::OnLOKInsertDeleteColumn(SCCOL nStartCol, tools::Long nOffset)
 
                     ScMarkData aMultiMark( pTabViewShell->GetViewData().GetMarkData() );
                     aMultiMark.SetMarking( false );
-
-                    if (aMultiMark.IsMultiMarked() || aMultiMark.IsMarked())
+                    aMultiMark.MarkToMulti();
+                    if (aMultiMark.IsMultiMarked())
                     {
                         aMultiMark.ShiftCols(pTabViewShell->GetViewData().GetDocument(), nStartCol, nOffset);
                         pTabViewShell->SetMarkData(aMultiMark);
@@ -1757,17 +1773,11 @@ void ScViewFunc::OnLOKInsertDeleteRow(SCROW nStartRow, tools::Long nOffset)
                 if (pTabViewShell->getPart() == nCurrentTabIndex)
                 {
                     SCROW nY = pTabViewShell->GetViewData().GetCurY();
-                    if (nY > nStartRow)
+                    if (nY > nStartRow || (nY == nStartRow && nOffset > 0))
                     {
-                        tools::Long offset = nOffset;
-                        if (nOffset + nStartRow > nY)
-                            offset = nY - nStartRow;
-                        else if (nOffset < 0 && nStartRow - nOffset > nY)
-                            offset = -1 * (nY - nStartRow);
-
                         ScInputHandler* pInputHdl = pTabViewShell->GetInputHandler();
                         SCCOL nX = pTabViewShell->GetViewData().GetCurX();
-                        pTabViewShell->SetCursor(nX, nY + offset);
+                        pTabViewShell->SetCursor(nX, nY + nOffset);
                         if (pInputHdl && pInputHdl->IsInputMode())
                         {
                             pInputHdl->SetModified();
@@ -1776,8 +1786,8 @@ void ScViewFunc::OnLOKInsertDeleteRow(SCROW nStartRow, tools::Long nOffset)
 
                     ScMarkData aMultiMark( pTabViewShell->GetViewData().GetMarkData() );
                     aMultiMark.SetMarking( false );
-
-                    if (aMultiMark.IsMultiMarked() || aMultiMark.IsMarked())
+                    aMultiMark.MarkToMulti();
+                    if (aMultiMark.IsMultiMarked())
                     {
                         aMultiMark.ShiftRows(pTabViewShell->GetViewData().GetDocument(), nStartRow, nOffset);
                         pTabViewShell->SetMarkData(aMultiMark);
@@ -2229,7 +2239,7 @@ void ScViewFunc::DeleteContents( InsertDeleteFlags nFlags )
 
     pDocSh->UpdateOle(GetViewData());
 
-    if (ScModelObj* pModelObj = HelperNotifyChanges::getModel(*pDocSh))
+    if (ScModelObj* pModelObj = pDocSh->GetModel())
     {
         ScRangeList aChangeRanges;
         if ( bSimple )
@@ -2413,7 +2423,7 @@ void ScViewFunc::SetWidthOrHeight(
                     Fraction aZoomX = GetViewData().GetZoomX();
                     Fraction aZoomY = GetViewData().GetZoomY();
 
-                    ScSizeDeviceProvider aProv(pDocSh, comphelper::LibreOfficeKit::isActive() /* bForceOwnDevice */);
+                    ScSizeDeviceProvider aProv(pDocSh);
                     if (aProv.IsPrinter())
                     {
                         nPPTX = aProv.GetPPTX();
@@ -2564,7 +2574,7 @@ void ScViewFunc::SetWidthOrHeight(
     if ( !bWidth )
         return;
 
-    ScModelObj* pModelObj = HelperNotifyChanges::getModel(*pDocSh);
+    ScModelObj* pModelObj = pDocSh->GetModel();
 
     if (!HelperNotifyChanges::getMustPropagateChangesModel(pModelObj))
         return;
@@ -2614,11 +2624,6 @@ void ScViewFunc::SetMarkedWidthOrHeight( bool bWidth, ScSizeMode eMode, sal_uInt
 
 void ScViewFunc::ModifyCellSize( ScDirection eDir, bool bOptimal )
 {
-    //! step size adjustable
-    //  step size is also minimum
-    constexpr sal_uInt16 nStepX = STD_COL_WIDTH / 5;
-    sal_uInt16 nStepY = ScGlobal::nStdRowHeight;
-
     ScModule* pScMod = SC_MOD();
     bool bAnyEdit = pScMod->IsInputMode();
     SCCOL nCol = GetViewData().GetCurX();
@@ -2639,6 +2644,11 @@ void ScViewFunc::ModifyCellSize( ScDirection eDir, bool bOptimal )
     }
 
     HideAllCursors();
+
+    //! step size adjustable
+    //  step size is also minimum
+    constexpr sal_uInt16 nStepX = STD_COL_WIDTH / 5;
+    const sal_uInt16 nStepY = rDoc.GetSheetOptimalMinRowHeight(nTab);
 
     sal_uInt16 nWidth = rDoc.GetColWidth( nCol, nTab );
     sal_uInt16 nHeight = rDoc.GetRowHeight( nRow, nTab );

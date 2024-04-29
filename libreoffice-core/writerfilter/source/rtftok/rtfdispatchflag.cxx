@@ -520,7 +520,9 @@ RTFError RTFDocumentImpl::dispatchFlag(RTFKeyword nKeyword)
         }
         break;
         case RTFKeyword::PAGEBB:
-            nParam = NS_ooxml::LN_CT_PPrBase_pageBreakBefore;
+            // ignore a page break that is defined before the document content has even started
+            if (!m_bFirstRun)
+                nParam = NS_ooxml::LN_CT_PPrBase_pageBreakBefore;
             break;
         default:
             break;
@@ -579,8 +581,6 @@ RTFError RTFDocumentImpl::dispatchFlag(RTFKeyword nKeyword)
                 dispatchSymbol(RTFKeyword::PAR);
             // \pard is allowed between \cell and \row, but in that case it should not reset the fact that we're inside a table.
             // It should not reset the paragraph style, either, so remember the old paragraph style.
-            RTFValue::Pointer_t pOldStyle
-                = m_aStates.top().getParagraphSprms().find(NS_ooxml::LN_CT_PPrBase_pStyle);
             m_aStates.top().getParagraphSprms() = m_aDefaultState.getParagraphSprms();
             m_aStates.top().getParagraphAttributes() = m_aDefaultState.getParagraphAttributes();
 
@@ -593,19 +593,14 @@ RTFError RTFDocumentImpl::dispatchFlag(RTFKeyword nKeyword)
             {
                 // We are still in a table.
                 m_aStates.top().getParagraphSprms().set(NS_ooxml::LN_inTbl, new RTFValue(1));
-                if (m_bAfterCellBeforeRow && pOldStyle)
-                    // And we still have the same paragraph style.
-                    m_aStates.top().getParagraphSprms().set(NS_ooxml::LN_CT_PPrBase_pStyle,
-                                                            pOldStyle);
                 // Ideally getDefaultSPRM() would take care of this, but it would not when we're buffering.
                 m_aStates.top().getParagraphSprms().set(NS_ooxml::LN_CT_PPrBase_tabs,
                                                         new RTFValue());
             }
             resetFrame();
 
-            // Reset currently selected paragraph style as well, unless we are in the special "after \cell, before \row" state.
+            // Reset currently selected paragraph style as well.
             // By default the style with index 0 is applied.
-            if (!m_bAfterCellBeforeRow)
             {
                 OUString const aName = getStyleName(0);
                 // But only in case it's not a character style.
@@ -1242,6 +1237,26 @@ RTFError RTFDocumentImpl::dispatchFlag(RTFKeyword nKeyword)
             m_aStates.top().getFrame().setSprm(NS_ooxml::LN_CT_FramePr_wrap,
                                                NS_ooxml::LN_Value_doc_ST_Wrap_notBeside);
             break;
+        case RTFKeyword::OVERLAY:
+            m_aStates.top().getFrame().setSprm(NS_ooxml::LN_CT_FramePr_wrap,
+                                               NS_ooxml::LN_Value_doc_ST_Wrap_none);
+            break;
+        case RTFKeyword::WRAPAROUND:
+            m_aStates.top().getFrame().setSprm(NS_ooxml::LN_CT_FramePr_wrap,
+                                               NS_ooxml::LN_Value_doc_ST_Wrap_around);
+            break;
+        case RTFKeyword::WRAPTHROUGH:
+            m_aStates.top().getFrame().setSprm(NS_ooxml::LN_CT_FramePr_wrap,
+                                               NS_ooxml::LN_Value_doc_ST_Wrap_through);
+            break;
+        case RTFKeyword::WRAPTIGHT:
+            m_aStates.top().getFrame().setSprm(NS_ooxml::LN_CT_FramePr_wrap,
+                                               NS_ooxml::LN_Value_doc_ST_Wrap_tight);
+            break;
+        case RTFKeyword::WRAPDEFAULT:
+            m_aStates.top().getFrame().setSprm(NS_ooxml::LN_CT_FramePr_wrap,
+                                               NS_ooxml::LN_Value_doc_ST_Wrap_auto);
+            break;
         case RTFKeyword::MNOR:
             m_bMathNor = true;
             break;
@@ -1341,6 +1356,13 @@ RTFError RTFDocumentImpl::dispatchFlag(RTFKeyword nKeyword)
         case RTFKeyword::NOBRKWRPTBL:
         {
             m_aSettingsTableSprms.set(NS_ooxml::LN_CT_Compat_doNotBreakWrappedTables,
+                                      new RTFValue(0));
+        }
+        break;
+        case RTFKeyword::SPLTPGPAR:
+        {
+            // if flag is present, it is turned *off* - opposite to what spec says
+            m_aSettingsTableSprms.set(NS_ooxml::LN_CT_Compat_splitPgBreakAndParaMark,
                                       new RTFValue(0));
         }
         break;

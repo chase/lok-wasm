@@ -42,6 +42,7 @@ namespace formula { struct VectorRefArray; }
 
 namespace sc {
 
+struct BroadcasterState;
 struct FormulaGroupEntry;
 class StartListeningContext;
 class EndListeningContext;
@@ -70,7 +71,7 @@ class Sparkline;
 
 class Fraction;
 class OutputDevice;
-class SfxItemPoolCache;
+class ScItemPoolCache;
 class SvtListener;
 class SfxPoolItem;
 class SfxStyleSheetBase;
@@ -144,7 +145,7 @@ public:
     const ScPatternAttr*    GetPattern( SCROW nRow ) const;
     const ScPatternAttr*    GetMostUsedPattern( SCROW nStartRow, SCROW nEndRow ) const;
     void        ApplySelectionStyle(const ScStyleSheet& rStyle, SCROW nTop, SCROW nBottom);
-    void        ApplySelectionCache(SfxItemPoolCache* pCache, SCROW nStartRow, SCROW nEndRow,
+    void        ApplySelectionCache(ScItemPoolCache* pCache, SCROW nStartRow, SCROW nEndRow,
                                     ScEditDataArray* pDataArray, bool* pIsChanged);
     void        ApplyPatternArea( SCROW nStartRow, SCROW nEndRow, const ScPatternAttr& rPatAttr,
                                   ScEditDataArray* pDataArray = nullptr,
@@ -204,7 +205,8 @@ class ScColumn : protected ScColumnData
     // Sparklines
     sc::SparklineStoreType maSparklines;
 
-    size_t mnBlkCountFormula;
+    sal_uInt32 mnBlkCountFormula;
+    sal_uInt32 mnBlkCountCellNotes;
 
     SCCOL           nCol;
     SCTAB           nTab;
@@ -318,7 +320,7 @@ public:
     bool    HasSelectionMatrixFragment(const ScMarkData& rMark, const ScRangeList& rRangeList) const;
 
     bool    GetFirstVisibleAttr( SCROW& rFirstRow ) const;
-    bool    GetLastVisibleAttr( SCROW& rLastRow ) const;
+    bool    GetLastVisibleAttr( SCROW& rLastRow, bool bSkipEmpty ) const;
     bool    HasVisibleAttrIn( SCROW nStartRow, SCROW nEndRow ) const;
     bool    IsVisibleAttrEqual( const ScColumn& rCol, SCROW nStartRow, SCROW nEndRow ) const;
 
@@ -650,7 +652,8 @@ public:
     bool ResolveStaticReference( ScMatrix& rMat, SCCOL nMatCol, SCROW nRow1, SCROW nRow2 );
     void FillMatrix( ScMatrix& rMat, size_t nMatCol, SCROW nRow1, SCROW nRow2, svl::SharedStringPool* pPool ) const;
     formula::VectorRefArray FetchVectorRefArray( SCROW nRow1, SCROW nRow2 );
-    bool HandleRefArrayForParallelism( SCROW nRow1, SCROW nRow2, const ScFormulaCellGroupRef& mxGroup );
+    bool HandleRefArrayForParallelism( SCROW nRow1, SCROW nRow2,
+                                       const ScFormulaCellGroupRef& mxGroup, ScAddress* pDirtiedAddress );
 #ifdef DBG_UTIL
     void AssertNoInterpretNeeded( SCROW nRow1, SCROW nRow2 );
 #endif
@@ -869,6 +872,8 @@ private:
 
     void EndListeningGroup( sc::EndListeningContext& rCxt, SCROW nRow );
     void SetNeedsListeningGroup( SCROW nRow );
+
+    void CollectBroadcasterState(sc::BroadcasterState& rState) const;
 };
 
 inline bool ScColumn::IsEmptyAttr() const
@@ -891,11 +896,11 @@ inline bool ScColumn::GetFirstVisibleAttr( SCROW& rFirstRow ) const
     return pAttrArray->GetFirstVisibleAttr( rFirstRow );
 }
 
-inline bool ScColumn::GetLastVisibleAttr( SCROW& rLastRow ) const
+inline bool ScColumn::GetLastVisibleAttr( SCROW& rLastRow, bool bSkipEmpty ) const
 {
     // row of last cell is needed
     SCROW nLastData = GetLastDataPos();    // always including notes, 0 if none
-    return pAttrArray->GetLastVisibleAttr( rLastRow, nLastData );
+    return pAttrArray->GetLastVisibleAttr( rLastRow, nLastData, bSkipEmpty );
 }
 
 inline bool ScColumn::HasVisibleAttrIn( SCROW nStartRow, SCROW nEndRow ) const
@@ -980,7 +985,7 @@ inline const SfxPoolItem& ScColumnData::GetAttr( SCROW nRow, sal_uInt16 nWhich, 
 
 inline sal_uInt32 ScColumnData::GetNumberFormat( const ScInterpreterContext& rContext, SCROW nRow ) const
 {
-    return pAttrArray->GetPattern( nRow )->GetNumberFormat( rContext.GetFormatTable() );
+    return pAttrArray->GetPattern( nRow )->GetNumberFormat( rContext );
 }
 
 inline void ScColumn::AddCondFormat( SCROW nStartRow, SCROW nEndRow, sal_uInt32 nIndex )

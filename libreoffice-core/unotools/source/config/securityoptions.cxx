@@ -25,6 +25,9 @@
 #include <com/sun/star/uno/Sequence.hxx>
 
 #include <com/sun/star/beans/PropertyValue.hpp>
+#include <com/sun/star/container/XNameContainer.hpp>
+#include <com/sun/star/container/XHierarchicalNameAccess.hpp>
+#include <com/sun/star/util/XChangesBatch.hpp>
 #include <comphelper/propertyvalue.hxx>
 #include <comphelper/sequence.hxx>
 #include <tools/urlobj.hxx>
@@ -36,10 +39,10 @@
 
 using namespace ::com::sun::star::uno;
 
-constexpr OUStringLiteral PROPERTYNAME_MACRO_TRUSTEDAUTHORS = u"TrustedAuthors";
-constexpr OUStringLiteral PROPERTYNAME_TRUSTEDAUTHOR_SUBJECTNAME = u"SubjectName";
-constexpr OUStringLiteral PROPERTYNAME_TRUSTEDAUTHOR_SERIALNUMBER = u"SerialNumber";
-constexpr OUStringLiteral PROPERTYNAME_TRUSTEDAUTHOR_RAWDATA = u"RawData";
+constexpr OUString PROPERTYNAME_MACRO_TRUSTEDAUTHORS = u"TrustedAuthors"_ustr;
+constexpr OUString PROPERTYNAME_TRUSTEDAUTHOR_SUBJECTNAME = u"SubjectName"_ustr;
+constexpr OUString PROPERTYNAME_TRUSTEDAUTHOR_SERIALNUMBER = u"SerialNumber"_ustr;
+constexpr OUString PROPERTYNAME_TRUSTEDAUTHOR_RAWDATA = u"RawData"_ustr;
 
 
 namespace SvtSecurityOptions
@@ -68,6 +71,18 @@ bool IsReadOnly( EOption eOption )
         case SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo:
             bReadonly = officecfg::Office::Common::Security::Scripting::RemovePersonalInfoOnSaving::isReadOnly();
             break;
+        case SvtSecurityOptions::EOption::DocWarnKeepRedlineInfo:
+            bReadonly = officecfg::Office::Common::Security::Scripting::KeepRedlineInfoOnSaving::isReadOnly();
+            break;
+        case SvtSecurityOptions::EOption::DocWarnKeepDocUserInfo:
+            bReadonly = officecfg::Office::Common::Security::Scripting::KeepDocUserInfoOnSaving::isReadOnly();
+            break;
+        case SvtSecurityOptions::EOption::DocWarnKeepNoteAuthorDateInfo:
+            bReadonly = officecfg::Office::Common::Security::Scripting::KeepNoteAuthorDateInfoOnSaving::isReadOnly();
+            break;
+        case SvtSecurityOptions::EOption::DocWarnKeepDocVersionInfo:
+            bReadonly = officecfg::Office::Common::Security::Scripting::KeepDocVersionInfoOnSaving::isReadOnly();
+            break;
         case SvtSecurityOptions::EOption::DocWarnRecommendPassword:
             bReadonly = officecfg::Office::Common::Security::Scripting::RecommendPasswordProtection::isReadOnly();
             break;
@@ -75,7 +90,9 @@ bool IsReadOnly( EOption eOption )
             bReadonly = officecfg::Office::Common::Security::Scripting::MacroSecurityLevel::isReadOnly();
             break;
         case SvtSecurityOptions::EOption::MacroTrustedAuthors:
-            bReadonly = false; // TODO? officecfg::Office::Common::Security::Scripting::TrustedAuthors::isReadOnly();
+            // the officecfg does not expose isReadOnly for a ConfigurationSet, so we have to code this ourself
+            bReadonly =
+              comphelper::detail::ConfigurationWrapper::get().isReadOnly(u"/org.openoffice.Office.Common/Security/Scripting/TrustedAuthors"_ustr);
             break;
         case SvtSecurityOptions::EOption::CtrlClickHyperlink:
             bReadonly = officecfg::Office::Common::Security::Scripting::HyperlinksWithCtrlClick::isReadOnly();
@@ -165,12 +182,12 @@ bool isTrustedLocationUriForUpdatingLinks(OUString const & uri)
 
 sal_Int32 GetMacroSecurityLevel()
 {
-    return officecfg::Office::Common::Security::Scripting::MacroSecurityLevel::get();
+    return utl::ConfigManager::IsFuzzing() ? 3 : officecfg::Office::Common::Security::Scripting::MacroSecurityLevel::get();
 }
 
 void SetMacroSecurityLevel( sal_Int32 _nLevel )
 {
-    if( officecfg::Office::Common::Security::Scripting::MacroSecurityLevel::isReadOnly() )
+    if (utl::ConfigManager::IsFuzzing() || officecfg::Office::Common::Security::Scripting::MacroSecurityLevel::isReadOnly())
         return;
 
     if( _nLevel > 3 || _nLevel < 0 )
@@ -183,7 +200,7 @@ void SetMacroSecurityLevel( sal_Int32 _nLevel )
 
 bool IsMacroDisabled()
 {
-    return officecfg::Office::Common::Security::Scripting::DisableMacrosExecution::get();
+    return utl::ConfigManager::IsFuzzing() || officecfg::Office::Common::Security::Scripting::DisableMacrosExecution::get();
 }
 
 std::vector< SvtSecurityOptions::Certificate > GetTrustedAuthors()
@@ -243,6 +260,18 @@ void SetTrustedAuthors( const std::vector< Certificate >& rAuthors )
 //        return;
 
     Reference<css::container::XHierarchicalNameAccess> xHierarchyAccess = utl::ConfigManager::acquireTree(u"Office.Common/Security/Scripting");
+
+    // first, clear existing entries
+    {
+        Reference<css::container::XNameContainer> xCont;
+        xHierarchyAccess->getByHierarchicalName(PROPERTYNAME_MACRO_TRUSTEDAUTHORS) >>= xCont;
+        const Sequence< OUString > aNames = xCont->getElementNames();
+        Reference<css::util::XChangesBatch> xBatch(xHierarchyAccess, UNO_QUERY);
+        for (const OUString& rName : aNames)
+            xCont->removeByName(rName);
+        xBatch->commitChanges();
+    }
+
     sal_Int32   nCnt = rAuthors.size();
     for( sal_Int32 i = 0; i < nCnt; ++i )
     {
@@ -284,6 +313,18 @@ bool IsOptionSet( EOption eOption )
         case SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo:
             bSet = officecfg::Office::Common::Security::Scripting::RemovePersonalInfoOnSaving::get();
             break;
+        case SvtSecurityOptions::EOption::DocWarnKeepRedlineInfo:
+            bSet = officecfg::Office::Common::Security::Scripting::KeepRedlineInfoOnSaving::get();
+            break;
+        case SvtSecurityOptions::EOption::DocWarnKeepDocUserInfo:
+            bSet = officecfg::Office::Common::Security::Scripting::KeepDocUserInfoOnSaving::get();
+            break;
+        case SvtSecurityOptions::EOption::DocWarnKeepNoteAuthorDateInfo:
+            bSet = officecfg::Office::Common::Security::Scripting::KeepNoteAuthorDateInfoOnSaving::get();
+            break;
+        case SvtSecurityOptions::EOption::DocWarnKeepDocVersionInfo:
+            bSet = officecfg::Office::Common::Security::Scripting::KeepDocVersionInfoOnSaving::get();
+            break;
         case SvtSecurityOptions::EOption::DocWarnRecommendPassword:
             bSet = officecfg::Office::Common::Security::Scripting::RecommendPasswordProtection::get();
             break;
@@ -320,6 +361,18 @@ void SetOption( EOption eOption, bool bValue )
             break;
         case SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo:
              officecfg::Office::Common::Security::Scripting::RemovePersonalInfoOnSaving::set(bValue, xChanges);
+            break;
+        case SvtSecurityOptions::EOption::DocWarnKeepRedlineInfo:
+             officecfg::Office::Common::Security::Scripting::KeepRedlineInfoOnSaving::set(bValue, xChanges);
+            break;
+        case SvtSecurityOptions::EOption::DocWarnKeepDocUserInfo:
+             officecfg::Office::Common::Security::Scripting::KeepDocUserInfoOnSaving::set(bValue, xChanges);
+            break;
+        case SvtSecurityOptions::EOption::DocWarnKeepNoteAuthorDateInfo:
+             officecfg::Office::Common::Security::Scripting::KeepNoteAuthorDateInfoOnSaving::set(bValue, xChanges);
+            break;
+        case SvtSecurityOptions::EOption::DocWarnKeepDocVersionInfo:
+             officecfg::Office::Common::Security::Scripting::KeepDocVersionInfoOnSaving::set(bValue, xChanges);
             break;
         case SvtSecurityOptions::EOption::DocWarnRecommendPassword:
              officecfg::Office::Common::Security::Scripting::RecommendPasswordProtection::set(bValue, xChanges);

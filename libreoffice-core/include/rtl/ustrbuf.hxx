@@ -43,6 +43,7 @@
 #include "sal/types.h"
 
 #ifdef LIBO_INTERNAL_ONLY // "RTL_FAST_STRING"
+#include "o3tl/safeint.hxx"
 #include "rtl/stringconcat.hxx"
 #endif
 
@@ -123,7 +124,7 @@ public:
     explicit OUStringBuffer(bool) = delete;
     explicit OUStringBuffer(char) = delete;
     explicit OUStringBuffer(wchar_t) = delete;
-#if defined __cpp_char8_t
+#if !(defined _MSC_VER && _MSC_VER >= 1930 && _MSC_VER <= 1939 && defined _MANAGED)
     explicit OUStringBuffer(char8_t) = delete;
 #endif
     explicit OUStringBuffer(char16_t) = delete;
@@ -242,8 +243,8 @@ public:
      @overload
      @internal
     */
-    template< typename T, std::size_t N >
-    OUStringBuffer( StringNumberBase< sal_Unicode, T, N >&& n )
+    template< std::size_t N >
+    OUStringBuffer( OUStringNumber< N >&& n )
         : pData(NULL)
         , nCapacity( n.length + 16 )
     {
@@ -380,11 +381,10 @@ public:
     }
 
     /** @overload @internal */
-    template<typename T, std::size_t N>
-    OUStringBuffer & operator =(StringNumberBase<sal_Unicode, T, N> && n)
+    template<std::size_t N>
+    OUStringBuffer & operator =(OUStringNumber<N> && n)
     {
-        *this = OUStringBuffer( std::move( n ) );
-        return *this;
+        return operator =(std::u16string_view(n));
     }
 #endif
 
@@ -591,17 +591,12 @@ public:
      */
 #if !defined LIBO_INTERNAL_ONLY
     OUStringBuffer & append(const OUString &str)
-    {
-        return append( str.getStr(), str.getLength() );
-    }
 #else
-    OUStringBuffer & append(std::u16string_view sv) {
-        if (sv.size() > sal_uInt32(std::numeric_limits<sal_Int32>::max())) {
-            throw std::bad_alloc();
-        }
-        return append(sv.data(), sv.size());
-    }
+    OUStringBuffer & append(std::u16string_view str)
 #endif
+    {
+        return insert(getLength(), str);
+    }
 
 #if !defined LIBO_INTERNAL_ONLY
     /**
@@ -645,7 +640,7 @@ public:
     OUStringBuffer & append( const sal_Unicode * str )
 #endif
     {
-        return append( str, rtl_ustr_getLength( str ) );
+        return insert(getLength(), str);
     }
 
     /**
@@ -663,9 +658,7 @@ public:
      */
     OUStringBuffer & append( const sal_Unicode * str, sal_Int32 len)
     {
-        assert( len == 0 || str != NULL ); // cannot assert that in rtl_uStringbuffer_insert
-        rtl_uStringbuffer_insert( &pData, &nCapacity, getLength(), str, len );
-        return *this;
+        return insert(getLength(), str, len);
     }
 
     /**
@@ -676,11 +669,7 @@ public:
     template< typename T >
     typename libreoffice_internal::ConstCharArrayDetector< T, OUStringBuffer& >::Type append( T& literal )
     {
-        assert(
-            libreoffice_internal::ConstCharArrayDetector<T>::isValid(literal));
-        return appendAscii(
-            libreoffice_internal::ConstCharArrayDetector<T>::toPointer(literal),
-            libreoffice_internal::ConstCharArrayDetector<T>::length);
+        return insert(getLength(), literal);
     }
 
 #if defined LIBO_INTERNAL_ONLY
@@ -693,9 +682,7 @@ public:
     typename libreoffice_internal::ConstCharArrayDetector<
         T, OUStringBuffer &>::TypeUtf16
     append(T & literal) {
-        return append(
-            libreoffice_internal::ConstCharArrayDetector<T>::toPointer(literal),
-            libreoffice_internal::ConstCharArrayDetector<T>::length);
+        return insert(getLength(), literal);
     }
 #endif
 
@@ -707,25 +694,7 @@ public:
     template< typename T1, typename T2 >
     OUStringBuffer& append( OUStringConcat< T1, T2 >&& c )
     {
-        sal_Int32 l = c.length();
-        if( l == 0 )
-            return *this;
-        l += pData->length;
-        rtl_uStringbuffer_ensureCapacity( &pData, &nCapacity, l );
-        sal_Unicode* end = c.addData( pData->buffer + pData->length );
-        *end = '\0';
-        pData->length = l;
-        return *this;
-    }
-
-    /**
-     @overload
-     @internal
-    */
-    template< typename T, std::size_t N >
-    OUStringBuffer& append( StringNumberBase< sal_Unicode, T, N >&& c )
-    {
-        return append( c.buf, c.length );
+        return insert(getLength(), std::move(c));
     }
 #endif
 
@@ -788,8 +757,7 @@ public:
      */
     OUStringBuffer & append(bool b)
     {
-        sal_Unicode sz[RTL_USTR_MAX_VALUEOFBOOLEAN];
-        return append( sz, rtl_ustr_valueOfBoolean( sz, b ) );
+        return insert(getLength(), b);
     }
 
     /// @cond INTERNAL
@@ -809,7 +777,7 @@ public:
     */
     OUStringBuffer & append(rtl_uString* str)
     {
-        return append( OUString( str ));
+        return append( OUString::unacquired( &str ));
     }
 
     /**
@@ -825,8 +793,7 @@ public:
      */
     OUStringBuffer & append(sal_Bool b)
     {
-        sal_Unicode sz[RTL_USTR_MAX_VALUEOFBOOLEAN];
-        return append( sz, rtl_ustr_valueOfBoolean( sz, b ) );
+        return insert(getLength(), b);
     }
 
     /**
@@ -844,7 +811,7 @@ public:
     OUStringBuffer & append(char c)
     {
         assert(static_cast< unsigned char >(c) <= 0x7F);
-        return append(sal_Unicode(c));
+        return insert(getLength(), c);
     }
 
     /**
@@ -859,7 +826,7 @@ public:
      */
     OUStringBuffer & append(sal_Unicode c)
     {
-        return append( &c, 1 );
+        return insert(getLength(), c);
     }
 
 #if defined LIBO_INTERNAL_ONLY
@@ -880,8 +847,7 @@ public:
      */
     OUStringBuffer & append(sal_Int32 i, sal_Int16 radix = 10 )
     {
-        sal_Unicode sz[RTL_USTR_MAX_VALUEOFINT32];
-        return append( sz, rtl_ustr_valueOfInt32( sz, i, radix ) );
+        return insert(getLength(), i, radix);
     }
 
     /**
@@ -898,8 +864,7 @@ public:
      */
     OUStringBuffer & append(sal_Int64 l, sal_Int16 radix = 10 )
     {
-        sal_Unicode sz[RTL_USTR_MAX_VALUEOFINT64];
-        return append( sz, rtl_ustr_valueOfInt64( sz, l, radix ) );
+        return insert(getLength(), l, radix);
     }
 
     /**
@@ -915,8 +880,7 @@ public:
      */
     OUStringBuffer & append(float f)
     {
-        sal_Unicode sz[RTL_USTR_MAX_VALUEOFFLOAT];
-        return append( sz, rtl_ustr_valueOfFloat( sz, f ) );
+        return insert(getLength(), f);
     }
 
     /**
@@ -932,8 +896,7 @@ public:
      */
     OUStringBuffer & append(double d)
     {
-        sal_Unicode sz[RTL_USTR_MAX_VALUEOFDOUBLE];
-        return append( sz, rtl_ustr_valueOfDouble( sz, d ) );
+        return insert(getLength(), d);
     }
 
     /**
@@ -1006,12 +969,37 @@ public:
 #if defined LIBO_INTERNAL_ONLY
     OUStringBuffer & insert(sal_Int32 offset, std::u16string_view str)
     {
+        if (str.size() > sal_uInt32(std::numeric_limits<sal_Int32>::max())) {
+            throw std::bad_alloc();
+        }
         return insert( offset, str.data(), str.length() );
     }
 #else
     OUStringBuffer & insert(sal_Int32 offset, const OUString & str)
     {
         return insert( offset, str.getStr(), str.getLength() );
+    }
+#endif
+
+#ifdef LIBO_INTERNAL_ONLY // "RTL_FAST_STRING"
+    /**
+     @overload
+     @internal
+    */
+    template <typename T1, typename T2>
+    OUStringBuffer& insert(sal_Int32 offset, OUStringConcat<T1, T2>&& c)
+    {
+        const size_t l = c.length();
+        if (l == 0)
+            return *this;
+        if (l > o3tl::make_unsigned(std::numeric_limits<sal_Int32>::max() - pData->length))
+            throw std::bad_alloc();
+
+        rtl_uStringbuffer_insert(&pData, &nCapacity, offset, nullptr, l);
+
+        /* insert the new characters */
+        c.addData(pData->buffer + offset);
+        return *this;
     }
 #endif
 
@@ -1253,10 +1241,13 @@ public:
         @return     this string buffer.
         @exception  StringIndexOutOfBoundsException  if the offset is invalid.
      */
-    OUStringBuffer insert(sal_Int32 offset, float f)
+    OUStringBuffer & insert(sal_Int32 offset, float f)
     {
-        sal_Unicode sz[RTL_USTR_MAX_VALUEOFFLOAT];
-        return insert( offset, sz, rtl_ustr_valueOfFloat( sz, f ) );
+        // Same as rtl::str::valueOfFP, used for rtl_ustr_valueOfFloat
+        rtl_math_doubleToUString(&pData, &nCapacity, offset, f, rtl_math_StringFormat_G,
+                                 RTL_USTR_MAX_VALUEOFFLOAT - SAL_N_ELEMENTS("-x.E-xxx") + 1, '.',
+                                 NULL, 0, true);
+        return *this;
     }
 
     /**
@@ -1279,8 +1270,11 @@ public:
      */
     OUStringBuffer & insert(sal_Int32 offset, double d)
     {
-        sal_Unicode sz[RTL_USTR_MAX_VALUEOFDOUBLE];
-        return insert( offset, sz, rtl_ustr_valueOfDouble( sz, d ) );
+        // Same as rtl::str::valueOfFP, used for rtl_ustr_valueOfDouble
+        rtl_math_doubleToUString(&pData, &nCapacity, offset, d, rtl_math_StringFormat_G,
+                                 RTL_USTR_MAX_VALUEOFDOUBLE - SAL_N_ELEMENTS("-x.E-xxx") + 1, '.',
+                                 NULL, 0, true);
+        return *this;
     }
 
     /**

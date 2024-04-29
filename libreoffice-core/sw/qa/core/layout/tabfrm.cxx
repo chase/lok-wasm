@@ -17,6 +17,8 @@
 #include <anchoredobject.hxx>
 #include <flyfrm.hxx>
 #include <flyfrms.hxx>
+#include <docsh.hxx>
+#include <wrtsh.hxx>
 
 namespace
 {
@@ -36,7 +38,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTablePrintAreaLeft)
     createSwDoc("table-print-area-left.docx");
 
     // When laying out that document & parsing the left margin of the table:
-    SwTwips nTablePrintLeft = parseDump("//tab/infos/prtBounds", "left").toInt32();
+    SwTwips nTablePrintLeft = parseDump("//tab/infos/prtBounds"_ostr, "left"_ostr).toInt32();
 
     // Then make sure it has ~no left margin:
     // Without the accompanying fix in place, this test would have failed with:
@@ -187,7 +189,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSplitFlyWrappedByTable)
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), rPageObjs.size());
     auto pFly = rPageObjs[0]->DynCastFlyFrame()->DynCastFlyAtContentFrame();
     CPPUNIT_ASSERT(pFly);
-    // Get the bottom of of the floating table, ignoring margins:
+    // Get the bottom of the floating table, ignoring margins:
     SwTwips nFloatingBottom = pFly->getFrameArea().Top() + pFly->getFramePrintArea().Height();
     SwFrame* pBody = pPage->FindBodyCont();
     auto pTab = pBody->GetLower()->GetNext()->DynCastTabFrame();
@@ -198,6 +200,61 @@ CPPUNIT_TEST_FIXTURE(Test, testSplitFlyWrappedByTable)
     // - Actual  : 7287
     // i.e. the inline table was under the floating one, not on the right of it.
     CPPUNIT_ASSERT_LESS(nFloatingBottom, nInlineTop);
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testInlineTableThenSplitFly)
+{
+    // Given a document with a floating table ("right") and an inline table ("left"):
+    // When laying out the document:
+    createSwDoc("floattable-not-wrapped-by-table.docx");
+
+    // Then make sure the inline table is on the left (small negative offset):
+    SwDoc* pDoc = getSwDoc();
+    SwRootFrame* pLayout = pDoc->getIDocumentLayoutAccess().GetCurrentLayout();
+    auto pPage = pLayout->Lower()->DynCastPageFrame();
+    CPPUNIT_ASSERT(pPage);
+    SwFrame* pBody = pPage->FindBodyCont();
+    auto pTab = pBody->GetLower()->GetNext()->DynCastTabFrame();
+    SwTwips nInlineLeft = pTab->getFramePrintArea().Left();
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected less than: 0
+    // - Actual  : 6958
+    // i.e. "left" was on the right, its horizontal margin was not a small negative value but a
+    // large positive one.
+    CPPUNIT_ASSERT_LESS(static_cast<SwTwips>(0), nInlineLeft);
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testSplitFlyWrappedByTableNested)
+{
+    // Given a document with 3 tables, one inline toplevel and two inner ones (one inline, one
+    // floating):
+    // When laying out that document:
+    // Without the accompanying fix in place, this test would have failed here with a layout loop.
+    createSwDoc("floattable-wrapped-by-table-nested.docx");
+
+    // Than make sure we have 3 tables, but only one of them is floating:
+    SwDoc* pDoc = getSwDoc();
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(3), pDoc->GetTableFrameFormats()->GetFormatCount());
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pDoc->GetSpzFrameFormats()->GetFormatCount());
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testSplitFlyHeader)
+{
+    // Given a document with 8 pages: a first page ending in a manual page break, then a multi-page
+    // floating table on pages 2..8:
+    createSwDoc("floattable-header.docx");
+    CPPUNIT_ASSERT_EQUAL(8, getPages());
+
+    // When creating a new paragraph at doc start:
+    SwDocShell* pDocShell = getSwDocShell();
+    SwWrtShell* pWrtShell = pDocShell->GetWrtShell();
+    pWrtShell->SttEndDoc(/*bStt=*/true);
+    pWrtShell->SplitNode();
+    // Without the accompanying fix in place, this test would have crashed here.
+    pWrtShell->CalcLayout();
+
+    // Then make sure we get one more page, since the first page is now 2 pages:
+    CPPUNIT_ASSERT_EQUAL(9, getPages());
 }
 }
 

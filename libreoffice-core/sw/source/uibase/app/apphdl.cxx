@@ -30,8 +30,8 @@
 #include <svtools/restartdialog.hxx>
 #include <svl/eitem.hxx>
 #include <svl/whiter.hxx>
-#include <svl/isethint.hxx>
 #include <svl/stritem.hxx>
+#include <svl/voiditem.hxx>
 #include <sfx2/lokhelper.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/fcontnr.hxx>
@@ -312,10 +312,11 @@ SwView* lcl_LoadDoc(SwView* pView, const OUString& rURL)
         SfxStringItem aTargetFrameName( SID_TARGETNAME, "_blank" );
         SfxBoolItem aHidden( SID_HIDDEN, true );
         SfxStringItem aReferer(SID_REFERER, pView->GetDocShell()->GetTitle());
-        const SfxObjectItem* pItem = static_cast<const SfxObjectItem*>(
-            pView->GetViewFrame()->GetDispatcher()->ExecuteList(SID_OPENDOC,
-                SfxCallMode::SYNCHRON,
-                { &aURL, &aHidden, &aReferer, &aTargetFrameName }));
+        const SfxPoolItemHolder aResult(
+            pView->GetViewFrame().GetDispatcher()->ExecuteList(SID_OPENDOC,
+            SfxCallMode::SYNCHRON,
+            { &aURL, &aHidden, &aReferer, &aTargetFrameName }));
+        const SfxObjectItem* pItem(static_cast<const SfxObjectItem*>(aResult.getItem()));
         SfxShell* pShell = pItem ? pItem->GetShell() : nullptr;
 
         if(pShell)
@@ -326,11 +327,11 @@ SwView* lcl_LoadDoc(SwView* pView, const OUString& rURL)
                 pNewView = dynamic_cast<SwView*>(pViewShell);
                 if (pNewView)
                 {
-                    pNewView->GetViewFrame()->GetFrame().Appear();
+                    pNewView->GetViewFrame().GetFrame().Appear();
                 }
                 else
                 {
-                    pViewShell->GetViewFrame()->DoClose();
+                    pViewShell->GetViewFrame().DoClose();
                 }
             }
         }
@@ -338,9 +339,10 @@ SwView* lcl_LoadDoc(SwView* pView, const OUString& rURL)
     else
     {
         SfxStringItem aFactory(SID_NEWDOCDIRECT, SwDocShell::Factory().GetFilterContainer()->GetName());
-        const SfxFrameItem* pItem = static_cast<const SfxFrameItem*>(
-            pView->GetViewFrame()->GetDispatcher()->ExecuteList(
-                SID_NEWDOCDIRECT, SfxCallMode::SYNCHRON, { &aFactory }));
+        const SfxPoolItemHolder aResult(pView->GetViewFrame().GetDispatcher()->ExecuteList(
+            SID_NEWDOCDIRECT,
+            SfxCallMode::SYNCHRON, { &aFactory }));
+        const SfxFrameItem* pItem(static_cast<const SfxFrameItem*>(aResult.getItem()));
         SfxFrame* pFrame = pItem ? pItem->GetFrame() : nullptr;
         SfxViewFrame* pViewFrame = pFrame ? pFrame->GetCurrentViewFrame() : nullptr;
         pNewView = pViewFrame ? dynamic_cast<SwView*>( pViewFrame->GetViewShell() ) : nullptr;
@@ -496,7 +498,7 @@ void SwMailMergeWizardExecutor::ExecutionFinished()
                                        FN_MAILMERGE_PRINT_DOCUMENTS,
                                        FN_MAILMERGE_EMAIL_DOCUMENTS,
                                        0 };
-        m_pView->GetViewFrame()->GetBindings().Invalidate(slotIds);
+        m_pView->GetViewFrame().GetBindings().Invalidate(slotIds);
     }
 
     // release/destroy asynchronously
@@ -582,8 +584,8 @@ void SwMailMergeWizardExecutor::EndDialogHdl(sal_Int32 nRet)
             if(pTargetView && pSourceView)
             {
                 m_pView2Close = pTargetView;
-                pTargetView->GetViewFrame()->GetTopViewFrame()->GetWindow().Hide();
-                pSourceView->GetViewFrame()->GetFrame().AppearWithUpdate();
+                pTargetView->GetViewFrame().GetTopViewFrame()->GetWindow().Hide();
+                pSourceView->GetViewFrame().GetFrame().AppearWithUpdate();
                 // the current view has be set when the target is destroyed
                 m_pView = pSourceView;
                 xMMConfig->SetTargetView(nullptr);
@@ -620,7 +622,7 @@ void SwMailMergeWizardExecutor::EndDialogHdl(sal_Int32 nRet)
             SwView* pSourceView = xMMConfig ? xMMConfig->GetSourceView() : nullptr;
             if(pSourceView)
             {
-                xMMConfig->GetSourceView()->GetViewFrame()->GetFrame().Appear();
+                xMMConfig->GetSourceView()->GetViewFrame().GetFrame().Appear();
             }
             ExecutionFinished();
             break;
@@ -648,13 +650,13 @@ IMPL_LINK_NOARG(SwMailMergeWizardExecutor, CancelHdl, void*, void)
     {
         if (xMMConfig->GetTargetView())
         {
-            xMMConfig->GetTargetView()->GetViewFrame()->DoClose();
+            xMMConfig->GetTargetView()->GetViewFrame().DoClose();
             xMMConfig->SetTargetView(nullptr);
         }
         if (xMMConfig->GetSourceView())
         {
-            auto pViewFrame(xMMConfig->GetSourceView()->GetViewFrame());
-            pViewFrame->GetFrame().AppearWithUpdate();
+            auto& rViewFrame(xMMConfig->GetSourceView()->GetViewFrame());
+            rViewFrame.GetFrame().AppearWithUpdate();
         }
         xMMConfig->Commit();
     }
@@ -673,7 +675,7 @@ IMPL_LINK_NOARG(SwMailMergeWizardExecutor, CloseFrameHdl, void*, void)
 {
     if ( m_pView2Close )
     {
-        m_pView2Close->GetViewFrame()->DoClose();
+        m_pView2Close->GetViewFrame().DoClose();
         m_pView2Close = nullptr;
     }
     m_pWizardToDestroyInCallback.disposeAndClear();
@@ -794,7 +796,7 @@ void SwModule::ExecOther(SfxRequest& rReq)
             rSh.GetDBManager()->Merge(aMergeDesc);
 
             // update enabled / disabled status of the buttons in the toolbar
-            SfxBindings& rBindings = rSh.GetView().GetViewFrame()->GetBindings();
+            SfxBindings& rBindings = rSh.GetView().GetViewFrame().GetBindings();
             rBindings.Invalidate(FN_MAILMERGE_FIRST_ENTRY);
             rBindings.Invalidate(FN_MAILMERGE_PREV_ENTRY);
             rBindings.Invalidate(FN_MAILMERGE_NEXT_ENTRY);
@@ -829,7 +831,7 @@ void SwModule::ExecOther(SfxRequest& rReq)
                 // The connection has been attempted, but failed or no results found,
                 // so invalidate the toolbar buttons in case they need to be disabled.
                 SfxBindings& rBindings
-                    = pView->GetWrtShell().GetView().GetViewFrame()->GetBindings();
+                    = pView->GetWrtShell().GetView().GetViewFrame().GetBindings();
                 rBindings.Invalidate(FN_MAILMERGE_CREATE_DOCUMENTS);
                 rBindings.Invalidate(FN_MAILMERGE_SAVE_DOCUMENTS);
                 rBindings.Invalidate(FN_MAILMERGE_PRINT_DOCUMENTS);
@@ -847,7 +849,7 @@ void SwModule::ExecOther(SfxRequest& rReq)
                 xConfigItem = SwDBManager::PerformMailMerge(pView);
 
                 if (xConfigItem && xConfigItem->GetTargetView())
-                    xConfigItem->GetTargetView()->GetViewFrame()->GetFrame().Appear();
+                    xConfigItem->GetTargetView()->GetViewFrame().GetFrame().Appear();
             }
             else
             {
@@ -885,12 +887,12 @@ void SwModule::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                 // update fixed fields
                 if (pDocSh->GetMedium())
                 {
-                    const SfxBoolItem* pTemplateItem = SfxItemSet::GetItem<SfxBoolItem>(pDocSh->GetMedium()->GetItemSet(), SID_TEMPLATE, false);
+                    const SfxBoolItem* pTemplateItem = pDocSh->GetMedium()->GetItemSet().GetItem(SID_TEMPLATE, false);
                     if (pTemplateItem && pTemplateItem->GetValue())
                     {
                         // assume that not calling via SwEditShell::SetFixFields
                         // is allowed, because the shell hasn't been created yet
-                        assert(!pWrtSh || pWrtSh->GetView().GetViewFrame()->GetFrame().IsClosing_Impl());
+                        assert(!pWrtSh || pWrtSh->GetView().GetViewFrame().GetFrame().IsClosing_Impl());
                         pDocSh->GetDoc()->getIDocumentFieldsAccess().SetFixFields(nullptr);
                     }
                 }
@@ -899,7 +901,7 @@ void SwModule::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                 // Update all FIX-Date/Time fields
                 if( pWrtSh )
                 {
-                    const SfxUInt16Item* pUpdateDocItem = SfxItemSet::GetItem<SfxUInt16Item>(pDocSh->GetMedium()->GetItemSet(), SID_UPDATEDOCMODE, false);
+                    const SfxUInt16Item* pUpdateDocItem = pDocSh->GetMedium()->GetItemSet().GetItem(SID_UPDATEDOCMODE, false);
                     bool bUpdateFields = true;
                     if( pUpdateDocItem &&  pUpdateDocItem->GetValue() == document::UpdateDocMode::NO_UPDATE)
                         bUpdateFields = false;
@@ -921,16 +923,6 @@ void SwModule::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                 break;
             default: break;
             }
-        }
-    }
-    else if(const SfxItemSetHint* pSfxItemSetHint = dynamic_cast<const SfxItemSetHint*>(&rHint))
-    {
-        if( SfxItemState::SET == pSfxItemSetHint->GetItemSet().GetItemState(SID_ATTR_PATHNAME))
-        {
-            ::GetGlossaries()->UpdateGlosPath( false );
-            SwGlossaryList* pList = ::GetGlossaryList();
-            if(pList->IsActive())
-                pList->Update();
         }
     }
     else
@@ -991,7 +983,7 @@ void SwModule::ConfigurationChanged(utl::ConfigurationBroadcaster* pBrdCst, Conf
                 if (pSwView)
                 {
                     SwViewOption aNewOptions = *pSwView->GetWrtShell().GetViewOptions();
-                    aNewOptions.SetThemeName(m_pColorConfig->GetCurrentSchemeName());
+                    aNewOptions.SetThemeName(svtools::ColorConfig::GetCurrentSchemeName());
                     SwViewColors aViewColors(*m_pColorConfig);
                     aNewOptions.SetColorConfig(aViewColors);
                     const bool bChanged(aNewOptions != *pSwView->GetWrtShell().GetViewOptions());
@@ -1006,9 +998,9 @@ void SwModule::ConfigurationChanged(utl::ConfigurationBroadcaster* pBrdCst, Conf
                     if (bKit)
                     {
                         pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_APPLICATION_BACKGROUND_COLOR,
-                            aViewColors.m_aAppBackgroundColor.AsRGBHexString().toUtf8().getStr());
+                            aViewColors.m_aAppBackgroundColor.AsRGBHexString().toUtf8());
                         pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_DOCUMENT_BACKGROUND_COLOR,
-                            aViewColors.m_aDocColor.AsRGBHexString().toUtf8().getStr());
+                            aViewColors.m_aAppBackgroundColor.AsRGBHexString().toUtf8());
                     }
 
                     // if nothing changed, and the hint was OnlyCurrentDocumentColorScheme we can skip invalidate
@@ -1040,9 +1032,9 @@ void SwModule::ConfigurationChanged(utl::ConfigurationBroadcaster* pBrdCst, Conf
                 auto pPagePreview = dynamic_cast<SwPagePreview *>( pViewShell );
 
                 if(pSwView)
-                    pSwView->ApplyAccessibilityOptions(*m_pAccessibilityOptions);
+                    pSwView->ApplyAccessibilityOptions();
                 else if(pPagePreview)
-                    pPagePreview->ApplyAccessibilityOptions(*m_pAccessibilityOptions);
+                    pPagePreview->ApplyAccessibilityOptions();
 
                 if(pSwView || pPagePreview || dynamic_cast< const SwSrcView *>( pViewShell ) !=  nullptr)
                 {
@@ -1089,26 +1081,6 @@ svtools::ColorConfig& SwModule::GetColorConfig()
     return *m_pColorConfig;
 }
 
-SvtAccessibilityOptions& SwModule::GetAccessibilityOptions()
-{
-    if(!m_pAccessibilityOptions)
-    {
-        m_pAccessibilityOptions.reset(new SvtAccessibilityOptions);
-        m_pAccessibilityOptions->AddListener(this);
-    }
-    return *m_pAccessibilityOptions;
-}
-
-SvtCTLOptions& SwModule::GetCTLOptions()
-{
-    if(!m_pCTLOptions)
-    {
-        m_pCTLOptions.reset(new SvtCTLOptions);
-        m_pCTLOptions->AddListener(this);
-    }
-    return *m_pCTLOptions;
-}
-
 SvtUserOptions& SwModule::GetUserOptions()
 {
     if(!m_pUserOptions)
@@ -1140,11 +1112,11 @@ void NewXForms( SfxRequest& rReq )
     // copied & excerpted from SwModule::InsertLab(..)
 
     // create new document
-    SfxObjectShellLock xDocSh( new SwDocShell( SfxObjectCreateMode::STANDARD) );
+    SwDocShellRef xDocSh( new SwDocShell( SfxObjectCreateMode::STANDARD) );
     xDocSh->DoInitNew();
 
     // initialize XForms
-    static_cast<SwDocShell*>( &xDocSh )->GetDoc()->initXForms( true );
+    xDocSh->GetDoc()->initXForms(true);
 
     // load document into frame
     SfxViewFrame::DisplayNewDocument( *xDocSh, rReq );

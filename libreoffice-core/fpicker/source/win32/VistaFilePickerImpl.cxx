@@ -169,55 +169,36 @@ using TFolderPickerDialogImpl = TDialogImpl<TFileOpenDialog, CLSID_FileOpenDialo
 
 static OUString lcl_getURLFromShellItem (IShellItem* pItem)
 {
-    LPWSTR pStr = nullptr;
-    OUString sURL;
-    HRESULT hr;
-
-    hr = pItem->GetDisplayName ( SIGDN_FILESYSPATH, &pStr );
-    if (SUCCEEDED(hr))
+    sal::systools::CoTaskMemAllocated<wchar_t> pStr;
+    HRESULT hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pStr);
+    if (FAILED(hr))
     {
-        ::osl::FileBase::getFileURLFromSystemPath( OUString(o3tl::toU(pStr)), sURL );
-        goto cleanup;
-    }
+        // tdf#155176: One could think that querying SIGDN_URL would go first. But Windows uses
+        // current 8-bit codepage for the filenames, and URL-encodes those octets. So check it
+        // only after SIGDN_FILESYSPATH query failed (can it ever happen?)
+        if (SUCCEEDED(pItem->GetDisplayName(SIGDN_URL, &pStr)))
+            return OUString(o3tl::toU(pStr));
 
-    hr = pItem->GetDisplayName ( SIGDN_URL, &pStr );
-    if (SUCCEEDED(hr))
-    {
-        sURL = o3tl::toU(pStr);
-        goto cleanup;
-    }
-
-    hr = pItem->GetDisplayName ( SIGDN_PARENTRELATIVEPARSING, &pStr );
-    if (SUCCEEDED(hr))
-    {
-        GUID known_folder_id;
-        std::wstring aStr = pStr;
-        CoTaskMemFree (pStr);
-
-        if (0 == aStr.compare(0, 3, L"::{"))
-            aStr = aStr.substr(2);
-        hr = IIDFromString(aStr.c_str(), &known_folder_id);
+        hr = pItem->GetDisplayName(SIGDN_PARENTRELATIVEPARSING, &pStr);
         if (SUCCEEDED(hr))
         {
-            hr = SHGetKnownFolderPath(known_folder_id, 0, nullptr, &pStr);
+            GUID known_folder_id;
+            wchar_t* pStr2 = pStr;
+            if (pStr2[0] == ':' && pStr2[1] == ':' && pStr2[2] == '{')
+                pStr2 += 2;
+            hr = IIDFromString(pStr2, &known_folder_id);
             if (SUCCEEDED(hr))
-            {
-                ::osl::FileBase::getFileURLFromSystemPath(OUString(o3tl::toU(pStr)), sURL);
-                goto cleanup;
-            }
+                hr = SHGetKnownFolderPath(known_folder_id, 0, nullptr, &pStr);
         }
     }
 
     // Default fallback
-    hr = SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &pStr);
+    if (FAILED(hr))
+        hr = SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &pStr);
+
+    OUString sURL;
     if (SUCCEEDED(hr))
         ::osl::FileBase::getFileURLFromSystemPath(OUString(o3tl::toU(pStr)), sURL);
-    else // shouldn't happen...
-        goto bailout;
-
-cleanup:
-    CoTaskMemFree (pStr);
-bailout:
     return sURL;
 }
 
@@ -1135,7 +1116,7 @@ void VistaFilePickerImpl::impl_sta_GetControlValue(Request& rRequest)
                 if ( SUCCEEDED(hResult) )
                 {
                     const OUString& sItem = m_lItems[bValue];
-                    aValue <<= OUString(sItem.getStr());
+                    aValue <<= sItem;
                 }
             }
             break;

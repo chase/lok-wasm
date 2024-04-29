@@ -37,12 +37,12 @@ namespace com::sun::star::util {
 namespace com::sun::star::uno { template <typename > class Reference; }
 
 // Common URL prefixes for various schemes:
-inline constexpr OUStringLiteral INET_FTP_SCHEME = u"ftp://";
-inline constexpr OUStringLiteral INET_HTTP_SCHEME = u"http://";
-inline constexpr OUStringLiteral INET_HTTPS_SCHEME = u"https://";
-inline constexpr OUStringLiteral INET_FILE_SCHEME = u"file://";
-inline constexpr OUStringLiteral INET_MAILTO_SCHEME = u"mailto:";
-inline constexpr OUStringLiteral INET_HID_SCHEME = u"hid:";
+inline constexpr OUString INET_FTP_SCHEME = u"ftp://"_ustr;
+inline constexpr OUString INET_HTTP_SCHEME = u"http://"_ustr;
+inline constexpr OUString INET_HTTPS_SCHEME = u"https://"_ustr;
+inline constexpr OUString INET_FILE_SCHEME = u"file://"_ustr;
+inline constexpr OUString INET_MAILTO_SCHEME = u"mailto:"_ustr;
+inline constexpr OUString INET_HID_SCHEME = u"hid:"_ustr;
 
 #define URL_PREFIX_PRIV_SOFFICE "private:"
 
@@ -426,9 +426,6 @@ public:
     { return setUser(rTheUser, RTL_TEXTENCODING_UTF8); }
 
     inline bool SetPass(std::u16string_view rThePassword);
-
-    inline bool SetUserAndPass(std::u16string_view rTheUser,
-                               std::u16string_view rThePassword);
 
     // Host and Port:
 
@@ -1261,15 +1258,6 @@ inline bool INetURLObject::SetPass(std::u16string_view rThePassword)
     return rThePassword.empty() ?
                clearPassword() :
                setPassword(rThePassword, RTL_TEXTENCODING_UTF8);
-}
-
-inline bool INetURLObject::SetUserAndPass(std::u16string_view rTheUser,
-                                          std::u16string_view rThePassword)
-{
-    return setUser(rTheUser, RTL_TEXTENCODING_UTF8)
-           && (rThePassword.empty() ?
-                   clearPassword() :
-                   setPassword(rThePassword, RTL_TEXTENCODING_UTF8));
 }
 
 inline bool INetURLObject::SetParam(std::u16string_view rTheQuery,

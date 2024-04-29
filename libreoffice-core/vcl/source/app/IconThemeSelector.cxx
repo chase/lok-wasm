@@ -70,6 +70,7 @@ IconThemeSelector::GetIconThemeForDesktopEnvironment(const OUString& desktopEnvi
 #else
     OUString r;
     if ( desktopEnvironment.equalsIgnoreAsciiCase("plasma5") ||
+         desktopEnvironment.equalsIgnoreAsciiCase("plasma6") ||
          desktopEnvironment.equalsIgnoreAsciiCase("lxqt") ) {
         if (!bPreferDarkIconTheme)
             r = "breeze";
@@ -126,8 +127,8 @@ IconThemeSelector::SelectIconTheme(
 {
     if (mUseHighContrastTheme) {
         const Color aCol(Application::GetSettings().GetStyleSettings().GetWindowColor());
-        const OUString name(aCol.IsDark() ? OUString(IconThemeInfo::HIGH_CONTRAST_ID_DARK)
-                                          : OUString(IconThemeInfo::HIGH_CONTRAST_ID_BRIGHT));
+        const OUString name(aCol.IsDark() ? IconThemeInfo::HIGH_CONTRAST_ID_DARK
+                                          : IconThemeInfo::HIGH_CONTRAST_ID_BRIGHT);
         if (icon_theme_is_in_installed_themes(name, installedThemes)) {
             return name;
         }

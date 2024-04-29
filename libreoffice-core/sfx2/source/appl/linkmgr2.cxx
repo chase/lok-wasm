@@ -21,6 +21,7 @@
 #include <sfx2/linkmgr.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <com/sun/star/document/UpdateDocMode.hpp>
+#include <officecfg/Office/Common.hxx>
 #include <osl/file.hxx>
 #include <sfx2/objsh.hxx>
 #include <svl/urihelper.hxx>
@@ -281,6 +282,11 @@ void LinkManager::UpdateAllLinks(
     bool bUpdateGrfLinks,
     weld::Window* pParentWin )
 {
+    // when active content is disabled don't bother updating all links
+    // also (when bAskUpdate == true) don't show the pop up.
+    if(officecfg::Office::Common::Security::Scripting::DisableActiveContent::get())
+        return;
+
     // First make a copy of the array in order to update links
     // links in ... no contact between them!
     std::vector<SvBaseLink*> aTmpArr;
@@ -354,8 +360,12 @@ SvLinkSourceRef LinkManager::CreateObj( SvBaseLink const * pLink )
         case SvBaseLinkObjectType::ClientOle:
             return new SvFileObject;
         case SvBaseLinkObjectType::Internal:
+            if(officecfg::Office::Common::Security::Scripting::DisableActiveContent::get())
+                return SvLinkSourceRef();
             return new SvxInternalLink;
         case SvBaseLinkObjectType::ClientDde:
+            if (officecfg::Office::Common::Security::Scripting::DisableActiveContent::get())
+                return SvLinkSourceRef();
             return new SvDDEObject;
         default:
             return SvLinkSourceRef();
@@ -458,16 +468,14 @@ void LinkManager::InsertFileLink(
         return;
 
     OUStringBuffer aBuf(64);
-    aBuf.append(rFileNm);
-    aBuf.append(sfx2::cTokenSeparator);
+    aBuf.append(rFileNm + OUStringChar(sfx2::cTokenSeparator));
 
     if (pRange)
         aBuf.append(*pRange);
 
     if (pFilterNm)
     {
-        aBuf.append(sfx2::cTokenSeparator);
-        aBuf.append(*pFilterNm);
+        aBuf.append(OUStringChar(sfx2::cTokenSeparator) + *pFilterNm);
     }
 
     OUString aCmd = aBuf.makeStringAndClear();
@@ -508,7 +516,7 @@ SotClipboardFormatId LinkManager::RegisterStatusInfoId()
     return nFormat;
 }
 
-bool LinkManager::GetGraphicFromAny(const OUString& rMimeType,
+bool LinkManager::GetGraphicFromAny(std::u16string_view rMimeType,
                                     const css::uno::Any & rValue,
                                     Graphic& rGraphic,
                                     weld::Window* pParentWin)
@@ -601,7 +609,7 @@ bool SvxInternalLink::Connect( sfx2::SvBaseLink* pLink )
         if( pShell && pShell->GetMedium() )
         {
             sReferer = pShell->GetMedium()->GetBaseURL();
-            const SfxUInt16Item* pItem = SfxItemSet::GetItem<SfxUInt16Item>(pShell->GetMedium()->GetItemSet(), SID_UPDATEDOCMODE, false);
+            const SfxUInt16Item* pItem = pShell->GetMedium()->GetItemSet().GetItem(SID_UPDATEDOCMODE, false);
             if ( pItem )
                 nUpdateMode = pItem->GetValue();
         }

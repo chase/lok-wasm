@@ -20,7 +20,6 @@
 #ifndef INCLUDED_FORMULA_FORMULAHELPER_HXX
 #define INCLUDED_FORMULA_FORMULAHELPER_HXX
 
-#include <memory>
 #include <vector>
 
 #include <formula/formuladllapi.h>
@@ -37,8 +36,8 @@ namespace formula
 
     class FORMULA_DLLPUBLIC FormulaHelper
     {
-        ::std::unique_ptr<SvtSysLocale> m_pSysLocale;
-        const CharClass*                m_pCharClass;
+        SvtSysLocale                    m_aSysLocale;
+        const CharClass&                m_rCharClass;
         const IFunctionManager*         m_pFunctionManager;
         const sal_Unicode open;
         const sal_Unicode close;
@@ -48,7 +47,7 @@ namespace formula
     public:
         FormulaHelper(const IFunctionManager* _pFunctionManager);
 
-        const CharClass* GetCharClass() const { return m_pCharClass; }
+        const CharClass& GetCharClass() const { return m_rCharClass; }
 
         sal_Int32           GetCategoryCount() const;
 

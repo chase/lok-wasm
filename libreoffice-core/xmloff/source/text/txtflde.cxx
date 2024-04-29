@@ -71,7 +71,6 @@
 #include <vector>
 
 
-using namespace ::std;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::text;
@@ -297,25 +296,25 @@ static Sequence<OUString> GetStringSequenceProperty(
 
 
     // service names
-constexpr OUStringLiteral gsServicePrefix(u"com.sun.star.text.textfield.");
+constexpr OUString gsServicePrefix(u"com.sun.star.text.textfield."_ustr);
 constexpr OUStringLiteral gsFieldMasterPrefix(u"com.sun.star.text.FieldMaster.");
-constexpr OUStringLiteral gsPresentationServicePrefix(u"com.sun.star.presentation.TextField.");
+constexpr OUString gsPresentationServicePrefix(u"com.sun.star.presentation.TextField."_ustr);
 
     // property names
-constexpr OUStringLiteral gsPropertyAdjust(u"Adjust");
+constexpr OUString gsPropertyAdjust(u"Adjust"_ustr);
 constexpr OUStringLiteral gsPropertyAuthor(u"Author");
 constexpr OUStringLiteral gsPropertyChapterFormat(u"ChapterFormat");
 constexpr OUStringLiteral gsPropertyChapterNumberingLevel(u"ChapterNumberingLevel");
 constexpr OUStringLiteral gsPropertyCharStyleNames(u"CharStyleNames");
-constexpr OUStringLiteral gsPropertyCondition(u"Condition");
-constexpr OUStringLiteral gsPropertyContent(u"Content");
+constexpr OUString gsPropertyCondition(u"Condition"_ustr);
+constexpr OUString gsPropertyContent(u"Content"_ustr);
 constexpr OUStringLiteral gsPropertyDataBaseName(u"DataBaseName");
-constexpr OUStringLiteral gsPropertyDataBaseURL(u"DataBaseURL");
+constexpr OUString gsPropertyDataBaseURL(u"DataBaseURL"_ustr);
 constexpr OUStringLiteral gsPropertyDataColumnName(u"DataColumnName");
-constexpr OUStringLiteral gsPropertyDataCommandType(u"DataCommandType");
-constexpr OUStringLiteral gsPropertyDataTableName(u"DataTableName");
-constexpr OUStringLiteral gsPropertyDateTime(u"DateTime");
-constexpr OUStringLiteral gsPropertyDateTimeValue(u"DateTimeValue");
+constexpr OUString gsPropertyDataCommandType(u"DataCommandType"_ustr);
+constexpr OUString gsPropertyDataTableName(u"DataTableName"_ustr);
+constexpr OUString gsPropertyDateTime(u"DateTime"_ustr);
+constexpr OUString gsPropertyDateTimeValue(u"DateTimeValue"_ustr);
 constexpr OUStringLiteral gsPropertyDDECommandElement(u"DDECommandElement");
 constexpr OUStringLiteral gsPropertyDDECommandFile(u"DDECommandFile");
 constexpr OUStringLiteral gsPropertyDDECommandType(u"DDECommandType");
@@ -323,53 +322,53 @@ constexpr OUStringLiteral gsPropertyDependentTextFields(u"DependentTextFields");
 constexpr OUStringLiteral gsPropertyFalseContent(u"FalseContent");
 constexpr OUStringLiteral gsPropertyFields(u"Fields");
 constexpr OUStringLiteral gsPropertyFieldSubType(u"UserDataType");
-constexpr OUStringLiteral gsPropertyFileFormat(u"FileFormat");
+constexpr OUString gsPropertyFileFormat(u"FileFormat"_ustr);
 constexpr OUStringLiteral gsPropertyFullName(u"FullName");
-constexpr OUStringLiteral gsPropertyHint(u"Hint");
+constexpr OUString gsPropertyHint(u"Hint"_ustr);
 constexpr OUStringLiteral gsPropertyInitials(u"Initials");
 constexpr OUStringLiteral gsPropertyInstanceName(u"InstanceName");
 constexpr OUStringLiteral gsPropertyIsAutomaticUpdate(u"IsAutomaticUpdate");
 constexpr OUStringLiteral gsPropertyIsConditionTrue(u"IsConditionTrue");
-constexpr OUStringLiteral gsPropertyIsDataBaseFormat(u"DataBaseFormat");
-constexpr OUStringLiteral gsPropertyIsDate(u"IsDate");
-constexpr OUStringLiteral gsPropertyIsExpression(u"IsExpression");
-constexpr OUStringLiteral gsPropertyIsFixed(u"IsFixed");
-constexpr OUStringLiteral gsPropertyIsFixedLanguage(u"IsFixedLanguage");
-constexpr OUStringLiteral gsPropertyIsHidden(u"IsHidden");
+constexpr OUString gsPropertyIsDataBaseFormat(u"DataBaseFormat"_ustr);
+constexpr OUString gsPropertyIsDate(u"IsDate"_ustr);
+constexpr OUString gsPropertyIsExpression(u"IsExpression"_ustr);
+constexpr OUString gsPropertyIsFixed(u"IsFixed"_ustr);
+constexpr OUString gsPropertyIsFixedLanguage(u"IsFixedLanguage"_ustr);
+constexpr OUString gsPropertyIsHidden(u"IsHidden"_ustr);
 constexpr OUStringLiteral gsPropertyIsInput(u"Input");
-constexpr OUStringLiteral gsPropertyIsShowFormula(u"IsShowFormula");
-constexpr OUStringLiteral gsPropertyIsVisible(u"IsVisible");
+constexpr OUString gsPropertyIsShowFormula(u"IsShowFormula"_ustr);
+constexpr OUString gsPropertyIsVisible(u"IsVisible"_ustr);
 constexpr OUStringLiteral gsPropertyItems(u"Items");
 constexpr OUStringLiteral gsPropertyLevel(u"Level");
 constexpr OUStringLiteral gsPropertyMeasureKind(u"Kind");
-constexpr OUStringLiteral gsPropertyName(u"Name");
+constexpr OUString gsPropertyName(u"Name"_ustr);
 constexpr OUStringLiteral gsPropertyParentName(u"ParentName");
-constexpr OUStringLiteral gsPropertyNumberFormat(u"NumberFormat");
+constexpr OUString gsPropertyNumberFormat(u"NumberFormat"_ustr);
 constexpr OUStringLiteral gsPropertyNumberingSeparator(u"NumberingSeparator");
-constexpr OUStringLiteral gsPropertyNumberingType(u"NumberingType");
-constexpr OUStringLiteral gsPropertyOffset(u"Offset");
+constexpr OUString gsPropertyNumberingType(u"NumberingType"_ustr);
+constexpr OUString gsPropertyOffset(u"Offset"_ustr);
 constexpr OUStringLiteral gsPropertyOn(u"On");
 constexpr OUStringLiteral gsPropertyPlaceholderType(u"PlaceHolderType");
-constexpr OUStringLiteral gsPropertyReferenceFieldFlags(u"ReferenceFieldFlags");
-constexpr OUStringLiteral gsPropertyReferenceFieldPart(u"ReferenceFieldPart");
-constexpr OUStringLiteral gsPropertyReferenceFieldSource(u"ReferenceFieldSource");
-constexpr OUStringLiteral gsPropertyReferenceFieldLanguage(u"ReferenceFieldLanguage");
+constexpr OUString gsPropertyReferenceFieldFlags(u"ReferenceFieldFlags"_ustr);
+constexpr OUString gsPropertyReferenceFieldPart(u"ReferenceFieldPart"_ustr);
+constexpr OUString gsPropertyReferenceFieldSource(u"ReferenceFieldSource"_ustr);
+constexpr OUString gsPropertyReferenceFieldLanguage(u"ReferenceFieldLanguage"_ustr);
 constexpr OUStringLiteral gsPropertyScriptType(u"ScriptType");
 constexpr OUStringLiteral gsPropertySelectedItem(u"SelectedItem");
-constexpr OUStringLiteral gsPropertySequenceNumber(u"SequenceNumber");
+constexpr OUString gsPropertySequenceNumber(u"SequenceNumber"_ustr);
 constexpr OUStringLiteral gsPropertySequenceValue(u"SequenceValue");
-constexpr OUStringLiteral gsPropertySetNumber(u"SetNumber");
-constexpr OUStringLiteral gsPropertySourceName(u"SourceName");
-constexpr OUStringLiteral gsPropertySubType(u"SubType");
+constexpr OUString gsPropertySetNumber(u"SetNumber"_ustr);
+constexpr OUString gsPropertySourceName(u"SourceName"_ustr);
+constexpr OUString gsPropertySubType(u"SubType"_ustr);
 constexpr OUStringLiteral gsPropertyTargetFrame(u"TargetFrame");
 constexpr OUStringLiteral gsPropertyTrueContent(u"TrueContent");
 constexpr OUStringLiteral gsPropertyURL(u"URL");
 constexpr OUStringLiteral gsPropertyURLContent(u"URLContent");
 constexpr OUStringLiteral gsPropertyUserText(u"UserText");
-constexpr OUStringLiteral gsPropertyValue(u"Value");
-constexpr OUStringLiteral gsPropertyVariableName(u"VariableName");
-constexpr OUStringLiteral gsPropertyHelp(u"Help");
-constexpr OUStringLiteral gsPropertyTooltip(u"Tooltip");
+constexpr OUString gsPropertyValue(u"Value"_ustr);
+constexpr OUString gsPropertyVariableName(u"VariableName"_ustr);
+constexpr OUString gsPropertyHelp(u"Help"_ustr);
+constexpr OUString gsPropertyTooltip(u"Tooltip"_ustr);
 constexpr OUStringLiteral gsPropertyTextRange(u"TextRange");
 
 XMLTextFieldExport::XMLTextFieldExport( SvXMLExport& rExp,
@@ -770,13 +769,13 @@ void XMLTextFieldExport::ExportFieldAutoStyle(
             // a header text.
             Reference<XText> xOurText = GetToplevelText(rTextField->getAnchor()->getText());
 
-            map<Reference<XText>, set<OUString> >::iterator aMapIter =
+            std::map<Reference<XText>, std::set<OUString> >::iterator aMapIter =
                 pUsedMasters->find(xOurText);
 
             // insert a list for our XText (if necessary)
             if (aMapIter == pUsedMasters->end())
             {
-                set<OUString> aSet;
+                std::set<OUString> aSet;
                 (*pUsedMasters)[xOurText] = aSet;
                 aMapIter = pUsedMasters->find(xOurText);
             }
@@ -904,7 +903,7 @@ void XMLTextFieldExport::ExportFieldAutoStyle(
         // export text style with the addition of the combined characters
         DBG_ASSERT(nullptr != pCombinedCharactersPropertyState,
                    "need proper PropertyState for combined characters");
-        o3tl::span<XMLPropertyState> aStates( pCombinedCharactersPropertyState.get(), 1 );
+        std::span<XMLPropertyState> aStates( pCombinedCharactersPropertyState.get(), 1 );
         GetExport().GetTextParagraphExport()->Add(
             XmlStyleFamily::TEXT_TEXT, xRangePropSet,
             aStates);
@@ -1761,7 +1760,8 @@ void XMLTextFieldExport::ExportFieldHelper(
                    "Unexpected presentation for annotation field");
 
         bool bRemovePersonalInfo = SvtSecurityOptions::IsOptionSet(
-            SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo );
+            SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo ) && !SvtSecurityOptions::IsOptionSet(
+                SvtSecurityOptions::EOption::DocWarnKeepNoteAuthorDateInfo);
 
         // annotation element + content
         OUString aName;
@@ -1952,10 +1952,10 @@ void XMLTextFieldExport::ExportFieldDeclarations(
     const Reference<XText> & rText )
 {
     // store lists for decl elements
-    vector<OUString>                    aVarName;
-    vector<OUString>                    aUserName;
-    vector<OUString>                    aSeqName;
-    vector<OUString>                    aDdeName;
+    std::vector<OUString>                    aVarName;
+    std::vector<OUString>                    aUserName;
+    std::vector<OUString>                    aSeqName;
+    std::vector<OUString>                    aDdeName;
 
     // get text fields supplier and field master name access
     Reference<XTextFieldsSupplier> xTextFieldsSupp(GetExport().GetModel(),
@@ -1978,7 +1978,7 @@ void XMLTextFieldExport::ExportFieldDeclarations(
                    "written out separately" );
         if (nullptr != pUsedMasters)
         {
-            map<Reference<XText>, set<OUString> > ::iterator aMapIter =
+            std::map<Reference<XText>, std::set<OUString> > ::iterator aMapIter =
                 pUsedMasters->find(rText);
             if (aMapIter != pUsedMasters->end())
             {
@@ -2248,7 +2248,7 @@ void XMLTextFieldExport::SetExportOnlyUsedFieldDeclarations(
 
     // create used masters set (if none is used)
     if (bExportOnlyUsed)
-        pUsedMasters.reset( new map<Reference<XText>, set<OUString> > );
+        pUsedMasters.reset( new std::map<Reference<XText>, std::set<OUString> > );
 }
 
 void XMLTextFieldExport::ExportElement(enum XMLTokenEnum eElementName,
@@ -2763,12 +2763,13 @@ void XMLTextFieldExport::ProcessBibliographyData(
             if (!sStr.isEmpty())
             {
                 XMLTokenEnum eElement = MapBibliographyFieldName(rProp.Name);
-                if (eElement == XML_URL || eElement == XML_LOCAL_URL)
+                if (eElement == XML_URL || eElement == XML_LOCAL_URL || eElement == XML_TARGET_URL)
                 {
                     sStr = GetExport().GetRelativeReference(sStr);
                 }
                 sal_uInt16 nPrefix = XML_NAMESPACE_TEXT;
-                if (eElement == XML_LOCAL_URL)
+                if (eElement == XML_LOCAL_URL || eElement == XML_TARGET_TYPE
+                    || eElement == XML_TARGET_URL)
                 {
                     nPrefix = XML_NAMESPACE_LO_EXT;
                 }
@@ -3471,6 +3472,14 @@ enum XMLTokenEnum XMLTextFieldExport::MapBibliographyFieldName(std::u16string_vi
     else if (sName == u"LocalURL")
     {
         eName = XML_LOCAL_URL;
+    }
+    else if (sName == u"TargetType")
+    {
+        eName = XML_TARGET_TYPE;
+    }
+    else if (sName == u"TargetURL")
+    {
+        eName = XML_TARGET_URL;
     }
     else
     {

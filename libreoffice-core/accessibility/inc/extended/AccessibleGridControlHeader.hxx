@@ -33,8 +33,8 @@ class AccessibleGridControlHeader final : public AccessibleGridControlTableBase
 public:
     /**  @param rxParent  accessible parent control
          @param rTable    accessible table
-         @param eObjType  One of the two allowed types TCTYPE_ROWHEADERBAR or
-                         TCTYPE_COLUMNHEADERBAR. */
+         @param eObjType  One of the two allowed types AccessibleTableControlObjType::ROWHEADERBAR or
+                          AccessibleTableControlObjType::COLUMNHEADERBAR. */
     AccessibleGridControlHeader(
         const css::uno::Reference<
             css::accessibility::XAccessible >& rxParent,
@@ -125,7 +125,7 @@ private:
     virtual tools::Rectangle implGetBoundingBox() override;
    /** @attention  This method requires locked mutex's and a living object.
         @return  The bounding box (VCL rect.) in screen coordinates. */
-    virtual tools::Rectangle implGetBoundingBoxOnScreen() override;
+    virtual AbsoluteScreenPixelRectangle implGetBoundingBoxOnScreen() override;
 
     // internal helper methods
 
@@ -139,12 +139,12 @@ private:
 
 inline bool AccessibleGridControlHeader::isRowBar() const
 {
-    return getType() == ::vcl::table::TCTYPE_ROWHEADERBAR;
+    return getType() == ::vcl::table::AccessibleTableControlObjType::ROWHEADERBAR;
 }
 
 inline bool AccessibleGridControlHeader::isColumnBar() const
 {
-    return getType() == ::vcl::table::TCTYPE_COLUMNHEADERBAR;
+    return getType() == ::vcl::table::AccessibleTableControlObjType::COLUMNHEADERBAR;
 }
 
 

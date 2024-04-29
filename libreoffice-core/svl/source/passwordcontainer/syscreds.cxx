@@ -38,10 +38,10 @@ void SysCredentialsConfigItem::Notify(
     const uno::Sequence< OUString > & /*seqPropertyNames*/ )
 {
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
         m_bInited = false;
         // rebuild m_seqURLs
-        getSystemCredentialsURLs();
+        getSystemCredentialsURLs(aGuard);
     }
     m_pOwner->persistentConfigChanged();
 }
@@ -54,7 +54,13 @@ void SysCredentialsConfigItem::ImplCommit()
 uno::Sequence< OUString >
 SysCredentialsConfigItem::getSystemCredentialsURLs()
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard(m_aMutex);
+    return getSystemCredentialsURLs(aGuard);
+}
+
+uno::Sequence< OUString >
+SysCredentialsConfigItem::getSystemCredentialsURLs(std::unique_lock<std::mutex>& /*rGuard*/)
+{
     if ( !m_bInited )
     {
         // read config item
@@ -81,14 +87,14 @@ SysCredentialsConfigItem::getSystemCredentialsURLs()
 void SysCredentialsConfigItem::setSystemCredentialsURLs(
     const uno::Sequence< OUString > & seqURLList )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
-
     // write config item.
     uno::Sequence< OUString > aPropNames{ "AuthenticateUsingSystemCredentials" };
     uno::Sequence< uno::Any > aPropValues{ uno::Any(seqURLList) };
 
     utl::ConfigItem::SetModified();
     utl::ConfigItem::PutProperties( aPropNames, aPropValues );
+
+    std::unique_lock aGuard( m_aMutex );
 
     m_seqURLs = seqURLList;
     m_bInited = true;
@@ -162,9 +168,8 @@ SysCredentialsConfig::SysCredentialsConfig()
 {
 }
 
-void SysCredentialsConfig::initCfg()
+void SysCredentialsConfig::initCfg(std::unique_lock<std::mutex>& /*rGuard*/)
 {
-    osl::MutexGuard aGuard( m_aMutex );
     if ( !m_bCfgInited )
     {
         const uno::Sequence< OUString > aURLs(
@@ -174,10 +179,8 @@ void SysCredentialsConfig::initCfg()
     }
 }
 
-void SysCredentialsConfig::writeCfg()
+void SysCredentialsConfig::writeCfg(std::unique_lock<std::mutex>& /*rGuard*/)
 {
-    osl::MutexGuard aGuard( m_aMutex );
-
     OSL_ENSURE( m_bCfgInited, "SysCredentialsConfig::writeCfg : not initialized!" );
 
     m_aConfigItem.setSystemCredentialsURLs( comphelper::containerToSequence(m_aCfgContainer) );
@@ -185,12 +188,12 @@ void SysCredentialsConfig::writeCfg()
 
 OUString SysCredentialsConfig::find( OUString const & aURL )
 {
-    osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
     OUString aResult;
     if ( findURL( m_aMemContainer, aURL, aResult ) )
         return aResult;
 
-    initCfg();
+    initCfg(aGuard);
     if ( findURL( m_aCfgContainer, aURL, aResult ) )
         return aResult;
 
@@ -199,21 +202,21 @@ OUString SysCredentialsConfig::find( OUString const & aURL )
 
 void SysCredentialsConfig::add( OUString const & rURL, bool bPersistent )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
     if ( bPersistent )
     {
         m_aMemContainer.erase( rURL );
 
-        initCfg();
+        initCfg(aGuard);
         m_aCfgContainer.insert( rURL );
-        writeCfg();
+        writeCfg(aGuard);
     }
     else
     {
-        initCfg();
+        initCfg(aGuard);
         if ( m_aCfgContainer.erase( rURL ) > 0 )
-            writeCfg();
+            writeCfg(aGuard);
 
         m_aMemContainer.insert( rURL );
     }
@@ -221,16 +224,19 @@ void SysCredentialsConfig::add( OUString const & rURL, bool bPersistent )
 
 void SysCredentialsConfig::remove( OUString const & rURL )
 {
+    std::unique_lock aGuard(m_aMutex);
+
     m_aMemContainer.erase( rURL );
 
-    initCfg();
+    initCfg(aGuard);
     if ( m_aCfgContainer.erase( rURL ) > 0 )
-        writeCfg();
+        writeCfg(aGuard);
 }
 
 uno::Sequence< OUString > SysCredentialsConfig::list( bool bOnlyPersistent )
 {
-    initCfg();
+    std::unique_lock aGuard(m_aMutex);
+    initCfg(aGuard);
     sal_Int32 nCount = m_aCfgContainer.size()
                      + ( bOnlyPersistent ? 0 : m_aMemContainer.size() );
     uno::Sequence< OUString > aResult( nCount );
@@ -256,7 +262,7 @@ uno::Sequence< OUString > SysCredentialsConfig::list( bool bOnlyPersistent )
 
 void SysCredentialsConfig::persistentConfigChanged()
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
     m_bCfgInited = false; // re-init on demand.
 }
 

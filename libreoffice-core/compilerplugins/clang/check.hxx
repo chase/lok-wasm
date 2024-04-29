@@ -16,6 +16,8 @@
 #include <clang/AST/Type.h>
 #include <clang/Basic/OperatorKinds.h>
 
+#include "compat.hxx"
+
 namespace loplugin {
 
 class ContextCheck;
@@ -140,6 +142,8 @@ public:
     explicit ContextCheck(const clang::NamespaceDecl * decl ) : context_( decl ) {}
 
 private:
+    clang::DeclContext const * lookThroughLinkageSpec() const;
+
     clang::DeclContext const * const context_;
 };
 
@@ -158,8 +162,9 @@ private:
 
 
 typedef std::function<bool(clang::Decl const *)> DeclChecker;
-// Returns true if the class has a base matching the checker, or if the class itself matches.
-bool isDerivedFrom(const clang::CXXRecordDecl *decl, DeclChecker base);
+// Returns true if the class has a base matching the checker, or, when checkSelf is true, if the
+// class itself matches.
+bool isDerivedFrom(const clang::CXXRecordDecl *decl, DeclChecker base, bool checkSelf = true);
 
 
 namespace detail {
@@ -185,7 +190,7 @@ ContextCheck TypeCheck::Class(llvm::StringRef id)
     if (!type_.isNull()) {
         auto const t = type_->getAs<clang::RecordType>();
         if (t != nullptr) {
-            return detail::checkRecordDecl(t->getDecl(), clang::TTK_Class, id);
+            return detail::checkRecordDecl(t->getDecl(), compat::TagTypeKind::Class, id);
         }
     }
     return ContextCheck();
@@ -196,7 +201,7 @@ ContextCheck TypeCheck::Struct(llvm::StringRef id) const
     if (!type_.isNull()) {
         auto const t = type_->getAs<clang::RecordType>();
         if (t != nullptr) {
-            return detail::checkRecordDecl(t->getDecl(), clang::TTK_Struct, id);
+            return detail::checkRecordDecl(t->getDecl(), compat::TagTypeKind::Struct, id);
         }
     }
     return ContextCheck();
@@ -228,12 +233,12 @@ ContextCheck TypeCheck::Typedef(llvm::StringRef id) const
 
 ContextCheck DeclCheck::Class(llvm::StringRef id) const
 {
-    return detail::checkRecordDecl(decl_, clang::TTK_Class, id);
+    return detail::checkRecordDecl(decl_, compat::TagTypeKind::Class, id);
 }
 
 ContextCheck DeclCheck::Struct(llvm::StringRef id) const
 {
-    return detail::checkRecordDecl(decl_, clang::TTK_Struct, id);
+    return detail::checkRecordDecl(decl_, compat::TagTypeKind::Struct, id);
 }
 
 ContextCheck DeclCheck::ClassOrStruct(llvm::StringRef id) const
@@ -247,7 +252,7 @@ ContextCheck DeclCheck::ClassOrStruct(llvm::StringRef id) const
 
 ContextCheck DeclCheck::Union(llvm::StringRef id) const
 {
-    return detail::checkRecordDecl(decl_, clang::TTK_Union, id);
+    return detail::checkRecordDecl(decl_, compat::TagTypeKind::Union, id);
 }
 
 ContextCheck DeclCheck::Function(llvm::StringRef id) const
@@ -277,7 +282,7 @@ ContextCheck DeclCheck::Var(llvm::StringRef id) const
 ContextCheck ContextCheck::Namespace(llvm::StringRef id) const
 {
     if (context_) {
-        auto n = llvm::dyn_cast<clang::NamespaceDecl>(context_);
+        auto n = llvm::dyn_cast<clang::NamespaceDecl>(lookThroughLinkageSpec());
         if (n != nullptr) {
             auto const i = n->getIdentifier();
             if (i != nullptr && i->getName() == id) {
@@ -291,13 +296,13 @@ ContextCheck ContextCheck::Namespace(llvm::StringRef id) const
 ContextCheck ContextCheck::Class(llvm::StringRef id) const
 {
     return detail::checkRecordDecl(
-        llvm::dyn_cast_or_null<clang::Decl>(context_), clang::TTK_Class, id);
+        llvm::dyn_cast_or_null<clang::Decl>(context_), compat::TagTypeKind::Class, id);
 }
 
 ContextCheck ContextCheck::Struct(llvm::StringRef id) const
 {
     return detail::checkRecordDecl(
-        llvm::dyn_cast_or_null<clang::Decl>(context_), clang::TTK_Struct, id);
+        llvm::dyn_cast_or_null<clang::Decl>(context_), compat::TagTypeKind::Struct, id);
 }
 
 bool isExtraWarnUnusedType(clang::QualType type);

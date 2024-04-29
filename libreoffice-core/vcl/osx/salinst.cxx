@@ -555,13 +555,6 @@ static bool isWakeupEvent( NSEvent *pEvent )
 
 bool AquaSalInstance::DoYield(bool bWait, bool bHandleAllCurrentEvents)
 {
-    // Related: tdf#152703 Eliminate potential blocking during live resize
-    // Some events and timers call Application::Reschedule() or
-    // Application::Yield() so don't block and wait for events when a
-    // window is in live resize
-    if ( ImplGetSVData()->mpWinData->mbIsLiveResize )
-        bWait = false;
-
     // ensure that the per thread autorelease pool is top level and
     // will therefore not be destroyed by cocoa implicitly
     SalData::ensureThreadAutoreleasePool();
@@ -588,16 +581,30 @@ bool AquaSalInstance::DoYield(bool bWait, bool bHandleAllCurrentEvents)
         NSTimeInterval now = [[NSProcessInfo processInfo] systemUptime];
         mbTimerProcessed = false;
 
+        int noLoops = 0;
         do
         {
             SolarMutexReleaser aReleaser;
 
             pEvent = [NSApp nextEventMatchingMask: NSEventMaskAny
-                            untilDate: nil
+                            untilDate: [NSDate distantPast]
                             inMode: NSDefaultRunLoopMode
                             dequeue: YES];
             if( pEvent )
             {
+                // tdf#155092 don't dispatch left mouse up events during live resizing
+                // If this is a left mouse up event, dispatching this event
+                // will trigger tdf#155092 to occur in the next mouse down
+                // event. So do not dispatch this event and push it back onto
+                // the front of the event queue so no more events will be
+                // dispatched until live resizing ends. Surprisingly, live
+                // resizing appears to end in the next mouse down event.
+                if ( ImplGetSVData()->mpWinData->mbIsLiveResize && [pEvent type] == NSEventTypeLeftMouseUp )
+                {
+                    [NSApp postEvent: pEvent atStart: YES];
+                    return false;
+                }
+
                 [NSApp sendEvent: pEvent];
                 if ( isWakeupEvent( pEvent ) )
                     continue;
@@ -607,6 +614,12 @@ bool AquaSalInstance::DoYield(bool bWait, bool bHandleAllCurrentEvents)
             [NSApp updateWindows];
 
             if ( !bHandleAllCurrentEvents || !pEvent || now < [pEvent timestamp] )
+                break;
+            // noelgrandin: I see sporadic hangs on the macos jenkins boxes, and the backtrace
+            // points to the this loop - let us see if breaking out of here after too many
+            // trips around helps.
+            noLoops++;
+            if (noLoops == 100)
                 break;
         }
         while( true );
@@ -619,12 +632,22 @@ bool AquaSalInstance::DoYield(bool bWait, bool bHandleAllCurrentEvents)
         }
 
         // if we had no event yet, wait for one if requested
-        if( bWait && ! bHadEvent )
+        // Related: tdf#152703 Eliminate potential blocking during live resize
+        // Some events and timers call Application::Reschedule() or
+        // Application::Yield() so don't block and wait for events when a
+        // window is in live resize
+        if( bWait && ! bHadEvent && !ImplGetSVData()->mpWinData->mbIsLiveResize )
         {
             SolarMutexReleaser aReleaser;
 
+            // attempt to fix macos jenkins hangs - part 3
+            // oox::xls::WorkbookFragment::finalizeImport() calls
+            // AquaSalInstance::DoYield() with bWait set to true. But
+            // since unit tests generally have no expected user generated
+            // events, we can end up blocking and waiting forever so
+            // don't block and wait when running unit tests.
             pEvent = [NSApp nextEventMatchingMask: NSEventMaskAny
-                            untilDate: [NSDate distantFuture]
+                            untilDate: SalInstance::IsRunningUnitTest() ? [NSDate distantPast] : [NSDate distantFuture]
                             inMode: NSDefaultRunLoopMode
                             dequeue: YES];
             if( pEvent )
@@ -710,6 +733,7 @@ bool AquaSalInstance::AnyInput( VclInputFlags nType )
 
     unsigned/*NSUInteger*/ nEventMask = 0;
     if( nType & VclInputFlags::MOUSE)
+    {
         nEventMask |=
             NSEventMaskLeftMouseDown    | NSEventMaskRightMouseDown    | NSEventMaskOtherMouseDown    |
             NSEventMaskLeftMouseUp      | NSEventMaskRightMouseUp      | NSEventMaskOtherMouseUp      |
@@ -717,6 +741,18 @@ bool AquaSalInstance::AnyInput( VclInputFlags nType )
             NSEventMaskScrollWheel      |
             // NSEventMaskMouseMoved    |
             NSEventMaskMouseEntered     | NSEventMaskMouseExited;
+
+        // Related: tdf#155266 stop delaying painting timer while swiping
+        // After fixing several flushing issues in tdf#155266, scrollbars
+        // still will not redraw until swiping has ended or paused when
+        // using Skia/Raster or Skia disabled. So, stop the delay by only
+        // including NSEventMaskScrollWheel if the current event type is
+        // not NSEventTypeScrollWheel.
+        NSEvent* pCurrentEvent = [NSApp currentEvent];
+        if( pCurrentEvent && [pCurrentEvent type] == NSEventTypeScrollWheel )
+            nEventMask &= ~NSEventMaskScrollWheel;
+    }
+
     if( nType & VclInputFlags::KEYBOARD)
         nEventMask |= NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskFlagsChanged;
     if( nType & VclInputFlags::OTHER)
@@ -725,7 +761,7 @@ bool AquaSalInstance::AnyInput( VclInputFlags nType )
     if( !bool(nType) )
         return false;
 
-    NSEvent* pEvent = [NSApp nextEventMatchingMask: nEventMask untilDate: nil
+    NSEvent* pEvent = [NSApp nextEventMatchingMask: nEventMask untilDate: [NSDate distantPast]
                             inMode: NSDefaultRunLoopMode dequeue: NO];
     return (pEvent != nullptr);
 }
@@ -829,7 +865,7 @@ OUString AquaSalInstance::GetDefaultPrinter()
             {
                 // Related: tdf#151700 Return the name of the fake printer if
                 // there are no printers so that the LibreOffice printing code
-                // will be able to find the the fake printer returned by
+                // will be able to find the fake printer returned by
                 // AquaSalInstance::GetPrinterQueueInfo()
                 NSString* pDefName = [pPr name];
                 SAL_WARN_IF( !pDefName, "vcl", "printer has no name" );
@@ -962,7 +998,7 @@ OUString AquaSalInstance::getOSVersion()
     if ( sysVersionDict )
         versionString = [ sysVersionDict valueForKey: @"ProductVersion" ];
 
-    OUString aVersion = "Mac OS X ";
+    OUString aVersion = "macOS ";
     if ( versionString )
         aVersion += OUString::fromUtf8( [ versionString UTF8String ] );
     else
@@ -995,7 +1031,7 @@ CGImageRef CreateCGImage( const Image& rImage )
         xImage = pSalBmp->CreateCroppedImage( 0, 0, pSalBmp->mnWidth, pSalBmp->mnHeight );
     else
     {
-        AlphaMask aAlphaMask( aBmpEx.GetAlpha() );
+        AlphaMask aAlphaMask( aBmpEx.GetAlphaMask() );
         Bitmap aMask( aAlphaMask.GetBitmap() );
         QuartzSalBitmap* pMaskBmp = static_cast<QuartzSalBitmap*>(aMask.ImplGetSalBitmap().get());
         if( pMaskBmp )

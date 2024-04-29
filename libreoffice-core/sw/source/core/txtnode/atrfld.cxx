@@ -35,7 +35,6 @@
 #include <usrfld.hxx>
 #include <expfld.hxx>
 #include <ndtxt.hxx>
-#include <calc.hxx>
 #include <hints.hxx>
 #include <IDocumentFieldsAccess.hxx>
 #include <IDocumentMarkAccess.hxx>
@@ -223,7 +222,12 @@ void SwFormatField::InvalidateField()
 void SwFormatField::SwClientNotify( const SwModify& rModify, const SfxHint& rHint )
 {
     SwClient::SwClientNotify(rModify, rHint);
-    if (rHint.GetId() == SfxHintId::SwField)
+    if (rHint.GetId() == SfxHintId::SwAutoFormatUsedHint) {
+        if(mpTextField)
+            static_cast<const sw::AutoFormatUsedHint&>(rHint).CheckNode(mpTextField->GetpTextNode());
+        return;
+    }
+    else if (rHint.GetId() == SfxHintId::SwField)
     {
         const auto pFieldHint = static_cast<const SwFieldHint*>( &rHint );
         // replace field content by text
@@ -245,10 +249,9 @@ void SwFormatField::SwClientNotify( const SwModify& rModify, const SfxHint& rHin
     }
     else if (rHint.GetId() == SfxHintId::SwLegacyModify)
     {
-        auto pLegacyHint = static_cast<const sw::LegacyModifyHint*>(&rHint);
-        if( !mpTextField )
+        if(!mpTextField)
             return;
-        UpdateTextNode(pLegacyHint->m_pOld, pLegacyHint->m_pNew);
+        UpdateTextNode(rHint);
     }
     else if (rHint.GetId() == SfxHintId::SwFindFormatForField)
     {
@@ -303,11 +306,112 @@ void SwFormatField::SwClientNotify( const SwModify& rModify, const SfxHint& rHin
         }
         pGatherFieldsHint->m_rvFields.push_back(this);
     }
+    else if (rHint.GetId() == SfxHintId::SwDocPosUpdate)
+    {
+        UpdateDocPos(static_cast<const sw::DocPosUpdate*>(&rHint)->m_nDocPos);
+    }
 }
 
-void SwFormatField::UpdateTextNode(const SfxPoolItem* pOld, const SfxPoolItem* pNew)
+namespace
 {
-    if (pOld && (RES_REMOVE_UNO_OBJECT == pOld->Which()))
+    bool lcl_ExpandField(const SwFieldIds eId, const bool bHiddenParaPrint)
+    {
+        switch(eId)
+        {
+            case SwFieldIds::HiddenPara:
+                return !bHiddenParaPrint;
+            case SwFieldIds::DbSetNumber:
+            case SwFieldIds::DbNumSet:
+            case SwFieldIds::DbNextSet:
+            case SwFieldIds::DatabaseName:
+                return false;
+            default:
+                return true;
+        }
+
+    };
+    bool lcl_TriggerNode(const SwFieldIds eId)
+    {
+        switch(eId)
+        {
+            case SwFieldIds::HiddenPara:
+            case SwFieldIds::DbSetNumber:
+            case SwFieldIds::DbNumSet:
+            case SwFieldIds::DbNextSet:
+            case SwFieldIds::DatabaseName:
+                return true;
+            default:
+                return false;
+        }
+    }
+    void lcl_EnsureUserFieldValid(SwFieldType& rType)
+    {
+        if(rType.Which() != SwFieldIds::User)
+            return;
+        static_cast<SwUserFieldType*>(&rType)->EnsureValid();
+    }
+    bool lcl_NeedsForcedUpdate(const SwField& rField)
+    {
+        if (rField.GetTyp()->Which() == SwFieldIds::DocInfo)
+        {
+            auto pDocInfoField = static_cast<const SwDocInfoField*>(&rField);
+            sal_uInt16 nSubType = pDocInfoField->GetSubType();
+            // Do not consider extended SubTypes.
+            nSubType &= 0xff;
+            switch (nSubType)
+            {
+                case nsSwDocInfoSubType::DI_TITLE:
+                case nsSwDocInfoSubType::DI_SUBJECT:
+                case nsSwDocInfoSubType::DI_CHANGE:
+                case nsSwDocInfoSubType::DI_CUSTOM:
+                    return false;
+            }
+        }
+        return true;
+    }
+}
+
+void SwFormatField::ForceUpdateTextNode()
+{
+    if (!IsFieldInDoc())
+        return;
+
+    SwTextNode* pTextNd = &mpTextField->GetTextNode();
+    OSL_ENSURE(pTextNd, "Where is my Node?");
+
+    auto pType = mpField->GetTyp();
+    lcl_EnsureUserFieldValid(*pType);
+    if(lcl_TriggerNode(pType->Which()))
+        pTextNd->TriggerNodeUpdate(sw::LegacyModifyHint(nullptr, nullptr));
+    if(!lcl_ExpandField(pType->Which(), false))
+        return;
+
+    // Force notify was added for conditional text fields,
+    // at least the below fields need no forced notify.
+    bool bNeedForced = lcl_NeedsForcedUpdate(*mpTextField->GetFormatField().GetField());
+    mpTextField->ExpandTextField(bNeedForced);
+}
+void SwFormatField::UpdateDocPos(const SwTwips nDocPos)
+{
+    if (!IsFieldInDoc())
+        return;
+    auto pTextNd = &mpTextField->GetTextNode();
+
+    pTextNd->UpdateDocPos(nDocPos, mpTextField->GetStart());
+}
+void SwFormatField::UpdateTextNode(const SfxHint& rHint)
+{
+    if(SfxHintId::SwLegacyModify != rHint.GetId())
+        return;
+    auto pLegacy = static_cast<const sw::LegacyModifyHint*>(&rHint);
+    auto pOld = pLegacy->m_pOld;
+    auto pNew = pLegacy->m_pNew;
+    if (pOld == nullptr && pNew == nullptr)
+    {
+        ForceUpdateTextNode();
+        return;
+    }
+    else if (pOld && (RES_REMOVE_UNO_OBJECT == pOld->Which()))
     {   // invalidate cached UNO object
         m_wXTextField.clear();
         // ??? why does this Modify method not already do this?
@@ -323,113 +427,31 @@ void SwFormatField::UpdateTextNode(const SfxPoolItem* pOld, const SfxPoolItem* p
         return;
 
     SwTextNode* pTextNd = &mpTextField->GetTextNode();
-    OSL_ENSURE( pTextNd, "Where is my Node?" );
+    OSL_ENSURE(pTextNd, "Where is my Node?");
 
-    bool bTriggerNode = false;
+    bool bTriggerNode = pNew != nullptr;
     bool bExpand = false;
-    const SfxPoolItem* pNodeOld = nullptr;
-    const SfxPoolItem* pNodeNew = nullptr;
     if(pNew)
     {
         switch(pNew->Which())
         {
-        case RES_REFMARKFLD_UPDATE:
-            // update GetRef fields
-            if( SwFieldIds::GetRef == mpField->GetTyp()->Which() )
-            {
-                // #i81002#
-                static_cast<SwGetRefField*>(mpField.get())->UpdateField( mpTextField, nullptr );
-            }
-            break;
-        case RES_DOCPOS_UPDATE:
-            // handled in SwTextFrame::Modify()
-            bTriggerNode = true;
-            pNodeOld = pNew;
-            pNodeNew = this;
-            break;
         case RES_ATTRSET_CHG:
         case RES_FMT_CHG:
-            bTriggerNode = true;
-            pNodeOld = pOld;
-            pNodeNew = pNew;
             break;
         default:
-            break;
-        }
-    }
-    if(!bTriggerNode)
-    {
-        switch (mpField->GetTyp()->Which())
-        {
-            case SwFieldIds::HiddenPara:
-                if( !pOld || pOld->Which() != RES_HIDDENPARA_PRINT ) {
-                    bExpand =true;
-                    break;
-                }
-                [[fallthrough]];
-            case SwFieldIds::DbSetNumber:
-            case SwFieldIds::DbNumSet:
-            case SwFieldIds::DbNextSet:
-            case SwFieldIds::DatabaseName:
-                bTriggerNode = true;
-                pNodeNew = pNew;
-                break;
-            case SwFieldIds::User:
             {
-                SwUserFieldType* pType = static_cast<SwUserFieldType*>(mpField->GetTyp());
-                if(!pType->IsValid())
-                {
-                    SwCalc aCalc( pTextNd->GetDoc() );
-                    pType->GetValue( aCalc );
-                }
-                bExpand = true;
+                auto pType = mpField->GetTyp();
+                lcl_EnsureUserFieldValid(*pType);
+                bTriggerNode = lcl_TriggerNode(pType->Which());
+                bExpand = lcl_ExpandField(pType->Which(), pOld && pOld->Which() == RES_HIDDENPARA_PRINT);
+                pOld = nullptr;
             }
-            break;
-            default:
-                bExpand = true;
-                break;
         }
     }
     if(bTriggerNode)
-        pTextNd->TriggerNodeUpdate(sw::LegacyModifyHint(pNodeOld, pNodeNew));
-    if(!bExpand)
-        return;
-
-    bool bForceNotify = pOld == nullptr && pNew == nullptr;
-    if (bForceNotify)
-    {
-        // Force notify was added for conditional text fields, at least the below fields need
-        // no forced notify.
-        const SwField* pField = mpTextField->GetFormatField().GetField();
-        const SwFieldIds nWhich = pField->GetTyp()->Which();
-        if (nWhich == SwFieldIds::DocInfo)
-        {
-            auto pDocInfoField = static_cast<const SwDocInfoField*>(pField);
-            sal_uInt16 nSubType = pDocInfoField->GetSubType();
-            // Do not consider extended SubTypes.
-            nSubType &= 0xff;
-            switch (nSubType)
-            {
-                case nsSwDocInfoSubType::DI_TITLE:
-                case nsSwDocInfoSubType::DI_SUBJECT:
-                case nsSwDocInfoSubType::DI_CHANGE:
-                case nsSwDocInfoSubType::DI_CUSTOM:
-                    bForceNotify = false;
-                    break;
-            }
-        }
-    }
-
-    mpTextField->ExpandTextField(bForceNotify);
-}
-
-bool SwFormatField::GetInfo( SfxPoolItem& rInfo ) const
-{
-    if( RES_AUTOFMT_DOCNODE != rInfo.Which() || !mpTextField )
-        return true;
-    const SwTextNode* pTextNd = mpTextField->GetpTextNode();
-    return nullptr == pTextNd ||
-        &pTextNd->GetNodes() != static_cast<SwAutoFormatGetDocNode&>(rInfo).pNodes;
+        pTextNd->TriggerNodeUpdate(sw::LegacyModifyHint(pOld, pNew));
+    if(bExpand)
+        mpTextField->ExpandTextField(false);
 }
 
 bool SwFormatField::IsFieldInDoc() const

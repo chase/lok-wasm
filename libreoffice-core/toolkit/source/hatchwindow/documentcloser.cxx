@@ -167,9 +167,9 @@ void SAL_CALL ODocumentCloser::dispose()
     std::unique_lock aGuard( m_aMutex );
 
     if ( m_bDisposed )
-        throw lang::DisposedException();
+        return;
 
-    lang::EventObject aSource( static_cast< ::cppu::OWeakObject* >(this) );
+    lang::EventObject aSource( getXWeak() );
     m_aListenersContainer.disposeAndClear( aGuard, aSource );
 
     // TODO: trigger a main thread execution to close the frame

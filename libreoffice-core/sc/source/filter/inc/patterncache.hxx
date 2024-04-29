@@ -23,7 +23,7 @@
 
 class ScPatternAttr;
 
-static constexpr sal_Int32 nPatternCacheSize = 16;
+constexpr sal_Int32 nPatternCacheSize = 16;
 class ScPatternCache
 {
     struct Entry

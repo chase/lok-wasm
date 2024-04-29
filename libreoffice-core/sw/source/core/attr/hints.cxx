@@ -69,6 +69,20 @@ RedlineUnDelText::RedlineUnDelText(sal_Int32 const nS, sal_Int32 const nL)
 {
 }
 
+VirtPageNumHint::VirtPageNumHint(const SwPageFrame* pPg):
+    SfxHint(SfxHintId::SwVirtPageNumHint),
+    m_pPage(nullptr),
+    m_pOrigPage(pPg),
+    m_pFrame(nullptr),
+    m_bFound(false)
+{
+}
+
+void AutoFormatUsedHint::CheckNode(const SwNode* pNode) const
+{
+    if(pNode && &pNode->GetNodes() == &m_rNodes)
+        SetUsed();
+}
 } // namespace sw
 
 SwUpdateAttr::SwUpdateAttr( sal_Int32 nS, sal_Int32 nE, sal_uInt16 nW )
@@ -81,31 +95,14 @@ SwUpdateAttr::SwUpdateAttr( sal_Int32 nS, sal_Int32 nE, sal_uInt16 nW, std::vect
 {
 }
 
-SwRefMarkFieldUpdate::SwRefMarkFieldUpdate( OutputDevice* pOutput )
-    : SwMsgPoolItem( RES_REFMARKFLD_UPDATE ),
-    pOut( pOutput )
-{
-    OSL_ENSURE( pOut, "No OutputDevice pointer" );
-}
-
-SwDocPosUpdate::SwDocPosUpdate( const SwTwips nDcPos )
-    : SwMsgPoolItem( RES_DOCPOS_UPDATE ), nDocPos(nDcPos)
-{
-}
-
-SwTableFormulaUpdate::SwTableFormulaUpdate( const SwTable* pNewTable )
-    : SwMsgPoolItem( RES_TABLEFML_UPDATE ),
-    m_pTable( pNewTable ), m_pHistory( nullptr ), m_nSplitLine( USHRT_MAX ),
-    m_eFlags( TBL_CALC )
+SwTableFormulaUpdate::SwTableFormulaUpdate(const SwTable* pNewTable)
+    : m_pTable(pNewTable)
+    , m_nSplitLine(USHRT_MAX)
+    , m_eFlags(TBL_CALC)
 {
     m_aData.pDelTable = nullptr;
     m_bModified = m_bBehindSplitLine = false;
     OSL_ENSURE( m_pTable, "No Table pointer" );
-}
-
-SwAutoFormatGetDocNode::SwAutoFormatGetDocNode( const SwNodes* pNds )
-    : SwMsgPoolItem( RES_AUTOFMT_DOCNODE ), pNodes( pNds )
-{
 }
 
 SwAttrSetChg::SwAttrSetChg( const SwAttrSet& rTheSet, SwAttrSet& rSet )
@@ -143,10 +140,13 @@ SwMsgPoolItem::SwMsgPoolItem( sal_uInt16 nWhch )
 {
 }
 
-bool SwMsgPoolItem::operator==( const SfxPoolItem& ) const
+bool SwMsgPoolItem::operator==( const SfxPoolItem& rItem ) const
 {
-    assert( false && "SwMsgPoolItem knows no ==" );
-    return false;
+    assert( SfxPoolItem::operator==(rItem)); (void)rItem;
+    // SwMsgPoolItem now knows operator== due to evtl. deeper
+    // ItemCompares using SfxPoolItem::areSame. No members,
+    // so always equal
+    return true;
 }
 
 SwMsgPoolItem* SwMsgPoolItem::Clone( SfxItemPool* ) const
@@ -170,11 +170,6 @@ const SfxPoolItem* GetDfltAttr( sal_uInt16 nWhich )
     return aAttrTab[ nWhich - POOLATTR_BEGIN ];
 }
 #endif
-
-SwVirtPageNumInfo::SwVirtPageNumInfo( const SwPageFrame *pPg ) :
-    SwMsgPoolItem( RES_VIRTPAGENUM_INFO ), m_pPage( nullptr ), m_pOrigPage( pPg ), m_pFrame( nullptr )
-{
-}
 
 SwFindNearestNode::SwFindNearestNode( const SwNode& rNd )
     : SwMsgPoolItem( RES_FINDNEARESTNODE ), m_pNode( &rNd ), m_pFound( nullptr )

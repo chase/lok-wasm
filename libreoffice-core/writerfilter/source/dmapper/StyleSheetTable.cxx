@@ -887,14 +887,16 @@ void PropValVector::Insert(const beans::PropertyValue& rVal)
 uno::Sequence< uno::Any > PropValVector::getValues()
 {
     std::vector<uno::Any> aRet;
-    std::transform(m_aValues.begin(), m_aValues.end(), std::back_inserter(aRet), [](const beans::PropertyValue& rValue) { return rValue.Value; });
+    std::transform(m_aValues.begin(), m_aValues.end(), std::back_inserter(aRet),
+            [](const beans::PropertyValue& rValue) -> const uno::Any& { return rValue.Value; });
     return comphelper::containerToSequence(aRet);
 }
 
 uno::Sequence< OUString > PropValVector::getNames()
 {
     std::vector<OUString> aRet;
-    std::transform(m_aValues.begin(), m_aValues.end(), std::back_inserter(aRet), [](const beans::PropertyValue& rValue) { return rValue.Name; });
+    std::transform(m_aValues.begin(), m_aValues.end(), std::back_inserter(aRet),
+            [](const beans::PropertyValue& rValue) -> const OUString& { return rValue.Name; });
     return comphelper::containerToSequence(aRet);
 }
 
@@ -970,12 +972,27 @@ void StyleSheetTable::ReApplyInheritedOutlineLevelFromChapterNumbering()
             if (pEntry->m_nStyleTypeCode != STYLE_TYPE_PARA || pEntry->m_sBaseStyleIdentifier.isEmpty())
                 continue;
 
-            sal_Int16 nOutlineLevel = pEntry->m_pProperties->GetOutlineLevel();
-            if (nOutlineLevel != -1)
-                continue;
-
             StyleSheetEntryPtr pParent = FindStyleSheetByISTD(pEntry->m_sBaseStyleIdentifier);
             if (!pParent || !pParent->m_bAssignedAsChapterNumbering)
+                continue;
+
+            uno::Reference< style::XStyle > xStyle;
+            xParaStyles->getByName(pEntry->m_sConvertedStyleName) >>= xStyle;
+            if (!xStyle.is())
+                continue;
+
+            uno::Reference<beans::XPropertySet> xPropertySet(xStyle, uno::UNO_QUERY_THROW);
+            const sal_Int16 nListId = pEntry->m_pProperties->props().GetListId();
+            const OUString& sParentNumberingStyleName
+                = m_pImpl->m_rDMapper.GetListStyleName(pParent->m_pProperties->props().GetListId());
+            if (nListId == -1 && !sParentNumberingStyleName.isEmpty())
+            {
+                xPropertySet->setPropertyValue(getPropertyName(PROP_NUMBERING_STYLE_NAME),
+                                               uno::Any(sParentNumberingStyleName));
+            }
+
+            sal_Int16 nOutlineLevel = pEntry->m_pProperties->GetOutlineLevel();
+            if (nOutlineLevel != -1)
                 continue;
 
             nOutlineLevel = pParent->m_pProperties->GetOutlineLevel();
@@ -984,12 +1001,6 @@ void StyleSheetTable::ReApplyInheritedOutlineLevelFromChapterNumbering()
             // convert MS level to LO equivalent outline level
             ++nOutlineLevel;
 
-            uno::Reference< style::XStyle > xStyle;
-            xParaStyles->getByName(pEntry->m_sConvertedStyleName) >>= xStyle;
-            if ( !xStyle.is() )
-                break;
-
-            uno::Reference<beans::XPropertySet> xPropertySet( xStyle, uno::UNO_QUERY_THROW );
             xPropertySet->setPropertyValue(getPropertyName(PROP_OUTLINE_LEVEL), uno::Any(nOutlineLevel));
         }
     }
@@ -1007,20 +1018,20 @@ void StyleSheetTable_Impl::ApplyClonedTOCStylesToXText(uno::Reference<text::XTex
     while (xParaEnum->hasMoreElements())
     {
         uno::Reference<lang::XServiceInfo> const xElem(xParaEnum->nextElement(), uno::UNO_QUERY_THROW);
-        if (xElem->supportsService(u"com.sun.star.text.Paragraph"))
+        if (xElem->supportsService(u"com.sun.star.text.Paragraph"_ustr))
         {
             uno::Reference<beans::XPropertySet> const xPara(xElem, uno::UNO_QUERY_THROW);
             OUString styleName;
-            if (xPara->getPropertyValue(u"ParaStyleName") >>= styleName)
+            if (xPara->getPropertyValue(u"ParaStyleName"_ustr) >>= styleName)
             {
                 auto const it(m_ClonedTOCStylesMap.find(styleName));
                 if (it != m_ClonedTOCStylesMap.end())
                 {
-                    xPara->setPropertyValue(u"ParaStyleName", uno::Any(it->second));
+                    xPara->setPropertyValue(u"ParaStyleName"_ustr, uno::Any(it->second));
                 }
             }
         }
-        else if (xElem->supportsService(u"com.sun.star.text.TextTable"))
+        else if (xElem->supportsService(u"com.sun.star.text.TextTable"_ustr))
         {
             uno::Reference<text::XTextTable> const xTable(xElem, uno::UNO_QUERY_THROW);
             uno::Sequence<OUString> const cells(xTable->getCellNames());
@@ -1595,7 +1606,8 @@ OUString StyleSheetTable::ConvertStyleName( const OUString& rWWName, bool bExten
         { "footer", "Footer" }, // RES_POOLCOLL_FOOTER
         { "Index Heading", "Index Heading" }, // RES_POOLCOLL_TOX_IDXH
         { "Caption", "Caption" }, // RES_POOLCOLL_LABEL
-        { "Table of Figures", "Drawing" }, // RES_POOLCOLL_LABEL_DRAWING
+        { "table of figures", "Figure Index 1" }, // RES_POOLCOLL_TOX_ILLUS1
+        { "Table of Figures", "Figure Index 1" }, // RES_POOLCOLL_TOX_ILLUS1
         { "Envelope Address", "Addressee" }, // RES_POOLCOLL_ENVELOPE_ADDRESS
         { "Envelope Return", "Sender" }, // RES_POOLCOLL_SEND_ADDRESS
         { "footnote reference", "Footnote Symbol" }, // RES_POOLCHR_FOOTNOTE; tdf#82173

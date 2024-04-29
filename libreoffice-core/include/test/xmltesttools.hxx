@@ -73,6 +73,14 @@ protected:
                               const OUString& rExpectedValue);
     void          assertXPathAttrs(const xmlDocUniquePtr& pXmlDoc, const OString& rXPath,
                           const std::vector<std::pair<OString, OUString>>& aPairVector);
+
+    /**
+     * Given a double for the rExpected value, assert that rXPath exists, returns exactly one node,
+     * and the rXPath's attribute's value matches the rExpected value within tolerance provided
+     * by delta. This is used to account for HiDPI scaling.
+     */
+    void          assertXPathDoubleValue(const xmlDocUniquePtr& pXmlDoc, const OString& rXPath, const OString& rAttribute,
+                              double expectedValue, double delta);
     /**
      * Assert that rXPath exists, and returns exactly nNumberOfNodes nodes (1 by default).
      * Also useful for checking that we do _not_ export some node (nNumberOfNodes == 0).
@@ -96,6 +104,9 @@ protected:
      * Assert that rXPath exists, has exactly 1 result set nodes and does *not* have an attribute named rAttribute.
      */
     void          assertXPathNoAttribute(const xmlDocUniquePtr& pXmlDoc, const OString& rXPath, const OString& rAttribute);
+    // Assert that the node name of the single node returned by an XPath is as specified,
+    // e.g. to check order of elements, where getXPathPosition is unapplicable
+    void assertXPathNodeName(const xmlDocUniquePtr& pXmlDoc, const OString& rXPath, const OString& rExpectedName);
 
     static void registerODFNamespaces(xmlXPathContextPtr& pXmlXpathCtx);
     static void registerOOXMLNamespaces(xmlXPathContextPtr& pXmlXpathCtx);

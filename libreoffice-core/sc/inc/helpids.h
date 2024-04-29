@@ -19,579 +19,584 @@
 
 #pragma once
 
-#include <rtl/string.hxx>
+#include <rtl/ustring.hxx>
 
-inline constexpr OStringLiteral HID_INSWIN_POS = "SC_HID_INSWIN_POS";
-inline constexpr OStringLiteral HID_INSWIN_CALC = "SC_HID_INSWIN_CALC";
-inline constexpr OStringLiteral HID_INSWIN_CANCEL = "SC_HID_INSWIN_CANCEL";
-inline constexpr OStringLiteral HID_INSWIN_OK = "SC_HID_INSWIN_OK";
-inline constexpr OStringLiteral HID_INSWIN_SUMME = "SC_HID_INSWIN_SUMME";
-inline constexpr OStringLiteral HID_INSWIN_FUNC = "SC_HID_INSWIN_FUNC";
-inline constexpr OStringLiteral HID_INSWIN_INPUT = "SC_HID_INSWIN_INPUT";
+inline constexpr OUString HID_INSWIN_POS = u"SC_HID_INSWIN_POS"_ustr;
+inline constexpr OUString HID_INSWIN_CALC = u"SC_HID_INSWIN_CALC"_ustr;
+inline constexpr OUString HID_INSWIN_CANCEL = u"SC_HID_INSWIN_CANCEL"_ustr;
+inline constexpr OUString HID_INSWIN_OK = u"SC_HID_INSWIN_OK"_ustr;
+inline constexpr OUString HID_INSWIN_SUMME = u"SC_HID_INSWIN_SUMME"_ustr;
+inline constexpr OUString HID_INSWIN_FUNC = u"SC_HID_INSWIN_FUNC"_ustr;
+inline constexpr OUString HID_INSWIN_INPUT = u"SC_HID_INSWIN_INPUT"_ustr;
 
 // Help IDs for document window ----------------------------------------------
-inline constexpr OStringLiteral HID_SC_WIN_GRIDWIN = "SC_HID_SC_WIN_GRIDWIN";
-inline constexpr OStringLiteral HID_SC_WIN_PREVIEW = "SC_HID_SC_WIN_PREVIEW";
+inline constexpr OUString HID_SC_WIN_GRIDWIN = u"SC_HID_SC_WIN_GRIDWIN"_ustr;
+inline constexpr OUString HID_SC_WIN_PREVIEW = u"SC_HID_SC_WIN_PREVIEW"_ustr;
 
-inline constexpr OStringLiteral HID_SC_HEADER_EDIT = "SC_HID_SC_HEADER_EDIT";
-inline constexpr OStringLiteral HID_SC_FOOTER_EDIT = "SC_HID_SC_FOOTER_EDIT";
+inline constexpr OUString HID_SC_HEADER_EDIT = u"SC_HID_SC_HEADER_EDIT"_ustr;
+inline constexpr OUString HID_SC_FOOTER_EDIT = u"SC_HID_SC_FOOTER_EDIT"_ustr;
 
-inline constexpr OStringLiteral HID_SC_SCENWIN_TOP = "SC_HID_SC_SCENWIN_TOP";
-inline constexpr OStringLiteral HID_SC_SCENWIN_BOTTOM = "SC_HID_SC_SCENWIN_BOTTOM";
+inline constexpr OUString HID_SC_SCENWIN_TOP = u"SC_HID_SC_SCENWIN_TOP"_ustr;
+inline constexpr OUString HID_SC_SCENWIN_BOTTOM = u"SC_HID_SC_SCENWIN_BOTTOM"_ustr;
 
-inline constexpr OStringLiteral HID_SC_INPUTWIN = "SC_HID_SC_INPUTWIN";
+inline constexpr OUString HID_SC_INPUTWIN = u"SC_HID_SC_INPUTWIN"_ustr;
 
-inline constexpr OStringLiteral HID_SC_RENAME_NAME = "SC_HID_SC_RENAME_NAME";
-inline constexpr OStringLiteral HID_SC_APPEND_NAME = "SC_HID_SC_APPEND_NAME";
+inline constexpr OUString HID_SC_RENAME_NAME = u"SC_HID_SC_RENAME_NAME"_ustr;
+inline constexpr OUString HID_SC_APPEND_NAME = u"SC_HID_SC_APPEND_NAME"_ustr;
 
-inline constexpr OStringLiteral HID_SC_ADD_AUTOFMT = "SC_HID_SC_ADD_AUTOFMT";
-inline constexpr OStringLiteral HID_SC_AUTOFMT_NAME = "SC_HID_SC_AUTOFMT_NAME";
+inline constexpr OUString HID_SC_ADD_AUTOFMT = u"SC_HID_SC_ADD_AUTOFMT"_ustr;
+inline constexpr OUString HID_SC_AUTOFMT_NAME = u"SC_HID_SC_AUTOFMT_NAME"_ustr;
 
 //  wrong group - HID_SC_DLG_START is full
-inline constexpr OStringLiteral HID_SC_REN_AFMT_NAME = "SC_HID_SC_REN_AFMT_NAME";
+inline constexpr OUString HID_SC_REN_AFMT_NAME = u"SC_HID_SC_REN_AFMT_NAME"_ustr;
 
-inline constexpr OStringLiteral HID_CHG_PROTECT = "SC_HID_CHG_PROTECT";
+inline constexpr OUString HID_CHG_PROTECT = u"SC_HID_CHG_PROTECT"_ustr;
 
 
-inline constexpr OStringLiteral HID_SC_REN_AFMT_DLG = "SC_HID_SC_REN_AFMT_DLG";
+inline constexpr OUString HID_SC_REN_AFMT_DLG = u"SC_HID_SC_REN_AFMT_DLG"_ustr;
 
 // Help IDs for Submenus (max.50) --------------------------------------------
-inline constexpr OStringLiteral HID_PASSWD_TABLE = "SC_HID_PASSWD_TABLE";
-inline constexpr OStringLiteral HID_PASSWD_DOC = "SC_HID_PASSWD_DOC";
-inline constexpr OStringLiteral HID_PASSWD_DOC_CONFIRM = "SC_HID_PASSWD_DOC_CONFIRM";
+inline constexpr OUString HID_PASSWD_TABLE = u"SC_HID_PASSWD_TABLE"_ustr;
+inline constexpr OUString HID_PASSWD_DOC = u"SC_HID_PASSWD_DOC"_ustr;
+inline constexpr OUString HID_PASSWD_DOC_CONFIRM = u"SC_HID_PASSWD_DOC_CONFIRM"_ustr;
 
 
 // Other help IDs (max.70) ---------------------------------------------------
-inline constexpr OStringLiteral HID_SELECTTABLES = "SC_HID_SELECTTABLES";
-inline constexpr OStringLiteral HID_GOTOTABLE  = "SC_HID_GOTOTABLE";
-inline constexpr OStringLiteral HID_GOTOTABLEMASK  = "SC_HID_GOTOTABLEMASK";
+inline constexpr OUString HID_SELECTTABLES = u"SC_HID_SELECTTABLES"_ustr;
+inline constexpr OUString HID_GOTOTABLE  = u"SC_HID_GOTOTABLE"_ustr;
+inline constexpr OUString HID_GOTOTABLEMASK  = u"SC_HID_GOTOTABLEMASK"_ustr;
 
 
 // Analysis Addin Functions (max.120) ----------------------------------------
-#define HID_AAI_FUNC_WORKDAY                                    "SC_HID_AAI_FUNC_WORKDAY"
-#define HID_AAI_FUNC_YEARFRAC                                   "SC_HID_AAI_FUNC_YEARFRAC"
-#define HID_AAI_FUNC_EDATE                                      "SC_HID_AAI_FUNC_EDATE"
-#define HID_AAI_FUNC_WEEKNUM                                    "SC_HID_AAI_FUNC_WEEKNUM"
-#define HID_AAI_FUNC_EOMONTH                                    "SC_HID_AAI_FUNC_EOMONTH"
-#define HID_AAI_FUNC_NETWORKDAYS                                "SC_HID_AAI_FUNC_NETWORKDAYS"
-#define HID_AAI_FUNC_AMORDEGRC                                  "SC_HID_AAI_FUNC_AMORDEGRC"
-#define HID_AAI_FUNC_AMORLINC                                   "SC_HID_AAI_FUNC_AMORLINC"
-#define HID_AAI_FUNC_ACCRINT                                    "SC_HID_AAI_FUNC_ACCRINT"
-#define HID_AAI_FUNC_ACCRINTM                                   "SC_HID_AAI_FUNC_ACCRINTM"
-#define HID_AAI_FUNC_RECEIVED                                   "SC_HID_AAI_FUNC_RECEIVED"
-#define HID_AAI_FUNC_DISC                                       "SC_HID_AAI_FUNC_DISC"
-#define HID_AAI_FUNC_DURATION                                   "SC_HID_AAI_FUNC_DURATION"
-#define HID_AAI_FUNC_EFFECT                                     "SC_HID_AAI_FUNC_EFFECT"
-#define HID_AAI_FUNC_CUMPRINC                                   "SC_HID_AAI_FUNC_CUMPRINC"
-#define HID_AAI_FUNC_CUMIPMT                                    "SC_HID_AAI_FUNC_CUMIPMT"
-#define HID_AAI_FUNC_PRICE                                      "SC_HID_AAI_FUNC_PRICE"
-#define HID_AAI_FUNC_PRICEDISC                                  "SC_HID_AAI_FUNC_PRICEDISC"
-#define HID_AAI_FUNC_PRICEMAT                                   "SC_HID_AAI_FUNC_PRICEMAT"
-#define HID_AAI_FUNC_MDURATION                                  "SC_HID_AAI_FUNC_MDURATION"
-#define HID_AAI_FUNC_NOMINAL                                    "SC_HID_AAI_FUNC_NOMINAL"
-#define HID_AAI_FUNC_DOLLARFR                                   "SC_HID_AAI_FUNC_DOLLARFR"
-#define HID_AAI_FUNC_DOLLARDE                                   "SC_HID_AAI_FUNC_DOLLARDE"
-#define HID_AAI_FUNC_YIELD                                      "SC_HID_AAI_FUNC_YIELD"
-#define HID_AAI_FUNC_YIELDDISC                                  "SC_HID_AAI_FUNC_YIELDDISC"
-#define HID_AAI_FUNC_YIELDMAT                                   "SC_HID_AAI_FUNC_YIELDMAT"
-#define HID_AAI_FUNC_TBILLEQ                                    "SC_HID_AAI_FUNC_TBILLEQ"
-#define HID_AAI_FUNC_TBILLPRICE                                 "SC_HID_AAI_FUNC_TBILLPRICE"
-#define HID_AAI_FUNC_TBILLYIELD                                 "SC_HID_AAI_FUNC_TBILLYIELD"
-#define HID_AAI_FUNC_ODDFPRICE                                  "SC_HID_AAI_FUNC_ODDFPRICE"
-#define HID_AAI_FUNC_ODDFYIELD                                  "SC_HID_AAI_FUNC_ODDFYIELD"
-#define HID_AAI_FUNC_ODDLPRICE                                  "SC_HID_AAI_FUNC_ODDLPRICE"
-#define HID_AAI_FUNC_ODDLYIELD                                  "SC_HID_AAI_FUNC_ODDLYIELD"
-#define HID_AAI_FUNC_XIRR                                       "SC_HID_AAI_FUNC_XIRR"
-#define HID_AAI_FUNC_XNPV                                       "SC_HID_AAI_FUNC_XNPV"
-#define HID_AAI_FUNC_INTRATE                                    "SC_HID_AAI_FUNC_INTRATE"
-#define HID_AAI_FUNC_COUPNCD                                    "SC_HID_AAI_FUNC_COUPNCD"
-#define HID_AAI_FUNC_COUPDAYS                                   "SC_HID_AAI_FUNC_COUPDAYS"
-#define HID_AAI_FUNC_COUPDAYSNC                                 "SC_HID_AAI_FUNC_COUPDAYSNC"
-#define HID_AAI_FUNC_COUPDAYBS                                  "SC_HID_AAI_FUNC_COUPDAYBS"
-#define HID_AAI_FUNC_COUPPCD                                    "SC_HID_AAI_FUNC_COUPPCD"
-#define HID_AAI_FUNC_COUPNUM                                    "SC_HID_AAI_FUNC_COUPNUM"
-#define HID_AAI_FUNC_FVSCHEDULE                                 "SC_HID_AAI_FUNC_FVSCHEDULE"
-#define HID_AAI_FUNC_ISEVEN                                     "SC_HID_AAI_FUNC_ISEVEN"
-#define HID_AAI_FUNC_ISODD                                      "SC_HID_AAI_FUNC_ISODD"
-#define HID_AAI_FUNC_GCD                                        "SC_HID_AAI_FUNC_GCD"
-#define HID_AAI_FUNC_LCM                                        "SC_HID_AAI_FUNC_LCM"
-#define HID_AAI_FUNC_MULTINOMIAL                                "SC_HID_AAI_FUNC_MULTINOMIAL"
-#define HID_AAI_FUNC_SERIESSUM                                  "SC_HID_AAI_FUNC_SERIESSUM"
-#define HID_AAI_FUNC_QUOTIENT                                   "SC_HID_AAI_FUNC_QUOTIENT"
-#define HID_AAI_FUNC_MROUND                                     "SC_HID_AAI_FUNC_MROUND"
-#define HID_AAI_FUNC_SQRTPI                                     "SC_HID_AAI_FUNC_SQRTPI"
-#define HID_AAI_FUNC_RANDBETWEEN                                "SC_HID_AAI_FUNC_RANDBETWEEN"
-#define HID_AAI_FUNC_BESSELI                                    "SC_HID_AAI_FUNC_BESSELI"
-#define HID_AAI_FUNC_BESSELJ                                    "SC_HID_AAI_FUNC_BESSELJ"
-#define HID_AAI_FUNC_BESSELK                                    "SC_HID_AAI_FUNC_BESSELK"
-#define HID_AAI_FUNC_BESSELY                                    "SC_HID_AAI_FUNC_BESSELY"
-#define HID_AAI_FUNC_BIN2DEC                                    "SC_HID_AAI_FUNC_BIN2DEC"
-#define HID_AAI_FUNC_BIN2HEX                                    "SC_HID_AAI_FUNC_BIN2HEX"
-#define HID_AAI_FUNC_BIN2OCT                                    "SC_HID_AAI_FUNC_BIN2OCT"
-#define HID_AAI_FUNC_DELTA                                      "SC_HID_AAI_FUNC_DELTA"
-#define HID_AAI_FUNC_DEC2BIN                                    "SC_HID_AAI_FUNC_DEC2BIN"
-#define HID_AAI_FUNC_DEC2HEX                                    "SC_HID_AAI_FUNC_DEC2HEX"
-#define HID_AAI_FUNC_DEC2OCT                                    "SC_HID_AAI_FUNC_DEC2OCT"
-#define HID_AAI_FUNC_ERF                                        "SC_HID_AAI_FUNC_ERF"
-#define HID_AAI_FUNC_ERFC                                       "SC_HID_AAI_FUNC_ERFC"
-#define HID_AAI_FUNC_GESTEP                                     "SC_HID_AAI_FUNC_GESTEP"
-#define HID_AAI_FUNC_HEX2BIN                                    "SC_HID_AAI_FUNC_HEX2BIN"
-#define HID_AAI_FUNC_HEX2DEC                                    "SC_HID_AAI_FUNC_HEX2DEC"
-#define HID_AAI_FUNC_HEX2OCT                                    "SC_HID_AAI_FUNC_HEX2OCT"
-#define HID_AAI_FUNC_IMABS                                      "SC_HID_AAI_FUNC_IMABS"
-#define HID_AAI_FUNC_IMAGINARY                                  "SC_HID_AAI_FUNC_IMAGINARY"
-#define HID_AAI_FUNC_IMPOWER                                    "SC_HID_AAI_FUNC_IMPOWER"
-#define HID_AAI_FUNC_IMARGUMENT                                 "SC_HID_AAI_FUNC_IMARGUMENT"
-#define HID_AAI_FUNC_IMCOS                                      "SC_HID_AAI_FUNC_IMCOS"
-#define HID_AAI_FUNC_IMDIV                                      "SC_HID_AAI_FUNC_IMDIV"
-#define HID_AAI_FUNC_IMEXP                                      "SC_HID_AAI_FUNC_IMEXP"
-#define HID_AAI_FUNC_IMCONJUGATE                                "SC_HID_AAI_FUNC_IMCONJUGATE"
-#define HID_AAI_FUNC_IMLN                                       "SC_HID_AAI_FUNC_IMLN"
-#define HID_AAI_FUNC_IMLOG10                                    "SC_HID_AAI_FUNC_IMLOG10"
-#define HID_AAI_FUNC_IMLOG2                                     "SC_HID_AAI_FUNC_IMLOG2"
-#define HID_AAI_FUNC_IMPRODUCT                                  "SC_HID_AAI_FUNC_IMPRODUCT"
-#define HID_AAI_FUNC_IMREAL                                     "SC_HID_AAI_FUNC_IMREAL"
-#define HID_AAI_FUNC_IMSIN                                      "SC_HID_AAI_FUNC_IMSIN"
-#define HID_AAI_FUNC_IMSUB                                      "SC_HID_AAI_FUNC_IMSUB"
-#define HID_AAI_FUNC_IMSUM                                      "SC_HID_AAI_FUNC_IMSUM"
-#define HID_AAI_FUNC_IMSQRT                                     "SC_HID_AAI_FUNC_IMSQRT"
-#define HID_AAI_FUNC_COMPLEX                                    "SC_HID_AAI_FUNC_COMPLEX"
-#define HID_AAI_FUNC_OCT2BIN                                    "SC_HID_AAI_FUNC_OCT2BIN"
-#define HID_AAI_FUNC_OCT2DEZ                                    "SC_HID_AAI_FUNC_OCT2DEZ"
-#define HID_AAI_FUNC_OCT2HEX                                    "SC_HID_AAI_FUNC_OCT2HEX"
-#define HID_AAI_FUNC_CONVERT                                    "SC_HID_AAI_FUNC_CONVERT"
-#define HID_AAI_FUNC_FACTDOUBLE                                 "SC_HID_AAI_FUNC_FACTDOUBLE"
-#define HID_AAI_FUNC_IMTAN                                      "SC_HID_AAI_FUNC_IMTAN"
-#define HID_AAI_FUNC_IMSEC                                      "SC_HID_AAI_FUNC_IMSEC"
-#define HID_AAI_FUNC_IMCSC                                      "SC_HID_AAI_FUNC_IMCSC"
-#define HID_AAI_FUNC_IMCOT                                      "SC_HID_AAI_FUNC_IMCOT"
-#define HID_AAI_FUNC_IMSINH                                     "SC_HID_AAI_FUNC_IMSINH"
-#define HID_AAI_FUNC_IMCOSH                                     "SC_HID_AAI_FUNC_IMCOSH"
-#define HID_AAI_FUNC_IMSECH                                     "SC_HID_AAI_FUNC_IMSECH"
-#define HID_AAI_FUNC_IMCSCH                                     "SC_HID_AAI_FUNC_IMCSCH"
+inline constexpr OUString HID_AAI_FUNC_WORKDAY = u"SC_HID_AAI_FUNC_WORKDAY"_ustr;
+inline constexpr OUString HID_AAI_FUNC_YEARFRAC = u"SC_HID_AAI_FUNC_YEARFRAC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_EDATE = u"SC_HID_AAI_FUNC_EDATE"_ustr;
+inline constexpr OUString HID_AAI_FUNC_WEEKNUM = u"SC_HID_AAI_FUNC_WEEKNUM"_ustr;
+inline constexpr OUString HID_AAI_FUNC_EOMONTH = u"SC_HID_AAI_FUNC_EOMONTH"_ustr;
+inline constexpr OUString HID_AAI_FUNC_NETWORKDAYS = u"SC_HID_AAI_FUNC_NETWORKDAYS"_ustr;
+inline constexpr OUString HID_AAI_FUNC_AMORDEGRC = u"SC_HID_AAI_FUNC_AMORDEGRC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_AMORLINC = u"SC_HID_AAI_FUNC_AMORLINC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_ACCRINT = u"SC_HID_AAI_FUNC_ACCRINT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_ACCRINTM = u"SC_HID_AAI_FUNC_ACCRINTM"_ustr;
+inline constexpr OUString HID_AAI_FUNC_RECEIVED = u"SC_HID_AAI_FUNC_RECEIVED"_ustr;
+inline constexpr OUString HID_AAI_FUNC_DISC = u"SC_HID_AAI_FUNC_DISC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_DURATION = u"SC_HID_AAI_FUNC_DURATION"_ustr;
+inline constexpr OUString HID_AAI_FUNC_EFFECT = u"SC_HID_AAI_FUNC_EFFECT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_CUMPRINC = u"SC_HID_AAI_FUNC_CUMPRINC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_CUMIPMT = u"SC_HID_AAI_FUNC_CUMIPMT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_PRICE = u"SC_HID_AAI_FUNC_PRICE"_ustr;
+inline constexpr OUString HID_AAI_FUNC_PRICEDISC = u"SC_HID_AAI_FUNC_PRICEDISC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_PRICEMAT = u"SC_HID_AAI_FUNC_PRICEMAT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_MDURATION = u"SC_HID_AAI_FUNC_MDURATION"_ustr;
+inline constexpr OUString HID_AAI_FUNC_NOMINAL = u"SC_HID_AAI_FUNC_NOMINAL"_ustr;
+inline constexpr OUString HID_AAI_FUNC_DOLLARFR = u"SC_HID_AAI_FUNC_DOLLARFR"_ustr;
+inline constexpr OUString HID_AAI_FUNC_DOLLARDE = u"SC_HID_AAI_FUNC_DOLLARDE"_ustr;
+inline constexpr OUString HID_AAI_FUNC_YIELD = u"SC_HID_AAI_FUNC_YIELD"_ustr;
+inline constexpr OUString HID_AAI_FUNC_YIELDDISC = u"SC_HID_AAI_FUNC_YIELDDISC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_YIELDMAT = u"SC_HID_AAI_FUNC_YIELDMAT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_TBILLEQ = u"SC_HID_AAI_FUNC_TBILLEQ"_ustr;
+inline constexpr OUString HID_AAI_FUNC_TBILLPRICE = u"SC_HID_AAI_FUNC_TBILLPRICE"_ustr;
+inline constexpr OUString HID_AAI_FUNC_TBILLYIELD = u"SC_HID_AAI_FUNC_TBILLYIELD"_ustr;
+inline constexpr OUString HID_AAI_FUNC_ODDFPRICE = u"SC_HID_AAI_FUNC_ODDFPRICE"_ustr;
+inline constexpr OUString HID_AAI_FUNC_ODDFYIELD = u"SC_HID_AAI_FUNC_ODDFYIELD"_ustr;
+inline constexpr OUString HID_AAI_FUNC_ODDLPRICE = u"SC_HID_AAI_FUNC_ODDLPRICE"_ustr;
+inline constexpr OUString HID_AAI_FUNC_ODDLYIELD = u"SC_HID_AAI_FUNC_ODDLYIELD"_ustr;
+inline constexpr OUString HID_AAI_FUNC_XIRR = u"SC_HID_AAI_FUNC_XIRR"_ustr;
+inline constexpr OUString HID_AAI_FUNC_XNPV = u"SC_HID_AAI_FUNC_XNPV"_ustr;
+inline constexpr OUString HID_AAI_FUNC_INTRATE = u"SC_HID_AAI_FUNC_INTRATE"_ustr;
+inline constexpr OUString HID_AAI_FUNC_COUPNCD = u"SC_HID_AAI_FUNC_COUPNCD"_ustr;
+inline constexpr OUString HID_AAI_FUNC_COUPDAYS = u"SC_HID_AAI_FUNC_COUPDAYS"_ustr;
+inline constexpr OUString HID_AAI_FUNC_COUPDAYSNC = u"SC_HID_AAI_FUNC_COUPDAYSNC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_COUPDAYBS = u"SC_HID_AAI_FUNC_COUPDAYBS"_ustr;
+inline constexpr OUString HID_AAI_FUNC_COUPPCD = u"SC_HID_AAI_FUNC_COUPPCD"_ustr;
+inline constexpr OUString HID_AAI_FUNC_COUPNUM = u"SC_HID_AAI_FUNC_COUPNUM"_ustr;
+inline constexpr OUString HID_AAI_FUNC_FVSCHEDULE = u"SC_HID_AAI_FUNC_FVSCHEDULE"_ustr;
+inline constexpr OUString HID_AAI_FUNC_ISEVEN = u"SC_HID_AAI_FUNC_ISEVEN"_ustr;
+inline constexpr OUString HID_AAI_FUNC_ISODD = u"SC_HID_AAI_FUNC_ISODD"_ustr;
+inline constexpr OUString HID_AAI_FUNC_GCD = u"SC_HID_AAI_FUNC_GCD"_ustr;
+inline constexpr OUString HID_AAI_FUNC_LCM = u"SC_HID_AAI_FUNC_LCM"_ustr;
+inline constexpr OUString HID_AAI_FUNC_MULTINOMIAL = u"SC_HID_AAI_FUNC_MULTINOMIAL"_ustr;
+inline constexpr OUString HID_AAI_FUNC_SERIESSUM = u"SC_HID_AAI_FUNC_SERIESSUM"_ustr;
+inline constexpr OUString HID_AAI_FUNC_QUOTIENT = u"SC_HID_AAI_FUNC_QUOTIENT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_MROUND = u"SC_HID_AAI_FUNC_MROUND"_ustr;
+inline constexpr OUString HID_AAI_FUNC_SQRTPI = u"SC_HID_AAI_FUNC_SQRTPI"_ustr;
+inline constexpr OUString HID_AAI_FUNC_RANDBETWEEN = u"SC_HID_AAI_FUNC_RANDBETWEEN"_ustr;
+inline constexpr OUString HID_AAI_FUNC_BESSELI = u"SC_HID_AAI_FUNC_BESSELI"_ustr;
+inline constexpr OUString HID_AAI_FUNC_BESSELJ = u"SC_HID_AAI_FUNC_BESSELJ"_ustr;
+inline constexpr OUString HID_AAI_FUNC_BESSELK = u"SC_HID_AAI_FUNC_BESSELK"_ustr;
+inline constexpr OUString HID_AAI_FUNC_BESSELY = u"SC_HID_AAI_FUNC_BESSELY"_ustr;
+inline constexpr OUString HID_AAI_FUNC_BIN2DEC = u"SC_HID_AAI_FUNC_BIN2DEC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_BIN2HEX = u"SC_HID_AAI_FUNC_BIN2HEX"_ustr;
+inline constexpr OUString HID_AAI_FUNC_BIN2OCT = u"SC_HID_AAI_FUNC_BIN2OCT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_DELTA = u"SC_HID_AAI_FUNC_DELTA"_ustr;
+inline constexpr OUString HID_AAI_FUNC_DEC2BIN = u"SC_HID_AAI_FUNC_DEC2BIN"_ustr;
+inline constexpr OUString HID_AAI_FUNC_DEC2HEX = u"SC_HID_AAI_FUNC_DEC2HEX"_ustr;
+inline constexpr OUString HID_AAI_FUNC_DEC2OCT = u"SC_HID_AAI_FUNC_DEC2OCT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_ERF = u"SC_HID_AAI_FUNC_ERF"_ustr;
+inline constexpr OUString HID_AAI_FUNC_ERFC = u"SC_HID_AAI_FUNC_ERFC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_GESTEP = u"SC_HID_AAI_FUNC_GESTEP"_ustr;
+inline constexpr OUString HID_AAI_FUNC_HEX2BIN = u"SC_HID_AAI_FUNC_HEX2BIN"_ustr;
+inline constexpr OUString HID_AAI_FUNC_HEX2DEC = u"SC_HID_AAI_FUNC_HEX2DEC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_HEX2OCT = u"SC_HID_AAI_FUNC_HEX2OCT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMABS = u"SC_HID_AAI_FUNC_IMABS"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMAGINARY = u"SC_HID_AAI_FUNC_IMAGINARY"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMPOWER = u"SC_HID_AAI_FUNC_IMPOWER"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMARGUMENT = u"SC_HID_AAI_FUNC_IMARGUMENT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMCOS = u"SC_HID_AAI_FUNC_IMCOS"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMDIV = u"SC_HID_AAI_FUNC_IMDIV"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMEXP = u"SC_HID_AAI_FUNC_IMEXP"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMCONJUGATE = u"SC_HID_AAI_FUNC_IMCONJUGATE"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMLN = u"SC_HID_AAI_FUNC_IMLN"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMLOG10 = u"SC_HID_AAI_FUNC_IMLOG10"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMLOG2 = u"SC_HID_AAI_FUNC_IMLOG2"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMPRODUCT = u"SC_HID_AAI_FUNC_IMPRODUCT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMREAL = u"SC_HID_AAI_FUNC_IMREAL"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMSIN = u"SC_HID_AAI_FUNC_IMSIN"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMSUB = u"SC_HID_AAI_FUNC_IMSUB"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMSUM = u"SC_HID_AAI_FUNC_IMSUM"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMSQRT = u"SC_HID_AAI_FUNC_IMSQRT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_COMPLEX = u"SC_HID_AAI_FUNC_COMPLEX"_ustr;
+inline constexpr OUString HID_AAI_FUNC_OCT2BIN = u"SC_HID_AAI_FUNC_OCT2BIN"_ustr;
+inline constexpr OUString HID_AAI_FUNC_OCT2DEZ = u"SC_HID_AAI_FUNC_OCT2DEZ"_ustr;
+inline constexpr OUString HID_AAI_FUNC_OCT2HEX = u"SC_HID_AAI_FUNC_OCT2HEX"_ustr;
+inline constexpr OUString HID_AAI_FUNC_CONVERT = u"SC_HID_AAI_FUNC_CONVERT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_FACTDOUBLE = u"SC_HID_AAI_FUNC_FACTDOUBLE"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMTAN = u"SC_HID_AAI_FUNC_IMTAN"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMSEC = u"SC_HID_AAI_FUNC_IMSEC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMCSC = u"SC_HID_AAI_FUNC_IMCSC"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMCOT = u"SC_HID_AAI_FUNC_IMCOT"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMSINH = u"SC_HID_AAI_FUNC_IMSINH"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMCOSH = u"SC_HID_AAI_FUNC_IMCOSH"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMSECH = u"SC_HID_AAI_FUNC_IMSECH"_ustr;
+inline constexpr OUString HID_AAI_FUNC_IMCSCH = u"SC_HID_AAI_FUNC_IMCSCH"_ustr;
 
-#define HID_UPDATE_LINK_WARNING                                 "cui/ui/baselinksdialog/UPDATE_NOW"
+inline constexpr OUString HID_UPDATE_LINK_WARNING = u"cui/ui/baselinksdialog/UPDATE_NOW"_ustr;
 
 // DateFunc Addin Functions (max.20) -----------------------------------------
-#define HID_DAI_FUNC_DAYSINMONTH                                "SC_HID_DAI_FUNC_DAYSINMONTH"
-#define HID_DAI_FUNC_DAYSINYEAR                                 "SC_HID_DAI_FUNC_DAYSINYEAR"
-#define HID_DAI_FUNC_WEEKSINYEAR                                "SC_HID_DAI_FUNC_WEEKSINYEAR"
-#define HID_DAI_FUNC_DIFFMONTHS                                 "SC_HID_DAI_FUNC_DIFFMONTHS"
-#define HID_DAI_FUNC_DIFFWEEKS                                  "SC_HID_DAI_FUNC_DIFFWEEKS"
-#define HID_DAI_FUNC_DIFFYEARS                                  "SC_HID_DAI_FUNC_DIFFYEARS"
-#define HID_DAI_FUNC_ROT13                                      "SC_HID_DAI_FUNC_ROT13"
+inline constexpr OUString HID_DAI_FUNC_DAYSINMONTH = u"SC_HID_DAI_FUNC_DAYSINMONTH"_ustr;
+inline constexpr OUString HID_DAI_FUNC_DAYSINYEAR = u"SC_HID_DAI_FUNC_DAYSINYEAR"_ustr;
+inline constexpr OUString HID_DAI_FUNC_WEEKSINYEAR = u"SC_HID_DAI_FUNC_WEEKSINYEAR"_ustr;
+inline constexpr OUString HID_DAI_FUNC_DIFFMONTHS = u"SC_HID_DAI_FUNC_DIFFMONTHS"_ustr;
+inline constexpr OUString HID_DAI_FUNC_DIFFWEEKS = u"SC_HID_DAI_FUNC_DIFFWEEKS"_ustr;
+inline constexpr OUString HID_DAI_FUNC_DIFFYEARS = u"SC_HID_DAI_FUNC_DIFFYEARS"_ustr;
+inline constexpr OUString HID_DAI_FUNC_ROT13 = u"SC_HID_DAI_FUNC_ROT13"_ustr;
 
 // PricingFunc Addin Functions  -----------------------------------------
 
-#define HID_PAI_FUNC_OPT_BARRIER                                "SC_HID_PAI_FUNC_OPT_BARRIER"
-#define HID_PAI_FUNC_OPT_TOUCH                                  "SC_HID_PAI_FUNC_OPT_TOUCH"
-#define HID_PAI_FUNC_OPT_PROB_HIT                               "SC_HID_PAI_FUNC_OPT_PROB_HIT"
-#define HID_PAI_FUNC_OPT_PROB_INMONEY                           "SC_HID_PAI_FUNC_OPT_PROB_INMONEY"
+inline constexpr OUString HID_PAI_FUNC_OPT_BARRIER = u"SC_HID_PAI_FUNC_OPT_BARRIER"_ustr;
+inline constexpr OUString HID_PAI_FUNC_OPT_TOUCH = u"SC_HID_PAI_FUNC_OPT_TOUCH"_ustr;
+inline constexpr OUString HID_PAI_FUNC_OPT_PROB_HIT = u"SC_HID_PAI_FUNC_OPT_PROB_HIT"_ustr;
+inline constexpr OUString HID_PAI_FUNC_OPT_PROB_INMONEY = u"SC_HID_PAI_FUNC_OPT_PROB_INMONEY"_ustr;
 
 // End help IDs ------------------------------------------------------------
 
-#define HID_FUNC_DBANZAHL                                       "SC_HID_FUNC_DBANZAHL"
-#define HID_FUNC_DBANZAHL2                                      "SC_HID_FUNC_DBANZAHL2"
-#define HID_FUNC_DBMITTELWERT                                   "SC_HID_FUNC_DBMITTELWERT"
-#define HID_FUNC_DBAUSZUG                                       "SC_HID_FUNC_DBAUSZUG"
-#define HID_FUNC_DBMAX                                          "SC_HID_FUNC_DBMAX"
-#define HID_FUNC_DBMIN                                          "SC_HID_FUNC_DBMIN"
-#define HID_FUNC_DBPRODUKT                                      "SC_HID_FUNC_DBPRODUKT"
-#define HID_FUNC_DBSTDABW                                       "SC_HID_FUNC_DBSTDABW"
-#define HID_FUNC_DBSTDABWN                                      "SC_HID_FUNC_DBSTDABWN"
-#define HID_FUNC_DBSUMME                                        "SC_HID_FUNC_DBSUMME"
-#define HID_FUNC_DBVARIANZ                                      "SC_HID_FUNC_DBVARIANZ"
-#define HID_FUNC_DBVARIANZEN                                    "SC_HID_FUNC_DBVARIANZEN"
+inline constexpr OUString HID_FUNC_DBANZAHL = u"SC_HID_FUNC_DBANZAHL"_ustr;
+inline constexpr OUString HID_FUNC_DBANZAHL2 = u"SC_HID_FUNC_DBANZAHL2"_ustr;
+inline constexpr OUString HID_FUNC_DBMITTELWERT = u"SC_HID_FUNC_DBMITTELWERT"_ustr;
+inline constexpr OUString HID_FUNC_DBAUSZUG = u"SC_HID_FUNC_DBAUSZUG"_ustr;
+inline constexpr OUString HID_FUNC_DBMAX = u"SC_HID_FUNC_DBMAX"_ustr;
+inline constexpr OUString HID_FUNC_DBMIN = u"SC_HID_FUNC_DBMIN"_ustr;
+inline constexpr OUString HID_FUNC_DBPRODUKT = u"SC_HID_FUNC_DBPRODUKT"_ustr;
+inline constexpr OUString HID_FUNC_DBSTDABW = u"SC_HID_FUNC_DBSTDABW"_ustr;
+inline constexpr OUString HID_FUNC_DBSTDABWN = u"SC_HID_FUNC_DBSTDABWN"_ustr;
+inline constexpr OUString HID_FUNC_DBSUMME = u"SC_HID_FUNC_DBSUMME"_ustr;
+inline constexpr OUString HID_FUNC_DBVARIANZ = u"SC_HID_FUNC_DBVARIANZ"_ustr;
+inline constexpr OUString HID_FUNC_DBVARIANZEN = u"SC_HID_FUNC_DBVARIANZEN"_ustr;
 
-#define HID_FUNC_DATUM                                          "SC_HID_FUNC_DATUM"
-#define HID_FUNC_DATWERT                                        "SC_HID_FUNC_DATWERT"
-#define HID_FUNC_TAG                                            "SC_HID_FUNC_TAG"
-#define HID_FUNC_TAGE360                                        "SC_HID_FUNC_TAGE360"
-#define HID_FUNC_STUNDE                                         "SC_HID_FUNC_STUNDE"
-#define HID_FUNC_MINUTE                                         "SC_HID_FUNC_MINUTE"
-#define HID_FUNC_MONAT                                          "SC_HID_FUNC_MONAT"
-#define HID_FUNC_JETZT                                          "SC_HID_FUNC_JETZT"
-#define HID_FUNC_SEKUNDE                                        "SC_HID_FUNC_SEKUNDE"
-#define HID_FUNC_ZEIT                                           "SC_HID_FUNC_ZEIT"
-#define HID_FUNC_ZEITWERT                                       "SC_HID_FUNC_ZEITWERT"
-#define HID_FUNC_HEUTE                                          "SC_HID_FUNC_HEUTE"
-#define HID_FUNC_WOCHENTAG                                      "SC_HID_FUNC_WOCHENTAG"
-#define HID_FUNC_JAHR                                           "SC_HID_FUNC_JAHR"
-#define HID_FUNC_TAGE                                           "SC_HID_FUNC_TAGE"
-#define HID_FUNC_DATEDIF                                        "SC_HID_FUNC_DATEDIF"
-#define HID_FUNC_KALENDERWOCHE                                  "SC_HID_FUNC_KALENDERWOCHE"
-#define HID_FUNC_OSTERSONNTAG                                   "SC_HID_FUNC_OSTERSONNTAG"
-#define HID_FUNC_ISOWEEKNUM                                     "SC_HID_FUNC_ISOWEEKNUM"
+inline constexpr OUString HID_FUNC_DATUM = u"SC_HID_FUNC_DATUM"_ustr;
+inline constexpr OUString HID_FUNC_DATWERT = u"SC_HID_FUNC_DATWERT"_ustr;
+inline constexpr OUString HID_FUNC_TAG = u"SC_HID_FUNC_TAG"_ustr;
+inline constexpr OUString HID_FUNC_TAGE360 = u"SC_HID_FUNC_TAGE360"_ustr;
+inline constexpr OUString HID_FUNC_STUNDE = u"SC_HID_FUNC_STUNDE"_ustr;
+inline constexpr OUString HID_FUNC_MINUTE = u"SC_HID_FUNC_MINUTE"_ustr;
+inline constexpr OUString HID_FUNC_MONAT = u"SC_HID_FUNC_MONAT"_ustr;
+inline constexpr OUString HID_FUNC_JETZT = u"SC_HID_FUNC_JETZT"_ustr;
+inline constexpr OUString HID_FUNC_SEKUNDE = u"SC_HID_FUNC_SEKUNDE"_ustr;
+inline constexpr OUString HID_FUNC_ZEIT = u"SC_HID_FUNC_ZEIT"_ustr;
+inline constexpr OUString HID_FUNC_ZEITWERT = u"SC_HID_FUNC_ZEITWERT"_ustr;
+inline constexpr OUString HID_FUNC_HEUTE = u"SC_HID_FUNC_HEUTE"_ustr;
+inline constexpr OUString HID_FUNC_WOCHENTAG = u"SC_HID_FUNC_WOCHENTAG"_ustr;
+inline constexpr OUString HID_FUNC_JAHR = u"SC_HID_FUNC_JAHR"_ustr;
+inline constexpr OUString HID_FUNC_TAGE = u"SC_HID_FUNC_TAGE"_ustr;
+inline constexpr OUString HID_FUNC_DATEDIF = u"SC_HID_FUNC_DATEDIF"_ustr;
+inline constexpr OUString HID_FUNC_KALENDERWOCHE = u"SC_HID_FUNC_KALENDERWOCHE"_ustr;
+inline constexpr OUString HID_FUNC_OSTERSONNTAG = u"SC_HID_FUNC_OSTERSONNTAG"_ustr;
+inline constexpr OUString HID_FUNC_ISOWEEKNUM = u"SC_HID_FUNC_ISOWEEKNUM"_ustr;
 
-#define HID_FUNC_BW                                             "SC_HID_FUNC_BW"
-#define HID_FUNC_ZW                                             "SC_HID_FUNC_ZW"
-#define HID_FUNC_ZZR                                            "SC_HID_FUNC_ZZR"
-#define HID_FUNC_RMZ                                            "SC_HID_FUNC_RMZ"
-#define HID_FUNC_ZINS                                           "SC_HID_FUNC_ZINS"
-#define HID_FUNC_ZINSZ                                          "SC_HID_FUNC_ZINSZ"
-#define HID_FUNC_KAPZ                                           "SC_HID_FUNC_KAPZ"
-#define HID_FUNC_KUMKAPITAL                                     "SC_HID_FUNC_KUMKAPITAL"
-#define HID_FUNC_KUMZINSZ                                       "SC_HID_FUNC_KUMZINSZ"
-#define HID_FUNC_DIA                                            "SC_HID_FUNC_DIA"
-#define HID_FUNC_LIA                                            "SC_HID_FUNC_LIA"
-#define HID_FUNC_GDA                                            "SC_HID_FUNC_GDA"
-#define HID_FUNC_GDA2                                           "SC_HID_FUNC_GDA2"
-#define HID_FUNC_VDB                                            "SC_HID_FUNC_VDB"
-#define HID_FUNC_EFFEKTIV                                       "SC_HID_FUNC_EFFEKTIV"
-#define HID_FUNC_NOMINAL                                        "SC_HID_FUNC_NOMINAL"
-#define HID_FUNC_NBW                                            "SC_HID_FUNC_NBW"
-#define HID_FUNC_IKV                                            "SC_HID_FUNC_IKV"
-#define HID_FUNC_LAUFZEIT                                       "SC_HID_FUNC_LAUFZEIT"
-#define HID_FUNC_ZGZ                                            "SC_HID_FUNC_ZGZ"
-#define HID_FUNC_QIKV                                           "SC_HID_FUNC_QIKV"
-#define HID_FUNC_ISPMT                                          "SC_HID_FUNC_ISPMT"
+inline constexpr OUString HID_FUNC_BW = u"SC_HID_FUNC_BW"_ustr;
+inline constexpr OUString HID_FUNC_ZW = u"SC_HID_FUNC_ZW"_ustr;
+inline constexpr OUString HID_FUNC_ZZR = u"SC_HID_FUNC_ZZR"_ustr;
+inline constexpr OUString HID_FUNC_RMZ = u"SC_HID_FUNC_RMZ"_ustr;
+inline constexpr OUString HID_FUNC_ZINS = u"SC_HID_FUNC_ZINS"_ustr;
+inline constexpr OUString HID_FUNC_ZINSZ = u"SC_HID_FUNC_ZINSZ"_ustr;
+inline constexpr OUString HID_FUNC_KAPZ = u"SC_HID_FUNC_KAPZ"_ustr;
+inline constexpr OUString HID_FUNC_KUMKAPITAL = u"SC_HID_FUNC_KUMKAPITAL"_ustr;
+inline constexpr OUString HID_FUNC_KUMZINSZ = u"SC_HID_FUNC_KUMZINSZ"_ustr;
+inline constexpr OUString HID_FUNC_DIA = u"SC_HID_FUNC_DIA"_ustr;
+inline constexpr OUString HID_FUNC_LIA = u"SC_HID_FUNC_LIA"_ustr;
+inline constexpr OUString HID_FUNC_GDA = u"SC_HID_FUNC_GDA"_ustr;
+inline constexpr OUString HID_FUNC_GDA2 = u"SC_HID_FUNC_GDA2"_ustr;
+inline constexpr OUString HID_FUNC_VDB = u"SC_HID_FUNC_VDB"_ustr;
+inline constexpr OUString HID_FUNC_EFFEKTIV = u"SC_HID_FUNC_EFFEKTIV"_ustr;
+inline constexpr OUString HID_FUNC_NOMINAL = u"SC_HID_FUNC_NOMINAL"_ustr;
+inline constexpr OUString HID_FUNC_NBW = u"SC_HID_FUNC_NBW"_ustr;
+inline constexpr OUString HID_FUNC_IKV = u"SC_HID_FUNC_IKV"_ustr;
+inline constexpr OUString HID_FUNC_LAUFZEIT = u"SC_HID_FUNC_LAUFZEIT"_ustr;
+inline constexpr OUString HID_FUNC_ZGZ = u"SC_HID_FUNC_ZGZ"_ustr;
+inline constexpr OUString HID_FUNC_QIKV = u"SC_HID_FUNC_QIKV"_ustr;
+inline constexpr OUString HID_FUNC_ISPMT = u"SC_HID_FUNC_ISPMT"_ustr;
 
-#define HID_FUNC_ISTBEZUG                                       "SC_HID_FUNC_ISTBEZUG"
-#define HID_FUNC_ISTFEHL                                        "SC_HID_FUNC_ISTFEHL"
-#define HID_FUNC_ISTFEHLER                                      "SC_HID_FUNC_ISTFEHLER"
-#define HID_FUNC_ISTLEER                                        "SC_HID_FUNC_ISTLEER"
-#define HID_FUNC_ISTLOG                                         "SC_HID_FUNC_ISTLOG"
-#define HID_FUNC_ISTNV                                          "SC_HID_FUNC_ISTNV"
-#define HID_FUNC_ISTKTEXT                                       "SC_HID_FUNC_ISTKTEXT"
-#define HID_FUNC_ISTTEXT                                        "SC_HID_FUNC_ISTTEXT"
-#define HID_FUNC_ISTZAHL                                        "SC_HID_FUNC_ISTZAHL"
-#define HID_FUNC_ISTFORMEL                                      "SC_HID_FUNC_ISTFORMEL"
-#define HID_FUNC_N                                              "SC_HID_FUNC_N"
-#define HID_FUNC_NV                                             "SC_HID_FUNC_NV"
-#define HID_FUNC_TYP                                            "SC_HID_FUNC_TYP"
-#define HID_FUNC_AKTUELL                                        "SC_HID_FUNC_AKTUELL"
-#define HID_FUNC_FORMEL                                         "SC_HID_FUNC_FORMEL"
-#define HID_FUNC_ZELLE                                          "SC_HID_FUNC_ZELLE"
-#define HID_FUNC_INFO                                           "SC_HID_FUNC_INFO"
+inline constexpr OUString HID_FUNC_ISTBEZUG = u"SC_HID_FUNC_ISTBEZUG"_ustr;
+inline constexpr OUString HID_FUNC_ISTFEHL = u"SC_HID_FUNC_ISTFEHL"_ustr;
+inline constexpr OUString HID_FUNC_ISTFEHLER = u"SC_HID_FUNC_ISTFEHLER"_ustr;
+inline constexpr OUString HID_FUNC_ISTLEER = u"SC_HID_FUNC_ISTLEER"_ustr;
+inline constexpr OUString HID_FUNC_ISTLOG = u"SC_HID_FUNC_ISTLOG"_ustr;
+inline constexpr OUString HID_FUNC_ISTNV = u"SC_HID_FUNC_ISTNV"_ustr;
+inline constexpr OUString HID_FUNC_ISTKTEXT = u"SC_HID_FUNC_ISTKTEXT"_ustr;
+inline constexpr OUString HID_FUNC_ISTTEXT = u"SC_HID_FUNC_ISTTEXT"_ustr;
+inline constexpr OUString HID_FUNC_ISTZAHL = u"SC_HID_FUNC_ISTZAHL"_ustr;
+inline constexpr OUString HID_FUNC_ISTFORMEL = u"SC_HID_FUNC_ISTFORMEL"_ustr;
+inline constexpr OUString HID_FUNC_N = u"SC_HID_FUNC_N"_ustr;
+inline constexpr OUString HID_FUNC_NV = u"SC_HID_FUNC_NV"_ustr;
+inline constexpr OUString HID_FUNC_TYP = u"SC_HID_FUNC_TYP"_ustr;
+inline constexpr OUString HID_FUNC_AKTUELL = u"SC_HID_FUNC_AKTUELL"_ustr;
+inline constexpr OUString HID_FUNC_FORMEL = u"SC_HID_FUNC_FORMEL"_ustr;
+inline constexpr OUString HID_FUNC_ZELLE = u"SC_HID_FUNC_ZELLE"_ustr;
+inline constexpr OUString HID_FUNC_INFO = u"SC_HID_FUNC_INFO"_ustr;
 
-#define HID_FUNC_FALSCH                                         "SC_HID_FUNC_FALSCH"
-#define HID_FUNC_NICHT                                          "SC_HID_FUNC_NICHT"
-#define HID_FUNC_WAHR                                           "SC_HID_FUNC_WAHR"
-#define HID_FUNC_WENN                                           "SC_HID_FUNC_WENN"
-#define HID_FUNC_IFERROR                                        "SC_HID_FUNC_IFERROR"
-#define HID_FUNC_IFNA                                           "SC_HID_FUNC_IFNA"
-#define HID_FUNC_ODER                                           "SC_HID_FUNC_ODER"
-#define HID_FUNC_UND                                            "SC_HID_FUNC_UND"
-#define HID_FUNC_XOR                                            "SC_HID_FUNC_XOR"
+inline constexpr OUString HID_FUNC_FALSCH = u"SC_HID_FUNC_FALSCH"_ustr;
+inline constexpr OUString HID_FUNC_NICHT = u"SC_HID_FUNC_NICHT"_ustr;
+inline constexpr OUString HID_FUNC_WAHR = u"SC_HID_FUNC_WAHR"_ustr;
+inline constexpr OUString HID_FUNC_WENN = u"SC_HID_FUNC_WENN"_ustr;
+inline constexpr OUString HID_FUNC_IFERROR = u"SC_HID_FUNC_IFERROR"_ustr;
+inline constexpr OUString HID_FUNC_IFNA = u"SC_HID_FUNC_IFNA"_ustr;
+inline constexpr OUString HID_FUNC_ODER = u"SC_HID_FUNC_ODER"_ustr;
+inline constexpr OUString HID_FUNC_UND = u"SC_HID_FUNC_UND"_ustr;
+inline constexpr OUString HID_FUNC_XOR = u"SC_HID_FUNC_XOR"_ustr;
 
-#define HID_FUNC_ABS                                            "SC_HID_FUNC_ABS"
-#define HID_FUNC_POTENZ                                         "SC_HID_FUNC_POTENZ"
-#define HID_FUNC_ANZAHLLEEREZELLEN                              "SC_HID_FUNC_ANZAHLLEEREZELLEN"
-#define HID_FUNC_PI                                             "SC_HID_FUNC_PI"
-#define HID_FUNC_SUMME                                          "SC_HID_FUNC_SUMME"
-#define HID_FUNC_QUADRATESUMME                                  "SC_HID_FUNC_QUADRATESUMME"
-#define HID_FUNC_PRODUKT                                        "SC_HID_FUNC_PRODUKT"
-#define HID_FUNC_SUMMEWENN                                      "SC_HID_FUNC_SUMMEWENN"
-#define HID_FUNC_AVERAGEIF                                      "SC_HID_FUNC_AVERAGEIF"
-#define HID_FUNC_SUMIFS                                         "SC_HID_FUNC_SUMIFS"
-#define HID_FUNC_AVERAGEIFS                                     "SC_HID_FUNC_AVERAGEIFS"
-#define HID_FUNC_COUNTIFS                                       "SC_HID_FUNC_COUNTIFS"
-#define HID_FUNC_ZAEHLENWENN                                    "SC_HID_FUNC_ZAEHLENWENN"
-#define HID_FUNC_WURZEL                                         "SC_HID_FUNC_WURZEL"
-#define HID_FUNC_ZUFALLSZAHL                                    "SC_HID_FUNC_ZUFALLSZAHL"
-#define HID_FUNC_ISTGERADE                                      "SC_HID_FUNC_ISTGERADE"
-#define HID_FUNC_ISTUNGERADE                                    "SC_HID_FUNC_ISTUNGERADE"
-#define HID_FUNC_KOMBINATIONEN                                  "SC_HID_FUNC_KOMBINATIONEN"
-#define HID_FUNC_KOMBINATIONEN2                                 "SC_HID_FUNC_KOMBINATIONEN2"
-#define HID_FUNC_ARCCOS                                         "SC_HID_FUNC_ARCCOS"
-#define HID_FUNC_ARCSIN                                         "SC_HID_FUNC_ARCSIN"
-#define HID_FUNC_ARCOSHYP                                       "SC_HID_FUNC_ARCOSHYP"
-#define HID_FUNC_ARSINHYP                                       "SC_HID_FUNC_ARSINHYP"
-#define HID_FUNC_ARCCOT                                         "SC_HID_FUNC_ARCCOT"
-#define HID_FUNC_ARCTAN                                         "SC_HID_FUNC_ARCTAN"
-#define HID_FUNC_ARCOTHYP                                       "SC_HID_FUNC_ARCOTHYP"
-#define HID_FUNC_ARTANHYP                                       "SC_HID_FUNC_ARTANHYP"
-#define HID_FUNC_COS                                            "SC_HID_FUNC_COS"
-#define HID_FUNC_SIN                                            "SC_HID_FUNC_SIN"
-#define HID_FUNC_COT                                            "SC_HID_FUNC_COT"
-#define HID_FUNC_TAN                                            "SC_HID_FUNC_TAN"
-#define HID_FUNC_COSHYP                                         "SC_HID_FUNC_COSHYP"
-#define HID_FUNC_SINHYP                                         "SC_HID_FUNC_SINHYP"
-#define HID_FUNC_COTHYP                                         "SC_HID_FUNC_COTHYP"
-#define HID_FUNC_TANHYP                                         "SC_HID_FUNC_TANHYP"
-#define HID_FUNC_ARCTAN2                                        "SC_HID_FUNC_ARCTAN2"
-#define HID_FUNC_COSECANT                                       "SC_HID_FUNC_COSECANT"
-#define HID_FUNC_SECANT                                         "SC_HID_FUNC_SECANT"
-#define HID_FUNC_SECANTHYP                                      "SC_HID_FUNC_SECANTHYP"
-#define HID_FUNC_COSECANTHYP                                    "SC_HID_FUNC_COSECANTHYP"
-#define HID_FUNC_DEG                                            "SC_HID_FUNC_DEG"
-#define HID_FUNC_RAD                                            "SC_HID_FUNC_RAD"
-#define HID_FUNC_EXP                                            "SC_HID_FUNC_EXP"
-#define HID_FUNC_LOG                                            "SC_HID_FUNC_LOG"
-#define HID_FUNC_LN                                             "SC_HID_FUNC_LN"
-#define HID_FUNC_LOG10                                          "SC_HID_FUNC_LOG10"
-#define HID_FUNC_FAKULTAET                                      "SC_HID_FUNC_FAKULTAET"
-#define HID_FUNC_REST                                           "SC_HID_FUNC_REST"
-#define HID_FUNC_VORZEICHEN                                     "SC_HID_FUNC_VORZEICHEN"
-#define HID_FUNC_TEILERGEBNIS                                   "SC_HID_FUNC_TEILERGEBNIS"
-#define HID_FUNC_GANZZAHL                                       "SC_HID_FUNC_GANZZAHL"
-#define HID_FUNC_KUERZEN                                        "SC_HID_FUNC_KUERZEN"
-#define HID_FUNC_RUNDEN                                         "SC_HID_FUNC_RUNDEN"
-#define HID_FUNC_AUFRUNDEN                                      "SC_HID_FUNC_AUFRUNDEN"
-#define HID_FUNC_ABRUNDEN                                       "SC_HID_FUNC_ABRUNDEN"
-#define HID_FUNC_GERADE                                         "SC_HID_FUNC_GERADE"
-#define HID_FUNC_UNGERADE                                       "SC_HID_FUNC_UNGERADE"
-#define HID_FUNC_OBERGRENZE                                     "SC_HID_FUNC_OBERGRENZE"
-#define HID_FUNC_UNTERGRENZE                                    "SC_HID_FUNC_UNTERGRENZE"
-#define HID_FUNC_GGT                                            "SC_HID_FUNC_GGT"
-#define HID_FUNC_KGV                                            "SC_HID_FUNC_KGV"
-#define HID_FUNC_UMRECHNEN                                      "SC_HID_FUNC_UMRECHNEN"
-#define HID_FUNC_EUROCONVERT                                    "SC_HID_FUNC_EUROCONVERT"
+inline constexpr OUString HID_FUNC_ABS = u"SC_HID_FUNC_ABS"_ustr;
+inline constexpr OUString HID_FUNC_POTENZ = u"SC_HID_FUNC_POTENZ"_ustr;
+inline constexpr OUString HID_FUNC_ANZAHLLEEREZELLEN = u"SC_HID_FUNC_ANZAHLLEEREZELLEN"_ustr;
+inline constexpr OUString HID_FUNC_PI = u"SC_HID_FUNC_PI"_ustr;
+inline constexpr OUString HID_FUNC_SUMME = u"SC_HID_FUNC_SUMME"_ustr;
+inline constexpr OUString HID_FUNC_QUADRATESUMME = u"SC_HID_FUNC_QUADRATESUMME"_ustr;
+inline constexpr OUString HID_FUNC_PRODUKT = u"SC_HID_FUNC_PRODUKT"_ustr;
+inline constexpr OUString HID_FUNC_SUMMEWENN = u"SC_HID_FUNC_SUMMEWENN"_ustr;
+inline constexpr OUString HID_FUNC_AVERAGEIF = u"SC_HID_FUNC_AVERAGEIF"_ustr;
+inline constexpr OUString HID_FUNC_SUMIFS = u"SC_HID_FUNC_SUMIFS"_ustr;
+inline constexpr OUString HID_FUNC_AVERAGEIFS = u"SC_HID_FUNC_AVERAGEIFS"_ustr;
+inline constexpr OUString HID_FUNC_COUNTIFS = u"SC_HID_FUNC_COUNTIFS"_ustr;
+inline constexpr OUString HID_FUNC_ZAEHLENWENN = u"SC_HID_FUNC_ZAEHLENWENN"_ustr;
+inline constexpr OUString HID_FUNC_WURZEL = u"SC_HID_FUNC_WURZEL"_ustr;
+inline constexpr OUString HID_FUNC_ZUFALLSZAHL = u"SC_HID_FUNC_ZUFALLSZAHL"_ustr;
+inline constexpr OUString HID_FUNC_ISTGERADE = u"SC_HID_FUNC_ISTGERADE"_ustr;
+inline constexpr OUString HID_FUNC_ISTUNGERADE = u"SC_HID_FUNC_ISTUNGERADE"_ustr;
+inline constexpr OUString HID_FUNC_KOMBINATIONEN = u"SC_HID_FUNC_KOMBINATIONEN"_ustr;
+inline constexpr OUString HID_FUNC_KOMBINATIONEN2 = u"SC_HID_FUNC_KOMBINATIONEN2"_ustr;
+inline constexpr OUString HID_FUNC_ARCCOS = u"SC_HID_FUNC_ARCCOS"_ustr;
+inline constexpr OUString HID_FUNC_ARCSIN = u"SC_HID_FUNC_ARCSIN"_ustr;
+inline constexpr OUString HID_FUNC_ARCOSHYP = u"SC_HID_FUNC_ARCOSHYP"_ustr;
+inline constexpr OUString HID_FUNC_ARSINHYP = u"SC_HID_FUNC_ARSINHYP"_ustr;
+inline constexpr OUString HID_FUNC_ARCCOT = u"SC_HID_FUNC_ARCCOT"_ustr;
+inline constexpr OUString HID_FUNC_ARCTAN = u"SC_HID_FUNC_ARCTAN"_ustr;
+inline constexpr OUString HID_FUNC_ARCOTHYP = u"SC_HID_FUNC_ARCOTHYP"_ustr;
+inline constexpr OUString HID_FUNC_ARTANHYP = u"SC_HID_FUNC_ARTANHYP"_ustr;
+inline constexpr OUString HID_FUNC_COS = u"SC_HID_FUNC_COS"_ustr;
+inline constexpr OUString HID_FUNC_SIN = u"SC_HID_FUNC_SIN"_ustr;
+inline constexpr OUString HID_FUNC_COT = u"SC_HID_FUNC_COT"_ustr;
+inline constexpr OUString HID_FUNC_TAN = u"SC_HID_FUNC_TAN"_ustr;
+inline constexpr OUString HID_FUNC_COSHYP = u"SC_HID_FUNC_COSHYP"_ustr;
+inline constexpr OUString HID_FUNC_SINHYP = u"SC_HID_FUNC_SINHYP"_ustr;
+inline constexpr OUString HID_FUNC_COTHYP = u"SC_HID_FUNC_COTHYP"_ustr;
+inline constexpr OUString HID_FUNC_TANHYP = u"SC_HID_FUNC_TANHYP"_ustr;
+inline constexpr OUString HID_FUNC_ARCTAN2 = u"SC_HID_FUNC_ARCTAN2"_ustr;
+inline constexpr OUString HID_FUNC_COSECANT = u"SC_HID_FUNC_COSECANT"_ustr;
+inline constexpr OUString HID_FUNC_SECANT = u"SC_HID_FUNC_SECANT"_ustr;
+inline constexpr OUString HID_FUNC_SECANTHYP = u"SC_HID_FUNC_SECANTHYP"_ustr;
+inline constexpr OUString HID_FUNC_COSECANTHYP = u"SC_HID_FUNC_COSECANTHYP"_ustr;
+inline constexpr OUString HID_FUNC_DEG = u"SC_HID_FUNC_DEG"_ustr;
+inline constexpr OUString HID_FUNC_RAD = u"SC_HID_FUNC_RAD"_ustr;
+inline constexpr OUString HID_FUNC_EXP = u"SC_HID_FUNC_EXP"_ustr;
+inline constexpr OUString HID_FUNC_LOG = u"SC_HID_FUNC_LOG"_ustr;
+inline constexpr OUString HID_FUNC_LN = u"SC_HID_FUNC_LN"_ustr;
+inline constexpr OUString HID_FUNC_LOG10 = u"SC_HID_FUNC_LOG10"_ustr;
+inline constexpr OUString HID_FUNC_FAKULTAET = u"SC_HID_FUNC_FAKULTAET"_ustr;
+inline constexpr OUString HID_FUNC_REST = u"SC_HID_FUNC_REST"_ustr;
+inline constexpr OUString HID_FUNC_VORZEICHEN = u"SC_HID_FUNC_VORZEICHEN"_ustr;
+inline constexpr OUString HID_FUNC_TEILERGEBNIS = u"SC_HID_FUNC_TEILERGEBNIS"_ustr;
+inline constexpr OUString HID_FUNC_GANZZAHL = u"SC_HID_FUNC_GANZZAHL"_ustr;
+inline constexpr OUString HID_FUNC_KUERZEN = u"SC_HID_FUNC_KUERZEN"_ustr;
+inline constexpr OUString HID_FUNC_RUNDEN = u"SC_HID_FUNC_RUNDEN"_ustr;
+inline constexpr OUString HID_FUNC_AUFRUNDEN = u"SC_HID_FUNC_AUFRUNDEN"_ustr;
+inline constexpr OUString HID_FUNC_ABRUNDEN = u"SC_HID_FUNC_ABRUNDEN"_ustr;
+inline constexpr OUString HID_FUNC_GERADE = u"SC_HID_FUNC_GERADE"_ustr;
+inline constexpr OUString HID_FUNC_UNGERADE = u"SC_HID_FUNC_UNGERADE"_ustr;
+inline constexpr OUString HID_FUNC_OBERGRENZE = u"SC_HID_FUNC_OBERGRENZE"_ustr;
+inline constexpr OUString HID_FUNC_UNTERGRENZE = u"SC_HID_FUNC_UNTERGRENZE"_ustr;
+inline constexpr OUString HID_FUNC_GGT = u"SC_HID_FUNC_GGT"_ustr;
+inline constexpr OUString HID_FUNC_KGV = u"SC_HID_FUNC_KGV"_ustr;
+inline constexpr OUString HID_FUNC_UMRECHNEN = u"SC_HID_FUNC_UMRECHNEN"_ustr;
+inline constexpr OUString HID_FUNC_EUROCONVERT = u"SC_HID_FUNC_EUROCONVERT"_ustr;
 
-#define HID_FUNC_MTRANS                                         "SC_HID_FUNC_MTRANS"
-#define HID_FUNC_MMULT                                          "SC_HID_FUNC_MMULT"
-#define HID_FUNC_MDET                                           "SC_HID_FUNC_MDET"
-#define HID_FUNC_MINV                                           "SC_HID_FUNC_MINV"
-#define HID_FUNC_EINHEITSMATRIX                                 "SC_HID_FUNC_EINHEITSMATRIX"
-#define HID_FUNC_SUMMENPRODUKT                                  "SC_HID_FUNC_SUMMENPRODUKT"
-#define HID_FUNC_SUMMEX2MY2                                     "SC_HID_FUNC_SUMMEX2MY2"
-#define HID_FUNC_SUMMEX2PY2                                     "SC_HID_FUNC_SUMMEX2PY2"
-#define HID_FUNC_SUMMEXMY2                                      "SC_HID_FUNC_SUMMEXMY2"
-#define HID_FUNC_HAEUFIGKEIT                                    "SC_HID_FUNC_HAEUFIGKEIT"
-#define HID_FUNC_RGP                                            "SC_HID_FUNC_RGP"
-#define HID_FUNC_RKP                                            "SC_HID_FUNC_RKP"
-#define HID_FUNC_TREND                                          "SC_HID_FUNC_TREND"
-#define HID_FUNC_VARIATION                                      "SC_HID_FUNC_VARIATION"
+inline constexpr OUString HID_FUNC_MTRANS = u"SC_HID_FUNC_MTRANS"_ustr;
+inline constexpr OUString HID_FUNC_MMULT = u"SC_HID_FUNC_MMULT"_ustr;
+inline constexpr OUString HID_FUNC_MDET = u"SC_HID_FUNC_MDET"_ustr;
+inline constexpr OUString HID_FUNC_MINV = u"SC_HID_FUNC_MINV"_ustr;
+inline constexpr OUString HID_FUNC_EINHEITSMATRIX = u"SC_HID_FUNC_EINHEITSMATRIX"_ustr;
+inline constexpr OUString HID_FUNC_SUMMENPRODUKT = u"SC_HID_FUNC_SUMMENPRODUKT"_ustr;
+inline constexpr OUString HID_FUNC_SUMMEX2MY2 = u"SC_HID_FUNC_SUMMEX2MY2"_ustr;
+inline constexpr OUString HID_FUNC_SUMMEX2PY2 = u"SC_HID_FUNC_SUMMEX2PY2"_ustr;
+inline constexpr OUString HID_FUNC_SUMMEXMY2 = u"SC_HID_FUNC_SUMMEXMY2"_ustr;
+inline constexpr OUString HID_FUNC_HAEUFIGKEIT = u"SC_HID_FUNC_HAEUFIGKEIT"_ustr;
+inline constexpr OUString HID_FUNC_RGP = u"SC_HID_FUNC_RGP"_ustr;
+inline constexpr OUString HID_FUNC_RKP = u"SC_HID_FUNC_RKP"_ustr;
+inline constexpr OUString HID_FUNC_TREND = u"SC_HID_FUNC_TREND"_ustr;
+inline constexpr OUString HID_FUNC_VARIATION = u"SC_HID_FUNC_VARIATION"_ustr;
 
-#define HID_FUNC_ANZAHL                                         "SC_HID_FUNC_ANZAHL"
-#define HID_FUNC_ANZAHL2                                        "SC_HID_FUNC_ANZAHL2"
-#define HID_FUNC_MAX                                            "SC_HID_FUNC_MAX"
-#define HID_FUNC_MIN                                            "SC_HID_FUNC_MIN"
-#define HID_FUNC_VARIANZ                                        "SC_HID_FUNC_VARIANZ"
-#define HID_FUNC_VARIANZEN                                      "SC_HID_FUNC_VARIANZEN"
-#define HID_FUNC_STABW                                          "SC_HID_FUNC_STABW"
-#define HID_FUNC_STABWN                                         "SC_HID_FUNC_STABWN"
-#define HID_FUNC_MITTELWERT                                     "SC_HID_FUNC_MITTELWERT"
-#define HID_FUNC_SUMQUADABW                                     "SC_HID_FUNC_SUMQUADABW"
-#define HID_FUNC_MITTELABW                                      "SC_HID_FUNC_MITTELABW"
-#define HID_FUNC_SCHIEFE                                        "SC_HID_FUNC_SCHIEFE"
-#define HID_FUNC_SKEWP                                          "SC_HID_FUNC_SKEWP"
-#define HID_FUNC_KURT                                           "SC_HID_FUNC_KURT"
-#define HID_FUNC_GEOMITTEL                                      "SC_HID_FUNC_GEOMITTEL"
-#define HID_FUNC_HARMITTEL                                      "SC_HID_FUNC_HARMITTEL"
-#define HID_FUNC_MODALWERT                                      "SC_HID_FUNC_MODALWERT"
-#define HID_FUNC_MEDIAN                                         "SC_HID_FUNC_MEDIAN"
-#define HID_FUNC_QUANTIL                                        "SC_HID_FUNC_QUANTIL"
-#define HID_FUNC_QUARTILE                                       "SC_HID_FUNC_QUARTILE"
-#define HID_FUNC_KGROESSTE                                      "SC_HID_FUNC_KGROESSTE"
-#define HID_FUNC_KKLEINSTE                                      "SC_HID_FUNC_KKLEINSTE"
-#define HID_FUNC_QUANTILSRANG                                   "SC_HID_FUNC_QUANTILSRANG"
-#define HID_FUNC_RANG                                           "SC_HID_FUNC_RANG"
-#define HID_FUNC_GESTUTZTMITTEL                                 "SC_HID_FUNC_GESTUTZTMITTEL"
-#define HID_FUNC_WAHRSCHBEREICH                                 "SC_HID_FUNC_WAHRSCHBEREICH"
-#define HID_FUNC_B                                              "SC_HID_FUNC_B"
-#define HID_FUNC_PHI                                            "SC_HID_FUNC_PHI"
-#define HID_FUNC_GAUSS                                          "SC_HID_FUNC_GAUSS"
-#define HID_FUNC_FISHER                                         "SC_HID_FUNC_FISHER"
-#define HID_FUNC_FISHERINV                                      "SC_HID_FUNC_FISHERINV"
-#define HID_FUNC_BINOMVERT                                      "SC_HID_FUNC_BINOMVERT"
-#define HID_FUNC_NEGBINOMVERT                                   "SC_HID_FUNC_NEGBINOMVERT"
-#define HID_FUNC_KRITBINOM                                      "SC_HID_FUNC_KRITBINOM"
-#define HID_FUNC_POISSON                                        "SC_HID_FUNC_POISSON"
-#define HID_FUNC_NORMVERT                                       "SC_HID_FUNC_NORMVERT"
-#define HID_FUNC_NORMINV                                        "SC_HID_FUNC_NORMINV"
-#define HID_FUNC_STANDNORMVERT                                  "SC_HID_FUNC_STANDNORMVERT"
-#define HID_FUNC_STANDNORMINV                                   "SC_HID_FUNC_STANDNORMINV"
-#define HID_FUNC_LOGNORMVERT                                    "SC_HID_FUNC_LOGNORMVERT"
-#define HID_FUNC_LOGINV                                         "SC_HID_FUNC_LOGINV"
-#define HID_FUNC_EXPONVERT                                      "SC_HID_FUNC_EXPONVERT"
-#define HID_FUNC_GAMMAVERT                                      "SC_HID_FUNC_GAMMAVERT"
-#define HID_FUNC_GAMMAINV                                       "SC_HID_FUNC_GAMMAINV"
-#define HID_FUNC_GAMMALN                                        "SC_HID_FUNC_GAMMALN"
-#define HID_FUNC_BETAVERT                                       "SC_HID_FUNC_BETAVERT"
-#define HID_FUNC_BETAINV                                        "SC_HID_FUNC_BETAINV"
-#define HID_FUNC_WEIBULL                                        "SC_HID_FUNC_WEIBULL"
-#define HID_FUNC_HYPGEOMVERT                                    "SC_HID_FUNC_HYPGEOMVERT"
-#define HID_FUNC_TVERT                                          "SC_HID_FUNC_TVERT"
-#define HID_FUNC_TINV                                           "SC_HID_FUNC_TINV"
-#define HID_FUNC_FVERT                                          "SC_HID_FUNC_FVERT"
-#define HID_FUNC_FINV                                           "SC_HID_FUNC_FINV"
-#define HID_FUNC_CHIVERT                                        "SC_HID_FUNC_CHIVERT"
-#define HID_FUNC_CHIINV                                         "SC_HID_FUNC_CHIINV"
-#define HID_FUNC_STANDARDISIERUNG                               "SC_HID_FUNC_STANDARDISIERUNG"
-#define HID_FUNC_VARIATIONEN                                    "SC_HID_FUNC_VARIATIONEN"
-#define HID_FUNC_VARIATIONEN2                                   "SC_HID_FUNC_VARIATIONEN2"
-#define HID_FUNC_KONFIDENZ                                      "SC_HID_FUNC_KONFIDENZ"
-#define HID_FUNC_GTEST                                          "SC_HID_FUNC_GTEST"
-#define HID_FUNC_CHITEST                                        "SC_HID_FUNC_CHITEST"
-#define HID_FUNC_FTEST                                          "SC_HID_FUNC_FTEST"
-#define HID_FUNC_TTEST                                          "SC_HID_FUNC_TTEST"
-#define HID_FUNC_BESTIMMTHEITSMASS                              "SC_HID_FUNC_BESTIMMTHEITSMASS"
-#define HID_FUNC_ACHSENABSCHNITT                                "SC_HID_FUNC_ACHSENABSCHNITT"
-#define HID_FUNC_STEIGUNG                                       "SC_HID_FUNC_STEIGUNG"
-#define HID_FUNC_STFEHLERYX                                     "SC_HID_FUNC_STFEHLERYX"
-#define HID_FUNC_PEARSON                                        "SC_HID_FUNC_PEARSON"
-#define HID_FUNC_KORREL                                         "SC_HID_FUNC_KORREL"
-#define HID_FUNC_KOVAR                                          "SC_HID_FUNC_KOVAR"
-#define HID_FUNC_SCHAETZER                                      "SC_HID_FUNC_SCHAETZER"
-#define HID_FUNC_MINA                                           "SC_HID_FUNC_MINA"
-#define HID_FUNC_MAXA                                           "SC_HID_FUNC_MAXA"
-#define HID_FUNC_MITTELWERTA                                    "SC_HID_FUNC_MITTELWERTA"
-#define HID_FUNC_STABWA                                         "SC_HID_FUNC_STABWA"
-#define HID_FUNC_STABWNA                                        "SC_HID_FUNC_STABWNA"
-#define HID_FUNC_VARIANZA                                       "SC_HID_FUNC_VARIANZA"
-#define HID_FUNC_VARIANZENA                                     "SC_HID_FUNC_VARIANZENA"
-#define HID_FUNC_CHISQDIST                                      "SC_HID_FUNC_CHISQDIST"
-#define HID_FUNC_CHISQINV                                       "SC_HID_FUNC_CHISQINV"
-#define HID_FUNC_GAMMA                                          "SC_HID_FUNC_GAMMA"
+inline constexpr OUString HID_FUNC_ANZAHL = u"SC_HID_FUNC_ANZAHL"_ustr;
+inline constexpr OUString HID_FUNC_ANZAHL2 = u"SC_HID_FUNC_ANZAHL2"_ustr;
+inline constexpr OUString HID_FUNC_MAX = u"SC_HID_FUNC_MAX"_ustr;
+inline constexpr OUString HID_FUNC_MIN = u"SC_HID_FUNC_MIN"_ustr;
+inline constexpr OUString HID_FUNC_VARIANZ = u"SC_HID_FUNC_VARIANZ"_ustr;
+inline constexpr OUString HID_FUNC_VARIANZEN = u"SC_HID_FUNC_VARIANZEN"_ustr;
+inline constexpr OUString HID_FUNC_STABW = u"SC_HID_FUNC_STABW"_ustr;
+inline constexpr OUString HID_FUNC_STABWN = u"SC_HID_FUNC_STABWN"_ustr;
+inline constexpr OUString HID_FUNC_MITTELWERT = u"SC_HID_FUNC_MITTELWERT"_ustr;
+inline constexpr OUString HID_FUNC_SUMQUADABW = u"SC_HID_FUNC_SUMQUADABW"_ustr;
+inline constexpr OUString HID_FUNC_MITTELABW = u"SC_HID_FUNC_MITTELABW"_ustr;
+inline constexpr OUString HID_FUNC_SCHIEFE = u"SC_HID_FUNC_SCHIEFE"_ustr;
+inline constexpr OUString HID_FUNC_SKEWP = u"SC_HID_FUNC_SKEWP"_ustr;
+inline constexpr OUString HID_FUNC_KURT = u"SC_HID_FUNC_KURT"_ustr;
+inline constexpr OUString HID_FUNC_GEOMITTEL = u"SC_HID_FUNC_GEOMITTEL"_ustr;
+inline constexpr OUString HID_FUNC_HARMITTEL = u"SC_HID_FUNC_HARMITTEL"_ustr;
+inline constexpr OUString HID_FUNC_MODALWERT = u"SC_HID_FUNC_MODALWERT"_ustr;
+inline constexpr OUString HID_FUNC_MEDIAN = u"SC_HID_FUNC_MEDIAN"_ustr;
+inline constexpr OUString HID_FUNC_QUANTIL = u"SC_HID_FUNC_QUANTIL"_ustr;
+inline constexpr OUString HID_FUNC_QUARTILE = u"SC_HID_FUNC_QUARTILE"_ustr;
+inline constexpr OUString HID_FUNC_KGROESSTE = u"SC_HID_FUNC_KGROESSTE"_ustr;
+inline constexpr OUString HID_FUNC_KKLEINSTE = u"SC_HID_FUNC_KKLEINSTE"_ustr;
+inline constexpr OUString HID_FUNC_QUANTILSRANG = u"SC_HID_FUNC_QUANTILSRANG"_ustr;
+inline constexpr OUString HID_FUNC_RANG = u"SC_HID_FUNC_RANG"_ustr;
+inline constexpr OUString HID_FUNC_GESTUTZTMITTEL = u"SC_HID_FUNC_GESTUTZTMITTEL"_ustr;
+inline constexpr OUString HID_FUNC_WAHRSCHBEREICH = u"SC_HID_FUNC_WAHRSCHBEREICH"_ustr;
+inline constexpr OUString HID_FUNC_B = u"SC_HID_FUNC_B"_ustr;
+inline constexpr OUString HID_FUNC_PHI = u"SC_HID_FUNC_PHI"_ustr;
+inline constexpr OUString HID_FUNC_GAUSS = u"SC_HID_FUNC_GAUSS"_ustr;
+inline constexpr OUString HID_FUNC_FISHER = u"SC_HID_FUNC_FISHER"_ustr;
+inline constexpr OUString HID_FUNC_FISHERINV = u"SC_HID_FUNC_FISHERINV"_ustr;
+inline constexpr OUString HID_FUNC_BINOMVERT = u"SC_HID_FUNC_BINOMVERT"_ustr;
+inline constexpr OUString HID_FUNC_NEGBINOMVERT = u"SC_HID_FUNC_NEGBINOMVERT"_ustr;
+inline constexpr OUString HID_FUNC_KRITBINOM = u"SC_HID_FUNC_KRITBINOM"_ustr;
+inline constexpr OUString HID_FUNC_POISSON = u"SC_HID_FUNC_POISSON"_ustr;
+inline constexpr OUString HID_FUNC_NORMVERT = u"SC_HID_FUNC_NORMVERT"_ustr;
+inline constexpr OUString HID_FUNC_NORMINV = u"SC_HID_FUNC_NORMINV"_ustr;
+inline constexpr OUString HID_FUNC_STANDNORMVERT = u"SC_HID_FUNC_STANDNORMVERT"_ustr;
+inline constexpr OUString HID_FUNC_STANDNORMINV = u"SC_HID_FUNC_STANDNORMINV"_ustr;
+inline constexpr OUString HID_FUNC_LOGNORMVERT = u"SC_HID_FUNC_LOGNORMVERT"_ustr;
+inline constexpr OUString HID_FUNC_LOGINV = u"SC_HID_FUNC_LOGINV"_ustr;
+inline constexpr OUString HID_FUNC_EXPONVERT = u"SC_HID_FUNC_EXPONVERT"_ustr;
+inline constexpr OUString HID_FUNC_GAMMAVERT = u"SC_HID_FUNC_GAMMAVERT"_ustr;
+inline constexpr OUString HID_FUNC_GAMMAINV = u"SC_HID_FUNC_GAMMAINV"_ustr;
+inline constexpr OUString HID_FUNC_GAMMALN = u"SC_HID_FUNC_GAMMALN"_ustr;
+inline constexpr OUString HID_FUNC_BETAVERT = u"SC_HID_FUNC_BETAVERT"_ustr;
+inline constexpr OUString HID_FUNC_BETAINV = u"SC_HID_FUNC_BETAINV"_ustr;
+inline constexpr OUString HID_FUNC_WEIBULL = u"SC_HID_FUNC_WEIBULL"_ustr;
+inline constexpr OUString HID_FUNC_HYPGEOMVERT = u"SC_HID_FUNC_HYPGEOMVERT"_ustr;
+inline constexpr OUString HID_FUNC_TVERT = u"SC_HID_FUNC_TVERT"_ustr;
+inline constexpr OUString HID_FUNC_TINV = u"SC_HID_FUNC_TINV"_ustr;
+inline constexpr OUString HID_FUNC_FVERT = u"SC_HID_FUNC_FVERT"_ustr;
+inline constexpr OUString HID_FUNC_FINV = u"SC_HID_FUNC_FINV"_ustr;
+inline constexpr OUString HID_FUNC_CHIVERT = u"SC_HID_FUNC_CHIVERT"_ustr;
+inline constexpr OUString HID_FUNC_CHIINV = u"SC_HID_FUNC_CHIINV"_ustr;
+inline constexpr OUString HID_FUNC_STANDARDISIERUNG = u"SC_HID_FUNC_STANDARDISIERUNG"_ustr;
+inline constexpr OUString HID_FUNC_VARIATIONEN = u"SC_HID_FUNC_VARIATIONEN"_ustr;
+inline constexpr OUString HID_FUNC_VARIATIONEN2 = u"SC_HID_FUNC_VARIATIONEN2"_ustr;
+inline constexpr OUString HID_FUNC_KONFIDENZ = u"SC_HID_FUNC_KONFIDENZ"_ustr;
+inline constexpr OUString HID_FUNC_GTEST = u"SC_HID_FUNC_GTEST"_ustr;
+inline constexpr OUString HID_FUNC_CHITEST = u"SC_HID_FUNC_CHITEST"_ustr;
+inline constexpr OUString HID_FUNC_FTEST = u"SC_HID_FUNC_FTEST"_ustr;
+inline constexpr OUString HID_FUNC_TTEST = u"SC_HID_FUNC_TTEST"_ustr;
+inline constexpr OUString HID_FUNC_BESTIMMTHEITSMASS = u"SC_HID_FUNC_BESTIMMTHEITSMASS"_ustr;
+inline constexpr OUString HID_FUNC_ACHSENABSCHNITT = u"SC_HID_FUNC_ACHSENABSCHNITT"_ustr;
+inline constexpr OUString HID_FUNC_STEIGUNG = u"SC_HID_FUNC_STEIGUNG"_ustr;
+inline constexpr OUString HID_FUNC_STFEHLERYX = u"SC_HID_FUNC_STFEHLERYX"_ustr;
+inline constexpr OUString HID_FUNC_PEARSON = u"SC_HID_FUNC_PEARSON"_ustr;
+inline constexpr OUString HID_FUNC_KORREL = u"SC_HID_FUNC_KORREL"_ustr;
+inline constexpr OUString HID_FUNC_KOVAR = u"SC_HID_FUNC_KOVAR"_ustr;
+inline constexpr OUString HID_FUNC_SCHAETZER = u"SC_HID_FUNC_SCHAETZER"_ustr;
+inline constexpr OUString HID_FUNC_MINA = u"SC_HID_FUNC_MINA"_ustr;
+inline constexpr OUString HID_FUNC_MAXA = u"SC_HID_FUNC_MAXA"_ustr;
+inline constexpr OUString HID_FUNC_MITTELWERTA = u"SC_HID_FUNC_MITTELWERTA"_ustr;
+inline constexpr OUString HID_FUNC_STABWA = u"SC_HID_FUNC_STABWA"_ustr;
+inline constexpr OUString HID_FUNC_STABWNA = u"SC_HID_FUNC_STABWNA"_ustr;
+inline constexpr OUString HID_FUNC_VARIANZA = u"SC_HID_FUNC_VARIANZA"_ustr;
+inline constexpr OUString HID_FUNC_VARIANZENA = u"SC_HID_FUNC_VARIANZENA"_ustr;
+inline constexpr OUString HID_FUNC_CHISQDIST = u"SC_HID_FUNC_CHISQDIST"_ustr;
+inline constexpr OUString HID_FUNC_CHISQINV = u"SC_HID_FUNC_CHISQINV"_ustr;
+inline constexpr OUString HID_FUNC_GAMMA = u"SC_HID_FUNC_GAMMA"_ustr;
 
-#define HID_FUNC_ADRESSE                                        "SC_HID_FUNC_ADRESSE"
-#define HID_FUNC_BEREICHE                                       "SC_HID_FUNC_BEREICHE"
-#define HID_FUNC_WAHL                                           "SC_HID_FUNC_WAHL"
-#define HID_FUNC_SPALTE                                         "SC_HID_FUNC_SPALTE"
-#define HID_FUNC_ZEILE                                          "SC_HID_FUNC_ZEILE"
-#define HID_FUNC_SPALTEN                                        "SC_HID_FUNC_SPALTEN"
-#define HID_FUNC_ZEILEN                                         "SC_HID_FUNC_ZEILEN"
-#define HID_FUNC_WVERWEIS                                       "SC_HID_FUNC_WVERWEIS"
-#define HID_FUNC_SVERWEIS                                       "SC_HID_FUNC_SVERWEIS"
-#define HID_FUNC_INDEX                                          "SC_HID_FUNC_INDEX"
-#define HID_FUNC_INDIREKT                                       "SC_HID_FUNC_INDIREKT"
-#define HID_FUNC_VERWEIS                                        "SC_HID_FUNC_VERWEIS"
-#define HID_FUNC_VERGLEICH                                      "SC_HID_FUNC_VERGLEICH"
-#define HID_FUNC_VERSCHIEBUNG                                   "SC_HID_FUNC_VERSCHIEBUNG"
-#define HID_FUNC_FEHLERTYP                                      "SC_HID_FUNC_FEHLERTYP"
-#define HID_FUNC_VORLAGE                                        "SC_HID_FUNC_VORLAGE"
-#define HID_FUNC_DDE                                            "SC_HID_FUNC_DDE"
-#define HID_FUNC_TABELLE                                        "SC_HID_FUNC_TABELLE"
-#define HID_FUNC_TABELLEN                                       "SC_HID_FUNC_TABELLEN"
-#define HID_FUNC_HYPERLINK                                      "SC_HID_FUNC_HYPERLINK"
-#define HID_FUNC_GETPIVOTDATA                                   "SC_HID_FUNC_GETPIVOTDATA"
+inline constexpr OUString HID_FUNC_ADRESSE = u"SC_HID_FUNC_ADRESSE"_ustr;
+inline constexpr OUString HID_FUNC_BEREICHE = u"SC_HID_FUNC_BEREICHE"_ustr;
+inline constexpr OUString HID_FUNC_WAHL = u"SC_HID_FUNC_WAHL"_ustr;
+inline constexpr OUString HID_FUNC_SPALTE = u"SC_HID_FUNC_SPALTE"_ustr;
+inline constexpr OUString HID_FUNC_ZEILE = u"SC_HID_FUNC_ZEILE"_ustr;
+inline constexpr OUString HID_FUNC_SPALTEN = u"SC_HID_FUNC_SPALTEN"_ustr;
+inline constexpr OUString HID_FUNC_ZEILEN = u"SC_HID_FUNC_ZEILEN"_ustr;
+inline constexpr OUString HID_FUNC_WVERWEIS = u"SC_HID_FUNC_WVERWEIS"_ustr;
+inline constexpr OUString HID_FUNC_SVERWEIS = u"SC_HID_FUNC_SVERWEIS"_ustr;
+inline constexpr OUString HID_FUNC_INDEX = u"SC_HID_FUNC_INDEX"_ustr;
+inline constexpr OUString HID_FUNC_INDIREKT = u"SC_HID_FUNC_INDIREKT"_ustr;
+inline constexpr OUString HID_FUNC_VERWEIS = u"SC_HID_FUNC_VERWEIS"_ustr;
+inline constexpr OUString HID_FUNC_VERGLEICH = u"SC_HID_FUNC_VERGLEICH"_ustr;
+inline constexpr OUString HID_FUNC_VERSCHIEBUNG = u"SC_HID_FUNC_VERSCHIEBUNG"_ustr;
+inline constexpr OUString HID_FUNC_FEHLERTYP = u"SC_HID_FUNC_FEHLERTYP"_ustr;
+inline constexpr OUString HID_FUNC_VORLAGE = u"SC_HID_FUNC_VORLAGE"_ustr;
+inline constexpr OUString HID_FUNC_DDE = u"SC_HID_FUNC_DDE"_ustr;
+inline constexpr OUString HID_FUNC_TABELLE = u"SC_HID_FUNC_TABELLE"_ustr;
+inline constexpr OUString HID_FUNC_TABELLEN = u"SC_HID_FUNC_TABELLEN"_ustr;
+inline constexpr OUString HID_FUNC_HYPERLINK = u"SC_HID_FUNC_HYPERLINK"_ustr;
+inline constexpr OUString HID_FUNC_GETPIVOTDATA = u"SC_HID_FUNC_GETPIVOTDATA"_ustr;
 
-#define HID_FUNC_CODE                                           "SC_HID_FUNC_CODE"
-#define HID_FUNC_DM                                             "SC_HID_FUNC_DM"
-#define HID_FUNC_ZEICHEN                                        "SC_HID_FUNC_ZEICHEN"
-#define HID_FUNC_SAEUBERN                                       "SC_HID_FUNC_SAEUBERN"
-#define HID_FUNC_VERKETTEN                                      "SC_HID_FUNC_VERKETTEN"
-#define HID_FUNC_IDENTISCH                                      "SC_HID_FUNC_IDENTISCH"
-#define HID_FUNC_FINDEN                                         "SC_HID_FUNC_FINDEN"
-#define HID_FUNC_SUCHEN                                         "SC_HID_FUNC_SUCHEN"
-#define HID_FUNC_GLAETTEN                                       "SC_HID_FUNC_GLAETTEN"
-#define HID_FUNC_GROSS2                                         "SC_HID_FUNC_GROSS2"
-#define HID_FUNC_GROSS                                          "SC_HID_FUNC_GROSS"
-#define HID_FUNC_KLEIN                                          "SC_HID_FUNC_KLEIN"
-#define HID_FUNC_WERT                                           "SC_HID_FUNC_WERT"
-#define HID_FUNC_TEXT                                           "SC_HID_FUNC_TEXT"
-#define HID_FUNC_T                                              "SC_HID_FUNC_T"
-#define HID_FUNC_ERSETZEN                                       "SC_HID_FUNC_ERSETZEN"
-#define HID_FUNC_FEST                                           "SC_HID_FUNC_FEST"
-#define HID_FUNC_LAENGE                                         "SC_HID_FUNC_LAENGE"
-#define HID_FUNC_LINKS                                          "SC_HID_FUNC_LINKS"
-#define HID_FUNC_RECHTS                                         "SC_HID_FUNC_RECHTS"
-#define HID_FUNC_TEIL                                           "SC_HID_FUNC_TEIL"
-#define HID_FUNC_LENB                                           "SC_HID_FUNC_LENB"
-#define HID_FUNC_RIGHTB                                         "SC_HID_FUNC_RIGHTB"
-#define HID_FUNC_LEFTB                                          "SC_HID_FUNC_LEFTB"
-#define HID_FUNC_MIDB                                           "SC_HID_FUNC_MIDB"
-#define HID_FUNC_WIEDERHOLEN                                    "SC_HID_FUNC_WIEDERHOLEN"
-#define HID_FUNC_WECHSELN                                       "SC_HID_FUNC_WECHSELN"
-#define HID_FUNC_BASIS                                          "SC_HID_FUNC_BASIS"
-#define HID_FUNC_DEZIMAL                                        "SC_HID_FUNC_DEZIMAL"
-#define HID_FUNC_ROEMISCH                                       "SC_HID_FUNC_ROEMISCH"
-#define HID_FUNC_ARABISCH                                       "SC_HID_FUNC_ARABISCH"
-#define HID_FUNC_BAHTTEXT                                       "SC_HID_FUNC_BAHTTEXT"
-#define HID_FUNC_JIS                                            "SC_HID_FUNC_JIS"
-#define HID_FUNC_ASC                                            "SC_HID_FUNC_ASC"
-#define HID_FUNC_UNICODE                                        "SC_HID_FUNC_UNICODE"
-#define HID_FUNC_UNICHAR                                        "SC_HID_FUNC_UNICHAR"
-#define HID_FUNC_NUMBERVALUE                                    "SC_HID_FUNC_NUMBERVALUE"
-#define HID_FUNC_BITAND                                         "SC_HID_FUNC_BITAND"
-#define HID_FUNC_BITOR                                          "SC_HID_FUNC_BITOR"
-#define HID_FUNC_BITXOR                                         "SC_HID_FUNC_BITXOR"
-#define HID_FUNC_BITLSHIFT                                      "SC_HID_FUNC_BITLSHIFT"
-#define HID_FUNC_BITRSHIFT                                      "SC_HID_FUNC_BITRSHIFT"
-#define HID_FUNC_FILTERXML                                      "SC_HID_FUNC_FILTERXML"
-#define HID_FUNC_WEBSERVICE                                     "SC_HID_FUNC_WEBSERVICE"
-#define HID_FUNC_ENCODEURL                                      "SC_HID_FUNC_ENCODEURL"
-#define HID_FUNC_COLOR                                          "SC_HID_FUNC_COLOR"
-#define HID_FUNC_COVARIANCE_P                                   "SC_HID_FUNC_COVARIANCE_P"
-#define HID_FUNC_COVARIANCE_S                                   "SC_HID_FUNC_COVARIANCE_S"
-#define HID_FUNC_ST_DEV_P_MS                                    "SC_HID_FUNC_ST_DEV_P_MS"
-#define HID_FUNC_ST_DEV_S                                       "SC_HID_FUNC_ST_DEV_S"
-#define HID_FUNC_VAR_P_MS                                       "SC_HID_FUNC_VAR_P_MS"
-#define HID_FUNC_VAR_S                                          "SC_HID_FUNC_VAR_S"
-#define HID_FUNC_BETADIST_MS                                    "SC_HID_FUNC_BETADIST_MS"
-#define HID_FUNC_BETAINV_MS                                     "SC_HID_FUNC_BETAINV_MS"
-#define HID_FUNC_BINOM_DIST_MS                                  "SC_HID_FUNC_BINOM_DIST_MS"
-#define HID_FUNC_BINOM_INV_MS                                   "SC_HID_FUNC_BINOM_INV_MS"
-#define HID_FUNC_CHIINV_MS                                      "SC_HID_FUNC_CHIINV_MS"
-#define HID_FUNC_CHIVERT_MS                                     "SC_HID_FUNC_CHIVERT_MS"
-#define HID_FUNC_CHITEST_MS                                     "SC_HID_FUNC_CHITEST_MS"
-#define HID_FUNC_CHISQDIST_MS                                   "SC_HID_FUNC_CHISQDIST_MS"
-#define HID_FUNC_CHISQINV_MS                                    "SC_HID_FUNC_CHISQINV_MS"
-#define HID_FUNC_CONFIDENCE_N                                   "SC_HID_FUNC_CONFIDENCE_N"
-#define HID_FUNC_CONFIDENCE_T                                   "SC_HID_FUNC_CONFIDENCE_T"
-#define HID_FUNC_F_DIST_LT                                      "SC_HID_FUNC_F_DIST_LT"
-#define HID_FUNC_F_DIST_RT                                      "SC_HID_FUNC_F_DIST_RT"
-#define HID_FUNC_F_INV_LT                                       "SC_HID_FUNC_F_INV_LT"
-#define HID_FUNC_F_INV_RT                                       "SC_HID_FUNC_F_INV_RT"
-#define HID_FUNC_F_TEST_MS                                      "SC_HID_FUNC_F_TEST_MS"
-#define HID_FUNC_EXP_DIST_MS                                    "SC_HID_FUNC_EXP_DIST_MS"
-#define HID_FUNC_HYP_GEOM_DIST_MS                               "SC_HID_FUNC_HYP_GEOM_DIST_MS"
-#define HID_FUNC_POISSON_DIST_MS                                "SC_HID_FUNC_POISSON_DIST_MS"
-#define HID_FUNC_WEIBULL_DIST_MS                                "SC_HID_FUNC_WEIBULL_DIST_MS"
-#define HID_FUNC_GAMMADIST_MS                                   "SC_HID_FUNC_GAMMADIST_MS"
-#define HID_FUNC_GAMMAINV_MS                                    "SC_HID_FUNC_GAMMAINV_MS"
-#define HID_FUNC_GAMMALN_MS                                     "SC_HID_FUNC_GAMMALN_MS"
-#define HID_FUNC_LOGNORMDIST_MS                                 "SC_HID_FUNC_LOGNORMDIST_MS"
-#define HID_FUNC_NORMDIST_MS                                    "SC_HID_FUNC_NORMDIST_MS"
-#define HID_FUNC_NORMINV_MS                                     "SC_HID_FUNC_NORMINV_MS"
-#define HID_FUNC_STD_NORMDIST_MS                                "SC_HID_FUNC_STD_NORMDIST_MS"
-#define HID_FUNC_STD_NORMINV_MS                                 "SC_HID_FUNC_STD_NORMINV_MS"
-#define HID_FUNC_TDIST_2T                                       "SC_HID_FUNC_TDIST_2T"
-#define HID_FUNC_TDIST_MS                                       "SC_HID_FUNC_TDIST_MS"
-#define HID_FUNC_TDIST_RT                                       "SC_HID_FUNC_TDIST_RT"
-#define HID_FUNC_TINV_2T                                        "SC_HID_FUNC_TINV_2T"
-#define HID_FUNC_TINV_MS                                        "SC_HID_FUNC_TINV_MS"
-#define HID_FUNC_TTEST_MS                                       "SC_HID_FUNC_TTEST_MS"
-#define HID_FUNC_PERCENTILE_EXC                                 "SC_HID_FUNC_PERCENTILE_EXC"
-#define HID_FUNC_PERCENTILE_INC                                 "SC_HID_FUNC_PERCENTILE_INC"
-#define HID_FUNC_PERCENTRANK_EXC                                "SC_HID_FUNC_PERCENTRANK_EXC"
-#define HID_FUNC_PERCENTRANK_INC                                "SC_HID_FUNC_PERCENTRANK_INC"
-#define HID_FUNC_QUARTILE_INC                                   "SC_HID_FUNC_QUARTILE_INC"
-#define HID_FUNC_QUARTILE_EXC                                   "SC_HID_FUNC_QUARTILE_EXC"
-#define HID_FUNC_RANK_EQ                                        "SC_HID_FUNC_RANK_EQ"
-#define HID_FUNC_RANK_AVG                                       "SC_HID_FUNC_RANK_AVG"
-#define HID_FUNC_MODAL_VALUE_MS                                 "SC_HID_FUNC_MODAL_VALUE_MS"
-#define HID_FUNC_MODAL_VALUE_MULTI                              "SC_HID_FUNC_MODAL_VALUE_MULTI"
-#define HID_FUNC_NEGBINOMDIST_MS                                "SC_HID_FUNC_NEGBINOMDIST_MS"
-#define HID_FUNC_Z_TEST_MS                                      "SC_HID_FUNC_Z_TEST_MS"
-#define HID_FUNC_CEIL_MS                                        "SC_HID_FUNC_CEIL_MS"
-#define HID_FUNC_CEIL_PRECISE                                   "SC_HID_FUNC_CEIL_PRECISE"
-#define HID_FUNC_CEIL_ISO                                       "SC_HID_FUNC_CEIL_ISO"
-#define HID_FUNC_FLOOR_MS                                       "SC_HID_FUNC_FLOOR_MS"
-#define HID_FUNC_NETWORKDAYS                                    "SC_HID_FUNC_NETWORKDAYS"
-#define HID_FUNC_NETWORKDAYS_MS                                 "SC_HID_FUNC_NETWORKDAYS_MS"
-#define HID_FUNC_WORKDAY_MS                                     "SC_HID_FUNC_WORKDAY_MS"
-#define HID_FUNC_ERF_MS                                         "SC_HID_FUNC_ERF_MS"
-#define HID_FUNC_ERFC_MS                                        "SC_HID_FUNC_ERFC_MS"
-#define HID_FUNC_AGGREGATE                                      "SC_HID_FUNC_AGGREGATE"
-#define HID_FUNC_ERROR_TYPE_ODF                                 "SC_HID_FUNC_ERROR_TYPE_ODF"
-#define HID_FUNC_CEIL_MATH                                      "SC_HID_FUNC_CEIL_MATH"
-#define HID_FUNC_FLOOR_MATH                                     "SC_HID_FUNC_FLOOR_MATH"
-#define HID_FUNC_FLOOR_PRECISE                                  "SC_HID_FUNC_FLOOR_PRECISE"
-#define HID_FUNC_RAWSUBTRACT                                    "SC_HID_FUNC_RAWSUBTRACT"
-#define HID_FUNC_WEEKNUM_OOO                                    "SC_HID_FUNC_WEEKNUM_OOO"
-#define HID_FUNC_FORECAST_ETS_ADD                               "SC_HID_FUNC_FORECAST_ETS_ADD"
-#define HID_FUNC_FORECAST_ETS_MUL                               "SC_HID_FUNC_FORECAST_ETS_MUL"
-#define HID_FUNC_FORECAST_ETS_PIA                               "SC_HID_FUNC_FORECAST_ETS_PIA"
-#define HID_FUNC_FORECAST_ETS_PIM                               "SC_HID_FUNC_FORECAST_ETS_PIM"
-#define HID_FUNC_FORECAST_ETS_SEA                               "SC_HID_FUNC_FORECAST_ETS_SEA"
-#define HID_FUNC_FORECAST_ETS_STA                               "SC_HID_FUNC_FORECAST_ETS_STA"
-#define HID_FUNC_FORECAST_ETS_STM                               "SC_HID_FUNC_FORECAST_ETS_STM"
-#define HID_FUNC_FORECAST_LIN                                   "SC_HID_FUNC_FORECAST_LIN"
-#define HID_FUNC_CONCAT_MS                                      "SC_HID_FUNC_CONCAT_MS"
-#define HID_FUNC_TEXTJOIN_MS                                    "SC_HID_FUNC_TEXTJOIN_MS"
-#define HID_FUNC_IFS_MS                                         "SC_HID_FUNC_IFS_MS"
-#define HID_FUNC_SWITCH_MS                                      "SC_HID_FUNC_SWITCH_MS"
-#define HID_FUNC_MINIFS_MS                                      "SC_HID_FUNC_MINIFS_MS"
-#define HID_FUNC_MAXIFS_MS                                      "SC_HID_FUNC_MAXIFS_MS"
-#define HID_FUNC_ROUNDSIG                                       "SC_HID_FUNC_ROUNDSIG"
-#define HID_FUNC_REPLACEB                                       "SC_HID_FUNC_REPLACEB"
-#define HID_FUNC_FINDB                                          "SC_HID_FUNC_FINDB"
-#define HID_FUNC_SEARCHB                                        "SC_HID_FUNC_SEARCHB"
-#define HID_FUNC_REGEX                                          "SC_HID_FUNC_REGEX"
-#define HID_FUNC_FOURIER                                        "SC_HID_FUNC_FOURIER"
-#define HID_FUNC_RAND_NV                                        "SC_HID_FUNC_RAND_NV"
-#define HID_FUNC_RANDBETWEEN_NV                                 "SC_HID_FUNC_RANDBETWEEN_NV"
+inline constexpr OUString HID_FUNC_CODE = u"SC_HID_FUNC_CODE"_ustr;
+inline constexpr OUString HID_FUNC_DM = u"SC_HID_FUNC_DM"_ustr;
+inline constexpr OUString HID_FUNC_ZEICHEN = u"SC_HID_FUNC_ZEICHEN"_ustr;
+inline constexpr OUString HID_FUNC_SAEUBERN = u"SC_HID_FUNC_SAEUBERN"_ustr;
+inline constexpr OUString HID_FUNC_VERKETTEN = u"SC_HID_FUNC_VERKETTEN"_ustr;
+inline constexpr OUString HID_FUNC_IDENTISCH = u"SC_HID_FUNC_IDENTISCH"_ustr;
+inline constexpr OUString HID_FUNC_FINDEN = u"SC_HID_FUNC_FINDEN"_ustr;
+inline constexpr OUString HID_FUNC_SUCHEN = u"SC_HID_FUNC_SUCHEN"_ustr;
+inline constexpr OUString HID_FUNC_GLAETTEN = u"SC_HID_FUNC_GLAETTEN"_ustr;
+inline constexpr OUString HID_FUNC_GROSS2 = u"SC_HID_FUNC_GROSS2"_ustr;
+inline constexpr OUString HID_FUNC_GROSS = u"SC_HID_FUNC_GROSS"_ustr;
+inline constexpr OUString HID_FUNC_KLEIN = u"SC_HID_FUNC_KLEIN"_ustr;
+inline constexpr OUString HID_FUNC_WERT = u"SC_HID_FUNC_WERT"_ustr;
+inline constexpr OUString HID_FUNC_TEXT = u"SC_HID_FUNC_TEXT"_ustr;
+inline constexpr OUString HID_FUNC_T = u"SC_HID_FUNC_T"_ustr;
+inline constexpr OUString HID_FUNC_ERSETZEN = u"SC_HID_FUNC_ERSETZEN"_ustr;
+inline constexpr OUString HID_FUNC_FEST = u"SC_HID_FUNC_FEST"_ustr;
+inline constexpr OUString HID_FUNC_LAENGE = u"SC_HID_FUNC_LAENGE"_ustr;
+inline constexpr OUString HID_FUNC_LINKS = u"SC_HID_FUNC_LINKS"_ustr;
+inline constexpr OUString HID_FUNC_RECHTS = u"SC_HID_FUNC_RECHTS"_ustr;
+inline constexpr OUString HID_FUNC_TEIL = u"SC_HID_FUNC_TEIL"_ustr;
+inline constexpr OUString HID_FUNC_LENB = u"SC_HID_FUNC_LENB"_ustr;
+inline constexpr OUString HID_FUNC_RIGHTB = u"SC_HID_FUNC_RIGHTB"_ustr;
+inline constexpr OUString HID_FUNC_LEFTB = u"SC_HID_FUNC_LEFTB"_ustr;
+inline constexpr OUString HID_FUNC_MIDB = u"SC_HID_FUNC_MIDB"_ustr;
+inline constexpr OUString HID_FUNC_WIEDERHOLEN = u"SC_HID_FUNC_WIEDERHOLEN"_ustr;
+inline constexpr OUString HID_FUNC_WECHSELN = u"SC_HID_FUNC_WECHSELN"_ustr;
+inline constexpr OUString HID_FUNC_BASIS = u"SC_HID_FUNC_BASIS"_ustr;
+inline constexpr OUString HID_FUNC_DEZIMAL = u"SC_HID_FUNC_DEZIMAL"_ustr;
+inline constexpr OUString HID_FUNC_ROEMISCH = u"SC_HID_FUNC_ROEMISCH"_ustr;
+inline constexpr OUString HID_FUNC_ARABISCH = u"SC_HID_FUNC_ARABISCH"_ustr;
+inline constexpr OUString HID_FUNC_BAHTTEXT = u"SC_HID_FUNC_BAHTTEXT"_ustr;
+inline constexpr OUString HID_FUNC_JIS = u"SC_HID_FUNC_JIS"_ustr;
+inline constexpr OUString HID_FUNC_ASC = u"SC_HID_FUNC_ASC"_ustr;
+inline constexpr OUString HID_FUNC_UNICODE = u"SC_HID_FUNC_UNICODE"_ustr;
+inline constexpr OUString HID_FUNC_UNICHAR = u"SC_HID_FUNC_UNICHAR"_ustr;
+inline constexpr OUString HID_FUNC_NUMBERVALUE = u"SC_HID_FUNC_NUMBERVALUE"_ustr;
+inline constexpr OUString HID_FUNC_BITAND = u"SC_HID_FUNC_BITAND"_ustr;
+inline constexpr OUString HID_FUNC_BITOR = u"SC_HID_FUNC_BITOR"_ustr;
+inline constexpr OUString HID_FUNC_BITXOR = u"SC_HID_FUNC_BITXOR"_ustr;
+inline constexpr OUString HID_FUNC_BITLSHIFT = u"SC_HID_FUNC_BITLSHIFT"_ustr;
+inline constexpr OUString HID_FUNC_BITRSHIFT = u"SC_HID_FUNC_BITRSHIFT"_ustr;
+inline constexpr OUString HID_FUNC_FILTERXML = u"SC_HID_FUNC_FILTERXML"_ustr;
+inline constexpr OUString HID_FUNC_WEBSERVICE = u"SC_HID_FUNC_WEBSERVICE"_ustr;
+inline constexpr OUString HID_FUNC_ENCODEURL = u"SC_HID_FUNC_ENCODEURL"_ustr;
+inline constexpr OUString HID_FUNC_COLOR = u"SC_HID_FUNC_COLOR"_ustr;
+inline constexpr OUString HID_FUNC_COVARIANCE_P = u"SC_HID_FUNC_COVARIANCE_P"_ustr;
+inline constexpr OUString HID_FUNC_COVARIANCE_S = u"SC_HID_FUNC_COVARIANCE_S"_ustr;
+inline constexpr OUString HID_FUNC_ST_DEV_P_MS = u"SC_HID_FUNC_ST_DEV_P_MS"_ustr;
+inline constexpr OUString HID_FUNC_ST_DEV_S = u"SC_HID_FUNC_ST_DEV_S"_ustr;
+inline constexpr OUString HID_FUNC_VAR_P_MS = u"SC_HID_FUNC_VAR_P_MS"_ustr;
+inline constexpr OUString HID_FUNC_VAR_S = u"SC_HID_FUNC_VAR_S"_ustr;
+inline constexpr OUString HID_FUNC_BETADIST_MS = u"SC_HID_FUNC_BETADIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_BETAINV_MS = u"SC_HID_FUNC_BETAINV_MS"_ustr;
+inline constexpr OUString HID_FUNC_BINOM_DIST_MS = u"SC_HID_FUNC_BINOM_DIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_BINOM_INV_MS = u"SC_HID_FUNC_BINOM_INV_MS"_ustr;
+inline constexpr OUString HID_FUNC_CHIINV_MS = u"SC_HID_FUNC_CHIINV_MS"_ustr;
+inline constexpr OUString HID_FUNC_CHIVERT_MS = u"SC_HID_FUNC_CHIVERT_MS"_ustr;
+inline constexpr OUString HID_FUNC_CHITEST_MS = u"SC_HID_FUNC_CHITEST_MS"_ustr;
+inline constexpr OUString HID_FUNC_CHISQDIST_MS = u"SC_HID_FUNC_CHISQDIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_CHISQINV_MS = u"SC_HID_FUNC_CHISQINV_MS"_ustr;
+inline constexpr OUString HID_FUNC_CONFIDENCE_N = u"SC_HID_FUNC_CONFIDENCE_N"_ustr;
+inline constexpr OUString HID_FUNC_CONFIDENCE_T = u"SC_HID_FUNC_CONFIDENCE_T"_ustr;
+inline constexpr OUString HID_FUNC_F_DIST_LT = u"SC_HID_FUNC_F_DIST_LT"_ustr;
+inline constexpr OUString HID_FUNC_F_DIST_RT = u"SC_HID_FUNC_F_DIST_RT"_ustr;
+inline constexpr OUString HID_FUNC_F_INV_LT = u"SC_HID_FUNC_F_INV_LT"_ustr;
+inline constexpr OUString HID_FUNC_F_INV_RT = u"SC_HID_FUNC_F_INV_RT"_ustr;
+inline constexpr OUString HID_FUNC_F_TEST_MS = u"SC_HID_FUNC_F_TEST_MS"_ustr;
+inline constexpr OUString HID_FUNC_EXP_DIST_MS = u"SC_HID_FUNC_EXP_DIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_HYP_GEOM_DIST_MS = u"SC_HID_FUNC_HYP_GEOM_DIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_POISSON_DIST_MS = u"SC_HID_FUNC_POISSON_DIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_WEIBULL_DIST_MS = u"SC_HID_FUNC_WEIBULL_DIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_GAMMADIST_MS = u"SC_HID_FUNC_GAMMADIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_GAMMAINV_MS = u"SC_HID_FUNC_GAMMAINV_MS"_ustr;
+inline constexpr OUString HID_FUNC_GAMMALN_MS = u"SC_HID_FUNC_GAMMALN_MS"_ustr;
+inline constexpr OUString HID_FUNC_LOGNORMDIST_MS = u"SC_HID_FUNC_LOGNORMDIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_NORMDIST_MS = u"SC_HID_FUNC_NORMDIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_NORMINV_MS = u"SC_HID_FUNC_NORMINV_MS"_ustr;
+inline constexpr OUString HID_FUNC_STD_NORMDIST_MS = u"SC_HID_FUNC_STD_NORMDIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_STD_NORMINV_MS = u"SC_HID_FUNC_STD_NORMINV_MS"_ustr;
+inline constexpr OUString HID_FUNC_TDIST_2T = u"SC_HID_FUNC_TDIST_2T"_ustr;
+inline constexpr OUString HID_FUNC_TDIST_MS = u"SC_HID_FUNC_TDIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_TDIST_RT = u"SC_HID_FUNC_TDIST_RT"_ustr;
+inline constexpr OUString HID_FUNC_TINV_2T = u"SC_HID_FUNC_TINV_2T"_ustr;
+inline constexpr OUString HID_FUNC_TINV_MS = u"SC_HID_FUNC_TINV_MS"_ustr;
+inline constexpr OUString HID_FUNC_TTEST_MS = u"SC_HID_FUNC_TTEST_MS"_ustr;
+inline constexpr OUString HID_FUNC_PERCENTILE_EXC = u"SC_HID_FUNC_PERCENTILE_EXC"_ustr;
+inline constexpr OUString HID_FUNC_PERCENTILE_INC = u"SC_HID_FUNC_PERCENTILE_INC"_ustr;
+inline constexpr OUString HID_FUNC_PERCENTRANK_EXC = u"SC_HID_FUNC_PERCENTRANK_EXC"_ustr;
+inline constexpr OUString HID_FUNC_PERCENTRANK_INC = u"SC_HID_FUNC_PERCENTRANK_INC"_ustr;
+inline constexpr OUString HID_FUNC_QUARTILE_INC = u"SC_HID_FUNC_QUARTILE_INC"_ustr;
+inline constexpr OUString HID_FUNC_QUARTILE_EXC = u"SC_HID_FUNC_QUARTILE_EXC"_ustr;
+inline constexpr OUString HID_FUNC_RANK_EQ = u"SC_HID_FUNC_RANK_EQ"_ustr;
+inline constexpr OUString HID_FUNC_RANK_AVG = u"SC_HID_FUNC_RANK_AVG"_ustr;
+inline constexpr OUString HID_FUNC_MODAL_VALUE_MS = u"SC_HID_FUNC_MODAL_VALUE_MS"_ustr;
+inline constexpr OUString HID_FUNC_MODAL_VALUE_MULTI = u"SC_HID_FUNC_MODAL_VALUE_MULTI"_ustr;
+inline constexpr OUString HID_FUNC_NEGBINOMDIST_MS = u"SC_HID_FUNC_NEGBINOMDIST_MS"_ustr;
+inline constexpr OUString HID_FUNC_Z_TEST_MS = u"SC_HID_FUNC_Z_TEST_MS"_ustr;
+inline constexpr OUString HID_FUNC_CEIL_MS = u"SC_HID_FUNC_CEIL_MS"_ustr;
+inline constexpr OUString HID_FUNC_CEIL_PRECISE = u"SC_HID_FUNC_CEIL_PRECISE"_ustr;
+inline constexpr OUString HID_FUNC_CEIL_ISO = u"SC_HID_FUNC_CEIL_ISO"_ustr;
+inline constexpr OUString HID_FUNC_FLOOR_MS = u"SC_HID_FUNC_FLOOR_MS"_ustr;
+inline constexpr OUString HID_FUNC_NETWORKDAYS = u"SC_HID_FUNC_NETWORKDAYS"_ustr;
+inline constexpr OUString HID_FUNC_NETWORKDAYS_MS = u"SC_HID_FUNC_NETWORKDAYS_MS"_ustr;
+inline constexpr OUString HID_FUNC_WORKDAY_MS = u"SC_HID_FUNC_WORKDAY_MS"_ustr;
+inline constexpr OUString HID_FUNC_ERF_MS = u"SC_HID_FUNC_ERF_MS"_ustr;
+inline constexpr OUString HID_FUNC_ERFC_MS = u"SC_HID_FUNC_ERFC_MS"_ustr;
+inline constexpr OUString HID_FUNC_AGGREGATE = u"SC_HID_FUNC_AGGREGATE"_ustr;
+inline constexpr OUString HID_FUNC_ERROR_TYPE_ODF = u"SC_HID_FUNC_ERROR_TYPE_ODF"_ustr;
+inline constexpr OUString HID_FUNC_CEIL_MATH = u"SC_HID_FUNC_CEIL_MATH"_ustr;
+inline constexpr OUString HID_FUNC_FLOOR_MATH = u"SC_HID_FUNC_FLOOR_MATH"_ustr;
+inline constexpr OUString HID_FUNC_FLOOR_PRECISE = u"SC_HID_FUNC_FLOOR_PRECISE"_ustr;
+inline constexpr OUString HID_FUNC_RAWSUBTRACT = u"SC_HID_FUNC_RAWSUBTRACT"_ustr;
+inline constexpr OUString HID_FUNC_WEEKNUM_OOO = u"SC_HID_FUNC_WEEKNUM_OOO"_ustr;
+inline constexpr OUString HID_FUNC_FORECAST_ETS_ADD = u"SC_HID_FUNC_FORECAST_ETS_ADD"_ustr;
+inline constexpr OUString HID_FUNC_FORECAST_ETS_MUL = u"SC_HID_FUNC_FORECAST_ETS_MUL"_ustr;
+inline constexpr OUString HID_FUNC_FORECAST_ETS_PIA = u"SC_HID_FUNC_FORECAST_ETS_PIA"_ustr;
+inline constexpr OUString HID_FUNC_FORECAST_ETS_PIM = u"SC_HID_FUNC_FORECAST_ETS_PIM"_ustr;
+inline constexpr OUString HID_FUNC_FORECAST_ETS_SEA = u"SC_HID_FUNC_FORECAST_ETS_SEA"_ustr;
+inline constexpr OUString HID_FUNC_FORECAST_ETS_STA = u"SC_HID_FUNC_FORECAST_ETS_STA"_ustr;
+inline constexpr OUString HID_FUNC_FORECAST_ETS_STM = u"SC_HID_FUNC_FORECAST_ETS_STM"_ustr;
+inline constexpr OUString HID_FUNC_FORECAST_LIN = u"SC_HID_FUNC_FORECAST_LIN"_ustr;
+inline constexpr OUString HID_FUNC_CONCAT_MS = u"SC_HID_FUNC_CONCAT_MS"_ustr;
+inline constexpr OUString HID_FUNC_TEXTJOIN_MS = u"SC_HID_FUNC_TEXTJOIN_MS"_ustr;
+inline constexpr OUString HID_FUNC_IFS_MS = u"SC_HID_FUNC_IFS_MS"_ustr;
+inline constexpr OUString HID_FUNC_SWITCH_MS = u"SC_HID_FUNC_SWITCH_MS"_ustr;
+inline constexpr OUString HID_FUNC_MINIFS_MS = u"SC_HID_FUNC_MINIFS_MS"_ustr;
+inline constexpr OUString HID_FUNC_MAXIFS_MS = u"SC_HID_FUNC_MAXIFS_MS"_ustr;
+inline constexpr OUString HID_FUNC_ROUNDSIG = u"SC_HID_FUNC_ROUNDSIG"_ustr;
+inline constexpr OUString HID_FUNC_REPLACEB = u"SC_HID_FUNC_REPLACEB"_ustr;
+inline constexpr OUString HID_FUNC_FINDB = u"SC_HID_FUNC_FINDB"_ustr;
+inline constexpr OUString HID_FUNC_SEARCHB = u"SC_HID_FUNC_SEARCHB"_ustr;
+inline constexpr OUString HID_FUNC_REGEX = u"SC_HID_FUNC_REGEX"_ustr;
+inline constexpr OUString HID_FUNC_FOURIER = u"SC_HID_FUNC_FOURIER"_ustr;
+inline constexpr OUString HID_FUNC_RAND_NV = u"SC_HID_FUNC_RAND_NV"_ustr;
+inline constexpr OUString HID_FUNC_RANDBETWEEN_NV = u"SC_HID_FUNC_RANDBETWEEN_NV"_ustr;
+inline constexpr OUString HID_FUNC_XLOOKUP_MS = u"SC_HID_FUNC_XLOOKUP_MS"_ustr;
+inline constexpr OUString HID_FUNC_XMATCH_MS = u"SC_HID_FUNC_XMATCH_MS"_ustr;
+inline constexpr OUString HID_FUNC_FILTER_MS = u"SC_HID_FUNC_FILTER_MS"_ustr;
+inline constexpr OUString HID_FUNC_SORT_MS = u"SC_HID_FUNC_SORT_MS"_ustr;
+inline constexpr OUString HID_FUNC_SORTBY_MS = u"SC_HID_FUNC_SORTBY_MS"_ustr;
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -127,14 +127,6 @@ namespace
         std::vector<PaMEntry> m_aUnoCursorEntries;
         std::vector<PaMEntry> m_aShellCursorEntries;
         typedef std::function<void (SwPosition& rPos, sal_Int32 nContent)> updater_t;
-        virtual void Clear() override
-        {
-            m_aBkmkEntries.clear();
-            m_aRedlineEntries.clear();
-            m_aFlyEntries.clear();
-            m_aUnoCursorEntries.clear();
-            m_aShellCursorEntries.clear();
-        }
         virtual bool Empty() override
         {
             return m_aBkmkEntries.empty() && m_aRedlineEntries.empty() && m_aFlyEntries.empty() && m_aUnoCursorEntries.empty() && m_aShellCursorEntries.empty();
@@ -342,14 +334,14 @@ void ContentIdxStoreImpl::SaveFlys(SwDoc& rDoc, SwNodeOffset nNode, sal_Int32 nC
         if ( RES_FLYFRMFMT == pFrameFormat->Which() || RES_DRAWFRMFMT == pFrameFormat->Which() )
         {
             const SwFormatAnchor& rAnchor = pFrameFormat->GetAnchor();
-            SwPosition const*const pAPos = rAnchor.GetContentAnchor();
-            if ( pAPos && ( nNode == pAPos->GetNodeIndex() ) &&
+            SwNode const*const pAnchorNode = rAnchor.GetAnchorNode();
+            if ( pAnchorNode && ( nNode == pAnchorNode->GetIndex() ) &&
                  ( RndStdIds::FLY_AT_PARA == rAnchor.GetAnchorId() ||
                    RndStdIds::FLY_AT_CHAR == rAnchor.GetAnchorId() ) )
             {
                 bool bSkip = false;
                 aSave.m_bOther = false;
-                aSave.m_nContent = pAPos->GetContentIndex();
+                aSave.m_nContent = rAnchor.GetAnchorContentOffset();
                 if ( RndStdIds::FLY_AT_CHAR == rAnchor.GetAnchorId() )
                 {
                     if( nContent <= aSave.m_nContent )
@@ -370,12 +362,12 @@ void ContentIdxStoreImpl::SaveFlys(SwDoc& rDoc, SwNodeOffset nNode, sal_Int32 nC
 
 void ContentIdxStoreImpl::RestoreFlys(SwDoc& rDoc, updater_t const & rUpdater, bool bAuto, bool bAtStart)
 {
-    SwFrameFormats* pSpz = rDoc.GetSpzFrameFormats();
+    sw::SpzFrameFormats* pSpz = rDoc.GetSpzFrameFormats();
     for (const MarkEntry& aEntry : m_aFlyEntries)
     {
         if(!aEntry.m_bOther)
         {
-            SwFrameFormat *pFrameFormat = (*pSpz)[ aEntry.m_nIdx ];
+            sw::SpzFrameFormat* pFrameFormat = (*pSpz)[ aEntry.m_nIdx ];
             const SwFormatAnchor& rFlyAnchor = pFrameFormat->GetAnchor();
             if( rFlyAnchor.GetContentAnchor() )
             {

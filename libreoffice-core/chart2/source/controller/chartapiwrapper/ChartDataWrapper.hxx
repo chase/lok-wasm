@@ -18,9 +18,10 @@
  */
 #pragma once
 
-#include <cppuhelper/basemutex.hxx>
 #include <cppuhelper/implbase.hxx>
-#include <comphelper/interfacecontainer2.hxx>
+#include <comphelper/interfacecontainer4.hxx>
+#include <rtl/ref.hxx>
+
 #include <com/sun/star/chart2/XAnyDescriptionAccess.hpp>
 #include <com/sun/star/chart/XDateCategories.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
@@ -29,13 +30,17 @@
 
 #include <memory>
 
-namespace chart::wrapper
+namespace chart
+{
+class ChartModel;
+
+namespace wrapper
 {
 
 class Chart2ModelContact;
 struct lcl_Operator;
 
-class ChartDataWrapper final : public cppu::BaseMutex, public
+class ChartDataWrapper final : public
     ::cppu::WeakImplHelper<
     css::chart2::XAnyDescriptionAccess,
     css::chart::XDateCategories,
@@ -53,6 +58,8 @@ public:
     virtual OUString SAL_CALL getImplementationName() override;
     virtual sal_Bool SAL_CALL supportsService( const OUString& ServiceName ) override;
     virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
+
+    rtl::Reference<ChartModel> getChartModel() const;
 
 private:
     // ____ XDateCategories ____
@@ -107,12 +114,13 @@ private:
     void initDataAccess();
     void applyData( lcl_Operator& rDataOperator );
 
+    std::mutex m_aMutex;
     css::uno::Reference< css::chart2::XAnyDescriptionAccess > m_xDataAccess;
-
     std::shared_ptr< Chart2ModelContact >   m_spChart2ModelContact;
-    ::comphelper::OInterfaceContainerHelper2      m_aEventListenerContainer;
+    ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> m_aEventListenerContainer;
 };
 
 } //  namespace chart::wrapper
+} //  namespace chart
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

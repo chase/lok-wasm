@@ -81,6 +81,28 @@ void ScTpPrintOptions::Reset( const SfxItemSet* rCoreSet )
     m_xForceBreaksCB->save_state();
 }
 
+OUString ScTpPrintOptions::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label1", "label2" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[] = { "suppressCB", "forceBreaksCB", "printCB" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
+}
+
 bool ScTpPrintOptions::FillItemSet( SfxItemSet* rCoreAttrs )
 {
     rCoreAttrs->ClearItem( SID_PRINT_SELECTEDSHEET );

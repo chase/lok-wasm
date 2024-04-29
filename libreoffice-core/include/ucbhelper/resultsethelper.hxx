@@ -20,7 +20,6 @@
 #ifndef INCLUDED_UCBHELPER_RESULTSETHELPER_HXX
 #define INCLUDED_UCBHELPER_RESULTSETHELPER_HXX
 
-#include <memory>
 #include <mutex>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/ucb/XDynamicResultSet.hpp>
@@ -38,7 +37,7 @@ namespace cppu {
 namespace ucbhelper {
 
 
-inline constexpr OUStringLiteral DYNAMICRESULTSET_SERVICE_NAME = u"com.sun.star.ucb.DynamicResultSet";
+inline constexpr OUString DYNAMICRESULTSET_SERVICE_NAME = u"com.sun.star.ucb.DynamicResultSet"_ustr;
 
 
 /**

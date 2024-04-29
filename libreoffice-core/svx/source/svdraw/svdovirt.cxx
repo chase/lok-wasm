@@ -18,6 +18,7 @@
  */
 
 
+#include <sdr/properties/emptyproperties.hxx>
 #include <svx/svdovirt.hxx>
 #include <svx/svdhdl.hxx>
 #include <svx/sdr/contact/viewcontactofvirtobj.hxx>
@@ -30,6 +31,11 @@ sdr::properties::BaseProperties& SdrVirtObj::GetProperties() const
     return mxRefObj->GetProperties();
 }
 
+
+std::unique_ptr<sdr::properties::BaseProperties> SdrVirtObj::CreateObjectSpecificProperties()
+{
+    return std::make_unique<sdr::properties::EmptyProperties>(*this);
+}
 
 // #i27224#
 std::unique_ptr<sdr::contact::ViewContact> SdrVirtObj::CreateObjectSpecificViewContact()
@@ -141,12 +147,22 @@ OUString SdrVirtObj::GetDescription() const
     return mxRefObj->GetDescription();
 }
 
+void SdrVirtObj::SetDecorative(bool const isDecorative)
+{
+    return mxRefObj->SetDecorative(isDecorative);
+}
+
+bool SdrVirtObj::IsDecorative() const
+{
+    return mxRefObj->IsDecorative();
+}
+
 const tools::Rectangle& SdrVirtObj::GetCurrentBoundRect() const
 {
     auto aRectangle = mxRefObj->GetCurrentBoundRect(); // TODO: Optimize this.
     aRectangle += m_aAnchor;
     setOutRectangleConst(aRectangle);
-    return m_aOutRect;
+    return getOutRectangle();
 }
 
 const tools::Rectangle& SdrVirtObj::GetLastBoundRect() const
@@ -154,7 +170,7 @@ const tools::Rectangle& SdrVirtObj::GetLastBoundRect() const
     auto aRectangle = mxRefObj->GetLastBoundRect(); // TODO: Optimize this.
     aRectangle += m_aAnchor;
     setOutRectangleConst(aRectangle);
-    return m_aOutRect;
+    return getOutRectangle();
 }
 
 void SdrVirtObj::RecalcBoundRect()

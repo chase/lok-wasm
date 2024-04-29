@@ -26,6 +26,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/commandinfoprovider.hxx>
 #include <osl/mutex.hxx>
+#include <toolkit/awt/vclxmenu.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
 using namespace com::sun::star::uno;
@@ -94,7 +95,7 @@ void SAL_CALL MacrosMenuController::disposing( const EventObject& )
 {
     Reference< css::awt::XMenuListener > xHolder(this);
 
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     m_xFrame.clear();
     m_xDispatch.clear();
     m_xContext.clear();
@@ -109,7 +110,7 @@ void SAL_CALL MacrosMenuController::disposing( const EventObject& )
 // XStatusListener
 void SAL_CALL MacrosMenuController::statusChanged( const FeatureStateEvent& )
 {
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     if ( m_xPopupMenu.is() )
     {
         fillPopupMenu( m_xPopupMenu );
@@ -118,9 +119,9 @@ void SAL_CALL MacrosMenuController::statusChanged( const FeatureStateEvent& )
 
 void MacrosMenuController::addScriptItems(const Reference<css::awt::XPopupMenu>& rPopupMenu, sal_uInt16 startItemId)
 {
-    static const OUStringLiteral aCmdBase(u".uno:ScriptOrganizer?ScriptOrganizer.Language:string=");
-    static const OUStringLiteral ellipsis( u"..." );
-    static const OUStringLiteral providerKey(u"com.sun.star.script.provider.ScriptProviderFor");
+    static constexpr OUStringLiteral aCmdBase(u".uno:ScriptOrganizer?ScriptOrganizer.Language:string=");
+    static constexpr OUStringLiteral ellipsis( u"..." );
+    static constexpr OUString providerKey(u"com.sun.star.script.provider.ScriptProviderFor"_ustr);
     sal_uInt16 itemId = startItemId;
     Reference< XContentEnumerationAccess > xEnumAccess( m_xContext->getServiceManager(), UNO_QUERY_THROW );
     Reference< XEnumeration > xEnum = xEnumAccess->createContentEnumeration ( "com.sun.star.script.provider.LanguageScriptProvider" );

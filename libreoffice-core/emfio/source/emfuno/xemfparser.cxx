@@ -21,7 +21,7 @@
 
 #include <com/sun/star/graphic/XEmfParser.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <cppuhelper/implbase2.hxx>
+#include <cppuhelper/implbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
 #include <utility>
@@ -43,7 +43,7 @@ namespace emfio::emfreader
 {
         namespace {
 
-        class XEmfParser : public ::cppu::WeakAggImplHelper2< graphic::XEmfParser, lang::XServiceInfo >
+        class XEmfParser : public ::cppu::WeakImplHelper< graphic::XEmfParser, lang::XServiceInfo >
         {
         private:
             uno::Reference< uno::XComponentContext > context_;
@@ -102,7 +102,7 @@ namespace emfio::emfreader
                 // rough check - import and conv to primitive
                 GDIMetaFile aMtf;
                 std::unique_ptr<SvStream> pStream(::utl::UcbStreamHelper::CreateStream(xEmfStream));
-                sal_uInt32 nOrgPos = pStream->Tell();
+                sal_uInt64 nOrgPos = pStream->Tell();
 
                 SvStreamEndian nOrigNumberFormat = pStream->GetEndian();
                 pStream->SetEndian(SvStreamEndian::LITTLE);

@@ -104,6 +104,12 @@ ScValidationDlg::ScValidationDlg(weld::Window* pParent, const SfxItemSet* pArgSe
 
 void ScValidationDlg::EndDialog(int nResponse)
 {
+    // tdf#155708 - do not close, just hide validation window if we click in another sheet
+    if (nResponse == nCloseResponseToJustHide && getDialog()->get_visible())
+    {
+        getDialog()->hide();
+        return;
+    }
     // tdf#137215 ensure original modality of true is restored before dialog loop ends
     if (m_bOwnRefHdlr)
         RemoveRefDlg(true);
@@ -314,7 +320,7 @@ void lclGetFormulaFromStringList( OUString& rFmlaStr, std::u16string_view rStrin
     @return  true = Conversion successful. */
 bool lclGetStringListFromFormula( OUString& rStringList, const OUString& rFmlaStr, sal_Unicode cFmlaSep )
 {
-    static const OUStringLiteral aQuotes( u"\"\"" );
+    static constexpr OUStringLiteral aQuotes( u"\"\"" );
 
     rStringList.clear();
     bool bIsStringList = !rFmlaStr.isEmpty();
@@ -839,8 +845,8 @@ bool ScValidationDlg::EnterRefStatus()
     if( !pTabViewShell ) return false;
 
     sal_uInt16 nId  = SLOTID;
-    SfxViewFrame* pViewFrm = pTabViewShell->GetViewFrame();
-    SfxChildWindow* pWnd = pViewFrm->GetChildWindow( nId );
+    SfxViewFrame& rViewFrm = pTabViewShell->GetViewFrame();
+    SfxChildWindow* pWnd = rViewFrm.GetChildWindow( nId );
 
     if (pWnd && pWnd->GetController().get() != this) pWnd = nullptr;
 
@@ -856,8 +862,8 @@ bool ScValidationDlg::LeaveRefStatus()
     if( !pTabViewShell ) return false;
 
     sal_uInt16 nId  = SLOTID;
-    SfxViewFrame* pViewFrm = pTabViewShell->GetViewFrame();
-    if ( pViewFrm->GetChildWindow( nId ) )
+    SfxViewFrame& rViewFrm = pTabViewShell->GetViewFrame();
+    if (rViewFrm.GetChildWindow(nId))
     {
         DoClose( nId );
     }
@@ -886,7 +892,7 @@ bool ScValidationDlg::RemoveRefDlg( bool bRestoreModal /* = true */ )
 
     if( !pTabVwSh ) return false;
 
-    if ( SfxChildWindow* pWnd = pTabVwSh->GetViewFrame()->GetChildWindow( SID_VALIDITY_REFERENCE ) )
+    if ( SfxChildWindow* pWnd = pTabVwSh->GetViewFrame().GetChildWindow( SID_VALIDITY_REFERENCE ) )
     {
         bVisLock = static_cast<ScValidityRefChildWin*>(pWnd)->LockVisible( true );
         bFreeWindowLock = static_cast<ScValidityRefChildWin*>(pWnd)->LockFreeWindow( true );
@@ -903,7 +909,7 @@ bool ScValidationDlg::RemoveRefDlg( bool bRestoreModal /* = true */ )
         }
     }
 
-    if ( SfxChildWindow* pWnd = pTabVwSh->GetViewFrame()->GetChildWindow( SID_VALIDITY_REFERENCE ) )
+    if ( SfxChildWindow* pWnd = pTabVwSh->GetViewFrame().GetChildWindow( SID_VALIDITY_REFERENCE ) )
     {
         static_cast<ScValidityRefChildWin*>(pWnd)->LockVisible( bVisLock );
         static_cast<ScValidityRefChildWin*>(pWnd)->LockFreeWindow( bFreeWindowLock );

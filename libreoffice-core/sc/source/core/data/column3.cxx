@@ -46,6 +46,7 @@
 #include <filterentries.hxx>
 #include <conditio.hxx>
 #include <colorscale.hxx>
+#include <table.hxx>
 #include <editeng/brushitem.hxx>
 #include <editeng/colritem.hxx>
 
@@ -237,6 +238,7 @@ void ScColumn::Delete( SCROW nRow )
 void ScColumn::FreeAll()
 {
     maCells.event_handler().stop();
+    maCellNotes.event_handler().stop();
 
     auto maxRowCount = GetDoc().GetMaxRowCount();
     // Keep a logical empty range of 0-rDoc.MaxRow() at all times.
@@ -867,6 +869,8 @@ bool ScColumn::UpdateScriptType( sc::CellTextAttr& rAttr, SCROW nRow, sc::CellSt
 
     SvNumberFormatter* pFormatter = rDocument.GetFormatTable();
 
+    // fetch the pattern again, it might have changed under us
+    pPattern = GetPattern(nRow);
     const Color* pColor;
     sal_uInt32 nFormat = pPattern->GetNumberFormat(pFormatter, pCondSet);
     OUString aStr = ScCellFormat::GetString(aCell, nFormat, &pColor, *pFormatter, rDocument);
@@ -1134,7 +1138,6 @@ void ScColumn::DeleteArea(
 
     if ( nDelFlag & InsertDeleteFlags::EDITATTR )
     {
-        OSL_ENSURE( nContFlag == InsertDeleteFlags::NONE, "DeleteArea: Wrong Flags" );
         RemoveEditAttribs(aBlockPos, nStartRow, nEndRow);
     }
 
@@ -2301,7 +2304,7 @@ bool ScColumn::ParseString(
                 sal_Unicode gsep = rGroupSep[0];
                 sal_Unicode dsepa = rDecSepAlt.toChar();
 
-                if (!ScStringUtil::parseSimpleNumber(rString, dsep, gsep, dsepa, nVal))
+                if (!ScStringUtil::parseSimpleNumber(rString, dsep, gsep, dsepa, nVal, aParam.mbDetectScientificNumberFormat))
                     break;
 
                 rCell.set(nVal);
@@ -2567,77 +2570,34 @@ class FilterEntriesHandler
     void processCell(const ScColumn& rColumn, SCROW nRow, ScRefCellValue& rCell, bool bIsEmptyCell=false)
     {
         SvNumberFormatter* pFormatter = mrColumn.GetDoc().GetFormatTable();
-        sal_uLong nFormat = mrColumn.GetNumberFormat(mrColumn.GetDoc().GetNonThreadedContext(), nRow);
+        sal_uInt32 nFormat = mrColumn.GetNumberFormat(mrColumn.GetDoc().GetNonThreadedContext(), nRow);
         OUString aStr = ScCellFormat::GetInputString(rCell, nFormat, *pFormatter, mrColumn.GetDoc(), mbFiltering);
 
         // Colors
         ScAddress aPos(rColumn.GetCol(), nRow, rColumn.GetTab());
-
-        Color backgroundColor;
-        bool bHasConditionalBackgroundColor = false;
-
-        Color textColor;
-        bool bHasConditionalTextColor = false;
-        // Check text & background color from cond. formatting
-        const ScPatternAttr* pPattern
-            = mrColumn.GetDoc().GetPattern(aPos.Col(), aPos.Row(), aPos.Tab());
-        if (pPattern)
+        if (ScTable* pTable = rColumn.GetDoc().FetchTable(rColumn.GetTab()))
         {
-            if (!pPattern->GetItem(ATTR_CONDITIONAL).GetCondFormatData().empty())
-            {
-                const SfxItemSet* pCondSet
-                    = mrColumn.GetDoc().GetCondResult(aPos.Col(), aPos.Row(), aPos.Tab());
-                const SvxColorItem* pColor = &pPattern->GetItem(ATTR_FONT_COLOR, pCondSet);
-                textColor = pColor->GetValue();
-                bHasConditionalTextColor = true;
-
-                const SvxBrushItem* pBackgroundColor = &pPattern->GetItem(ATTR_BACKGROUND, pCondSet);
-                backgroundColor = pBackgroundColor->GetColor();
-                bHasConditionalBackgroundColor = true;
-            }
+            mrFilterEntries.addTextColor(pTable->GetCellTextColor(aPos));
+            mrFilterEntries.addBackgroundColor(pTable->GetCellBackgroundColor(aPos));
         }
-
-        if (!bHasConditionalTextColor)
-        {
-            const SvxColorItem* pColor = rColumn.GetDoc().GetAttr(aPos, ATTR_FONT_COLOR);
-            textColor = pColor->GetValue();
-        }
-        mrFilterEntries.addTextColor(textColor);
-
-        // Color scale needs a different handling
-        ScConditionalFormat* pCondFormat
-            = rColumn.GetDoc().GetCondFormat(aPos.Col(), aPos.Row(), aPos.Tab());
-        if (pCondFormat)
-        {
-            for (size_t i = 0; i < pCondFormat->size(); i++)
-            {
-                auto aEntry = pCondFormat->GetEntry(i);
-                if (aEntry->GetType() == ScFormatEntry::Type::Colorscale)
-                {
-                    const ScColorScaleFormat* pColFormat
-                        = static_cast<const ScColorScaleFormat*>(aEntry);
-                    std::optional<Color> oColor = pColFormat->GetColor(aPos);
-                    if (oColor)
-                    {
-                        backgroundColor = *oColor;
-                        bHasConditionalBackgroundColor = true;
-                    }
-                }
-            }
-        }
-        if (!bHasConditionalBackgroundColor)
-        {
-            const SvxBrushItem* pBrush = rColumn.GetDoc().GetAttr(aPos, ATTR_BACKGROUND);
-            backgroundColor = pBrush->GetColor();
-        }
-        mrFilterEntries.addBackgroundColor(backgroundColor);
 
         if (bIsEmptyCell)
         {
-            if (!mrFilterEntries.mbHasEmpties)
+            if (mbFilteredRow)
             {
-                mrFilterEntries.push_back(ScTypedStrData(OUString()));
-                mrFilterEntries.mbHasEmpties = true;
+                if (!mrFilterEntries.mbHasHiddenEmpties)
+                {
+                    mrFilterEntries.push_back(ScTypedStrData(OUString(), 0.0, 0.0, ScTypedStrData::Standard, false, true));
+                    mrFilterEntries.mbHasHiddenEmpties = true;
+                }
+            }
+            else
+            {
+                if (!mrFilterEntries.mbHasUnHiddenEmpties)
+                {
+                    mrFilterEntries.push_back(ScTypedStrData(OUString(), 0.0, 0.0, ScTypedStrData::Standard, false, false));
+                    mrFilterEntries.mbHasUnHiddenEmpties = true;
+                }
             }
             return;
         }
@@ -2666,7 +2626,7 @@ class FilterEntriesHandler
                     OUString aErr = ScGlobal::GetErrorString(nErr);
                     if (!aErr.isEmpty())
                     {
-                        mrFilterEntries.push_back(ScTypedStrData(std::move(aErr)));
+                        mrFilterEntries.push_back(ScTypedStrData(std::move(aErr), 0.0, 0.0, ScTypedStrData::Standard, false, mbFilteredRow));
                         return;
                     }
                 }
@@ -3199,7 +3159,7 @@ double* ScColumn::GetValueCell( SCROW nRow )
 
 OUString ScColumn::GetInputString( const ScRefCellValue& aCell, SCROW nRow, bool bForceSystemLocale ) const
 {
-    sal_uLong nFormat = GetNumberFormat(GetDoc().GetNonThreadedContext(), nRow);
+    sal_uInt32 nFormat = GetNumberFormat(GetDoc().GetNonThreadedContext(), nRow);
     return ScCellFormat::GetInputString(aCell, nFormat, *(GetDoc().GetFormatTable()), GetDoc(), nullptr, false, bForceSystemLocale);
 }
 
@@ -3750,6 +3710,8 @@ public:
             {
                 // Both previous and current cells are regular cells.
                 assert(pPrev->aPos.Row() == static_cast<SCROW>(nRow - 1));
+                // silence set-but-unused warning for non-dbg build
+                (void) nRow;
                 xPrevGrp = pPrev->CreateCellGroup(2, eCompState == ScFormulaCell::EqualInvariant);
                 pCur->SetCellGroup(xPrevGrp);
                 ++nRow;

@@ -430,6 +430,7 @@ module com {
      const short BRACKETRIGHT = 1316;
      const short C = 514;
      const short CAPSLOCK = 1312;
+     const short COLON = 1320;
      const short COMMA = 1292;
      const short CONTEXTMENU = 1305;
      const short COPY = 1298;
@@ -531,6 +532,7 @@ module com {
      const short REPEAT = 1301;
      const short RETURN = 1280;
      const short RIGHT = 1027;
+     const short RIGHTCURLYBRACKET = 1319;
      const short S = 530;
      const short SCROLLLOCK = 1314;
      const short SELECT_ALL = 1557;
@@ -1142,6 +1144,8 @@ module com {
      [property, optional] short WritingMode;
      [property, optional] short MouseWheelBehavior;
      [property, optional] sequence< any > TypedItemList;
+     [property, optional] ::com::sun::star::util::Color HighlightColor;
+     [property, optional] ::com::sun::star::util::Color HighlightTextColor;
     };
     published interface XControlContainer {
      interface ::com::sun::star::uno::XInterface;
@@ -1242,6 +1246,8 @@ module com {
      [property, optional] short WritingMode;
      [property, optional] short MouseWheelBehavior;
      [property, optional] ::com::sun::star::style::VerticalAlignment VerticalAlign;
+     [property, optional] ::com::sun::star::util::Color HighlightColor;
+     [property, optional] ::com::sun::star::util::Color HighlightTextColor;
     };
    };
    module util {
@@ -1307,6 +1313,8 @@ module com {
      [property, optional] short WritingMode;
      [property, optional] short MouseWheelBehavior;
      [property, optional] ::com::sun::star::style::VerticalAlignment VerticalAlign;
+     [property, optional] ::com::sun::star::util::Color HighlightColor;
+     [property, optional] ::com::sun::star::util::Color HighlightTextColor;
     };
     published interface XDialog {
      interface ::com::sun::star::uno::XInterface;
@@ -1395,6 +1403,8 @@ module com {
      [property] boolean VScroll;
      [property, optional] short WritingMode;
      [property, optional] ::com::sun::star::style::VerticalAlignment VerticalAlign;
+     [property, optional] ::com::sun::star::util::Color HighlightColor;
+     [property, optional] ::com::sun::star::util::Color HighlightTextColor;
     };
     published service UnoControlFileControl {
      service ::com::sun::star::awt::UnoControlEdit;
@@ -1467,6 +1477,8 @@ module com {
      [property] ::com::sun::star::util::Color TextLineColor;
      [property, optional] ::com::sun::star::style::VerticalAlignment VerticalAlign;
      [property, optional] boolean NoLabel;
+     [property, optional] ::com::sun::star::util::Color HighlightColor;
+     [property, optional] ::com::sun::star::util::Color HighlightTextColor;
     };
     published service UnoControlFormattedField {
      service ::com::sun::star::awt::UnoControlEdit;
@@ -1511,6 +1523,8 @@ module com {
      [property, optional] short WritingMode;
      [property, optional] short MouseWheelBehavior;
      [property, optional] ::com::sun::star::style::VerticalAlignment VerticalAlign;
+     [property, optional] ::com::sun::star::util::Color HighlightColor;
+     [property, optional] ::com::sun::star::util::Color HighlightTextColor;
     };
     published service UnoControlGroupBox {
      service ::com::sun::star::awt::UnoControl;
@@ -1606,6 +1620,8 @@ module com {
      [property, optional] short MouseWheelBehavior;
      [property, maybevoid, optional] short ItemSeparatorPos;
      [property, optional] sequence< any > TypedItemList;
+     [property, optional] ::com::sun::star::util::Color HighlightColor;
+     [property, optional] ::com::sun::star::util::Color HighlightTextColor;
     };
     published interface XNumericField {
      interface ::com::sun::star::uno::XInterface;
@@ -1661,6 +1677,8 @@ module com {
      [property, optional] short WritingMode;
      [property, optional] short MouseWheelBehavior;
      [property, optional] ::com::sun::star::style::VerticalAlignment VerticalAlign;
+     [property, optional] ::com::sun::star::util::Color HighlightColor;
+     [property, optional] ::com::sun::star::util::Color HighlightTextColor;
     };
     published interface XPatternField {
      interface ::com::sun::star::uno::XInterface;
@@ -1701,6 +1719,8 @@ module com {
      [property, optional] short WritingMode;
      [property, optional] short MouseWheelBehavior;
      [property, optional] ::com::sun::star::style::VerticalAlignment VerticalAlign;
+     [property, optional] ::com::sun::star::util::Color HighlightColor;
+     [property, optional] ::com::sun::star::util::Color HighlightTextColor;
     };
     published interface XProgressBar {
      interface ::com::sun::star::uno::XInterface;
@@ -1871,6 +1891,8 @@ module com {
      [property, optional] short WritingMode;
      [property, optional] short MouseWheelBehavior;
      [property, optional] ::com::sun::star::style::VerticalAlignment VerticalAlign;
+     [property, optional] ::com::sun::star::util::Color HighlightColor;
+     [property, optional] ::com::sun::star::util::Color HighlightTextColor;
     };
     published struct VclContainerEvent: ::com::sun::star::lang::EventObject {
      ::com::sun::star::uno::XInterface Child;
@@ -2825,7 +2847,7 @@ module com {
     };
     published enum LineJoint {
      NONE = 0,
-     MIDDLE = 1,
+     /** @deprecated */ MIDDLE = 1,
      BEVEL = 2,
      MITER = 3,
      ROUND = 4
@@ -3252,6 +3274,9 @@ module com {
      [property, optional] short RelativeWidth;
      [property, optional] short RelativeHeightRelation;
      [property, optional] short RelativeWidthRelation;
+     [property, optional] string Title;
+     [property, optional] string Description;
+     [property, optional] boolean Decorative;
     };
    };
    module chart {
@@ -3637,6 +3662,7 @@ module com {
      [property, optional] boolean ParaHyphenationNoLastWord;
      [property, optional] short ParaHyphenationMinWordLength;
      [property, optional] long ParaHyphenationZone;
+     [property, optional, readonly] long SortedTextId;
     };
    };
    module util {
@@ -4302,11 +4328,6 @@ module com {
       interface ::com::sun::star::lang::XInitialization;
       interface ::com::sun::star::lang::XComponent;
      };
-     published constants RenderingCapabilities {
-      const byte Delayed = 1;
-      /** @deprecated */ const byte Persistant = 2;
-      const byte Persistent = 2;
-     };
      published interface XFlushableClipboard {
       interface ::com::sun::star::uno::XInterface;
       void flushClipboard();
@@ -4316,6 +4337,11 @@ module com {
       interface ::com::sun::star::datatransfer::clipboard::XClipboardNotifier;
       interface ::com::sun::star::lang::XComponent;
       [optional] interface ::com::sun::star::datatransfer::clipboard::XFlushableClipboard;
+     };
+     published constants RenderingCapabilities {
+      const byte Delayed = 1;
+      /** @deprecated */ const byte Persistant = 2;
+      const byte Persistent = 2;
      };
      published service SystemClipboard: ::com::sun::star::datatransfer::clipboard::XSystemClipboard;
      published interface XClipboardFactory {
@@ -7867,7 +7893,7 @@ module com {
      const short HYPHENATION = 2;
      const short WORDBOUNDARY = 1;
     };
-    published constants CTLScriptType {
+    /** @deprecated */ published constants CTLScriptType {
      const short CTL_ARABIC = 2;
      const short CTL_HEBREW = 1;
      const short CTL_INDIC = 4;
@@ -8758,9 +8784,9 @@ module com {
      long beginOfScriptDirection([in] string aText, [in] long nPos, [in] short nScriptDirection);
      long endOfScriptDirection([in] string aText, [in] long nPos, [in] short nScriptDirection);
      short getScriptDirection([in] string aText, [in] long nPos, [in] short nDefaultScriptDirection);
-     long beginOfCTLScriptType([in] string aText, [in] long nPos);
-     long endOfCTLScriptType([in] string aText, [in] long nPos);
-     short getCTLScriptType([in] string aText, [in] long nPos);
+     /** @deprecated */ long beginOfCTLScriptType([in] string aText, [in] long nPos);
+     /** @deprecated */ long endOfCTLScriptType([in] string aText, [in] long nPos);
+     /** @deprecated */ short getCTLScriptType([in] string aText, [in] long nPos);
     };
     published constants reservedWords {
      const short ABOVE_WORD = 6;
@@ -13355,14 +13381,18 @@ module com {
      const short CHARS_CYRILLIC_LOWER_LETTER_N_BG = 41;
      const short CHARS_CYRILLIC_LOWER_LETTER_N_RU = 45;
      const short CHARS_CYRILLIC_LOWER_LETTER_N_SR = 51;
+     const short CHARS_CYRILLIC_LOWER_LETTER_N_UK = 75;
      const short CHARS_CYRILLIC_LOWER_LETTER_RU = 43;
      const short CHARS_CYRILLIC_LOWER_LETTER_SR = 49;
+     const short CHARS_CYRILLIC_LOWER_LETTER_UK = 73;
      const short CHARS_CYRILLIC_UPPER_LETTER_BG = 38;
      const short CHARS_CYRILLIC_UPPER_LETTER_N_BG = 40;
      const short CHARS_CYRILLIC_UPPER_LETTER_N_RU = 44;
      const short CHARS_CYRILLIC_UPPER_LETTER_N_SR = 50;
+     const short CHARS_CYRILLIC_UPPER_LETTER_N_UK = 74;
      const short CHARS_CYRILLIC_UPPER_LETTER_RU = 42;
      const short CHARS_CYRILLIC_UPPER_LETTER_SR = 48;
+     const short CHARS_CYRILLIC_UPPER_LETTER_UK = 72;
      const short CHARS_GREEK_LOWER_LETTER = 53;
      const short CHARS_GREEK_UPPER_LETTER = 52;
      const short CHARS_HEBREW = 33;
@@ -13850,6 +13880,8 @@ module com {
      [property, optional] ::com::sun::star::graphic::XGraphic BackGraphic;
      [property, optional] boolean AllowOverlap;
      [property, optional] string Tooltip;
+     [property, optional] boolean Decorative;
+     [property, optional] boolean IsSplitAllowed;
     };
     published service BaseFrame {
      service ::com::sun::star::text::BaseFrameProperties;
@@ -13992,6 +14024,7 @@ module com {
      [property] short VertOrient;
      [property, optional] ::com::sun::star::graphic::XGraphic BackGraphic;
      [property, optional, readonly] ::com::sun::star::text::XText ParentText;
+     [property, optional] boolean HasTextChangesOnly;
     };
     published service CellRange {
      service ::com::sun::star::style::CharacterProperties;
@@ -14264,6 +14297,10 @@ module com {
      interface ::com::sun::star::uno::XInterface;
      ::com::sun::star::container::XIndexReplace getChapterNumberingRules();
     };
+    interface XContentControlsSupplier {
+     interface ::com::sun::star::uno::XInterface;
+     ::com::sun::star::container::XIndexAccess getContentControls();
+    };
     published interface XDocumentIndexesSupplier {
      interface ::com::sun::star::uno::XInterface;
      ::com::sun::star::container::XIndexAccess getDocumentIndexes();
@@ -14330,6 +14367,7 @@ module com {
      [optional] interface ::com::sun::star::tiledrendering::XTiledRenderable;
      [optional] interface ::com::sun::star::text::XFootnotesSupplier;
      [optional] interface ::com::sun::star::text::XEndnotesSupplier;
+     [optional] interface ::com::sun::star::text::XContentControlsSupplier;
      [optional] interface ::com::sun::star::util::XReplaceable;
      [optional] interface ::com::sun::star::text::XPagePrintable;
      [optional] interface ::com::sun::star::text::XReferenceMarksSupplier;
@@ -14396,6 +14434,7 @@ module com {
      [property, optional] boolean CreateFromLabels;
      [property, optional] string LabelCategory;
      [property, optional] short LabelDisplayType;
+     [property, maybevoid, optional] string CreateFromParagraphStyle;
     };
     published exception InvalidTextContentException: ::com::sun::star::uno::Exception {
      ::com::sun::star::text::XTextContent TextContent;
@@ -14517,11 +14556,11 @@ module com {
     published service ObjectIndex {
      service ::com::sun::star::text::BaseIndex;
      [property, optional] boolean CreateFromStarMath;
-     [property, optional] boolean CreateFromStarImage;
      [property, optional] boolean CreateFromStarChart;
      [property, optional] boolean CreateFromStarCalc;
      [property, optional] boolean CreateFromStarDraw;
      [property, optional] boolean CreateFromOtherEmbeddedObjects;
+     [property, maybevoid, optional] string CreateFromParagraphStyle;
     };
     published service PageFootnoteInfo {
      [property] long FootnoteHeight;
@@ -14765,6 +14804,7 @@ module com {
      [property, optional] boolean CreateFromLabels;
      [property, optional] string LabelCategory;
      [property, optional] short LabelDisplayType;
+     [property, maybevoid, optional] string CreateFromParagraphStyle;
     };
     published service TableRows {
      interface ::com::sun::star::table::XTableRows;
@@ -15247,6 +15287,7 @@ module com {
      const short RL_TB = 1;
      const short TB_LR = 3;
      const short TB_RL = 2;
+     const short TB_RL90 = 6;
     };
     published interface XBookmarkInsertTool {
      interface ::com::sun::star::uno::XInterface;
@@ -17419,6 +17460,7 @@ module com {
      [property, optional] short DuplexMode;
      [property, optional] string PrinterName;
      [property, optional] boolean SinglePrintJobs;
+     [property, optional] boolean JobName;
     };
     published service PrintSettings {
      [property] boolean PrintBlackFonts;

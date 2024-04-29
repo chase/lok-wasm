@@ -39,7 +39,7 @@ private:
     std::unique_ptr<Timer> mpMenuTimer;
     VclPtr<PopupMenu> mpMenu;
     VclPtr<Window>  mpFloatingWindow;
-    OString         msCurItemIdent;
+    OUString         msCurItemIdent;
     sal_uInt16      mnCurItemId;
     bool            mbDelayMenu;
     bool            mbStartingMenu;
@@ -54,6 +54,8 @@ private:
 protected:
     using Window::ImplInit;
     SAL_DLLPRIVATE void    ImplInit( vcl::Window* pParent, WinBits nStyle );
+    // override in derived classes to set up anything needed to execute menu
+    virtual void PrepareExecute() {};
 
 public:
     explicit        MenuButton( vcl::Window* pParent, WinBits nStyle = 0 );
@@ -84,7 +86,7 @@ public:
     void            SetPopover(Window* pWindow);
     Window*         GetPopover() { return mpFloatingWindow.get(); }
 
-    OString const & GetCurItemIdent() const { return msCurItemIdent; }
+    OUString const& GetCurItemIdent() const { return msCurItemIdent; }
 
     void            SetActivateHdl( const Link<MenuButton *, void>& rLink ) { maActivateHdl = rLink; }
     void            SetSelectHdl( const Link<MenuButton *, void>& rLink ) { maSelectHdl = rLink; }

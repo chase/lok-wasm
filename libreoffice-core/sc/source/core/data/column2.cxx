@@ -203,7 +203,7 @@ tools::Long ScColumn::GetNeededSize(
         }
         if (bNumeric)
         {
-            if (!bMayInvalidatePattern || pPattern == pOldPattern)
+            if (!bMayInvalidatePattern || SfxPoolItem::areSame(pPattern, pOldPattern))
                 bBreak = false;
             else
             {
@@ -735,10 +735,10 @@ sal_uInt16 ScColumn::GetOptimalColWidth(
         // All cells are empty.
         return nOldWidth;
 
-    sc::SingleColumnSpanSet aSpanSet(GetDoc().GetSheetLimits());
     sc::SingleColumnSpanSet::SpansType aMarkedSpans;
     if (pMarkData && (pMarkData->IsMarked() || pMarkData->IsMultiMarked()))
     {
+        sc::SingleColumnSpanSet aSpanSet(GetDoc().GetSheetLimits());
         aSpanSet.scan(*pMarkData, nTab, nCol);
         aSpanSet.getSpans(aMarkedSpans);
     }
@@ -774,7 +774,7 @@ sal_uInt16 ScColumn::GetOptimalColWidth(
             // Or again in case there was a leading sep=";" row or two header
             // rows..
             const ScPatternAttr* pNextPattern = GetPattern( ++nRow );
-            if (pNextPattern != pPattern)
+            if (!SfxPoolItem::areSame(pNextPattern, pPattern))
                 nFormat = pNextPattern->GetNumberFormat( pFormatter );
         }
         OUString aLongStr;
@@ -810,9 +810,9 @@ sal_uInt16 ScColumn::GetOptimalColWidth(
 
         // Go though all non-empty cells within selection.
         sc::CellStoreType::const_iterator itPos = maCells.begin();
-        for (const auto& [ nRow1, nRow2 ] : aMarkedSpans)
+        // coverity[auto_causes_copy] This trivial copy is intentional
+        for (auto [ nRow, nRow2 ] : aMarkedSpans)
         {
-            SCROW nRow = nRow1;
             while (nRow <= nRow2)
             {
                 size_t nOffset;
@@ -832,7 +832,7 @@ sal_uInt16 ScColumn::GetOptimalColWidth(
 
                     const ScPatternAttr* pPattern = GetPattern(nRow);
                     aOptions.pPattern = pPattern;
-                    aOptions.bGetFont = (pPattern != pOldPattern || nScript != SvtScriptType::NONE);
+                    aOptions.bGetFont = (!SfxPoolItem::areSame(pPattern, pOldPattern) || nScript != SvtScriptType::NONE);
                     pOldPattern = pPattern;
                     sal_uInt16 nThis = static_cast<sal_uInt16>(GetNeededSize(
                         nRow, pDev, nPPTX, nPPTY, rZoomX, rZoomY, true, aOptions, &pOldPattern));
@@ -857,7 +857,8 @@ sal_uInt16 ScColumn::GetOptimalColWidth(
         return nOldWidth;
 }
 
-static sal_uInt16 lcl_GetAttribHeight( const ScPatternAttr& rPattern, sal_uInt16 nFontHeightId )
+static sal_uInt16 lcl_GetAttribHeight(const ScPatternAttr& rPattern, sal_uInt16 nFontHeightId,
+                                      sal_uInt16 nMinHeight)
 {
     const SvxFontHeightItem& rFontHeight =
         static_cast<const SvxFontHeightItem&>(rPattern.GetItem(nFontHeightId));
@@ -879,8 +880,8 @@ static sal_uInt16 lcl_GetAttribHeight( const ScPatternAttr& rPattern, sal_uInt16
     if (nHeight > STD_ROWHEIGHT_DIFF)
         nHeight -= STD_ROWHEIGHT_DIFF;
 
-    if (nHeight < ScGlobal::nStdRowHeight)
-        nHeight = ScGlobal::nStdRowHeight;
+    if (nHeight < nMinHeight)
+        nHeight = nMinHeight;
 
     return nHeight;
 }
@@ -904,6 +905,7 @@ void ScColumn::GetOptimalHeight(
     //  with conditional formatting, always consider the individual cells
 
     const ScPatternAttr* pPattern = aIter.Next(nStart,nEnd);
+    const sal_uInt16 nOptimalMinRowHeight = GetDoc().GetSheetOptimalMinRowHeight(nTab);
     while ( pPattern )
     {
         const ScMergeAttr*      pMerge = &pPattern->GetItem(ATTR_MERGE);
@@ -980,11 +982,14 @@ void ScColumn::GetOptimalHeight(
                 sal_uInt16 nDefHeight;
                 SvtScriptType nDefScript = ScGlobal::GetDefaultScriptType();
                 if ( nDefScript == SvtScriptType::ASIAN )
-                    nDefHeight = nCjkHeight = lcl_GetAttribHeight( *pPattern, ATTR_CJK_FONT_HEIGHT );
+                    nDefHeight = nCjkHeight = lcl_GetAttribHeight(*pPattern, ATTR_CJK_FONT_HEIGHT,
+                                                                  nOptimalMinRowHeight);
                 else if ( nDefScript == SvtScriptType::COMPLEX )
-                    nDefHeight = nCtlHeight = lcl_GetAttribHeight( *pPattern, ATTR_CTL_FONT_HEIGHT );
+                    nDefHeight = nCtlHeight = lcl_GetAttribHeight(*pPattern, ATTR_CTL_FONT_HEIGHT,
+                                                                  nOptimalMinRowHeight);
                 else
-                    nDefHeight = nLatHeight = lcl_GetAttribHeight( *pPattern, ATTR_FONT_HEIGHT );
+                    nDefHeight = nLatHeight = lcl_GetAttribHeight(*pPattern, ATTR_FONT_HEIGHT,
+                                                                  nOptimalMinRowHeight);
 
                 //  if everything below is already larger, the loop doesn't have to
                 //  be run again
@@ -1025,21 +1030,26 @@ void ScColumn::GetOptimalHeight(
                             if ( nScript == SvtScriptType::ASIAN )
                             {
                                 if ( nCjkHeight == 0 )
-                                    nCjkHeight = lcl_GetAttribHeight( *pPattern, ATTR_CJK_FONT_HEIGHT );
+                                    nCjkHeight = lcl_GetAttribHeight(*pPattern,
+                                                                     ATTR_CJK_FONT_HEIGHT,
+                                                                     nOptimalMinRowHeight);
                                 if (nCjkHeight > rHeights.GetValue(nRow))
                                     rHeights.SetValue(nRow, nRow, nCjkHeight);
                             }
                             else if ( nScript == SvtScriptType::COMPLEX )
                             {
                                 if ( nCtlHeight == 0 )
-                                    nCtlHeight = lcl_GetAttribHeight( *pPattern, ATTR_CTL_FONT_HEIGHT );
+                                    nCtlHeight = lcl_GetAttribHeight(*pPattern,
+                                                                     ATTR_CTL_FONT_HEIGHT,
+                                                                     nOptimalMinRowHeight);
                                 if (nCtlHeight > rHeights.GetValue(nRow))
                                     rHeights.SetValue(nRow, nRow, nCtlHeight);
                             }
                             else
                             {
                                 if ( nLatHeight == 0 )
-                                    nLatHeight = lcl_GetAttribHeight( *pPattern, ATTR_FONT_HEIGHT );
+                                    nLatHeight = lcl_GetAttribHeight(*pPattern, ATTR_FONT_HEIGHT,
+                                                                     nOptimalMinRowHeight);
                                 if (nLatHeight > rHeights.GetValue(nRow))
                                     rHeights.SetValue(nRow, nRow, nLatHeight);
                             }
@@ -1071,7 +1081,7 @@ void ScColumn::GetOptimalHeight(
                             if (nHeight > rHeights.GetValue(nRow))
                                 rHeights.SetValue(nRow, nRow, nHeight);
                             // Pattern changed due to calculation? => sync.
-                            if (pPattern != pOldPattern)
+                            if (!SfxPoolItem::areSame(pPattern, pOldPattern))
                             {
                                 pPattern = aIter.Resync( nRow, nStart, nEnd);
                                 nNextEnd = 0;
@@ -1937,7 +1947,7 @@ public:
         ScPostIt* pNew = p->Clone(aSrcPos, mrDestCol.GetDoc(), aDestPos, mbCloneCaption).release();
         miPos = mrDestNotes.set(miPos, nDestRow, pNew);
         // Notify our LOK clients also
-        ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Add, &mrDestCol.GetDoc(), aDestPos, pNew);
+        ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Add, mrDestCol.GetDoc(), aDestPos, pNew);
     }
 };
 
@@ -2222,13 +2232,13 @@ void ScColumn::SetCellNote(SCROW nRow, std::unique_ptr<ScPostIt> pNote)
 namespace {
     class CellNoteHandler
     {
-        const ScDocument* m_pDocument;
+        const ScDocument& m_rDocument;
         const ScAddress m_aAddress; // 'incomplete' address consisting of tab, column
         const bool m_bForgetCaptionOwnership;
 
     public:
-        CellNoteHandler(const ScDocument* pDocument, const ScAddress& rPos, bool bForgetCaptionOwnership) :
-            m_pDocument(pDocument),
+        CellNoteHandler(const ScDocument& rDocument, const ScAddress& rPos, bool bForgetCaptionOwnership) :
+            m_rDocument(rDocument),
             m_aAddress(rPos),
             m_bForgetCaptionOwnership(bForgetCaptionOwnership) {}
 
@@ -2241,7 +2251,7 @@ namespace {
             ScAddress aAddr(m_aAddress);
             aAddr.SetRow(nRow);
             // Notify our LOK clients
-            ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Remove, m_pDocument, aAddr, p);
+            ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Remove, m_rDocument, aAddr, p);
         }
     };
 } // anonymous namespace
@@ -2249,7 +2259,7 @@ namespace {
 void ScColumn::CellNotesDeleting(SCROW nRow1, SCROW nRow2, bool bForgetCaptionOwnership)
 {
     ScAddress aAddr(nCol, 0, nTab);
-    CellNoteHandler aFunc(&GetDoc(), aAddr, bForgetCaptionOwnership);
+    CellNoteHandler aFunc(GetDoc(), aAddr, bForgetCaptionOwnership);
     sc::ParseNote(maCellNotes.begin(), maCellNotes, nRow1, nRow2, aFunc);
 }
 
@@ -2263,9 +2273,7 @@ void ScColumn::DeleteCellNotes( sc::ColumnBlockPosition& rBlockPos, SCROW nRow1,
 
 bool ScColumn::HasCellNotes() const
 {
-    if (maCellNotes.block_size() == 1 && maCellNotes.begin()->type == sc::element_type_empty)
-        return false; // all elements are empty
-    return true; // otherwise some must be notes
+    return mnBlkCountCellNotes != 0;
 }
 
 SCROW ScColumn::GetCellNotesMaxRow() const
@@ -3714,7 +3722,7 @@ namespace {
 
 class WeightedCounter
 {
-    sal_uLong mnCount;
+    size_t mnCount;
 public:
     WeightedCounter() : mnCount(0) {}
 
@@ -3723,7 +3731,7 @@ public:
         mnCount += getWeight(node);
     }
 
-    static sal_uLong getWeight(const sc::CellStoreType::value_type& node)
+    static size_t getWeight(const sc::CellStoreType::value_type& node)
     {
         switch (node.type)
         {
@@ -3744,14 +3752,14 @@ public:
         }
     }
 
-    sal_uLong getCount() const { return mnCount; }
+    size_t getCount() const { return mnCount; }
 };
 
 class WeightedCounterWithRows
 {
     const SCROW mnStartRow;
     const SCROW mnEndRow;
-    sal_uLong mnCount;
+    size_t mnCount;
 
 public:
     WeightedCounterWithRows(SCROW nStartRow, SCROW nEndRow)
@@ -3772,7 +3780,7 @@ public:
         }
     }
 
-    sal_uLong getCount() const { return mnCount; }
+    size_t getCount() const { return mnCount; }
 };
 
 }

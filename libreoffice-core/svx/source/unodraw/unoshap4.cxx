@@ -71,7 +71,7 @@ SvxOle2Shape::SvxOle2Shape(SdrObject* pObject, OUString referer)
 {
 }
 
-SvxOle2Shape::SvxOle2Shape(SdrObject* pObject, OUString referer, o3tl::span<const SfxItemPropertyMapEntry> pPropertyMap, const SvxItemPropertySet* pPropertySet)
+SvxOle2Shape::SvxOle2Shape(SdrObject* pObject, OUString referer, std::span<const SfxItemPropertyMapEntry> pPropertyMap, const SvxItemPropertySet* pPropertySet)
     : SvxShapeText(pObject, pPropertyMap, pPropertySet)
     , referer_(std::move(referer))
 {
@@ -480,7 +480,7 @@ void SvxOle2Shape::createLink( const OUString& aLinkURL )
             awt::Size aSz = xObj->getVisualAreaSize( pOle2Obj->GetAspect() );
             aRect.SetSize( Size( aSz.Width, aSz.Height ) );
         }
-        catch( embed::NoVisualAreaSizeException& )
+        catch (const uno::Exception&)
         {}
         pOle2Obj->SetLogicRect( aRect );
     }
@@ -939,7 +939,7 @@ bool SvxMediaShape::setPropertyValueImpl( const OUString& rName, const SfxItemPr
                 css::uno::Any exc = cppu::getCaughtException();
                 throw css::lang::WrappedTargetException(
                         "ContentCreationException Setting InputStream!",
-                        static_cast<OWeakObject *>(this),
+                        getXWeak(),
                         exc);
             }
             catch (const css::ucb::CommandFailedException&)
@@ -947,7 +947,7 @@ bool SvxMediaShape::setPropertyValueImpl( const OUString& rName, const SfxItemPr
                 css::uno::Any anyEx = cppu::getCaughtException();
                 throw css::lang::WrappedTargetException(
                         "CommandFailedException Setting InputStream!",
-                        static_cast<OWeakObject *>(this),
+                        getXWeak(),
                         anyEx);
             }
 #endif
@@ -1032,14 +1032,14 @@ bool SvxMediaShape::getPropertyValueImpl( const OUString& rName, const SfxItemPr
                     css::uno::Any anyEx = cppu::getCaughtException();
                     throw css::lang::WrappedTargetException(
                             "ContentCreationException Getting InputStream!",
-                            static_cast < OWeakObject * > ( this ), anyEx );
+                            getXWeak(), anyEx );
                 }
                 catch (const css::ucb::CommandFailedException&)
                 {
                     css::uno::Any anyEx = cppu::getCaughtException();
                     throw css::lang::WrappedTargetException(
                             "CommandFailedException Getting InputStream!",
-                            static_cast < OWeakObject * > ( this ), anyEx );
+                            getXWeak(), anyEx );
                 }
 
                 break;

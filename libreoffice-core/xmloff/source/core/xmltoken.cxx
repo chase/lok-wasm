@@ -530,6 +530,7 @@ namespace xmloff::token {
         TOKEN( "contour-path",                    XML_CONTOUR_PATH ),
         TOKEN( "contour-polygon",                 XML_CONTOUR_POLYGON ),
         TOKEN( "contrast",                        XML_CONTRAST ),
+        TOKEN( "contributor",                     XML_CONTRIBUTOR ),
         TOKEN( "control",                         XML_CONTROL ),
         TOKEN( "conversion-mode",                 XML_CONVERSION_MODE ),
         TOKEN( "conversion-type",                 XML_CONVERSION_TYPE ),
@@ -554,6 +555,7 @@ namespace xmloff::token {
         TOKEN( "country",                         XML_COUNTRY ),
         TOKEN( "country-asian",                   XML_COUNTRY_ASIAN ),
         TOKEN( "country-complex",                 XML_COUNTRY_COMPLEX ),
+        TOKEN( "coverage",                        XML_COVERAGE ),
         TOKEN( "covered-table-cell",              XML_COVERED_TABLE_CELL ),
         TOKEN( "create-date",                     XML_CREATE_DATE ),
         TOKEN( "create-date-string",              XML_CREATE_DATE_STRING ),
@@ -1640,6 +1642,7 @@ namespace xmloff::token {
         TOKEN( "rel-height-rel",                  XML_REL_HEIGHT_REL ),
         TOKEN( "rel-width",                       XML_REL_WIDTH ),
         TOKEN( "rel-width-rel",                   XML_REL_WIDTH_REL ),
+        TOKEN( "relation",                        XML_RELATION ),
         TOKEN( "relative",                        XML_RELATIVE ),
         TOKEN( "relative-tab-stop-position",      XML_RELATIVE_TAB_STOP_POSITION ),
         TOKEN( "reln",                            XML_RELN ),
@@ -1661,6 +1664,7 @@ namespace xmloff::token {
         TOKEN( "right-to-left",                   XML_RIGHT_TO_LEFT ),
         TOKEN( "right-arc",                       XML_RIGHTARC ),
         TOKEN( "right-circle",                    XML_RIGHTCIRCLE ),
+        TOKEN( "rights",                          XML_RIGHTS ),
         TOKEN( "ring",                            XML_RING ),
         TOKEN( "role",                            XML_ROLE ),
         TOKEN( "roll-from-bottom",                XML_ROLL_FROM_BOTTOM ),
@@ -3468,13 +3472,17 @@ namespace xmloff::token {
         TOKEN( "external-data", XML_EXTERNALDATA),
 
         TOKEN( "exponent-interval",               XML_EXPONENT_INTERVAL ),
+        TOKEN( "exponent-lowercase",              XML_EXPONENT_LOWERCASE ),
         TOKEN( "forced-exponent-sign",            XML_FORCED_EXPONENT_SIGN ),
+        TOKEN( "blank-exponent-digits",           XML_BLANK_EXPONENT_DIGITS ),
         TOKEN( "min-decimal-places",              XML_MIN_DECIMAL_PLACES ),
         TOKEN( "max-denominator-value",           XML_MAX_DENOMINATOR_VALUE ),
         TOKEN( "max-numerator-digits",            XML_MAX_NUMERATOR_DIGITS ),
         TOKEN( "zeros-numerator-digits",          XML_ZEROS_NUMERATOR_DIGITS ),
         TOKEN( "zeros-denominator-digits",        XML_ZEROS_DENOMINATOR_DIGITS ),
         TOKEN( "integer-fraction-delimiter",      XML_INTEGER_FRACTION_DELIMITER ),
+        TOKEN( "max-blank-integer-digits",        XML_MAX_BLANK_INTEGER_DIGITS ),
+        TOKEN( "blank-width-char",                XML_BLANK_WIDTH_CHAR ),
 
         // for optional language-dependent reference formats
         TOKEN( "reference-language",              XML_REFERENCE_LANGUAGE ),
@@ -3493,6 +3501,8 @@ namespace xmloff::token {
         TOKEN("margin-gutter", XML_MARGIN_GUTTER),
 
         TOKEN("local-url", XML_LOCAL_URL),
+        TOKEN("target-type", XML_TARGET_TYPE),
+        TOKEN("target-url", XML_TARGET_URL),
 
         TOKEN("dir",                 XML_DIR ),
         TOKEN("displaystyle",        XML_DISPLAYSTYLE ),

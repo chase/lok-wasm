@@ -25,8 +25,8 @@
 #include <osl/diagnose.h>
 #include <svl/itempool.hxx>
 #include <svl/setitem.hxx>
+#include <svl/voiditem.hxx>
 #include <svl/undo.hxx>
-#include <itemdel.hxx>
 #include <svtools/asynclink.hxx>
 #include <unotools/configmgr.hxx>
 #include <comphelper/lok.hxx>
@@ -136,7 +136,7 @@ SfxViewFrame* SfxShell::GetFrame() const
     if ( pImpl->pFrame )
         return pImpl->pFrame;
     if ( pImpl->pViewSh )
-        return pImpl->pViewSh->GetViewFrame();
+        return &pImpl->pViewSh->GetViewFrame();
     return nullptr;
 }
 
@@ -157,7 +157,7 @@ void SfxShell::PutItem
                                   which is stored in the SfxShell in a list. */
 )
 {
-    DBG_ASSERT( dynamic_cast< const SfxSetItem* >( &rItem) ==  nullptr, "SetItems aren't allowed here" );
+    DBG_ASSERT( !rItem.isSetItem(), "SetItems aren't allowed here" );
     DBG_ASSERT( SfxItemPool::IsSlot( rItem.Which() ),
                 "items with Which-Ids aren't allowed here" );
 
@@ -170,8 +170,7 @@ void SfxShell::PutItem
     if (it != pImpl->m_Items.end())
     {
         // Replace Item
-        pImpl->m_Items.erase( it );
-        pImpl->m_Items.insert(std::make_pair(nWhich, std::unique_ptr<SfxPoolItem>(pItem)));
+        it->second = std::unique_ptr<SfxPoolItem>(pItem);
 
         // if active, notify Bindings
         SfxDispatcher *pDispat = GetDispatcher();
@@ -246,7 +245,7 @@ void SfxShell::Invalidate
         return;
     }
 
-    Invalidate_Impl( GetViewShell()->GetViewFrame()->GetBindings(), nId );
+    Invalidate_Impl( GetViewShell()->GetViewFrame().GetBindings(), nId );
 }
 
 void SfxShell::Invalidate_Impl( SfxBindings& rBindings, sal_uInt16 nId )
@@ -435,7 +434,7 @@ void SfxShell::ExecuteSlot( SfxRequest& rReq, bool bAsync )
     }
 }
 
-const SfxPoolItem* SfxShell::ExecuteSlot
+const SfxPoolItemHolder& SfxShell::ExecuteSlot
 (
     SfxRequest          &rReq,  // the relayed <SfxRequest>
     const SfxInterface* pIF     // default = 0 means get virtually
@@ -459,7 +458,7 @@ const SfxPoolItem* SfxShell::ExecuteSlot
     return rReq.GetReturnValue();
 }
 
-const SfxPoolItem* SfxShell::GetSlotState
+SfxPoolItemHolder SfxShell::GetSlotState
 (
     sal_uInt16              nSlotId,    // Slot-Id to the Slots in question
     const SfxInterface* pIF,        // default = 0 means get virtually
@@ -505,29 +504,27 @@ const SfxPoolItem* SfxShell::GetSlotState
     }
 
     // Evaluate Item and item status and possibly maintain them in pStateSet
-    std::unique_ptr<SfxPoolItem> pRetItem;
     if ( !bItemStateSet || eState <= SfxItemState::DISABLED )
     {
         if ( pStateSet )
             pStateSet->DisableItem(nSlotId);
-        return nullptr;
+        return SfxPoolItemHolder();
     }
-    else if ( bItemStateSet && eState == SfxItemState::DONTCARE )
+
+    if ( bItemStateSet && eState == SfxItemState::DONTCARE )
     {
         if ( pStateSet )
             pStateSet->ClearItem(nSlotId);
-        pRetItem.reset( new SfxVoidItem(0) );
+        return SfxPoolItemHolder(rPool, new SfxVoidItem(0), true);
     }
-    else // bItemStateSet && eState >= SfxItemState::DEFAULT
-    {
-        if ( pStateSet && pStateSet->Put( *pItem ) )
-            return &pStateSet->Get( pItem->Which() );
-        pRetItem.reset(pItem->Clone());
-    }
-    auto pTemp = pRetItem.get();
-    DeleteItemOnIdle(std::move(pRetItem));
 
-    return pTemp;
+    // bItemStateSet && eState >= SfxItemState::DEFAULT
+    if ( pStateSet && pStateSet->Put( *pItem ) )
+    {
+        return SfxPoolItemHolder(rPool, &pStateSet->Get(pItem->Which()));
+    }
+
+    return SfxPoolItemHolder(rPool, pItem);
 }
 
 static SFX_EXEC_STUB(SfxShell, VerbExec)
@@ -548,7 +545,7 @@ void SfxShell::SetVerbs(const css::uno::Sequence < css::embed::VerbDescriptor >&
     // the Slots
     {
         SfxBindings *pBindings =
-            pViewSh->GetViewFrame()->GetDispatcher()->GetBindings();
+            pViewSh->GetViewFrame().GetDispatcher()->GetBindings();
         sal_uInt16 nCount = pImpl->aSlotArr.size();
         for (sal_uInt16 n1=0; n1<nCount ; n1++)
         {
@@ -565,21 +562,15 @@ void SfxShell::SetVerbs(const css::uno::Sequence < css::embed::VerbDescriptor >&
         if (nSlotId > SID_VERB_END)
             break;
 
-        SfxSlot *pNewSlot = new SfxSlot;
-        pNewSlot->nSlotId = nSlotId;
-        pNewSlot->nGroupId = SfxGroupId::NONE;
-
-        // Verb slots must be executed asynchronously, so that they can be
-        // destroyed while executing.
-        pNewSlot->nFlags = SfxSlotMode::ASYNCHRON | SfxSlotMode::CONTAINER;
-        pNewSlot->nMasterSlotId = 0;
-        pNewSlot->nValue = 0;
-        pNewSlot->fnExec = SFX_STUB_PTR(SfxShell,VerbExec);
-        pNewSlot->fnState = SFX_STUB_PTR(SfxShell,VerbState);
-        pNewSlot->pType = nullptr; // HACK(SFX_TYPE(SfxVoidItem)) ???
-        pNewSlot->nArgDefCount = 0;
-        pNewSlot->pFirstArgDef = nullptr;
-        pNewSlot->pUnoName = nullptr;
+        SfxSlot* pNewSlot = new SfxSlot(
+            nSlotId, SfxGroupId::NONE,
+            // Verb slots must be executed asynchronously, so that they can be
+            // destroyed while executing.
+            SfxSlotMode::ASYNCHRON | SfxSlotMode::CONTAINER,
+            0, 0,
+            SFX_STUB_PTR(SfxShell, VerbExec), SFX_STUB_PTR(SfxShell, VerbState),
+            nullptr, // HACK(SFX_TYPE(SfxVoidItem)) ???
+            nullptr, nullptr, 0, SfxDisableFlags::NONE, "");
 
         if (!pImpl->aSlotArr.empty())
         {
@@ -597,7 +588,7 @@ void SfxShell::SetVerbs(const css::uno::Sequence < css::embed::VerbDescriptor >&
 
     // The status of SID_OBJECT is collected in the controller directly on
     // the Shell, it is thus enough to encourage a new status update
-    SfxBindings* pBindings = pViewSh->GetViewFrame()->GetDispatcher()->GetBindings();
+    SfxBindings* pBindings = pViewSh->GetViewFrame().GetDispatcher()->GetBindings();
     pBindings->Invalidate(SID_OBJECT, true, true);
 }
 
@@ -656,7 +647,7 @@ const SfxSlot* SfxShell::GetVerbSlot_Impl(sal_uInt16 nId) const
 SfxObjectShell* SfxShell::GetObjectShell()
 {
     if ( GetViewShell() )
-        return GetViewShell()->GetViewFrame()->GetObjectShell();
+        return GetViewShell()->GetViewFrame().GetObjectShell();
     else
         return nullptr;
 }
@@ -678,7 +669,7 @@ void SfxShell::UIFeatureChanged()
     if ( pFrame && pFrame->IsVisible() )
     {
         // Also force an update, if dispatcher is already updated otherwise
-        // something my get stuck in the bunkered tools. Asynchronous call to
+        // something may get stuck in the bunkered tools. Asynchronous call to
         // prevent recursion.
         if ( !pImpl->pUpdater )
             pImpl->pUpdater.reset( new svtools::AsynchronLink( Link<void*,void>( this, DispatcherUpdate_Impl ) ) );

@@ -33,6 +33,7 @@
 #include <editeng/sizeitem.hxx>
 #include <editeng/urlfieldhelper.hxx>
 #include <officecfg/Office/Impress.hxx>
+#include <officecfg/Office/Security.hxx>
 #include <svx/svxids.hrc>
 #include <svx/svdpagv.hxx>
 #include <svx/clipfmtitem.hxx>
@@ -152,6 +153,7 @@ static ::std::unique_ptr<SvxClipboardFormatItem> GetSupportedClipboardFormats (
                 case SotClipboardFormatId::NETSCAPE_BOOKMARK:
                 case SotClipboardFormatId::STRING:
                 case SotClipboardFormatId::HTML:
+                case SotClipboardFormatId::HTML_SIMPLE:
                 case SotClipboardFormatId::RTF:
                 case SotClipboardFormatId::RICHTEXT:
                 case SotClipboardFormatId::EDITENGINE_ODF_TEXT_FLAT:
@@ -293,7 +295,8 @@ bool DrawViewShell::ShouldDisableEditHyperlink() const
     bool bDisableEditHyperlink = true;
     if( mpDrawView->IsTextEdit() )
     {
-        if (URLFieldHelper::IsCursorAtURLField(mpDrawView->GetTextEditOutlinerView()))
+        if (URLFieldHelper::IsCursorAtURLField(mpDrawView->GetTextEditOutlinerView(),
+                                               /*AlsoCheckBeforeCursor=*/true))
             bDisableEditHyperlink = false;
     }
     else
@@ -799,6 +802,7 @@ void DrawViewShell::GetMenuState( SfxItemSet &rSet )
         rSet.DisableItem(SID_RENAMEPAGE_QUICK);
         rSet.DisableItem(SID_INSERTLAYER);
         rSet.DisableItem(SID_MODIFYLAYER);
+        rSet.DisableItem(SID_TOGGLELAYERVISIBILITY);
         rSet.DisableItem(SID_RENAMELAYER);
         rSet.DisableItem(SID_LAYERMODE);
         rSet.DisableItem(SID_INSERTFILE);
@@ -824,6 +828,7 @@ void DrawViewShell::GetMenuState( SfxItemSet &rSet )
     {
         rSet.DisableItem( SID_INSERTLAYER );
         rSet.DisableItem( SID_MODIFYLAYER );
+        rSet.DisableItem( SID_TOGGLELAYERVISIBILITY );
         rSet.DisableItem( SID_DELETE_LAYER );
         rSet.DisableItem( SID_RENAMELAYER );
     }
@@ -1007,8 +1012,9 @@ void DrawViewShell::GetMenuState( SfxItemSet &rSet )
 #ifndef ENABLE_SDREMOTE
         bDisableSdremoteForGood = true;
 #endif
-        bDisableSdremoteForGood |= ! ( /*officecfg::Office::Common::Misc::ExperimentalMode::get() &&*/
-                                       officecfg::Office::Impress::Misc::Start::EnableSdremote::get() );
+        bDisableSdremoteForGood |= !(officecfg::Office::Impress::Misc::Start::EnableSdremote::get()
+                                     && officecfg::Office::Security::Net::AllowInsecureImpressRemoteWiFi::get()
+                                       );
 
         // This dialog is only useful for TCP/IP remote control
         // which is unusual, under-tested and a security issue.
@@ -1274,6 +1280,9 @@ void DrawViewShell::GetMenuState( SfxItemSet &rSet )
         rSet.DisableItem(SID_3D_PYRAMID);
     }
 
+    if ( !aActiveLayer.isEmpty() && pPV )
+        rSet.Put( SfxBoolItem(SID_TOGGLELAYERVISIBILITY, !pPageView->IsLayerVisible(aActiveLayer)) );
+
     // are the modules available?
 
     if (!SvtModuleOptions().IsCalc())
@@ -1474,16 +1483,7 @@ void DrawViewShell::GetMenuState( SfxItemSet &rSet )
 
     // Menuoption: Edit->Hyperlink
     // Disable, if there is no hyperlink
-    bool bDisableEditHyperlink;
-    if (!moAtContextMenu_DisableEditHyperlink)
-        bDisableEditHyperlink = ShouldDisableEditHyperlink();
-    else
-    {
-        // tdf#137445 if a popup menu was active, use the state as of when the popup was launched and then drop
-        // moAtContextMenu_DisableEditHyperlink
-        bDisableEditHyperlink = *moAtContextMenu_DisableEditHyperlink;
-        moAtContextMenu_DisableEditHyperlink.reset();
-    }
+    bool bDisableEditHyperlink = ShouldDisableEditHyperlink();
 
     //highlight selected custom shape
     {
@@ -1777,7 +1777,7 @@ void DrawViewShell::SetPageProperties (SfxRequest& rReq)
     {
         SdrPageProperties& rPageProperties = pPage->getSdrPageProperties();
         const SfxItemSet &aPageItemSet = rPageProperties.GetItemSet();
-        SfxItemSet aTempSet = aPageItemSet.CloneAsValue(false, &mpDrawView->GetModel()->GetItemPool());
+        SfxItemSet aTempSet = aPageItemSet.CloneAsValue(false, &mpDrawView->GetModel().GetItemPool());
         const SfxPoolItem* pItem = nullptr;
 
         rPageProperties.ClearItem(XATTR_FILLSTYLE);
@@ -1799,28 +1799,11 @@ void DrawViewShell::SetPageProperties (SfxRequest& rReq)
 
             case SID_ATTR_PAGE_COLOR:
             {
-                if (SfxItemState::SET == pArgs->GetItemState(SID_ATTR_COLOR_STR, false, &pItem))
-                {
-                    Color aColor;
-                    OUString sColor;
-
-                    sColor = static_cast<const SfxStringItem*>(pItem)->GetValue();
-
-                    if (sColor == "transparent")
-                        aColor = COL_TRANSPARENT;
-                    else
-                        aColor = Color(ColorTransparency, sColor.toInt32(16));
-
-                    XFillColorItem aColorItem(OUString(), aColor);
-                    rPageProperties.PutItem( XFillStyleItem( drawing::FillStyle_SOLID ) );
-                    rPageProperties.PutItem( aColorItem );
-                }
+                rPageProperties.PutItem( XFillStyleItem( drawing::FillStyle_SOLID ) );
+                if (const XFillColorItem* pColorItem = static_cast<const XFillColorItem*>(pArgs->GetItem(SID_ATTR_PAGE_COLOR)))
+                    rPageProperties.PutItem(XFillColorItem("", pColorItem->GetColorValue()));
                 else
-                {
-                    XFillColorItem aColorItem( pArgs->Get( XATTR_FILLCOLOR ) );
-                    rPageProperties.PutItem( XFillStyleItem( drawing::FillStyle_SOLID ) );
-                    rPageProperties.PutItem( aColorItem );
-                }
+                    rPageProperties.PutItem(pArgs->Get(XATTR_FILLCOLOR));
             }
             break;
 
@@ -1832,9 +1815,9 @@ void DrawViewShell::SetPageProperties (SfxRequest& rReq)
                     XFillGradientItem aGradientItem( basegfx::BGradient::fromJSON(pJSON->GetValue()) );
 
                     // MigrateItemSet guarantees unique gradient names
-                    SfxItemSetFixed<XATTR_FILLGRADIENT, XATTR_FILLGRADIENT> aMigrateSet( mpDrawView->GetModel()->GetItemPool() );
+                    SfxItemSetFixed<XATTR_FILLGRADIENT, XATTR_FILLGRADIENT> aMigrateSet(mpDrawView->GetModel().GetItemPool());
                     aMigrateSet.Put( aGradientItem );
-                    SdrModel::MigrateItemSet( &aMigrateSet, &aTempSet, mpDrawView->GetModel() );
+                    SdrModel::MigrateItemSet(&aMigrateSet, &aTempSet, &mpDrawView->GetModel());
 
                     rPageProperties.PutItem( XFillStyleItem( drawing::FillStyle_GRADIENT ) );
                     rPageProperties.PutItemSet( aTempSet );
@@ -1844,9 +1827,9 @@ void DrawViewShell::SetPageProperties (SfxRequest& rReq)
                     XFillGradientItem aGradientItem( pArgs->Get( XATTR_FILLGRADIENT ) );
 
                     // MigrateItemSet guarantees unique gradient names
-                    SfxItemSetFixed<XATTR_FILLGRADIENT, XATTR_FILLGRADIENT> aMigrateSet( mpDrawView->GetModel()->GetItemPool() );
+                    SfxItemSetFixed<XATTR_FILLGRADIENT, XATTR_FILLGRADIENT> aMigrateSet(mpDrawView->GetModel().GetItemPool());
                     aMigrateSet.Put( aGradientItem );
-                    SdrModel::MigrateItemSet( &aMigrateSet, &aTempSet, mpDrawView->GetModel() );
+                    SdrModel::MigrateItemSet(&aMigrateSet, &aTempSet, &mpDrawView->GetModel());
 
                     rPageProperties.PutItem( XFillStyleItem( drawing::FillStyle_GRADIENT ) );
                     rPageProperties.PutItemSet( aTempSet );

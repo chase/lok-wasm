@@ -26,6 +26,7 @@
 #include <svx/svxids.hrc>
 #include <osl/diagnose.h>
 #include <officecfg/Office/Common.hxx>
+#include <officecfg/Office/Chart.hxx>
 
 void SvxDefaultColorOptPage::InsertColorEntry(const XColorEntry& rEntry, sal_Int32 nPos)
 {
@@ -100,6 +101,14 @@ SvxDefaultColorOptPage::SvxDefaultColorOptPage(weld::Container* pPage, weld::Dia
 {
     m_xLbChartColors->set_size_request(-1, m_xLbChartColors->get_height_rows(16));
 
+    if (officecfg::Office::Chart::DefaultColor::Series::isReadOnly())
+    {
+        m_xPBDefault->set_sensitive(false);
+        m_xPBAdd->set_sensitive(false);
+        m_xPBRemove->set_sensitive(false);
+        m_xValSetColorBoxWin->set_sensitive(false);
+    }
+
     m_xPBDefault->connect_clicked( LINK( this, SvxDefaultColorOptPage, ResetToDefaults ) );
     m_xPBAdd->connect_clicked( LINK( this, SvxDefaultColorOptPage, AddChartColor ) );
     m_xPBRemove->connect_clicked( LINK( this, SvxDefaultColorOptPage, RemoveChartColor ) );
@@ -108,8 +117,6 @@ SvxDefaultColorOptPage::SvxDefaultColorOptPage(weld::Container* pPage, weld::Dia
 
     m_xValSetColorBox->SetStyle( m_xValSetColorBox->GetStyle()
                                     | WB_ITEMBORDER | WB_NAMEFIELD | WB_VSCROLL );
-
-    m_SvxChartOptionsUniquePtr.reset(new SvxChartOptions);
 
     if ( const SvxChartColorTableItem* pEditOptionsItem = rInAttrs.GetItemIfSet( SID_SCH_EDITOPTIONS, false ) )
     {
@@ -120,7 +127,7 @@ SvxDefaultColorOptPage::SvxDefaultColorOptPage(weld::Container* pPage, weld::Dia
     {
         m_SvxChartColorTableUniquePtr = std::make_unique<SvxChartColorTable>();
         m_SvxChartColorTableUniquePtr->useDefault();
-        m_SvxChartOptionsUniquePtr->SetDefaultColors(*m_SvxChartColorTableUniquePtr);
+        SvxChartOptions::SetDefaultColors(*m_SvxChartColorTableUniquePtr);
     }
 
     Construct();
@@ -143,6 +150,28 @@ void SvxDefaultColorOptPage::Construct()
 std::unique_ptr<SfxTabPage> SvxDefaultColorOptPage::Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrs )
 {
     return std::make_unique<SvxDefaultColorOptPage>( pPage, pController, *rAttrs );
+}
+
+OUString SvxDefaultColorOptPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label20", "label1" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString buttons[] = { "add", "delete", "default" };
+
+    for (const auto& btn : buttons)
+    {
+        if (const auto& pString = m_xBuilder->weld_button(btn))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SvxDefaultColorOptPage::FillItemSet( SfxItemSet* rOutAttrs )
@@ -175,11 +204,8 @@ void SvxDefaultColorOptPage::FillPaletteLB()
 
 void SvxDefaultColorOptPage::SaveChartOptions()
 {
-    if (m_SvxChartOptionsUniquePtr && m_SvxChartColorTableUniquePtr)
-    {
-        m_SvxChartOptionsUniquePtr->SetDefaultColors(*m_SvxChartColorTableUniquePtr);
-        m_SvxChartOptionsUniquePtr->Commit();
-    }
+    if (m_SvxChartColorTableUniquePtr)
+        SvxChartOptions::SetDefaultColors(*m_SvxChartColorTableUniquePtr);
 }
 
 // event handlers

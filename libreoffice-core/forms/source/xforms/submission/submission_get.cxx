@@ -24,7 +24,6 @@
 #include <rtl/strbuf.hxx>
 #include <osl/diagnose.h>
 #include <ucbhelper/content.hxx>
-#include <com/sun/star/io/Pipe.hpp>
 #include <com/sun/star/task/InteractionHandler.hpp>
 #include <comphelper/diagnose_ex.hxx>
 
@@ -76,14 +75,10 @@ CSubmission::SubmissionResult CSubmissionGet::submit(const css::uno::Reference< 
             aQueryString.append(reinterpret_cast<char const *>(aByteBuffer.getConstArray()), n);
         if (!aQueryString.isEmpty() && m_aURLObj.GetProtocol() != INetProtocol::File)
         {
-            aUTF8QueryURL.append('?');
-            aUTF8QueryURL.append(aQueryString);
+            aUTF8QueryURL.append("?" + aQueryString);
         }
         OUString aQueryURL = OStringToOUString(aUTF8QueryURL, RTL_TEXTENCODING_UTF8);
         ucbhelper::Content aContent(aQueryURL, aEnvironment, m_xContext);
-        css::uno::Reference< XOutputStream > aPipe( css::io::Pipe::create(m_xContext), UNO_QUERY_THROW );
-        if (!aContent.openStream(aPipe))
-            return UNKNOWN_ERROR;
         // get reply
         try {
             m_aResultStream = aContent.openStream();

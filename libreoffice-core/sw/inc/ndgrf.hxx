@@ -23,6 +23,7 @@
 #include <sfx2/lnkbase.hxx>
 #include <vcl/GraphicObject.hxx>
 #include "ndnotxt.hxx"
+#include "swbaslnk.hxx"
 #include <memory>
 
 class SwAsyncRetrieveInputStreamThreadConsumer;
@@ -37,7 +38,7 @@ class SW_DLLPUBLIC SwGrfNode final: public SwNoTextNode
 
     GraphicObject maGrfObj;
     std::unique_ptr<GraphicObject> mpReplacementGraphic;
-    tools::SvRef<sfx2::SvBaseLink> mxLink;       ///< If graphics only as link then pointer is set.
+    tools::SvRef<SwBaseLink> mxLink; ///< If graphics only as link then pointer is set.
     Size mnGrfSize;
     bool mbInSwapIn              :1; // to avoid recursion in SwGrfNode::SwapIn
     bool mbInBaseLinkSwapIn      :1; // to avoid recursion in SwBaseLink::SwapIn
@@ -59,10 +60,6 @@ class SW_DLLPUBLIC SwGrfNode final: public SwNoTextNode
     ///< Ctor for reading (SW/G) without graphics.
     SwGrfNode( SwNode& rWhere,
                std::u16string_view rGrfName, const OUString& rFltName,
-               SwGrfFormatColl* pGrfColl,
-               SwAttrSet const * pAutoAttr );
-    SwGrfNode( SwNode& rWhere,
-               const GraphicObject& rGrfObj,
                SwGrfFormatColl* pGrfColl,
                SwAttrSet const * pAutoAttr );
 
@@ -129,7 +126,7 @@ public:
     bool IsGrfLink() const                  { return mxLink.is(); }
     bool IsLinkedFile() const;
     bool IsLinkedDDE() const;
-    const tools::SvRef<sfx2::SvBaseLink>& GetLink() const    { return mxLink; }
+    const tools::SvRef<SwBaseLink>& GetLink() const { return mxLink; }
     bool GetFileFilterNms( OUString* pFileNm, OUString* pFilterNm ) const;
     void ReleaseLink();
 

@@ -13,7 +13,6 @@
 #include <xmloff/xmlnamespace.hxx>
 #include <xmloff/xmltypes.hxx>
 #include <xmloff/xmlimp.hxx>
-#include <xmloff/xmlimppr.hxx>
 
 #include <xmloff/XMLComplexColorContext.hxx>
 

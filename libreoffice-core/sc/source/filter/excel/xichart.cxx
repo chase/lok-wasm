@@ -85,6 +85,7 @@
 
 #include <document.hxx>
 #include <drwlayer.hxx>
+#include <docsh.hxx>
 #include <tokenarray.hxx>
 #include <compiler.hxx>
 #include <reftokenhelper.hxx>
@@ -270,7 +271,7 @@ void XclImpChRoot::InitConversion( const Reference<XChartDocument>& xChartDoc, c
     if( xChartDoc.is() )
         xChartDoc->lockControllers();
 
-    SfxObjectShell* pDocShell = GetDocShell();
+    ScDocShell* pDocShell = GetDocShell();
     Reference< XDataReceiver > xDataRec( xChartDoc, UNO_QUERY );
     if( pDocShell && xDataRec.is() )
     {
@@ -280,7 +281,7 @@ void XclImpChRoot::InitConversion( const Reference<XChartDocument>& xChartDoc, c
         if( xDataProv.is() )
             xDataRec->attachDataProvider( xDataProv );
         // attach the number formatter
-        Reference< XNumberFormatsSupplier > xNumFmtSupp( pDocShell->GetModel(), UNO_QUERY );
+        Reference< XNumberFormatsSupplier > xNumFmtSupp( static_cast<cppu::OWeakObject*>(pDocShell->GetModel()), UNO_QUERY );
         if( xNumFmtSupp.is() )
             xDataRec->attachNumberFormatsSupplier( xNumFmtSupp );
     }
@@ -821,7 +822,7 @@ void XclImpChSourceLink::ConvertNumFmt( ScfPropertySet& rPropSet, bool bPercent 
 {
     bool bLinkToSource = ::get_flag( maData.mnFlags, EXC_CHSRCLINK_NUMFMT );
     sal_uInt32 nScNumFmt = bLinkToSource ? GetNumFmtBuffer().GetScFormat( maData.mnNumFmtIdx ) : NUMBERFORMAT_ENTRY_NOT_FOUND;
-    OUString aPropName = bPercent ? OUString( EXC_CHPROP_PERCENTAGENUMFMT ) : OUString( EXC_CHPROP_NUMBERFORMAT );
+    OUString aPropName = bPercent ? EXC_CHPROP_PERCENTAGENUMFMT : EXC_CHPROP_NUMBERFORMAT;
     if( nScNumFmt != NUMBERFORMAT_ENTRY_NOT_FOUND )
         rPropSet.SetProperty( aPropName, static_cast< sal_Int32 >( nScNumFmt ) );
     else

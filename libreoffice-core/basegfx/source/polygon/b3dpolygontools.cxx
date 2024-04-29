@@ -173,7 +173,7 @@ namespace basegfx::utils
         void applyLineDashing(
             const B3DPolygon& rCandidate,
             const std::vector<double>& rDotDashArray,
-            std::function<void(const basegfx::B3DPolygon& rSnippet)> aLineTargetCallback,
+            const std::function<void(const basegfx::B3DPolygon& rSnippet)>& rLineTargetCallback,
             double fDotDashLength)
         {
             const sal_uInt32 nPointCount(rCandidate.count());
@@ -184,14 +184,11 @@ namespace basegfx::utils
                 fDotDashLength = std::accumulate(rDotDashArray.begin(), rDotDashArray.end(), 0.0);
             }
 
-            if(fTools::lessOrEqual(fDotDashLength, 0.0) || !aLineTargetCallback || !nPointCount)
+            if(fTools::lessOrEqual(fDotDashLength, 0.0) || !rLineTargetCallback || !nPointCount)
             {
                 // parameters make no sense, just add source to targets
-                if(aLineTargetCallback)
-                {
-                    aLineTargetCallback(rCandidate);
-                }
-
+                if (rLineTargetCallback)
+                    rLineTargetCallback(rCandidate);
                 return;
             }
 
@@ -219,7 +216,6 @@ namespace basegfx::utils
                 // to enlarge these as needed
                 const double fFactor(fCandidateLength / fAllowedLength);
                 std::for_each(aDotDashArray.begin(), aDotDashArray.end(), [&fFactor](double &f){ f *= fFactor; });
-                fDotDashLength *= fFactor;
             }
 
             // prepare current edge's start
@@ -260,7 +256,7 @@ namespace basegfx::utils
 
                             aSnippet.append(interpolate(aCurrentPoint, aNextPoint, fDotDashMovingLength / fEdgeLength));
 
-                            implHandleSnippet(aSnippet, aLineTargetCallback, aFirstLine, aLastLine);
+                            implHandleSnippet(aSnippet, rLineTargetCallback, aFirstLine, aLastLine);
 
                             aSnippet.clear();
                         }
@@ -295,13 +291,13 @@ namespace basegfx::utils
             {
                 if(bIsLine)
                 {
-                    implHandleSnippet(aSnippet, aLineTargetCallback, aFirstLine, aLastLine);
+                    implHandleSnippet(aSnippet, rLineTargetCallback, aFirstLine, aLastLine);
                 }
             }
 
             if(bIsClosed)
             {
-                implHandleFirstLast(aLineTargetCallback, aFirstLine, aLastLine);
+                implHandleFirstLast(rLineTargetCallback, aFirstLine, aLastLine);
             }
         }
 

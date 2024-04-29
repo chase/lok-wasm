@@ -654,7 +654,7 @@ Reference<deployment::XPackage> BackendImpl::bindPackage_(
             {
                 // xxx todo: probe and evaluate component xml description
 
-                auto const iter = params.find(OString("platform"));
+                auto const iter = params.find("platform"_ostr);
                 bool bPlatformFits(iter == params.end());
                 OUString aPlatform;
                 if (!bPlatformFits) // platform is specified, we have to check
@@ -665,7 +665,7 @@ Reference<deployment::XPackage> BackendImpl::bindPackage_(
                 // If the package is being removed, do not care whether
                 // platform fits. We won't be using it anyway.
                 if (bPlatformFits || bRemoved) {
-                    auto const iterType = params.find(OString("type"));
+                    auto const iterType = params.find("type"_ostr);
                     if (iterType != params.end())
                     {
                         OUString const & value = iterType->second.m_sValue;
@@ -697,7 +697,7 @@ Reference<deployment::XPackage> BackendImpl::bindPackage_(
             }
             else if (subType.equalsIgnoreAsciiCase("vnd.sun.star.uno-components"))
             {
-                auto const iter = params.find(OString("platform"));
+                auto const iter = params.find("platform"_ostr);
                 if (iter == params.end() || platform_fits(iter->second.m_sValue)) {
                     return new BackendImpl::ComponentsPackageImpl(
                         this, url, name, m_xComponentsTypeInfo, bRemoved,
@@ -706,7 +706,7 @@ Reference<deployment::XPackage> BackendImpl::bindPackage_(
             }
             else if (subType.equalsIgnoreAsciiCase( "vnd.sun.star.uno-typelibrary"))
             {
-                auto const iter = params.find(OString("type"));
+                auto const iter = params.find("type"_ostr);
                 if (iter != params.end()) {
                     OUString const & value = iter->second.m_sValue;
                     if (value.equalsIgnoreAsciiCase("RDB"))
@@ -858,13 +858,9 @@ void BackendImpl::unorc_flush( Reference<XCommandEnvironment> const & xCmdEnv )
     if (!m_unorc_inited || !m_unorc_modified)
         return;
 
-    OStringBuffer buf;
-
-    buf.append("ORIGIN=");
     OUString sOrigin = dp_misc::makeRcTerm(m_cachePath);
     OString osOrigin = OUStringToOString(sOrigin, RTL_TEXTENCODING_UTF8);
-    buf.append(osOrigin);
-    buf.append(LF);
+    OStringBuffer buf("ORIGIN=" + osOrigin + OStringChar(LF));
 
     if (! m_jar_typelibs.empty())
     {
@@ -913,9 +909,8 @@ void BackendImpl::unorc_flush( Reference<XCommandEnvironment> const & xCmdEnv )
         bool space = false;
         if (!sCommonRDB.isEmpty())
         {
-            buf.append( "?$ORIGIN/" );
-            buf.append( OUStringToOString(
-                            sCommonRDB, RTL_TEXTENCODING_ASCII_US ) );
+            buf.append( "?$ORIGIN/"
+                + OUStringToOString( sCommonRDB, RTL_TEXTENCODING_ASCII_US ) );
             space = true;
         }
         if (!sNativeRDB.isEmpty())
@@ -951,8 +946,7 @@ void BackendImpl::unorc_flush( Reference<XCommandEnvironment> const & xCmdEnv )
             {
                 buf.append(' ');
             }
-            buf.append('?');
-            buf.append(OUStringToOString(component, RTL_TEXTENCODING_UTF8));
+            buf.append("?" + OUStringToOString(component, RTL_TEXTENCODING_UTF8));
             space = true;
         }
         buf.append(LF);
@@ -995,7 +989,7 @@ void BackendImpl::removeFromUnoRc(
     const ::osl::MutexGuard guard( m_aMutex );
     unorc_verify_init( xCmdEnv );
     std::deque<OUString> & aRcItemList = getRcItemList(kind);
-    aRcItemList.erase(std::remove(aRcItemList.begin(), aRcItemList.end(), rcterm), aRcItemList.end());
+    std::erase(aRcItemList, rcterm);
     // write immediately:
     m_unorc_modified = true;
     unorc_flush( xCmdEnv );
@@ -1566,7 +1560,7 @@ BackendImpl::OtherPlatformPackageImpl::impl_openRDB() const
     catch (registry::InvalidRegistryException const&)
     {
         // If the registry does not exist, we do not need to bother at all
-        xRegistry.set(nullptr);
+        xRegistry.clear();
     }
 
     SAL_WARN_IF( !xRegistry.is(), "desktop.deployment", "could not create registry for the package's platform");

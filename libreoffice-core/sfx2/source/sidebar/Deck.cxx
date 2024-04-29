@@ -42,7 +42,7 @@ void Deck::LOKSendSidebarFullUpdate()
     if (comphelper::LibreOfficeKit::isActive())
     {
         sal_uInt64 nShellId = reinterpret_cast<sal_uInt64>(SfxViewShell::Current());
-        jsdialog::SendFullUpdate(std::to_string(nShellId) + "sidebar", "Panel");
+        jsdialog::SendFullUpdate(OUString::number(nShellId) + "sidebar", "Panel");
     }
 }
 
@@ -55,7 +55,8 @@ Deck::Deck(const DeckDescriptor& rDeckDescriptor, SidebarDockingWindow* pParentW
     , mnMinimalHeight(0)
     , maPanels()
     , mxParentWindow(pParentWindow)
-    , mxTitleBar(new DeckTitleBar(rDeckDescriptor.msTitle, *m_xBuilder, rCloserAction))
+    , mxTitleBar(new DeckTitleBar(rDeckDescriptor.msTitle, *m_xBuilder,
+                 rDeckDescriptor.msHelpId, rCloserAction))
     , mxVerticalScrollBar(m_xBuilder->weld_scrolled_window("scrolledwindow"))
     , mxContents(m_xBuilder->weld_box("contents"))
 {

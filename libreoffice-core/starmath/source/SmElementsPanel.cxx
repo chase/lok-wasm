@@ -23,6 +23,7 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/lokcomponenthelpers.hxx>
 #include <svl/stritem.hxx>
+#include <svl/itemset.hxx>
 
 #include "SmElementsPanel.hxx"
 #include <starmath.hrc>
@@ -78,7 +79,7 @@ IMPL_LINK(SmElementsPanel, ElementClickHandler, OUString, ElementSource, void)
     if (SmViewShell* pViewSh = GetView())
     {
         SfxStringItem aInsertCommand(SID_INSERTCOMMANDTEXT, ElementSource);
-        pViewSh->GetViewFrame()->GetDispatcher()->ExecuteList(
+        pViewSh->GetViewFrame().GetDispatcher()->ExecuteList(
             SID_INSERTCOMMANDTEXT, SfxCallMode::RECORD, { &aInsertCommand });
     }
 }

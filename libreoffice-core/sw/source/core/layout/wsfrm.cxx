@@ -24,6 +24,7 @@
 #include <o3tl/safeint.hxx>
 #include <svl/itemiter.hxx>
 #include <editeng/brushitem.hxx>
+#include <sfx2/viewsh.hxx>
 #include <fmtornt.hxx>
 #include <pagefrm.hxx>
 #include <section.hxx>
@@ -63,6 +64,7 @@
 #include <layact.hxx>
 #include <ndtxt.hxx>
 #include <swtable.hxx>
+#include <view.hxx>
 
 // RotateFlyFrame3
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
@@ -288,6 +290,36 @@ void TransformableSwFrame::transform(const basegfx::B2DHomMatrix& aTransform)
 {
     maFrameAreaTransformation *= aTransform;
     maFramePrintAreaTransformation *= aTransform;
+}
+
+void SwFrame::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("infos"));
+    dumpInfosAsXml(pWriter);
+    (void)xmlTextWriterEndElement(pWriter);
+
+    if ( m_pDrawObjs && m_pDrawObjs->size() > 0 )
+    {
+        (void)xmlTextWriterStartElement( pWriter, BAD_CAST( "anchored" ) );
+
+        for (SwAnchoredObject* pObject : *m_pDrawObjs)
+        {
+            pObject->dumpAsXml( pWriter );
+        }
+
+        (void)xmlTextWriterEndElement( pWriter );
+    }
+
+    dumpChildrenAsXml(pWriter);
+}
+
+void SwFrame::dumpChildrenAsXml( xmlTextWriterPtr writer ) const
+{
+    const SwFrame *pFrame = GetLower(  );
+    for ( ; pFrame != nullptr; pFrame = pFrame->GetNext(  ) )
+    {
+        pFrame->dumpAsXml( writer );
+    }
 }
 
 SwFrame::SwFrame( sw::BroadcastingModify *pMod, SwFrame* pSib )
@@ -539,6 +571,9 @@ void SwFrame::UpdateAttrFrame( const SfxPoolItem *pOld, const SfxPoolItem *pNew,
         case RES_SHADOW:
             Prepare( PrepareHint::FixSizeChanged );
             [[fallthrough]];
+        case RES_MARGIN_FIRSTLINE:
+        case RES_MARGIN_TEXTLEFT:
+        case RES_MARGIN_RIGHT:
         case RES_LR_SPACE:
         case RES_UL_SPACE:
         case RES_RTL_GUTTER:
@@ -2312,8 +2347,8 @@ SwTwips SwContentFrame::ShrinkFrame( SwTwips nDist, bool bTst, bool bInfo )
 
                     if( aBound.Overlaps( aRect ) )
                     {
-                        const SwFrameFormat& rFormat = pAnchoredObj->GetFrameFormat();
-                        if( css::text::WrapTextMode_THROUGH != rFormat.GetSurround().GetSurround() )
+                        const SwFrameFormat* pFormat = pAnchoredObj->GetFrameFormat();
+                        if( css::text::WrapTextMode_THROUGH != pFormat->GetSurround().GetSurround() )
                         {
                             const SwFrame* pAnchor = pAnchoredObj->GetAnchorFrame();
                             if ( pAnchor && pAnchor->FindFooterOrHeader() == GetUpper() )
@@ -2448,8 +2483,7 @@ void SwContentFrame::UpdateAttr_( const SfxPoolItem* pOld, const SfxPoolItem* pN
                     CheckPageDescs( pPage );
                 if (GetPageDescItem().GetNumOffset())
                     static_cast<SwRootFrame*>(pPage->GetUpper())->SetVirtPageNum( true );
-                SwDocPosUpdate aMsgHint( pPage->getFrameArea().Top() );
-                pPage->GetFormat()->GetDoc()->getIDocumentFieldsAccess().UpdatePageFields( &aMsgHint );
+                pPage->GetFormat()->GetDoc()->getIDocumentFieldsAccess().UpdatePageFields(pPage->getFrameArea().Top());
             }
             break;
 
@@ -2489,6 +2523,9 @@ void SwContentFrame::UpdateAttr_( const SfxPoolItem* pOld, const SfxPoolItem* pN
                 rInvFlags |= SwContentFrameInvFlags::SetNextCompletePaint;
                 [[fallthrough]];
             }
+        case RES_MARGIN_FIRSTLINE:
+        case RES_MARGIN_TEXTLEFT:
+        case RES_MARGIN_RIGHT:
         case RES_LR_SPACE:
         case RES_BOX:
         case RES_SHADOW:
@@ -2771,13 +2808,28 @@ SwTwips SwLayoutFrame::GrowFrame( SwTwips nDist, bool bTst, bool bInfo )
             SwPageFrame *pPage = FindPageFrame();
             if ( GetNext() )
             {
-                GetNext()->InvalidatePos_();
-                if (GetNext()->IsRowFrame())
-                {   // also invalidate first cell
-                    static_cast<SwLayoutFrame*>(GetNext())->Lower()->InvalidatePos_();
+                SwFrame * pNext = GetNext();
+                do
+                {
+                    pNext->InvalidatePos_();
+                    if (pNext->IsRowFrame())
+                    {   // also invalidate first cell
+                        static_cast<SwLayoutFrame*>(pNext)->Lower()->InvalidatePos_();
+                    }
+                    else if (pNext->IsContentFrame())
+                    {
+                        pNext->InvalidatePage(pPage);
+                    }
+                    if (pNext->HasFixSize())
+                    {   // continue to invalidate because growing pNext won't do it!
+                        pNext = pNext->GetNext();
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
-                if ( GetNext()->IsContentFrame() )
-                    GetNext()->InvalidatePage( pPage );
+                while (pNext);
             }
             if ( !IsPageBodyFrame() )
             {
@@ -3134,26 +3186,48 @@ void SwLayoutFrame::ChgLowersProp( const Size& rOldSize )
             }
             else
             {
+                SwFrame const* pFirstInvalid(nullptr);
+                for (SwFrame const* pLow = Lower();
+                     pLow && pLow != pLowerFrame; pLow = pLow->GetNext())
+                {
+                    if (!pLow->isFrameAreaDefinitionValid())
+                    {
+                        pFirstInvalid = pLow;
+                        break;
+                    }
+                }
                 // variable size of body|section frame has shrunk. Thus,
                 // invalidate all lowers not matching the new body|section size
                 // and the dedicated new last lower.
                 if( aRectFnSet.IsVert() )
                 {
                     SwTwips nBot = getFrameArea().Left() + getFramePrintArea().Left();
-                    while ( pLowerFrame && pLowerFrame->GetPrev() && pLowerFrame->getFrameArea().Left() < nBot )
+                    while (pLowerFrame && pLowerFrame->GetPrev()
+                        && (pFirstInvalid != nullptr // tdf#152307 trust nothing after invalid frame
+                            || pLowerFrame->getFrameArea().Left() < nBot))
                     {
                         pLowerFrame->InvalidateAll_();
                         pLowerFrame->InvalidatePage( pPage );
+                        if (pLowerFrame == pFirstInvalid)
+                        {
+                            pFirstInvalid = nullptr; // continue checking nBot
+                        }
                         pLowerFrame = pLowerFrame->GetPrev();
                     }
                 }
                 else
                 {
                     SwTwips nBot = getFrameArea().Top() + getFramePrintArea().Bottom();
-                    while ( pLowerFrame && pLowerFrame->GetPrev() && pLowerFrame->getFrameArea().Top() > nBot )
+                    while (pLowerFrame && pLowerFrame->GetPrev()
+                        && (pFirstInvalid != nullptr // tdf#152307 trust nothing after invalid frame
+                            || nBot < pLowerFrame->getFrameArea().Top()))
                     {
                         pLowerFrame->InvalidateAll_();
                         pLowerFrame->InvalidatePage( pPage );
+                        if (pLowerFrame == pFirstInvalid)
+                        {
+                            pFirstInvalid = nullptr; // continue checking nBot
+                        }
                         pLowerFrame = pLowerFrame->GetPrev();
                     }
                 }
@@ -3731,22 +3805,22 @@ void SwLayoutFrame::FormatWidthCols( const SwBorderAttrs &rAttrs,
     {
         // Underlying algorithm
         // We try to find the optimal height for the column.
-        // nMinimum starts with the passed minimum height and is then remembered
-        // as the maximum height on which column content still juts out of a
+        // nMinimum starts with the passed minimum height and is then maintained
+        // as the maximum height on which column content did not fit into a
         // column.
-        // nMaximum starts with LONG_MAX and is then remembered as the minimum
-        // width on which the content fitted.
+        // nMaximum starts with LONG_MAX and is then maintained as the minimum
+        // height on which the content fit into the columns.
         // In column based sections nMaximum starts at the maximum value which
-        // the surrounding defines, this can certainly be a value on which
-        // content still juts out.
+        // the environment defines, this can certainly be a value on which
+        // content doesn't fit.
         // The columns are formatted. If content still juts out, nMinimum is
-        // adjusted accordingly, then we grow, at least by uMinDiff but not
+        // adjusted accordingly, then we grow, at least by nMinDiff but not
         // over a certain nMaximum. If no content juts out but there is still
-        // some space left in the column, shrinking is done accordingly, at
-        // least by nMindIff but not below the nMinimum.
+        // some space left in a column, shrinking is done accordingly, at
+        // least by nMinDiff but not below the nMinimum.
         // Cancel as soon as no content juts out and the difference from minimum
-        // to maximum is less than MinDiff or the maximum which was defined by
-        // the surrounding is reached even if some content still juts out.
+        // to maximum is less than nMinDiff or the maximum which was defined by
+        // the environment is reached and some content still doesn't fit.
 
         // Criticism of this implementation
         // 1. Theoretically situations are possible in which the content fits in
@@ -3755,7 +3829,7 @@ void SwLayoutFrame::FormatWidthCols( const SwBorderAttrs &rAttrs,
         // minimum and maximum which probably are never triggered.
         // 2. We use the same nMinDiff for shrinking and growing, but nMinDiff
         // is more or less the smallest first line height and doesn't seem ideal
-        // as minimum value.
+        // as minimum value for shrinking.
 
         tools::Long nMinimum = nMinHeight;
         tools::Long nMaximum;
@@ -3832,7 +3906,7 @@ void SwLayoutFrame::FormatWidthCols( const SwBorderAttrs &rAttrs,
                 pImp->CheckWaitCursor();
 
             setFrameAreaSizeValid(true);
-            //First format the column as this will relieve the stack a bit.
+            //First format the column, before using lots of stack space here.
             //Also set width and height of the column (if they are wrong)
             //while we are at it.
             SwLayoutFrame *pCol = static_cast<SwLayoutFrame*>(Lower());
@@ -3865,7 +3939,7 @@ void SwLayoutFrame::FormatWidthCols( const SwBorderAttrs &rAttrs,
                 pCol = static_cast<SwLayoutFrame*>(pCol->GetNext());
             }
             pCol = static_cast<SwLayoutFrame*>(Lower());
-            // OD 28.03.2003 #108446# - initialize local variable
+
             SwTwips nDiff = 0;
             SwTwips nMaxFree = 0;
             SwTwips nAllFree = LONG_MAX;
@@ -3947,13 +4021,13 @@ void SwLayoutFrame::FormatWidthCols( const SwBorderAttrs &rAttrs,
                         else if( nDiff < nMinDiff )
                             nDiff = nMinDiff - nPrtHeight + 1;
                     }
-                    // nMaximum has a size which fits the content or the
-                    // requested value from the surrounding therefore we don't
-                    // need to exceed this value.
+                    // nMaximum is a size in which the content fit or the
+                    // requested value from the environment, therefore we don't
+                    // should not exceed this value.
                     if( nDiff + nPrtHeight > nMaximum )
                         nDiff = nMaximum - nPrtHeight;
                 }
-                else if( nMaximum > nMinimum ) // We fit, do we still have some margin?
+                else if (nMaximum > nMinimum) // We fit, do we still have some opportunity to shrink?
                 {
                     tools::Long nPrtHeight = aRectFnSet.GetHeight(getFramePrintArea());
                     if ( nMaximum < nPrtHeight )
@@ -3961,11 +4035,11 @@ void SwLayoutFrame::FormatWidthCols( const SwBorderAttrs &rAttrs,
                         // height and shrink back to it, but will this ever
                         // happen?
                     else
-                    {   // We have a new maximum, a size which fits for the content.
+                    {   // We have a new maximum, a size where the content fits.
                         nMaximum = nPrtHeight;
-                        // If the margin in the column is bigger than nMinDiff
-                        // and we therefore drop under the minimum, we deflate
-                        // a bit.
+                        // If the extra space in the column is bigger than
+                        // nMinDiff, we shrink a bit, unless size would drop
+                        // below the minimum.
                         if ( !bNoBalance &&
                              // #i23129# - <nMinDiff> can be
                              // big, because of an object at the beginning of
@@ -4024,7 +4098,7 @@ void SwLayoutFrame::FormatWidthCols( const SwBorderAttrs &rAttrs,
                         }
                     }
                     //Invalidate suitable to nicely balance the Frames.
-                    //- Every first one after the second column gets a
+                    //- Every first lower starting from the second column gets a
                     //  InvalidatePos();
                     pCol = static_cast<SwLayoutFrame*>(Lower()->GetNext());
                     while ( pCol )
@@ -4062,6 +4136,18 @@ void SwLayoutFrame::FormatWidthCols( const SwBorderAttrs &rAttrs,
         ::CalcContent( this, true );
         if( bBackLock )
             static_cast<SwSectionFrame*>(this)->SetFootnoteLock( false );
+    }
+}
+
+void SwLayoutFrame::dumpAsXmlAttributes(xmlTextWriterPtr writer) const
+{
+    SwFrame::dumpAsXmlAttributes(writer);
+
+    const SwFrameFormat* pFormat = GetFormat();
+    if (pFormat)
+    {
+        (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "format" ), "%p", pFormat);
+        (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "formatName" ), "%s", BAD_CAST(pFormat->GetName().toUtf8().getStr()));
     }
 }
 
@@ -4241,7 +4327,7 @@ void SwRootFrame::InvalidateAllObjPos()
             const SwSortedObjs& rObjs = *(pPageFrame->GetSortedObjs());
             for (SwAnchoredObject* pAnchoredObj : rObjs)
             {
-                const SwFormatAnchor& rAnch = pAnchoredObj->GetFrameFormat().GetAnchor();
+                const SwFormatAnchor& rAnch = pAnchoredObj->GetFrameFormat()->GetAnchor();
                 if ((rAnch.GetAnchorId() != RndStdIds::FLY_AT_PARA) &&
                     (rAnch.GetAnchorId() != RndStdIds::FLY_AT_CHAR))
                 {
@@ -4264,7 +4350,7 @@ void SwRootFrame::InvalidateAllObjPos()
 static void AddRemoveFlysForNode(
         SwTextFrame & rFrame, SwTextNode & rTextNode,
         std::set<SwNodeOffset> *const pSkipped,
-        const SwFrameFormats & rTable,
+        const sw::FrameFormats<sw::SpzFrameFormat*>& rTable,
         SwPageFrame *const pPage,
         SwTextNode const*const pNode,
         std::vector<sw::Extent>::const_iterator const& rIterFirst,
@@ -4315,7 +4401,7 @@ void AddRemoveFlysAnchoredToFrameStartingAtNode(
         && rTextNode.GetIndex() <= pMerged->pLastNode->GetIndex());
     // add visible flys in non-first node to merged frame
     // (hidden flys remain and are deleted via DelFrames())
-    SwFrameFormats& rTable(*rTextNode.GetDoc().GetSpzFrameFormats());
+    sw::SpzFrameFormats& rTable(*rTextNode.GetDoc().GetSpzFrameFormats());
     SwPageFrame *const pPage(rFrame.FindPageFrame());
     std::vector<sw::Extent>::const_iterator iterFirst(pMerged->extents.begin());
     std::vector<sw::Extent>::const_iterator iter(iterFirst);
@@ -4499,7 +4585,7 @@ static void UnHideRedlines(SwRootFrame & rLayout,
                 }
                 pTableNd->DelFrames(&rLayout);
             }
-            else if ( pTableNd->GetTable().HasDeletedRow() )
+            else if ( pTableNd->GetTable().HasDeletedRowOrCell() )
             {
                 pTableNd->DelFrames(&rLayout);
                 if ( !pTableNd->GetTable().IsDeleted() )
@@ -4509,7 +4595,7 @@ static void UnHideRedlines(SwRootFrame & rLayout,
             }
         }
         else if (rNode.IsTableNode() && !rLayout.IsHideRedlines() &&
-            rNode.GetTableNode()->GetTable().HasDeletedRow() )
+            rNode.GetTableNode()->GetTable().HasDeletedRowOrCell() )
         {
             SwTableNode * pTableNd = rNode.GetTableNode();
             pTableNd->DelFrames(&rLayout);
@@ -4753,6 +4839,52 @@ bool SwRootFrame::HasMergedParas() const
     return IsHideRedlines()
         || GetFieldmarkMode() != sw::FieldmarkMode::ShowBoth
         || GetParagraphBreakMode() == sw::ParagraphBreakMode::Hidden;
+}
+
+namespace {
+    xmlTextWriterPtr lcl_createDefaultWriter()
+    {
+        xmlTextWriterPtr writer = xmlNewTextWriterFilename( "layout.xml", 0 );
+        xmlTextWriterSetIndent(writer,1);
+        (void)xmlTextWriterSetIndentString(writer, BAD_CAST("  "));
+        (void)xmlTextWriterStartDocument( writer, nullptr, nullptr, nullptr );
+        return writer;
+    }
+
+    void lcl_freeWriter( xmlTextWriterPtr writer )
+    {
+        (void)xmlTextWriterEndDocument( writer );
+        xmlFreeTextWriter( writer );
+    }
+}
+
+void SwRootFrame::dumpAsXml(xmlTextWriterPtr writer) const
+{
+    bool bCreateWriter = (nullptr == writer);
+    if (bCreateWriter)
+        writer = lcl_createDefaultWriter();
+
+    (void)xmlTextWriterStartElement(writer, reinterpret_cast<const xmlChar*>("root"));
+    dumpAsXmlAttributes(writer);
+
+    (void)xmlTextWriterStartElement(writer, BAD_CAST("sfxViewShells"));
+    SwView* pView = static_cast<SwView*>(SfxViewShell::GetFirst(true, checkSfxViewShell<SwView>));
+    while (pView)
+    {
+        if (GetCurrShell()->GetSfxViewShell() && pView->GetObjectShell() == GetCurrShell()->GetSfxViewShell()->GetObjectShell())
+            pView->dumpAsXml(writer);
+        pView = static_cast<SwView*>(SfxViewShell::GetNext(*pView, true, checkSfxViewShell<SwView>));
+    }
+    (void)xmlTextWriterEndElement(writer);
+
+    (void)xmlTextWriterStartElement(writer, BAD_CAST("infos"));
+    dumpInfosAsXml(writer);
+    (void)xmlTextWriterEndElement(writer);
+    dumpChildrenAsXml(writer);
+    (void)xmlTextWriterEndElement(writer);
+
+    if (bCreateWriter)
+        lcl_freeWriter(writer);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

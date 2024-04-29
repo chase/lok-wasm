@@ -32,6 +32,22 @@ std::unique_ptr<SfxTabPage> ScTpCompatOptions::Create(weld::Container* pPage, we
     return std::make_unique<ScTpCompatOptions>(pPage, pController, *rCoreAttrs);
 }
 
+OUString ScTpCompatOptions::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label1", "label2" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    // id "keybindings" GtkComboBoxText is not included
+
+    return sAllStrings.replaceAll("_", "");
+}
+
 bool ScTpCompatOptions::FillItemSet(SfxItemSet *rCoreAttrs)
 {
     bool bRet = false;

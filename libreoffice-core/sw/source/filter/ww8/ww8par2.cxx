@@ -79,7 +79,7 @@ WW8TabBandDesc::WW8TabBandDesc():
     pNextBand(nullptr), nGapHalf(0), mnDefaultLeft(0), mnDefaultTop(0), mnDefaultRight(0),
     mnDefaultBottom(0), mbHasSpacing(false), nLineHeight(0), nRows(0), nCenter{}, nWidth{},
     nWwCols(0), nSwCols(0), bLEmptyCol(false), bREmptyCol(false), bCantSplit(false),
-    bCantSplit90(false), pTCs(nullptr), nOverrideSpacing{}, nOverrideValues{}, pSHDs(nullptr),
+    pTCs(nullptr), nOverrideSpacing{}, nOverrideValues{}, pSHDs(nullptr),
     pNewSHDs(nullptr), bExist{}, nTransCell{}
 {
     for (sal_uInt16 & rn : maDirections)
@@ -286,12 +286,14 @@ sal_uInt16 SwWW8ImplReader::End_Footnote()
                 {
                     // Allow MSO to emulate LO footnote text starting at left margin - only meaningful with hanging indent
                     sal_Int32 nFirstLineIndent=0;
-                    SfxItemSetFixed<RES_LR_SPACE, RES_LR_SPACE> aSet( m_rDoc.GetAttrPool() );
+                    SfxItemSetFixed<RES_MARGIN_FIRSTLINE, RES_MARGIN_FIRSTLINE> aSet(m_rDoc.GetAttrPool());
                     if ( pTNd->GetAttr(aSet) )
                     {
-                        const SvxLRSpaceItem* pLRSpace = aSet.GetItem<SvxLRSpaceItem>(RES_LR_SPACE);
-                        if ( pLRSpace )
-                            nFirstLineIndent = pLRSpace->GetTextFirstLineOffset();
+                        const SvxFirstLineIndentItem *const pFirstLine(aSet.GetItem<SvxFirstLineIndentItem>(RES_MARGIN_FIRSTLINE));
+                        if (pFirstLine)
+                        {
+                            nFirstLineIndent = pFirstLine->GetTextFirstLineOffset();
+                        }
                     }
 
                     rPaMPointPos.SetContent(0);
@@ -412,45 +414,6 @@ bool SwWW8ImplReader::SearchRowEnd(WW8PLCFx_Cp_FKP* pPap, WW8_CP &rStartCp,
     return false;
 }
 
-bool SwWW8ImplReader::SearchTableEnd(WW8PLCFx_Cp_FKP* pPap) const
-{
-    if (m_bVer67)
-        // The below SPRM is for WW8 only.
-        return false;
-
-    WW8PLCFxDesc aRes;
-    aRes.pMemPos = nullptr;
-    aRes.nEndPos = pPap->Where();
-    std::set<std::pair<WW8_CP, WW8_CP>> aPrevRes;
-
-    while (pPap->HasFkp() && pPap->Where() != WW8_CP_MAX)
-    {
-        // See if the current pap is outside the table.
-        SprmResult aSprmRes = pPap->HasSprm(NS_sprm::PFInTable::val);
-        const sal_uInt8* pB = aSprmRes.pSprm;
-        if (!pB || aSprmRes.nRemainingData < 1 || *pB != 1)
-            // Yes, this is the position after the end of the table.
-            return true;
-
-        // It is, so seek to the next pap.
-        aRes.nStartPos = aRes.nEndPos;
-        aRes.pMemPos = nullptr;
-        if (!pPap->SeekPos(aRes.nStartPos))
-            return false;
-
-        // Read the sprms and make sure we moved forward to avoid infinite loops.
-        pPap->GetSprms(&aRes);
-        auto aBounds(std::make_pair(aRes.nStartPos, aRes.nEndPos));
-        if (!aPrevRes.insert(aBounds).second) //already seen these bounds, infinite loop
-        {
-            SAL_WARN("sw.ww8", "SearchTableEnd, loop in paragraph property chain");
-            break;
-        }
-    }
-
-    return false;
-}
-
 ApoTestResults SwWW8ImplReader::TestApo(int nCellLevel, bool bTableRowEnd,
     const WW8_TablePos *pTabPos)
 {
@@ -481,11 +444,12 @@ ApoTestResults SwWW8ImplReader::TestApo(int nCellLevel, bool bTableRowEnd,
     to see if we are still in that frame.
     */
 
-    aRet.m_bHasSprmPWr = m_xPlcxMan->HasParaSprm(m_bVer67 ? 37 : 0x2423).pSprm != nullptr;
-    SprmResult aSrpmPPc = m_xPlcxMan->HasParaSprm(m_bVer67 ? 29 : 0x261B);
+    aRet.m_bHasSprmPWr = m_xPlcxMan->HasParaSprm(m_bVer67 ? 37 : 0x2423).pSprm != nullptr; // sprmPWr
+    SprmResult aSrpmPPc = m_xPlcxMan->HasParaSprm(m_bVer67 ? 29 : 0x261B); // sprmPPc
     const sal_uInt8 *pSrpmPPc = aSrpmPPc.pSprm;
     aRet.m_bHasSprmPPc = pSrpmPPc != nullptr;
-    aRet.m_nSprmPPc = (pSrpmPPc && aSrpmPPc.nRemainingData >= 1) ? *pSrpmPPc : 0;
+    const sal_Int16 nTPc = aRet.mpStyleApo ? aRet.mpStyleApo->nTPc : 0;
+    aRet.m_nSprmPPc = (pSrpmPPc && aSrpmPPc.nRemainingData >= 1) ? *pSrpmPPc : nTPc;
 
     // Is there some frame data here
     bool bNowApo = aRet.HasFrame() || pTopLevelTable;
@@ -765,7 +729,7 @@ SwNumRule* SwWW8ImplReader::GetStyRule()
     if( m_xStyles->mpStyRule )         // Bullet-Style already present
         return m_xStyles->mpStyRule;
 
-    const OUString aBaseName("WW8StyleNum");
+    constexpr OUString aBaseName(u"WW8StyleNum"_ustr);
     const OUString aName( m_rDoc.GetUniqueNumRuleName( &aBaseName, false) );
 
     // #i86652#
@@ -847,7 +811,7 @@ void SwWW8ImplReader::Read_ANLevelDesc( sal_uInt16, const sal_uInt8* pData, shor
         // If NumRuleItems were set, either directly or through inheritance, disable them now
         m_pCurrentColl->SetFormatAttr( SwNumRuleItem() );
 
-        const OUString aName("Outline");
+        constexpr OUString aName(u"Outline"_ustr);
         SwNumRule aNR( m_rDoc.GetUniqueNumRuleName( &aName ),
                        SvxNumberFormat::LABEL_WIDTH_AND_POSITION,
                        OUTLINE_RULE );
@@ -3654,9 +3618,6 @@ void WW8RStyle::ImportSprms(sal_uInt8 *pSprms, short nLen, bool bPap)
     WW8SprmIter aSprmIter(pSprms, nLen, maSprmParser);
     while (const sal_uInt8* pSprm = aSprmIter.GetSprms())
     {
-#ifdef DEBUGSPRMREADER
-        fprintf(stderr, "id is %x\n", aIter.GetCurrentId());
-#endif
         mpIo->ImportSprm(pSprm, aSprmIter.GetRemLen(), aSprmIter.GetCurrentId());
         aSprmIter.advance();
     }

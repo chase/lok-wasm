@@ -145,18 +145,6 @@ SwXReferenceMark::CreateXReferenceMark(
     return xMark;
 }
 
-const uno::Sequence< sal_Int8 > & SwXReferenceMark::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXReferenceMarkUnoTunnelId;
-    return theSwXReferenceMarkUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL
-SwXReferenceMark::getSomething(const uno::Sequence< sal_Int8 >& rId)
-{
-    return comphelper::getSomethingImpl<SwXReferenceMark>(rId, this);
-}
-
 OUString SAL_CALL SwXReferenceMark::getImplementationName()
 {
     return "SwXReferenceMark";
@@ -270,9 +258,8 @@ SwXReferenceMark::attach(const uno::Reference< text::XTextRange > & xTextRange)
     {
         throw uno::RuntimeException();
     }
-    uno::Reference<lang::XUnoTunnel> xRangeTunnel( xTextRange, uno::UNO_QUERY);
-    SwXTextRange* pRange = comphelper::getFromUnoTunnel<SwXTextRange>(xRangeTunnel);
-    OTextCursorHelper* pCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xRangeTunnel);
+    SwXTextRange* pRange = dynamic_cast<SwXTextRange*>(xTextRange.get());
+    OTextCursorHelper* pCursor = dynamic_cast<OTextCursorHelper*>(xTextRange.get());
     SwDoc *const pDocument =
         pRange ? &pRange->GetDoc() : (pCursor ? pCursor->GetDoc() : nullptr);
     if (!pDocument)
@@ -297,7 +284,7 @@ SwXReferenceMark::getAnchor()
     {
         SwFormatRefMark const*const pNewMark =
             m_pImpl->m_pDoc->GetRefMark(m_pImpl->m_sMarkName);
-        if (pNewMark && (pNewMark == m_pImpl->m_pMarkFormat))
+        if (pNewMark && SfxPoolItem::areSame(pNewMark, m_pImpl->m_pMarkFormat))
         {
             SwTextRefMark const*const pTextMark =
                 m_pImpl->m_pMarkFormat->GetTextRefMark();
@@ -328,7 +315,7 @@ void SAL_CALL SwXReferenceMark::dispose()
     {
         SwFormatRefMark const*const pNewMark =
             m_pImpl->m_pDoc->GetRefMark(m_pImpl->m_sMarkName);
-        if (pNewMark && (pNewMark == m_pImpl->m_pMarkFormat))
+        if (pNewMark && SfxPoolItem::areSame(pNewMark, m_pImpl->m_pMarkFormat))
         {
             SwTextRefMark const*const pTextMark =
                 m_pImpl->m_pMarkFormat->GetTextRefMark();
@@ -398,7 +385,7 @@ void SAL_CALL SwXReferenceMark::setName(const OUString& rName)
         SwFormatRefMark const*const pCurMark =
             m_pImpl->m_pDoc->GetRefMark(m_pImpl->m_sMarkName);
         if ((rName != m_pImpl->m_sMarkName)
-            && pCurMark && (pCurMark == m_pImpl->m_pMarkFormat))
+            && pCurMark && SfxPoolItem::areSame(pCurMark, m_pImpl->m_pMarkFormat))
         {
             const UnoActionContext aCont(m_pImpl->m_pDoc);
             SwTextRefMark const*const pTextMark =
@@ -498,8 +485,6 @@ private:
 
 protected:
     virtual const SwStartNode *GetStartNode() const override;
-    virtual uno::Reference< text::XTextCursor >
-        CreateCursor() override;
 
 public:
     SwXMetaText(SwDoc & rDoc, SwXMeta & rMeta);
@@ -516,12 +501,9 @@ public:
         getImplementationId() override;
 
     // XText
-    virtual uno::Reference< text::XTextCursor >  SAL_CALL
-        createTextCursor() override;
-    virtual uno::Reference< text::XTextCursor >  SAL_CALL
-        createTextCursorByRange(
-            const uno::Reference< text::XTextRange > & xTextPosition) override;
-
+    virtual rtl::Reference< SwXTextCursor > createXTextCursor() override;
+    virtual rtl::Reference< SwXTextCursor > createXTextCursorByRange(
+            const ::css::uno::Reference< ::css::text::XTextRange >& aTextPosition ) override;
 };
 
 }
@@ -534,8 +516,7 @@ SwXMetaText::SwXMetaText(SwDoc & rDoc, SwXMeta & rMeta)
 
 const SwStartNode *SwXMetaText::GetStartNode() const
 {
-    SwXText const * const pParent(
-            dynamic_cast<SwXText*>(m_rMeta.GetParentText().get()));
+    SwXText const * const pParent = m_rMeta.GetParentText().get();
     return pParent ? pParent->GetStartNode() : nullptr;
 }
 
@@ -553,9 +534,9 @@ bool SwXMetaText::CheckForOwnMemberMeta(const SwPaM & rPam, const bool bAbsorb)
     return m_rMeta.CheckForOwnMemberMeta(rPam, bAbsorb);
 }
 
-uno::Reference< text::XTextCursor > SwXMetaText::CreateCursor()
+rtl::Reference< SwXTextCursor > SwXMetaText::createXTextCursor()
 {
-    uno::Reference< text::XTextCursor > xRet;
+    rtl::Reference< SwXTextCursor > xRet;
     if (IsValid())
     {
         SwTextNode * pTextNode;
@@ -566,8 +547,7 @@ uno::Reference< text::XTextCursor > SwXMetaText::CreateCursor()
         if (bSuccess)
         {
             SwPosition aPos(*pTextNode, nMetaStart);
-            xRet = static_cast<text::XWordCursor*>(
-                    new SwXTextCursor(*GetDoc(), &m_rMeta, CursorType::Meta, aPos));
+            xRet = new SwXTextCursor(*GetDoc(), &m_rMeta, CursorType::Meta, aPos);
         }
     }
     return xRet;
@@ -580,17 +560,12 @@ SwXMetaText::getImplementationId()
 }
 
 // XText
-uno::Reference< text::XTextCursor > SAL_CALL
-SwXMetaText::createTextCursor()
-{
-    return CreateCursor();
-}
 
-uno::Reference< text::XTextCursor > SAL_CALL
-SwXMetaText::createTextCursorByRange(
+rtl::Reference< SwXTextCursor >
+SwXMetaText::createXTextCursorByRange(
         const uno::Reference<text::XTextRange> & xTextPosition)
 {
-    const uno::Reference<text::XTextCursor> xCursor( CreateCursor() );
+    const rtl::Reference< SwXTextCursor > xCursor( createXTextCursor() );
     xCursor->gotoRange(xTextPosition, false);
     return xCursor;
 }
@@ -612,13 +587,13 @@ public:
     // 3 possible states: not attached, attached, disposed
     bool m_bIsDisposed;
     bool m_bIsDescriptor;
-    uno::Reference<text::XText> m_xParentText;
+    css::uno::Reference<SwXText> m_xParentText;
     rtl::Reference<SwXMetaText> m_xText;
     sw::Meta* m_pMeta;
 
     Impl(SwXMeta& rThis, SwDoc& rDoc,
             ::sw::Meta* const pMeta,
-            uno::Reference<text::XText> xParentText,
+            css::uno::Reference<SwXText> xParentText,
             std::unique_ptr<TextRangeList_t const> pPortions)
         : m_pTextPortions(std::move(pPortions))
         , m_bIsDisposed(false)
@@ -663,13 +638,13 @@ void SwXMeta::Impl::Notify(const SfxHint& rHint)
     m_EventListeners.disposeAndClear(aGuard, ev);
 }
 
-uno::Reference<text::XText> const & SwXMeta::GetParentText() const
+css::uno::Reference<SwXText> const & SwXMeta::GetParentText() const
 {
     return m_pImpl->m_xParentText;
 }
 
 SwXMeta::SwXMeta(SwDoc *const pDoc, ::sw::Meta *const pMeta,
-        uno::Reference<text::XText> const& xParentText,
+        css::uno::Reference<SwXText> const& xParentText,
         std::unique_ptr<TextRangeList_t const> pPortions)
     : m_pImpl( new SwXMeta::Impl(*this, *pDoc, pMeta, xParentText, std::move(pPortions)) )
 {
@@ -697,7 +672,7 @@ SwXMeta::CreateXMeta(SwDoc & rDoc, bool const isField)
 
 rtl::Reference<SwXMeta>
 SwXMeta::CreateXMeta(::sw::Meta & rMeta,
-            uno::Reference<text::XText> const& i_xParent,
+            css::uno::Reference<SwXText> i_xParent,
             std::unique_ptr<TextRangeList_t const> && pPortions)
 {
     // re-use existing SwXMeta
@@ -715,7 +690,7 @@ SwXMeta::CreateXMeta(::sw::Meta & rMeta,
             if (xMeta->m_pImpl->m_xParentText.get() != i_xParent.get())
             {
                 SAL_WARN("sw.uno", "SwXMeta with different parent?");
-                xMeta->m_pImpl->m_xParentText.set(i_xParent);
+                xMeta->m_pImpl->m_xParentText = i_xParent;
             }
         }
         return xMeta;
@@ -725,14 +700,14 @@ SwXMeta::CreateXMeta(::sw::Meta & rMeta,
     SwTextNode * const pTextNode( rMeta.GetTextNode() );
     SAL_WARN_IF(!pTextNode, "sw.uno", "CreateXMeta: no text node?");
     if (!pTextNode) { return nullptr; }
-    uno::Reference<text::XText> xParentText(i_xParent);
+    css::uno::Reference<SwXText> xParentText(i_xParent);
     if (!xParentText.is())
     {
         SwTextMeta * const pTextAttr( rMeta.GetTextAttr() );
         SAL_WARN_IF(!pTextAttr, "sw.uno", "CreateXMeta: no text attr?");
         if (!pTextAttr) { return nullptr; }
         const SwPosition aPos(*pTextNode, pTextAttr->GetStart());
-        xParentText.set( ::sw::CreateParentXText(pTextNode->GetDoc(), aPos) );
+        xParentText = ::sw::CreateParentXText(pTextNode->GetDoc(), aPos);
     }
     if (!xParentText.is()) { return nullptr; }
     // this is why the constructor is private: need to acquire pXMeta here
@@ -831,19 +806,6 @@ bool SwXMeta::CheckForOwnMemberMeta(const SwPaM & rPam, const bool bAbsorb)
     return bForceExpandHints;
 }
 
-const uno::Sequence< sal_Int8 > & SwXMeta::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXMetaUnoTunnelId;
-    return theSwXMetaUnoTunnelId.getSeq();
-}
-
-// XUnoTunnel
-sal_Int64 SAL_CALL
-SwXMeta::getSomething( const uno::Sequence< sal_Int8 > & i_rId )
-{
-    return comphelper::getSomethingImpl<SwXMeta>(i_rId, this);
-}
-
 // XServiceInfo
 OUString SAL_CALL
 SwXMeta::getImplementationName()
@@ -893,7 +855,7 @@ SwXMeta::dispose()
     if (m_pImpl->m_bIsDescriptor)
     {
         m_pImpl->m_pTextPortions.reset();
-        lang::EventObject const ev(static_cast< ::cppu::OWeakObject&>(*this));
+        lang::EventObject const ev(getXWeak());
         std::unique_lock aGuard(m_pImpl->m_Mutex);
         m_pImpl->m_EventListeners.disposeAndClear(aGuard, ev);
         m_pImpl->m_bIsDisposed = true;
@@ -933,25 +895,16 @@ SwXMeta::AttachImpl(const uno::Reference< text::XTextRange > & i_xTextRange,
     {
         throw uno::RuntimeException(
             "SwXMeta::attach(): already attached",
-            static_cast< ::cppu::OWeakObject* >(this));
+            getXWeak());
     }
 
-    uno::Reference<lang::XUnoTunnel> xRangeTunnel(i_xTextRange, uno::UNO_QUERY);
-    if (!xRangeTunnel.is())
-    {
-        throw lang::IllegalArgumentException(
-            "SwXMeta::attach(): argument is no XUnoTunnel",
-            static_cast< ::cppu::OWeakObject* >(this), 0);
-    }
-    SwXTextRange *const pRange(
-            comphelper::getFromUnoTunnel<SwXTextRange>(xRangeTunnel));
-    OTextCursorHelper *const pCursor( pRange ? nullptr :
-            comphelper::getFromUnoTunnel<OTextCursorHelper>(xRangeTunnel));
+    SwXTextRange *const pRange(dynamic_cast<SwXTextRange*>(i_xTextRange.get()));
+    OTextCursorHelper *const pCursor(dynamic_cast<OTextCursorHelper*>(i_xTextRange.get()));
     if (!pRange && !pCursor)
     {
         throw lang::IllegalArgumentException(
             "SwXMeta::attach(): argument not supported type",
-            static_cast< ::cppu::OWeakObject* >(this), 0);
+            getXWeak(), 0);
     }
 
     SwDoc * const pDoc(
@@ -960,7 +913,7 @@ SwXMeta::AttachImpl(const uno::Reference< text::XTextRange > & i_xTextRange,
     {
         throw lang::IllegalArgumentException(
             "SwXMeta::attach(): argument has no SwDoc",
-            static_cast< ::cppu::OWeakObject* >(this), 0);
+            getXWeak(), 0);
     }
 
     SwUnoInternalPaM aPam(*pDoc);
@@ -987,14 +940,14 @@ SwXMeta::AttachImpl(const uno::Reference< text::XTextRange > & i_xTextRange,
     {
         throw lang::IllegalArgumentException(
             "SwXMeta::attach(): cannot create meta: range invalid?",
-            static_cast< ::cppu::OWeakObject* >(this), 1);
+            getXWeak(), 1);
     }
     if (!pTextAttr)
     {
         OSL_FAIL("meta inserted, but has no text attribute?");
         throw uno::RuntimeException(
             "SwXMeta::attach(): cannot create meta",
-            static_cast< ::cppu::OWeakObject* >(this));
+            getXWeak());
     }
 
     m_pImpl->EndListeningAll();
@@ -1027,7 +980,7 @@ SwXMeta::getAnchor()
     {
         throw uno::RuntimeException(
                 "SwXMeta::getAnchor(): not inserted",
-                static_cast< ::cppu::OWeakObject* >(this));
+                getXWeak());
     }
 
     SwTextNode * pTextNode;
@@ -1039,7 +992,7 @@ SwXMeta::getAnchor()
     {
         throw lang::DisposedException(
                 "SwXMeta::getAnchor(): not attached",
-                static_cast< ::cppu::OWeakObject* >(this));
+                getXWeak());
     }
 
     const SwPosition start(*pTextNode, nMetaStart - 1); // -1 due to CH_TXTATR
@@ -1185,7 +1138,7 @@ SwXMeta::createEnumeration()
     {
         throw uno::RuntimeException(
                 "createEnumeration(): not inserted",
-                static_cast< ::cppu::OWeakObject* >(this));
+                getXWeak());
     }
 
     SwTextNode * pTextNode;
@@ -1236,7 +1189,7 @@ inline const ::sw::MetaField* SwXMeta::Impl::GetMetaField() const
 }
 
 SwXMetaField::SwXMetaField(SwDoc *const pDoc, ::sw::Meta *const pMeta,
-        uno::Reference<text::XText> const& xParentText,
+        css::uno::Reference<SwXText> const& xParentText,
         std::unique_ptr<TextRangeList_t const> pPortions)
     : SwXMetaField_Base(pDoc, pMeta, xParentText, std::move(pPortions))
 {

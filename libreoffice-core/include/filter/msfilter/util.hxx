@@ -79,12 +79,14 @@ public:
     static const ApiPaperSize& getApiSizeForMSPaperSizeIndex( sal_Int32 nMSOPaperIndex );
 };
 
+MSFILTER_DLLPUBLIC OUString CreateDOCXStyleId(std::u16string_view aName);
+
 /**
  * Finds the quoted text in a field instruction text.
  *
  * Example: SEQ "Figure" \someoption -> "Figure"
  */
-MSFILTER_DLLPUBLIC std::u16string_view findQuotedText( std::u16string_view rCommand, const char* cStartQuote, const sal_Unicode uEndQuote );
+MSFILTER_DLLPUBLIC std::u16string_view findQuotedText( std::u16string_view rCommand, std::u16string_view cStartQuote, const sal_Unicode uEndQuote );
 
 class MSFILTER_DLLPUBLIC WW8ReadFieldParams
 {

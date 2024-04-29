@@ -73,7 +73,7 @@ void SwEditWin::StartDrag( sal_Int8 /*nAction*/, const Point& rPosPixel )
         CommandEvent aDragEvent( rPosPixel, CommandEventId::StartDrag, true );
         if( rSh.GetDrawView()->Command( aDragEvent, this ) )
         {
-            m_rView.GetViewFrame()->GetBindings().InvalidateAll(false);
+            m_rView.GetViewFrame().GetBindings().InvalidateAll(false);
             return; // Event evaluated by SdrView
         }
     }
@@ -120,6 +120,16 @@ void SwEditWin::StartDrag( sal_Int8 /*nAction*/, const Point& rPosPixel )
 
     if ( !bStart || m_bIsInDrag )
         return;
+
+    // If the add selection mode has been pushed in the MouseButtonDown handler it needs to be
+    // popped or it will remain active and noticeable in the statusbar selection control until the
+    // next MouseButtonUp event after the DnD, since a MouseButtonUp event is not received by the
+    // edit window when DnD is done.
+    if (g_bModePushed)
+    {
+        rSh.PopMode();
+        g_bModePushed = false;
+    }
 
     m_bMBPressed = false;
     ReleaseMouse();
@@ -250,9 +260,7 @@ SotExchangeDest SwEditWin::GetDropDestination( const Point& rPixPnt, SdrObject *
 {
     SwWrtShell &rSh = m_rView.GetWrtShell();
     const Point aDocPt( PixelToLogic( rPixPnt ) );
-    if( rSh.TestCurrPam( aDocPt )
-        || rSh.IsOverReadOnlyPos( aDocPt )
-        || rSh.DocPtInsideInputField( aDocPt ) )
+    if (rSh.IsOverReadOnlyPos(aDocPt) || rSh.DocPtInsideInputField(aDocPt))
         return SotExchangeDest::NONE;
 
     SdrObject *pObj = nullptr;
@@ -486,12 +494,8 @@ IMPL_LINK_NOARG(SwEditWin, DDHandler, Timer *, void)
     m_bMBPressed = false;
     ReleaseMouse();
     g_bFrameDrag = false;
-
-    if ( m_rView.GetViewFrame() )
-    {
-        g_bExecuteDrag = true;
-        StartExecuteDrag();
-    }
+    g_bExecuteDrag = true;
+    StartExecuteDrag();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

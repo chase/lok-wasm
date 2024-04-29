@@ -143,7 +143,7 @@ sal_uInt32 readUcs4(sal_Unicode const ** pBegin, sal_Unicode const * pEnd,
         }
         else
         {
-            OStringBuffer aBuf;
+            OStringBuffer aBuf(16);
             aBuf.append(static_cast< char >(nChar));
             rtl_TextToUnicodeConverter aConverter
                 = rtl_createTextToUnicodeConverter(eCharset);
@@ -515,7 +515,8 @@ void SAL_CALL rtl_uriEncode(rtl_uString * pText, sal_Bool const * pCharClass,
             (eMechanism == rtl_UriEncodeKeepEscapes
              || eMechanism == rtl_UriEncodeCheckEscapes
              || eMechanism == rtl_UriEncodeStrictKeepEscapes),
-            eCharset, &eType);
+            eMechanism == rtl_UriEncodeStrictKeepEscapes ? RTL_TEXTENCODING_UTF8 : eCharset,
+            &eType);
 
         switch (eType)
         {

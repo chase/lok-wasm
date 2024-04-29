@@ -20,7 +20,6 @@
 #include <sal/types.h>
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
-#include <cppunit/plugin/TestPlugIn.h>
 
 #include <rtl/string.hxx>
 #include <cstring>
@@ -32,8 +31,8 @@ namespace rtl_str
     {
         void compare_001()
             {
-                OString aStr1 = "";
-                OString aStr2 = "";
+                OString aStr1 = ""_ostr;
+                OString aStr2 = ""_ostr;
 
                 sal_Int32 nValue = rtl_str_compare( aStr1.getStr(), aStr2.getStr());
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("compare failed, strings are equal.", sal_Int32(0), nValue);
@@ -41,8 +40,8 @@ namespace rtl_str
 
         void compare_002()
             {
-                OString aStr1 = "Line must be equal.";
-                OString aStr2 = "Line must be equal.";
+                OString aStr1 = "Line must be equal."_ostr;
+                OString aStr2 = "Line must be equal."_ostr;
 
                 sal_Int32 nValue = rtl_str_compare( aStr1.getStr(), aStr2.getStr());
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("compare failed, strings are equal.", sal_Int32(0), nValue);
@@ -50,8 +49,8 @@ namespace rtl_str
 
         void compare_003()
             {
-                OString aStr1 = "Line must differ.";
-                OString aStr2 = "Line foo bar, ok, differ.";
+                OString aStr1 = "Line must differ."_ostr;
+                OString aStr2 = "Line foo bar, ok, differ."_ostr;
 
                 sal_Int32 nValue = rtl_str_compare( aStr1.getStr(), aStr2.getStr());
                 CPPUNIT_ASSERT_MESSAGE("compare failed, strings differ.", nValue != 0);
@@ -72,8 +71,8 @@ namespace rtl_str
     {
         void compare_001()
             {
-                OString aStr1 = "";
-                OString aStr2 = "";
+                OString aStr1 = ""_ostr;
+                OString aStr2 = ""_ostr;
 
                 sal_Int32 nValue = rtl_str_compareIgnoreAsciiCase( aStr1.getStr(), aStr2.getStr());
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("compare failed, strings are equal.", sal_Int32(0), nValue);
@@ -81,8 +80,8 @@ namespace rtl_str
 
         void compare_002()
             {
-                OString aStr1 = "Line must be equal.";
-                OString aStr2 = "Line must be equal.";
+                OString aStr1 = "Line must be equal."_ostr;
+                OString aStr2 = "Line must be equal."_ostr;
 
                 sal_Int32 nValue = rtl_str_compareIgnoreAsciiCase( aStr1.getStr(), aStr2.getStr());
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("compare failed, strings are equal.", sal_Int32(0), nValue);
@@ -90,8 +89,8 @@ namespace rtl_str
 
         void compare_002_1()
             {
-                OString aStr1 = "Line must be equal.";
-                OString aStr2 = "LINE MUST BE EQUAL.";
+                OString aStr1 = "Line must be equal."_ostr;
+                OString aStr2 = "LINE MUST BE EQUAL."_ostr;
 
                 sal_Int32 nValue = rtl_str_compareIgnoreAsciiCase( aStr1.getStr(), aStr2.getStr());
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("compare failed, strings are equal (if case insensitive).", sal_Int32(0), nValue);
@@ -99,8 +98,8 @@ namespace rtl_str
 
         void compare_003()
             {
-                OString aStr1 = "Line must differ.";
-                OString aStr2 = "Line foo bar, ok, differ.";
+                OString aStr1 = "Line must differ."_ostr;
+                OString aStr2 = "Line foo bar, ok, differ."_ostr;
 
                 sal_Int32 nValue = rtl_str_compareIgnoreAsciiCase( aStr1.getStr(), aStr2.getStr());
                 CPPUNIT_ASSERT_MESSAGE("compare failed, strings differ.", nValue != 0);
@@ -127,13 +126,13 @@ namespace rtl_str
 
         void compare_000_1()
             {
-                OString aStr1 = "Line must be equal.";
+                OString aStr1 = "Line must be equal."_ostr;
                 rtl_str_shortenedCompareIgnoreAsciiCase_WithLength( aStr1.getStr(), aStr1.getLength(), nullptr, 0, 1);
             }
         void compare_001()
             {
-                OString aStr1 = "";
-                OString aStr2 = "";
+                OString aStr1 = ""_ostr;
+                OString aStr2 = ""_ostr;
 
                 sal_Int32 nValue = rtl_str_shortenedCompareIgnoreAsciiCase_WithLength( aStr1.getStr(), aStr1.getLength(), aStr2.getStr(), aStr2.getLength(), aStr1.getLength());
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("compare failed, strings are equal.", sal_Int32(0), nValue);
@@ -141,8 +140,8 @@ namespace rtl_str
 
         void compare_002()
             {
-                OString aStr1 = "Line must be equal.";
-                OString aStr2 = "Line must be equal.";
+                OString aStr1 = "Line must be equal."_ostr;
+                OString aStr2 = "Line must be equal."_ostr;
 
                 sal_Int32 nValue = rtl_str_shortenedCompareIgnoreAsciiCase_WithLength( aStr1.getStr(), aStr1.getLength(),
                                                                                        aStr2.getStr(), aStr2.getLength(),
@@ -152,8 +151,8 @@ namespace rtl_str
 
         void compare_002_1()
             {
-                OString aStr1 = "Line must be equal.";
-                OString aStr2 = "LINE MUST BE EQUAL.";
+                OString aStr1 = "Line must be equal."_ostr;
+                OString aStr2 = "LINE MUST BE EQUAL."_ostr;
 
                 sal_Int32 nValue = rtl_str_shortenedCompareIgnoreAsciiCase_WithLength( aStr1.getStr(), aStr1.getLength(),
                                                                                        aStr2.getStr(), aStr2.getLength(),
@@ -163,8 +162,8 @@ namespace rtl_str
 
         void compare_003()
             {
-                OString aStr1 = "Line must differ.";
-                OString aStr2 = "Line foo bar, ok, differ.";
+                OString aStr1 = "Line must differ."_ostr;
+                OString aStr2 = "Line foo bar, ok, differ."_ostr;
 
                 sal_Int32 nValue = rtl_str_shortenedCompareIgnoreAsciiCase_WithLength( aStr1.getStr(), aStr1.getLength(),
                                                                                        aStr2.getStr(), aStr2.getLength(),
@@ -174,8 +173,8 @@ namespace rtl_str
 
         void compare_004()
             {
-                OString aStr1 = "Line must differ.";
-                OString aStr2 = "Line foo bar, ok, differ.";
+                OString aStr1 = "Line must differ."_ostr;
+                OString aStr2 = "Line foo bar, ok, differ."_ostr;
 
                 sal_Int32 nValue = rtl_str_shortenedCompareIgnoreAsciiCase_WithLength( aStr1.getStr(), aStr1.getLength(),
                                                                                        aStr2.getStr(), aStr2.getLength(),
@@ -202,7 +201,7 @@ namespace rtl_str
     {
         void hashCode_001()
             {
-                OString aStr1 = "Line for a hashCode.";
+                OString aStr1 = "Line for a hashCode."_ostr;
                 sal_Int32 nHashCode = rtl_str_hashCode( aStr1.getStr() );
                 printf("hashcode: %" SAL_PRIdINT32 "\n", nHashCode);
                 // CPPUNIT_ASSERT_MESSAGE("failed.", nValue == 0);
@@ -210,10 +209,10 @@ namespace rtl_str
 
         void hashCode_002()
             {
-                OString aStr1 = "Line for a hashCode.";
+                OString aStr1 = "Line for a hashCode."_ostr;
                 sal_Int32 nHashCode1 = rtl_str_hashCode( aStr1.getStr() );
 
-                OString aStr2 = "Line for a hashCode.";
+                OString aStr2 = "Line for a hashCode."_ostr;
                 sal_Int32 nHashCode2 = rtl_str_hashCode( aStr2.getStr() );
 
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("hashcodes must be equal.", nHashCode1, nHashCode2 );
@@ -221,10 +220,10 @@ namespace rtl_str
 
         void hashCode_003()
             {
-                OString aStr1 = "Line for a hashCode.";
+                OString aStr1 = "Line for a hashCode."_ostr;
                 sal_Int32 nHashCode1 = rtl_str_hashCode( aStr1.getStr() );
 
-                OString aStr2 = "Line for another hashcode.";
+                OString aStr2 = "Line for another hashcode."_ostr;
                 sal_Int32 nHashCode2 = rtl_str_hashCode( aStr2.getStr() );
 
                 CPPUNIT_ASSERT_MESSAGE("hashcodes must differ.", nHashCode1 != nHashCode2 );
@@ -252,7 +251,7 @@ namespace rtl_str
 
         void indexOfChar_001()
             {
-                OString aStr1 = "Line for an indexOfChar.";
+                OString aStr1 = "Line for an indexOfChar."_ostr;
 
                 sal_Int32 nIndex = rtl_str_indexOfChar( aStr1.getStr(), 'L' );
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(0), nIndex);
@@ -269,7 +268,7 @@ namespace rtl_str
 
         void indexOfChar_002()
             {
-                OString aStr1 = "Line for an indexOfChar.";
+                OString aStr1 = "Line for an indexOfChar."_ostr;
                 sal_Int32 nIndex = rtl_str_indexOfChar( aStr1.getStr(), 'y' );
 
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(-1), nIndex);
@@ -297,7 +296,7 @@ namespace rtl_str
 
         void lastIndexOfChar_001()
             {
-                OString aStr1 = "Line for a lastIndexOfChar.";
+                OString aStr1 = "Line for a lastIndexOfChar."_ostr;
 
                 sal_Int32 nIndex = rtl_str_lastIndexOfChar( aStr1.getStr(), 'C' );
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(22), nIndex);
@@ -314,7 +313,7 @@ namespace rtl_str
 
         void lastIndexOfChar_002()
             {
-                OString aStr1 = "Line for a lastIndexOfChar.";
+                OString aStr1 = "Line for a lastIndexOfChar."_ostr;
                 sal_Int32 nIndex = rtl_str_lastIndexOfChar( aStr1.getStr(), 'y' );
 
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(-1), nIndex);
@@ -335,7 +334,7 @@ namespace rtl_str
     {
         void indexOfStr_000()
             {
-                OString aStr1("Line for an indexOfStr.");
+                OString aStr1("Line for an indexOfStr."_ostr);
                 sal_Int32 nIndex = rtl_str_indexOfStr( aStr1.getStr(), "" );
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("an empty substring is always not findable",
                                              sal_Int32(-1), nIndex);
@@ -343,7 +342,7 @@ namespace rtl_str
 
         void indexOfStr_001()
             {
-                OString aStr1 = "Line for an indexOfStr.";
+                OString aStr1 = "Line for an indexOfStr."_ostr;
 
                 sal_Int32 nIndex = rtl_str_indexOfStr( aStr1.getStr(), "Line" );
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(0), nIndex);
@@ -360,7 +359,7 @@ namespace rtl_str
 
         void indexOfStr_002()
             {
-                OString aStr1 = "Line for an indexOfStr.";
+                OString aStr1 = "Line for an indexOfStr."_ostr;
                 sal_Int32 nIndex = rtl_str_indexOfStr( aStr1.getStr(), "not exist" );
 
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(-1), nIndex);
@@ -381,7 +380,7 @@ namespace rtl_str
     {
         void lastIndexOfStr_000()
             {
-                OString aStr1("Line for a lastIndexOfStr.");
+                OString aStr1("Line for a lastIndexOfStr."_ostr);
                 sal_Int32 nIndex = rtl_str_lastIndexOfStr( aStr1.getStr(), "" );
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("an empty substring is always not findable",
                                              sal_Int32(-1), nIndex);
@@ -389,25 +388,25 @@ namespace rtl_str
 
         void lastIndexOfStr_001()
             {
-                OString aStr1 = "Line for a lastIndexOfStr.";
-                OString aSearchStr = "Index";
+                OString aStr1 = "Line for a lastIndexOfStr."_ostr;
+                OString aSearchStr = "Index"_ostr;
 
                 sal_Int32 nIndex = rtl_str_lastIndexOfStr( aStr1.getStr(), aSearchStr.getStr() );
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(15), nIndex);
 
-                /* OString */ aSearchStr = "Line";
+                /* OString */ aSearchStr = "Line"_ostr;
                 /* sal_Int32 */ nIndex = rtl_str_lastIndexOfStr( aStr1.getStr(), aSearchStr.getStr() );
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(0), nIndex);
 
-                /* OString */ aSearchStr = "";
+                /* OString */ aSearchStr = ""_ostr;
                 /* sal_Int32 */ nIndex = rtl_str_lastIndexOfStr( aStr1.getStr(), aSearchStr.getStr() );
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(-1), nIndex);
             }
 
         void lastIndexOfStr_002()
             {
-                OString aStr1 = "Line for a lastIndexOfStr.";
-                OString aSearchStr = "foo";
+                OString aStr1 = "Line for a lastIndexOfStr."_ostr;
+                OString aSearchStr = "foo"_ostr;
                 sal_Int32 nIndex = rtl_str_lastIndexOfStr( aStr1.getStr(), aSearchStr.getStr() );
 
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(-1), nIndex);
@@ -415,8 +414,8 @@ namespace rtl_str
 
         void lastIndexOfStr_003()
             {
-                OString aStr1 = "Line for a lastIndexOfStr.";
-                OString aSearchStr = "O";
+                OString aStr1 = "Line for a lastIndexOfStr."_ostr;
+                OString aSearchStr = "O"_ostr;
                 sal_Int32 nIndex = rtl_str_lastIndexOfStr( aStr1.getStr(), aSearchStr.getStr() );
 
                 CPPUNIT_ASSERT_EQUAL_MESSAGE("index is wrong.", sal_Int32(20), nIndex);
@@ -438,8 +437,8 @@ namespace rtl_str
     {
         void replaceChar_001()
             {
-                OString aStr1 = "replace char.";
-                OString aShouldStr1 = "ruplacu char.";
+                OString aStr1 = "replace char."_ostr;
+                OString aShouldStr1 = "ruplacu char."_ostr;
 
                 char* pStr = static_cast<char*>(malloc(aStr1.getLength() + 1));
                 CPPUNIT_ASSERT_MESSAGE("can't get memory for test", pStr != nullptr);
@@ -469,8 +468,8 @@ namespace rtl_str
 
         void replaceChar_WithLength_001()
             {
-                OString aStr1 = "replace char.";
-                OString aShouldStr1 = "ruplace char.";
+                OString aStr1 = "replace char."_ostr;
+                OString aShouldStr1 = "ruplace char."_ostr;
 
                 char* pStr = static_cast<char*>(malloc(aStr1.getLength() + 1));
                 CPPUNIT_ASSERT_MESSAGE("can't get memory for test", pStr != nullptr);
@@ -496,8 +495,8 @@ namespace rtl_str
     {
         void toAsciiLowerCase_001()
             {
-                OString aStr1 = "CHANGE THIS TO ASCII LOWER CASE.";
-                OString aShouldStr1 = "change this to ascii lower case.";
+                OString aStr1 = "CHANGE THIS TO ASCII LOWER CASE."_ostr;
+                OString aShouldStr1 = "change this to ascii lower case."_ostr;
 
                 char* pStr = static_cast<char*>(malloc(aStr1.getLength() + 1));
                 CPPUNIT_ASSERT_MESSAGE("can't get memory for test", pStr != nullptr);
@@ -527,8 +526,8 @@ namespace rtl_str
 
         void toAsciiLowerCase_WithLength_001()
             {
-                OString aStr1 = "CHANGE THIS TO ASCII LOWER CASE.";
-                OString aShouldStr1 = "change thiS TO ASCII LOWER CASE.";
+                OString aStr1 = "CHANGE THIS TO ASCII LOWER CASE."_ostr;
+                OString aShouldStr1 = "change thiS TO ASCII LOWER CASE."_ostr;
 
                 char* pStr = static_cast<char*>(malloc(aStr1.getLength() + 1));
                 CPPUNIT_ASSERT_MESSAGE("can't get memory for test", pStr != nullptr);
@@ -555,8 +554,8 @@ namespace rtl_str
     {
         void toAsciiUpperCase_001()
             {
-                OString aStr1 = "change this to ascii upper case.";
-                OString aShouldStr1 = "CHANGE THIS TO ASCII UPPER CASE.";
+                OString aStr1 = "change this to ascii upper case."_ostr;
+                OString aShouldStr1 = "CHANGE THIS TO ASCII UPPER CASE."_ostr;
 
                 char* pStr = static_cast<char*>(malloc(aStr1.getLength() + 1));
                 CPPUNIT_ASSERT_MESSAGE("can't get memory for test", pStr != nullptr);
@@ -586,8 +585,8 @@ namespace rtl_str
 
         void toAsciiUpperCase_WithLength_001()
             {
-                OString aStr1 = "change this to ascii lower case.";
-                OString aShouldStr1 = "CHANGE THIs to ascii lower case.";
+                OString aStr1 = "change this to ascii lower case."_ostr;
+                OString aShouldStr1 = "CHANGE THIs to ascii lower case."_ostr;
 
                 char* pStr = static_cast<char*>(malloc(aStr1.getLength() + 1));
                 CPPUNIT_ASSERT_MESSAGE("can't get memory for test", pStr != nullptr);

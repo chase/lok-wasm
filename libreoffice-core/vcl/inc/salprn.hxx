@@ -21,12 +21,15 @@
 #define INCLUDED_VCL_INC_SALPRN_HXX
 
 #include <i18nutil/paper.hxx>
+#include <rtl/ustring.hxx>
 #include <vcl/prntypes.hxx>
 #include <vcl/dllapi.h>
+#include <tools/gen.hxx>
 
 #include "salptype.hxx"
 
 #include <vector>
+#include <optional>
 
 class SalGraphics;
 class SalFrame;
@@ -42,7 +45,7 @@ struct VCL_PLUGIN_PUBLIC SalPrinterQueueInfo
     OUString               maComment;
     PrintQueueFlags        mnStatus;
     sal_uInt32             mnJobs;
-    std::unique_ptr<OUString> mpPortName; // only used by Windows backend
+    std::optional<OUString> moPortName; // only used by Windows backend
 
                             SalPrinterQueueInfo();
                             ~SalPrinterQueueInfo();
@@ -79,6 +82,11 @@ public:
     virtual sal_uInt32              GetCapabilities( const ImplJobSetup* pSetupData, PrinterCapType nType ) = 0;
     virtual sal_uInt16              GetPaperBinCount( const ImplJobSetup* pSetupData ) = 0;
     virtual OUString                GetPaperBinName( const ImplJobSetup* pSetupData, sal_uInt16 nPaperBin ) = 0;
+    virtual sal_uInt16              GetPaperBinBySourceIndex(const ImplJobSetup* pSetupData,
+                                                             sal_uInt16 nPaperSource) = 0;
+    virtual sal_uInt16              GetSourceIndexByPaperBin(const ImplJobSetup* pSetupData,
+                                                             sal_uInt16 nPaperSource) = 0;
+
     // fills m_aPaperFormats and sets m_bPapersInit to true
     virtual void                    InitPaperFormats( const ImplJobSetup* pSetupData ) = 0;
     // returns angle that a landscape page will be turned counterclockwise wrt to portrait

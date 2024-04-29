@@ -20,14 +20,15 @@
 #define INCLUDED_SFX2_DISPATCH_HXX
 
 #include <memory>
+#include <span>
 #include <sal/config.h>
+#include <rtl/ref.hxx>
 #include <sfx2/dllapi.h>
 #include <sfx2/toolbarids.hxx>
 #include <sal/types.h>
 
 #include <sfx2/bindings.hxx>
 #include <o3tl/typed_flags_set.hxx>
-#include <o3tl/span.hxx>
 
 #include <boost/property_tree/ptree_fwd.hpp>
 #include <initializer_list>
@@ -39,6 +40,8 @@ class SfxItemSet;
 class SfxModule;
 class Point;
 struct SfxDispatcher_Impl;
+class VCLXPopupMenu;
+class SfxPoolItemHolder;
 
 namespace com::sun::star::awt { class XPopupMenu; }
 namespace vcl { class Window; }
@@ -86,6 +89,7 @@ friend class SfxHelp;
 
 
     bool                FindServer_( sal_uInt16 nId, SfxSlotServer &rServer );
+    static bool                IsCommandAllowedInLokReadOnlyViewMode (OUString commandName);
     bool                FillState_( const SfxSlotServer &rServer,
                                     SfxItemSet &rState, const SfxSlot *pRealSlot );
     void                Execute_( SfxShell &rShell, const SfxSlot &rSlot,
@@ -102,24 +106,24 @@ public:
 
                         ~SfxDispatcher();
 
-    const SfxPoolItem*  Execute( sal_uInt16 nSlot,
+    SfxPoolItemHolder   Execute( sal_uInt16 nSlot,
                                  SfxCallMode nCall = SfxCallMode::SLOT,
                                  const SfxPoolItem **pArgs = nullptr,
                                  sal_uInt16 nModi = 0,
                                  const SfxPoolItem **pInternalArgs = nullptr);
 
-    const SfxPoolItem*  Execute(sal_uInt16 nSlot,
+    SfxPoolItemHolder   Execute(sal_uInt16 nSlot,
                                 SfxCallMode nCall,
                                 SfxItemSet const * pArgs,
                                 SfxItemSet const * pInternalArgs,
                                 sal_uInt16 nModi);
 
-    const SfxPoolItem*  ExecuteList(sal_uInt16 nSlot,
+    SfxPoolItemHolder   ExecuteList(sal_uInt16 nSlot,
                                     SfxCallMode nCall,
                                     std::initializer_list<SfxPoolItem const*> args,
                                     std::initializer_list<SfxPoolItem const*> internalargs = std::initializer_list<SfxPoolItem const*>());
 
-    const SfxPoolItem*  Execute( sal_uInt16 nSlot,
+    SfxPoolItemHolder   Execute( sal_uInt16 nSlot,
                                  SfxCallMode nCall,
                                  const SfxItemSet &rArgs );
 
@@ -145,17 +149,12 @@ public:
     void                Lock( bool bLock );
     bool                IsLocked() const;
     void                SetSlotFilter( SfxSlotFilterState nEnable = SfxSlotFilterState::DISABLED,
-                                       o3tl::span<sal_uInt16 const> pSIDs = o3tl::span<sal_uInt16 const>());
+                                       std::span<sal_uInt16 const> pSIDs = std::span<sal_uInt16 const>());
 
     void                HideUI( bool bHide = true );
     ToolbarId           GetObjectBarId( sal_uInt16 nPos ) const;
 
-    SfxItemState        QueryState( sal_uInt16 nSID, const SfxPoolItem* &rpState );
-    template<class T>
-    SfxItemState        QueryState( TypedWhichId<T> nSID, const T* &rpState )
-    {
-        return QueryState(sal_uInt16(nSID), reinterpret_cast<SfxPoolItem const*&>(rpState));
-    }
+    SfxItemState        QueryState( sal_uInt16 nSID, SfxPoolItemHolder& rState );
     SfxItemState        QueryState( sal_uInt16 nSID, css::uno::Any& rAny );
 
     void                SetDisableFlags( SfxDisableFlags nFlags );
@@ -176,7 +175,7 @@ public:
     SAL_DLLPRIVATE void DoDeactivate_Impl( bool bMDI, SfxViewFrame const * pNew );
     SAL_DLLPRIVATE void InvalidateBindings_Impl(bool);
 
-    static boost::property_tree::ptree fillPopupMenu(const css::uno::Reference<css::awt::XPopupMenu>& rMenu);
+    static boost::property_tree::ptree fillPopupMenu(const rtl::Reference<VCLXPopupMenu>& rMenu);
 };
 
 #endif

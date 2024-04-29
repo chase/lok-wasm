@@ -42,11 +42,16 @@
 #include <com/sun/star/task/XInteractionRequest.hpp>
 #include <com/sun/star/task/XInteractionContinuation.hpp>
 #include <com/sun/star/xforms/InvalidDataOnSubmitException.hpp>
+#include <com/sun/star/form/runtime/XFormController.hpp>
 #include <com/sun/star/frame/XFrame.hpp>
 #include <cppuhelper/exc_hlp.hxx>
 #include <comphelper/interaction.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/servicehelper.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
+#include <frm_resource.hxx>
+#include <strings.hrc>
 #include <memory>
 #include <string_view>
 
@@ -55,8 +60,6 @@ using com::sun::star::form::submission::XSubmissionVetoListener;
 using com::sun::star::lang::WrappedTargetException;
 using com::sun::star::lang::NoSupportException;
 using com::sun::star::task::XInteractionHandler;
-using com::sun::star::task::XInteractionRequest;
-using com::sun::star::task::XInteractionContinuation;
 using com::sun::star::xforms::XModel;
 using com::sun::star::xforms::InvalidDataOnSubmitException;
 using com::sun::star::xml::xpath::XXPathObject;
@@ -85,7 +88,8 @@ Submission::~Submission() noexcept
 
 void Submission::setModel( const Reference<XModel>& xModel )
 {
-    mxModel = xModel;
+    mxModel = dynamic_cast<Model*>(xModel.get());
+    assert(bool(mxModel)==bool(xModel) && "we only support an instance of Model here");
 }
 
 
@@ -202,12 +206,12 @@ bool Submission::doSubmit( const Reference< XInteractionHandler >& xHandler )
     else if( !maRef.getExpression().isEmpty() )
     {
         aExpression.setExpression( maRef.getExpression() );
-        aEvalContext = comphelper::getFromUnoTunnel<Model>( mxModel )->getEvaluationContext();
+        aEvalContext = mxModel->getEvaluationContext();
     }
     else
     {
         aExpression.setExpression( "/" );
-        aEvalContext = comphelper::getFromUnoTunnel<Model>( mxModel )->getEvaluationContext();
+        aEvalContext = mxModel->getEvaluationContext();
     }
     aExpression.evaluate( aEvalContext );
     Reference<XXPathObject> xResult = aExpression.getXPath();
@@ -239,8 +243,31 @@ bool Submission::doSubmit( const Reference< XInteractionHandler >& xHandler )
         return false;
     }
 
-    if (!xSubmission->IsWebProtocol())
-        return false;
+    const INetURLObject& rURLObject = xSubmission->GetURLObject();
+    INetProtocol eProtocol = rURLObject.GetProtocol();
+    // tdf#154337 continue to allow submitting to http[s]: without further
+    // interaction. Don't allow for other protocols, except for file:
+    // where the user has to agree first.
+    if (eProtocol != INetProtocol::Http && eProtocol != INetProtocol::Https)
+    {
+        if (eProtocol != INetProtocol::File)
+            return false;
+        else
+        {
+            Reference<css::form::runtime::XFormController> xFormController(xHandler, UNO_QUERY);
+            Reference<css::awt::XControl> xContainerControl(xFormController ? xFormController->getContainer() : nullptr, UNO_QUERY);
+            Reference<css::awt::XWindow> xParent(xContainerControl ? xContainerControl->getPeer() : nullptr, UNO_QUERY);
+
+            OUString aFileName(rURLObject.getFSysPath(FSysStyle::Detect));
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(Application::GetFrameWeld(xParent),
+                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                           frm::ResourceManager::loadString(RID_STR_XFORMS_WARN_TARGET_IS_FILE).replaceFirst("$", aFileName)));
+            xQueryBox->set_default_response(RET_NO);
+
+            if (xQueryBox->run() != RET_YES)
+                return false;
+        }
+    }
 
     CSubmission::SubmissionResult aResult = xSubmission->submit( xHandler );
 
@@ -253,13 +280,6 @@ bool Submission::doSubmit( const Reference< XInteractionHandler >& xHandler )
     return ( aResult == CSubmission::SUCCESS );
 }
 
-Sequence<sal_Int8> Submission::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit aImplementationId;
-    return aImplementationId.getSeq();
-}
-
-
 void Submission::liveCheck()
 {
     bool bValid = mxModel.is();
@@ -268,12 +288,9 @@ void Submission::liveCheck()
         throw RuntimeException();
 }
 
-Model* Submission::getModelImpl() const
+css::uno::Reference<XModel> Submission::getModel() const
 {
-    Model* pModel = nullptr;
-    if( mxModel.is() )
-        pModel = comphelper::getFromUnoTunnel<Model>( mxModel );
-    return pModel;
+    return mxModel;
 }
 
 
@@ -386,13 +403,6 @@ void SAL_CALL Submission::setName( const OUString& sID )
 }
 
 
-sal_Int64 SAL_CALL Submission::getSomething(
-    const Sequence<sal_Int8>& aId )
-{
-    return comphelper::getSomethingImpl(aId, this);
-}
-
-
 static OUString lcl_message( std::u16string_view rID, std::u16string_view rText )
 {
     OUString aMessage = OUString::Concat("XForms submission '") + rID + "' failed" + rText + ".";
@@ -404,7 +414,7 @@ void SAL_CALL Submission::submitWithInteraction(
 {
     // as long as this class is not really threadsafe, we need to copy
     // the members we're interested in
-    Reference< XModel > xModel( mxModel );
+    rtl::Reference< Model > xModel( mxModel );
     OUString sID( msID );
 
     if ( !xModel.is() || msID.isEmpty() )
@@ -413,12 +423,9 @@ void SAL_CALL Submission::submitWithInteraction(
                 *this
               );
 
-    Model* pModel = comphelper::getFromUnoTunnel<Model>( xModel );
-    OSL_ENSURE( pModel != nullptr, "illegal model?" );
-
     // #i36765# #i47248# warning on submission of illegal data
     // check for validity (and query user if invalid)
-    bool bValid = pModel->isValid();
+    bool bValid = xModel->isValid();
     if( ! bValid )
     {
         InvalidDataOnSubmitException aInvalidDataException(

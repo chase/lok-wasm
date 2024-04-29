@@ -21,7 +21,7 @@
 #include <controls/geometrycontrolmodel.hxx>
 #include <controls/tabpagecontainer.hxx>
 #include <controls/tabpagemodel.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 
 #include <com/sun/star/awt/XControlModel.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
@@ -139,7 +139,7 @@ void SAL_CALL UnoControlTabPageContainerModel::insertByIndex( ::sal_Int32 nIndex
     SolarMutexGuard aSolarGuard;
     uno::Reference < XTabPageModel > xTabPageModel;
     if(!(aElement >>= xTabPageModel))
-        throw IllegalArgumentException( WRONG_TYPE_EXCEPTION, static_cast<OWeakObject *>(this), 2 );
+        throw IllegalArgumentException( WRONG_TYPE_EXCEPTION, getXWeak(), 2 );
 
     if ( sal_Int32( m_aTabPageVector.size()) ==nIndex )
         m_aTabPageVector.push_back( xTabPageModel );
@@ -150,7 +150,7 @@ void SAL_CALL UnoControlTabPageContainerModel::insertByIndex( ::sal_Int32 nIndex
         m_aTabPageVector.insert( aIter, xTabPageModel );
     }
     else
-        throw IndexOutOfBoundsException( OUString(), static_cast<OWeakObject *>(this) );
+        throw IndexOutOfBoundsException( OUString(), getXWeak() );
     ContainerEvent aEvent;
     aEvent.Source = *this;
     aEvent.Element = aElement;
@@ -170,13 +170,13 @@ void SAL_CALL UnoControlTabPageContainerModel::replaceByIndex( ::sal_Int32 /*Ind
 // XIndexAccess
 ::sal_Int32 SAL_CALL UnoControlTabPageContainerModel::getCount(  )
 {
-    ::osl::Guard< ::osl::Mutex > aGuard( GetMutex() );
+    std::unique_lock aGuard( m_aMutex );
     return sal_Int32( m_aTabPageVector.size());
 }
 
 uno::Any SAL_CALL UnoControlTabPageContainerModel::getByIndex( ::sal_Int32 nIndex )
 {
-    ::osl::Guard< ::osl::Mutex > aGuard( GetMutex() );
+    std::unique_lock aGuard( m_aMutex );
     if ( nIndex < 0 || o3tl::make_unsigned(nIndex) > m_aTabPageVector.size() )
         throw lang::IndexOutOfBoundsException();
     return uno::Any(m_aTabPageVector[nIndex]);
@@ -190,7 +190,7 @@ uno::Type SAL_CALL UnoControlTabPageContainerModel::getElementType(  )
 
 sal_Bool SAL_CALL UnoControlTabPageContainerModel::hasElements(  )
 {
-    ::osl::Guard< ::osl::Mutex > aGuard( GetMutex() );
+    std::unique_lock aGuard( m_aMutex );
     return !m_aTabPageVector.empty();
 }
 // XContainer
@@ -220,7 +220,7 @@ OUString UnoControlTabPageContainer::GetComponentServiceName() const
 void SAL_CALL UnoControlTabPageContainer::dispose(  )
 {
     lang::EventObject aEvt;
-    aEvt.Source = static_cast<cppu::OWeakObject*>(this);
+    aEvt.Source = getXWeak();
     m_aTabPageListeners.disposeAndClear( aEvt );
     UnoControl::dispose();
 }

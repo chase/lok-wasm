@@ -76,7 +76,7 @@ void SearchResultLocatorTest::testSearchResultLocatorUsingXmlPayload()
     sw::search::SearchResultLocator aLocator(pDoc);
     OString payload = "<indexing>"
                       "<paragraph node_type=\"writer\" index=\"14\" />"
-                      "</indexing>";
+                      "</indexing>"_ostr;
 
     sw::search::LocationResult aResult = aLocator.findForPayload(payload.getStr());
     CPPUNIT_ASSERT_EQUAL(size_t(1), aResult.maRectangles.size());
@@ -105,7 +105,7 @@ void SearchResultLocatorTest::testSearchResultLocatorUsingJsonPayload()
     sw::search::SearchResultLocator aLocator(pDoc);
     OString payload = "["
                       "{ \"node_type\" : \"writer\", \"index\" : 14 }"
-                      "]";
+                      "]"_ostr;
 
     sw::search::LocationResult aResult = aLocator.findForPayload(payload.getStr());
     CPPUNIT_ASSERT_EQUAL(size_t(1), aResult.maRectangles.size());
@@ -133,7 +133,7 @@ void SearchResultLocatorTest::testSearchResultLocatorForSdrObjects()
 
     sw::search::SearchResultLocator aLocator(pDoc);
     std::vector<sw::search::SearchIndexData> aDataVector;
-    aDataVector.emplace_back(sw::search::NodeType::CommonNode, SwNodeOffset(1), u"Circle");
+    aDataVector.emplace_back(sw::search::NodeType::CommonNode, SwNodeOffset(1), u"Circle"_ustr);
 
     sw::search::LocationResult aResult = aLocator.find(aDataVector);
     CPPUNIT_ASSERT_EQUAL(size_t(1), aResult.maRectangles.size());
@@ -162,7 +162,7 @@ void SearchResultLocatorTest::testSearchResultLocatorForSdrObjectsUsingJsonPaylo
     sw::search::SearchResultLocator aLocator(pDoc);
     OString payload = "["
                       "{ \"node_type\" : \"common\", \"index\" : 1, \"object_name\" : \"Circle\" }"
-                      "]";
+                      "]"_ostr;
 
     sw::search::LocationResult aResult = aLocator.findForPayload(payload.getStr());
     CPPUNIT_ASSERT_EQUAL(size_t(1), aResult.maRectangles.size());

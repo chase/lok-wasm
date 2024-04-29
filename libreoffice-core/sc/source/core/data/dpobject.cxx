@@ -101,7 +101,7 @@ constexpr OUStringLiteral SC_DBPROP_DATASOURCENAME = u"DataSourceName";
 constexpr OUStringLiteral SC_DBPROP_COMMAND = u"Command";
 constexpr OUStringLiteral SC_DBPROP_COMMANDTYPE = u"CommandType";
 
-constexpr OUStringLiteral SCDPSOURCE_SERVICE = u"com.sun.star.sheet.DataPilotSource";
+constexpr OUString SCDPSOURCE_SERVICE = u"com.sun.star.sheet.DataPilotSource"_ustr;
 
 namespace {
 
@@ -3273,7 +3273,7 @@ uno::Reference<sdbc::XRowSet> ScDPCollection::DBCaches::createRowSet(
         OSL_ENSURE( xRowProp.is(), "can't get RowSet" );
         if (!xRowProp.is())
         {
-            xRowSet.set(nullptr);
+            xRowSet.clear();
             return xRowSet;
         }
 
@@ -3309,7 +3309,7 @@ uno::Reference<sdbc::XRowSet> ScDPCollection::DBCaches::createRowSet(
         TOOLS_WARN_EXCEPTION( "sc", "Unexpected exception in database");
     }
 
-    xRowSet.set(nullptr);
+    xRowSet.clear();
     return xRowSet;
 }
 
@@ -3627,7 +3627,7 @@ bool ScDPCollection::GetReferenceGroups(const ScDPObject& rDPObj, const ScDPDime
 
 void ScDPCollection::DeleteOnTab( SCTAB nTab )
 {
-    maTables.erase( std::remove_if(maTables.begin(), maTables.end(), MatchByTable(nTab)), maTables.end());
+    std::erase_if(maTables, MatchByTable(nTab));
 }
 
 void ScDPCollection::UpdateReference( UpdateRefMode eUpdateRefMode,
@@ -3765,7 +3765,7 @@ void ScDPCollection::FreeTable(const ScDPObject* pDPObject)
         return pCurrent.get() == pDPObject;
     };
 
-    maTables.erase(std::remove_if(maTables.begin(), maTables.end(), funcRemoveCondition), maTables.end());
+    std::erase_if(maTables, funcRemoveCondition);
 }
 
 ScDPObject* ScDPCollection::InsertNewTable(std::unique_ptr<ScDPObject> pDPObj)

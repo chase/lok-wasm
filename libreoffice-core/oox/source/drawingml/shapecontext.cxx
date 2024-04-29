@@ -66,6 +66,14 @@ ContextHandlerRef ShapeContext::onCreateContext( sal_Int32 aElementToken, const 
     // nvSpPr CT_ShapeNonVisual begin
 //  case XML_drElemPr:
 //      break;
+    case XML_extLst:
+    case XML_ext:
+        break;
+    case XML_decorative:
+        {
+            mpShapePtr->setDecorative(rAttribs.getBool(XML_val, false));
+        }
+        break;
     case XML_cNvPr:
     {
         mpShapePtr->setHidden( rAttribs.getBool( XML_hidden, false ) );
@@ -81,8 +89,6 @@ ContextHandlerRef ShapeContext::onCreateContext( sal_Int32 aElementToken, const 
         mpShapePtr->setSubType( rAttribs.getToken( XML_type, XML_obj ) );
         if( rAttribs.hasAttribute( XML_idx ) )
             mpShapePtr->setSubTypeIndex( rAttribs.getInteger( XML_idx, 0 ) );
-        if( rAttribs.hasAttribute( XML_hasCustomPrompt ) )
-            mpShapePtr->setHasCustomPrompt( rAttribs.getBool( XML_hasCustomPrompt, false ) );
         break;
     // nvSpPr CT_ShapeNonVisual end
 
@@ -126,7 +132,7 @@ ContextHandlerRef ShapeContext::onCreateContext( sal_Int32 aElementToken, const 
     case XML_nvSpPr:
         break;
     default:
-        SAL_WARN("oox", "ShapeContext::onCreateContext: unhandled element: " << getBaseToken(aElementToken));
+        SAL_INFO("oox", "ShapeContext::onCreateContext: unhandled element: " << getBaseToken(aElementToken));
         break;
     }
 

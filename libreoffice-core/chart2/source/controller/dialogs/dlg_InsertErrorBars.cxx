@@ -23,6 +23,7 @@
 #include <chartview/ExplicitValueProvider.hxx>
 #include <ChartModelHelper.hxx>
 #include <ChartModel.hxx>
+#include <ChartView.hxx>
 #include <ObjectIdentifier.hxx>
 #include <DiagramHelper.hxx>
 #include <Diagram.hxx>
@@ -33,7 +34,6 @@
 
 #include <comphelper/servicehelper.hxx>
 
-using ::com::sun::star::uno::Reference;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
 
@@ -68,17 +68,17 @@ void InsertErrorBarsDialog::SetAxisMinorStepWidthForErrorBarDecimals( double fMi
 
 double InsertErrorBarsDialog::getAxisMinorStepWidthForErrorBarDecimals(
     const rtl::Reference<::chart::ChartModel>& xChartModel,
-    const Reference< uno::XInterface >& xChartView,
+    const rtl::Reference<::chart::ChartView>& xChartView,
     std::u16string_view rSelectedObjectCID )
 {
     double fStepWidth = 0.001;
 
-    ExplicitValueProvider* pExplicitValueProvider( comphelper::getFromUnoTunnel<ExplicitValueProvider>(xChartView) );
+    ExplicitValueProvider* pExplicitValueProvider( xChartView.get() );
     if( pExplicitValueProvider )
     {
-        rtl::Reference< Diagram > xDiagram( ChartModelHelper::findDiagram( xChartModel ) );
+        rtl::Reference< Diagram > xDiagram( xChartModel->getFirstChartDiagram() );
         rtl::Reference< DataSeries > xSeries = ObjectIdentifier::getDataSeriesForCID( rSelectedObjectCID, xChartModel );
-        rtl::Reference< Axis > xAxis = DiagramHelper::getAttachedAxis( xSeries, xDiagram );
+        rtl::Reference< Axis > xAxis = xDiagram->getAttachedAxis( xSeries );
         if(!xAxis.is())
             xAxis = AxisHelper::getAxis( 1/*nDimensionIndex*/, true/*bMainAxis*/, xDiagram );
         if(xAxis.is())

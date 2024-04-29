@@ -35,8 +35,6 @@ using ::com::sun::star::beans::PropertyValue;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
 using ::com::sun::star::uno::Any;
-using ::com::sun::star::xml::sax::XAttributeList;
-using ::xmloff::token::IsXMLToken;
 using ::xmloff::token::XML_STYLE_NAME;
 
 
@@ -77,7 +75,7 @@ void XMLIndexSimpleEntryContext::startFastElement(
                 m_bCharStyleNameOK = false;
         }
         else
-            XMLOFF_WARN_UNKNOWN("xmloff", aIter);
+            XMLOFF_INFO_UNKNOWN("xmloff", aIter);
     }
 
     // if we have a style name, set it!

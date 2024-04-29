@@ -21,6 +21,7 @@
 #include <compiler.hxx>
 #include <formulacell.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <dociter.hxx>
 #include <global.hxx>
 #include <scmod.hxx>
@@ -43,6 +44,7 @@
 #include <tools/json_writer.hxx>
 #include <algorithm>
 #include <memory>
+#include <strings.hrc>
 #include <utility>
 
 ScChangeAction::ScChangeAction( ScChangeActionType eTypeP, const ScRange& rRange )
@@ -491,12 +493,10 @@ OUString ScChangeAction::GetRefString(
                 {
                     OUString aTmp;
                     rDoc.GetName( aTmpRange.aStart.Tab(), aTmp );
-                    aBuf.append(aTmp);
-                    aBuf.append('.');
+                    aBuf.append(aTmp + ".");
                 }
-                aBuf.append(ScColToAlpha(aTmpRange.aStart.Col()));
-                aBuf.append(':');
-                aBuf.append(ScColToAlpha(aTmpRange.aEnd.Col()));
+                aBuf.append(ScColToAlpha(aTmpRange.aStart.Col())
+                    + ":" + ScColToAlpha(aTmpRange.aEnd.Col()));
             break;
             case SC_CAT_INSERT_ROWS :
             case SC_CAT_DELETE_ROWS :
@@ -504,12 +504,10 @@ OUString ScChangeAction::GetRefString(
                 {
                     OUString aTmp;
                     rDoc.GetName( aTmpRange.aStart.Tab(), aTmp );
-                    aBuf.append(aTmp);
-                    aBuf.append('.');
+                    aBuf.append(aTmp + ".");
                 }
-                aBuf.append(static_cast<sal_Int64>(aTmpRange.aStart.Row()+1));
-                aBuf.append(':');
-                aBuf.append(static_cast<sal_Int64>(aTmpRange.aEnd.Row()+1));
+                aBuf.append(OUString::number(static_cast<sal_Int64>(aTmpRange.aStart.Row()+1))
+                    + ":" + OUString::number(static_cast<sal_Int64>(aTmpRange.aEnd.Row()+1)));
             break;
             default:
             {
@@ -2061,9 +2059,7 @@ void ScChangeTrack::Init()
     bUseFixDateTime = false;
     bTimeNanoSeconds = true;
 
-    const SvtUserOptions& rUserOpt = SC_MOD()->GetUserOptions();
-    maUser = rUserOpt.GetFirstName() + " " + rUserOpt.GetLastName();
-    maUserCollection.insert(maUser);
+    CreateAuthorName();
 }
 
 void ScChangeTrack::DtorClear()
@@ -2160,10 +2156,9 @@ void ScChangeTrack::ConfigurationChanged( utl::ConfigurationBroadcaster*, Config
     if ( rDoc.IsInDtorClear() )
         return;
 
-    const SvtUserOptions& rUserOptions = SC_MOD()->GetUserOptions();
     size_t nOldCount = maUserCollection.size();
 
-    SetUser(rUserOptions.GetFirstName() + " " + rUserOptions.GetLastName());
+    CreateAuthorName();
 
     if ( maUserCollection.size() != nOldCount )
     {
@@ -2172,11 +2167,27 @@ void ScChangeTrack::ConfigurationChanged( utl::ConfigurationBroadcaster*, Config
         //  (Has to be done in the Notify handler, to be sure
         //  the user collection has already been updated)
 
-        SfxObjectShell* pDocSh = rDoc.GetDocumentShell();
+        ScDocShell* pDocSh = rDoc.GetDocumentShell();
         if (pDocSh)
             pDocSh->Broadcast( ScPaintHint( ScRange(0,0,0,rDoc.MaxCol(),rDoc.MaxRow(),MAXTAB), PaintPartFlags::Grid ) );
     }
 }
+
+void ScChangeTrack::CreateAuthorName()
+{
+    const SvtUserOptions& rUserOptions = SC_MOD()->GetUserOptions();
+    OUString aFirstName(rUserOptions.GetFirstName());
+    OUString aLastName(rUserOptions.GetLastName());
+    if (aFirstName.isEmpty() && aLastName.isEmpty())
+        SetUser(ScResId(STR_CHG_UNKNOWN_AUTHOR));
+    else if(!aFirstName.isEmpty() && aLastName.isEmpty())
+        SetUser(aFirstName);
+    else if(aFirstName.isEmpty() && !aLastName.isEmpty())
+        SetUser(aLastName);
+    else
+        SetUser(aFirstName + " " + aLastName);
+}
+
 
 void ScChangeTrack::SetUser( const OUString& rUser )
 {

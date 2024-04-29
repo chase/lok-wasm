@@ -21,6 +21,7 @@
 #include <sal/log.hxx>
 
 #include <cstdlib>
+#include <thread>
 
 #include <unx/saldisp.hxx>
 
@@ -946,7 +947,7 @@ bool SelectionManager::getPasteData( Atom selection, Atom type, Sequence< sal_In
             else
             {
                 aGuard.clear();
-                osl::Thread::wait(std::chrono::milliseconds(100));
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 aGuard.reset();
             }
             if( bHandle )
@@ -1772,7 +1773,7 @@ bool SelectionManager::handleSelectionRequest( XSelectionRequestEvent& rRequest 
         m_xDragSourceListener.is() )
     {
         DragSourceDropEvent dsde;
-        dsde.Source                 = static_cast< OWeakObject* >(this);
+        dsde.Source                 = getXWeak();
         dsde.DragSourceContext      = new DragSourceContext( m_aDropWindow, *this );
         dsde.DragSource             = static_cast< XDragSource* >(this);
         if( aNotify.xselection.property != None )
@@ -2343,7 +2344,7 @@ void SelectionManager::dropComplete( bool bSuccess, ::Window aDropWindow )
         if( m_xDragSourceListener.is() )
         {
             DragSourceDropEvent dsde;
-            dsde.Source             = static_cast< OWeakObject* >(this);
+            dsde.Source             = getXWeak();
             dsde.DragSourceContext  = new DragSourceContext( m_aDropWindow, *this );
             dsde.DragSource         = static_cast< XDragSource* >(this);
             dsde.DropAction         = getUserDragAction();
@@ -2422,7 +2423,7 @@ void SelectionManager::sendDragStatus( Atom nDropAction )
         }
 
         DragSourceDragEvent dsde;
-        dsde.Source             = static_cast< OWeakObject* >(this);
+        dsde.Source             = getXWeak();
         dsde.DragSourceContext  = new DragSourceContext( m_aDropWindow, *this );
         dsde.DragSource         = static_cast< XDragSource* >(this);
         dsde.DropAction         = m_nSourceActions;
@@ -2515,7 +2516,7 @@ bool SelectionManager::updateDragAction( int modifierState )
         m_nUserDragAction = nNewDropAction;
 
         DragSourceDragEvent dsde;
-        dsde.Source             = static_cast< OWeakObject* >(this);
+        dsde.Source             = getXWeak();
         dsde.DragSourceContext  = new DragSourceContext( m_aDropWindow, *this );
         dsde.DragSource         = static_cast< XDragSource* >(this);
         dsde.DropAction         = m_nUserDragAction;
@@ -2543,7 +2544,7 @@ void SelectionManager::sendDropPosition( bool bForce, Time eventTime )
             ::Window aChild;
             XTranslateCoordinates( m_pDisplay, it->second.m_aRootWindow, m_aDropWindow, m_nLastDragX, m_nLastDragY, &x, &y, &aChild );
             DropTargetDragEvent dtde;
-            dtde.Source         = static_cast< OWeakObject* >(it->second.m_pTarget );
+            dtde.Source         = it->second.m_pTarget->getXWeak();
             dtde.Context        = new DropTargetDragContext( m_aCurrentDropWindow, *this );
             dtde.LocationX      = x;
             dtde.LocationY      = y;
@@ -2647,7 +2648,7 @@ bool SelectionManager::handleDragEvent( XEvent const & rMessage )
         {
             bHandled = true;
             DragSourceDragEvent dsde;
-            dsde.Source                 = static_cast< OWeakObject* >(this);
+            dsde.Source                 = getXWeak();
             dsde.DragSourceContext      = new DragSourceContext( m_aDropWindow, *this );
             dsde.DragSource             = static_cast< XDragSource* >( this );
             dsde.UserAction = getUserDragAction();
@@ -2694,7 +2695,7 @@ bool SelectionManager::handleDragEvent( XEvent const & rMessage )
             bHandled = true;
             // notify the listener
             DragSourceDropEvent dsde;
-            dsde.Source             = static_cast< OWeakObject* >(this);
+            dsde.Source             = getXWeak();
             dsde.DragSourceContext  = new DragSourceContext( m_aDropWindow, *this );
             dsde.DragSource         = static_cast< XDragSource* >(this);
             dsde.DropAction         = m_nTargetAcceptAction;
@@ -2739,7 +2740,7 @@ bool SelectionManager::handleDragEvent( XEvent const & rMessage )
             if( it != m_aDropTargets.end() )
             {
                 DropTargetEvent dte;
-                dte.Source = static_cast< OWeakObject* >( it->second.m_pTarget );
+                dte.Source = it->second.m_pTarget->getXWeak();
                 aGuard.clear();
                 it->second.m_pTarget->dragExit( dte );
                 aGuard.reset();
@@ -2760,7 +2761,7 @@ bool SelectionManager::handleDragEvent( XEvent const & rMessage )
             }
             // notify the listener
             DragSourceDropEvent dsde;
-            dsde.Source             = static_cast< OWeakObject* >(this);
+            dsde.Source             = getXWeak();
             dsde.DragSourceContext  = new DragSourceContext( m_aDropWindow, *this );
             dsde.DragSource         = static_cast< XDragSource* >(this);
             dsde.DropAction         = DNDConstants::ACTION_NONE;
@@ -2812,7 +2813,7 @@ bool SelectionManager::handleDragEvent( XEvent const & rMessage )
                     ::Window aChild;
                     XTranslateCoordinates( m_pDisplay, rMessage.xbutton.root, m_aDropWindow, rMessage.xbutton.x_root, rMessage.xbutton.y_root, &x, &y, &aChild );
                     DropTargetDropEvent dtde;
-                    dtde.Source         = static_cast< OWeakObject* >(it->second.m_pTarget );
+                    dtde.Source         = it->second.m_pTarget->getXWeak();
                     dtde.Context        = new DropTargetDropContext( m_aCurrentDropWindow, *this );
                     dtde.LocationX      = x;
                     dtde.LocationY      = y;
@@ -2901,7 +2902,7 @@ bool SelectionManager::handleDragEvent( XEvent const & rMessage )
         {
             // cancel drag
             DragSourceDropEvent dsde;
-            dsde.Source             = static_cast< OWeakObject* >(this);
+            dsde.Source             = getXWeak();
             dsde.DragSourceContext  = new DragSourceContext( m_aDropWindow, *this );
             dsde.DragSource         = static_cast< XDragSource* >(this);
             dsde.DropAction         = DNDConstants::ACTION_NONE;
@@ -2949,7 +2950,7 @@ void SelectionManager::reject( ::Window aDropWindow )
     if( m_bDropSent && m_xDragSourceListener.is() )
     {
         DragSourceDropEvent dsde;
-        dsde.Source             = static_cast< OWeakObject* >(this);
+        dsde.Source             = getXWeak();
         dsde.DragSourceContext  = new DragSourceContext( m_aDropWindow, *this );
         dsde.DragSource         = static_cast< XDragSource* >(this);
         dsde.DropAction         = DNDConstants::ACTION_NONE;
@@ -3094,7 +3095,7 @@ void SelectionManager::updateDragWindow( int nX, int nY, ::Window aRoot )
     }
 
     DragSourceDragEvent dsde;
-    dsde.Source             = static_cast< OWeakObject* >(this);
+    dsde.Source             = getXWeak();
     dsde.DragSourceContext  = new DragSourceContext( m_aDropWindow, *this );
     dsde.DragSource         = static_cast< XDragSource* >(this);
     dsde.DropAction         = nNewProtocolVersion >= 0 ? m_nUserDragAction : DNDConstants::ACTION_COPY;
@@ -3125,7 +3126,7 @@ void SelectionManager::updateDragWindow( int nX, int nY, ::Window aRoot )
                 // shortcut for own drop targets
             {
                 DropTargetEvent dte;
-                dte.Source  = static_cast< OWeakObject* >( it->second.m_pTarget );
+                dte.Source  = it->second.m_pTarget->getXWeak();
                 aGuard.clear();
                 it->second.m_pTarget->dragExit( dte );
                 aGuard.reset();
@@ -3173,7 +3174,7 @@ void SelectionManager::updateDragWindow( int nX, int nY, ::Window aRoot )
             {
                 XTranslateCoordinates( m_pDisplay, aRoot, m_aDropWindow, nX, nY, &nWinX, &nWinY, &aChild );
                 DropTargetDragEnterEvent dtde;
-                dtde.Source                 = static_cast< OWeakObject* >( it->second.m_pTarget );
+                dtde.Source                 = it->second.m_pTarget->getXWeak();
                 dtde.Context                = new DropTargetDragContext( m_aCurrentDropWindow, *this );
                 dtde.LocationX              = nWinX;
                 dtde.LocationY              = nWinY;
@@ -3232,7 +3233,7 @@ void SelectionManager::startDrag(
             << " ).");
 #endif
     DragSourceDropEvent aDragFailedEvent;
-    aDragFailedEvent.Source             = static_cast< OWeakObject* >(this);
+    aDragFailedEvent.Source             = getXWeak();
     aDragFailedEvent.DragSource         = static_cast< XDragSource* >(this);
     aDragFailedEvent.DragSourceContext  = new DragSourceContext( None, *this );
     aDragFailedEvent.DropAction         = DNDConstants::ACTION_NONE;
@@ -3501,7 +3502,7 @@ void SelectionManager::dragDoDispatch()
     {
         // let the thread in the run method do the dispatching
         // just look occasionally here whether drop timed out or is completed
-        osl::Thread::wait(std::chrono::milliseconds(200));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 #if OSL_DEBUG_LEVEL > 1
     SAL_INFO("vcl.unx.dtrans", "end executeDrag dispatching.");
@@ -3515,7 +3516,7 @@ void SelectionManager::dragDoDispatch()
         m_xDragSourceTransferable.clear();
 
         DragSourceDropEvent dsde;
-        dsde.Source             = static_cast< OWeakObject* >(this);
+        dsde.Source             = getXWeak();
         dsde.DragSourceContext  = new DragSourceContext( m_aDropWindow, *this );
         dsde.DragSource         = static_cast< XDragSource* >(this);
         dsde.DropAction         = DNDConstants::ACTION_NONE;
@@ -4006,7 +4007,7 @@ void SelectionManager::registerDropTarget( ::Window aWindow, DropTarget* pTarget
 
 void SelectionManager::deregisterDropTarget( ::Window aWindow )
 {
-    osl::ClearableMutexGuard aGuard(m_aMutex);
+    osl::ResettableGuard aGuard(m_aMutex);
 
     m_aDropTargets.erase( aWindow );
     if( aWindow != m_aDragSourceWindow || !m_aDragRunning.check() )
@@ -4018,9 +4019,10 @@ void SelectionManager::deregisterDropTarget( ::Window aWindow )
     if( it != m_aDropTargets.end() )
     {
         DropTargetEvent dte;
-        dte.Source = static_cast< OWeakObject* >( it->second.m_pTarget );
+        dte.Source = it->second.m_pTarget->getXWeak();
         aGuard.clear();
         it->second.m_pTarget->dragExit( dte );
+        aGuard.reset();
     }
     else if( m_aDropProxy != None && m_nCurrentProtocolVersion >= 0 )
     {
@@ -4038,7 +4040,7 @@ void SelectionManager::deregisterDropTarget( ::Window aWindow )
     }
     // notify the listener
     DragSourceDropEvent dsde;
-    dsde.Source             = static_cast< OWeakObject* >(this);
+    dsde.Source             = getXWeak();
     dsde.DragSourceContext  = new DragSourceContext( m_aDropWindow, *this );
     dsde.DragSource         = static_cast< XDragSource* >(this);
     dsde.DropAction         = DNDConstants::ACTION_NONE;
@@ -4047,7 +4049,6 @@ void SelectionManager::deregisterDropTarget( ::Window aWindow )
     m_xDragSourceListener.clear();
     aGuard.clear();
     xListener->dragDropEnd( dsde );
-
 }
 
 /*
@@ -4070,7 +4071,7 @@ void SelectionManager::fireContentsChanged() noexcept
 
 css::uno::Reference< XInterface > SelectionManager::getReference() noexcept
 {
-    return css::uno::Reference< XInterface >( static_cast<OWeakObject*>(this) );
+    return getXWeak();
 }
 
 /*

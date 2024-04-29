@@ -43,7 +43,6 @@
 #include <sfx2/htmlmode.hxx>
 #include <swmodule.hxx>
 #include <fchrfmt.hxx>
-#include <svtools/htmlcfg.hxx>
 #include <svx/xdef.hxx>
 #include <SwStyleNameMapper.hxx>
 #include <SwRewriter.hxx>
@@ -78,11 +77,14 @@
 #include <tblafmt.hxx>
 #include <sfx2/watermarkitem.hxx>
 #include <svl/grabbagitem.hxx>
+#include <PostItMgr.hxx>
+#include <AnnotationWin.hxx>
 #include <SwUndoFmt.hxx>
 #include <strings.hrc>
 #include <AccessibilityCheck.hxx>
 #include <docmodel/theme/Theme.hxx>
 #include <svx/svdpage.hxx>
+#include <officecfg/Office/Common.hxx>
 
 using namespace ::com::sun::star;
 
@@ -104,9 +106,9 @@ void  SwDocShell::StateStyleSheet(SfxItemSet& rSet, SwWrtShell* pSh)
     }
     else
     {
-        SfxViewFrame* pFrame = pShell->GetView().GetViewFrame();
+        SfxViewFrame& rFrame = pShell->GetView().GetViewFrame();
         std::unique_ptr<SfxUInt16Item> pFamilyItem;
-        pFrame->GetBindings().QueryState(SID_STYLE_FAMILY, pFamilyItem);
+        rFrame.GetBindings().QueryState(SID_STYLE_FAMILY, pFamilyItem);
         if (pFamilyItem)
         {
             nActualFamily = static_cast<SfxStyleFamily>(pFamilyItem->GetValue());
@@ -128,6 +130,12 @@ void  SwDocShell::StateStyleSheet(SfxItemSet& rSet, SwWrtShell* pSh)
                     SwFrameFormat* pFormat = pShell->GetSelectedFrameFormat();
                     if( pFormat )
                         aName = pFormat->GetName();
+                }
+                else if (pShell->GetSelectionType() == SelectionType::PostIt)
+                {
+                    auto pStyle = pShell->GetPostItMgr()->GetActiveSidebarWin()->GetOutlinerView()->GetStyleSheet();
+                    if (pStyle)
+                        aName = pStyle->GetName();
                 }
                 else
                 {
@@ -154,8 +162,15 @@ void  SwDocShell::StateStyleSheet(SfxItemSet& rSet, SwWrtShell* pSh)
                 if(!pShell->IsFrameSelected())
                 {
                     OUString aProgName;
-                    SwTextFormatColl* pColl = pShell->GetCurTextFormatColl();
-                    if(pColl)
+                    if (pShell->GetSelectionType() == SelectionType::PostIt)
+                    {
+                        if (auto pStyle = pShell->GetPostItMgr()->GetActiveSidebarWin()->GetOutlinerView()->GetStyleSheet())
+                        {
+                            aName = pStyle->GetName();
+                            aProgName = SwStyleNameMapper::GetProgName(aName, SwGetPoolIdFromName::TxtColl);
+                        }
+                    }
+                    else if (auto pColl = pShell->GetCurTextFormatColl())
                     {
                         aName = pColl->GetName();
                         sal_uInt16 nId = pColl->GetPoolFormatId();
@@ -206,7 +221,7 @@ void  SwDocShell::StateStyleSheet(SfxItemSet& rSet, SwWrtShell* pSh)
 
             case SID_STYLE_FAMILY4:
             {
-                if (m_xDoc->getIDocumentSettingAccess().get(DocumentSettingId::HTML_MODE) && !SvxHtmlOptions::IsPrintLayoutExtension())
+                if (m_xDoc->getIDocumentSettingAccess().get(DocumentSettingId::HTML_MODE) && !officecfg::Office::Common::Filter::HTML::Export::PrintLayout::get())
                     rSet.DisableItem( nWhich );
                 else
                 {
@@ -321,14 +336,14 @@ void SwDocShell::ExecStyleSheet( SfxRequest& rReq )
             if (sName.isEmpty() && m_xBasePool)
                 sName = SfxStyleDialogController::GenerateUnusedName(*m_xBasePool, nFamily);
 
-            Edit(rReq.GetFrameWeld(), sName, sParent, nFamily, nMask, true, OString(), nullptr, &rReq, nSlot);
+            Edit(rReq.GetFrameWeld(), sName, sParent, nFamily, nMask, true, {}, nullptr, &rReq, nSlot);
         }
         break;
 
         case SID_STYLE_APPLY:
             if( !pArgs )
             {
-                GetView()->GetViewFrame()->GetDispatcher()->Execute(SID_STYLE_DESIGNER);
+                GetView()->GetViewFrame().GetDispatcher()->Execute(SID_STYLE_DESIGNER);
                 break;
             }
             else
@@ -360,6 +375,7 @@ void SwDocShell::ExecStyleSheet( SfxRequest& rReq )
             [[fallthrough]];
 
         case SID_STYLE_EDIT:
+        case SID_STYLE_FONT:
         case SID_STYLE_DELETE:
         case SID_STYLE_HIDE:
         case SID_STYLE_SHOW:
@@ -392,12 +408,17 @@ void SwDocShell::ExecStyleSheet( SfxRequest& rReq )
                     case SID_STYLE_UPDATE_BY_EXAMPLE:
                     case SID_STYLE_EDIT:
                     {
-                        SwTextFormatColl* pColl = GetWrtShell()->GetCurTextFormatColl();
-                        if(pColl)
+                        if (GetWrtShell()->GetSelectionType() == SelectionType::PostIt)
                         {
-                            aParam = pColl->GetName();
-                            rReq.AppendItem(SfxStringItem(nSlot, aParam));
+                            auto pOLV = GetWrtShell()->GetPostItMgr()->GetActiveSidebarWin()->GetOutlinerView();
+                            if (auto pStyle = pOLV->GetStyleSheet())
+                                aParam = pStyle->GetName();
                         }
+                        else if (auto pColl = GetWrtShell()->GetCurTextFormatColl())
+                            aParam = pColl->GetName();
+
+                        if (!aParam.isEmpty())
+                            rReq.AppendItem(SfxStringItem(nSlot, aParam));
                     }
                     break;
                 }
@@ -492,7 +513,8 @@ void SwDocShell::ExecStyleSheet( SfxRequest& rReq )
                 switch(nSlot)
                 {
                     case SID_STYLE_EDIT:
-                        Edit(rReq.GetFrameWeld(), aParam, OUString(), nFamily, nMask, false, OString(), pActShell);
+                    case SID_STYLE_FONT:
+                        Edit(rReq.GetFrameWeld(), aParam, {}, nFamily, nMask, false, (nSlot == SID_STYLE_FONT) ? "font" : OUString(), pActShell);
                         break;
                     case SID_STYLE_DELETE:
                         Delete(aParam, nFamily);
@@ -520,6 +542,10 @@ void SwDocShell::ExecStyleSheet( SfxRequest& rReq )
                     default:
                         OSL_FAIL("Invalid SlotId");
                 }
+
+                // Update formatting toolbar buttons status
+                if (GetWrtShell()->GetSelectionType() == SelectionType::PostIt)
+                    GetView()->GetViewFrame().GetBindings().InvalidateAll(false);
 
                 if (bReturns)
                 {
@@ -594,7 +620,7 @@ IMPL_LINK_NOARG(ApplyStyle, ApplyHdl, LinkParamNone*, void)
         ::SfxToSwPageDescAttr( *pWrtShell, aSet  );
         // reset indent attributes at paragraph style, if a list style
         // will be applied and no indent attributes will be applied.
-        m_xTmp->SetItemSet( aSet, true );
+        m_xTmp->SetItemSet( aSet, false, true );
     }
     else
     {
@@ -606,7 +632,7 @@ IMPL_LINK_NOARG(ApplyStyle, ApplyHdl, LinkParamNone*, void)
                 FN_INSERT_CTRL, FN_INSERT_OBJ_CTRL,
                 FN_TABLE_INSERT_COL_BEFORE,
                 FN_TABLE_INSERT_COL_AFTER, 0};
-            pView->GetViewFrame()->GetBindings().Invalidate(aInval);
+            pView->GetViewFrame().GetBindings().Invalidate(aInval);
         }
         SfxItemSet aTmpSet( *m_pDlg->GetOutputItemSet() );
         if( SfxStyleFamily::Char == m_nFamily )
@@ -614,9 +640,9 @@ IMPL_LINK_NOARG(ApplyStyle, ApplyHdl, LinkParamNone*, void)
             ::ConvertAttrGenToChar(aTmpSet, m_xTmp->GetItemSet());
         }
 
-        m_xTmp->SetItemSet( aTmpSet );
+        m_xTmp->SetItemSet( aTmpSet, false );
 
-        if( SfxStyleFamily::Page == m_nFamily && SvtCTLOptions().IsCTLFontEnabled() )
+        if( SfxStyleFamily::Page == m_nFamily && SvtCTLOptions::IsCTLFontEnabled() )
         {
             const SfxPoolItem *pItem = nullptr;
             if( aTmpSet.GetItemState( m_rDocSh.GetPool().GetTrueWhich( SID_ATTR_FRAMEDIRECTION, false ) , true, &pItem ) == SfxItemState::SET )
@@ -667,7 +693,7 @@ IMPL_LINK_NOARG(ApplyStyle, ApplyHdl, LinkParamNone*, void)
             SfxItemSet aTmpSet(*m_pDlg->GetOutputItemSet());
 
             aTmpSet.ClearItem(XATTR_FILLSTYLE);
-            m_xTmp->SetItemSet(aTmpSet);
+            m_xTmp->SetItemSet(aTmpSet, false);
         }
     }
 
@@ -759,7 +785,7 @@ void SwDocShell::Edit(
     const SfxStyleFamily nFamily,
     SfxStyleSearchBits nMask,
     const bool bNew,
-    const OString& sPage,
+    const OUString& sPage,
     SwWrtShell* pActShell,
     SfxRequest* pReq,
     sal_uInt16 nSlot)
@@ -1159,15 +1185,22 @@ SfxStyleFamily SwDocShell::ApplyStyles(const OUString &rName, SfxStyleFamily nFa
         }
         case SfxStyleFamily::Para:
         {
-            // When outline-folding is enabled, MakeAllOutlineContentTemporarilyVisible makes
-            // application of a paragraph style that has an outline-level greater than the previous
-            // outline node become folded content of the previous outline node if the previous
-            // outline node's content is folded.
-            MakeAllOutlineContentTemporarilyVisible a(GetDoc());
-            // #i62675#
-            // clear also list attributes at affected text nodes, if paragraph
-            // style has the list style attribute set.
-            pSh->SetTextFormatColl( pStyle->GetCollection(), true );
+            if (pSh->GetPostItMgr() && pSh->GetPostItMgr()->HasActiveSidebarWin())
+            {
+                pSh->GetPostItMgr()->GetActiveSidebarWin()->GetOutlinerView()->SetStyleSheet(rName);
+            }
+            else
+            {
+                // When outline-folding is enabled, MakeAllOutlineContentTemporarilyVisible makes
+                // application of a paragraph style that has an outline-level greater than the previous
+                // outline node become folded content of the previous outline node if the previous
+                // outline node's content is folded.
+                MakeAllOutlineContentTemporarilyVisible a(GetDoc());
+                // #i62675#
+                // clear also list attributes at affected text nodes, if paragraph
+                // style has the list style attribute set.
+                pSh->SetTextFormatColl( pStyle->GetCollection(), true );
+            }
             break;
         }
         case SfxStyleFamily::Frame:
@@ -1650,7 +1683,7 @@ void SwDocShell::LoadStyles_( SfxObjectShell& rSource, bool bPreserveCurrentDocu
 void SwDocShell::FormatPage(
     weld::Window* pDialogParent,
     const OUString& rPage,
-    const OString& rPageId,
+    const OUString& rPageId,
     SwWrtShell& rActShell,
     SfxRequest* pRequest)
 {

@@ -208,7 +208,7 @@ SdPresLayoutTemplateDlg::~SdPresLayoutTemplateDlg()
 {
 }
 
-void SdPresLayoutTemplateDlg::PageCreated(const OString& rId, SfxTabPage &rPage)
+void SdPresLayoutTemplateDlg::PageCreated(const OUString& rId, SfxTabPage &rPage)
 {
     SfxAllItemSet aSet(*(aInputSet.GetPool()));
 

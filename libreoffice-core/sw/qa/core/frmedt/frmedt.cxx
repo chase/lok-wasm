@@ -90,7 +90,8 @@ CPPUNIT_TEST_FIXTURE(SwCoreFrmedtTest, testVertPosFromBottomBoundingBox)
 
     // Get the absolute position of the top of the page bottom margin area.
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    SwTwips nPagePrintAreaBottom = getXPath(pXmlDoc, "//page/infos/prtBounds", "bottom").toInt32();
+    SwTwips nPagePrintAreaBottom
+        = getXPath(pXmlDoc, "//page/infos/prtBounds"_ostr, "bottom"_ostr).toInt32();
 
     // Calculate the allowed bounding box of the shape, e.g. the shape's position & size dialog uses
     // this to limit the vertical position to sensible values.
@@ -155,7 +156,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreFrmedtTest, testTextBoxSelectCursorPos)
     SwDoc* pDoc = getSwDoc();
     SdrPage* pPage = pDoc->getIDocumentDrawModelAccess().GetDrawModel()->GetPage(0);
     SdrObject* pFlyObject = pPage->GetObj(1);
-    SwDrawContact* pFlyContact = static_cast<SwDrawContact*>(pFlyObject->GetUserCall());
+    SwContact* pFlyContact = static_cast<SwContact*>(pFlyObject->GetUserCall());
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(RES_FLYFRMFMT), pFlyContact->GetFormat()->Which());
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
     pWrtShell->SelectObj(Point(), 0, pFlyObject);
@@ -194,8 +195,8 @@ CPPUNIT_TEST_FIXTURE(SwCoreFrmedtTest, testSplitFlyInsertCaption)
 
     // Then make sure the insertion finishes and now this is just a plain table-in-frame:
     SwDoc* pDoc = getSwDoc();
-    SwFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
-    SwFrameFormat* pFly = rFlys[0];
+    sw::SpzFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormat* pFly = rFlys[0];
     CPPUNIT_ASSERT(!pFly->GetAttrSet().GetFlySplit().GetValue());
 }
 
@@ -206,7 +207,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreFrmedtTest, testSplitFlyUnfloat)
     SwDoc* pDoc = getSwDocShell()->GetDoc();
     CPPUNIT_ASSERT(pDoc->GetUndoManager().IsUndoEnabled());
     pDoc->GetUndoManager().EnableUndo(false);
-    SwFrameFormats& rFlyFormats = *pDoc->GetSpzFrameFormats();
+    sw::FrameFormats<sw::SpzFrameFormat*>& rFlyFormats = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT(rFlyFormats.empty());
     // Insert a table:
     SwWrtShell* pWrtShell = getSwDocShell()->GetWrtShell();

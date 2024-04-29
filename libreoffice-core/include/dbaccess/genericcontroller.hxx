@@ -25,6 +25,7 @@
 #include <deque>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -57,11 +58,11 @@
 #include <dbaccess/controllerframe.hxx>
 #include <dbaccess/dbaccessdllapi.h>
 #include <dbaccess/IController.hxx>
-#include <osl/mutex.hxx>
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
 #include <tools/link.hxx>
 #include <vcl/vclptr.hxx>
+#include <sfx2/userinputinterception.hxx>
 
 namespace com::sun::star {
     namespace awt { class XKeyHandler; }
@@ -207,9 +208,7 @@ namespace dbaui
         SupportedFeatures               m_aSupportedFeatures;
         ::comphelper::NamedValueCollection
                                         m_aInitParameters;
-
-        ::std::unique_ptr< OGenericUnoController_Data >
-                                        m_pData;
+        ::sfx2::UserInputInterception   m_aUserInputInterception;
         VclPtr<ODataView>               m_pView;                // our (VCL) "main window"
 
 #ifdef DBG_UTIL
@@ -233,7 +232,7 @@ namespace dbaui
         ::std::deque< FeatureListener >
                                 m_aFeaturesToInvalidate;
 
-        ::osl::Mutex            m_aFeatureMutex;        // locked when features are append to or remove from deque
+        std::mutex              m_aFeatureMutex;        // locked when features are append to or remove from deque
         StateCache              m_aStateCache;          // save the current status of feature state
         Dispatch                m_arrStatusListener;    // all our listeners where we dispatch status changes
         OAsynchronousLink       m_aAsyncInvalidateAll;
@@ -374,6 +373,8 @@ namespace dbaui
         void ImplInvalidateFeature( sal_Int32 _nId, const css::uno::Reference< css::frame::XStatusListener >& _xListener, bool _bForceBroadcast );
 
         void ImplBroadcastFeatureState(const OUString& _rFeature, const css::uno::Reference< css::frame::XStatusListener > & xListener, bool _bIgnoreCache);
+
+        void executeUserDefinedFeatures( const css::util::URL& _rFeatureURL, const css::uno::Sequence< css::beans::PropertyValue>& _rArgs );
 
         // link methods
         DECL_DLLPRIVATE_LINK(OnAsyncInvalidateAll, void*, void);

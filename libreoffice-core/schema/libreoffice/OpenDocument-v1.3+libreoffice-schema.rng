@@ -1963,6 +1963,68 @@ xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.
       </rng:interleave>
     </rng:define>
 
+    <!-- TODO no proposal -->
+    <rng:define name="text-illustration-index-source">
+      <rng:element name="text:illustration-index-source">
+        <rng:ref name="text-illustration-index-source-attrs"/>
+        <rng:optional>
+          <rng:ref name="text-index-title-template"/>
+        </rng:optional>
+        <rng:optional>
+          <rng:ref name="text-illustration-index-entry-template"/>
+        </rng:optional>
+        <rng:optional>
+          <!-- <rng:ref name="text-index-source-style"/> -->
+          <rng:element name="loext:index-source-style">
+            <rng:attribute name="text:style-name">
+              <rng:ref name="styleNameRef"/>
+            </rng:attribute>
+            <rng:empty/>
+          </rng:element>
+        </rng:optional>
+      </rng:element>
+    </rng:define>
+    <rng:define name="text-object-index-source">
+      <rng:element name="text:object-index-source">
+        <rng:ref name="text-object-index-source-attrs"/>
+        <rng:optional>
+          <rng:ref name="text-index-title-template"/>
+        </rng:optional>
+        <rng:optional>
+          <rng:ref name="text-object-index-entry-template"/>
+        </rng:optional>
+        <rng:optional>
+          <!-- <rng:ref name="text-index-source-style"/> -->
+          <rng:element name="loext:index-source-style">
+            <rng:attribute name="text:style-name">
+              <rng:ref name="styleNameRef"/>
+            </rng:attribute>
+            <rng:empty/>
+          </rng:element>
+        </rng:optional>
+      </rng:element>
+    </rng:define>
+    <rng:define name="text-table-index-source">
+      <rng:element name="text:table-index-source">
+        <rng:ref name="text-illustration-index-source-attrs"/>
+        <rng:optional>
+          <rng:ref name="text-index-title-template"/>
+        </rng:optional>
+        <rng:optional>
+          <rng:ref name="text-table-index-entry-template"/>
+        </rng:optional>
+        <rng:optional>
+          <!-- <rng:ref name="text-index-source-style"/> -->
+          <rng:element name="loext:index-source-style">
+            <rng:attribute name="text:style-name">
+              <rng:ref name="styleNameRef"/>
+            </rng:attribute>
+            <rng:empty/>
+          </rng:element>
+        </rng:optional>
+      </rng:element>
+    </rng:define>
+
     <!-- Belongs to project MCGR (Armin Le Grand) LO 7.6 -->
     <rng:define name="draw-gradient">
       <rng:element name="draw:gradient">
@@ -1983,6 +2045,61 @@ xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.
         </rng:zeroOrMore>
       </rng:element>
     </rng:define>
+
+    <rng:define name="number-scientific-number">
+      <rng:element name="number:scientific-number">
+        <rng:ref name="number-scientific-number-attlist"/>
+        <rng:ref name="common-decimal-places-attlist"/>
+        <rng:ref name="common-number-attlist"/>
+        <!-- TODO no proposal -->
+        <rng:zeroOrMore>
+          <rng:ref name="number-embedded-text"/>
+        </rng:zeroOrMore>
+        <rng:empty/>
+      </rng:element>
+    </rng:define>
+    <rng:define name="number-text">
+      <rng:element name="number:text">
+        <rng:optional>
+          <rng:ref name="number-text-attlist"/>
+         </rng:optional>
+        <rng:text/>
+      </rng:element>
+    </rng:define>
+
+    <!-- Adds hidden option to named ranges -->
+    <rng:define name="table-named-range-attlist">
+    <rng:attribute name="table:name">
+      <rng:ref name="string"/>
+    </rng:attribute>
+    <rng:attribute name="table:cell-range-address">
+      <rng:ref name="cellRangeAddress"/>
+    </rng:attribute>
+    <rng:optional>
+      <rng:attribute name="table:base-cell-address">
+        <rng:ref name="cellAddress"/>
+      </rng:attribute>
+    </rng:optional>
+    <rng:optional>
+      <rng:attribute name="table:range-usable-as">
+        <rng:choice>
+          <rng:value>none</rng:value>
+          <rng:list>
+            <rng:oneOrMore>
+              <rng:choice>
+                <rng:value>print-range</rng:value>
+                <rng:value>filter</rng:value>
+                <rng:value>repeat-row</rng:value>
+                <rng:value>repeat-column</rng:value>
+                <!-- The option "hidden" is the new value for "range-usable-as" -->
+                <rng:value>hidden</rng:value>
+              </rng:choice>
+            </rng:oneOrMore>
+          </rng:list>
+        </rng:choice>
+      </rng:attribute>
+    </rng:optional>
+  </rng:define>
 
    </rng:include>
 
@@ -2705,6 +2822,53 @@ xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.
     </rng:optional>
   </rng:define>
 
+  <rng:define name="common-number-attlist" combine="interleave">
+    <!-- TODO no proposal,  -->
+    <rng:optional>
+      <rng:attribute name="loext:max-blank-integer-digits">
+        <rng:ref name="positiveInteger"/>
+      </rng:attribute>
+    </rng:optional>
+  </rng:define>
+
+  <rng:define name="number-embedded-text-attlist" combine="interleave">
+    <!-- TODO no proposal,  -->
+    <rng:optional>
+      <rng:attribute name="loext:blank-width-char">
+        <rng:ref name="string"/>
+      </rng:attribute>
+    </rng:optional>
+  </rng:define>
+
+  <!-- TODO no proposal,  -->
+  <rng:define name="number-text-attlist">
+    <rng:interleave>
+      <rng:optional>
+        <rng:attribute name="loext:blank-width-char">
+          <rng:ref name="string"/>
+        </rng:attribute>
+      </rng:optional>
+    </rng:interleave>
+  </rng:define>
+
+  <!-- TODO no proposal,  -->
+  <rng:define name="number-scientific-number-attlist" combine="interleave">
+    <rng:optional>
+      <rng:attribute name="loext:exponent-lowercase">
+        <rng:ref name="boolean"/>
+      </rng:attribute>
+    </rng:optional>
+  </rng:define>
+
+  <!-- TODO no proposal,  -->
+  <rng:define name="number-scientific-number-attlist" combine="interleave">
+    <rng:optional>
+      <rng:attribute name="loext:blank-exponent-digits">
+        <rng:ref name="positiveInteger"/>
+      </rng:attribute>
+    </rng:optional>
+  </rng:define>
+
   <!-- TODO no proposal -->
   <rng:define name="table-data-pilot-level-attlist" combine="interleave">
     <rng:optional>
@@ -3223,6 +3387,15 @@ xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.
     </rng:optional>
   </rng:define>
 
+  <!-- TODO no proposal -->
+  <rng:define name="style-table-cell-properties-attlist" combine="interleave">
+    <rng:optional>
+      <rng:attribute name="loext:text-changes-only">
+        <rng:ref name="boolean"/>
+      </rng:attribute>
+    </rng:optional>
+  </rng:define>
+
   <!-- https://issues.oasis-open.org/browse/OFFICE-4108 -->
   <rng:define name="common-num-format-prefix-suffix-attlist" combine="interleave">
     <rng:optional>
@@ -3289,6 +3462,9 @@ xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.
             <rng:name>text:isbn</rng:name>
             <rng:name>text:issn</rng:name>
             <rng:name>loext:local-url</rng:name>
+            <!-- TODO no proposal -->
+            <rng:name>loext:target-type</rng:name>
+            <rng:name>loext:target-url</rng:name>
           </rng:choice>
           <rng:ref name="string"/>
         </rng:attribute>
@@ -3623,13 +3799,7 @@ xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.
   </rng:define>
 
   <rng:define name="draw-frame-attlist" combine="interleave">
-    <!-- https://issues.oasis-open.org/browse/OFFICE-4136 -->
-    <rng:optional>
-      <rng:attribute name="loext:decorative">
-        <rng:ref name="boolean"/>
-      </rng:attribute>
-    </rng:optional>
-    <!-- TODO(vmiklos) no proposal for multi-page floating tables -->
+    <!-- https://issues.oasis-open.org/browse/OFFICE-4150 Frames may break between pages in text documents -->
     <rng:optional>
       <rng:attribute name="loext:may-break-between-pages">
         <rng:ref name="boolean"/>
@@ -3638,6 +3808,7 @@ xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.
   </rng:define>
 
   <rng:define name="style-graphic-properties-attlist" combine="interleave">
+    <!-- https://issues.oasis-open.org/browse/OFFICE-4142 -->
     <rng:optional>
       <rng:attribute name="loext:decorative">
         <rng:ref name="boolean"/>
@@ -3712,4 +3883,17 @@ xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.
     </rng:element>
   </rng:define>
 
+  <!-- TODO no proposal, belongs to commit 33ef17ed, 2010-03-02 -->
+  <rng:define name="common-draw-shape-with-styles-attlist" combine="interleave">
+    <rng:optional>
+      <rng:attribute name="drawooo:display">
+        <rng:choice>
+          <rng:value>always</rng:value>
+          <rng:value>screen</rng:value>
+          <rng:value>printer</rng:value>
+          <rng:value>none</rng:value>
+        </rng:choice>
+      </rng:attribute>
+    </rng:optional>
+  </rng:define>
 </rng:grammar>

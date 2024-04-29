@@ -46,7 +46,6 @@
 #include <textcat.h>
 #endif
 
-using namespace ::std;
 using namespace ::osl;
 using namespace ::cppu;
 using namespace ::com::sun::star;
@@ -170,8 +169,8 @@ Locale SAL_CALL LangGuess_Impl::guessPrimaryLanguage(
     OString o( OUStringToOString( rText.subView(nStartPos, nLen), RTL_TEXTENCODING_UTF8 ) );
     Guess g = m_aGuesser.GuessPrimaryLanguage(o.getStr());
     lang::Locale aRes;
-    aRes.Language   = OUString::createFromAscii( g.GetLanguage().c_str() );
-    aRes.Country    = OUString::createFromAscii( g.GetCountry().c_str() );
+    aRes.Language   = OUString::createFromAscii( g.GetLanguage() );
+    aRes.Country    = OUString::createFromAscii( g.GetCountry() );
     return aRes;
 }
 
@@ -194,15 +193,15 @@ uno::Sequence< Locale > SAL_CALL LangGuess_Impl::getAvailableLanguages(  )
     EnsureInitialized();
 
     Sequence< css::lang::Locale > aRes;
-    vector<Guess> gs = m_aGuesser.GetAllManagedLanguages();
+    std::vector<Guess> gs = m_aGuesser.GetAllManagedLanguages();
     aRes.realloc(gs.size());
 
     css::lang::Locale *pRes = aRes.getArray();
 
     for(size_t i = 0; i < gs.size() ; i++ ){
         css::lang::Locale current_aRes;
-        current_aRes.Language   = OUString::createFromAscii( gs[i].GetLanguage().c_str() );
-        current_aRes.Country    = OUString::createFromAscii( gs[i].GetCountry().c_str() );
+        current_aRes.Language   = OUString::createFromAscii( gs[i].GetLanguage() );
+        current_aRes.Country    = OUString::createFromAscii( gs[i].GetCountry() );
         pRes[i] = current_aRes;
     }
 
@@ -216,15 +215,15 @@ uno::Sequence< Locale > SAL_CALL LangGuess_Impl::getEnabledLanguages(  )
     EnsureInitialized();
 
     Sequence< css::lang::Locale > aRes;
-    vector<Guess> gs = m_aGuesser.GetAvailableLanguages();
+    std::vector<Guess> gs = m_aGuesser.GetAvailableLanguages();
     aRes.realloc(gs.size());
 
     css::lang::Locale *pRes = aRes.getArray();
 
     for(size_t i = 0; i < gs.size() ; i++ ){
         css::lang::Locale current_aRes;
-        current_aRes.Language   = OUString::createFromAscii( gs[i].GetLanguage().c_str() );
-        current_aRes.Country    = OUString::createFromAscii( gs[i].GetCountry().c_str() );
+        current_aRes.Language   = OUString::createFromAscii( gs[i].GetLanguage() );
+        current_aRes.Country    = OUString::createFromAscii( gs[i].GetCountry() );
         pRes[i] = current_aRes;
     }
 
@@ -238,15 +237,15 @@ uno::Sequence< Locale > SAL_CALL LangGuess_Impl::getDisabledLanguages(  )
     EnsureInitialized();
 
     Sequence< css::lang::Locale > aRes;
-    vector<Guess> gs = m_aGuesser.GetUnavailableLanguages();
+    std::vector<Guess> gs = m_aGuesser.GetUnavailableLanguages();
     aRes.realloc(gs.size());
 
     css::lang::Locale *pRes = aRes.getArray();
 
     for(size_t i = 0; i < gs.size() ; i++ ){
         css::lang::Locale current_aRes;
-        current_aRes.Language   = OUString::createFromAscii( gs[i].GetLanguage().c_str() );
-        current_aRes.Country    = OUString::createFromAscii( gs[i].GetCountry().c_str() );
+        current_aRes.Language   = OUString::createFromAscii( gs[i].GetLanguage() );
+        current_aRes.Country    = OUString::createFromAscii( gs[i].GetCountry() );
         pRes[i] = current_aRes;
     }
 
@@ -262,7 +261,7 @@ void SAL_CALL LangGuess_Impl::disableLanguages(
 
     for (const Locale& rLanguage : rLanguages)
     {
-        string language;
+        std::string language;
 
         OString l = OUStringToOString( rLanguage.Language, RTL_TEXTENCODING_ASCII_US );
         OString c = OUStringToOString( rLanguage.Country, RTL_TEXTENCODING_ASCII_US );
@@ -283,7 +282,7 @@ void SAL_CALL LangGuess_Impl::enableLanguages(
 
     for (const Locale& rLanguage : rLanguages)
     {
-        string language;
+        std::string language;
 
         OString l = OUStringToOString( rLanguage.Language, RTL_TEXTENCODING_ASCII_US );
         OString c = OUStringToOString( rLanguage.Country, RTL_TEXTENCODING_ASCII_US );

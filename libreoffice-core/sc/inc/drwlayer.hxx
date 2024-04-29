@@ -118,6 +118,7 @@ public:
     virtual SdrModel* AllocModel() const override;
     virtual void    SetChanged( bool bFlg = true ) override;
 
+    void            CreateDefaultStyles();
     bool            HasObjects() const;
 
     bool            ScAddPage( SCTAB nTab );
@@ -155,8 +156,9 @@ public:
 
     void            CopyToClip( ScDocument* pClipDoc, SCTAB nTab, const tools::Rectangle& rRange );
     void            CopyFromClip( ScDrawLayer* pClipModel,
-                                    SCTAB nSourceTab, const tools::Rectangle& rSourceRange,
-                                    const ScAddress& rDestPos, const tools::Rectangle& rDestRange );
+                                    SCTAB nSourceTab, const ScRange& rSourceRange,
+                                    const ScAddress& rDestPos, const ScRange& rDestRange,
+                                    bool bTransposing = false);
 
     void            SetPageSize(sal_uInt16 nPageNo, const Size& rSize, bool bUpdateNoteCaptionPos,
                                 const ScObjectHandling eObjectHandling = ScObjectHandling::RecalcPosMode);
@@ -213,7 +215,8 @@ public:
     static ScDrawObjData* GetObjDataTab( SdrObject* pObj, SCTAB nTab );
 
     /** Returns true, if the passed object is the caption of a cell note. */
-    static bool     IsNoteCaption( SdrObject* pObj );
+    static bool IsNoteCaption(const ScDrawObjData* pData);
+    static bool IsNoteCaption(SdrObject* pObj) { return IsNoteCaption(GetObjData(pObj)); }
 
     /** Returns the object data, if the passed object is a cell note caption. */
     static ScDrawObjData* GetNoteCaptionData( SdrObject* pObj, SCTAB nTab );
@@ -225,7 +228,7 @@ private:
 public:
     static void     SetGlobalDrawPersist(SfxObjectShell* pPersist);
 private:
-    virtual css::uno::Reference< css::uno::XInterface > createUnoModel() override;
+    virtual css::uno::Reference< css::frame::XModel > createUnoModel() override;
 };
 
 extern bool bDrawIsInUndo; // somewhere as member!

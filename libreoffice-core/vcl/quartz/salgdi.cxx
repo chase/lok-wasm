@@ -18,6 +18,9 @@
  */
 
 #include <sal/config.h>
+
+#include <memory>
+
 #include <sal/log.hxx>
 #include <config_folders.h>
 
@@ -39,10 +42,9 @@
 #include <vcl/svapp.hxx>
 #include <vcl/sysdata.hxx>
 
-#include <quartz/ctfonts.hxx>
 #include <fontsubset.hxx>
 #include <impfont.hxx>
-#include <impfontmetricdata.hxx>
+#include <font/FontMetricData.hxx>
 #include <font/fontsubstitution.hxx>
 #include <font/PhysicalFontCollection.hxx>
 
@@ -61,6 +63,10 @@
 #include <skia/osx/gdiimpl.hxx>
 #endif
 
+#include <quartz/SystemFontList.hxx>
+#include <quartz/CoreTextFont.hxx>
+#include <quartz/CoreTextFontFace.hxx>
+
 using namespace vcl;
 
 namespace {
@@ -74,8 +80,8 @@ public:
 
 bool FontHasCharacter(CTFontRef pFont, const OUString& rString, sal_Int32 nIndex, sal_Int32 nLen)
 {
-    CGGlyph glyphs[nLen];
-    return CTFontGetGlyphsForCharacters(pFont, reinterpret_cast<const UniChar*>(rString.getStr() + nIndex), glyphs, nLen);
+    auto const glyphs = std::make_unique<CGGlyph[]>(nLen);
+    return CTFontGetGlyphsForCharacters(pFont, reinterpret_cast<const UniChar*>(rString.getStr() + nIndex), glyphs.get(), nLen);
 }
 
 }
@@ -118,23 +124,6 @@ bool CoreTextGlyphFallbackSubstititution::FindFontSubstitute(vcl::font::FontSele
     }
 
     return bFound;
-}
-
-CoreTextFontFace::CoreTextFontFace( const FontAttributes& rDFA, CTFontDescriptorRef xFontDescriptor )
-  : vcl::font::PhysicalFontFace( rDFA )
-  , mxFontDescriptor( xFontDescriptor )
-{
-    CFRetain(mxFontDescriptor);
-}
-
-CoreTextFontFace::~CoreTextFontFace()
-{
-    CFRelease(mxFontDescriptor);
-}
-
-sal_IntPtr CoreTextFontFace::GetFontId() const
-{
-    return reinterpret_cast<sal_IntPtr>(mxFontDescriptor);
 }
 
 AquaSalGraphics::AquaSalGraphics(bool bPrinter)
@@ -208,7 +197,7 @@ void AquaSalGraphics::SetTextColor( Color nColor )
     maShared.maTextColor = nColor;
 }
 
-void AquaSalGraphics::GetFontMetric(ImplFontMetricDataRef& rxFontMetric, int nFallbackLevel)
+void AquaSalGraphics::GetFontMetric(FontMetricDataRef& rxFontMetric, int nFallbackLevel)
 {
     if (nFallbackLevel < MAX_FALLBACK && mpFont[nFallbackLevel])
     {
@@ -306,10 +295,10 @@ bool AquaSalGraphics::AddTempDevFont(vcl::font::PhysicalFontCollection*,
 
 void AquaSalGraphics::DrawTextLayout(const GenericSalLayout& rLayout)
 {
-    mpBackend->drawTextLayout(rLayout, rLayout.GetTextRenderModeForResolutionIndependentLayout());
+    mpBackend->drawTextLayout(rLayout);
 }
 
-void AquaGraphicsBackend::drawTextLayout(const GenericSalLayout& rLayout, bool bTextRenderModeForResolutionIndependentLayout)
+void AquaGraphicsBackend::drawTextLayout(const GenericSalLayout& rLayout)
 {
 #ifdef IOS
     if (!mrShared.checkContext())
@@ -330,7 +319,7 @@ void AquaGraphicsBackend::drawTextLayout(const GenericSalLayout& rLayout, bool b
     CTFontRef pCTFont = rFont.GetCTFont();
     CGAffineTransform aRotMatrix = CGAffineTransformMakeRotation(-rFont.mfFontRotation);
 
-    DevicePoint aPos;
+    basegfx::B2DPoint aPos;
     const GlyphItem* pGlyph;
     std::vector<CGGlyph> aGlyphIds;
     std::vector<CGPoint> aGlyphPos;
@@ -397,7 +386,7 @@ void AquaGraphicsBackend::drawTextLayout(const GenericSalLayout& rLayout, bool b
         CGContextSetTextDrawingMode(mrShared.maContextHolder.get(), kCGTextFillStroke);
     }
 
-    if (bTextRenderModeForResolutionIndependentLayout)
+    if (rLayout.GetSubpixelPositioning())
     {
         CGContextSetAllowsFontSubpixelQuantization(mrShared.maContextHolder.get(), false);
         CGContextSetShouldSubpixelQuantizeFonts(mrShared.maContextHolder.get(), false);

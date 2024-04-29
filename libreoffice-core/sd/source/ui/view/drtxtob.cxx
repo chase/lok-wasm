@@ -32,6 +32,7 @@
 #include <editeng/outliner.hxx>
 #include <editeng/unolingu.hxx>
 #include <editeng/kernitem.hxx>
+#include <editeng/editund2.hxx>
 #include <svl/whiter.hxx>
 #include <svl/itempool.hxx>
 #include <svl/stritem.hxx>
@@ -56,12 +57,13 @@
 #include <OutlineViewShell.hxx>
 #include <Window.hxx>
 #include <OutlineView.hxx>
-
-using namespace sd;
-using namespace ::com::sun::star;
+#include <Outliner.hxx>
 
 #define ShellClass_TextObjectBar
+using namespace sd;
 #include <sdslots.hxx>
+
+using namespace ::com::sun::star;
 
 namespace sd {
 
@@ -145,7 +147,7 @@ void TextObjectBar::GetAttrState( SfxItemSet& rSet )
     SfxWhichIter        aIter( rSet );
     sal_uInt16              nWhich = aIter.FirstWhich();
     SfxItemSet          aAttrSet( mpView->GetDoc().GetPool() );
-    bool            bDisableParagraphTextDirection = !SvtCTLOptions().IsCTLFontEnabled();
+    bool            bDisableParagraphTextDirection = !SvtCTLOptions::IsCTLFontEnabled();
     bool            bDisableVerticalText = !SvtCJKOptions::IsVerticalTextEnabled();
 
     mpView->GetAttributes( aAttrSet );
@@ -185,7 +187,7 @@ void TextObjectBar::GetAttrState( SfxItemSet& rSet )
                         pOLV = pOView->GetViewByWindow(mpViewShell->GetActiveWindow());
 
                     if (pOutliner)
-                        pOutliner->getGlobalScale(o3tl::temporary(double()), stretchY, o3tl::temporary(double()), o3tl::temporary(double()));
+                        stretchY = pOutliner->getScalingParameters().fFontY;
 
                     if(pOLV && !pOLV->GetSelection().HasRange())
                     {

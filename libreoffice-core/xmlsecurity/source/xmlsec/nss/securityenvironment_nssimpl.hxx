@@ -29,7 +29,6 @@
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/xml/crypto/XSecurityEnvironment.hpp>
 #include <com/sun/star/xml/crypto/XCertificateCreator.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 
 #include <mutex>
 
@@ -47,14 +46,13 @@ class X509Certificate_NssImpl;
 class SecurityEnvironment_NssImpl : public ::cppu::WeakImplHelper<
     css::xml::crypto::XSecurityEnvironment,
     css::xml::crypto::XCertificateCreator,
-    css::lang::XServiceInfo,
-    css::lang::XUnoTunnel >
+    css::lang::XServiceInfo >
 {
 private:
 
     std::vector< PK11SlotInfo* > m_Slots;
     /// The last used certificate which has the private key for signing.
-    css::uno::Reference<css::security::XCertificate> m_xSigningCertificate;
+    rtl::Reference<X509Certificate_NssImpl> m_xSigningCertificate;
 
     std::mutex m_mutex;
 
@@ -86,11 +84,6 @@ private:
         virtual ::sal_Int32 SAL_CALL getCertificateCharacters( const css::uno::Reference< css::security::XCertificate >& xCert ) override ;
 
         virtual OUString SAL_CALL getSecurityEnvironmentInformation(  ) override;
-
-        //Methods from XUnoTunnel
-        virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
-
-        static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId() ;
 
         /// @throws css::uno::Exception
         /// @throws css::uno::RuntimeException

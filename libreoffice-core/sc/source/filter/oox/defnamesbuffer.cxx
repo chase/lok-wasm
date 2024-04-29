@@ -54,7 +54,7 @@ const sal_uInt32 BIFF12_DEFNAME_VBNAME      = 0x00000004;
 const sal_uInt32 BIFF12_DEFNAME_MACRO       = 0x00000008;
 const sal_uInt32 BIFF12_DEFNAME_BUILTIN     = 0x00000020;
 
-constexpr OUStringLiteral spcOoxPrefix(u"_xlnm.");
+constexpr OUString spcOoxPrefix(u"_xlnm."_ustr);
 
 const char* const sppcBaseNames[] =
 {
@@ -107,10 +107,10 @@ sal_Unicode lclGetBuiltinIdFromPrefixedName( std::u16string_view aModelName )
 }
 
 /** returns the built-in name identifier from a built-in base name, e.g. 'Print_Area'. */
-sal_Unicode lclGetBuiltinIdFromBaseName( const OUString& rModelName )
+sal_Unicode lclGetBuiltinIdFromBaseName( std::u16string_view rModelName )
 {
     for( sal_Unicode cBuiltinId = 0; cBuiltinId < SAL_N_ELEMENTS( sppcBaseNames ); ++cBuiltinId )
-        if( rModelName.equalsIgnoreAsciiCaseAscii( sppcBaseNames[ cBuiltinId ] ) )
+        if( o3tl::equalsIgnoreAsciiCase( rModelName, sppcBaseNames[ cBuiltinId ] ) )
             return cBuiltinId;
     return BIFF_DEFNAME_UNKNOWN;
 }
@@ -223,20 +223,30 @@ void DefinedName::createNameObject( sal_Int32 nIndex )
 
     // special flags for this name
     sal_Int32 nNameFlags = 0;
-    using namespace ::com::sun::star::sheet::NamedRangeFlag;
+    using namespace ::com::sun::star::sheet;
     if( !isGlobalName() ) switch( mcBuiltinId )
     {
         case BIFF_DEFNAME_CRITERIA:
-        case BIFF_DEFNAME_FILTERDATABASE: nNameFlags = FILTER_CRITERIA;               break;
-        case BIFF_DEFNAME_PRINTAREA:      nNameFlags = PRINT_AREA;                    break;
-        case BIFF_DEFNAME_PRINTTITLES:    nNameFlags = COLUMN_HEADER | ROW_HEADER;    break;
+        case BIFF_DEFNAME_FILTERDATABASE:
+            nNameFlags = NamedRangeFlag::FILTER_CRITERIA;
+            break;
+        case BIFF_DEFNAME_PRINTAREA:
+            nNameFlags = NamedRangeFlag::PRINT_AREA;
+            break;
+        case BIFF_DEFNAME_PRINTTITLES:
+            nNameFlags = NamedRangeFlag::COLUMN_HEADER | NamedRangeFlag::ROW_HEADER;
+            break;
     }
+
+    // Set the appropriate flag if it is a hidden named range
+    if (maModel.mbHidden)
+        nNameFlags |= NamedRangeFlag::HIDDEN;
 
     // create the name and insert it into the document, maCalcName will be changed to the resulting name
     if (maModel.mnSheet >= 0)
-        maScRangeData = createLocalNamedRangeObject( maCalcName, ApiTokenSequence(), nIndex, nNameFlags, maModel.mnSheet, maModel.mbHidden );
+        maScRangeData = createLocalNamedRangeObject(maCalcName, nIndex, nNameFlags, maModel.mnSheet);
     else
-        maScRangeData = createNamedRangeObject( maCalcName, ApiTokenSequence(), nIndex, nNameFlags, maModel.mbHidden );
+        maScRangeData = createNamedRangeObject( maCalcName, nIndex, nNameFlags);
     mnTokenIndex = nIndex;
 }
 

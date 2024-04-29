@@ -29,6 +29,7 @@
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <com/sun/star/uno/RuntimeException.hpp>
 
 using namespace ::com::sun::star;
 
@@ -76,24 +77,10 @@ void ValueItemAcc::ParentDestroyed()
     mpParent = nullptr;
 }
 
-const uno::Sequence< sal_Int8 >& ValueItemAcc::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theValueItemAccUnoTunnelId;
-    return theValueItemAccUnoTunnelId.getSeq();
-}
-
-
 ValueItemAcc* ValueItemAcc::getImplementation( const uno::Reference< uno::XInterface >& rxData )
     noexcept
 {
-    try
-    {
-        return comphelper::getFromUnoTunnel<ValueItemAcc>(rxData);
-    }
-    catch(const css::uno::Exception&)
-    {
-        return nullptr;
-    }
+    return dynamic_cast<ValueItemAcc*>(rxData.get());
 }
 
 
@@ -224,15 +211,15 @@ sal_Int64 SAL_CALL ValueItemAcc::getAccessibleStateSet()
         if ( !mbIsTransientChildrenDisabled )
             nStateSet |= accessibility::AccessibleStateType::TRANSIENT;
 
-        // SELECTABLE
         nStateSet |= accessibility::AccessibleStateType::SELECTABLE;
-        //      pStateSet->AddState( accessibility::AccessibleStateType::FOCUSABLE );
+        nStateSet |= accessibility::AccessibleStateType::FOCUSABLE;
 
-        // SELECTED
         if( mpParent->mrParent.GetSelectedItemId() == mpParent->mnId )
         {
+
             nStateSet |= accessibility::AccessibleStateType::SELECTED;
-            //              pStateSet->AddState( accessibility::AccessibleStateType::FOCUSED );
+            if (mpParent->mrParent.HasChildFocus())
+                nStateSet |= accessibility::AccessibleStateType::FOCUSED;
         }
     }
 
@@ -392,11 +379,6 @@ sal_Int32 SAL_CALL ValueItemAcc::getBackground(  )
     return static_cast<sal_Int32>(nColor);
 }
 
-sal_Int64 SAL_CALL ValueItemAcc::getSomething( const uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
 void ValueItemAcc::FireAccessibleEvent( short nEventId, const uno::Any& rOldValue, const uno::Any& rNewValue )
 {
     if( !nEventId )
@@ -406,7 +388,7 @@ void ValueItemAcc::FireAccessibleEvent( short nEventId, const uno::Any& rOldValu
     accessibility::AccessibleEventObject                                                        aEvtObject;
 
     aEvtObject.EventId = nEventId;
-    aEvtObject.Source = static_cast<uno::XWeak*>(this);
+    aEvtObject.Source = getXWeak();
     aEvtObject.NewValue = rNewValue;
     aEvtObject.OldValue = rOldValue;
 
@@ -437,9 +419,10 @@ void ValueSetAcc::FireAccessibleEvent( short nEventId, const uno::Any& rOldValue
     accessibility::AccessibleEventObject                                                        aEvtObject;
 
     aEvtObject.EventId = nEventId;
-    aEvtObject.Source = static_cast<uno::XWeak*>(this);
+    aEvtObject.Source = getXWeak();
     aEvtObject.NewValue = rNewValue;
     aEvtObject.OldValue = rOldValue;
+    aEvtObject.IndexHint = -1;
 
     for (auto const& tmpListener : aTmpListeners)
     {
@@ -452,27 +435,6 @@ void ValueSetAcc::FireAccessibleEvent( short nEventId, const uno::Any& rOldValue
         }
     }
 }
-
-const uno::Sequence< sal_Int8 >& ValueSetAcc::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theValueSetAccUnoTunnelId;
-    return theValueSetAccUnoTunnelId.getSeq();
-}
-
-
-ValueSetAcc* ValueSetAcc::getImplementation( const uno::Reference< uno::XInterface >& rxData )
-    noexcept
-{
-    try
-    {
-        return comphelper::getFromUnoTunnel<ValueSetAcc>(rxData);
-    }
-    catch(const css::uno::Exception&)
-    {
-        return nullptr;
-    }
-}
-
 
 void ValueSetAcc::GetFocus()
 {
@@ -502,7 +464,8 @@ void ValueSetAcc::LoseFocus()
 
 uno::Reference< accessibility::XAccessibleContext > SAL_CALL ValueSetAcc::getAccessibleContext()
 {
-    ThrowIfDisposed();
+    // still allow retrieving a11y context when not disposed yet, but ValueSet is unset
+    ThrowIfDisposed(false);
     return this;
 }
 
@@ -573,7 +536,7 @@ sal_Int64 SAL_CALL ValueSetAcc::getAccessibleIndexInParent()
     }
     catch (const uno::Exception&)
     {
-        TOOLS_WARN_EXCEPTION( "svtools", "OAccessibleContextHelper::getAccessibleIndexInParent" );
+        TOOLS_WARN_EXCEPTION( "svtools", "ValueSetAcc::getAccessibleIndexInParent" );
     }
 
     return nRet;
@@ -662,7 +625,7 @@ lang::Locale SAL_CALL ValueSetAcc::getLocale()
 
 void SAL_CALL ValueSetAcc::addAccessibleEventListener( const uno::Reference< accessibility::XAccessibleEventListener >& rxListener )
 {
-    ThrowIfDisposed();
+    ThrowIfDisposed(false);
     std::unique_lock aGuard (m_aMutex);
 
     if( !rxListener.is() )
@@ -686,7 +649,7 @@ void SAL_CALL ValueSetAcc::addAccessibleEventListener( const uno::Reference< acc
 
 void SAL_CALL ValueSetAcc::removeAccessibleEventListener( const uno::Reference< accessibility::XAccessibleEventListener >& rxListener )
 {
-    ThrowIfDisposed();
+    ThrowIfDisposed(false);
     std::unique_lock aGuard (m_aMutex);
 
     if( rxListener.is() )
@@ -918,21 +881,15 @@ void SAL_CALL ValueSetAcc::deselectAccessibleChild( sal_Int64 nChildIndex )
         mpParent->SetNoSelection();
 }
 
-
-sal_Int64 SAL_CALL ValueSetAcc::getSomething( const uno::Sequence< sal_Int8 >& rId )
+void ValueSetAcc::Invalidate()
 {
-    return comphelper::getSomethingImpl(rId, this);
+    mpParent = nullptr;
 }
-
 
 void ValueSetAcc::disposing(std::unique_lock<std::mutex>& rGuard)
 {
     // Make a copy of the list and clear the original.
     ::std::vector<uno::Reference<accessibility::XAccessibleEventListener> > aListenerListCopy = std::move(mxEventListeners);
-
-    // Reset the pointer to the parent.  It has to be the one who has
-    // disposed us because he is dying.
-    mpParent = nullptr;
 
     if (aListenerListCopy.empty())
         return;
@@ -984,18 +941,20 @@ ValueSetItem* ValueSetAcc::getItem (sal_uInt16 nIndex) const
 }
 
 
-void ValueSetAcc::ThrowIfDisposed()
+void ValueSetAcc::ThrowIfDisposed(bool bCheckParent)
 {
     if (m_bDisposed)
     {
         SAL_WARN("svx", "Calling disposed object. Throwing exception:");
         throw lang::DisposedException (
             "object has been already disposed",
-            static_cast<uno::XWeak*>(this));
+            getXWeak());
     }
-    else
+
+    if (bCheckParent && !mpParent)
     {
-        DBG_ASSERT (mpParent!=nullptr, "ValueSetAcc not disposed but mpParent == NULL");
+        assert(false && "ValueSetAcc not disposed but mpParent == NULL");
+        throw css::uno::RuntimeException("ValueSetAcc not disposed but mpParent == NULL");
     }
 }
 

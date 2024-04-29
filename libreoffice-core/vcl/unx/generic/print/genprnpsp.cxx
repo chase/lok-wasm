@@ -43,6 +43,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <rtl/ustring.hxx>
 #include <sal/log.hxx>
+#include <osl/file.hxx>
 
 #include <utility>
 #include <vcl/gdimtf.hxx>
@@ -225,109 +226,18 @@ static void copyJobDataToJobSetup( ImplJobSetup* pJobSetup, JobData& rData )
     }
 
     // copy the whole context
-    if( pJobSetup->GetDriverData() )
-        std::free( const_cast<sal_uInt8*>(pJobSetup->GetDriverData()) );
 
     sal_uInt32 nBytes;
-    void* pBuffer = nullptr;
+    std::unique_ptr<sal_uInt8[]> pBuffer;
     if( rData.getStreamBuffer( pBuffer, nBytes ) )
     {
-        pJobSetup->SetDriverDataLen( nBytes );
-        pJobSetup->SetDriverData( static_cast<sal_uInt8*>(pBuffer) );
+        pJobSetup->SetDriverData( std::move(pBuffer), nBytes );
     }
     else
     {
-        pJobSetup->SetDriverDataLen( 0 );
-        pJobSetup->SetDriverData( nullptr );
+        pJobSetup->SetDriverData( nullptr, 0 );
     }
     pJobSetup->SetPapersizeFromSetup( rData.m_bPapersizeFromSetup );
-}
-
-// Needs a cleaner abstraction ...
-static bool passFileToCommandLine( const OUString& rFilename, const OUString& rCommandLine )
-{
-    bool bSuccess = false;
-
-    rtl_TextEncoding aEncoding = osl_getThreadTextEncoding();
-    OString aCmdLine(OUStringToOString(rCommandLine, aEncoding));
-    OString aFilename(OUStringToOString(rFilename, aEncoding));
-
-    bool bPipe = aCmdLine.indexOf( "(TMP)" ) == -1;
-
-    // setup command line for exec
-    if( ! bPipe )
-        aCmdLine = aCmdLine.replaceAll("(TMP)", aFilename);
-
-#if OSL_DEBUG_LEVEL > 1
-    SAL_INFO("vcl.unx.print", (bPipe ? "piping to" : "executing")
-            << " commandline: \"" << aCmdLine << "\".");
-    struct stat aStat;
-    SAL_WARN_IF(stat( aFilename.getStr(), &aStat ),
-            "vcl.unx.print", "stat( " << aFilename << " ) failed.");
-    SAL_INFO("vcl.unx.print", "Tmp file " << aFilename
-            << " has modes: "
-            << std::showbase << std::oct
-            << (long)aStat.st_mode);
-#endif
-    const char* argv[4];
-    if( ! ( argv[ 0 ] = getenv( "SHELL" ) ) )
-        argv[ 0 ] = "/bin/sh";
-    argv[ 1 ] = "-c";
-    argv[ 2 ] = aCmdLine.getStr();
-    argv[ 3 ] = nullptr;
-
-    bool bHavePipes = false;
-    int pid, fd[2];
-
-    if( bPipe )
-        bHavePipes = pipe( fd ) == 0;
-    if( ( pid = fork() ) > 0 )
-    {
-        if( bPipe && bHavePipes )
-        {
-            close( fd[0] );
-            char aBuffer[ 2048 ];
-            FILE* fp = fopen( aFilename.getStr(), "r" );
-            while (fp && !feof(fp))
-            {
-                size_t nBytesRead = fread(aBuffer, 1, sizeof( aBuffer ), fp);
-                if (nBytesRead )
-                {
-                    size_t nBytesWritten = write(fd[1], aBuffer, nBytesRead);
-                    OSL_ENSURE(nBytesWritten == nBytesRead, "short write");
-                    if (nBytesWritten != nBytesRead)
-                        break;
-                }
-            }
-            fclose( fp );
-            close( fd[ 1 ] );
-        }
-        int status = 0;
-        if(waitpid( pid, &status, 0 ) != -1)
-        {
-            if( ! status )
-                bSuccess = true;
-        }
-    }
-    else if( ! pid )
-    {
-        if( bPipe && bHavePipes )
-        {
-            close( fd[1] );
-            if( fd[0] != STDIN_FILENO ) // not probable, but who knows :)
-                dup2( fd[0], STDIN_FILENO );
-        }
-        execv( argv[0], const_cast<char**>(argv) );
-        fprintf( stderr, "failed to execute \"%s\"\n", aCmdLine.getStr() );
-        _exit( 1 );
-    }
-    else
-        fprintf( stderr, "failed to fork\n" );
-
-    // clean up the mess
-    unlink( aFilename.getStr() );
-
-    return bSuccess;
 }
 
 static std::vector<OUString> getFaxNumbers()
@@ -344,11 +254,6 @@ static std::vector<OUString> getFaxNumbers()
     return aFaxNumbers;
 }
 
-static bool createPdf( std::u16string_view rToFile, const OUString& rFromFile, const OUString& rCommandLine )
-{
-    return passFileToCommandLine( rFromFile, rCommandLine.replaceAll("(OUTFILE)", rToFile) );
-}
-
 /*
  *  SalInstance
  */
@@ -362,7 +267,6 @@ void SalGenericInstance::configurePspInfoPrinter(PspSalInfoPrinter *pPrinter,
     PrinterInfoManager& rManager( PrinterInfoManager::get() );
     PrinterInfo aInfo( rManager.getPrinterInfo( pQueueInfo->maPrinterName ) );
     pPrinter->m_aJobData = aInfo;
-    pPrinter->m_aPrinterGfx.Init( pPrinter->m_aJobData );
 
     if( pJobSetup->GetDriverData() )
         JobData::constructFromStreamBuffer( pJobSetup->GetDriverData(),
@@ -488,7 +392,7 @@ SalGraphics* PspSalInfoPrinter::AcquireGraphics()
     if( ! m_pGraphics )
     {
         m_pGraphics = GetGenericInstance()->CreatePrintGraphics();
-        m_pGraphics->Init(&m_aJobData, &m_aPrinterGfx);
+        m_pGraphics->Init(&m_aJobData);
         pRet = m_pGraphics.get();
     }
     return pRet;
@@ -520,15 +424,12 @@ bool PspSalInfoPrinter::Setup( weld::Window* pFrame, ImplJobSetup* pJobSetup )
 
     if (SetupPrinterDriver(pFrame, aInfo))
     {
-        aInfo.resolveDefaultBackend();
-        std::free( const_cast<sal_uInt8*>(pJobSetup->GetDriverData()) );
-        pJobSetup->SetDriverData( nullptr );
+        pJobSetup->SetDriverData( nullptr, 0 );
 
         sal_uInt32 nBytes;
-        void* pBuffer = nullptr;
+        std::unique_ptr<sal_uInt8[]> pBuffer;
         aInfo.getStreamBuffer( pBuffer, nBytes );
-        pJobSetup->SetDriverDataLen( nBytes );
-        pJobSetup->SetDriverData( static_cast<sal_uInt8*>(pBuffer) );
+        pJobSetup->SetDriverData( std::move(pBuffer), nBytes );
 
         // copy everything to job setup
         copyJobDataToJobSetup( pJobSetup, aInfo );
@@ -737,6 +638,16 @@ OUString PspSalInfoPrinter::GetPaperBinName( const ImplJobSetup* pJobSetup, sal_
     return OUString();
 }
 
+sal_uInt16 PspSalInfoPrinter::GetPaperBinBySourceIndex( const ImplJobSetup*, sal_uInt16 )
+{
+    return 0xffff;
+}
+
+sal_uInt16  PspSalInfoPrinter::GetSourceIndexByPaperBin(const ImplJobSetup*, sal_uInt16)
+{
+    return 0;
+}
+
 sal_uInt32 PspSalInfoPrinter::GetCapabilities( const ImplJobSetup* pJobSetup, PrinterCapType nType )
 {
     switch( nType )
@@ -772,26 +683,11 @@ sal_uInt32 PspSalInfoPrinter::GetCapabilities( const ImplJobSetup* pJobSetup, Pr
             }
 
         case PrinterCapType::PDF:
-            if( PrinterInfoManager::get().checkFeatureToken( pJobSetup->GetPrinterName(), "pdf" ) )
-                return 1;
-            else
-            {
-                // see if the PPD contains a value to set PDF device
-                JobData aData = PrinterInfoManager::get().getPrinterInfo( pJobSetup->GetPrinterName() );
-                if( pJobSetup->GetDriverData() )
-                    JobData::constructFromStreamBuffer( pJobSetup->GetDriverData(), pJobSetup->GetDriverDataLen(), aData );
-                return aData.m_nPDFDevice > 0 ? 1 : 0;
-            }
+            return 1;
         case PrinterCapType::ExternalDialog:
             return PrinterInfoManager::get().checkFeatureToken( pJobSetup->GetPrinterName(), "external_dialog" ) ? 1 : 0;
         case PrinterCapType::UsePullModel:
-        {
-            // see if the PPD contains a value to set PDF device
-            JobData aData = PrinterInfoManager::get().getPrinterInfo( pJobSetup->GetPrinterName() );
-            if( pJobSetup->GetDriverData() )
-                JobData::constructFromStreamBuffer( pJobSetup->GetDriverData(), pJobSetup->GetDriverDataLen(), aData );
-            return aData.m_nPDFDevice > 0 ? 1 : 0;
-        }
+            return 1;
         default: break;
     }
     return 0;
@@ -802,10 +698,6 @@ sal_uInt32 PspSalInfoPrinter::GetCapabilities( const ImplJobSetup* pJobSetup, Pr
  */
 PspSalPrinter::PspSalPrinter( SalInfoPrinter* pInfoPrinter )
     : m_pInfoPrinter( pInfoPrinter )
-    , m_nCopies( 1 )
-    , m_bCollate( false )
-    , m_bPdf( false )
-    , m_bIsPDFWriterJob( false )
 {
 }
 
@@ -813,109 +705,34 @@ PspSalPrinter::~PspSalPrinter()
 {
 }
 
-static OUString getTmpName()
-{
-    OUString aTmp, aSys;
-    osl_createTempFile( nullptr, nullptr, &aTmp.pData );
-    osl_getSystemPathFromFileURL( aTmp.pData, &aSys.pData );
-
-    return aSys;
-}
-
 bool PspSalPrinter::StartJob(
-    const OUString* pFileName,
-    const OUString& rJobName,
-    const OUString& rAppName,
-    sal_uInt32 nCopies,
-    bool bCollate,
-    bool bDirect,
-    ImplJobSetup* pJobSetup )
+    const OUString* /*pFileName*/,
+    const OUString& /*rJobName*/,
+    const OUString& /*rAppName*/,
+    sal_uInt32 /*nCopies*/,
+    bool /*bCollate*/,
+    bool /*bDirect*/,
+    ImplJobSetup* /*pJobSetup*/ )
 {
-    SAL_INFO( "vcl.unx.print", "PspSalPrinter::StartJob");
-    GetSalInstance()->jobStartedPrinterUpdate();
-    m_bPdf      = false;
-    if (pFileName)
-        m_aFileName = *pFileName;
-    else
-        m_aFileName.clear();
-    m_aTmpFile.clear();
-    m_nCopies   = nCopies;
-    m_bCollate  = bCollate;
-
-    JobData::constructFromStreamBuffer( pJobSetup->GetDriverData(), pJobSetup->GetDriverDataLen(), m_aJobData );
-    if( m_nCopies > 1 )
-    {
-        // in case user did not do anything (m_nCopies=1)
-        // take the default from jobsetup
-        m_aJobData.m_nCopies = m_nCopies;
-        m_aJobData.setCollate( bCollate );
-    }
-
-    int nMode = 0;
-    // check whether this printer is configured as fax
-    const PrinterInfo& rInfo( PrinterInfoManager::get().getPrinterInfo( m_aJobData.m_aPrinterName ) );
-    OUString sPdfDir;
-    if (getPdfDir(rInfo, sPdfDir))
-    {
-        m_bPdf = true;
-        m_aTmpFile = getTmpName();
-        nMode = S_IRUSR | S_IWUSR;
-
-        if( m_aFileName.isEmpty() )
-            m_aFileName = sPdfDir + "/" + rJobName + ".pdf";
-    }
-    m_aPrinterGfx.Init( m_aJobData );
-
-    return m_aPrintJob.StartJob( ! m_aTmpFile.isEmpty() ? m_aTmpFile : m_aFileName, nMode, rJobName, rAppName, m_aJobData, &m_aPrinterGfx, bDirect );
+    OSL_FAIL( "should never be called" );
+    return false;
 }
 
 bool PspSalPrinter::EndJob()
 {
-    bool bSuccess = false;
-    if( m_bIsPDFWriterJob )
-        bSuccess = true;
-    else
-    {
-        bSuccess = m_aPrintJob.EndJob();
-        SAL_INFO( "vcl.unx.print", "PspSalPrinter::EndJob " << bSuccess);
-
-        if( bSuccess && m_bPdf )
-        {
-            const PrinterInfo& rInfo( PrinterInfoManager::get().getPrinterInfo( m_aJobData.m_aPrinterName ) );
-            bSuccess = createPdf( m_aFileName, m_aTmpFile, rInfo.m_aCommand );
-        }
-    }
     GetSalInstance()->jobEndedPrinterUpdate();
-    return bSuccess;
+    return true;
 }
 
-SalGraphics* PspSalPrinter::StartPage( ImplJobSetup* pJobSetup, bool )
+SalGraphics* PspSalPrinter::StartPage( ImplJobSetup*, bool )
 {
-    SAL_INFO( "vcl.unx.print", "PspSalPrinter::StartPage");
-
-    JobData::constructFromStreamBuffer( pJobSetup->GetDriverData(), pJobSetup->GetDriverDataLen(), m_aJobData );
-    m_xGraphics = GetGenericInstance()->CreatePrintGraphics();
-    m_xGraphics->Init(&m_aJobData, &m_aPrinterGfx);
-
-    if( m_nCopies > 1 )
-    {
-        // in case user did not do anything (m_nCopies=1)
-        // take the default from jobsetup
-        m_aJobData.m_nCopies = m_nCopies;
-        m_aJobData.setCollate( m_nCopies > 1 && m_bCollate );
-    }
-
-    m_aPrintJob.StartPage( m_aJobData );
-    m_aPrinterGfx.Init( m_aPrintJob );
-
-    return m_xGraphics.get();
+    OSL_FAIL( "should never be called" );
+    return nullptr;
 }
 
 void PspSalPrinter::EndPage()
 {
-    m_aPrintJob.EndPage();
-    m_aPrinterGfx.Clear();
-    SAL_INFO( "vcl.unx.print", "PspSalPrinter::EndPage");
+    OSL_FAIL( "should never be called" );
 }
 
 namespace {
@@ -962,8 +779,6 @@ bool PspSalPrinter::StartJob( const OUString* i_pFileName, const OUString& i_rJo
                               ImplJobSetup* i_pSetupData, vcl::PrinterController& i_rController )
 {
     SAL_INFO( "vcl.unx.print", "StartJob with controller: pFilename = " << (i_pFileName ? *i_pFileName : "<nil>") );
-    // mark for endjob
-    m_bIsPDFWriterJob = true;
     // reset IsLastPage
     i_rController.setLastPage( false );
     // is this a fax device
@@ -972,9 +787,6 @@ bool PspSalPrinter::StartJob( const OUString* i_pFileName, const OUString& i_rJo
     // update job data
     if( i_pSetupData )
         JobData::constructFromStreamBuffer( i_pSetupData->GetDriverData(), i_pSetupData->GetDriverDataLen(), m_aJobData );
-
-    OSL_ASSERT( m_aJobData.m_nPDFDevice > 0 );
-    m_aJobData.m_nPDFDevice = 1;
 
     // possibly create one job for collated output
     int nCopies = i_rController.getPrinter()->GetCopyCount();
@@ -1216,7 +1028,6 @@ class PrinterUpdate
     DECL_STATIC_LINK( PrinterUpdate, UpdateTimerHdl, Timer*, void );
 public:
     static void update(SalGenericInstance const &rInstance);
-    static void jobStarted() { nActiveJobs++; }
     static void jobEnded();
 };
 
@@ -1271,11 +1082,6 @@ void PrinterUpdate::update(SalGenericInstance const &rInstance)
 void SalGenericInstance::updatePrinterUpdate()
 {
     PrinterUpdate::update(*this);
-}
-
-void SalGenericInstance::jobStartedPrinterUpdate()
-{
-    PrinterUpdate::jobStarted();
 }
 
 void PrinterUpdate::jobEnded()

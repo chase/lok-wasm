@@ -35,6 +35,7 @@
 
 #include <com/sun/star/uno/XInterface.hpp>
 #include <utility>
+#include <filefmt.hxx>
 using namespace com::sun::star::uno;
 
 // SbxVariable
@@ -515,7 +516,7 @@ bool SbxVariable::LoadData( SvStream& rStrm, sal_uInt16 nVer )
     return true;
 }
 
-bool SbxVariable::StoreData( SvStream& rStrm ) const
+std::pair<bool, sal_uInt32> SbxVariable::StoreData( SvStream& rStrm ) const
 {
     rStrm.WriteUChar( 0xFF );      // Marker
     bool bValStore;
@@ -532,16 +533,16 @@ bool SbxVariable::StoreData( SvStream& rStrm ) const
         // So that the method will not be executed in any case!
         // CAST, to avoid const!
         pThis->SetFlag( SbxFlagBits::NoBroadcast );
-        bValStore = SbxValue::StoreData( rStrm );
+        bValStore = SbxValue::StoreData( rStrm ).first;
         pThis->ResetFlag( SbxFlagBits::NoBroadcast );
     }
     else
     {
-        bValStore = SbxValue::StoreData( rStrm );
+        bValStore = SbxValue::StoreData( rStrm ).first;
     }
     if( !bValStore )
     {
-        return false;
+        return { false, 0 };
     }
     write_uInt16_lenPrefixed_uInt8s_FromOUString(rStrm, maName,
                                                       RTL_TEXTENCODING_ASCII_US);
@@ -555,7 +556,7 @@ bool SbxVariable::StoreData( SvStream& rStrm ) const
     {
         rStrm.WriteUChar( 0 );
     }
-    return true;
+    return { true, B_IMG_VERSION_12 };
 }
 
 // SbxInfo
@@ -571,19 +572,19 @@ SbxInfo::SbxInfo( OUString a, sal_uInt32 n )
 void SbxVariable::Dump( SvStream& rStrm, bool bFill )
 {
     OString aBNameStr(OUStringToOString(GetName( SbxNameType::ShortTypes ), RTL_TEXTENCODING_ASCII_US));
-    rStrm.WriteCharPtr( "Variable( " )
-         .WriteOString( OString::number(reinterpret_cast<sal_IntPtr>(this)) ).WriteCharPtr( "==" )
+    rStrm.WriteOString( "Variable( " )
+         .WriteOString( OString::number(reinterpret_cast<sal_IntPtr>(this)) ).WriteOString( "==" )
          .WriteOString( aBNameStr );
     OString aBParentNameStr(OUStringToOString(GetParent()->GetName(), RTL_TEXTENCODING_ASCII_US));
     if ( GetParent() )
     {
-        rStrm.WriteCharPtr( " in parent '" ).WriteOString( aBParentNameStr ).WriteCharPtr( "'" );
+        rStrm.WriteOString( " in parent '" ).WriteOString( aBParentNameStr ).WriteOString( "'" );
     }
     else
     {
-        rStrm.WriteCharPtr( " no parent" );
+        rStrm.WriteOString( " no parent" );
     }
-    rStrm.WriteCharPtr( " ) " );
+    rStrm.WriteOString( " ) " );
 
     // output also the object at object-vars
     if ( GetValues_Impl().eType == SbxOBJECT &&
@@ -591,7 +592,7 @@ void SbxVariable::Dump( SvStream& rStrm, bool bFill )
             GetValues_Impl().pObj != this &&
             GetValues_Impl().pObj != GetParent() )
     {
-        rStrm.WriteCharPtr( " contains " );
+        rStrm.WriteOString( " contains " );
         static_cast<SbxObject*>(GetValues_Impl().pObj)->Dump( rStrm, bFill );
     }
     else

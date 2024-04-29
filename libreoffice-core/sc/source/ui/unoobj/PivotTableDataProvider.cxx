@@ -17,6 +17,7 @@
 
 #include <miscuno.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <unonames.hxx>
 #include <scresid.hxx>
 #include <globstr.hrc>
@@ -60,7 +61,7 @@ constexpr OUStringLiteral constIdCategories(u"categories");
 constexpr OUStringLiteral constIdLabel(u"label");
 constexpr OUStringLiteral constIdData(u"data");
 
-o3tl::span<const SfxItemPropertyMapEntry> lcl_GetDataProviderPropertyMap()
+std::span<const SfxItemPropertyMapEntry> lcl_GetDataProviderPropertyMap()
 {
     static const SfxItemPropertyMapEntry aDataProviderPropertyMap_Impl[] =
     {
@@ -73,7 +74,7 @@ o3tl::span<const SfxItemPropertyMapEntry> lcl_GetDataProviderPropertyMap()
 uno::Reference<frame::XModel> lcl_GetXModel(const ScDocument * pDoc)
 {
     uno::Reference<frame::XModel> xModel;
-    SfxObjectShell* pObjSh(pDoc ? pDoc->GetDocumentShell() : nullptr);
+    ScDocShell* pObjSh(pDoc ? pDoc->GetDocumentShell() : nullptr);
     if (pObjSh)
         xModel.set(pObjSh->GetModel());
     return xModel;
@@ -167,7 +168,7 @@ void PivotTableDataProvider::Notify(SfxBroadcaster& /*rBroadcaster*/, const SfxH
                 m_bNeedsUpdate = true;
                 for (uno::Reference<util::XModifyListener> const & xListener : m_aValueListeners)
                 {
-                    css::chart::ChartDataChangeEvent aEvent(static_cast<cppu::OWeakObject*>(this),
+                    css::chart::ChartDataChangeEvent aEvent(getXWeak(),
                                                             css::chart::ChartDataChangeType_ALL,
                                                             0, 0, 0, 0);
                     xListener->modified(aEvent);

@@ -1047,12 +1047,6 @@ SvStream& SvStream::WriteDouble ( const double& r )
     return *this;
 }
 
-SvStream& SvStream::WriteCharPtr( const char* pBuf )
-{
-    WriteBytes( pBuf, strlen(pBuf) );
-    return *this;
-}
-
 SvStream& SvStream::WriteStream( SvStream& rStream )
 {
     const sal_uInt32 cBufLen = 0x8000;
@@ -1357,20 +1351,6 @@ void SvStream::RefreshBuffer()
     if (m_nCryptMask)
         EncryptBuffer(m_pRWBuf.get(), static_cast<std::size_t>(m_nBufActualLen));
     m_isIoRead = m_isIoWrite = false;
-}
-
-SvStream& SvStream::WriteInt32AsString(sal_Int32 nInt32)
-{
-    auto const buffer = OString::number(nInt32);
-    WriteBytes(buffer.getStr(), buffer.length);
-    return *this;
-}
-
-SvStream& SvStream::WriteUInt32AsString(sal_uInt32 nUInt32)
-{
-    auto const buffer = OString::number(nUInt32);
-    WriteBytes(buffer.getStr(), buffer.length);
-    return *this;
 }
 
 #define CRYPT_BUFSIZE 1024

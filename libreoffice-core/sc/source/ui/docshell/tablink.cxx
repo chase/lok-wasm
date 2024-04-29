@@ -61,8 +61,7 @@ struct TableLink_Impl
     TableLink_Impl() : m_pDocSh( nullptr ) {}
 };
 
-
-ScTableLink::ScTableLink(ScDocShell* pDocSh, OUString aFile,
+ScTableLink::ScTableLink(ScDocShell* pShell, OUString aFile,
                             OUString aFilter, OUString aOpt,
                             sal_Int32 nRefreshDelaySeconds ):
     ::sfx2::SvBaseLink(SfxLinkUpdateMode::ONCALL,SotClipboardFormatId::SIMPLE_FILE),
@@ -75,25 +74,7 @@ ScTableLink::ScTableLink(ScDocShell* pDocSh, OUString aFile,
     bInEdit( false ),
     bAddUndo( true )
 {
-    pImpl->m_pDocSh = pDocSh;
-}
-
-ScTableLink::ScTableLink(SfxObjectShell* pShell, OUString aFile,
-                            OUString aFilter, OUString aOpt,
-                            sal_Int32 nRefreshDelaySeconds ):
-    ::sfx2::SvBaseLink(SfxLinkUpdateMode::ONCALL,SotClipboardFormatId::SIMPLE_FILE),
-    ScRefreshTimer( nRefreshDelaySeconds ),
-    pImpl( new TableLink_Impl ),
-    aFileName(std::move(aFile)),
-    aFilterName(std::move(aFilter)),
-    aOptions(std::move(aOpt)),
-    bInCreate( false ),
-    bInEdit( false ),
-    bAddUndo( true )
-{
-    pImpl->m_pDocSh = static_cast< ScDocShell* >( pShell );
-    SetRefreshHandler( LINK( this, ScTableLink, RefreshHdl ) );
-    SetRefreshControl( &pImpl->m_pDocSh->GetDocument().GetRefreshTimerControlAddress() );
+    pImpl->m_pDocSh = pShell;
 }
 
 ScTableLink::~ScTableLink()
@@ -271,7 +252,7 @@ bool ScTableLink::Refresh(const OUString& rNewFile, const OUString& rNewFilter,
             /*  #i71497# check if external document is loaded successfully,
                 otherwise we may find the empty default sheet "Sheet1" in
                 rSrcDoc, even if the document does not exist. */
-            if( pMed->GetError() == ERRCODE_NONE )
+            if( pMed->GetErrorIgnoreWarning() == ERRCODE_NONE )
             {
                 // no sheet name -> use first sheet
                 if ( !aTabName.isEmpty() && !bAutoTab )
@@ -407,11 +388,6 @@ bool ScTableLink::Refresh(const OUString& rNewFile, const OUString& rNewFilter,
     return true;
 }
 
-IMPL_LINK_NOARG(ScTableLink, RefreshHdl, Timer *, void)
-{
-    Refresh( aFileName, aFilterName, nullptr, GetRefreshDelaySeconds() );
-}
-
 IMPL_LINK( ScTableLink, TableEndEditHdl, ::sfx2::SvBaseLink&, rLink, void )
 {
     pImpl->m_aEndEditLink.Call( rLink );
@@ -422,9 +398,7 @@ IMPL_LINK( ScTableLink, TableEndEditHdl, ::sfx2::SvBaseLink&, rLink, void )
 
 OUString ScDocumentLoader::GetOptions( const SfxMedium& rMedium )
 {
-    SfxItemSet* pSet = rMedium.GetItemSet();
-    const SfxStringItem* pItem;
-    if ( pSet && (pItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS )) )
+    if ( const SfxStringItem* pItem = rMedium.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
         return pItem->GetValue();
 
     return OUString();
@@ -459,7 +433,7 @@ bool ScDocumentLoader::GetFilterName( const OUString& rFileName,
 
     std::shared_ptr<const SfxFilter> pSfxFilter;
     auto pMedium = std::make_unique<SfxMedium>( rFileName, StreamMode::STD_READ );
-    if (pMedium->GetError() == ERRCODE_NONE && !utl::ConfigManager::IsFuzzing())
+    if (pMedium->GetErrorIgnoreWarning() == ERRCODE_NONE && !utl::ConfigManager::IsFuzzing())
     {
         if ( bWithInteraction )
             pMedium->UseInteractionHandler(true);   // #i73992# no longer called from GuessFilter
@@ -472,7 +446,7 @@ bool ScDocumentLoader::GetFilterName( const OUString& rFileName,
     }
 
     bool bOK = false;
-    if ( pMedium->GetError() == ERRCODE_NONE )
+    if ( pMedium->GetErrorIgnoreWarning() == ERRCODE_NONE )
     {
         if ( pSfxFilter )
             rFilter = pSfxFilter->GetFilterName();
@@ -528,7 +502,7 @@ ScDocumentLoader::ScDocumentLoader(const OUString& rFileName,
     pMedium = CreateMedium(rFileName, pFilter, rOptions, pInteractionParent);
     if (xInputStream.is())
         pMedium->setStreamToLoadFrom(xInputStream, true);
-    if ( pMedium->GetError() != ERRCODE_NONE )
+    if ( pMedium->GetErrorIgnoreWarning() != ERRCODE_NONE )
         return ;
 
     pDocShell = new ScDocShell( SfxModelFlags::EMBEDDED_OBJECT | SfxModelFlags::DISABLE_EMBEDDED_SCRIPTS );
@@ -579,17 +553,9 @@ ScDocument* ScDocumentLoader::GetDocument()
 bool ScDocumentLoader::IsError() const
 {
     if ( pDocShell && pMedium )
-        return pMedium->GetError() != ERRCODE_NONE;
+        return pMedium->GetErrorIgnoreWarning() != ERRCODE_NONE;
     else
         return true;
-}
-
-OUString ScDocumentLoader::GetTitle() const
-{
-    if ( pDocShell )
-        return pDocShell->GetTitle();
-    else
-        return OUString();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -152,7 +152,7 @@ void SwDrawShell::InsertPictureFromFile(SdrObject& rObject)
     {
         pSdrView->AddUndo(std::make_unique<SdrUndoAttrObj>(rObject));
 
-        SfxItemSetFixed<XATTR_FILLSTYLE, XATTR_FILLBITMAP> aSet(pSdrView->GetModel()->GetItemPool());
+        SfxItemSetFixed<XATTR_FILLSTYLE, XATTR_FILLBITMAP> aSet(pSdrView->GetModel().GetItemPool());
 
         aSet.Put(XFillStyleItem(drawing::FillStyle_BITMAP));
         aSet.Put(XFillBitmapItem(OUString(), std::move(aGraphic)));
@@ -173,11 +173,11 @@ void SwDrawShell::Execute(SfxRequest &rReq)
     SwWrtShell          &rSh = GetShell();
     SdrView             *pSdrView = rSh.GetDrawView();
     const SfxItemSet    *pArgs = rReq.GetArgs();
-    SfxBindings         &rBnd  = GetView().GetViewFrame()->GetBindings();
+    SfxBindings         &rBnd  = GetView().GetViewFrame().GetBindings();
     sal_uInt16               nSlotId = rReq.GetSlot();
-    bool                 bChanged = pSdrView->GetModel()->IsChanged();
+    bool bChanged = pSdrView->GetModel().IsChanged();
 
-    pSdrView->GetModel()->SetChanged(false);
+    pSdrView->GetModel().SetChanged(false);
 
     const SfxPoolItem* pItem;
     if(pArgs)
@@ -291,15 +291,15 @@ void SwDrawShell::Execute(SfxRequest &rReq)
         {
             FieldUnit eMetric = ::GetDfltMetric( dynamic_cast<SwWebView*>( &rSh.GetView()) != nullptr );
             SW_MOD()->PutItem(SfxUInt16Item(SID_ATTR_METRIC, static_cast< sal_uInt16 >(eMetric)) );
-            SfxViewFrame* pVFrame = GetView().GetViewFrame();
+            SfxViewFrame& rVFrame = GetView().GetViewFrame();
             if (pArgs)
             {
-                pVFrame->SetChildWindow(SvxFontWorkChildWindow::GetChildWindowId(),
+                rVFrame.SetChildWindow(SvxFontWorkChildWindow::GetChildWindowId(),
                     static_cast<const SfxBoolItem&>((pArgs->Get(SID_FONTWORK))).GetValue());
             }
             else
-                pVFrame->ToggleChildWindow( SvxFontWorkChildWindow::GetChildWindowId() );
-            pVFrame->GetBindings().Invalidate(SID_FONTWORK);
+                rVFrame.ToggleChildWindow( SvxFontWorkChildWindow::GetChildWindowId() );
+            rVFrame.GetBindings().Invalidate(SID_FONTWORK);
         }
         break;
         case FN_FORMAT_FOOTNOTE_DLG:
@@ -395,10 +395,10 @@ void SwDrawShell::Execute(SfxRequest &rReq)
             OSL_ENSURE(false, "wrong dispatcher");
             return;
     }
-    if (pSdrView->GetModel()->IsChanged())
+    if (pSdrView->GetModel().IsChanged())
         rSh.SetModified();
     else if (bChanged)
-        pSdrView->GetModel()->SetChanged();
+        pSdrView->GetModel().SetChanged();
 }
 
 void SwDrawShell::GetState(SfxItemSet& rSet)
@@ -479,7 +479,7 @@ void SwDrawShell::GetState(SfxItemSet& rSet)
                 else
                 {
                     const sal_uInt16 nId = SvxFontWorkChildWindow::GetChildWindowId();
-                    rSet.Put(SfxBoolItem( nWhich , GetView().GetViewFrame()->HasChildWindow(nId)));
+                    rSet.Put(SfxBoolItem( nWhich , GetView().GetViewFrame().HasChildWindow(nId)));
                 }
             }
             break;
@@ -563,8 +563,8 @@ void SwDrawShell::ExecFormText(SfxRequest const & rReq)
 {
     SwWrtShell &rSh = GetShell();
     SdrView*    pDrView = rSh.GetDrawView();
-    bool        bChanged = pDrView->GetModel()->IsChanged();
-    pDrView->GetModel()->SetChanged(false);
+    bool bChanged = pDrView->GetModel().IsChanged();
+    pDrView->GetModel().SetChanged(false);
 
     const SdrMarkList& rMarkList = pDrView->GetMarkedObjectList();
 
@@ -580,11 +580,11 @@ void SwDrawShell::ExecFormText(SfxRequest const & rReq)
 
         pDrView->SetAttributes(rSet);
     }
-    if (pDrView->GetModel()->IsChanged())
+    if (pDrView->GetModel().IsChanged())
         rSh.SetModified();
     else
         if (bChanged)
-            pDrView->GetModel()->SetChanged();
+            pDrView->GetModel().SetChanged();
 }
 
 //Return status values for FontWork

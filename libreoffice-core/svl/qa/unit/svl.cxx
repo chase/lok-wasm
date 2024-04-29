@@ -276,13 +276,12 @@ void Test::testNumberFormat()
 
     SvNumberFormatter aFormatter(m_xContext, eLang);
 
-    for (size_t i = 0; i < SAL_N_ELEMENTS(aTests); ++i)
+    for (auto const[eStart, eEnd, nSize, pCodes] : aTests)
     {
-        size_t nStart = aTests[i].eStart;
-        size_t nEnd = aTests[i].eEnd;
-
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Unexpected number of formats for this category.",
-                               aTests[i].nSize, (nEnd - nStart + 1));
+        size_t nStart = eStart;
+        size_t nEnd = eEnd;
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Unexpected number of formats for this category.", nSize,
+                                     (nEnd - nStart + 1));
 
         for (size_t j = nStart; j <= nEnd; ++j)
         {
@@ -292,7 +291,7 @@ void Test::testNumberFormat()
 
             CPPUNIT_ASSERT_MESSAGE("Number format entry is expected, but doesn't exist.", p);
             OUString aCode = p->GetFormatstring();
-            CPPUNIT_ASSERT_EQUAL( OString( aTests[i].pCodes[j-nStart] ), aCode.toUtf8());
+            CPPUNIT_ASSERT_EQUAL(OString( pCodes[j-nStart]), aCode.toUtf8());
         }
     }
 
@@ -566,10 +565,10 @@ void Test::testTdf103060()
     sExpected = "H"; // Heisei era
     checkPreviewString(aFormatter, sCode, fPreviewNumber, eLang, sExpected);
     sCode = "GG";
-    sExpected = u"\u5E73";
+    sExpected = u"\u5E73"_ustr;
     checkPreviewString(aFormatter, sCode, fPreviewNumber, eLang, sExpected);
     sCode = "GGG";
-    sExpected = u"\u5E73\u6210";
+    sExpected = u"\u5E73\u6210"_ustr;
     checkPreviewString(aFormatter, sCode, fPreviewNumber, eLang, sExpected);
 }
 
@@ -1117,9 +1116,9 @@ void Test::testDateInput()
     LanguageType eLang = LANGUAGE_ENGLISH_US;
     SvNumberFormatter aFormatter(m_xContext, eLang);
 
-    for (size_t i=0; i < SAL_N_ELEMENTS(aData); ++i)
+    for (auto const& aEntry : aData)
     {
-        checkDateInput( aFormatter, aData[i][0], aData[i][1]);
+        checkDateInput(aFormatter, aEntry[0], aEntry[1]);
     }
 }
 
@@ -1173,17 +1172,17 @@ void Test::testIsNumberFormat()
         { "1999-11-23 12:34:56,789", false },   // comma not in en-US if 'T' separator is not present,
                                                 // debatable, 'T' "may be omitted by mutual consent of those
                                                 // interchanging data, if ambiguity can be avoided."
-        { "1999-11-23T12:34:56/789", false }
+        { "1999-11-23T12:34:56/789", false },
+        { "−1000", true } // unicode minus
     };
 
-    for (size_t i = 0; i < SAL_N_ELEMENTS(aTests); ++i)
+    for (auto const[pFormat, bTestIsNumber] : aTests)
     {
         sal_uInt32 nIndex = 0;
         double nNumber = 0;
-        OUString aString = OUString::createFromAscii(aTests[i].pFormat);
+        OUString aString = OUString::fromUtf8(pFormat);
         bool bIsNumber = aFormatter.IsNumberFormat(aString, nIndex, nNumber);
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(aTests[i].pFormat, aTests[i].bIsNumber, bIsNumber);
-
+        CPPUNIT_ASSERT_EQUAL_MESSAGE(pFormat, bTestIsNumber, bIsNumber);
     }
 }
 
@@ -1523,7 +1522,7 @@ void Test::testUserDefinedNumberFormats()
     {  // tdf#79399 tdf#101462 Native Number Formats
         sCode = "[NatNum5][$-0404]General\\ ";
         // Chinese upper case number characters for 120
-        sExpected = u"\u58F9\u4F70\u8CB3\u62FE ";
+        sExpected = u"\u58F9\u4F70\u8CB3\u62FE "_ustr;
         checkPreviewString(aFormatter, sCode, 120, eLang, sExpected);
         sCode = "[DBNum2][$-0404]General\\ ";
         checkPreviewString(aFormatter, sCode, 120, eLang, sExpected);
@@ -1583,7 +1582,7 @@ void Test::testUserDefinedNumberFormats()
         // DBNum1 -> NatNum4: Chinese lower case text for 123456789
         // 一億二千三百四十五萬六千七百八十九
         sExpected = u"\u4e00\u5104\u4e8c\u5343\u4e09\u767e\u56db\u5341\u4e94\u842c\u516d\u5343"
-                    u"\u4e03\u767e\u516b\u5341\u4e5d ";
+                    u"\u4e03\u767e\u516b\u5341\u4e5d "_ustr;
         sCode = "[NatNum4][$-0404]General\\ ";
         checkPreviewString(aFormatter, sCode, 123456789, eLang, sExpected);
         sCode = "[DBNum1][$-0404]General\\ ";
@@ -1592,7 +1591,7 @@ void Test::testUserDefinedNumberFormats()
         // DBNum2 -> NatNum5: Chinese upper case text
         // 壹億貳仟參佰肆拾伍萬陸仟柒佰捌拾玖
         sExpected = u"\u58f9\u5104\u8cb3\u4edf\u53c3\u4f70\u8086\u62fe\u4f0d\u842c\u9678\u4edf"
-                    u"\u67d2\u4f70\u634c\u62fe\u7396 ";
+                    u"\u67d2\u4f70\u634c\u62fe\u7396 "_ustr;
         sCode = "[NatNum5][$-0404]General\\ ";
         checkPreviewString(aFormatter, sCode, 123456789, eLang, sExpected);
         sCode = "[DBNum2][$-0404]General\\ ";
@@ -1600,7 +1599,7 @@ void Test::testUserDefinedNumberFormats()
 
         // DBNum3 -> NatNum3: fullwidth text
         // １２３４５６７８９
-        sExpected = u"\uff11\uff12\uff13\uff14\uff15\uff16\uff17\uff18\uff19 ";
+        sExpected = u"\uff11\uff12\uff13\uff14\uff15\uff16\uff17\uff18\uff19 "_ustr;
         sCode = "[NatNum3][$-0404]General\\ ";
         checkPreviewString(aFormatter, sCode, 123456789, eLang, sExpected);
         sCode = "[DBNum3][$-0404]General\\ ";
@@ -1611,7 +1610,7 @@ void Test::testUserDefinedNumberFormats()
         // DBNum1 -> NatNum4: Japanese modern long Kanji text for 123456789
         // 一億二千三百四十五万六千七百八十九
         sExpected = u"\u4e00\u5104\u4e8c\u5343\u4e09\u767e\u56db\u5341\u4e94\u4e07\u516d\u5343"
-                    u"\u4e03\u767e\u516b\u5341\u4e5d ";
+                    u"\u4e03\u767e\u516b\u5341\u4e5d "_ustr;
         sCode = "[NatNum4][$-0411]General\\ ";
         checkPreviewString(aFormatter, sCode, 123456789, eLang, sExpected);
         sCode = "[DBNum1][$-0411]General\\ ";
@@ -1620,7 +1619,7 @@ void Test::testUserDefinedNumberFormats()
         // DBNum2 -> NatNum5: traditional long Kanji text
         // 壱億弐阡参百四拾伍萬六阡七百八拾九
         sExpected = u"\u58f1\u5104\u5f10\u9621\u53c2\u767e\u56db\u62fe\u4f0d\u842c\u516d\u9621"
-                    u"\u4e03\u767e\u516b\u62fe\u4e5d ";
+                    u"\u4e03\u767e\u516b\u62fe\u4e5d "_ustr;
         sCode = "[NatNum5][$-0411]General\\ ";
         checkPreviewString(aFormatter, sCode, 123456789, eLang, sExpected);
         sCode = "[DBNum2][$-0411]General\\ ";
@@ -1628,7 +1627,7 @@ void Test::testUserDefinedNumberFormats()
 
         // DBNum3 -> NatNum3: fullwidth Arabic digits
         // １２３４５６７８９
-        sExpected = u"\uff11\uff12\uff13\uff14\uff15\uff16\uff17\uff18\uff19 ";
+        sExpected = u"\uff11\uff12\uff13\uff14\uff15\uff16\uff17\uff18\uff19 "_ustr;
         sCode = "[NatNum3][$-0411]General\\ ";
         checkPreviewString(aFormatter, sCode, 123456789, eLang, sExpected);
         sCode = "[DBNum3][$-0411]General\\ ";
@@ -1638,7 +1637,7 @@ void Test::testUserDefinedNumberFormats()
 
         // DBNum1 -> NatNum4: Korean lower case characters
         // 一億二千三百四十五万六千七百八十九
-        sExpected = u"\u4e00\u5104\u4e8c\u5343\u4e09\u767e\u56db\u5341\u4e94\u4e07\u516d\u5343\u4e03\u767e\u516b\u5341\u4e5d ";
+        sExpected = u"\u4e00\u5104\u4e8c\u5343\u4e09\u767e\u56db\u5341\u4e94\u4e07\u516d\u5343\u4e03\u767e\u516b\u5341\u4e5d "_ustr;
         sCode = "[NatNum4][$-0412]General\\ ";
         checkPreviewString(aFormatter, sCode, 123456789, eLang, sExpected);
         sCode = "[DBNum1][$-0412]General\\ ";
@@ -1646,7 +1645,7 @@ void Test::testUserDefinedNumberFormats()
 
         // DBNum2 -> NatNum5: Korean upper case characters
         // 壹億貳阡參佰四拾伍萬六阡七佰八拾九
-        sExpected = u"\u58f9\u5104\u8cb3\u9621\u53c3\u4f70\u56db\u62fe\u4f0d\u842c\u516d\u9621\u4e03\u4f70\u516b\u62fe\u4e5d ";
+        sExpected = u"\u58f9\u5104\u8cb3\u9621\u53c3\u4f70\u56db\u62fe\u4f0d\u842c\u516d\u9621\u4e03\u4f70\u516b\u62fe\u4e5d "_ustr;
         sCode = "[NatNum5][$-0412]General\\ ";
         checkPreviewString(aFormatter, sCode, 123456789, eLang, sExpected);
         sCode = "[DBNum2][$-0412]General\\ ";
@@ -1654,7 +1653,7 @@ void Test::testUserDefinedNumberFormats()
 
         // DBNum3 -> NatNum6: fullwidth Arabic digits
         // １억２천３백４십５만６천７백８십９
-        sExpected = u"\uff11\uc5b5\uff12\ucc9c\uff13\ubc31\uff14\uc2ed\uff15\ub9cc\uff16\ucc9c\uff17\ubc31\uff18\uc2ed\uff19 ";
+        sExpected = u"\uff11\uc5b5\uff12\ucc9c\uff13\ubc31\uff14\uc2ed\uff15\ub9cc\uff16\ucc9c\uff17\ubc31\uff18\uc2ed\uff19 "_ustr;
         sCode = "[NatNum6][$-0412]General\\ ";
         checkPreviewString(aFormatter, sCode, 123456789, eLang, sExpected);
         sCode = "[DBNum3][$-0412]General\\ ";
@@ -1662,7 +1661,7 @@ void Test::testUserDefinedNumberFormats()
 
         // DBNum4 -> NatNum10: Hangul characters
         // 일억이천삼백사십오만육천칠백팔십구
-        sExpected = u"\uc77c\uc5b5\uc774\ucc9c\uc0bc\ubc31\uc0ac\uc2ed\uc624\ub9cc\uc721\ucc9c\uce60\ubc31\ud314\uc2ed\uad6c ";
+        sExpected = u"\uc77c\uc5b5\uc774\ucc9c\uc0bc\ubc31\uc0ac\uc2ed\uc624\ub9cc\uc721\ucc9c\uce60\ubc31\ud314\uc2ed\uad6c "_ustr;
         sCode = "[NatNum10][$-0412]General\\ ";
         checkPreviewString(aFormatter, sCode, 123456789, eLang, sExpected);
         sCode = "[DBNum4][$-0412]General\\ ";
@@ -1725,6 +1724,31 @@ void Test::testUserDefinedNumberFormats()
         checkPreviewString(aFormatter, sCode, M_PI, eLang, sExpected);
         sCode =     "YYYY-MM-DD MM:SS.000";
         sExpected = "1900-01-02 23:53.605";
+        checkPreviewString(aFormatter, sCode, M_PI, eLang, sExpected);
+    }
+    {   // tdf#150028 decimals of seconds fraction without truncate on overflow
+        sCode =     "[SS]";
+        sExpected = "271434";
+        checkPreviewString(aFormatter, sCode, M_PI, eLang, sExpected);
+        // One decimal.
+        sCode =     "[SS].0";
+        sExpected = "271433.6";
+        checkPreviewString(aFormatter, sCode, M_PI, eLang, sExpected);
+        // Two decimals.
+        sCode =     "[SS].00";
+        sExpected = "271433.61";
+        checkPreviewString(aFormatter, sCode, M_PI, eLang, sExpected);
+        // Three decimals.
+        sCode =     "[SS].000";
+        sExpected = "271433.605";
+        checkPreviewString(aFormatter, sCode, M_PI, eLang, sExpected);
+    }
+    {   // tdf#156449 Use '?' in exponent of scientific number
+        sCode =     "0.00E+?0";
+        sExpected = "3.14E+ 0"; // before change it was "3.14E+00"
+        checkPreviewString(aFormatter, sCode, M_PI, eLang, sExpected);
+        // There should be at least one '0' in exponent
+        sCode =     "0.00E+??";
         checkPreviewString(aFormatter, sCode, M_PI, eLang, sExpected);
     }
     {   // tdf#33689 use English NfKeywords in non-English language
@@ -1871,16 +1895,16 @@ void Test::testStandardColorIntegrity()
     CPPUNIT_ASSERT_EQUAL( size_t(NF_KEY_LASTCOLOR) - size_t(NF_KEY_FIRSTCOLOR) + 1, nMaxDefaultColors );
     CPPUNIT_ASSERT_EQUAL( nMaxDefaultColors, rStandardColors.size() );
     // Colors must follow same order as in sEnglishKeyword
-    CPPUNIT_ASSERT_EQUAL( rStandardColors[0], COL_BLACK );
-    CPPUNIT_ASSERT_EQUAL( rStandardColors[1], COL_LIGHTBLUE );
-    CPPUNIT_ASSERT_EQUAL( rStandardColors[2], COL_LIGHTGREEN );
-    CPPUNIT_ASSERT_EQUAL( rStandardColors[3], COL_LIGHTCYAN );
-    CPPUNIT_ASSERT_EQUAL( rStandardColors[4], COL_LIGHTRED );
-    CPPUNIT_ASSERT_EQUAL( rStandardColors[5], COL_LIGHTMAGENTA );
-    CPPUNIT_ASSERT_EQUAL( rStandardColors[6], COL_BROWN );
-    CPPUNIT_ASSERT_EQUAL( rStandardColors[7], COL_GRAY );
-    CPPUNIT_ASSERT_EQUAL( rStandardColors[8], COL_YELLOW );
-    CPPUNIT_ASSERT_EQUAL( rStandardColors[9], COL_WHITE );
+    CPPUNIT_ASSERT_EQUAL( COL_BLACK, rStandardColors[0] );
+    CPPUNIT_ASSERT_EQUAL( COL_LIGHTBLUE, rStandardColors[1] );
+    CPPUNIT_ASSERT_EQUAL( COL_LIGHTGREEN, rStandardColors[2] );
+    CPPUNIT_ASSERT_EQUAL( COL_LIGHTCYAN, rStandardColors[3] );
+    CPPUNIT_ASSERT_EQUAL( COL_LIGHTRED, rStandardColors[4] );
+    CPPUNIT_ASSERT_EQUAL( COL_LIGHTMAGENTA, rStandardColors[5] );
+    CPPUNIT_ASSERT_EQUAL( COL_BROWN, rStandardColors[6] );
+    CPPUNIT_ASSERT_EQUAL( COL_GRAY, rStandardColors[7] );
+    CPPUNIT_ASSERT_EQUAL( COL_YELLOW, rStandardColors[8] );
+    CPPUNIT_ASSERT_EQUAL( COL_WHITE, rStandardColors[9] );
 }
 
 void Test::testColorNamesConversion()
@@ -1967,6 +1991,26 @@ CPPUNIT_TEST_FIXTURE(Test, testLanguageNone)
     SvNumberformat const*const pFormat = aFormatter.GetEntry(nKey);
     LocaleDataWrapper ldw(m_xContext, LanguageTag(pFormat->GetLanguage()));
     CPPUNIT_ASSERT_EQUAL(OUString("dd.mm.yyyy"), pFormat->GetMappedFormatstring(keywords, ldw));
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testTdf160306)
+{
+    // Check some cases, where the output of ROUND and of number formatter differed
+    SvNumberFormatter aFormatter(m_xContext, LANGUAGE_ENGLISH_US);
+    sal_uInt32 format = aFormatter.GetEntryKey(u"0.00", LANGUAGE_ENGLISH_US);
+    CPPUNIT_ASSERT(format != NUMBERFORMAT_ENTRY_NOT_FOUND);
+    OUString output;
+    const Color* color;
+    aFormatter.GetOutputString(2697.0649999999996, format, output, &color);
+    // Without the fix in place, this would fail with
+    // - Expected: 2697.07
+    // - Actual  : 2697.06
+    CPPUNIT_ASSERT_EQUAL(u"2697.07"_ustr, output);
+    aFormatter.GetOutputString(57.374999999999993, format, output, &color);
+    // Without the fix in place, this would fail with
+    // - Expected: 57.38
+    // - Actual  : 57.37
+    CPPUNIT_ASSERT_EQUAL(u"57.38"_ustr, output);
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(Test);

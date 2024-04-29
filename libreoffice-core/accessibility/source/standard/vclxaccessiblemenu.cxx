@@ -21,6 +21,7 @@
 
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <vcl/menu.hxx>
 
 
@@ -58,18 +59,6 @@ bool VCLXAccessibleMenu::IsPopupMenuOpen()
 
     return bPopupMenuOpen;
 }
-
-
-// XInterface
-
-
-IMPLEMENT_FORWARD_XINTERFACE2( VCLXAccessibleMenu, VCLXAccessibleMenuItem, VCLXAccessibleMenu_BASE )
-
-
-// XTypeProvider
-
-
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( VCLXAccessibleMenu, VCLXAccessibleMenuItem, VCLXAccessibleMenu_BASE )
 
 
 // XServiceInfo

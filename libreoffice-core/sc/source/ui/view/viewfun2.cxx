@@ -91,6 +91,7 @@
 #include <tools/json_writer.hxx>
 
 #include <officecfg/Office/Calc.hxx>
+#include <sfx2/lokhelper.hxx>
 
 using namespace com::sun::star;
 using ::editeng::SvxBorderLine;
@@ -875,9 +876,7 @@ OUString ScViewFunc::GetAutoSumFormula( const ScRangeList& rRangeList, bool bSub
     ScCompiler aComp(rDoc, rAddr, aArray, rDoc.GetGrammar());
     OUStringBuffer aBuf;
     aComp.CreateStringFromTokenArray(aBuf);
-    OUString aFormula = aBuf.makeStringAndClear();
-    aBuf.append('=');
-    aBuf.append(aFormula);
+    aBuf.insert(0, "=");
     return aBuf.makeStringAndClear();
 }
 
@@ -1065,7 +1064,10 @@ void ScViewFunc::SetPrintRanges( bool bEntireSheet, const OUString* pPrint,
         //  print ranges
 
         if( !bAddPrint )
+        {
             rDoc.ClearPrintRanges( nTab );
+            rDoc.ClearPrintNamedRanges(nTab);
+        }
 
         if( bEntireSheet )
         {
@@ -1139,8 +1141,8 @@ void ScViewFunc::SetPrintRanges( bool bEntireSheet, const OUString* pPrint,
             pNewRanges->GetPrintRangesInfo(aJsonWriter);
 
             SfxViewShell* pViewShell = GetViewData().GetViewShell();
-            const std::string message = aJsonWriter.extractAsStdString();
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_PRINT_RANGES, message.c_str());
+            const OString message = aJsonWriter.finishAndGetAsOString();
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_PRINT_RANGES, message);
         }
 
         pDocSh->GetUndoManager()->AddUndoAction(
@@ -1281,7 +1283,7 @@ void ScViewFunc::MergeCells( bool bApi, bool bDoContents, bool bCenter,
 
             SfxViewShell* pViewShell = GetViewData().GetViewShell();
 
-            pBox->runAsync(pBox, [=](sal_Int32 nRetVal) {
+            weld::DialogController::runAsync(pBox, [=](sal_Int32 nRetVal) {
                 if (nRetVal == RET_OK)
                 {
                     bool bRealDoContents = bDoContents;
@@ -1309,7 +1311,7 @@ void ScViewFunc::MergeCells( bool bApi, bool bDoContents, bool bCenter,
                         SfxRequest aReq(pViewShell->GetViewFrame(), nSlot);
                         if (!bApi && bRealDoContents)
                             aReq.AppendItem(SfxBoolItem(nSlot, bDoContents));
-                        SfxBindings& rBindings = pViewShell->GetViewFrame()->GetBindings();
+                        SfxBindings& rBindings = pViewShell->GetViewFrame().GetBindings();
                         rBindings.Invalidate(nSlot);
                         aReq.Done();
                     }
@@ -1424,7 +1426,8 @@ void ScViewFunc::FillSimple( FillDir eDir )
             UpdateScrollBars();
 
             auto& rDoc = pDocSh->GetDocument();
-            bool bDoAutoSpell = rDoc.GetDocOptions().IsAutoSpell();
+            const ScTabViewShell* pTabViewShell = GetViewData().GetViewShell();
+            const bool bDoAutoSpell = pTabViewShell && pTabViewShell->IsAutoSpell();
             if ( bDoAutoSpell )
             {
                 // Copy AutoSpellData from above(left/right/below) if no selection.
@@ -1499,11 +1502,12 @@ void ScViewFunc::FillAuto( FillDir eDir, SCCOL nStartCol, SCROW nStartRow,
     pDocSh->UpdateOle(GetViewData());
     UpdateScrollBars();
 
-    bool bDoAutoSpell = pDocSh->GetDocument().GetDocOptions().IsAutoSpell();
+    const ScTabViewShell* pTabViewShell = GetViewData().GetViewShell();
+    const bool bDoAutoSpell = pTabViewShell && pTabViewShell->IsAutoSpell();
     if ( bDoAutoSpell )
         CopyAutoSpellData(eDir, nStartCol, nStartRow, nEndCol, nEndRow, nCount);
 
-    ScModelObj* pModelObj = HelperNotifyChanges::getModel(*pDocSh);
+    ScModelObj* pModelObj = pDocSh->GetModel();
 
     ScRangeList aChangeRanges;
     ScRange aChangeRange( aRange );
@@ -2132,7 +2136,7 @@ bool ScViewFunc::SearchAndReplace( const SvxSearchItem* pSearchItem,
             GetFrameWin()->LeaveWait();
             if (!bIsApi)
             {
-                GetViewData().GetViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, pSearchItem->GetSearchString().toUtf8().getStr());
+                GetViewData().GetViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, pSearchItem->GetSearchString().toUtf8());
                 SvxSearchDialogWrapper::SetSearchLabel(SearchLabel::NotFound);
             }
 
@@ -2213,9 +2217,9 @@ bool ScViewFunc::SearchAndReplace( const SvxSearchItem* pSearchItem,
 
                 std::stringstream aStream;
                 boost::property_tree::write_json(aStream, aTree);
-                OString aPayload = aStream.str().c_str();
+                OString aPayload( aStream.str() );
                 SfxViewShell* pViewShell = GetViewData().GetViewShell();
-                pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_RESULT_SELECTION, aPayload.getStr());
+                pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_RESULT_SELECTION, aPayload);
 
                 // Trigger LOK_CALLBACK_TEXT_SELECTION now.
                 MarkDataChanged();
@@ -2750,8 +2754,6 @@ void ScViewFunc::ImportTables( ScDocShell* pSrcShell,
     bool bUndo(rDoc.IsUndoEnabled());
 
     bool bError = false;
-    bool bRefs = false;
-    bool bName = false;
 
     if (rSrcDoc.GetDrawLayer())
         pDocSh->MakeDrawLayer();
@@ -2777,23 +2779,12 @@ void ScViewFunc::ImportTables( ScDocShell* pSrcShell,
     {
         SCTAB nSrcTab = pSrcTabs[i];
         SCTAB nDestTab1=nTab+i;
-        sal_uLong nErrVal = pDocSh->TransferTab( *pSrcShell, nSrcTab, nDestTab1,
+        bool bValid = pDocSh->TransferTab( *pSrcShell, nSrcTab, nDestTab1,
             false, false );     // no insert
 
-        switch (nErrVal)
+        if (!bValid)
         {
-            case 0:                     // internal error or full of errors
-                bError = true;
-                break;
-            case 2:
-                bRefs = true;
-                break;
-            case 3:
-                bName = true;
-                break;
-            case 4:
-                bRefs = bName = true;
-                break;
+            bError = true;
         }
 
     }
@@ -2852,11 +2843,6 @@ void ScViewFunc::ImportTables( ScDocShell* pSrcShell,
     pDocSh->PostPaintExtras();
     pDocSh->PostPaintGridAll();
     pDocSh->SetDocumentModified();
-
-    if (bRefs)
-        ErrorMessage(STR_ABSREFLOST);
-    if (bName)
-        ErrorMessage(STR_NAMECONFLICT);
 }
 
 //  Move/Copy table to another document
@@ -2882,14 +2868,14 @@ void ScViewFunc::MoveTable(sal_uInt16 nDestDocNo, SCTAB nDestTab, bool bCopy,
         SfxStringItem aItem( SID_FILE_NAME, "private:factory/" + STRING_SCAPP );
         SfxStringItem aTarget( SID_TARGETNAME, "_blank" );
 
-        const SfxPoolItem* pRetItem = GetViewData().GetDispatcher().ExecuteList(
-                    SID_OPENDOC, SfxCallMode::API|SfxCallMode::SYNCHRON,
-                    { &aItem, &aTarget });
-        if ( pRetItem )
+        const SfxPoolItemHolder aResult(GetViewData().GetDispatcher().ExecuteList(
+            SID_OPENDOC, SfxCallMode::API|SfxCallMode::SYNCHRON,
+            { &aItem, &aTarget }));
+        if (nullptr != aResult.getItem())
         {
-            if ( auto pObjectItem = dynamic_cast<const SfxObjectItem*>(pRetItem) )
+            if ( auto pObjectItem = dynamic_cast<const SfxObjectItem*>(aResult.getItem()) )
                 pDestShell = dynamic_cast<ScDocShell*>( pObjectItem->GetShell()  );
-            else if ( auto pViewFrameItem = dynamic_cast<const SfxViewFrameItem*>( pRetItem) )
+            else if ( auto pViewFrameItem = dynamic_cast<const SfxViewFrameItem*>(aResult.getItem()))
             {
                 SfxViewFrame* pFrm = pViewFrameItem->GetFrame();
                 if (pFrm)
@@ -2960,7 +2946,7 @@ void ScViewFunc::MoveTable(sal_uInt16 nDestDocNo, SCTAB nDestTab, bool bCopy,
         if (!bNewDoc && bUndo)
             rDestDoc.BeginDrawUndo();      // drawing layer must do its own undo actions
 
-        sal_uLong nErrVal =1;
+        bool bValid = true;
         if(nDestTab==SC_TAB_APPEND)
             nDestTab=rDestDoc.GetTableCount();
         SCTAB nDestTab1=nDestTab;
@@ -2976,19 +2962,19 @@ void ScViewFunc::MoveTable(sal_uInt16 nDestDocNo, SCTAB nDestTab, bool bCopy,
             rDestDoc.CreateValidTabName( aName );
             if ( !rDestDoc.InsertTab( nDestTab1, aName ) )
             {
-                nErrVal = 0;        // total error
+                bValid = false;        // total error
                 break;  // for
             }
             ScRange aRange( 0, 0, TheTabs[j], rDoc.MaxCol(), rDoc.MaxRow(), TheTabs[j] );
             aParam.maRanges.push_back(aRange);
         }
         rDoc.SetClipParam(aParam);
-        if ( nErrVal > 0 )
+        if ( bValid )
         {
             nDestTab1 = nDestTab;
             for(SCTAB nTab : TheTabs)
             {
-                nErrVal = pDestShell->TransferTab( *pDocShell, nTab, nDestTab1, false, false );
+                bValid = pDestShell->TransferTab( *pDocShell, nTab, nDestTab1, false, false );
                 nDestTab1++;
             }
         }
@@ -3007,27 +2993,11 @@ void ScViewFunc::MoveTable(sal_uInt16 nDestDocNo, SCTAB nDestTab, bool bCopy,
         }
 
         GetFrameWin()->LeaveWait();
-        switch (nErrVal)
+
+        if (!bValid)
         {
-            case 0:                     // internal error or full of errors
-            {
-                ErrorMessage(STR_TABINSERT_ERROR);
-                return;
-            }
-            case 2:
-                ErrorMessage(STR_ABSREFLOST);
-            break;
-            case 3:
-                ErrorMessage(STR_NAMECONFLICT);
-            break;
-            case 4:
-            {
-                ErrorMessage(STR_ABSREFLOST);
-                ErrorMessage(STR_NAMECONFLICT);
-            }
-            break;
-            default:
-            break;
+            ErrorMessage(STR_TABINSERT_ERROR);
+            return;
         }
 
         if (!bCopy)
@@ -3200,6 +3170,12 @@ void ScViewFunc::MoveTable(sal_uInt16 nDestDocNo, SCTAB nDestTab, bool bCopy,
             pTabNames.reset();
 
         SCTAB nTab = GetViewData().GetTabNo();
+
+        if (comphelper::LibreOfficeKit::isActive() && !pSrcTabs->empty())
+        {
+            ScModelObj* pModel = pDocShell->GetModel();
+            SfxLokHelper::notifyDocumentSizeChangedAllViews(pModel);
+        }
 
         if (bUndo)
         {
@@ -3470,7 +3446,7 @@ void ScViewFunc::SetSelectionFrameLines( const SvxBorderLine* pLine,
             aNewSet.Put( aBLTRItem );
         }
 
-        ApplyAttributes( &aNewSet, &aOldSet );
+        ApplyAttributes( aNewSet, aOldSet );
     }
     else // if ( eItemState == SfxItemState::DONTCARE )
     {

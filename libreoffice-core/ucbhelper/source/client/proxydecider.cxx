@@ -43,20 +43,19 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <Winhttp.h>
+#include <process.h>
 #endif
 
 using namespace com::sun::star;
 using namespace ucbhelper;
 
-constexpr OUStringLiteral CONFIG_ROOT_KEY = u"org.openoffice.Inet/Settings";
-constexpr OUStringLiteral PROXY_TYPE_KEY = u"ooInetProxyType";
-constexpr OUStringLiteral NO_PROXY_LIST_KEY = u"ooInetNoProxy";
-constexpr OUStringLiteral HTTP_PROXY_NAME_KEY = u"ooInetHTTPProxyName";
-constexpr OUStringLiteral HTTP_PROXY_PORT_KEY = u"ooInetHTTPProxyPort";
-constexpr OUStringLiteral HTTPS_PROXY_NAME_KEY = u"ooInetHTTPSProxyName";
-constexpr OUStringLiteral HTTPS_PROXY_PORT_KEY = u"ooInetHTTPSProxyPort";
-constexpr OUStringLiteral FTP_PROXY_NAME_KEY = u"ooInetFTPProxyName";
-constexpr OUStringLiteral FTP_PROXY_PORT_KEY = u"ooInetFTPProxyPort";
+constexpr OUString CONFIG_ROOT_KEY = u"org.openoffice.Inet/Settings"_ustr;
+constexpr OUString PROXY_TYPE_KEY = u"ooInetProxyType"_ustr;
+constexpr OUString NO_PROXY_LIST_KEY = u"ooInetNoProxy"_ustr;
+constexpr OUString HTTP_PROXY_NAME_KEY = u"ooInetHTTPProxyName"_ustr;
+constexpr OUString HTTP_PROXY_PORT_KEY = u"ooInetHTTPProxyPort"_ustr;
+constexpr OUString HTTPS_PROXY_NAME_KEY = u"ooInetHTTPSProxyName"_ustr;
+constexpr OUString HTTPS_PROXY_PORT_KEY = u"ooInetHTTPSProxyPort"_ustr;
 
 
 namespace ucbhelper
@@ -128,7 +127,6 @@ class InternetProxyDecider_Impl :
     mutable osl::Mutex                       m_aMutex;
     InternetProxyServer                      m_aHttpProxy;
     InternetProxyServer                      m_aHttpsProxy;
-    InternetProxyServer                      m_aFtpProxy;
     const InternetProxyServer                m_aEmptyProxy;
     ProxyType                                m_nProxyType;
     uno::Reference< util::XChangesNotifier > m_xNotifier;
@@ -302,7 +300,7 @@ InternetProxyDecider_Impl::InternetProxyDecider_Impl(
         uno::Reference< lang::XMultiServiceFactory > xConfigProv =
                 configuration::theDefaultProvider::get( rxContext );
 
-        uno::Sequence< uno::Any > aArguments{ uno::Any(OUString( CONFIG_ROOT_KEY )) };
+        uno::Sequence< uno::Any > aArguments{ uno::Any(CONFIG_ROOT_KEY) };
         uno::Reference< uno::XInterface > xInterface(
                     xConfigProv->createInstanceWithArguments(
                         "com.sun.star.configuration.ConfigurationAccess",
@@ -351,14 +349,6 @@ InternetProxyDecider_Impl::InternetProxyDecider_Impl(
                     xNameAccess, HTTPS_PROXY_PORT_KEY, m_aHttpsProxy.nPort );
                 if ( m_aHttpsProxy.nPort == -1 )
                     m_aHttpsProxy.nPort = 443; // standard HTTPS port.
-
-                // *** FTP ***
-                getConfigStringValue(
-                    xNameAccess, FTP_PROXY_NAME_KEY, m_aFtpProxy.aName );
-
-                m_aFtpProxy.nPort = -1;
-                getConfigInt32Value(
-                    xNameAccess, FTP_PROXY_PORT_KEY, m_aFtpProxy.nPort );
             }
 
             // Register as listener for config changes.
@@ -410,9 +400,7 @@ bool InternetProxyDecider_Impl::shouldUseProxy( std::u16string_view rHost,
          ( rHost[ 0 ] != '[' ) )
     {
         // host is given as numeric IPv6 address
-        aBuffer.append( "[" );
-        aBuffer.append( rHost );
-        aBuffer.append( "]" );
+        aBuffer.append( OUString::Concat("[") + rHost + "]" );
     }
     else
     {
@@ -420,20 +408,18 @@ bool InternetProxyDecider_Impl::shouldUseProxy( std::u16string_view rHost,
         aBuffer.append( rHost );
     }
 
-    aBuffer.append( ':' );
-    aBuffer.append( nPort );
-    const OUString aHostAndPort( aBuffer.makeStringAndClear() );
+    aBuffer.append( ":" + OUString::number( nPort ) );
 
     for (auto const& noProxy : m_aNoProxyList)
     {
         if ( bUseFullyQualified )
         {
-            if ( noProxy.second.Matches( aHostAndPort ) )
+            if ( noProxy.second.Matches( aBuffer ) )
                 return false;
         }
         else
         {
-            if ( noProxy.first.Matches( aHostAndPort ) )
+            if ( noProxy.first.Matches( aBuffer ) )
                 return false;
         }
     }
@@ -464,7 +450,7 @@ struct GetPACProxyData
 // Tries to get proxy configuration using WinHttpGetProxyForUrl, which supports Web Proxy Auto-Discovery
 // (WPAD) protocol and manually configured address to get Proxy Auto-Configuration (PAC) file.
 // The WinINet/WinHTTP functions cannot correctly run in a STA COM thread, so use a dedicated thread
-DWORD WINAPI GetPACProxyThread(_In_ LPVOID lpParameter)
+unsigned __stdcall GetPACProxyThread(void* lpParameter)
 {
     assert(lpParameter);
     GetPACProxyData* pData = static_cast<GetPACProxyData*>(lpParameter);
@@ -561,7 +547,8 @@ InternetProxyServer GetPACProxy(const OUString& rProtocol, const OUString& rHost
         }
     }
 
-    HANDLE hThread = CreateThread(nullptr, 0, GetPACProxyThread, &aData, 0, nullptr);
+    HANDLE hThread = reinterpret_cast<HANDLE>(
+        _beginthreadex(nullptr, 0, GetPACProxyThread, &aData, 0, nullptr));
     if (hThread)
     {
         WaitForSingleObject(hThread, INFINITE);
@@ -587,8 +574,9 @@ InternetProxyServer GetUnixSystemProxy(const OUString & rProtocol)
     OUString tmp = OUString::createFromAscii(pEnvProxy);
     if (tmp.getLength() < (rProtocol.getLength() + 3))
         return aProxy;
-    tmp = tmp.copy(rProtocol.getLength() + 3);
-    sal_Int32 x = tmp.indexOf(':');
+    sal_Int32 x = tmp.indexOf("://");
+    sal_Int32 at = tmp.indexOf('@', x == -1 ? 0 : x + 3);
+    x = tmp.indexOf(':', at == -1 ? x == -1 ? 0 : x + 3 : at + 1);
     if (x == -1)
         return aProxy;
     int nPort = o3tl::toInt32(tmp.subView(x + 1));
@@ -686,12 +674,7 @@ InternetProxyServer InternetProxyDecider_Impl::getProxy(
             return m_aEmptyProxy;
     }
 
-    if ( rProtocol.toAsciiLowerCase() == "ftp" )
-    {
-        if ( !m_aFtpProxy.aName.isEmpty() && m_aFtpProxy.nPort >= 0 )
-            return m_aFtpProxy;
-    }
-    else if ( rProtocol.toAsciiLowerCase() == "https" )
+    if (rProtocol.toAsciiLowerCase() == "https")
     {
         if ( !m_aHttpsProxy.aName.isEmpty() )
             return m_aHttpsProxy;
@@ -774,22 +757,6 @@ void SAL_CALL InternetProxyDecider_Impl::changesOccurred(
 
                 if ( m_aHttpsProxy.nPort == -1 )
                     m_aHttpsProxy.nPort = 443; // standard HTTPS port.
-            }
-            else if ( aKey == FTP_PROXY_NAME_KEY )
-            {
-                if ( !( rElem.Element >>= m_aFtpProxy.aName ) )
-                {
-                    OSL_FAIL( "InternetProxyDecider - changesOccurred - "
-                                "Error getting config item value!" );
-                }
-            }
-            else if ( aKey == FTP_PROXY_PORT_KEY )
-            {
-                if ( !( rElem.Element >>= m_aFtpProxy.nPort ) )
-                {
-                    OSL_FAIL( "InternetProxyDecider - changesOccurred - "
-                                "Error getting config item value!" );
-                }
             }
         }
     }
@@ -889,17 +856,10 @@ void InternetProxyDecider_Impl::setNoProxyList(
                 if ( aTmp != aServer.toAsciiLowerCase() )
                 {
                     if ( bIPv6Address )
-                    {
-                        aFullyQualifiedHost.append( "[" );
-                        aFullyQualifiedHost.append( aTmp );
-                        aFullyQualifiedHost.append( "]" );
-                    }
+                        aFullyQualifiedHost.append( "[" + aTmp + "]" );
                     else
-                    {
                         aFullyQualifiedHost.append( aTmp );
-                    }
-                    aFullyQualifiedHost.append( ":" );
-                    aFullyQualifiedHost.append( aPort );
+                    aFullyQualifiedHost.append( ":" + aPort );
                 }
             }
 
@@ -936,23 +896,19 @@ InternetProxyDecider::~InternetProxyDecider()
 }
 
 
-bool InternetProxyDecider::shouldUseProxy( const OUString & rProtocol,
-                                           const OUString & rHost,
-                                           sal_Int32 nPort ) const
-{
-    const InternetProxyServer & rData = m_xImpl->getProxy( rProtocol,
-                                                           rHost,
-                                                           nPort );
-    return !rData.aName.isEmpty();
-}
-
-
-InternetProxyServer InternetProxyDecider::getProxy(
+OUString InternetProxyDecider::getProxy(
                                             const OUString & rProtocol,
                                             const OUString & rHost,
                                             sal_Int32 nPort ) const
 {
-    return m_xImpl->getProxy( rProtocol, rHost, nPort );
+    InternetProxyServer ret(m_xImpl->getProxy(rProtocol, rHost, nPort));
+
+    if (ret.aName.isEmpty() || ret.nPort == -1)
+    {
+        return ret.aName;
+    }
+
+    return ret.aName + ":" + OUString::number(ret.nPort);
 }
 
 } // namespace ucbhelper

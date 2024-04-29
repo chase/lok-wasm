@@ -19,10 +19,10 @@
 
 
 #include <limits.h>
+#include <mutex>
 #include <string_view>
 
 #include <com/sun/star/uno/Any.h>
-#include <osl/mutex.hxx>
 #include <sal/log.hxx>
 
 #include <unotools/pathoptions.hxx>
@@ -57,19 +57,6 @@
 #include "doctemplateslocal.hxx"
 #include <sfxurlrelocator.hxx>
 
-using namespace ::com::sun::star;
-using namespace ::com::sun::star::beans;
-using namespace ::com::sun::star::frame;
-using namespace ::com::sun::star::io;
-using namespace ::com::sun::star::lang;
-using namespace ::com::sun::star::sdbc;
-using namespace ::com::sun::star::uno;
-using namespace ::com::sun::star::ucb;
-using namespace ::com::sun::star::document;
-using namespace ::rtl;
-using namespace ::ucbhelper;
-
-
 #include <sfx2/doctempl.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/sfxresid.hxx>
@@ -82,8 +69,20 @@ using namespace ::ucbhelper;
 #include <vector>
 
 
-constexpr OUStringLiteral TITLE = u"Title";
-constexpr OUStringLiteral TARGET_URL = u"TargetURL";
+using namespace ::com::sun::star;
+using namespace ::com::sun::star::beans;
+using namespace ::com::sun::star::frame;
+using namespace ::com::sun::star::io;
+using namespace ::com::sun::star::lang;
+using namespace ::com::sun::star::sdbc;
+using namespace ::com::sun::star::uno;
+using namespace ::com::sun::star::ucb;
+using namespace ::com::sun::star::document;
+using namespace ::rtl;
+using namespace ::ucbhelper;
+
+constexpr OUString TITLE = u"Title"_ustr;
+constexpr OUString TARGET_URL = u"TargetURL"_ustr;
 
 constexpr OUStringLiteral COMMAND_TRANSFER = u"transfer";
 
@@ -174,7 +173,7 @@ class SfxDocTemplate_Impl : public SvRefBase
     uno::Reference< XPersist >               mxInfo;
     uno::Reference< XDocumentTemplates >     mxTemplates;
 
-    ::osl::Mutex        maMutex;
+    std::mutex          maMutex;
     OUString            maRootURL;
     OUString            maStandardGroup;
     std::vector<std::unique_ptr<RegionData_Impl>> maRegions;
@@ -197,9 +196,10 @@ public:
     void                DecrementLock();
 
     bool            Construct( );
-    void                CreateFromHierarchy( Content &rTemplRoot );
+    void                CreateFromHierarchy( std::unique_lock<std::mutex>& rGuard, Content &rTemplRoot );
     void                ReInitFromComponent();
-    void                AddRegion( const OUString& rTitle,
+    void                AddRegion( std::unique_lock<std::mutex>& rGuard,
+                                   const OUString& rTitle,
                                    Content& rContent );
 
     void                Rescan();
@@ -462,7 +462,7 @@ OUString SfxDocumentTemplates::GetTemplateTargetURLFromComponent( std::u16string
 */
 OUString SfxDocumentTemplates::ConvertResourceString(const OUString& rString)
 {
-    static constexpr rtl::OUStringConstExpr aTemplateNames[] =
+    static constexpr OUString aTemplateNames[] =
     {
         STR_TEMPLATE_NAME1_DEF,
         STR_TEMPLATE_NAME2_DEF,
@@ -496,7 +496,8 @@ OUString SfxDocumentTemplates::ConvertResourceString(const OUString& rString)
         STR_TEMPLATE_NAME30_DEF,
         STR_TEMPLATE_NAME31_DEF,
         STR_TEMPLATE_NAME32_DEF,
-        STR_TEMPLATE_NAME33_DEF
+        STR_TEMPLATE_NAME33_DEF,
+        STR_TEMPLATE_NAME34_DEF
     };
 
     TranslateId STR_TEMPLATE_NAME[] =
@@ -533,7 +534,8 @@ OUString SfxDocumentTemplates::ConvertResourceString(const OUString& rString)
         STR_TEMPLATE_NAME30,
         STR_TEMPLATE_NAME31,
         STR_TEMPLATE_NAME32,
-        STR_TEMPLATE_NAME33
+        STR_TEMPLATE_NAME33,
+        STR_TEMPLATE_NAME34
     };
 
     static_assert(SAL_N_ELEMENTS(aTemplateNames) == SAL_N_ELEMENTS(STR_TEMPLATE_NAME));
@@ -1435,14 +1437,14 @@ SfxDocTemplate_Impl::~SfxDocTemplate_Impl()
 
 void SfxDocTemplate_Impl::IncrementLock()
 {
-    ::osl::MutexGuard aGuard( maMutex );
+    std::unique_lock aGuard( maMutex );
     mnLockCounter++;
 }
 
 
 void SfxDocTemplate_Impl::DecrementLock()
 {
-    ::osl::MutexGuard aGuard( maMutex );
+    std::unique_lock aGuard( maMutex );
     if ( mnLockCounter )
         mnLockCounter--;
 }
@@ -1481,7 +1483,8 @@ void SfxDocTemplate_Impl::DeleteRegion( size_t nIndex )
 
 /*  AddRegion adds a Region to the RegionList
 */
-void SfxDocTemplate_Impl::AddRegion( const OUString& rTitle,
+void SfxDocTemplate_Impl::AddRegion( std::unique_lock<std::mutex>& /*rGuard*/,
+                                     const OUString& rTitle,
                                      Content& rContent )
 {
     auto pRegion = std::make_unique<RegionData_Impl>( this, rTitle );
@@ -1517,7 +1520,7 @@ void SfxDocTemplate_Impl::AddRegion( const OUString& rTitle,
 }
 
 
-void SfxDocTemplate_Impl::CreateFromHierarchy( Content &rTemplRoot )
+void SfxDocTemplate_Impl::CreateFromHierarchy( std::unique_lock<std::mutex>& rGuard, Content &rTemplRoot )
 {
     uno::Reference< XResultSet > xResultSet;
     Sequence< OUString > aProps { TITLE };
@@ -1551,7 +1554,7 @@ void SfxDocTemplate_Impl::CreateFromHierarchy( Content &rTemplRoot )
             const OUString aId = xContentAccess->queryContentIdentifierString();
             Content  aContent( aId, aCmdEnv, comphelper::getProcessComponentContext() );
 
-            AddRegion( xRow->getString( 1 ), aContent );
+            AddRegion( rGuard, xRow->getString( 1 ), aContent );
         }
     }
     catch ( Exception& ) {}
@@ -1560,7 +1563,7 @@ void SfxDocTemplate_Impl::CreateFromHierarchy( Content &rTemplRoot )
 
 bool SfxDocTemplate_Impl::Construct( )
 {
-    ::osl::MutexGuard aGuard( maMutex );
+    std::unique_lock aGuard( maMutex );
 
     if ( mbConstructed )
         return true;
@@ -1587,7 +1590,7 @@ bool SfxDocTemplate_Impl::Construct( )
 
     maStandardGroup = DocTemplLocaleHelper::GetStandardGroupString();
     Content aTemplRoot( aRootContent, aCmdEnv, xContext );
-    CreateFromHierarchy( aTemplRoot );
+    CreateFromHierarchy( aGuard, aTemplRoot );
 
     return true;
 }
@@ -1602,15 +1605,14 @@ void SfxDocTemplate_Impl::ReInitFromComponent()
         uno::Reference < XCommandEnvironment > aCmdEnv;
         Content aTemplRoot( aRootContent, aCmdEnv, comphelper::getProcessComponentContext() );
         Clear();
-        CreateFromHierarchy( aTemplRoot );
+        std::unique_lock aGuard(maMutex);
+        CreateFromHierarchy( aGuard, aTemplRoot );
     }
 }
 
 
 bool SfxDocTemplate_Impl::InsertRegion( std::unique_ptr<RegionData_Impl> pNew, size_t nPos )
 {
-    ::osl::MutexGuard   aGuard( maMutex );
-
     // return false (not inserted) if the entry already exists
     for (auto const& pRegion : maRegions)
         if ( pRegion->Compare( pNew.get() ) == 0 )
@@ -1649,7 +1651,8 @@ void SfxDocTemplate_Impl::Rescan()
             uno::Reference < XCommandEnvironment > aCmdEnv;
 
             Content aTemplRoot( aRootContent, aCmdEnv, comphelper::getProcessComponentContext() );
-            CreateFromHierarchy( aTemplRoot );
+            std::unique_lock aGuard(maMutex);
+            CreateFromHierarchy( aGuard, aTemplRoot );
         }
     }
     catch( const Exception& )
@@ -1703,7 +1706,7 @@ bool SfxDocTemplate_Impl::GetTitleFromURL( const OUString& rURL,
 
 void SfxDocTemplate_Impl::Clear()
 {
-    ::osl::MutexGuard   aGuard( maMutex );
+    std::unique_lock aGuard( maMutex );
     if ( mnLockCounter )
         return;
     maRegions.clear();

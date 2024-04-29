@@ -151,7 +151,7 @@ OUString OutlinerEditEng::GetUndoComment( sal_uInt16 nUndoId ) const
 }
 
 void OutlinerEditEng::DrawingText( const Point& rStartPos, const OUString& rText, sal_Int32 nTextStart, sal_Int32 nTextLen,
-                                   o3tl::span<const sal_Int32> pDXArray, o3tl::span<const sal_Bool> pKashidaArray,
+                                   std::span<const sal_Int32> pDXArray, std::span<const sal_Bool> pKashidaArray,
                                    const SvxFont& rFont, sal_Int32 nPara, sal_uInt8 nRightToLeft,
                                    const EEngineData::WrongSpellVector* pWrongSpellVector,
                                    const SvxFieldData* pFieldData,
@@ -174,9 +174,9 @@ void OutlinerEditEng::DrawingTab( const Point& rStartPos, tools::Long nWidth, co
             bEndOfLine, bEndOfParagraph, rOverlineColor, rTextLineColor );
 }
 
-OUString OutlinerEditEng::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor )
+OUString OutlinerEditEng::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor, std::optional<FontLineStyle>& rpFldLineStyle )
 {
-    return pOwner->CalcFieldValue( rField, nPara, nPos, rpTxtColor, rpFldColor );
+    return pOwner->CalcFieldValue( rField, nPara, nPos, rpTxtColor, rpFldColor, rpFldLineStyle );
 }
 
 void OutlinerEditEng::SetParaAttribs( sal_Int32 nPara, const SfxItemSet& rSet )

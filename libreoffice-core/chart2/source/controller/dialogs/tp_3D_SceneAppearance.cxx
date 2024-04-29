@@ -53,10 +53,10 @@ lcl_ModelProperties lcl_getPropertiesFromModel( rtl::Reference<::chart::ChartMod
     lcl_ModelProperties aProps;
     try
     {
-        rtl::Reference< ::chart::Diagram > xDiagram( ::chart::ChartModelHelper::findDiagram( xModel ) );
+        rtl::Reference< ::chart::Diagram > xDiagram( xModel->getFirstChartDiagram() );
         xDiagram->getPropertyValue( "D3DSceneShadeMode" ) >>= aProps.m_aShadeMode;
         ::chart::ThreeDHelper::getRoundedEdgesAndObjectLines( xDiagram, aProps.m_nRoundedEdges, aProps.m_nObjectLines );
-        aProps.m_eScheme = ::chart::ThreeDHelper::detectScheme( xDiagram );
+        aProps.m_eScheme = xDiagram->detectScheme();
     }
     catch( const uno::Exception & )
     {
@@ -69,7 +69,7 @@ void lcl_setShadeModeAtModel( rtl::Reference<::chart::ChartModel> const & xModel
 {
     try
     {
-        rtl::Reference< ::chart::Diagram > xDiaProp = ::chart::ChartModelHelper::findDiagram( xModel );
+        rtl::Reference< ::chart::Diagram > xDiaProp = xModel->getFirstChartDiagram();
         xDiaProp->setPropertyValue( "D3DSceneShadeMode" , uno::Any( aShadeMode ));
     }
     catch( const uno::Exception & )
@@ -159,7 +159,7 @@ void ThreeD_SceneAppearance_TabPage::applyRoundedEdgeAndObjectLinesToModel()
     // locked controllers
     ControllerLockHelperGuard aGuard( m_rControllerLockHelper );
     ThreeDHelper::setRoundedEdgesAndObjectLines(
-        ::chart::ChartModelHelper::findDiagram( m_xChartModel ), nCurrentRoundedEdges, nObjectLines );
+        m_xChartModel->getFirstChartDiagram(), nCurrentRoundedEdges, nObjectLines );
 }
 
 void ThreeD_SceneAppearance_TabPage::applyShadeModeToModel()
@@ -270,12 +270,12 @@ IMPL_LINK_NOARG(ThreeD_SceneAppearance_TabPage, SelectSchemeHdl, weld::ComboBox&
         // locked controllers
         ControllerLockHelperGuard aGuard( m_rControllerLockHelper );
 
-        rtl::Reference< Diagram > xDiagram = ::chart::ChartModelHelper::findDiagram( m_xChartModel );
+        rtl::Reference< Diagram > xDiagram = m_xChartModel->getFirstChartDiagram();
 
         if( m_xLB_Scheme->get_active() == POS_3DSCHEME_REALISTIC )
-            ThreeDHelper::setScheme( xDiagram, ThreeDLookScheme::ThreeDLookScheme_Realistic );
+            xDiagram->setScheme( ThreeDLookScheme::ThreeDLookScheme_Realistic );
         else if( m_xLB_Scheme->get_active() == POS_3DSCHEME_SIMPLE )
-            ThreeDHelper::setScheme( xDiagram, ThreeDLookScheme::ThreeDLookScheme_Simple );
+            xDiagram->setScheme( ThreeDLookScheme::ThreeDLookScheme_Simple );
         else
         {
             OSL_FAIL( "Invalid Entry selected" );

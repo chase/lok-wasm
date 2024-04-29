@@ -51,7 +51,6 @@ using ::com::sun::star::task::PasswordRequestMode;
 using ::com::sun::star::task::PasswordRequestMode_PASSWORD_ENTER;
 using ::com::sun::star::task::PasswordRequestMode_PASSWORD_REENTER;
 using ::com::sun::star::task::XInteractionHandler;
-using ::com::sun::star::task::XInteractionRequest;
 
 using namespace ::com::sun::star;
 
@@ -374,6 +373,8 @@ std::vector<unsigned char> DocPasswordHelper::GetOoxHashAsVector(
         eType = comphelper::HashType::SHA512;
     else if (rAlgorithmName == u"SHA-256" || rAlgorithmName == u"SHA256")
         eType = comphelper::HashType::SHA256;
+    else if (rAlgorithmName == u"SHA-384" || rAlgorithmName == u"SHA384")
+        eType = comphelper::HashType::SHA384;
     else if (rAlgorithmName == u"SHA-1" || rAlgorithmName == u"SHA1") // "SHA1" might be in the wild
         eType = comphelper::HashType::SHA1;
     else if (rAlgorithmName == u"MD5")
@@ -426,7 +427,10 @@ OUString DocPasswordHelper::GetOoxHashAsBase64(
     uno::Sequence< sal_Int8 > aResult( nLength );
 
     rtlRandomPool aRandomPool = rtl_random_createPool ();
-    rtl_random_getBytes ( aRandomPool, aResult.getArray(), nLength );
+    if (rtl_random_getBytes(aRandomPool, aResult.getArray(), nLength) != rtl_Random_E_None)
+    {
+        throw uno::RuntimeException("rtl_random_getBytes failed");
+    }
     rtl_random_destroyPool ( aRandomPool );
 
     return aResult;
@@ -622,11 +626,10 @@ OUString DocPasswordHelper::GetOoxHashAsBase64(
 
     if (eResult == DocPasswordVerifierResult::OK && !aPassword.isEmpty())
     {
-        if (std::find_if(std::cbegin(aEncData), std::cend(aEncData),
+        if (std::none_of(std::cbegin(aEncData), std::cend(aEncData),
                          [](const css::beans::NamedValue& val) {
                              return val.Name == PACKAGE_ENCRYPTIONDATA_SHA256UTF8;
-                         })
-            == std::cend(aEncData))
+                         }))
         {
             // tdf#118639: We need ODF encryption data for autorecovery, where password
             // will already be unavailable, so generate and append it here

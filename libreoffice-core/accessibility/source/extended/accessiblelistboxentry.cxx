@@ -23,6 +23,7 @@
 #include <svtools/stringtransfer.hxx>
 #include <vcl/toolkit/svlbitm.hxx>
 #include <com/sun/star/awt/Rectangle.hpp>
+#include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleRelationType.hpp>
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
@@ -36,20 +37,6 @@
 #include <comphelper/accessibleeventnotifier.hxx>
 #include <helper/accresmgr.hxx>
 #include <strings.hrc>
-
-#define ACCESSIBLE_ACTION_COUNT 1
-
-namespace
-{
-    /// @throws css::lang::IndexOutOfBoundsException
-    void checkActionIndex_Impl( sal_Int32 _nIndex )
-    {
-        if ( _nIndex < 0 || _nIndex >= ACCESSIBLE_ACTION_COUNT )
-            // only three actions
-            throw css::lang::IndexOutOfBoundsException();
-    }
-}
-
 
 namespace accessibility
 {
@@ -73,7 +60,6 @@ namespace accessibility
         , m_pSvLBoxEntry(&rEntry)
         , m_nClientId( 0 )
         , m_wListBox(&rListBox)
-        , m_rListBox(rListBox)
     {
         m_pTreeListBox->AddEventListener( LINK( this, AccessibleListBoxEntry, WindowEventListener ) );
         _rListBox.FillEntryPath( m_pSvLBoxEntry, m_aEntryPath );
@@ -99,6 +85,22 @@ namespace accessibility
 
         switch ( rEvent.GetId() )
         {
+            case VclEventId::CheckboxToggle:
+            {
+                // assert this object is represented as a checkbox on a11y layer (LABEL role is used for
+                // SvButtonState::Tristate, s. AccessibleListBoxEntry::getAccessibleRole)
+                assert(getAccessibleRole() == AccessibleRole::CHECK_BOX
+                       || getAccessibleRole() == AccessibleRole::LABEL);
+                Any aOldValue;
+                Any aNewValue;
+                if (getAccessibleStateSet() & AccessibleStateType::CHECKED)
+                    aNewValue <<= AccessibleStateType::CHECKED;
+                else
+                    aOldValue <<= AccessibleStateType::CHECKED;
+
+                NotifyAccessibleEvent(AccessibleEventId::STATE_CHANGED, aOldValue, aNewValue);
+                break;
+            }
             case  VclEventId::ObjectDying :
             {
                 if ( m_pTreeListBox )
@@ -116,7 +118,7 @@ namespace accessibility
                                                    const css::uno::Any& _aNewValue )
     {
         Reference< uno::XInterface > xSource( *this );
-        AccessibleEventObject aEventObj( xSource, _nEventId, _aNewValue, _aOldValue );
+        AccessibleEventObject aEventObj( xSource, _nEventId, _aNewValue, _aOldValue, -1 );
 
         if (m_nClientId)
             comphelper::AccessibleEventNotifier::addEvent( m_nClientId, aEventObj );
@@ -151,7 +153,7 @@ namespace accessibility
         {
             aRect = m_pTreeListBox->GetBoundingRect( pEntry );
             Point aTopLeft = aRect.TopLeft();
-            aTopLeft += m_pTreeListBox->GetWindowExtentsRelative( nullptr ).TopLeft();
+            aTopLeft += Point(m_pTreeListBox->GetWindowExtentsAbsolute().TopLeft());
             aRect = tools::Rectangle( aTopLeft, aRect.GetSize() );
         }
 
@@ -196,6 +198,12 @@ namespace accessibility
 
         EnsureIsAlive();
         return GetBoundingBoxOnScreen_Impl();
+    }
+
+    void AccessibleListBoxEntry::CheckActionIndex(sal_Int32 nIndex)
+    {
+        if (nIndex < 0 || nIndex >= getAccessibleActionCount())
+            throw css::lang::IndexOutOfBoundsException();
     }
 
     void AccessibleListBoxEntry::EnsureIsAlive() const
@@ -310,45 +318,39 @@ namespace accessibility
         if ( !pEntry )
             throw IndexOutOfBoundsException();
 
-        uno::Reference<XAccessible> xListBox(m_wListBox);
+        rtl::Reference<AccessibleListBox> xListBox(m_wListBox);
         assert(xListBox.is());
 
-        return m_rListBox.implGetAccessible(*pEntry);
+        return xListBox->implGetAccessible(*pEntry);
     }
 
     Reference< XAccessible > AccessibleListBoxEntry::implGetParentAccessible( ) const
     {
         Reference< XAccessible > xParent;
-        if ( !xParent.is() )
-        {
-            assert( m_aEntryPath.size() ); // invalid path
-            if ( m_aEntryPath.size() == 1 )
-            {   // we're a top level entry
-                // -> our parent is the tree listbox itself
-                if ( m_pTreeListBox )
-                    xParent = m_pTreeListBox->GetAccessible( );
-            }
-            else
-            {   // we have an entry as parent -> get its accessible
+        assert( m_aEntryPath.size() ); // invalid path
+        if ( m_aEntryPath.size() == 1 )
+        {   // we're a top level entry
+            // -> our parent is the tree listbox itself
+            if ( m_pTreeListBox )
+                xParent = m_pTreeListBox->GetAccessible( );
+        }
+        else
+        {   // we have an entry as parent -> get its accessible
 
-                // shorten our access path by one
-                std::deque< sal_Int32 > aParentPath( m_aEntryPath );
-                aParentPath.pop_back();
+            // shorten our access path by one
+            std::deque< sal_Int32 > aParentPath( m_aEntryPath );
+            aParentPath.pop_back();
 
-                // get the entry for this shortened access path
-                SvTreeListEntry* pParentEntry = m_pTreeListBox->GetEntryFromPath( aParentPath );
-                OSL_ENSURE( pParentEntry, "AccessibleListBoxEntry::implGetParentAccessible: could not obtain a parent entry!" );
-
-                if ( pParentEntry )
-                    pParentEntry = m_pTreeListBox->GetParent(pParentEntry);
-                if ( pParentEntry )
-                {
-                    uno::Reference<XAccessible> xListBox(m_wListBox);
-                    assert(xListBox.is());
-                    return m_rListBox.implGetAccessible(*pParentEntry);
-                    // the AccessibleListBoxEntry class will create its parent
-                    // when needed
-                }
+            // get the entry for this shortened access path
+            SvTreeListEntry* pParentEntry = m_pTreeListBox->GetEntryFromPath( aParentPath );
+            assert(pParentEntry && "AccessibleListBoxEntry::implGetParentAccessible: could not obtain a parent entry!");
+            if ( pParentEntry )
+            {
+                rtl::Reference<AccessibleListBox> xListBox(m_wListBox);
+                assert(xListBox.is());
+                return xListBox->implGetAccessible(*pParentEntry);
+                // the AccessibleListBoxEntry class will create its parent
+                // when needed
             }
         }
 
@@ -535,9 +537,9 @@ namespace accessibility
             throw RuntimeException("AccessibleListBoxEntry::getAccessibleAtPoint - pEntry cannot be empty!");
 
         Reference< XAccessible > xAcc;
-        uno::Reference<XAccessible> xListBox(m_wListBox);
+        rtl::Reference<AccessibleListBox> xListBox(m_wListBox);
         assert(xListBox.is());
-        auto pAccEntry = m_rListBox.implGetAccessible(*pEntry);
+        auto pAccEntry = xListBox->implGetAccessible(*pEntry);
         tools::Rectangle aRect = pAccEntry->GetBoundingBox_Impl();
         if ( aRect.Contains( VCLPoint( _aPoint ) ) )
             xAcc = pAccEntry.get();
@@ -727,7 +729,7 @@ namespace accessibility
                 return 0;
         }
         else
-            return ACCESSIBLE_ACTION_COUNT;
+            return 1;
         return 0;
     }
 
@@ -737,7 +739,7 @@ namespace accessibility
         ::osl::MutexGuard aGuard( m_aMutex );
 
         bool bRet = false;
-        checkActionIndex_Impl( nIndex );
+        CheckActionIndex(nIndex);
         EnsureIsAlive();
 
         SvTreeFlags treeFlag = m_pTreeListBox->GetTreeFlags();
@@ -774,7 +776,7 @@ namespace accessibility
         SolarMutexGuard aSolarGuard;
         ::osl::MutexGuard aGuard( m_aMutex );
 
-        checkActionIndex_Impl( nIndex );
+        CheckActionIndex(nIndex);
         EnsureIsAlive();
 
         SvTreeListEntry* pEntry = m_pTreeListBox->GetEntryFromPath( m_aEntryPath );
@@ -809,10 +811,8 @@ namespace accessibility
 
     Reference< XAccessibleKeyBinding > AccessibleListBoxEntry::getAccessibleActionKeyBinding( sal_Int32 nIndex )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
-
         Reference< XAccessibleKeyBinding > xRet;
-        checkActionIndex_Impl( nIndex );
+        CheckActionIndex(nIndex);
         // ... which key?
         return xRet;
     }
@@ -940,9 +940,9 @@ namespace accessibility
 
             if ( nSelCount == ( nSelectedChildIndex + 1 ) )
             {
-                uno::Reference<XAccessible> xListBox(m_wListBox);
+                rtl::Reference<AccessibleListBox> xListBox(m_wListBox);
                 assert(xListBox.is());
-                xChild = m_rListBox.implGetAccessible(*pEntry).get();
+                xChild = xListBox->implGetAccessible(*pEntry).get();
                 break;
             }
         }

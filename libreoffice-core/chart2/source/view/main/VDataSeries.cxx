@@ -21,11 +21,13 @@
 #include <memory>
 #include <VDataSeries.hxx>
 #include <DataSeries.hxx>
+#include <DataSeriesProperties.hxx>
 #include <ObjectIdentifier.hxx>
 #include <CommonConverters.hxx>
 #include <LabelPositionHelper.hxx>
 #include <ChartType.hxx>
 #include <ChartTypeHelper.hxx>
+#include <RegressionCurveCalculator.hxx>
 #include <RegressionCurveHelper.hxx>
 #include <unonames.hxx>
 
@@ -46,6 +48,7 @@ namespace chart {
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
 using ::com::sun::star::uno::Reference;
+using namespace ::chart::DataSeriesProperties;
 
 void VDataSequence::init( const uno::Reference< data::XDataSequence >& xModel )
 {
@@ -226,12 +229,12 @@ VDataSeries::VDataSeries( const rtl::Reference< DataSeries >& xDataSeries )
 
     try
     {
-        //get AttributedDataPoints
-        xDataSeries->getPropertyValue("AttributedDataPoints") >>= m_aAttributedDataPointIndexList;
+        // "AttributedDataPoints"
+        xDataSeries->getFastPropertyValue(PROP_DATASERIES_ATTRIBUTED_DATA_POINTS) >>= m_aAttributedDataPointIndexList;
 
-        xDataSeries->getPropertyValue("StackingDirection") >>= m_eStackingDirection;
+        xDataSeries->getFastPropertyValue(PROP_DATASERIES_STACKING_DIRECTION) >>= m_eStackingDirection; // "StackingDirection"
 
-        xDataSeries->getPropertyValue("AttachedAxisIndex") >>= m_nAxisIndex;
+        xDataSeries->getFastPropertyValue(PROP_DATASERIES_ATTACHED_AXIS_INDEX) >>= m_nAxisIndex; // "AttachedAxisIndex"
         if(m_nAxisIndex<0)
             m_nAxisIndex=0;
     }
@@ -282,12 +285,12 @@ void VDataSeries::doSortByXValues()
 
 void VDataSeries::releaseShapes()
 {
-    m_xGroupShape.set(nullptr);
-    m_xLabelsGroupShape.set(nullptr);
-    m_xErrorXBarsGroupShape.set(nullptr);
-    m_xErrorYBarsGroupShape.set(nullptr);
-    m_xFrontSubGroupShape.set(nullptr);
-    m_xBackSubGroupShape.set(nullptr);
+    m_xGroupShape.clear();
+    m_xLabelsGroupShape.clear();
+    m_xErrorXBarsGroupShape.clear();
+    m_xErrorYBarsGroupShape.clear();
+    m_xFrontSubGroupShape.clear();
+    m_xBackSubGroupShape.clear();
 
     m_aPolyPolygonShape3D.clear();
     m_nPolygonIndex = 0;
@@ -522,7 +525,7 @@ double VDataSeries::getBubble_Size( sal_Int32 index ) const
 
 bool VDataSeries::hasExplicitNumberFormat( sal_Int32 nPointIndex, bool bForPercentage ) const
 {
-    OUString aPropName = bForPercentage ? OUString("PercentageNumberFormat") : OUString(CHART_UNONAME_NUMFMT);
+    OUString aPropName = bForPercentage ? OUString("PercentageNumberFormat") : CHART_UNONAME_NUMFMT;
     bool bHasNumberFormat = false;
     bool bLinkToSource = true;
     uno::Reference< beans::XPropertySet > xPointProp( getPropertiesOfPoint( nPointIndex ));
@@ -536,7 +539,7 @@ bool VDataSeries::hasExplicitNumberFormat( sal_Int32 nPointIndex, bool bForPerce
 }
 sal_Int32 VDataSeries::getExplicitNumberFormat( sal_Int32 nPointIndex, bool bForPercentage ) const
 {
-    OUString aPropName = bForPercentage ? OUString("PercentageNumberFormat") : OUString(CHART_UNONAME_NUMFMT);
+    OUString aPropName = bForPercentage ? OUString("PercentageNumberFormat") : CHART_UNONAME_NUMFMT;
     sal_Int32 nNumberFormat = -1;
     uno::Reference< beans::XPropertySet > xPointProp( getPropertiesOfPoint( nPointIndex ));
     if( xPointProp.is() )
@@ -744,7 +747,7 @@ double VDataSeries::getXMeanValue() const
 {
     if( std::isnan( m_fXMeanValue ) )
     {
-        uno::Reference< XRegressionCurveCalculator > xCalculator( RegressionCurveHelper::createRegressionCurveCalculatorByServiceName( u"com.sun.star.chart2.MeanValueRegressionCurve" ) );
+        rtl::Reference< RegressionCurveCalculator > xCalculator( RegressionCurveHelper::createRegressionCurveCalculatorByServiceName( u"com.sun.star.chart2.MeanValueRegressionCurve" ) );
         uno::Sequence< double > aXValuesDummy;
         xCalculator->recalculateRegression( aXValuesDummy, getAllX() );
         m_fXMeanValue = xCalculator->getCurveValue( 1.0 );
@@ -756,7 +759,7 @@ double VDataSeries::getYMeanValue() const
 {
     if( std::isnan( m_fYMeanValue ) )
     {
-        uno::Reference< XRegressionCurveCalculator > xCalculator(
+        rtl::Reference< RegressionCurveCalculator > xCalculator(
             RegressionCurveHelper::createRegressionCurveCalculatorByServiceName(u"com.sun.star.chart2.MeanValueRegressionCurve"));
         uno::Sequence< double > aXValuesDummy;
         xCalculator->recalculateRegression( aXValuesDummy, getAllY() );
@@ -765,26 +768,26 @@ double VDataSeries::getYMeanValue() const
     return m_fYMeanValue;
 }
 
-static std::unique_ptr<Symbol> getSymbolPropertiesFromPropertySet( const uno::Reference< beans::XPropertySet >& xProp )
+static std::optional<Symbol> getSymbolPropertiesFromPropertySet( const uno::Reference< beans::XPropertySet >& xProp )
 {
-    std::unique_ptr< Symbol > apSymbolProps( new Symbol() );
+    Symbol aSymbolProps;
     try
     {
-        if( xProp->getPropertyValue("Symbol") >>= *apSymbolProps )
+        if( xProp->getPropertyValue("Symbol") >>= aSymbolProps )
         {
             //use main color to fill symbols
-            xProp->getPropertyValue("Color") >>= apSymbolProps->FillColor;
+            xProp->getPropertyValue("Color") >>= aSymbolProps.FillColor;
             // border of symbols always same as fill color
-            apSymbolProps->BorderColor = apSymbolProps->FillColor;
+            aSymbolProps.BorderColor = aSymbolProps.FillColor;
         }
         else
-            apSymbolProps.reset();
+            return std::nullopt;
     }
     catch(const uno::Exception &)
     {
         TOOLS_WARN_EXCEPTION("chart2", "" );
     }
-    return apSymbolProps;
+    return aSymbolProps;
 }
 
 Symbol* VDataSeries::getSymbolProperties( sal_Int32 index ) const
@@ -793,38 +796,38 @@ Symbol* VDataSeries::getSymbolProperties( sal_Int32 index ) const
     if( isAttributedDataPoint( index ) )
     {
         adaptPointCache( index );
-        if (!m_apSymbolProperties_AttributedPoint)
-            m_apSymbolProperties_AttributedPoint
+        if (!m_oSymbolProperties_AttributedPoint)
+            m_oSymbolProperties_AttributedPoint
                 = getSymbolPropertiesFromPropertySet(getPropertiesOfPoint(index));
-        pRet = m_apSymbolProperties_AttributedPoint.get();
+        pRet = &*m_oSymbolProperties_AttributedPoint;
         //if a single data point does not have symbols but the dataseries itself has symbols
         //we create an invisible symbol shape to enable selection of that point
         if( !pRet || pRet->Style == SymbolStyle_NONE )
         {
-            if (!m_apSymbolProperties_Series)
-                m_apSymbolProperties_Series
+            if (!m_oSymbolProperties_Series)
+                m_oSymbolProperties_Series
                     = getSymbolPropertiesFromPropertySet(getPropertiesOfSeries());
-            if( m_apSymbolProperties_Series && m_apSymbolProperties_Series->Style != SymbolStyle_NONE )
+            if( m_oSymbolProperties_Series && m_oSymbolProperties_Series->Style != SymbolStyle_NONE )
             {
-                if (!m_apSymbolProperties_InvisibleSymbolForSelection)
+                if (!m_oSymbolProperties_InvisibleSymbolForSelection)
                 {
-                    m_apSymbolProperties_InvisibleSymbolForSelection.reset(new Symbol);
-                    m_apSymbolProperties_InvisibleSymbolForSelection->Style = SymbolStyle_STANDARD;
-                    m_apSymbolProperties_InvisibleSymbolForSelection->StandardSymbol = 0;//square
-                    m_apSymbolProperties_InvisibleSymbolForSelection->Size = com::sun::star::awt::Size(0, 0);//tdf#126033
-                    m_apSymbolProperties_InvisibleSymbolForSelection->BorderColor = 0xff000000;//invisible
-                    m_apSymbolProperties_InvisibleSymbolForSelection->FillColor = 0xff000000;//invisible
+                    m_oSymbolProperties_InvisibleSymbolForSelection.emplace();
+                    m_oSymbolProperties_InvisibleSymbolForSelection->Style = SymbolStyle_STANDARD;
+                    m_oSymbolProperties_InvisibleSymbolForSelection->StandardSymbol = 0;//square
+                    m_oSymbolProperties_InvisibleSymbolForSelection->Size = com::sun::star::awt::Size(0, 0);//tdf#126033
+                    m_oSymbolProperties_InvisibleSymbolForSelection->BorderColor = 0xff000000;//invisible
+                    m_oSymbolProperties_InvisibleSymbolForSelection->FillColor = 0xff000000;//invisible
                 }
-                pRet = m_apSymbolProperties_InvisibleSymbolForSelection.get();
+                pRet = &*m_oSymbolProperties_InvisibleSymbolForSelection;
             }
         }
     }
     else
     {
-        if (!m_apSymbolProperties_Series)
-            m_apSymbolProperties_Series
+        if (!m_oSymbolProperties_Series)
+            m_oSymbolProperties_Series
                 = getSymbolPropertiesFromPropertySet(getPropertiesOfSeries());
-        pRet = m_apSymbolProperties_Series.get();
+        pRet = &*m_oSymbolProperties_Series;
     }
 
     if( pRet && pRet->Style == SymbolStyle_AUTO )
@@ -893,9 +896,8 @@ bool VDataSeries::isAttributedDataPoint( sal_Int32 index ) const
 bool VDataSeries::isVaryColorsByPoint() const
 {
     bool bVaryColorsByPoint = false;
-    Reference< beans::XPropertySet > xSeriesProp( getPropertiesOfSeries() );
-    if( xSeriesProp.is() )
-        xSeriesProp->getPropertyValue("VaryColorsByPoint") >>= bVaryColorsByPoint;
+    if( m_xDataSeries )
+        m_xDataSeries->getFastPropertyValue(PROP_DATASERIES_VARY_COLORS_BY_POINT) >>= bVaryColorsByPoint; // "VaryColorsByPoint"
     return bVaryColorsByPoint;
 }
 
@@ -911,9 +913,9 @@ const uno::Reference<beans::XPropertySet> & VDataSeries::getPropertiesOfSeries()
     return m_xDataSeriesProps;
 }
 
-static std::unique_ptr<DataPointLabel> getDataPointLabelFromPropertySet( const uno::Reference< beans::XPropertySet >& xProp )
+static std::optional<DataPointLabel> getDataPointLabelFromPropertySet( const uno::Reference< beans::XPropertySet >& xProp )
 {
-    std::unique_ptr< DataPointLabel > apLabel( new DataPointLabel() );
+    std::optional< DataPointLabel > apLabel( std::in_place );
     try
     {
         if( !(xProp->getPropertyValue(CHART_UNONAME_LABEL) >>= *apLabel) )
@@ -930,10 +932,10 @@ void VDataSeries::adaptPointCache( sal_Int32 nNewPointIndex ) const
 {
     if( m_nCurrentAttributedPoint != nNewPointIndex )
     {
-        m_apLabel_AttributedPoint.reset();
+        m_oLabel_AttributedPoint.reset();
         m_apLabelPropNames_AttributedPoint.reset();
         m_apLabelPropValues_AttributedPoint.reset();
-        m_apSymbolProperties_AttributedPoint.reset();
+        m_oSymbolProperties_AttributedPoint.reset();
         m_nCurrentAttributedPoint = nNewPointIndex;
     }
 }
@@ -944,17 +946,19 @@ DataPointLabel* VDataSeries::getDataPointLabel( sal_Int32 index ) const
     if( isAttributedDataPoint( index ) )
     {
         adaptPointCache( index );
-        if (!m_apLabel_AttributedPoint)
-            m_apLabel_AttributedPoint
+        if (!m_oLabel_AttributedPoint)
+            m_oLabel_AttributedPoint
                 = getDataPointLabelFromPropertySet(getPropertiesOfPoint(index));
-        pRet = m_apLabel_AttributedPoint.get();
+        if (m_oLabel_AttributedPoint)
+            pRet = &*m_oLabel_AttributedPoint;
     }
     else
     {
-        if (!m_apLabel_Series)
-            m_apLabel_Series
+        if (!m_oLabel_Series)
+            m_oLabel_Series
                 = getDataPointLabelFromPropertySet(getPropertiesOfPoint(index));
-        pRet = m_apLabel_Series.get();
+        if (m_oLabel_Series)
+            pRet = &*m_oLabel_Series;
     }
     if( !m_bAllowPercentValueInDataLabel )
     {
@@ -998,18 +1002,18 @@ bool VDataSeries::getTextLabelMultiPropertyLists( sal_Int32 index
     }
     else
     {
-        if (!m_apLabelPropValues_Series)
+        if (!m_oLabelPropValues_Series)
         {
             // Cache these properties for the whole series.
-            m_apLabelPropNames_Series.reset(new tNameSequence);
-            m_apLabelPropValues_Series.reset(new tAnySequence);
+            m_oLabelPropNames_Series.emplace();
+            m_oLabelPropValues_Series.emplace();
             xTextProp.set( getPropertiesOfPoint( index ));
             PropertyMapper::getTextLabelMultiPropertyLists(
-                xTextProp, *m_apLabelPropNames_Series, *m_apLabelPropValues_Series);
+                xTextProp, *m_oLabelPropNames_Series, *m_oLabelPropValues_Series);
             bDoDynamicFontResize = true;
         }
-        pPropNames = m_apLabelPropNames_Series.get();
-        pPropValues = m_apLabelPropValues_Series.get();
+        pPropNames = &*m_oLabelPropNames_Series;
+        pPropValues = &*m_oLabelPropValues_Series;
     }
 
     if( bDoDynamicFontResize &&

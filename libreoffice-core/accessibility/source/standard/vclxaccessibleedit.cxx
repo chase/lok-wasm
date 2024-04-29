@@ -28,6 +28,7 @@
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 #include <com/sun/star/accessibility/AccessibleTextType.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <comphelper/string.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/window.hxx>
@@ -55,7 +56,7 @@ using namespace ::comphelper;
 
 
 VCLXAccessibleEdit::VCLXAccessibleEdit( VCLXWindow* pVCLWindow )
-    :VCLXAccessibleTextComponent( pVCLWindow )
+    :ImplInheritanceHelper( pVCLWindow )
 {
     m_nCaretPosition = getCaretPosition();
 }
@@ -107,12 +108,17 @@ void VCLXAccessibleEdit::FillAccessibleStateSet( sal_Int64& rStateSet )
 {
     VCLXAccessibleTextComponent::FillAccessibleStateSet( rStateSet );
 
-    VCLXEdit* pVCLXEdit = static_cast< VCLXEdit* >( GetVCLXWindow() );
-    if ( pVCLXEdit )
+    VCLXWindow* pVCLXWindow = GetVCLXWindow();
+    if (pVCLXWindow)
     {
         rStateSet |= AccessibleStateType::FOCUSABLE;
-        rStateSet |= AccessibleStateType::SINGLE_LINE;
-        if ( pVCLXEdit->isEditable() )
+
+        if (GetWindow() && GetWindow()->GetType() == WindowType::MULTILINEEDIT)
+            rStateSet |= AccessibleStateType::MULTI_LINE;
+        else
+            rStateSet |= AccessibleStateType::SINGLE_LINE;
+
+        if (isEditable())
             rStateSet |= AccessibleStateType::EDITABLE;
     }
 }
@@ -147,26 +153,14 @@ OUString VCLXAccessibleEdit::implGetText()
 
 void VCLXAccessibleEdit::implGetSelection( sal_Int32& nStartIndex, sal_Int32& nEndIndex )
 {
-    awt::Selection aSelection;
-    VCLXEdit* pVCLXEdit = static_cast< VCLXEdit* >( GetVCLXWindow() );
-    if ( pVCLXEdit )
-        aSelection = pVCLXEdit->getSelection();
+    Selection aSelection;
+    VclPtr<Edit> pEdit = GetAs<Edit>();
+    if (pEdit)
+        aSelection = pEdit->GetSelection();
 
-    nStartIndex = aSelection.Min;
-    nEndIndex = aSelection.Max;
+    nStartIndex = aSelection.Min();
+    nEndIndex = aSelection.Max();
 }
-
-
-// XInterface
-
-
-IMPLEMENT_FORWARD_XINTERFACE2( VCLXAccessibleEdit, VCLXAccessibleTextComponent, VCLXAccessibleEdit_BASE )
-
-
-// XTypeProvider
-
-
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( VCLXAccessibleEdit, VCLXAccessibleTextComponent, VCLXAccessibleEdit_BASE )
 
 
 // XServiceInfo
@@ -426,11 +420,10 @@ sal_Bool VCLXAccessibleEdit::setSelection( sal_Int32 nStartIndex, sal_Int32 nEnd
     if ( !implIsValidRange( nStartIndex, nEndIndex, sText.getLength() ) )
         throw IndexOutOfBoundsException();
 
-    VCLXEdit* pVCLXEdit = static_cast< VCLXEdit* >( GetVCLXWindow() );
     VclPtr< Edit > pEdit = GetAs< Edit >();
-    if ( pVCLXEdit && pEdit && pEdit->IsEnabled() )
+    if (pEdit && pEdit->IsEnabled())
     {
-        pVCLXEdit->setSelection( awt::Selection( nStartIndex, nEndIndex ) );
+        pEdit->SetSelection(Selection(nStartIndex, nEndIndex));
         bReturn = true;
     }
 
@@ -562,10 +555,12 @@ sal_Bool VCLXAccessibleEdit::replaceText( sal_Int32 nStartIndex, sal_Int32 nEndI
     sal_Int32 nMinIndex = std::min( nStartIndex, nEndIndex );
     sal_Int32 nMaxIndex = std::max( nStartIndex, nEndIndex );
 
-    VCLXEdit* pVCLXEdit = static_cast< VCLXEdit* >( GetVCLXWindow() );
-    if ( pVCLXEdit && pVCLXEdit->isEditable() )
+
+    if (isEditable())
     {
-        pVCLXEdit->setText( sText.replaceAt( nMinIndex, nMaxIndex - nMinIndex, sReplacement ) );
+        VclPtr<Edit> pEdit = GetAs<Edit>();
+        assert(pEdit);
+        pEdit->SetText(sText.replaceAt(nMinIndex, nMaxIndex - nMinIndex, sReplacement));
         sal_Int32 nIndex = nMinIndex + sReplacement.getLength();
         setSelection( nIndex, nIndex );
         bReturn = true;
@@ -592,17 +587,23 @@ sal_Bool VCLXAccessibleEdit::setText( const OUString& sText )
 
     bool bReturn = false;
 
-    VCLXEdit* pVCLXEdit = static_cast< VCLXEdit* >( GetVCLXWindow() );
-    if ( pVCLXEdit && pVCLXEdit->isEditable() )
+    if (isEditable())
     {
-        pVCLXEdit->setText( sText );
+        VclPtr<Edit> pEdit = GetAs<Edit>();
+        assert(pEdit);
+        pEdit->SetText(sText);
         sal_Int32 nSize = sText.getLength();
-        pVCLXEdit->setSelection( awt::Selection( nSize, nSize ) );
+        pEdit->SetSelection(Selection(nSize, nSize) );
         bReturn = true;
     }
 
     return bReturn;
 }
 
+bool VCLXAccessibleEdit::isEditable()
+{
+    VclPtr<Edit> pEdit = GetAs<Edit>();
+    return pEdit && !pEdit->IsReadOnly() && pEdit->IsEnabled();
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

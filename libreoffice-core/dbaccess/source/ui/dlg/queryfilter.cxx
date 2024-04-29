@@ -295,16 +295,16 @@ bool DlgFilterCrit::getCondition(const weld::ComboBox& _rField,const weld::Combo
                     {
                         // properly quote all parts of the table name, so
                         // e.g. <schema>.<table> becomes "<schema>"."<table>"
-                        OUString aCatlog,aSchema,aTable;
-                        ::dbtools::qualifiedNameComponents( m_xMetaData, sTableName, aCatlog, aSchema, aTable, ::dbtools::EComposeRule::InDataManipulation );
-                        sTableName = ::dbtools::composeTableName( m_xMetaData, aCatlog, aSchema, aTable, true, ::dbtools::EComposeRule::InDataManipulation );
+                        OUString aCatalog,aSchema,aTable;
+                        ::dbtools::qualifiedNameComponents( m_xMetaData, sTableName, aCatalog, aSchema, aTable, ::dbtools::EComposeRule::InDataManipulation );
+                        sTableName = ::dbtools::composeTableName( m_xMetaData, aCatalog, aSchema, aTable, true, ::dbtools::EComposeRule::InDataManipulation );
                     }
                 }
                 xColumn->getPropertyValue(PROPERTY_REALNAME)    >>= _rFilter.Name;
-                static constexpr OUStringLiteral sAgg = u"AggregateFunction";
+                static constexpr OUString sAgg = u"AggregateFunction"_ustr;
                 if ( xInfo->hasPropertyByName(sAgg) )
                     xColumn->getPropertyValue(sAgg) >>= bHaving;
-                static constexpr OUStringLiteral sFunction = u"Function";
+                static constexpr OUString sFunction = u"Function"_ustr;
                 if ( xInfo->hasPropertyByName(sFunction) )
                     xColumn->getPropertyValue(sFunction) >>= bFunction;
             }

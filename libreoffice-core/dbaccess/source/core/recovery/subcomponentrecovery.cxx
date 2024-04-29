@@ -47,12 +47,10 @@ namespace dbaccess
 {
 
     using css::uno::Reference;
-    using css::uno::XInterface;
     using css::uno::UNO_QUERY;
     using css::uno::UNO_QUERY_THROW;
     using css::uno::UNO_SET_THROW;
     using css::uno::Exception;
-    using css::uno::RuntimeException;
     using css::uno::Any;
     using css::uno::Sequence;
     using css::uno::XComponentContext;
@@ -160,8 +158,8 @@ namespace dbaccess
             return xCommandProcessor;
         }
 
-        constexpr OUStringLiteral sSettingsStreamName = u"settings.xml";
-        constexpr OUStringLiteral sCurrentQueryDesignName = u"ooo:current-query-design";
+        constexpr OUString sSettingsStreamName = u"settings.xml"_ustr;
+        constexpr OUString sCurrentQueryDesignName = u"ooo:current-query-design"_ustr;
     }
 
     namespace {
@@ -170,7 +168,7 @@ namespace dbaccess
     class SettingsExportContext : public ::xmloff::XMLSettingsExportContext
     {
     public:
-        SettingsExportContext( const Reference<XComponentContext>& i_rContext, const StorageXMLOutputStream& i_rDelegator )
+        SettingsExportContext( const Reference<XComponentContext>& i_rContext, StorageXMLOutputStream& i_rDelegator )
             :m_rContext( i_rContext )
             ,m_rDelegator( i_rDelegator )
             ,m_aNamespace( ::xmloff::token::GetXMLToken( ::xmloff::token::XML_NP_CONFIG ) )
@@ -199,7 +197,7 @@ namespace dbaccess
 
     private:
         const Reference<XComponentContext>&   m_rContext;
-        const StorageXMLOutputStream&           m_rDelegator;
+        StorageXMLOutputStream& m_rDelegator;
         const OUString m_aNamespace;
     };
 
@@ -480,7 +478,7 @@ namespace dbaccess
         StorageXMLOutputStream aDesignOutput( m_rContext, i_rObjectStorage, sSettingsStreamName );
         SettingsExportContext aSettingsExportContext( m_rContext, aDesignOutput );
 
-        static const OUStringLiteral sWhitespace( u" " );
+        static constexpr OUString sWhitespace( u" "_ustr );
 
         aDesignOutput.startElement( "office:settings" );
         aDesignOutput.ignorableWhitespace( sWhitespace );

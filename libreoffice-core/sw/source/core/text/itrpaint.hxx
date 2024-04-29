@@ -21,14 +21,17 @@
 
 #include "itrtxt.hxx"
 
+#include <optional>
+
 class SwSaveClip;          // SwTextPainter
 class SwMultiPortion;
+class SwTaggedPDFHelper;
 
 class SwTextPainter : public SwTextCursor
 {
     bool m_bPaintDrop;
 
-    SwLinePortion *CalcPaintOfst( const SwRect &rPaint );
+    SwLinePortion *CalcPaintOfst(const SwRect &rPaint, bool& rbSkippedNumPortions);
     void CheckSpecialUnderline( const SwLinePortion* pPor,
                                 tools::Long nAdjustBaseLine = 0 );
 protected:
@@ -46,7 +49,10 @@ public:
         CtorInitTextPainter( pTextFrame, pTextPaintInf );
     }
     void DrawTextLine( const SwRect &rPaint, SwSaveClip &rClip,
-                       const bool bUnderSz );
+        const bool bUnderSz,
+        ::std::optional<SwTaggedPDFHelper> & roTaggedLabel,
+        ::std::optional<SwTaggedPDFHelper> & roTaggedParagraph,
+        bool isPDFTaggingEnabled);
     void PaintDropPortion();
     // if PaintMultiPortion is called recursively, we have to pass the
     // surrounding SwBidiPortion

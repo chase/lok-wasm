@@ -30,7 +30,6 @@
 #include <com/sun/star/uno/Any.hxx>
 #include <com/sun/star/uno/Reference.hxx>
 #include <com/sun/star/uno/Sequence.hxx>
-#include <cppuhelper/basemutex.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <oox/dllapi.h>
 #include <oox/helper/binarystreambase.hxx>
@@ -73,7 +72,14 @@ namespace oox::core {
 
 enum OoxmlVersion
 {
-    ECMA_DIALECT,
+    /** There are currently 5 editions of ECMA-376, latest is from 2021.
+      * 1st edition allegedly corresponds to Word 2007
+      * 2nd edition allegedly corresponds to ISO 29500:2008
+      * it's unclear what changed in later editions; there is:
+        Annex M.  Differences Between ECMA-376:2016 and ECMA-376:2006
+        but that's relative to 1st edition.
+    */
+    ECMA_376_1ST_EDITION,
     ISOIEC_29500_2008
 };
 
@@ -87,7 +93,7 @@ typedef ::cppu::WeakImplHelper<
         css::document::XFilter >
     FilterBase_BASE;
 
-class OOX_DLLPUBLIC FilterBase : public FilterBase_BASE, public ::cppu::BaseMutex
+class OOX_DLLPUBLIC FilterBase : public FilterBase_BASE
 {
 public:
     /// @throws css::uno::RuntimeException

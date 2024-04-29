@@ -29,6 +29,7 @@
 #include <osl/interlck.h>
 #include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <comphelper/types.hxx>
 
 namespace svx
@@ -55,7 +56,7 @@ SvxShowCharSetItem::~SvxShowCharSetItem()
     }
 }
 
-uno::Reference< css::accessibility::XAccessible > SvxShowCharSetItem::GetAccessible()
+rtl::Reference<SvxShowCharSetItemAcc> SvxShowCharSetItem::GetAccessible()
 {
     if( !m_xItem.is() )
     {
@@ -83,15 +84,12 @@ SvxShowCharSetAcc::~SvxShowCharSetAcc()
 void SAL_CALL SvxShowCharSetAcc::disposing()
 {
     OAccessibleSelectionHelper::disposing();
-    for (auto& rChild : m_aChildren)
-        ::comphelper::disposeComponent(rChild);
+    for (auto& rxChild : m_aChildren)
+        rxChild->dispose();
 
     m_aChildren.clear();
     m_pParent = nullptr;
 }
-
-IMPLEMENT_FORWARD_XINTERFACE2( SvxShowCharSetAcc, OAccessibleSelectionHelper, OAccessibleHelper_Base )
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( SvxShowCharSetAcc, OAccessibleSelectionHelper, OAccessibleHelper_Base )
 
 bool SvxShowCharSetAcc::implIsSelected( sal_Int64 nAccessibleChildIndex )
 {
@@ -148,7 +146,7 @@ uno::Reference< css::accessibility::XAccessible > SAL_CALL SvxShowCharSetAcc::ge
 {
     OExternalLockGuard aGuard( this );
 
-    uno::Reference< css::accessibility::XAccessible >    xRet;
+    rtl::Reference< SvxShowCharSetItemAcc >  xRet;
     SvxShowCharSetItem* pItem = m_pParent->ImplGetItem( static_cast< sal_uInt16 >( i ) );
 
     if( !pItem )
@@ -381,9 +379,6 @@ SvxShowCharSetItemAcc::~SvxShowCharSetItemAcc()
     ensureDisposed();
 }
 
-IMPLEMENT_FORWARD_XINTERFACE2( SvxShowCharSetItemAcc, OAccessibleComponentHelper, OAccessibleHelper_Base_3 )
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( SvxShowCharSetItemAcc, OAccessibleComponentHelper, OAccessibleHelper_Base_3 )
-
 void SvxShowCharSetItemAcc::ParentDestroyed()
 {
     const ::osl::MutexGuard aGuard( GetMutex() );
@@ -488,7 +483,8 @@ sal_Int64 SAL_CALL SvxShowCharSetItemAcc::getAccessibleStateSet()
         if( mpParent->mrParent.GetSelectIndexId() == mpParent->mnId )
         {
             nStateSet |= css::accessibility::AccessibleStateType::SELECTED;
-            nStateSet |= css::accessibility::AccessibleStateType::FOCUSED;
+            if (mpParent->mrParent.HasChildFocus())
+                nStateSet |= css::accessibility::AccessibleStateType::FOCUSED;
         }
         if ( mpParent->mnId >= mpParent->mrParent.FirstInView() && mpParent->mnId <= mpParent->mrParent.LastInView() )
         {

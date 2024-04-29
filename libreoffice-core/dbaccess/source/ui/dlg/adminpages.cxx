@@ -48,7 +48,7 @@ namespace dbaui
     {
     }
 
-    OGenericAdministrationPage::OGenericAdministrationPage(weld::Container* pPage, weld::DialogController* pController, const OUString& rUIXMLDescription, const OString& rId, const SfxItemSet& rAttrSet)
+    OGenericAdministrationPage::OGenericAdministrationPage(weld::Container* pPage, weld::DialogController* pController, const OUString& rUIXMLDescription, const OUString& rId, const SfxItemSet& rAttrSet)
         : SfxTabPage(pPage, pController, rUIXMLDescription, rId, &rAttrSet)
         , m_abEnableRoadmap(false)
         , m_pAdminDialog(nullptr)
@@ -208,7 +208,7 @@ namespace dbaui
 
         _bChangedSomething = true;
     }
-    void OGenericAdministrationPage::fillInt32(SfxItemSet& _rSet, const weld::SpinButton* pEdit, sal_uInt16 _nID, bool& _bChangedSomething)
+    void OGenericAdministrationPage::fillInt32(SfxItemSet& _rSet, const weld::SpinButton* pEdit, TypedWhichId<SfxInt32Item> _nID, bool& _bChangedSomething)
     {
         if (pEdit && pEdit->get_value_changed_from_saved())
         {
@@ -216,7 +216,7 @@ namespace dbaui
             _bChangedSomething = true;
         }
     }
-    void OGenericAdministrationPage::fillString(SfxItemSet& _rSet, const weld::Entry* pEdit, sal_uInt16 _nID, bool& _bChangedSomething)
+    void OGenericAdministrationPage::fillString(SfxItemSet& _rSet, const weld::Entry* pEdit, TypedWhichId<SfxStringItem> _nID, bool& _bChangedSomething)
     {
         if (pEdit && pEdit->get_value_changed_from_saved())
         {
@@ -224,7 +224,7 @@ namespace dbaui
             _bChangedSomething = true;
         }
     }
-    void OGenericAdministrationPage::fillString(SfxItemSet& _rSet, const dbaui::OConnectionURLEdit* pEdit, sal_uInt16 _nID, bool& _bChangedSomething)
+    void OGenericAdministrationPage::fillString(SfxItemSet& _rSet, const dbaui::OConnectionURLEdit* pEdit, TypedWhichId<SfxStringItem> _nID, bool& _bChangedSomething)
     {
         if (pEdit && pEdit->get_value_changed_from_saved())
         {

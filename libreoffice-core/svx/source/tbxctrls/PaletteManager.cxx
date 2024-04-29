@@ -22,6 +22,7 @@
 #include <basegfx/color/bcolortools.hxx>
 #include <comphelper/propertyvalue.hxx>
 #include <tools/urlobj.hxx>
+#include <tools/json_writer.hxx>
 #include <osl/file.hxx>
 #include <unotools/pathoptions.hxx>
 #include <sfx2/objsh.hxx>
@@ -43,7 +44,6 @@
 #include <docmodel/color/ComplexColor.hxx>
 #include <docmodel/color/ComplexColorJSON.hxx>
 #include <editeng/colritem.hxx>
-#include <svx/svxids.hrc>
 #include <editeng/memberids.h>
 
 #include <palettes.hxx>
@@ -211,7 +211,7 @@ void PaletteManager::ReloadColorSet(SvxColorValueSet &rColorSet)
             auto pColorSet = pObjectShell->GetThemeColors();
             mnColorCount = 12;
             rColorSet.Clear();
-            sal_uInt16 nItemId = 0;
+            sal_uInt16 nItemId = 1;
 
             if (!pColorSet)
                 return;
@@ -382,6 +382,12 @@ void PaletteManager::AddRecentColor(const Color& rRecentColor, const OUString& r
     batch->commit();
 }
 
+void PaletteManager::SetSplitButtonColor(const NamedColor& rColor)
+{
+    if (mpBtnUpdater)
+        mpBtnUpdater->SetRecentColor(rColor);
+}
+
 void PaletteManager::SetBtnUpdater(svx::ToolboxButtonColorUpdaterBase* pBtnUpdater)
 {
     mpBtnUpdater = pBtnUpdater;
@@ -399,16 +405,16 @@ void PaletteManager::PopupColorPicker(weld::Window* pParent, const OUString& aCo
     m_pColorDlg = std::make_unique<SvColorDialog>();
     m_pColorDlg->SetColor(rInitialColor);
     m_pColorDlg->SetMode(svtools::ColorPickerMode::Modify);
-    m_pColorDlg->ExecuteAsync(pParent, [this, aCommandCopy] (sal_Int32 nResult) {
+    std::shared_ptr<PaletteManager> xSelf(shared_from_this());
+    m_pColorDlg->ExecuteAsync(pParent, [xSelf, aCommandCopy] (sal_Int32 nResult) {
         if (nResult == RET_OK)
         {
-            Color aLastColor = m_pColorDlg->GetColor();
+            Color aLastColor = xSelf->m_pColorDlg->GetColor();
             OUString sColorName = "#" + aLastColor.AsRGBHexString().toAsciiUpperCase();
             NamedColor aNamedColor(aLastColor, sColorName);
-            if (mpBtnUpdater)
-                mpBtnUpdater->Update(aNamedColor);
-            AddRecentColor(aLastColor, sColorName);
-            maColorSelectFunction(aCommandCopy, aNamedColor);
+            xSelf->SetSplitButtonColor(aNamedColor);
+            xSelf->AddRecentColor(aLastColor, sColorName);
+            xSelf->maColorSelectFunction(aCommandCopy, aNamedColor);
         }
     });
 }
@@ -464,9 +470,9 @@ void PaletteManager::DispatchColorCommand(const OUString& aCommand, const NamedC
 }
 
 // TODO: make it generic, send any palette
-void PaletteManager::generateJSON(boost::property_tree::ptree& aTree, const std::set<Color>& rColors)
+void PaletteManager::generateJSON(tools::JsonWriter& aTree, const std::set<Color>& rColors)
 {
-    boost::property_tree::ptree aColorListTree;
+    auto aColorListTree = aTree.startArray("DocumentColors");
     sal_uInt32 nStartIndex = 1;
 
     const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
@@ -476,26 +482,20 @@ void PaletteManager::generateJSON(boost::property_tree::ptree& aTree, const std:
     auto aColorIt = rColors.begin();
     while (aColorIt != rColors.end())
     {
-        boost::property_tree::ptree aColorRowTree;
+        auto aColorRowTree = aTree.startAnonArray();
 
         for (sal_uInt32 nColumn = 0; nColumn < nColumnCount; nColumn++)
         {
-            boost::property_tree::ptree aColorTree;
+            auto aColorTree = aTree.startStruct();
             OUString sName = aNamePrefix + OUString::number(nStartIndex++);
-            aColorTree.put("Value", aColorIt->AsRGBHexString().toUtf8());
-            aColorTree.put("Name", sName);
-
-            aColorRowTree.push_back(std::make_pair("", aColorTree));
+            aTree.put("Value", aColorIt->AsRGBHexString().toUtf8());
+            aTree.put("Name", sName);
 
             aColorIt++;
             if (aColorIt == rColors.end())
                 break;
         }
-
-        aColorListTree.push_back(std::make_pair("", aColorRowTree));
     }
-
-    aTree.add_child("DocumentColors", aColorListTree);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

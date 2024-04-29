@@ -65,8 +65,8 @@ void SwBezierShell::Execute(SfxRequest const &rReq)
     SdrView*    pSdrView = pSh->GetDrawView();
     const SfxItemSet *pArgs = rReq.GetArgs();
     sal_uInt16      nSlotId = rReq.GetSlot();
-    bool        bChanged = pSdrView->GetModel()->IsChanged();
-    pSdrView->GetModel()->SetChanged(false);
+    bool bChanged = pSdrView->GetModel().IsChanged();
+    pSdrView->GetModel().SetChanged(false);
     const SfxPoolItem* pItem;
     if(pArgs)
         pArgs->GetItemState(nSlotId, false, &pItem);
@@ -78,7 +78,7 @@ void SwBezierShell::Execute(SfxRequest const &rReq)
             if (pSh->IsObjSelected())
             {
                 if (pSdrView->HasMarkedPoints())
-                    pSh->GetView().GetViewFrame()->GetDispatcher()->Execute(SID_BEZIER_DELETE);
+                    pSh->GetView().GetViewFrame().GetDispatcher()->Execute(SID_BEZIER_DELETE);
                 else
                 {
                     pSh->DelSelectedObj();
@@ -121,7 +121,7 @@ void SwBezierShell::Execute(SfxRequest const &rReq)
                                     SID_BEZIER_MOVE,
                                     0
                                 };
-                GetView().GetViewFrame()->GetBindings().Invalidate(aInva);
+                GetView().GetViewFrame().GetBindings().Invalidate(aInva);
             }
             break;
 
@@ -182,7 +182,7 @@ void SwBezierShell::Execute(SfxRequest const &rReq)
                                                 SID_BEZIER_SYMMTR,
                                                 0
                                             };
-                            GetView().GetViewFrame()->GetBindings().Invalidate(aInva);
+                            GetView().GetViewFrame().GetBindings().Invalidate(aInva);
                         }
                         break;
                     }
@@ -208,10 +208,10 @@ void SwBezierShell::Execute(SfxRequest const &rReq)
             break;
     }
 
-    if (pSdrView->GetModel()->IsChanged())
+    if (pSdrView->GetModel().IsChanged())
         GetShell().SetModified();
     else if (bChanged)
-        pSdrView->GetModel()->SetChanged();
+        pSdrView->GetModel().SetChanged();
 }
 
 void SwBezierShell::GetState(SfxItemSet &rSet)

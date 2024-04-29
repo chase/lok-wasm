@@ -25,6 +25,12 @@ Option Explicit
 &apos;&apos;&apos;
 &apos;&apos;&apos;		The provided interfaces include simple tables, queries and fields lists, and access to database metadata.
 &apos;&apos;&apos;
+&apos;&apos;&apos;		Transaction handling
+&apos;&apos;&apos;			Changes to data remain reversible until the moment the running script instructs the database to commit them.
+&apos;&apos;&apos;			The implicit (default) behaviour is that commit takes place after the execution of every single SQL statement.
+&apos;&apos;&apos;			The choice can be made (SetTransactionMode()) to take commitments manually.
+&apos;&apos;&apos;			The Commit() and Rollback() statements delimit transactions.
+&apos;&apos;&apos;
 &apos;&apos;&apos;		Service invocation and usage:
 &apos;&apos;&apos;		1) To access any database at anytime
 &apos;&apos;&apos;				Dim myDatabase As Object
@@ -53,6 +59,7 @@ REM ================================================================== EXCEPTION
 
 Private Const DBREADONLYERROR		=	&quot;DBREADONLYERROR&quot;
 Private Const SQLSYNTAXERROR		=	&quot;SQLSYNTAXERROR&quot;
+Private Const SQLSYNTAX2ERROR		=	&quot;SQLSYNTAX2ERROR&quot;
 
 REM ============================================================= PRIVATE MEMBERS
 
@@ -66,8 +73,13 @@ Private	_URL					As String		&apos; Text on status bar
 Private _Location				As String		&apos; File name
 Private _ReadOnly				As Boolean
 Private	_MetaData				As Object		&apos; com.sun.star.sdbc.XDatabaseMetaData
+Private _User					As String		&apos; Connection parameters to enable a reconnection
+Private _Password				As String
+Private _Datasets				As Variant		&apos; Array of open datasets
 
 REM ============================================================ MODULE CONSTANTS
+
+Const cstToken = &quot;//&quot;							&apos; Form names accept special characters but not slashes
 
 REM ===================================================== CONSTRUCTOR/DESTRUCTOR
 
@@ -83,6 +95,9 @@ Private Sub Class_Initialize()
 	_Location = &quot;&quot;
 	_ReadOnly = True
 	Set _MetaData = Nothing
+	_User = &quot;&quot;
+	_Password = &quot;&quot;
+	_Datasets = Array()
 End Sub		&apos;	SFDatabases.SF_Database Constructor
 
 REM -----------------------------------------------------------------------------
@@ -137,19 +152,155 @@ Check:
 	ScriptForge.SF_Utils._EnterFunction(cstThisSub, cstSubArgs)
 
 Try:
-	With _Connection
-		If Not IsNull(_Connection) Then
-			If ScriptForge.SF_Session.HasUnoMethod(_Connection, &quot;flush&quot;) Then .flush()
-			.close()
-			.dispose()
-		End If
-		Dispose()
-	End With
+	_CloseConnection()
+	Dispose()
 
 Finally:
 	ScriptForge.SF_Utils._ExitFunction(cstThisSub)
 	Exit Sub
-End Sub
+End Sub			&apos;	SFDatabases.SF_Database.CloseDatabase
+
+REM -----------------------------------------------------------------------------
+Public Sub Commit()
+&apos;&apos;&apos;	Commit all updates done since the previous Commit or Rollback
+&apos;&apos;&apos;	The statement is ignored if the commits are done automatically after each SQL statement.
+&apos;&apos;&apos;	Args:
+&apos;&apos;&apos;	Returns:
+&apos;&apos;&apos;	Exceptions:
+&apos;&apos;&apos;		DBREADONLYERROR			The method is not applicable on a read-only database
+&apos;&apos;&apos;	Example:
+&apos;&apos;&apos;		db.SetTransactionMode(4)		&apos;	Highest transaction level
+&apos;&apos;&apos;		db.RunSql(&quot;UPDATE ...&quot;)
+&apos;&apos;&apos;		db.Commit()
+&apos;&apos;&apos;		db.RunSql(DELETE ...&quot;)
+&apos;&apos;&apos;		If ...something happened... Then db.Rollback() Else db.Commit()
+&apos;&apos;&apos;		db.SetTransactionMode()			&apos;	Back to the automatic mode
+
+Const cstThisSub = &quot;SFDatabases.Database.Commit&quot;
+Const cstSubArgs = &quot;&quot;
+
+	On Local Error GoTo Finally
+
+Check:
+	ScriptForge.SF_Utils._EnterFunction(cstThisSub, cstSubArgs)
+	If _ReadOnly Then GoTo Catch_ReadOnly
+
+Try:
+	With _Connection
+		If Not .AutoCommit Then
+			.commit()
+			&apos;	To make updates potentially visible in the user interface ...
+			_FlushConnection()
+		End If
+	End With
+
+Finally:
+	On Local Error GoTo 0
+	ScriptForge.SF_Utils._ExitFunction(cstThisSub)
+	Exit Sub
+Catch_ReadOnly:
+	ScriptForge.SF_Exception.RaiseFatal(DBREADONLYERROR)
+	GoTo Finally
+End Sub			&apos;	SFDatabases.SF_Database.Commit
+
+REM -----------------------------------------------------------------------------
+Public Function CreateDataset(Optional ByVal SQLCommand As Variant _
+									, Optional ByVal DirectSql As Variant _
+									, Optional ByVal Filter As Variant _
+									, Optional ByVal OrderBy As Variant _
+									) As Object
+&apos;&apos;&apos;	Create and return a Dataset class instance based on a table, a query
+&apos;&apos;&apos;	or an SQL SELECT statement.
+&apos;&apos;&apos;	Args:
+&apos;&apos;&apos;		SQLCommand: as a case-sensitive string, a table name, a query name
+&apos;&apos;&apos;			or a valid SQL SELECT statement. Identifiers may be surrounded
+&apos;&apos;&apos;			with square brackets
+&apos;&apos;&apos;		DirectSql: when True, the statement is processed by the targeted RDBMS
+&apos;&apos;&apos;		Filter: an additional condition that records must match, expressed
+&apos;&apos;&apos;			as a valid SQL WHERE clause without the WHERE keyword
+&apos;&apos;&apos;		OrderBy: the ordering of the dataset expressed as a valid SQL ORDER BY clause
+&apos;&apos;&apos;			without the ORDER BY keywords
+&apos;&apos;&apos;	Returns:
+&apos;&apos;&apos;		A SF_Dataset instance or Nothing when not successful
+&apos;&apos;&apos;	Exceptions
+&apos;&apos;&apos;		SQLSYNTAX2ERROR			The given SQL statement is incorrect
+
+Dim oDataset As Object			&apos;	Return value
+Dim bDirect As Boolean			&apos;	Alias of DirectSql
+Dim sSql As String				&apos;	SQL statement
+Dim sType As String				&apos;	TABLE, QUERY or SQL
+Dim oQuery As Object			&apos;	com.sun.star.ucb.XContent
+Dim ARR As Object				:	Set ARR = ScriptForge.SF_Array
+
+Const cstThisSub = &quot;SFDatabases.Database.CreateDataset&quot;
+Const cstSubArgs = &quot;SQLCommand, [DirectSQL=False], [Filter=&quot;&quot;&quot;&quot;], [OrderBy=&quot;&quot;&quot;&quot;]&quot;
+
+	If ScriptForge.SF_Utils._ErrorHandling() Then On Local Error GoTo Catch
+	Set oDataset = Nothing
+
+Check:
+	If IsMissing(DirectSQL) Or IsEmpty(DirectSQL) Then DirectSQL = False
+	If IsMissing(Filter) Or IsEmpty(Filter) Then Filter = &quot;&quot;
+	If IsMissing(OrderBy) Or IsEmpty(OrderBy) Then OrderBy = &quot;&quot;
+	If ScriptForge.SF_Utils._EnterFunction(cstThisSub, cstSubArgs) Then
+		If Not ScriptForge.SF_Utils._Validate(SQLCommand, &quot;SQLCommand&quot;, V_STRING) Then GoTo Finally
+		If Not ScriptForge.SF_Utils._Validate(DirectSQL, &quot;DirectSQL&quot;, ScriptForge.V_BOOLEAN) Then GoTo Finally
+		If Not ScriptForge.SF_Utils._Validate(Filter, &quot;Filter&quot;, V_STRING) Then GoTo Finally
+		If Not ScriptForge.SF_Utils._Validate(OrderBy, &quot;OrderBy&quot;, V_STRING) Then GoTo Finally
+	End If
+
+Try:
+	&apos;	Table, query of SQL ? Prepare dataset
+	If ARR.Contains(Tables, SQLCommand, CaseSensitive := True, SortOrder := &quot;ASC&quot;) Then
+		If Len(Filter) + Len(OrderBy) = 0 Then		&apos;	Filter seems not applicable on pure TABLE resultset
+			sType = &quot;TABLE&quot;
+			sSql = SQLCommand
+		Else
+			sType = &quot;SQL&quot;
+			sSql = &quot;SELECT * FROM [&quot; &amp; SQLCommand &amp; &quot;]&quot;
+		End If
+		bDirect = DirectSQL
+	ElseIf ARR.Contains(Queries, SQLCommand, CaseSensitive := True, SortOrder := &quot;ASC&quot;) Then
+		Set oQuery = _Connection.Queries.getByName(SQLCommand)
+		If Len(Filter) + Len(OrderBy) = 0 Then		&apos;	Filter seems not applicable on pure QUERY resultset
+			sType = &quot;QUERY&quot;
+			sSql = SQLCommand
+		Else
+			sType = &quot;SQL&quot;
+			sSql = oQuery.Command
+		End If
+		bDirect = Not oQuery.EscapeProcessing
+	ElseIf ScriptForge.SF_String.StartsWith(SQLCommand, &quot;SELECT&quot;, CaseSensitive := False) Then
+		sType = &quot;SQL&quot;
+		sSql = SQLCommand
+		bDirect = DirectSQL
+	Else
+		If Not ScriptForge.SF_Utils._Validate(SQLCommand, &quot;SQLCommand&quot;, V_STRING _
+			, ARR.Flatten(ARR.Append(Tables, Queries))) Then GoTo Finally
+	End If
+
+	Set oDataset = New SF_Dataset
+	With oDataset
+		Set .[Me] = oDataset
+		Set ._ParentDatabase = [Me]
+		._DatasetType = sType
+		._Command = SQLCommand
+		._Sql = _ReplaceSquareBrackets(sSql)
+		._DirectSql = bDirect
+		._Filter = _ReplaceSquareBrackets(Filter)
+		._OrderBy = _ReplaceSquareBrackets(OrderBy)
+		._ReadOnly = _ReadOnly
+		&apos;	If creation not successful, then cancel everything
+		If Not ._Initialize() Then Set oDataset = .Dispose()
+	End With
+
+Finally:
+	Set CreateDataset = oDataset
+	ScriptForge.SF_Utils._ExitFunction(cstThisSub)
+	Exit Function
+Catch:
+	GoTo Finally
+End Function	&apos;	SFDatabases.SF_Database.CreateDataset
 
 REM -----------------------------------------------------------------------------
 Public Function DAvg(Optional ByVal Expression As Variant _
@@ -352,7 +503,7 @@ Try:
 
 	With oResult
 		&apos;Initialize output array with header row
-		Set oColumns = oResult.getColumns()
+		Set oColumns = .getColumns()
 		lCols = oColumns.Count - 1
 		If Header Then
 			lRows = 0
@@ -395,6 +546,8 @@ Public Function Methods() As Variant
 
 	Methods = Array( _
 					&quot;CloseDatabase&quot; _
+					, &quot;Commit&quot; _
+					, &quot;CreateDataset&quot; _
 					, &quot;DAvg&quot; _
 					, &quot;DCount&quot; _
 					, &quot;DLookup&quot; _
@@ -402,13 +555,69 @@ Public Function Methods() As Variant
 					, &quot;DMin&quot; _
 					, &quot;DSum&quot; _
 					, &quot;GetRows&quot; _
+					, &quot;OpenFormDocument&quot; _
 					, &quot;OpenQuery&quot; _
 					, &quot;OpenSql&quot; _
 					, &quot;OpenTable&quot; _
+					, &quot;Rollback&quot; _
 					, &quot;RunSql&quot; _
+					, &quot;SetTransactionMode&quot; _
 					)
 
 End Function	&apos;	SFDatabases.SF_Database.Methods
+
+REM -----------------------------------------------------------------------------
+Public Function OpenFormDocument(Optional ByVal FormDocument As Variant) As Object
+&apos;&apos;&apos;	Open the FormDocument given by its hierarchical name in normal mode
+&apos;&apos;&apos;	If the form document is already open, the form document is made active
+&apos;&apos;&apos;	Args:
+&apos;&apos;&apos;		FormDocument: a valid form document name as a case-sensitive string
+&apos;&apos;&apos;			When hierarchical, the hierarchy must be rendered with forward slashes (&quot;/&quot;)
+&apos;&apos;&apos;	Returns:
+&apos;&apos;&apos;		A FormDocument instance or Nothing
+&apos;&apos;&apos;	Exceptions:
+&apos;&apos;&apos;		Form name is invalid
+&apos;&apos;&apos;	Example:
+&apos;&apos;&apos;		Set oForm = oDb.OpenFormDocument(&quot;Folder1/myFormDocument&quot;)
+
+Dim oOpen As Object					&apos;	Return value
+Dim oFormDocuments As Variant		&apos;	com.sun.star.comp.dba.ODocumentContainer
+Dim vFormNames As Variant			&apos;	Array of all document form names present in the document
+Dim vOpenArgs As Variant			&apos;	Array of property values
+Dim oNewForm As Object				&apos;	Output of loadComponent()
+Const cstThisSub = &quot;SFDatabases.Database.OpenFormDocument&quot;
+Const cstSubArgs = &quot;FormDocument&quot;
+
+	If ScriptForge.SF_Utils._ErrorHandling() Then On Local Error GoTo Catch
+	Set oOpen = Nothing
+
+Check:
+	&apos;	Build list of available FormDocuments recursively with _CollectFormDocuments
+	Set oFormDocuments = _Connection.Parent.DataBaseDocument.FormDocuments
+
+	If ScriptForge.SF_Utils._EnterFunction(cstThisSub, cstSubArgs) Then
+		vFormNames = Split(_CollectFormDocuments(oFormDocuments), cstToken)
+		If Not ScriptForge.SF_Utils._Validate(FormDocument, &quot;FormDocument&quot;, V_STRING, vFormNames) Then GoTo Finally
+	End If
+
+Try:
+	vOpenArgs = Array(SF_Utils._MakePropertyValue(&quot;ActiveConnection&quot;, _Connection) _
+						, SF_Utils._MakePropertyValue(&quot;OpenMode&quot;, &quot;open&quot;) _
+				)
+	Set oNewForm = oFormDocuments.loadComponentFromURL(FormDocument, &quot;&quot;, 0, vOpenArgs)
+
+	Set oOpen = ScriptForge.SF_Services.CreateScriptService(&quot;SFDocuments.FormDocument&quot;, oNewForm)
+
+	&apos;	Prevent desynchronization when using .last(), .next() etc immediately after component loading. Bug #156836
+	Wait 1
+
+Finally:
+	Set OpenFormDocument = oOpen
+	ScriptForge.SF_Utils._ExitFunction(cstThisSub)
+	Exit Function
+Catch:
+	GoTo Finally
+End Function	&apos;	SF_Databases.SF_Database.OpenFormDocument
 
 REM -----------------------------------------------------------------------------
 Public Function OpenQuery(Optional ByVal QueryName As Variant) As Object
@@ -445,7 +654,7 @@ Finally:
 	Exit Function
 Catch:
 	GoTo Finally
-End Function	&apos;	SFDocuments.SF_Base.OpenQuery
+End Function	&apos;SFDatabases.SF_Database.OpenQuery
 
 REM -----------------------------------------------------------------------------
 Public Function OpenSql(Optional ByRef Sql As Variant _
@@ -485,7 +694,7 @@ Finally:
 	Exit Function
 Catch:
 	GoTo Finally
-End Function	&apos;	SFDocuments.SF_Base.OpenSql
+End Function	&apos;	SFDatabases.SF_Database.OpenSql
 
 REM -----------------------------------------------------------------------------
 Public Function OpenTable(Optional ByVal TableName As Variant) As Object
@@ -521,7 +730,7 @@ Finally:
 	Exit Function
 Catch:
 	GoTo Finally
-End Function	&apos;	SFDocuments.SF_Base.OpenTable
+End Function	&apos;	SFDatabases.SF_Database.OpenTable
 
 REM -----------------------------------------------------------------------------
 Public Function Properties() As Variant
@@ -535,6 +744,45 @@ Public Function Properties() As Variant
 					)
 
 End Function	&apos;	SFDatabases.SF_Database.Properties
+
+REM -----------------------------------------------------------------------------
+Public Sub Rollback()
+&apos;&apos;&apos;	Cancel all updates done since the previous Commit or Rollback
+&apos;&apos;&apos;	The statement is ignored if the commits are done automatically after each SQL statement.
+&apos;&apos;&apos;	Args:
+&apos;&apos;&apos;	Returns:
+&apos;&apos;&apos;	Exceptions:
+&apos;&apos;&apos;		DBREADONLYERROR			The method is not applicable on a read-only database
+&apos;&apos;&apos;	Example:
+&apos;&apos;&apos;		db.SetTransactionMode(4)		&apos;	Highest transaction level
+&apos;&apos;&apos;		db.RunSql(&quot;UPDATE ...&quot;)
+&apos;&apos;&apos;		db.Commit()
+&apos;&apos;&apos;		db.RunSql(DELETE ...&quot;)
+&apos;&apos;&apos;		If ...something happened... Then db.Rollback() Else db.Commit()
+&apos;&apos;&apos;		db.SetTransactionMode()			&apos;	Back to the automatic mode
+
+Const cstThisSub = &quot;SFDatabases.Database.Rollback&quot;
+Const cstSubArgs = &quot;&quot;
+
+	On Local Error GoTo Finally
+
+Check:
+	ScriptForge.SF_Utils._EnterFunction(cstThisSub, cstSubArgs)
+	If _ReadOnly Then GoTo Catch_ReadOnly
+
+Try:
+	With _Connection
+		If Not .AutoCommit Then .rollback()
+	End With
+
+Finally:
+	On Local Error GoTo 0
+	ScriptForge.SF_Utils._ExitFunction(cstThisSub)
+	Exit Sub
+Catch_ReadOnly:
+	ScriptForge.SF_Exception.RaiseFatal(DBREADONLYERROR)
+	GoTo Finally
+End Sub			&apos;	SFDatabases.SF_Database.Rollback
 
 REM -----------------------------------------------------------------------------
 Public Function RunSql(Optional ByVal SQLCommand As Variant _
@@ -631,7 +879,224 @@ Catch:
 	GoTo Finally
 End Function	&apos;	SFDatabases.SF_Database.SetProperty
 
+REM -----------------------------------------------------------------------------
+Public Function SetTransactionMode(Optional ByVal TransactionMode As Variant) As Boolean
+&apos;&apos;&apos;	Configure the handling of transactions.
+&apos;&apos;&apos;	Usually all transactions are in auto-commit mode, that means, a commit takes place
+&apos;&apos;&apos;	after each single SQL command. Therefore to control a transaction manually, implies to switch auto-commit off.
+&apos;&apos;&apos;	The first SQL command starts a transaction that is active until the corresponding
+&apos;&apos;&apos;	methods have been committed or rolled back.
+&apos;&apos;&apos;
+&apos;&apos;&apos;	The transaction mode remains valid until the next call of the method with a different value,
+&apos;&apos;&apos;	or until the closure of the actual Database instance,
+&apos;&apos;&apos;	or until a call to SetTransactionMode() without argument, which cancels the manual transaction mode.
+&apos;&apos;&apos;
+&apos;&apos;&apos;	The method may close and replace the actual  connection. This means that all open datasets
+&apos;&apos;&apos;	are first closed. Open datasheets might see their content changed or vanish.
+&apos;&apos;&apos;	The easiest is to set the transaction mode immediately after the creation of the Database instance.
+&apos;&apos;&apos;
+&apos;&apos;&apos;	Args:
+&apos;&apos;&apos;		TransactionMode: one of the com.sun.star.sdbc.TransactionIsolation constants:
+&apos;&apos;&apos;			(0)	NONE				Indicates that transactions are not supported. Default: cancel the transaction mode.
+&apos;&apos;&apos;			(1) READ_UNCOMMITTED	Dirty reads, non-repeatable reads and phantom reads can occur.
+&apos;&apos;&apos;									This level allows a row changed by one transaction to be read by another transaction
+&apos;&apos;&apos;									before any changes in that row have been committed (a &quot;dirty read&quot;).
+&apos;&apos;&apos;									If any of the changes are rolled back, the second transaction will have retrieved an invalid row. 
+&apos;&apos;&apos;			(2) READ_COMMITTED		Dirty reads are prevented; non-repeatable reads and phantom reads can occur.
+&apos;&apos;&apos;									This level only prohibits a transaction from reading a row with uncommitted changes in it.
+&apos;&apos;&apos;			(4)	REPEATABLE_READ		Dirty reads and non-repeatable reads are prevented; phantom reads can occur.
+&apos;&apos;&apos;									This level prohibits a transaction from reading a row with uncommitted changes in it,
+&apos;&apos;&apos;									and it also prohibits the situation where one transaction reads a row,
+&apos;&apos;&apos;									a second transaction alters the row, and the first transaction rereads the row,
+&apos;&apos;&apos;									getting different values the second time (a &quot;non-repeatable read&quot;).
+&apos;&apos;&apos;			(8) SERIALIZABLE		Dirty reads, non-repeatable reads and phantom reads are prevented.
+&apos;&apos;&apos;									This level includes the prohibitions in REPEATABLE_READ and further prohibits
+&apos;&apos;&apos;									the situation where one transaction reads all rows that satisfy a WHERE condition,
+&apos;&apos;&apos;									a second transaction inserts a row that satisfies that WHERE condition,
+&apos;&apos;&apos;									and the first transaction rereads for the same condition, retrieving
+&apos;&apos;&apos;									the additional &quot;phantom&quot; row in the second read. 
+&apos;&apos;&apos;	Returns:
+&apos;&apos;&apos;		True when successful.
+&apos;&apos;&apos;	Exceptions:
+&apos;&apos;&apos;		DBREADONLYERROR			The method is not applicable on a read-only database
+&apos;&apos;&apos;	Example:
+&apos;&apos;&apos;		oDb.SetTransactionMode(com.sun.star.sdbc.TransactionIsolation.SERIALIZABLE)		&apos;	8
+
+Dim bSet As Boolean				&apos;	Return value
+Dim bCommit As Boolean			&apos;	To compare with AutoCommit
+Const cstThisSub = &quot;SFDatabases.Database.SetTransactionMode&quot;
+Const cstSubArgs = &quot;TransactionMode=0|1|2|4|8&quot;
+
+	If ScriptForge.SF_Utils._ErrorHandling() Then On Local Error GoTo Catch
+	bSet = False
+
+Check:
+	If IsMissing(TransactionMode) Or IsEmpty(TransactionMode) Then TransactionMode = 0
+	If ScriptForge.SF_Utils._EnterFunction(cstThisSub, cstSubArgs) Then
+		If Not ScriptForge.SF_Utils._Validate(TransactionMode, &quot;TransactionMode&quot;, ScriptForge.V_NUMERIC, Array(0, 1, 2, 4, 8)) Then GoTo Finally
+	End If
+	If _ReadOnly Then GoTo Catch_ReadOnly
+
+Try:
+	With _Connection
+		bCommit = ( TransactionMode &gt; com.sun.star.sdbc.TransactionIsolation.NONE )
+		&apos;	Replace the existing connection
+		If Not IsNull(_Connection) Then
+			If .AutoCommit And bCommit Then
+				_CloseConnection()
+				Set _Connection = _DataSource.getIsolatedConnection(_User, _Password)
+			ElseIf Not .AutoCommit And Not bCommit Then
+				_CloseConnection()
+				Set _Connection = _DataSource.getConnection(_User, _Password)
+			End If
+		End If
+
+		&apos;	Set the transaction mode
+		If bCommit Then
+			.SetTransactionIsolation(CLng(TransactionMode))
+			.setAutoCommit(Not bCommit)
+		End If
+	End With
+
+	bSet = True
+
+Finally:
+	SetTransactionMode = bSet
+	ScriptForge.SF_Utils._ExitFunction(cstThisSub)
+	Exit Function
+Catch:
+	GoTo Finally
+Catch_ReadOnly:
+	ScriptForge.SF_Exception.RaiseFatal(DBREADONLYERROR)
+	GoTo Finally
+End Function	&apos;	SFDatabases.SF_Database.SetTransactionMode
+
 REM =========================================================== PRIVATE FUNCTIONS
+
+REM -----------------------------------------------------------------------------
+Public Function _AddToDatasets(ByRef poDataset As Object) As Long
+&apos;&apos;&apos;	Insert a newly created Dataset instance in the open datasets array
+&apos;&apos;&apos;	and return the index of the used entry.
+&apos;&apos;&apos;	Empty space is reused.
+&apos;&apos;&apos;	Args:
+&apos;&apos;&apos;		poDataset: the dataset instance to insert
+
+Dim lIndex As Long			&apos;	Return value
+Dim lSize As Long			&apos;	UBound of the _datasets array
+Dim i As Long
+
+Check:
+	lIndex = -1
+	If IsNull(poDataset) Then Exit Function
+	On Local Error GoTo Finally
+	lSize = UBound(_Datasets)
+
+Try:
+	&apos;	Can an empty entry be reused ?
+	For i = 0 To lSize
+		If IsNull(_Datasets(i)) Then
+			lIndex = i
+			Exit For
+		End If
+	Next i
+
+	&apos;	Resize _Datasets if no empty space
+	If lIndex &lt; 0 Then
+		lSize = lSize + 1
+		If lSize &gt; 0 Then
+			ReDim Preserve _Datasets(0 To lSize)
+		Else
+			ReDim _Datasets (0 To 0)
+		End If
+		lIndex = lSize
+	End If
+
+	&apos;	Insert new object
+	Set _Datasets(lIndex) = poDataset
+
+Finally:
+	_AddToDatasets = lIndex
+	Exit Function
+End Function	&apos;	SFDatabases.SF_Database._AddToDatasets
+
+REM -----------------------------------------------------------------------------
+Private Sub _CloseConnection()
+&apos;&apos;&apos;	Close the actual connection
+&apos;&apos;&apos;	To enable transaction modes, it is necessary to reinitialize the connection to the datasource.
+&apos;&apos;&apos;	The reinit includes
+&apos;&apos;&apos;		- the closure of all open datasets
+&apos;&apos;&apos;		- flushing the buffered and committed updates
+&apos;&apos;&apos;		- the effective closure
+&apos;&apos;&apos;	Otherwise the experience showed undesired side-effects.
+
+Dim oParent As Object			&apos;	Parent of actual connection
+Dim oDataset As Object			&apos;	Single dataset in the _Datasets array
+Dim oSession As Object			:	Set oSession = ScriptForge.SF_Session
+Dim i As Long
+
+	On Local Error GoTo Finally		&apos;	Never abort
+
+Check:
+	If IsNull(_Connection) Then Exit Sub
+
+Try:
+	&apos;	Close datasets
+	For i = 0 To UBound(_Datasets)
+		Set oDataset = _Datasets(i)
+		If Not IsNull(oDataset) Then oDataset.CloseDataset()
+		Set _Datasets(i) = Nothing
+	Next i
+	_Datasets = Array()
+
+	&apos;	Flush buffers
+	_FlushConnection()
+
+	&apos;	Close the connection
+	_Connection.close()
+	_Connection.dispose()
+
+Finally:
+	On Local Error GoTo 0
+	Exit Sub
+End Sub			&apos;	SFDatabases.SF_Database._CloseConnection
+
+REM -----------------------------------------------------------------------------
+Private Function _CollectFormDocuments(ByRef poContainer As Object) As String
+&apos;&apos;&apos;	Returns a token-separated string of all hierarchical formdocument names
+&apos;&apos;&apos;	depending on the formdocuments container in argument
+&apos;&apos;&apos;	The function traverses recursively the whole tree below the container
+&apos;&apos;&apos;	The initial call starts from the container _Component.getFormDocuments
+&apos;&apos;&apos;	The list contains closed and open forms
+
+Dim sCollectNames As String			&apos;	Return value
+Dim oSubItem As Object				&apos;	com.sun.star.container.XNameAccess (folder) or com.sun.star.ucb.XContent (form)
+Dim i As Long
+Const cstFormType = &quot;application/vnd.oasis.opendocument.text&quot;
+									&apos;	Identifies forms. Folders have a zero-length content type
+
+	On Local Error GoTo Finally
+
+Try:
+	sCollectNames = &quot;&quot;
+	With poContainer
+		For i = 0 To .Count - 1
+			Set oSubItem = .getByIndex(i)
+			If oSubItem.ContentType = cstFormType Then		&apos;	Add the form to the list
+				sCollectNames = sCollectNames &amp; cstToken &amp; oSubItem.HierarchicalName
+			Else
+				sCollectNames = sCollectNames &amp; cstToken &amp; _CollectFormDocuments(oSubItem)
+			End If
+		Next i
+	End With
+
+Finally:
+	If Len(sCollectNames) &gt; 0 Then
+		_CollectFormDocuments = Mid(sCollectNames, Len(cstToken) + 1)	&apos;	Skip the initial token
+	Else
+		_CollectFormDocuments = &quot;&quot;
+	End If
+	Exit Function
+End Function	&apos;	SFDatabases.SF_Database._CollectFormDocuments
 
 REM -----------------------------------------------------------------------------------------------------------------------
 Private Function _DFunction(ByVal psFunction As String _
@@ -709,9 +1174,7 @@ Try:
 	&apos;	Execute the SQL statement and retain the first column of the first record
 	Set oResult = _ExecuteSql(sSql, True)
 	If Not IsNull(oResult) And Not IsEmpty(oResult) Then
-		If Not oResult.first() Then Goto Finally
-		If oResult.isAfterLast() Then GoTo Finally
-		vResult = _GetColumnValue(oResult, 1, True)		&apos;	Force return of binary field
+		If oResult.first() Then vResult = _GetColumnValue(oResult, 1) Else GoTo Finally
 	End If
 	Set oResult = Nothing
 
@@ -767,6 +1230,7 @@ Finally:
 	Set oStatement = Nothing
 	Exit Function
 Catch_Sql:
+	On Local Error GoTo 0
 	ScriptForge.SF_Exception.RaiseFatal(SQLSYNTAXERROR, sSql)
 	GoTo Finally
 Catch:
@@ -774,22 +1238,47 @@ Catch:
 End Function	&apos;	SFDatabases.SF_Database._ExecuteSql
 
 REM -----------------------------------------------------------------------------
+Private Sub _FlushConnection()
+&apos;&apos;&apos;	Empties the buffers of the actual connection
+&apos;&apos;&apos;	Sub called after each commit and at connection closure..
+
+Dim oParent As Object			&apos;	Parent of actual connection
+Dim oSession As Object			:	Set oSession = ScriptForge.SF_Session
+
+	On Local Error GoTo Finally		&apos;	Never abort
+
+Check:
+	If IsNull(_Connection) Then Exit Sub
+
+Try:
+	&apos;	Flush buffers
+	With oSession
+		If .HasUnoMethod(_Connection, &quot;getParent&quot;) Then
+			Set oParent = _Connection.getParent()
+			If .HasUnoMethod(oParent, &quot;flush&quot;) Then oParent.flush()
+		ElseIf .HasUnoMethod(_Connection, &quot;flush&quot;) Then
+			_Connection.flush()
+		End If
+	End With
+
+Finally:
+	Exit Sub
+End Sub			&apos;	SFDatabases.SF_Database._FlushConnection
+
+REM -----------------------------------------------------------------------------
 Private Function _GetColumnValue(ByRef poResultSet As Object _
 									, ByVal plColIndex As Long _
-									, Optional ByVal pbReturnBinary As Boolean _
 									) As Variant
 &apos;&apos;&apos;	Get the data stored in the current record of a result set in a given column
 &apos;&apos;&apos;	The type of the column is found in the resultset&apos;s metadata
 &apos;&apos;&apos;	Args:
 &apos;&apos;&apos;		poResultSet: com.sun.star.sdbc.XResultSet or com.sun.star.awt.XTabControllerModel
 &apos;&apos;&apos;		plColIndex: the index of the column to extract the value from. Starts at 1
-&apos;&apos;&apos;		pbReturnBinary: when True, the method returns the content of a binary field,
-&apos;&apos;&apos;			as long as its length does not exceed a maximum length.
-&apos;&apos;&apos;			Default = False: binary fields are not returned, only their length
 &apos;&apos;&apos;	Returns:
 &apos;&apos;&apos;		The Variant value found in the column
 &apos;&apos;&apos;		Dates and times are returned as Basic dates
 &apos;&apos;&apos;		Null values are returned as Null
+&apos;&apos;&apos;		Binary fields are returned as a Long giving their length
 &apos;&apos;&apos;		Errors or strange data types are returned as Null as well
 	
 Dim vValue As Variant			&apos;	Return value
@@ -803,7 +1292,6 @@ Const cstMaxBinlength = 2 * 65535
 
 	On Local Error Goto 0			&apos;	Disable error handler
 	vValue = Empty					&apos;	Default value if error
-	If IsMissing(pbReturnBinary) Then pbReturnBinary = False
 
 	With com.sun.star.sdbc.DataType
 		lType = poResultSet.MetaData.getColumnType(plColIndex)
@@ -813,22 +1301,17 @@ Const cstMaxBinlength = 2 * 65535
 			Case .ARRAY						:	vValue = poResultSet.getArray(plColIndex)
 			Case .BINARY, .VARBINARY, .LONGVARBINARY, .BLOB
 				Set oStream = poResultSet.getBinaryStream(plColIndex)
-				If bNullable Then
-					If Not poResultSet.wasNull() Then
-						If Not ScriptForge.SF_Session.HasUNOMethod(oStream, &quot;getLength&quot;) Then	&apos;	When no recordset
-							lSize = cstMaxBinLength
-						Else
-							lSize = CLng(oStream.getLength())
-						End If
-						If lSize &lt;= cstMaxBinLength And pbReturnBinary Then
-							vValue = Array()
-							oStream.readBytes(vValue, lSize)
-						Else	&apos;	Return length of field, not content
-							vValue = lSize
-						End If
+				If IsNull(oStream) Then
+					lSize = 0
+				Else
+					If bNullable Then
+						If Not poResultSet.wasNull() Then lSize = CLng(oStream.getLength()) Else lSize = 0
+					Else
+						lSize = CLng(oStream.getLength())
 					End If
+					oStream.closeInput()
 				End If
-				If Not IsNull(oStream) Then oStream.closeInput()
+				vValue = lSize	&apos;	Return length of field, not content
 			Case .BIT, .BOOLEAN				:	vValue = poResultSet.getBoolean(plColIndex)
 			Case .DATE
 				vDateTime = poResultSet.getDate(plColIndex)
@@ -841,16 +1324,10 @@ Const cstMaxBinlength = 2 * 65535
 			Case .BIGINT					:	vValue = CLng(poResultSet.getLong(plColIndex))
 			Case .DECIMAL, .NUMERIC			:	vValue = poResultSet.getDouble(plColIndex)
 			Case .SQLNULL					:	vValue = poResultSet.getNull(plColIndex)
-			Case .OBJECT, .OTHER, .STRUCT	:	vValue = Null
 			Case .REF						:	vValue = poResultSet.getRef(plColIndex)
 			Case .TINYINT					:	vValue = poResultSet.getShort(plColIndex)
-			Case .CHAR, .VARCHAR			:	vValue = poResultSet.getString(plColIndex)
-			Case .LONGVARCHAR, .CLOB
-				If bNullable Then
-					If Not poResultSet.wasNull() Then vValue = poResultSet.getString(plColIndex)
-				Else
-					vValue = &quot;&quot;
-				End If
+			Case .CHAR, .VARCHAR, .LONGVARCHAR, .CLOB
+												vValue = poResultSet.getString(plColIndex)
 			Case .TIME
 				vDateTime = poResultSet.getTime(plColIndex)
 				If Not poResultSet.wasNull() Then vValue = TimeSerial(vDateTime.Hours, vDateTime.Minutes, vDateTime.Seconds)&apos;, vDateTime.HundredthSeconds)
@@ -862,6 +1339,7 @@ Const cstMaxBinlength = 2 * 65535
 				vValue = poResultSet.getString(plColIndex)			&apos;GIVE STRING A TRY
 				If IsNumeric(vValue) Then vValue = Val(vValue)		&apos;Required when type = &quot;&quot;, sometimes numeric fields are returned as strings (query/MSAccess)
 		End Select
+		&apos;	.wasNull() must be preceded by getXXX(). Done. Test for Null here.
 		If bNullable Then
 			If poResultSet.wasNull() Then vValue = Null
 		End If
@@ -869,7 +1347,7 @@ Const cstMaxBinlength = 2 * 65535
 	
 	_GetColumnValue = vValue
 	
-End Function	&apos;	SFDatabases.SF_Database.GetColumnValue
+End Function	&apos;	SFDatabases.SF_Database._GetColumnValue
 
 REM -----------------------------------------------------------------------------
 Public Function _OpenDatasheet(Optional ByVal psCommand As Variant _

@@ -154,8 +154,10 @@ export function OfficeDocument(props: Props) {
     createKeyHandler(() => props.doc, focused)
   );
 
+
   return (
     <>
+
       <div
         class="flex flex-1 justify-center relative overflow-hidden"
         use:observedSize={[props.doc, setContainerHeight]}

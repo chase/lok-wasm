@@ -104,6 +104,10 @@ namespace drawinglayer::primitive2d
                     maVirtualDeviceMask->EnableMapMode(false);
                     maVirtualDevice->SetOutputSizePixel(aTarget);
                     maVirtualDeviceMask->SetOutputSizePixel(aTarget);
+
+                    // tdf#156630 make erase calls fill with transparency
+                    maVirtualDevice->SetBackground(COL_BLACK);
+                    maVirtualDeviceMask->SetBackground(COL_ALPHA_TRANSPARENT);
                 }
 
                 maVirtualDevice->Erase();
@@ -181,7 +185,9 @@ namespace drawinglayer::primitive2d
                 }
                 else
                 {
-                    const Bitmap aMaskBitmap(maVirtualDeviceMask->GetBitmap(Point(), maVirtualDeviceMask->GetOutputSizePixel()));
+                    Bitmap aMaskBitmap(maVirtualDeviceMask->GetBitmap(Point(), maVirtualDeviceMask->GetOutputSizePixel()));
+                    // tdf#156630 invert the alpha mask
+                    aMaskBitmap.Invert(); // convert from transparency to alpha
                     bitmap = BitmapEx(aMainBitmap, aMaskBitmap);
                 }
 
@@ -252,12 +258,21 @@ namespace drawinglayer::primitive2d
                     // prepare step
                     const AnimationFrame& rAnimationFrame = maAnimation.Get(sal_uInt16(mnNextFrameToPrepare));
 
+                    bool bSourceBlending = rAnimationFrame.meBlend == Blend::Source;
+
+                    if (bSourceBlending)
+                    {
+                        tools::Rectangle aArea(rAnimationFrame.maPositionPixel, rAnimationFrame.maBitmapEx.GetSizePixel());
+                        maVirtualDevice->Erase(aArea);
+                        maVirtualDeviceMask->Erase(aArea);
+                    }
+
                     switch (rAnimationFrame.meDisposal)
                     {
                         case Disposal::Not:
                         {
                             maVirtualDevice->DrawBitmapEx(rAnimationFrame.maPositionPixel, rAnimationFrame.maBitmapEx);
-                            Bitmap aAlphaMask = rAnimationFrame.maBitmapEx.GetAlpha();
+                            AlphaMask aAlphaMask = rAnimationFrame.maBitmapEx.GetAlphaMask();
 
                             if (aAlphaMask.IsEmpty())
                             {
@@ -268,7 +283,7 @@ namespace drawinglayer::primitive2d
                             }
                             else
                             {
-                                BitmapEx aExpandVisibilityMask(aAlphaMask, aAlphaMask);
+                                BitmapEx aExpandVisibilityMask(aAlphaMask.GetBitmap(), aAlphaMask);
                                 maVirtualDeviceMask->DrawBitmapEx(rAnimationFrame.maPositionPixel, aExpandVisibilityMask);
                             }
 
@@ -277,22 +292,21 @@ namespace drawinglayer::primitive2d
                         case Disposal::Back:
                         {
                             // #i70772# react on no mask, for primitives, too.
-                            const Bitmap & rMask(rAnimationFrame.maBitmapEx.GetAlpha());
-                            const Bitmap & rContent(rAnimationFrame.maBitmapEx.GetBitmap());
+                            const AlphaMask & rMask(rAnimationFrame.maBitmapEx.GetAlphaMask());
 
                             maVirtualDeviceMask->Erase();
-                            maVirtualDevice->DrawBitmap(rAnimationFrame.maPositionPixel, rContent);
+                            maVirtualDevice->DrawBitmapEx(rAnimationFrame.maPositionPixel, rAnimationFrame.maBitmapEx);
 
                             if (rMask.IsEmpty())
                             {
-                                const ::tools::Rectangle aRect(rAnimationFrame.maPositionPixel, rContent.GetSizePixel());
+                                const ::tools::Rectangle aRect(rAnimationFrame.maPositionPixel, rAnimationFrame.maBitmapEx.GetSizePixel());
                                 maVirtualDeviceMask->SetFillColor(COL_BLACK);
                                 maVirtualDeviceMask->SetLineColor();
                                 maVirtualDeviceMask->DrawRect(aRect);
                             }
                             else
                             {
-                                BitmapEx aExpandVisibilityMask(rMask, rMask);
+                                BitmapEx aExpandVisibilityMask(rMask.GetBitmap(), rMask);
                                 maVirtualDeviceMask->DrawBitmapEx(rAnimationFrame.maPositionPixel, aExpandVisibilityMask);
                             }
 
@@ -301,7 +315,7 @@ namespace drawinglayer::primitive2d
                         case Disposal::Previous:
                         {
                             maVirtualDevice->DrawBitmapEx(rAnimationFrame.maPositionPixel, rAnimationFrame.maBitmapEx);
-                            BitmapEx aExpandVisibilityMask(rAnimationFrame.maBitmapEx.GetAlpha(), rAnimationFrame.maBitmapEx.GetAlpha());
+                            BitmapEx aExpandVisibilityMask(rAnimationFrame.maBitmapEx.GetAlphaMask().GetBitmap(), rAnimationFrame.maBitmapEx.GetAlphaMask());
                             maVirtualDeviceMask->DrawBitmapEx(rAnimationFrame.maPositionPixel, aExpandVisibilityMask);
                             break;
                         }
@@ -344,6 +358,7 @@ namespace drawinglayer::primitive2d
             AnimatedGraphicPrimitive2D(
                 const Graphic& rGraphic,
                 basegfx::B2DHomMatrix aTransform);
+            virtual ~AnimatedGraphicPrimitive2D();
 
             /// data read access
             const basegfx::B2DHomMatrix& getTransform() const { return maTransform; }
@@ -405,6 +420,23 @@ namespace drawinglayer::primitive2d
             {
                 maBufferedPrimitives.resize(maAnimation.Count());
             }
+        }
+
+        AnimatedGraphicPrimitive2D::~AnimatedGraphicPrimitive2D()
+        {
+            // Related: tdf#158807 mutex must be locked when disposing a VirtualDevice
+            // If the following .ppt document is opened in a debug build
+            // and the document is left open for a minute or two without
+            // changing any content, this destructor will be called on a
+            // non-main thread with the mutex unlocked:
+            //   https://bugs.documentfoundation.org/attachment.cgi?id=46801
+            // This hits an assert in VirtualDevice::ReleaseGraphics() so
+            // explicitly lock the mutex and explicitly dispose and clear
+            // the VirtualDevice instances variables.
+            const SolarMutexGuard aSolarGuard;
+
+            maVirtualDevice.disposeAndClear();
+            maVirtualDeviceMask.disposeAndClear();
         }
 
         bool AnimatedGraphicPrimitive2D::operator==(const BasePrimitive2D& rPrimitive) const

@@ -47,11 +47,9 @@ std::string RTFSprm::toString() const
         aBuf.append(sal_Int32(m_nKeyword));
     else
         aBuf.append(sResult.c_str());
-    aBuf.append("', '");
-    aBuf.append(m_pValue->toString().c_str());
-    aBuf.append("')");
+    aBuf.append("', '" + m_pValue->toString() + "')");
 
-    return aBuf.makeStringAndClear().getStr();
+    return std::string(aBuf);
 }
 #endif
 
@@ -59,16 +57,16 @@ namespace
 {
 class RTFSprms_compare
 {
-    Id keyword;
+    Id m_keyword;
 
 public:
-    RTFSprms_compare(Id kw)
-        : keyword{ kw }
+    RTFSprms_compare(Id keyword)
+        : m_keyword{ keyword }
     {
     }
     bool operator()(const std::pair<Id, RTFValue::Pointer_t>& raPair) const
     {
-        return raPair.first == keyword;
+        return raPair.first == m_keyword;
     }
 };
 }
@@ -105,9 +103,7 @@ void RTFSprms::set(Id nKeyword, const RTFValue::Pointer_t& pValue, RTFOverwrite 
     {
         case RTFOverwrite::YES_PREPEND:
         {
-            m_pSprms->erase(
-                std::remove_if(m_pSprms->begin(), m_pSprms->end(), RTFSprms_compare{ nKeyword }),
-                m_pSprms->end());
+            std::erase_if(*m_pSprms, RTFSprms_compare{ nKeyword });
             m_pSprms->emplace(m_pSprms->cbegin(), nKeyword, pValue);
             break;
         }
@@ -292,9 +288,14 @@ static void cloneAndDeduplicateSprm(std::pair<Id, RTFValue::Pointer_t> const& rS
     {
         if (rSprm.second->equals(*pValue))
         {
-            if (!isSPRMDeduplicateDenylist(rSprm.first, pDirect))
+            //this removes properties that are equal at the style and at the sprm
+            //don't do that for paragraph styles
+            if (nStyleType == NS_ooxml::LN_Value_ST_StyleType_character)
             {
-                ret.erase(rSprm.first); // duplicate to style
+                if (!isSPRMDeduplicateDenylist(rSprm.first, pDirect))
+                {
+                    ret.erase(rSprm.first); // duplicate to style
+                }
             }
         }
         else if (!rSprm.second->getSprms().empty() || !rSprm.second->getAttributes().empty())
@@ -436,12 +437,22 @@ RTFSprms RTFSprms::cloneAndDeduplicate(RTFSprms& rReference, Id const nStyleType
     return ret;
 }
 
-bool RTFSprms::equals(const RTFValue& rOther) const
+bool RTFSprms::equals(const RTFSprms& rOther) const
 {
-    return std::all_of(m_pSprms->cbegin(), m_pSprms->cend(),
-                       [&](const std::pair<Id, RTFValue::Pointer_t>& raPair) -> bool {
-                           return raPair.second->equals(rOther);
-                       });
+    auto it1 = m_pSprms->cbegin();
+    auto it1End = m_pSprms->cend();
+    auto it2 = rOther.m_pSprms->cbegin();
+    auto it2End = rOther.m_pSprms->cend();
+    while (it1 != it1End && it2 != it2End)
+    {
+        if (it1->first != it2->first)
+            return false;
+        if (!it1->second->equals(*it2->second))
+            return false;
+        ++it1;
+        ++it2;
+    }
+    return it1 == it1End && it2 == it2End;
 }
 
 void RTFSprms::ensureCopyBeforeWrite()

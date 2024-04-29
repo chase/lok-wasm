@@ -152,6 +152,8 @@ public:
     void    EnterStdMode();
     bool    IsStdMode() const { return !m_bExtMode && !m_bAddMode && !m_bBlockMode; }
 
+    void AssureStdMode();
+
     void    EnterExtMode();
     void    LeaveExtMode();
     void    ToggleExtMode();
@@ -509,12 +511,14 @@ typedef bool (SwWrtShell::*FNSimpleMove)();
     void MakeOutlineContentVisible(const size_t nPos, bool bMakeVisible = true, bool bSetAttrOutlineVisibility = true);
     void MakeAllFoldedOutlineContentVisible(bool bMakeVisible = true);
     void InvalidateOutlineContentVisibility();
-    bool GetAttrOutlineContentVisible(const size_t nPos);
+    bool GetAttrOutlineContentVisible(const size_t nPos) const;
 
     void MakeOutlineLevelsVisible(const int nLevel);
 
-    bool HasFoldedOutlineContentSelected();
-    void InfoReadOnlyDialog(bool bAsync = false);
+    bool HasFoldedOutlineContentSelected() const;
+    virtual void InfoReadOnlyDialog(bool bAsync) const override;
+    virtual bool WarnHiddenSectionDialog() const override;
+    virtual bool WarnSwitchToDesignModeDialog() const override;
 
     std::optional<OString> getLOKPayload(int nType, int nViewId) const;
 

@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SVX_UNOPROV_HXX
 #define INCLUDED_SVX_UNOPROV_HXX
 
-#include <config_options.h>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <svl/itemprop.hxx>
 #include <svx/svxdllapi.h>
@@ -82,12 +81,12 @@ public:
 
 class SVXCORE_DLLPUBLIC SvxUnoPropertyMapProvider
 {
-    o3tl::span<SfxItemPropertyMapEntry const> aMapArr[SVXMAP_END];
+    std::span<SfxItemPropertyMapEntry const> aMapArr[SVXMAP_END];
     std::unique_ptr<SvxItemPropertySet> aSetArr[SVXMAP_END];
 public:
     SvxUnoPropertyMapProvider();
     ~SvxUnoPropertyMapProvider();
-    o3tl::span<const SfxItemPropertyMapEntry> GetMap(sal_uInt16 nPropertyId);
+    std::span<const SfxItemPropertyMapEntry> GetMap(sal_uInt16 nPropertyId);
     const SvxItemPropertySet* GetPropertySet(sal_uInt16 nPropertyId, SfxItemPool& rPool);
 };
 
@@ -95,19 +94,12 @@ public:
  * class SvxPropertySetInfoPool
  */
 
-const sal_Int32 SVXUNO_SERVICEID_COM_SUN_STAR_DRAWING_DEFAULTS = 0;
-const sal_Int32 SVXUNO_SERVICEID_COM_SUN_STAR_DRAWING_DEFAULTS_WRITER = 1;
-const sal_Int32 SVXUNO_SERVICEID_LASTID = 1;
-
 namespace comphelper { class PropertySetInfo; }
 
-class SvxPropertySetInfoPool
+namespace SvxPropertySetInfoPool
 {
-public:
-    UNLESS_MERGELIBS(SVXCORE_DLLPUBLIC) static rtl::Reference<comphelper::PropertySetInfo> const & getOrCreate( sal_Int32 nServiceId ) noexcept;
-
-private:
-    static rtl::Reference<comphelper::PropertySetInfo> mxInfos[SVXUNO_SERVICEID_LASTID+1];
+    SVXCORE_DLLPUBLIC rtl::Reference<comphelper::PropertySetInfo> const & getDrawingDefaults() noexcept;
+    SVXCORE_DLLPUBLIC rtl::Reference<comphelper::PropertySetInfo> const & getWriterDrawingDefaults() noexcept;
 };
 
 #endif

@@ -513,12 +513,9 @@ AC_DEFINE_UNQUOTED(LIBO_VERSION_MINOR,$LIBO_VERSION_MINOR)
 AC_DEFINE_UNQUOTED(LIBO_VERSION_MICRO,$LIBO_VERSION_MICRO)
 AC_DEFINE_UNQUOTED(LIBO_VERSION_PATCH,$LIBO_VERSION_PATCH)
 
-LIBO_THIS_YEAR=`date +%Y`
+git_date=`git log -1 --pretty=format:"%cd" --date=format:'%Y' 2>&/dev/null`
+LIBO_THIS_YEAR=${git_date:-2024}
 AC_DEFINE_UNQUOTED(LIBO_THIS_YEAR,$LIBO_THIS_YEAR)
-
-# replace backslashes, to get a valid c++ string
-config_args=$(echo $ac_configure_args | tr '\\' '/')
-AC_DEFINE_UNQUOTED([BUILDCONFIG],[["$config_args"]],[Options passed to configure script])
 
 dnl ===================================================================
 dnl Product version
@@ -680,6 +677,32 @@ fi
 if test -n "$with_android_ndk"; then
     eval ANDROID_NDK_DIR=$with_android_ndk
 
+    ANDROID_API_LEVEL=21
+    if test -n "$with_android_api_level" ; then
+        ANDROID_API_LEVEL="$with_android_api_level"
+    fi
+
+    if test $host_cpu = arm; then
+        LLVM_TRIPLE=armv7a-linux-androideabi
+        ANDROID_SYSROOT_PLATFORM=arm-linux-androideabi
+        ANDROID_APP_ABI=armeabi-v7a
+        ANDROIDCFLAGS="-mthumb -march=armv7-a -mfloat-abi=softfp -mfpu=neon -Wl,--fix-cortex-a8"
+    elif test $host_cpu = aarch64; then
+        LLVM_TRIPLE=aarch64-linux-android
+        ANDROID_SYSROOT_PLATFORM=$LLVM_TRIPLE
+        ANDROID_APP_ABI=arm64-v8a
+    elif test $host_cpu = x86_64; then
+        LLVM_TRIPLE=x86_64-linux-android
+        ANDROID_SYSROOT_PLATFORM=$LLVM_TRIPLE
+        ANDROID_APP_ABI=x86_64
+    else
+        # host_cpu is something like "i386" or "i686" I guess, NDK uses
+        # "x86" in some contexts
+        LLVM_TRIPLE=i686-linux-android
+        ANDROID_SYSROOT_PLATFORM=$LLVM_TRIPLE
+        ANDROID_APP_ABI=x86
+    fi
+
     # Set up a lot of pre-canned defaults
 
     if test ! -f $ANDROID_NDK_DIR/RELEASE.TXT; then
@@ -695,56 +718,18 @@ if test -n "$with_android_ndk"; then
     fi
     case $ANDROID_NDK_VERSION in
     r9*|r10*)
-        AC_MSG_ERROR([Building for Android is only supported with NDK versions above 16.x*])
+        AC_MSG_ERROR([Building for Android requires NDK version >= 23.*])
         ;;
-    11.1.*|12.1.*|13.1.*|14.1.*)
-        AC_MSG_ERROR([Building for Android is only supported with NDK versions above 16.x.*])
+    11.1.*|12.1.*|13.1.*|14.1.*|16.*|17.*|18.*|19.*|20.*|21.*|22.*)
+        AC_MSG_ERROR([Building for Android requires NDK version >= 23.*])
         ;;
-    16.*|17.*|18.*|19.*|20.*)
+    23.*|24.*|25.*)
         ;;
     *)
-        AC_MSG_WARN([Untested Android NDK version $ANDROID_NDK_VERSION, only versions 16.* til 20.* have been used successfully. Proceed at your own risk.])
-        add_warning "Untested Android NDK version $ANDROID_NDK_VERSION, only versions 16.* til 20.* have been used successfully. Proceed at your own risk."
+        AC_MSG_WARN([Untested Android NDK version $ANDROID_NDK_VERSION, only versions 23.* to 25.* have been used successfully. Proceed at your own risk.])
+        add_warning "Untested Android NDK version $ANDROID_NDK_VERSION, only versions 23.* to 25.* have been used successfully. Proceed at your own risk."
         ;;
     esac
-
-    ANDROID_API_LEVEL=16
-    if test -n "$with_android_api_level" ; then
-        ANDROID_API_LEVEL="$with_android_api_level"
-    fi
-
-    android_cpu=$host_cpu
-    if test $host_cpu = arm; then
-        android_platform_prefix=arm-linux-androideabi
-        android_gnu_prefix=$android_platform_prefix
-        LLVM_TRIPLE=armv7a-linux-androideabi
-        ANDROID_APP_ABI=armeabi-v7a
-        ANDROIDCFLAGS="-mthumb -march=armv7-a -mfloat-abi=softfp -mfpu=neon -Wl,--fix-cortex-a8"
-    elif test $host_cpu = aarch64; then
-        android_platform_prefix=aarch64-linux-android
-        android_gnu_prefix=$android_platform_prefix
-        LLVM_TRIPLE=$android_platform_prefix
-        # minimum android version that supports aarch64
-        if test "$ANDROID_API_LEVEL" -lt "21" ; then
-            ANDROID_API_LEVEL=21
-        fi
-        ANDROID_APP_ABI=arm64-v8a
-    elif test $host_cpu = x86_64; then
-        android_platform_prefix=x86_64-linux-android
-        android_gnu_prefix=$android_platform_prefix
-        LLVM_TRIPLE=$android_platform_prefix
-        # minimum android version that supports x86_64
-        ANDROID_API_LEVEL=21
-        ANDROID_APP_ABI=x86_64
-    else
-        # host_cpu is something like "i386" or "i686" I guess, NDK uses
-        # "x86" in some contexts
-        android_cpu=x86
-        android_platform_prefix=$android_cpu
-        android_gnu_prefix=i686-linux-android
-        LLVM_TRIPLE=$android_gnu_prefix
-        ANDROID_APP_ABI=x86
-    fi
 
     case "$with_android_ndk_toolchain_version" in
     clang5.0)
@@ -774,17 +759,14 @@ if test -n "$with_android_ndk"; then
         # ndk would also support windows and windows-x86_64
         ;;
     esac
-    android_TOOLCHAIN=$ANDROID_NDK_DIR/toolchains/llvm/prebuilt/$android_HOST_TAG
-    ANDROID_COMPILER_BIN=$android_TOOLCHAIN/bin
-    dnl TODO: NSS build uses it...
-    ANDROID_BINUTILS_PREBUILT_ROOT=$ANDROID_NDK_DIR/toolchains/$android_platform_prefix-$ANDROID_GCC_TOOLCHAIN_VERSION/prebuilt/$android_HOST_TAG
-    AC_SUBST(ANDROID_BINUTILS_PREBUILT_ROOT)
+    ANDROID_TOOLCHAIN=$ANDROID_NDK_DIR/toolchains/llvm/prebuilt/$android_HOST_TAG
+    ANDROID_COMPILER_BIN=$ANDROID_TOOLCHAIN/bin
 
-    test -z "$AR" && AR=$ANDROID_COMPILER_BIN/$android_gnu_prefix-ar
-    test -z "$NM" && NM=$ANDROID_COMPILER_BIN/$android_gnu_prefix-nm
-    test -z "$OBJDUMP" && OBJDUMP=$ANDROID_COMPILER_BIN/$android_gnu_prefix-objdump
-    test -z "$RANLIB" && RANLIB=$ANDROID_COMPILER_BIN/$android_gnu_prefix-ranlib
-    test -z "$STRIP" && STRIP=$ANDROID_COMPILER_BIN/$android_gnu_prefix-strip
+    test -z "$AR" && AR=$ANDROID_COMPILER_BIN/llvm-ar
+    test -z "$NM" && NM=$ANDROID_COMPILER_BIN/llvm-nm
+    test -z "$OBJDUMP" && OBJDUMP=$ANDROID_COMPILER_BIN/llvm-objdump
+    test -z "$RANLIB" && RANLIB=$ANDROID_COMPILER_BIN/llvm-ranlib
+    test -z "$STRIP" && STRIP=$ANDROID_COMPILER_BIN/llvm-strip
 
     ANDROIDCFLAGS="$ANDROIDCFLAGS -target ${LLVM_TRIPLE}${ANDROID_API_LEVEL}"
     ANDROIDCFLAGS="$ANDROIDCFLAGS -no-canonical-prefixes -ffunction-sections -fdata-sections -Qunused-arguments"
@@ -806,8 +788,11 @@ if test -n "$with_android_ndk"; then
     fi
 fi
 AC_SUBST(ANDROID_NDK_DIR)
+AC_SUBST(ANDROID_API_LEVEL)
 AC_SUBST(ANDROID_APP_ABI)
 AC_SUBST(ANDROID_GCC_TOOLCHAIN_VERSION)
+AC_SUBST(ANDROID_SYSROOT_PLATFORM)
+AC_SUBST(ANDROID_TOOLCHAIN)
 
 dnl ===================================================================
 dnl --with-android-sdk
@@ -1086,15 +1071,6 @@ freebsd*)
     _os=NetBSD
     ;;
 
-aix*)
-    using_freetype_fontconfig=yes
-    using_x11=yes
-    test_randr=no
-    test_gstreamer_1_0=no
-    PTHREAD_LIBS=-pthread
-    _os=AIX
-    ;;
-
 openbsd*)
     using_freetype_fontconfig=yes
     using_x11=yes
@@ -1139,6 +1115,7 @@ haiku*)
     test_gtk3=no
     test_gtk3_kde5=no
     test_kf5=yes
+    test_kf6=yes
     enable_odk=no
     enable_coinmp=no
     enable_pdfium=no
@@ -1185,6 +1162,7 @@ test "${test_gstreamer_1_0+set}" = set || test_gstreamer_1_0="$using_x11"
 test "${test_gtk3+set}" = set || test_gtk3="$using_x11"
 test "${test_gtk4+set}" = set || test_gtk4="$using_x11"
 test "${test_kf5+set}" = set || test_kf5="$using_x11"
+test "${test_kf6+set}" = set || test_kf6="$using_x11"
 # don't handle test_qt5, so it can disable test_kf5 later
 test "${test_qt6+set}" = set || test_qt6="$using_x11"
 test "${test_randr+set}" = set || test_randr="$using_x11"
@@ -1216,6 +1194,7 @@ disable_x11_tests()
     test_gtk3=no
     test_gtk4=no
     test_kf5=no
+    test_kf6=no
     test_qt5=no
     test_qt6=no
     test_randr=no
@@ -1225,6 +1204,7 @@ disable_x11_tests()
 test "$using_x11" = yes && USING_X11=TRUE
 
 if test "$using_freetype_fontconfig" = yes; then
+    AC_DEFINE(USE_HEADLESS_CODE)
     USE_HEADLESS_CODE=TRUE
     if test "$using_headless_plugin" = yes; then
         AC_DEFINE(ENABLE_HEADLESS)
@@ -1261,13 +1241,6 @@ if test "$_os" = "Android" ; then
         AC_MSG_ERROR([the --with-android-sdk option is mandatory, unless it is available at external/android-sdk-linux/.])
     elif test ! -d "$ANDROID_SDK_DIR/platforms"; then
         AC_MSG_ERROR([the --with-android-sdk option does not point to an Android SDK])
-    fi
-fi
-
-if test "$_os" = "AIX"; then
-    AC_PATH_PROG(GAWK, gawk)
-    if test -z "$GAWK"; then
-        AC_MSG_ERROR([gawk not found in \$PATH])
     fi
 fi
 
@@ -1541,8 +1514,11 @@ libo_FUZZ_ARG_ENABLE(skia,
 dnl ---------- *** ----------
 
 libo_FUZZ_ARG_ENABLE(mergelibs,
-    AS_HELP_STRING([--enable-mergelibs],
-        [Merge several of the smaller libraries into one big, "merged", one.])
+    AS_HELP_STRING([--enable-mergelibs=yes/no/more],
+        [Merge several of the smaller libraries into one big "merged" library.
+         The "more" option will link even more of the smaller libraries.
+         "more" not appropriate for distros which split up LibreOffice into multiple packages.
+         It is only appropriate for situations where all of LO is delivered in a single install/package. ])
 )
 
 libo_FUZZ_ARG_ENABLE(breakpad,
@@ -1713,6 +1689,10 @@ AC_ARG_ENABLE(gtk4,
     AS_HELP_STRING([--enable-gtk4],
         [Determines whether to use Gtk+ 4.0 vclplug on platforms where Gtk+ 4.0 is available.]))
 
+AC_ARG_ENABLE(atspi-tests,
+    AS_HELP_STRING([--disable-atspi-tests],
+        [Determines whether to enable AT-SPI2 tests for the GTK3 vclplug.]))
+
 AC_ARG_ENABLE(introspection,
     AS_HELP_STRING([--enable-introspection],
         [Generate files for GObject introspection.  Requires --enable-gtk3.  (Typically used by
@@ -1773,6 +1753,13 @@ AC_ARG_ENABLE(kf5,
         [Determines whether to use Qt5/KF5 vclplug on platforms where Qt5 and
          KF5 are available.]),
 ,)
+
+AC_ARG_ENABLE(kf6,
+    AS_HELP_STRING([--enable-kf6],
+        [Determines whether to use KF6 vclplug on platforms where Qt6 and
+         KF6 are available.]),
+,)
+
 
 AC_ARG_ENABLE(gtk3_kde5,
     AS_HELP_STRING([--enable-gtk3-kde5],
@@ -1866,14 +1853,49 @@ AC_ARG_ENABLE(z7-debug,
 libo_FUZZ_ARG_ENABLE(online-update,
     AS_HELP_STRING([--enable-online-update],
         [Enable the online update service that will check for new versions of
-         LibreOffice. Disabled by default. Requires --with-privacy-policy-url to be set.
-         If the value is "mar", the experimental Mozilla-like update will be
-         enabled instead of the traditional update mechanism.]),
+         LibreOffice. Disabled by default. Requires --with-privacy-policy-url to be set.]),
 ,)
 
-AC_ARG_WITH(update-config,
-    AS_HELP_STRING([--with-update-config=/tmp/update.ini],
-                   [Path to the update config ini file]))
+libo_FUZZ_ARG_ENABLE(online-update-mar,
+    AS_HELP_STRING([--enable-online-update-mar],
+        [Enable the experimental Mozilla-like online update service that will
+         check for new versions of LibreOffice. Disabled by default.]),
+,)
+
+libo_FUZZ_ARG_WITH(online-update-mar-baseurl,
+    AS_HELP_STRING([--with-online-update-mar-baseurl=...],
+        [Set the base URL value for --enable-online-update-mar.
+         (Can be left off for debug purposes, even if that may render the feature
+         non-functional.)]),
+,)
+
+libo_FUZZ_ARG_WITH(online-update-mar-certificateder,
+    AS_HELP_STRING([--with-online-update-mar-certificateder=...],
+        [Set the certificate DER value for --enable-online-update-mar.
+         (Can be left off for debug purposes, even if that may render the feature
+         non-functional.)]),
+,)
+
+libo_FUZZ_ARG_WITH(online-update-mar-certificatename,
+    AS_HELP_STRING([--with-online-update-mar-certificatename=...],
+        [Set the certificate name value for --enable-online-update-mar.
+         (Can be left off for debug purposes, even if that may render the feature
+         non-functional.)]),
+,)
+
+libo_FUZZ_ARG_WITH(online-update-mar-certificatepath,
+    AS_HELP_STRING([--with-online-update-mar-certificatepath=...],
+        [Set the certificate path value for --enable-online-update-mar.
+         (Can be left off for debug purposes, even if that may render the feature
+         non-functional.)]),
+,)
+
+libo_FUZZ_ARG_WITH(online-update-mar-uploadurl,
+    AS_HELP_STRING([--with-online-update-mar-uploadurl=...],
+        [Set the upload URL value for --enable-online-update-mar.
+         (Can be left off for debug purposes, even if that may render the feature
+         non-functional.)]),
+,)
 
 libo_FUZZ_ARG_ENABLE(extension-update,
     AS_HELP_STRING([--disable-extension-update],
@@ -1885,7 +1907,14 @@ libo_FUZZ_ARG_ENABLE(release-build,
         [Enable release build. Note that the "release build" choice is orthogonal to
          whether symbols are present, debug info is generated, or optimization
          is done.
-         See http://wiki.documentfoundation.org/Development/DevBuild]),
+         See https://wiki.documentfoundation.org/Development/DevBuild]),
+,)
+
+libo_FUZZ_ARG_ENABLE(hardening-flags,
+    AS_HELP_STRING([--enable-hardening-flags],
+        [Enable automatically using hardening compiler flags. Distros should typically
+         use their default configuration via CXXFLAGS, etc. But this provides a
+         convenient default set of hardening flags]),
 ,)
 
 AC_ARG_ENABLE(windows-build-signing,
@@ -1896,6 +1925,11 @@ AC_ARG_ENABLE(windows-build-signing,
 AC_ARG_ENABLE(silent-msi,
     AS_HELP_STRING([--enable-silent-msi],
         [Enable MSI with LIMITUI=1 (silent install).]),
+,)
+
+AC_ARG_ENABLE(wix,
+    AS_HELP_STRING([--enable-wix],
+        [Build Windows installer using WiX.]),
 ,)
 
 AC_ARG_ENABLE(macosx-code-signing,
@@ -2066,11 +2100,6 @@ AC_ARG_ENABLE(customtarget-components,
     AS_HELP_STRING([--enable-customtarget-components],
         [Generates the static UNO object constructor mapping from the build.]))
 
-AC_ARG_ENABLE(float_device_pixel,
-    AS_HELP_STRING([--enable-float-device-pixel],
-                   [Uses doubles for VCL device coordinates instead of 32-bit integers.]),
-,)
-
 dnl ===================================================================
 dnl Optional Packages (--with/without-)
 dnl ===================================================================
@@ -2173,7 +2202,7 @@ AC_ARG_WITH(package-format,
     AS_HELP_STRING([--with-package-format],
         [Specify package format(s) for LibreOffice installation sets. The
          implicit --without-package-format leads to no installation sets being
-         generated. Possible values: aix, archive, bsd, deb, dmg,
+         generated. Possible values: archive, bsd, deb, dmg,
          installed, msi, pkg, and rpm.
          Example: --with-package-format='deb rpm']),
 ,)
@@ -2195,7 +2224,8 @@ AC_ARG_WITH(system-libs,
 
 AC_ARG_WITH(system-bzip2,
     AS_HELP_STRING([--with-system-bzip2],
-        [Use bzip2 already on system. Used only when --enable-online-update=mar]),,
+        [Use bzip2 already on system. Used when --enable-online-update-mar
+        or --enable-python=internal]),,
     [with_system_bzip2="$with_system_libs"])
 
 AC_ARG_WITH(system-headers,
@@ -2464,6 +2494,11 @@ AC_ARG_WITH(system-dragonbox,
         [Use dragonbox already on system.]),,
     [with_system_dragonbox="$with_system_headers"])
 
+AC_ARG_WITH(system-frozen,
+    AS_HELP_STRING([--with-system-frozen],
+        [Use frozen already on system.]),,
+    [with_system_frozen="$with_system_headers"])
+
 AC_ARG_WITH(system-libfixmath,
     AS_HELP_STRING([--with-system-libfixmath],
         [Use libfixmath already on system.]),,
@@ -2491,6 +2526,11 @@ AC_ARG_WITH(system-zxing,
     AS_HELP_STRING([--with-system-zxing],
         [Use libzxing already on system.]),,
     [with_system_zxing="$with_system_libs"])
+
+AC_ARG_WITH(system-zxcvbn,
+    AS_HELP_STRING([--with-system-zxcvbn],
+        [Use libzxcvbn already on system.]),,
+    [with_system_zxcvbn="$with_system_libs"])
 
 AC_ARG_WITH(system-box2d,
     AS_HELP_STRING([--with-system-box2d],
@@ -2538,7 +2578,7 @@ AC_ARG_WITH(linker-hash-style,
 
 AC_ARG_WITH(jdk-home,
     AS_HELP_STRING([--with-jdk-home=<absolute path to JDK home>],
-        [If you have installed JDK 9 or later on your system please supply the
+        [If you have installed JDK 8 or later on your system please supply the
          path here. Note that this is not the location of the java command but the
          location of the entire distribution. In case of cross-compiling, this
          is the JDK of the host os. Use --with-build-platform-configure-options
@@ -2609,7 +2649,7 @@ AC_ARG_WITH(bffvalidator,
         [Enables export validation for Microsoft Binary formats (doc, xls, ppt).
          Requires installed Microsoft Office Binary File Format Validator.
          Note: export-validation (--with-export-validation) is required to be turned on.
-         See https://www.microsoft.com/en-us/download/details.aspx?id=26794]),
+         See https://web.archive.org/web/20200804155745/https://www.microsoft.com/en-us/download/details.aspx?id=26794]),
 ,with_bffvalidator=no)
 
 libo_FUZZ_ARG_WITH(junit,
@@ -2843,6 +2883,32 @@ AC_ARG_WITH(onedrive-client-secret,
         authentication on OneDrive. If either this or
         --with-onedrive-client-id is empty, the feature will be disabled]),
 )
+
+dnl Check for coredumpctl support to present information about crashing test processes:
+AC_ARG_WITH(coredumpctl,
+    AS_HELP_STRING([--with-coredumpctl],
+        [Use coredumpctl (together with systemd-run) to retrieve core dumps of crashing test
+        processes.]))
+
+AC_ARG_WITH(buildconfig-recorded,
+    AS_HELP_STRING([--with-buildconfig-recorded],
+        [Put build config into version info reported by LOK. Incompatible with reproducible builds.]),
+)
+
+AC_MSG_CHECKING([whether to record build config])
+if test -z "$with_buildconfig_recorded"; then
+    with_buildconfig_recorded=no
+fi
+if test "$with_buildconfig_recorded" = no; then
+    AC_MSG_RESULT([no])
+else
+    AC_MSG_RESULT([yes])
+    # replace backslashes, to get a valid c++ string
+    config_args=$(echo $ac_configure_args | tr '\\' '/')
+    AC_DEFINE_UNQUOTED([BUILDCONFIG],[["$config_args"]],[Options passed to configure script])
+    AC_DEFINE([BUILDCONFIG_RECORDED],[1],[Options passed to configure script])
+fi
+
 dnl ===================================================================
 dnl Do we want to use pre-build binary tarball for recompile
 dnl ===================================================================
@@ -2861,17 +2927,29 @@ AC_MSG_CHECKING([whether build target is Release Build])
 if test "$enable_release_build" = "" -o "$enable_release_build" = "no"; then
     AC_MSG_RESULT([no])
     ENABLE_RELEASE_BUILD=
-    GET_TASK_ALLOW_ENTITLEMENT='
-        <!-- We want to be able to debug a hardened process when not building for release -->
-        <key>com.apple.security.get-task-allow</key>
-        <true/>'
+    dnl Pu the value on one line as make (at least on macOS) seems to ignore
+    dnl the newlines and then complains about spaces.
+    GET_TASK_ALLOW_ENTITLEMENT='<!-- We want to be able to debug a hardened process when not building for release --><key>com.apple.security.get-task-allow</key><true/>'
 else
     AC_MSG_RESULT([yes])
     ENABLE_RELEASE_BUILD=TRUE
-    GET_TASK_ALLOW_ENTITLEMENT=''
+    GET_TASK_ALLOW_ENTITLEMENT=
 fi
 AC_SUBST(ENABLE_RELEASE_BUILD)
 AC_SUBST(GET_TASK_ALLOW_ENTITLEMENT)
+
+dnl ===================================================================
+dnl Test whether build should auto use hardening compiler flags
+dnl ===================================================================
+AC_MSG_CHECKING([whether build should auto use hardening compiler flags])
+if test "$enable_hardening_flags" = "" -o "$enable_hardening_flags" = "no"; then
+    AC_MSG_RESULT([no])
+    ENABLE_HARDENING_FLAGS=
+else
+    AC_MSG_RESULT([yes])
+    ENABLE_HARDENING_FLAGS=TRUE
+fi
+AC_SUBST(ENABLE_HARDENING_FLAGS)
 
 AC_MSG_CHECKING([whether to build a Community flavor])
 if test -z "$enable_community_flavor" -o "$enable_community_flavor" = "yes"; then
@@ -2902,7 +2980,7 @@ AC_ARG_WITH(macosx-version-min-required,
     AS_HELP_STRING([--with-macosx-version-min-required=<version>],
         [set the minimum OS version needed to run the built LibreOffice])
     [
-                          e. g.: --with-macosx-version-min-required=10.14
+                          e. g.: --with-macosx-version-min-required=10.15
     ],
 ,)
 
@@ -3040,7 +3118,7 @@ fi
 # also work with the default gtk3 plugin.
 if test "$enable_wasm_strip" = "yes"; then
     enable_avmedia=no
-    enable_cmis=no
+    enable_libcmis=no
     enable_coinmp=no
     enable_cups=no
     test "$_os" = Emscripten && enable_curl=no
@@ -3492,8 +3570,8 @@ if test $_os = Darwin; then
     # we don't target the lower versions anymore, so it doesn't matter that we don't generate the
     # correct version in case such an old SDK is specified, it will be rejected later anyway
     MACOSX_SDK_VERSION=$(echo $macosx_sdk | $AWK -F. '{ print $1*10000+$2*100+$3 }')
-    if test $MACOSX_SDK_VERSION -lt 101400; then
-        AC_MSG_ERROR([macOS SDK $macosx_sdk is not supported, lowest supported version is 10.14])
+    if test $MACOSX_SDK_VERSION -lt 101500; then
+        AC_MSG_ERROR([macOS SDK $macosx_sdk is not supported, lowest supported version is 10.15])
     fi
     if test "$host_cpu" = arm64 -a $MACOSX_SDK_VERSION -lt 110000; then
         AC_MSG_ERROR([macOS SDK $macosx_sdk is not supported for Apple Silicon (need at least 11.0)])
@@ -3503,15 +3581,15 @@ if test $_os = Darwin; then
     AC_MSG_CHECKING([what minimum version of macOS to require])
     if test "$with_macosx_version_min_required" = "" ; then
         if test "$host_cpu" = x86_64; then
-            with_macosx_version_min_required="10.14";
+            with_macosx_version_min_required="10.15";
         else
             with_macosx_version_min_required="11.0";
         fi
     fi
     # see same notes about MACOSX_SDK_VERSION above
     MAC_OS_X_VERSION_MIN_REQUIRED=$(echo $with_macosx_version_min_required | $AWK -F. '{ print $1*10000+$2*100+$3 }')
-    if test $MAC_OS_X_VERSION_MIN_REQUIRED -lt 101400; then
-        AC_MSG_ERROR([with-macosx-version-min-required $with_macosx_version_min_required is not a supported value, minimum supported version is 10.14])
+    if test $MAC_OS_X_VERSION_MIN_REQUIRED -lt 101500; then
+        AC_MSG_ERROR([with-macosx-version-min-required $with_macosx_version_min_required is not a supported value, minimum supported version is 10.15])
     fi
     AC_MSG_RESULT([$with_macosx_version_min_required])
 
@@ -3600,7 +3678,7 @@ if test $_os = Darwin; then
         if test "$enable_macosx_code_signing" = yes; then
             # By default use the first suitable certificate (?).
 
-            # http://stackoverflow.com/questions/13196291/difference-between-mac-developer-and-3rd-party-mac-developer-application
+            # https://stackoverflow.com/questions/13196291/difference-between-mac-developer-and-3rd-party-mac-developer-application
             # says that the "Mac Developer" certificate is useful just for self-testing. For distribution
             # outside the Mac App Store, use the "Developer ID Application" one, and for distribution in
             # the App Store, the "3rd Party Mac Developer" one. I think it works best to the
@@ -4036,7 +4114,7 @@ map_vs_year_to_version()
     2022)
         vsversion=17;;
     2022preview)
-        vsversion=17.4;;
+        vsversion=17.9;;
     *)
         AC_MSG_ERROR([Assertion failure - invalid argument "$1" to map_vs_year_to_version()]);;
     esac
@@ -4058,12 +4136,11 @@ vs_versions_to_check()
     fi
 }
 
-win_get_env_from_vsvars32bat()
+win_get_env_from_vsdevcmdbat()
 {
     local WRAPPERBATCHFILEPATH="`mktemp -t wrpXXXXXX.bat`"
-    # Also seems to be located in another directory under the same name: vsvars32.bat
-    # https://github.com/bazelbuild/bazel/blob/master/src/main/native/build_windows_jni.sh#L56-L57
-    printf '@call "%s/../Common7/Tools/VsDevCmd.bat" /no_logo\r\n' "$(cygpath -w $VC_PRODUCT_DIR)" > $WRAPPERBATCHFILEPATH
+    printf '@set VSCMD_SKIP_SENDTELEMETRY=1\r\n' > $WRAPPERBATCHFILEPATH
+    printf '@call "%s/../Common7/Tools/VsDevCmd.bat" /no_logo\r\n' "$(cygpath -w $VC_PRODUCT_DIR)" >> $WRAPPERBATCHFILEPATH
     # use 'echo.%ENV%' syntax (instead of 'echo %ENV%') to avoid outputting "ECHO is off." in case when ENV is empty or a space
     printf '@setlocal\r\n@echo.%%%s%%\r\n@endlocal\r\n' "$1" >> $WRAPPERBATCHFILEPATH
     local result
@@ -4094,9 +4171,9 @@ find_ucrt()
         ide_env_dir="$VC_PRODUCT_DIR/../Common7/Tools/"
         ide_env_file="${ide_env_dir}VsDevCmd.bat"
         if test -f "$ide_env_file"; then
-            PathFormat "$(win_get_env_from_vsvars32bat UniversalCRTSdkDir)"
+            PathFormat "$(win_get_env_from_vsdevcmdbat UniversalCRTSdkDir)"
             UCRTSDKDIR=$formatted_path
-            UCRTVERSION=$(win_get_env_from_vsvars32bat UCRTVersion)
+            UCRTVERSION=$(win_get_env_from_vsdevcmdbat UCRTVersion)
             dnl Hack needed at least by tml:
             if test "$UCRTVERSION" = 10.0.15063.0 \
                 -a ! -f "${UCRTSDKDIR}Include/10.0.15063.0/um/sqlext.h" \
@@ -4157,7 +4234,7 @@ find_msvc()
             vcyear=2019
             vctoolset=v142
             ;;
-        17.0 | 17.4)
+        17.0 | 17.9)
             vcyear=2022
             vctoolset=v143
             ;;
@@ -4329,7 +4406,7 @@ if test "$_os" = "WINNT"; then
         # are always "better", we list them in reverse chronological order.
 
         case "$vcnumwithdot" in
-        16.0 | 17.0 | 17.4)
+        16.0 | 17.0 | 17.9)
             WINDOWS_SDK_ACCEPTABLE_VERSIONS="10.0 8.1A 8.1 8.0"
             ;;
         esac
@@ -4477,10 +4554,10 @@ if test "$COM_IS_CLANG" = TRUE; then
         CLANG_FULL_VERSION=`echo __clang_version__ | $CC $my_args -`
         CLANGVER=`echo $clang_version \
             | $AWK -F. '{ print \$1*10000+(\$2<100?\$2:99)*100+(\$3<100?\$3:99) }'`
-        if test "$CLANGVER" -ge 80001; then
+        if test "$CLANGVER" -ge 120000; then
             AC_MSG_RESULT([yes ($clang_version)])
         else
-            AC_MSG_ERROR(["$CLANG_FULL_VERSION" is too old or unrecognized, must be at least Clang 8.0.1])
+            AC_MSG_ERROR(["$CLANG_FULL_VERSION" is too old or unrecognized, must be at least Clang 12])
         fi
         AC_DEFINE_UNQUOTED(CLANG_VERSION,$CLANGVER)
         AC_DEFINE_UNQUOTED(CLANG_FULL_VERSION,$CLANG_FULL_VERSION)
@@ -4580,8 +4657,8 @@ if test "$GCC" = "yes" -a -z "$COM_IS_CLANG"; then
 
     AC_MSG_RESULT([gcc $_gcc_version ($gcc_full_version)])
 
-    if test "$gcc_full_version" -lt 70000; then
-        AC_MSG_ERROR([GCC $_gcc_version is too old, must be at least GCC 7.0.0])
+    if test "$gcc_full_version" -lt 120000; then
+        AC_MSG_ERROR([GCC $_gcc_version is too old, must be at least GCC 12])
     fi
 else
     # Explicitly force GCC_VERSION to be empty, even for Clang, to check incorrect uses.
@@ -5012,16 +5089,6 @@ AC_SUBST(ENABLE_OPTIMIZED_DEBUG)
 #
 case "$host_os" in
 
-aix*)
-    COM=GCC
-    CPUNAME=POWERPC
-    OS=AIX
-    RTL_OS=AIX
-    RTL_ARCH=PowerPC
-    PLATFORMID=aix_powerpc
-    P_SEP=:
-    ;;
-
 cygwin*|wsl*)
     # Already handled
     ;;
@@ -5293,11 +5360,6 @@ linux-gnu*|linux-musl*)
         RTL_ARCH=SPARC64
         PLATFORMID=linux_sparc64
         ;;
-    s390)
-        CPUNAME=S390
-        RTL_ARCH=S390
-        PLATFORMID=linux_s390
-        ;;
     s390x)
         CPUNAME=S390X
         RTL_ARCH=S390x
@@ -5309,10 +5371,10 @@ linux-gnu*|linux-musl*)
         PLATFORMID=linux_x86_64
         ;;
     loongarch64)
-	CPUNAME=LOONGARCH64
-	RTL_ARCH=LOONGARCH64
-	PLATFORMID=linux_loongarch64
-	;;
+        CPUNAME=LOONGARCH64
+        RTL_ARCH=LOONGARCH64
+        PLATFORMID=linux_loongarch64
+        ;;
     *)
         AC_MSG_ERROR([Unsupported host_cpu $host_cpu for host_os $host_os])
         ;;
@@ -5540,11 +5602,10 @@ AC_MSG_CHECKING([which package format to use])
 if test -n "$with_package_format" -a "$with_package_format" != no; then
     for i in $with_package_format; do
         case "$i" in
-        aix | bsd | deb | pkg | rpm | archive | dmg | installed | msi)
+        bsd | deb | pkg | rpm | archive | dmg | installed | msi)
             ;;
         *)
             AC_MSG_ERROR([unsupported format $i. Supported by EPM are:
-aix - AIX software distribution
 bsd - FreeBSD, NetBSD, or OpenBSD software distribution
 deb - Debian software distribution
 pkg - Solaris software distribution
@@ -5697,14 +5758,14 @@ if test "$cross_compiling" = "yes"; then
         config_host.mk.in \
         config_host_lang.mk.in \
         Makefile.in \
-        lo.xcent.in \
         bin/bffvalidator.sh.in \
         bin/odfvalidator.sh.in \
         bin/officeotron.sh.in \
-        hardened_runtime.xcent.in \
         instsetoo_native/util/openoffice.lst.in \
         config_host/*.in \
         sysui/desktop/macosx/Info.plist.in \
+        sysui/desktop/macosx/hardened_runtime.xcent.in \
+        sysui/desktop/macosx/lo.xcent.in \
         .vscode/vs-code-template.code-workspace.in \
         solenv/lockfile/autoconf.h.in \
         ) \
@@ -5768,6 +5829,9 @@ if test "$cross_compiling" = "yes"; then
             sub_conf_opts="$sub_conf_opts --with-main-module=writer"
         fi
     fi
+    # windows uses full-internal python and that in turn relies on openssl, so also enable openssl
+    # when cross-compiling for aarch64, overriding the defaults below
+    test "${PLATFORMID}" = "windows_aarch64" && sub_conf_opts="$sub_conf_opts --enable-openssl --with-tls=openssl"
 
     # Don't bother having configure look for stuff not needed for the build platform anyway
     # WARNING: any option with an argument containing spaces must be handled separately (see --with-theme)
@@ -5786,6 +5850,7 @@ if test "$cross_compiling" = "yes"; then
         --disable-nss \
         --disable-online-update \
         --disable-opencl \
+        --disable-openssl \
         --disable-pdfimport \
         --disable-postgresql-sdbc \
         --disable-skia \
@@ -5793,9 +5858,9 @@ if test "$cross_compiling" = "yes"; then
         --enable-dynamic-loading \
         --enable-icecream="$enable_icecream" \
         --without-doxygen \
+        --without-tls \
         --without-webdav \
         --without-x \
-        --with-tls=openssl \
 "
     # single quotes added for better readability in case of spaces
     echo "    Running CONF-FOR-BUILD/configure" \
@@ -5822,8 +5887,10 @@ if test "$cross_compiling" = "yes"; then
 
     # filter permitted build targets
     PERMITTED_BUILD_TARGETS="
+        ARGON2
         AVMEDIA
         BOOST
+        BZIP2
         CAIRO
         CLUCENE
         CURL
@@ -5833,6 +5900,7 @@ if test "$cross_compiling" = "yes"; then
         DYNLOADING
         EPOXY
         EXPAT
+        FROZEN
         GLM
         GRAPHITE
         HARFBUZZ
@@ -5855,6 +5923,7 @@ if test "$cross_compiling" = "yes"; then
         PYTHON
         SCRIPTING
         ZLIB
+        ZXCVBN
 "
     # converts BUILD_TYPE and PERMITTED_BUILD_TARGETS into non-whitespace,
     # newlined lists, to use grep as a filter
@@ -5894,7 +5963,6 @@ if test "$cross_compiling" = "yes"; then
         ANT
         ANT_HOME
         ANT_LIB
-        JAVA_CLASSPATH_NOT_SET
         JAVA_SOURCE_VER
         JAVA_TARGET_VER
         JAVACFLAGS
@@ -6092,6 +6160,15 @@ if test "$test_kf5" = "yes" -a "$enable_kf5" = "yes"; then
     fi
 fi
 
+if test "$test_kf6" = "yes" -a "$enable_kf6" = "yes"; then
+    if test "$enable_qt6" = "no"; then
+        AC_MSG_ERROR([KF6 support depends on QT6, so it conflicts with --disable-qt6])
+    else
+        enable_qt6=yes
+    fi
+fi
+
+
 AC_MSG_CHECKING([whether to build the pagein binaries for oosplash])
 if test "${enable_pagein}" != no -a -z "$DISABLE_DYNLOADING"; then
     AC_MSG_RESULT([yes])
@@ -6123,7 +6200,7 @@ fi
 
 AC_SUBST(ENABLE_CUPS)
 
-libo_CHECK_SYSTEM_MODULE([fontconfig],[FONTCONFIG],[fontconfig >= 2.4.1],,system,TRUE)
+libo_CHECK_SYSTEM_MODULE([fontconfig],[FONTCONFIG],[fontconfig >= 2.12.0],,system,TRUE)
 
 dnl whether to find & fetch external tarballs?
 dnl ===================================================================
@@ -6591,7 +6668,7 @@ find_al()
     done
 }
 
-find_dotnetsdk46()
+find_dotnetsdk()
 {
     unset frametest
 
@@ -6602,6 +6679,7 @@ find_dotnetsdk46()
             return
         fi
     done
+    AC_MSG_ERROR([The Windows NET SDK (minimum 4.6) not found, check the installation])
 }
 
 find_winsdk_version()
@@ -6682,7 +6760,7 @@ find_msms()
 
     msmdir=
     case "$VCVER" in
-    16.0 | 17.0 | 17.4)
+    16.0 | 17.0 | 17.9)
         for l in `ls -1 $VC_PRODUCT_DIR/redist/MSVC/`; do
             my_msm_dir="$VC_PRODUCT_DIR/redist/MSVC/$l/MergeModules/"
             echo "$as_me:$LINENO: looking for $my_msm_dir${my_msm_file}])" >&5
@@ -6718,7 +6796,7 @@ find_msvc_x64_dlls()
 
     msvcdllpath="$VC_PRODUCT_DIR/redist/x64/Microsoft.VC${VCVER}.CRT"
     case "$VCVER" in
-    16.0 | 17.0 | 17.4)
+    16.0 | 17.0 | 17.9)
         for crtver in 141 142 143; do
             for l in `ls -1 $VC_PRODUCT_DIR/redist/MSVC/`; do
                 echo "$as_me:$LINENO: testing $VC_PRODUCT_DIR/redist/MSVC/$l/x64/Microsoft.VC$crtver.CRT" >&5
@@ -6955,7 +7033,7 @@ if test "$build_os" = "cygwin" -o "$build_os" = "wsl"; then
 
     dnl Check mscoree.lib / .NET Framework dir
     AC_MSG_CHECKING(.NET Framework)
-    find_dotnetsdk46
+    find_dotnetsdk
     PathFormat "$frametest"
     frametest="$formatted_path_unix"
     if test -f "$frametest/Lib/um/$WIN_BUILD_ARCH/mscoree.lib"; then
@@ -7011,7 +7089,7 @@ if test "$GXX" = "yes" -a -z "$COM_IS_CLANG"; then
         AC_MSG_RESULT([ok (g++ $_gpp_version)])
     fi
 
-    dnl see https://code.google.com/p/android/issues/detail?id=41770
+    dnl see https://issuetracker.google.com/issues/36962819
         glibcxx_threads=no
         AC_LANG_PUSH([C++])
         AC_REQUIRE_CPP
@@ -7140,7 +7218,9 @@ if test "$_os" != "WINNT"; then
 
     dnl Check for large file support
     AC_SYS_LARGEFILE
-    if test -n "$ac_cv_sys_file_offset_bits" -a "$ac_cv_sys_file_offset_bits" != "no"; then
+    if test -n "$ac_cv_sys_largefile_opts"  -a "$ac_cv_sys_largefile_opts" != "none needed" -a "$ac_cv_sys_largefile_opts" != "support not detected"; then
+        LFS_CFLAGS="$ac_cv_sys_largefile_opts"
+    elif test -n "$ac_cv_sys_file_offset_bits" -a "$ac_cv_sys_file_offset_bits" != "no"; then
         LFS_CFLAGS="-D_FILE_OFFSET_BITS=$ac_cv_sys_file_offset_bits"
     fi
     if test -n "$ac_cv_sys_large_files" -a "$ac_cv_sys_large_files" != "no"; then
@@ -7296,13 +7376,51 @@ dnl ===================================================================
 dnl GCC features
 dnl ===================================================================
 HAVE_GCC_STACK_CLASH_PROTECTION=
+HARDENING_CFLAGS=
+HARDENING_OPT_CFLAGS=
 if test "$GCC" = "yes" -o "$COM_IS_CLANG" = TRUE; then
+    AC_MSG_CHECKING([whether $CC_BASE supports -grecord-gcc-switches])
+    save_CFLAGS=$CFLAGS
+    CFLAGS="$CFLAGS -Werror -grecord-gcc-switches"
+    AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM(, [[return 0;]])],
+        [AC_MSG_RESULT([yes]); HARDENING_CFLAGS="$HARDENING_CFLAGS -grecord-gcc-switches"],
+        [AC_MSG_RESULT([no])])
+    CFLAGS=$save_CFLAGS
+
+    AC_MSG_CHECKING([whether $CC_BASE supports -D_FORTIFY_SOURCE=2])
+    save_CFLAGS=$CFLAGS
+    CFLAGS="$CFLAGS -Werror -Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=2"
+    AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM(, [[return 0;]])],
+        [AC_MSG_RESULT([yes]); HARDENING_OPT_CFLAGS="$HARDENING_OPT_CFLAGS -Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=2"],
+        [AC_MSG_RESULT([no])])
+    CFLAGS=$save_CFLAGS
+
+    AC_MSG_CHECKING([whether $CC_BASE supports -D_GLIBCXX_ASSERTIONS])
+    save_CFLAGS=$CFLAGS
+    CFLAGS="$CFLAGS -Werror -Wp,-D_GLIBCXX_ASSERTIONS"
+    AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM(, [[return 0;]])],
+        [AC_MSG_RESULT([yes]); HARDENING_CFLAGS="$HARDENING_CFLAGS -Wp,-D_GLIBCXX_ASSERTIONS"],
+        [AC_MSG_RESULT([no])])
+    CFLAGS=$save_CFLAGS
+
     AC_MSG_CHECKING([whether $CC_BASE supports -fstack-clash-protection])
     save_CFLAGS=$CFLAGS
     CFLAGS="$CFLAGS -Werror -fstack-clash-protection"
     AC_LINK_IFELSE(
         [AC_LANG_PROGRAM(, [[return 0;]])],
-        [AC_MSG_RESULT([yes]); HAVE_GCC_STACK_CLASH_PROTECTION=TRUE],
+        [AC_MSG_RESULT([yes]); HAVE_GCC_STACK_CLASH_PROTECTION=TRUE; HARDENING_CFLAGS="$HARDENING_CFLAGS -fstack-clash-protection"],
+        [AC_MSG_RESULT([no])])
+    CFLAGS=$save_CFLAGS
+
+    AC_MSG_CHECKING([whether $CC_BASE supports -fcf-protection])
+    save_CFLAGS=$CFLAGS
+    CFLAGS="$CFLAGS -Werror -fcf-protection"
+    AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM(, [[return 0;]])],
+        [AC_MSG_RESULT([yes]); HARDENING_CFLAGS="$HARDENING_CFLAGS -fcf-protection"],
         [AC_MSG_RESULT([no])])
     CFLAGS=$save_CFLAGS
 
@@ -7456,6 +7574,8 @@ fi
 AC_SUBST(HAVE_GCC_AVX)
 AC_SUBST(HAVE_GCC_BUILTIN_ATOMIC)
 AC_SUBST(HAVE_GCC_STACK_CLASH_PROTECTION)
+AC_SUBST(HARDENING_CFLAGS)
+AC_SUBST(HARDENING_OPT_CFLAGS)
 
 dnl ===================================================================
 dnl Identify the C++ library
@@ -7585,18 +7705,18 @@ dnl C++11
 dnl ===================================================================
 
 if test -z "${CXXFLAGS_CXX11+x}"; then
-    AC_MSG_CHECKING([whether $CXX_BASE supports C++17])
+    AC_MSG_CHECKING([whether $CXX_BASE supports C++20])
     if test "$COM" = MSC -a "$COM_IS_CLANG" != TRUE; then
         if test "$with_latest_c__" = yes; then
             CXXFLAGS_CXX11=-std:c++latest
         else
-            CXXFLAGS_CXX11=-std:c++17
+            CXXFLAGS_CXX11=-std:c++20
         fi
-        CXXFLAGS_CXX11="$CXXFLAGS_CXX11 -permissive- -Zc:__cplusplus"
+        CXXFLAGS_CXX11="$CXXFLAGS_CXX11 -permissive- -Zc:__cplusplus,preprocessor"
     elif test "$GCC" = "yes" -o "$COM_IS_CLANG" = TRUE; then
-        my_flags='-std=c++17 -std=c++1z'
+        my_flags='-std=c++20 -std=c++2a'
         if test "$with_latest_c__" = yes; then
-            my_flags="-std=c++23 -std=c++2b -std=c++20 -std=c++2a $my_flags"
+            my_flags="-std=c++26 -std=c++2c -std=c++23 -std=c++2b $my_flags"
         fi
         for flag in $my_flags; do
             if test "$COM" = MSC; then
@@ -7706,22 +7826,6 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
         constinit S<int> s{3, 2, 1};
     ])], [
         AC_DEFINE([HAVE_CPP_CONSTINIT_SORTED_VECTOR],[1])
-        AC_MSG_RESULT([yes])
-    ], [AC_MSG_RESULT([no])])
-CXXFLAGS=$save_CXXFLAGS
-AC_LANG_POP([C++])
-
-AC_MSG_CHECKING([whether $CXX_BASE supports C++2a <span> with unsigned size_type])
-AC_LANG_PUSH([C++])
-save_CXXFLAGS=$CXXFLAGS
-CXXFLAGS="$CXXFLAGS $CXXFLAGS_CXX11"
-AC_COMPILE_IFELSE([AC_LANG_SOURCE([
-        #include <span>
-        #include <type_traits>
-        // Don't check size_type directly, as it was called index_type before P1872R0:
-        void f(std::span<int> s) { static_assert(std::is_unsigned_v<decltype(s.size())>); };
-    ])], [
-        AC_DEFINE([HAVE_CPP_SPAN],[1])
         AC_MSG_RESULT([yes])
     ], [AC_MSG_RESULT([no])])
 CXXFLAGS=$save_CXXFLAGS
@@ -8594,7 +8698,7 @@ if test "$ENABLE_JAVA" != ""; then
         fi
 
         if ! test -f "$with_jdk_home/lib/jvm.lib" -a -f "$with_jdk_home/bin/java.exe"; then
-            AC_MSG_ERROR([No JDK found, pass the --with-jdk-home option (or fix the path) pointing to a $WIN_HOST_BITS-bit JDK >= 9])
+            AC_MSG_ERROR([No JDK found, pass the --with-jdk-home option (or fix the path) pointing to a $WIN_HOST_BITS-bit JDK >= 8])
         fi
     fi
 
@@ -8636,7 +8740,7 @@ if test "$ENABLE_JAVA" != ""; then
         JAVAINTERPRETER=`win_short_path_for_make "$JAVAINTERPRETER"`
     elif test "$cross_compiling" != "yes"; then
         case $CPUNAME in
-            AARCH64|AXP|X86_64|IA64|POWERPC64|S390X|SPARC64|MIPS64|RISCV64)
+            AARCH64|AXP|X86_64|IA64|POWERPC64|S390X|SPARC64|MIPS64|RISCV64|LOONGARCH64)
                 if test -f "$JAVAINTERPRETER" -a "`$JAVAINTERPRETER -version 2>&1 | $GREP -i 64-bit`" = "" >/dev/null; then
                     AC_MSG_WARN([You are building 64-bit binaries but the JDK $JAVAINTERPRETER is 32-bit])
                     AC_MSG_ERROR([You should pass the --with-jdk-home option pointing to a 64-bit JDK])
@@ -8659,6 +8763,7 @@ dnl ===================================================================
 # Whether all the complexity here actually is needed any more or not, no idea.
 
 JDK_SECURITYMANAGER_DISALLOWED=
+MODULAR_JAVA=
 if test "$ENABLE_JAVA" != "" -a "$cross_compiling" != "yes"; then
     _gij_longver=0
     AC_MSG_CHECKING([the installed JDK])
@@ -8679,11 +8784,8 @@ if test "$ENABLE_JAVA" != "" -a "$cross_compiling" != "yes"; then
             _jdk=`$JAVAINTERPRETER -version 2>&1 | $AWK -F'"' '{ print \$2 }' | $SED '/^$/d' | $SED s/[[-A-Za-z]]*//`
             _jdk_ver=`echo "$_jdk" | $AWK -F. '{ print (($1 * 100) + $2) * 100 + $3;}'`
 
-            if test "$_jdk_ver" -lt 10900; then
-                AC_MSG_ERROR([JDK is too old, you need at least 9 ($_jdk_ver < 10900)])
-            fi
-            if test "$_jdk_ver" -gt 10900; then
-                JAVA_CLASSPATH_NOT_SET=TRUE
+            if test "$_jdk_ver" -lt 10800; then
+                AC_MSG_ERROR([JDK is too old, you need at least 8 ($_jdk_ver < 10800)])
             fi
             dnl TODO: Presumably, the Security Manager will not merely be disallowed, but be
             dnl completely removed in some Java version > 18 (see
@@ -8698,13 +8800,21 @@ if test "$ENABLE_JAVA" != "" -a "$cross_compiling" != "yes"; then
             fi
             AC_MSG_RESULT([found $JAVA_HOME (JDK $_jdk)])
 
+            dnl Check whether the build Java supports modules
+            if test "$_jdk_ver" -ge 90000; then
+                MODULAR_JAVA=TRUE
+            else
+                AC_MSG_WARN([Modular jars will not be built. They need at least Java 9 ($_jdk_ver < 90000)])
+                add_warning "Modular jars will not be built. They need at least Java 9 ($_jdk_ver < 90000)"
+            fi
+
             # set to limit VM usage for JunitTests
             JAVAIFLAGS=-Xmx64M
             # set to limit VM usage for javac
             JAVACFLAGS=-J-Xmx128M
         fi
     else
-        AC_MSG_ERROR([Java not found. You need at least JDK 9])
+        AC_MSG_ERROR([Java not found. You need at least JDK 8])
     fi
 else
     if test -z "$ENABLE_JAVA"; then
@@ -8930,12 +9040,6 @@ AC_SUBST(JAWTLIB)
 if test -n "$ENABLE_JAVA" -a -z "$JAVAINC"; then
     case "$host_os" in
 
-    aix*)
-        JAVAINC="-I$JAVA_HOME/include"
-        JAVAINC="$JAVAINC -I$JAVA_HOME/include/aix"
-        test -d "$JAVA_HOME/include/native_thread" && JAVAINC="$JAVAINC -I$JAVA_HOME/include/native_thread"
-        ;;
-
     cygwin*|wsl*)
         JAVAINC="-I$JAVA_HOME/include/win32"
         JAVAINC="$JAVAINC -I$JAVA_HOME/include"
@@ -9007,7 +9111,6 @@ AC_SUBST(JAVACOMPILER)
 AC_SUBST(JAVAINTERPRETER)
 AC_SUBST(JAVAIFLAGS)
 AC_SUBST(JAVAIFLAGS_FOR_BUILD)
-AC_SUBST(JAVA_CLASSPATH_NOT_SET)
 AC_SUBST(JAVA_HOME)
 AC_SUBST(JAVA_HOME_FOR_BUILD)
 AC_SUBST(JDK)
@@ -9015,6 +9118,7 @@ AC_SUBST(JDK_FOR_BUILD)
 AC_SUBST(JDK_SECURITYMANAGER_DISALLOWED_FOR_BUILD)
 AC_SUBST(JAVA_SOURCE_VER)
 AC_SUBST(JAVA_TARGET_VER)
+AC_SUBST(MODULAR_JAVA)
 
 
 dnl ===================================================================
@@ -9162,7 +9266,7 @@ if test "$enable_epm" = "yes"; then
             if $EPM | grep "ESP Package Manager" >/dev/null 2>/dev/null; then
                 AC_MSG_RESULT([yes])
             else
-                AC_MSG_ERROR([no. Install ESP Package Manager (http://www.msweet.org/projects.php?Z2) and/or specify the path to the right epm])
+                AC_MSG_ERROR([no. Install ESP Package Manager (https://jimjag.github.io/epm/) and/or specify the path to the right epm])
             fi
             AC_MSG_CHECKING([epm version])
             EPM_VERSION=`$EPM | grep 'ESP Package Manager' | cut -d' ' -f4 | $SED -e s/v//`
@@ -9171,7 +9275,7 @@ if test "$enable_epm" = "yes"; then
                 AC_MSG_RESULT([OK, >= 3.7])
             else
                 AC_MSG_RESULT([too old. epm >= 3.7 is required.])
-                AC_MSG_ERROR([Install ESP Package Manager (http://www.msweet.org/projects.php?Z2) and/or specify the path to the right epm])
+                AC_MSG_ERROR([Install ESP Package Manager (https://jimjag.github.io/epm/) and/or specify the path to the right epm])
             fi
         fi
     fi
@@ -9245,7 +9349,7 @@ if test "$enable_epm" = "yes"; then
 else
     for i in $PKGFORMAT; do
         case "$i" in
-        aix | bsd | deb | pkg | rpm | native | portable)
+        bsd | deb | pkg | rpm | native | portable)
             AC_MSG_ERROR(
                 [--with-package-format='$PKGFORMAT' requires --enable-epm])
             ;;
@@ -9323,7 +9427,6 @@ else
     AC_MSG_RESULT([yes])
     ENABLE_FUZZERS="TRUE"
     AC_DEFINE([ENABLE_FUZZERS],1)
-    AC_DEFINE([VCL_FLOAT_DEVICE_PIXEL],1)
     BUILD_TYPE="$BUILD_TYPE FUZZERS"
 fi
 AC_SUBST(LIB_FUZZING_ENGINE)
@@ -9536,7 +9639,7 @@ cd /opt/lo/bin
 wget https://dev-www.libreoffice.org/bin/cygwin/nasm.exe
 chmod +x nasm
 
-or get and install one from http://www.nasm.us/
+or get and install one from https://www.nasm.us/
 
 Then re-run autogen.sh
 
@@ -9546,7 +9649,7 @@ Alternatively, you can install the 'new' nasm where ever you want and make sure 
 _EOS
             else
 cat << _EOS
-consult https://github.com/libjpeg-turbo/libjpeg-turbo/blob/master/BUILDING.md
+consult https://github.com/libjpeg-turbo/libjpeg-turbo/blob/main/BUILDING.md
 
 _EOS
             fi
@@ -9573,7 +9676,7 @@ if test "$SYSTEM_CLUCENE" = TRUE; then
     save_CPPFLAGS=$CPPFLAGS
     CXXFLAGS="$CXXFLAGS $CLUCENE_CFLAGS"
     CPPFLAGS="$CPPFLAGS $CLUCENE_CFLAGS"
-    dnl http://sourceforge.net/tracker/index.php?func=detail&aid=3392466&group_id=80013&atid=558446
+    dnl https://sourceforge.net/p/clucene/bugs/200/
     dnl https://bugzilla.redhat.com/show_bug.cgi?id=794795
     AC_CHECK_HEADER([CLucene/analysis/cjk/CJKAnalyzer.h], [],
                  [AC_MSG_ERROR([Your version of libclucene has contribs-lib missing.])], [#include <CLucene.h>])
@@ -9632,7 +9735,7 @@ libo_CHECK_SYSTEM_MODULE([libwpd],[WPD],[libwpd-0.10])
 libo_CHECK_SYSTEM_MODULE([libwpg],[WPG],[libwpg-0.3])
 
 libo_CHECK_SYSTEM_MODULE([libwps],[WPS],[libwps-0.4])
-libo_PKG_VERSION([WPS], [libwps-0.4], [0.4.12])
+libo_PKG_VERSION([WPS], [libwps-0.4], [0.4.14])
 
 libo_CHECK_SYSTEM_MODULE([libvisio],[VISIO],[libvisio-0.1])
 
@@ -10015,7 +10118,7 @@ if test \( "$cross_compiling" = yes -a -z "$PYTHON_FOR_BUILD" \) -o "$enable_pyt
     SYSTEM_PYTHON=
     PYTHON_VERSION_MAJOR=3
     PYTHON_VERSION_MINOR=8
-    PYTHON_VERSION=${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.18
+    PYTHON_VERSION=${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.19
     if ! grep -q -i python.*${PYTHON_VERSION} ${SRC_ROOT}/download.lst; then
         AC_MSG_ERROR([PYTHON_VERSION ${PYTHON_VERSION} but no matching file in download.lst])
     fi
@@ -10581,7 +10684,7 @@ dnl ===================================================================
 dnl Check for system mdds
 dnl ===================================================================
 MDDS_CFLAGS_internal="-I${WORKDIR}/UnpackedTarball/mdds/include"
-libo_CHECK_SYSTEM_MODULE([mdds],[MDDS],[mdds-2.0 >= 2.0.0])
+libo_CHECK_SYSTEM_MODULE([mdds],[MDDS],[mdds-2.1 >= 2.1.0])
 
 dnl ===================================================================
 dnl Check for system dragonbox
@@ -10606,6 +10709,27 @@ else
 fi
 AC_SUBST([SYSTEM_DRAGONBOX])
 AC_SUBST([DRAGONBOX_CFLAGS])
+
+dnl ===================================================================
+dnl Check for system frozen
+dnl ===================================================================
+AC_MSG_CHECKING([which frozen to use])
+if test "$with_system_frozen" = "yes"; then
+    AC_MSG_RESULT([external])
+    SYSTEM_FROZEN=TRUE
+    AC_LANG_PUSH([C++])
+    save_CPPFLAGS=$CPPFLAGS
+    AC_CHECK_HEADER([frozen/unordered_map.h], [],
+       [AC_MSG_ERROR([frozen/unordered_map.h not found. install frozen headers])], [])
+    AC_LANG_POP([C++])
+    CPPFLAGS=$save_CPPFLAGS
+else
+    AC_MSG_RESULT([internal])
+    BUILD_TYPE="$BUILD_TYPE FROZEN"
+    SYSTEM_FROZEN=
+fi
+AC_SUBST([SYSTEM_FROZEN])
+AC_SUBST([FROZEN_CFLAGS])
 
 dnl ===================================================================
 dnl Check for system libfixmath
@@ -10682,7 +10806,7 @@ if test "$enable_fuzzers" != "yes" -a "$enable_nss" = "yes"; then
     libo_CHECK_SYSTEM_MODULE([nss],[NSS],[nss >= 3.9.3 nspr >= 4.8],,system-if-linux)
     AC_DEFINE(HAVE_FEATURE_NSS)
     ENABLE_NSS=TRUE
-elif test $_os != iOS ; then
+elif test $_os != iOS -a "$enable_openssl" != "no"; then
     with_tls=openssl
 fi
 AC_SUBST(ENABLE_NSS)
@@ -10693,14 +10817,14 @@ dnl ===================================================================
 
 if test "$test_openldap" = yes; then
     AC_MSG_CHECKING([whether to enable LDAP support])
-    if test "$enable_ldap" = yes -a \( "$ENABLE_NSS" = TRUE -o "$with_system_openldap" = yes \); then
+    if test "$enable_ldap" = yes -a \( "$enable_openssl" = yes -o "$with_system_openldap" = yes \); then
         AC_MSG_RESULT([yes])
         ENABLE_LDAP=TRUE
     else
         if test "$enable_ldap" != "yes"; then
             AC_MSG_RESULT([no])
         else
-            AC_MSG_RESULT([no (needs NSS or system openldap)])
+            AC_MSG_RESULT([no (needs OPENSSL or system openldap)])
         fi
     fi
 
@@ -10786,14 +10910,11 @@ fi
 dnl ===================================================================
 dnl Check for system icu
 dnl ===================================================================
-ICU_MAJOR=72
-ICU_MINOR=1
-ICU_RECLASSIFIED_PREPEND_SET_EMPTY="TRUE"
-ICU_RECLASSIFIED_CONDITIONAL_JAPANESE_STARTER="TRUE"
-ICU_RECLASSIFIED_HEBREW_LETTER="TRUE"
+ICU_MAJOR=73
+ICU_MINOR=2
 ICU_CFLAGS_internal="-I${WORKDIR}/UnpackedTarball/icu/source/i18n -I${WORKDIR}/UnpackedTarball/icu/source/common"
 ICU_LIBS_internal="-L${WORKDIR}/UnpackedTarball/icu/source/lib"
-libo_CHECK_SYSTEM_MODULE([icu],[ICU],[icu-i18n >= 4.6])
+libo_CHECK_SYSTEM_MODULE([icu],[ICU],[icu-i18n >= 66])
 if test "$SYSTEM_ICU" = TRUE; then
     AC_LANG_PUSH([C++])
     AC_MSG_CHECKING([for unicode/rbbi.h])
@@ -10803,11 +10924,6 @@ if test "$SYSTEM_ICU" = TRUE; then
     ICU_VERSION=`$PKG_CONFIG --modversion icu-i18n 2>/dev/null`
     ICU_MAJOR=`echo $ICU_VERSION | cut -d"." -f1`
     ICU_MINOR=`echo $ICU_VERSION | cut -d"." -f2`
-
-    if test "$ICU_MAJOR" -ge 50; then
-        AC_MSG_NOTICE([Ignore ICU_MINOR as obviously the libraries don't include the minor version in their names any more])
-        ICU_MINOR=
-    fi
 
     if test "$CROSS_COMPILING" != TRUE; then
         # using the system icu tools can lead to version confusion, use the
@@ -10824,31 +10940,21 @@ if test "$SYSTEM_ICU" = TRUE; then
         if test -z "$SYSTEM_GENCMN"; then
             AC_MSG_ERROR([\'gencmn\' not found in \$PATH, install the icu development tool \'gencmn\'])
         fi
-        if test "$ICU_MAJOR" -lt 49; then
-            ICU_RECLASSIFIED_PREPEND_SET_EMPTY=
-            ICU_RECLASSIFIED_CONDITIONAL_JAPANESE_STARTER=
-            ICU_RECLASSIFIED_HEBREW_LETTER=
-        fi
     fi
 fi
-if test "$ICU_MAJOR" -ge "59"; then
-    # As of ICU 59 it defaults to typedef char16_t UChar; which is available
-    # with -std=c++11 but not all external libraries can be built with that,
-    # for those use a bit-compatible typedef uint16_t UChar; see
-    # icu/source/common/unicode/umachine.h
-    ICU_UCHAR_TYPE="-DUCHAR_TYPE=uint16_t"
-else
-    ICU_UCHAR_TYPE=""
-fi
+
 AC_SUBST(SYSTEM_GENBRK)
 AC_SUBST(SYSTEM_GENCCODE)
 AC_SUBST(SYSTEM_GENCMN)
 AC_SUBST(ICU_MAJOR)
 AC_SUBST(ICU_MINOR)
-AC_SUBST(ICU_RECLASSIFIED_PREPEND_SET_EMPTY)
-AC_SUBST(ICU_RECLASSIFIED_CONDITIONAL_JAPANESE_STARTER)
-AC_SUBST(ICU_RECLASSIFIED_HEBREW_LETTER)
-AC_SUBST(ICU_UCHAR_TYPE)
+
+dnl ==================================================================
+dnl CURL
+dnl ==================================================================
+if test "$enable_curl" == "yes"; then
+    AC_DEFINE([HAVE_FEATURE_CURL])
+fi
 
 dnl ==================================================================
 dnl Breakpad
@@ -10858,6 +10964,9 @@ AC_MSG_CHECKING([whether to enable breakpad])
 if test "$enable_breakpad" != yes; then
     AC_MSG_RESULT([no])
 else
+    if test "$enable_curl" != "yes"; then
+        AC_MSG_ERROR([--disable-breakpad must be used when --disable-curl is used])
+    fi
     AC_MSG_RESULT([yes])
     ENABLE_BREAKPAD="TRUE"
     AC_DEFINE(ENABLE_BREAKPAD)
@@ -10886,10 +10995,19 @@ fi
 AC_SUBST(ENABLE_BREAKPAD)
 AC_SUBST(DEFAULT_CRASHDUMP_VALUE)
 
+dnl ==================================================================
+dnl libcmis
+dnl ==================================================================
+if test "$enable_libcmis" == "yes"; then
+    if test "$enable_curl" != "yes"; then
+        AC_MSG_ERROR([--disable-libcmis must be used when --disable-curl is used])
+    fi
+fi
+
 dnl ===================================================================
 dnl Orcus
 dnl ===================================================================
-libo_CHECK_SYSTEM_MODULE([orcus],[ORCUS],[liborcus-0.17 >= 0.17.2])
+libo_CHECK_SYSTEM_MODULE([orcus],[ORCUS],[liborcus-0.18 >= 0.19.1])
 if test "$with_system_orcus" != "yes"; then
     if test "$SYSTEM_BOOST" = "TRUE"; then
         dnl Link with Boost.System
@@ -10910,19 +11028,19 @@ dnl ===================================================================
 harfbuzz_required_version=5.1.0
 
 GRAPHITE_CFLAGS_internal="-I${WORKDIR}/UnpackedTarball/graphite/include -DGRAPHITE2_STATIC"
-GRAPHITE_LIBS_internal="-L${WORKDIR}/LinkTarget/StaticLibrary -lgraphite"
 HARFBUZZ_CFLAGS_internal="-I${WORKDIR}/UnpackedTarball/harfbuzz/src"
-HARFBUZZ_LIBS_internal="-L${WORKDIR}/UnpackedTarball/harfbuzz/src/.libs -lharfbuzz"
 case "$_os" in
     Linux)
-        libo_CHECK_SYSTEM_MODULE([graphite],[GRAPHITE],[graphite2 >= 0.9.3],,,TRUE)
-        libo_CHECK_SYSTEM_MODULE([harfbuzz],[HARFBUZZ],[harfbuzz-icu >= 0.9.42],,,TRUE)
+        GRAPHITE_LIBS_internal="${WORKDIR}/LinkTarget/StaticLibrary/libgraphite.a"
+        HARFBUZZ_LIBS_internal="${WORKDIR}/UnpackedTarball/harfbuzz/src/.libs/libharfbuzz.a"
         ;;
     *)
-        libo_CHECK_SYSTEM_MODULE([graphite],[GRAPHITE],[graphite2 >= 0.9.3])
-        libo_CHECK_SYSTEM_MODULE([harfbuzz],[HARFBUZZ],[harfbuzz-icu >= 0.9.42])
+        GRAPHITE_LIBS_internal="-L${WORKDIR}/LinkTarget/StaticLibrary -lgraphite"
+        HARFBUZZ_LIBS_internal="-L${WORKDIR}/UnpackedTarball/harfbuzz/src/.libs -lharfbuzz"
         ;;
 esac
+libo_CHECK_SYSTEM_MODULE([graphite],[GRAPHITE],[graphite2 >= 0.9.3])
+libo_CHECK_SYSTEM_MODULE([harfbuzz],[HARFBUZZ],[harfbuzz-icu >= $harfbuzz_required_version])
 
 if test "$COM" = "MSC"; then # override the above
     GRAPHITE_LIBS="${WORKDIR}/LinkTarget/StaticLibrary/graphite.lib"
@@ -11048,7 +11166,7 @@ no)
     AC_MSG_RESULT([yes])
     # curl is already mandatory (almost) and checked elsewhere
     if test "$enable_curl" = "no"; then
-        AC_MSG_ERROR(["--with-webdav conflicts with --disable-curl"])
+        AC_MSG_ERROR(["--without-webdav must be used when --disable-curl is used"])
     fi
     WITH_WEBDAV=TRUE
     ;;
@@ -11059,20 +11177,6 @@ dnl ===================================================================
 dnl Check for disabling cve_tests
 dnl ===================================================================
 AC_MSG_CHECKING([whether to execute CVE tests])
-# If not explicitly enabled or disabled, default
-if test -z "$enable_cve_tests"; then
-    case "$OS" in
-    WNT)
-        # Default cves off for Windows with its wild and wonderful
-        # variety of AV software kicking in and panicking
-        enable_cve_tests=no
-        ;;
-    *)
-        # otherwise yes
-        enable_cve_tests=yes
-        ;;
-    esac
-fi
 if test "$enable_cve_tests" = "no"; then
     AC_MSG_RESULT([no])
     DISABLE_CVE_TESTS=TRUE
@@ -11092,8 +11196,8 @@ if test "$enable_openssl" = "yes"; then
     if test "$_os" = Darwin ; then
         # OpenSSL is deprecated when building for 10.7 or later.
         #
-        # http://stackoverflow.com/questions/7406946/why-is-apple-deprecating-openssl-in-macos-10-7-lion
-        # http://stackoverflow.com/questions/7475914/libcrypto-deprecated-on-mac-os-x-10-7-lion
+        # https://stackoverflow.com/questions/7406946/why-is-apple-deprecating-openssl-in-macos-10-7-lion
+        # https://stackoverflow.com/questions/7475914/libcrypto-deprecated-on-mac-os-x-10-7-lion
 
         with_system_openssl=no
         libo_CHECK_SYSTEM_MODULE([openssl],[OPENSSL],[openssl])
@@ -11159,6 +11263,14 @@ if test "$build_crypto" = yes; then
     fi
 fi
 
+ARGON2_CFLAGS_internal="-I${WORKDIR}/UnpackedTarball/argon2/include"
+if test "$COM" = "MSC"; then
+    ARGON2_LIBS_internal="${WORKDIR}/UnpackedTarball/argon2/vs2015/build/Argon2OptDll.lib"
+else
+    ARGON2_LIBS_internal="${WORKDIR}/UnpackedTarball/argon2/libargon2.a"
+fi
+libo_CHECK_SYSTEM_MODULE([argon2],[ARGON2],[libargon2])
+
 dnl ===================================================================
 dnl Check for system redland
 dnl ===================================================================
@@ -11216,6 +11328,24 @@ AC_SUBST(HUNSPELL_CFLAGS)
 AC_SUBST(HUNSPELL_LIBS)
 
 dnl ===================================================================
+dnl Check for system zxcvbn
+dnl ===================================================================
+AC_MSG_CHECKING([which zxcvbn to use])
+if test "$with_system_zxcvbn" = "yes"; then
+    AC_MSG_RESULT([external])
+    SYSTEM_ZXCVBN=TRUE
+    AC_CHECK_HEADER(zxcvbn.h, [],
+       [ AC_MSG_ERROR(zxcvbn headers not found.)], [])
+    AC_CHECK_LIB(zxcvbn, ZxcvbnMatch, [],
+        [ AC_MSG_ERROR(zxcvbn library not found.)], [])
+else
+   AC_MSG_RESULT([internal])
+   BUILD_TYPE="$BUILD_TYPE ZXCVBN"
+   SYSTEM_ZXCVBN=
+fi
+AC_SUBST(SYSTEM_ZXCVBN)
+
+dnl ===================================================================
 dnl Check for system zxing
 dnl ===================================================================
 AC_MSG_CHECKING([whether to use zxing])
@@ -11238,8 +11368,8 @@ else
         for i in $CPLUS_INCLUDE_PATH /usr/include; do
             dnl Reset IFS as soon as possible, to avoid unexpected side effects (and the
             dnl "/usr/include" fallback makes sure we get here at least once; resetting rather than
-            dnl unsetting follows the advice at <http://git.savannah.gnu.org/gitweb/?p=autoconf.git;
-            dnl a=commit;h=e51c9919f2cf70185b7916ac040bc0bbfd0f743b> "Add recommendation on (not)
+            dnl unsetting follows the advice at <https://git.savannah.gnu.org/gitweb/?p=autoconf.git;
+            dnl a=commitdiff;h=e51c9919f2cf70185b7916ac040bc0bbfd0f743b> "Add recommendation on (not)
             dnl unsetting IFS."):
             IFS=$save_IFS
             dnl TODO: GCC and Clang treat empty paths in CPLUS_INCLUDE_PATH like ".", but we simply
@@ -11267,10 +11397,31 @@ else
         AC_MSG_RESULT([internal])
         SYSTEM_ZXING=
         BUILD_TYPE="$BUILD_TYPE ZXING"
+        ZXING_CFLAGS="-I${WORKDIR}/UnpackedTarball/zxing/core/src"
     fi
     if test "$ENABLE_ZXING" = TRUE; then
         AC_DEFINE(ENABLE_ZXING)
     fi
+    AC_MSG_CHECKING([whether zxing::tosvg function is available])
+    AC_LANG_PUSH([C++])
+    save_CXXFLAGS=$CXXFLAGS
+    CXXFLAGS="$CXXFLAGS $CXXFLAGS_CXX11 $ZXING_CFLAGS"
+    AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+            #include <BitMatrix.h>
+            #include <BitMatrixIO.h>
+            int main(){
+                ZXing::BitMatrix matrix(1, 1);
+                matrix.set(0, 0, true);
+                ZXing::ToSVG(matrix);
+                return 0;
+            }
+        ])], [
+            AC_DEFINE([HAVE_ZXING_TOSVG],[1])
+            AC_MSG_RESULT([yes])
+        ], [AC_MSG_RESULT([no])])
+    CXXFLAGS=$save_CXXFLAGS
+    AC_LANG_POP([C++])
+    AC_SUBST(HAVE_ZXING_TOSVG)
 fi
 AC_SUBST(SYSTEM_ZXING)
 AC_SUBST(ENABLE_ZXING)
@@ -11622,7 +11773,7 @@ elif $GNUCP --version 2>/dev/null | grep "GNU fileutils" >/dev/null 2>/dev/null;
     AC_MSG_RESULT([yes])
 else
     case "$build_os" in
-    darwin*|netbsd*|openbsd*|freebsd*|dragonfly*|aix*)
+    darwin*|netbsd*|openbsd*|freebsd*|dragonfly*)
         x_GNUCP=[\#]
         GNUCP=''
         AC_MSG_RESULT([no gnucp found - using the system's cp command])
@@ -11697,18 +11848,6 @@ EPOXY_CFLAGS_internal="-I${WORKDIR}/UnpackedTarball/epoxy/include"
 libo_CHECK_SYSTEM_MODULE([epoxy], [EPOXY], [epoxy >= 1.2])
 
 dnl ===================================================================
-dnl Set vcl option: coordinate device in double or sal_Int32
-dnl ===================================================================
-
-AC_MSG_CHECKING([Type to use for Device Pixel coordinates])
-if test "$enable_float_device_pixel" = yes; then
-    AC_DEFINE(VCL_FLOAT_DEVICE_PIXEL)
-    AC_MSG_RESULT([double])
-else
-    AC_MSG_RESULT([sal_Int32])
-fi
-
-dnl ===================================================================
 dnl Show which vclplugs will be built.
 dnl ===================================================================
 R=""
@@ -11718,6 +11857,7 @@ libo_ENABLE_VCLPLUG([gtk3])
 libo_ENABLE_VCLPLUG([gtk3_kde5])
 libo_ENABLE_VCLPLUG([gtk4])
 libo_ENABLE_VCLPLUG([kf5])
+libo_ENABLE_VCLPLUG([kf6])
 libo_ENABLE_VCLPLUG([qt5])
 libo_ENABLE_VCLPLUG([qt6])
 
@@ -11815,6 +11955,60 @@ if test "$enable_introspection" = yes; then
         AC_MSG_ERROR([--enable-introspection requires --enable-gtk3])
     fi
 fi
+
+# AT-SPI2 tests require gtk3, xvfb-run, dbus-launch and atspi-2
+if ! test "$ENABLE_GTK3" = TRUE; then
+    if test "$enable_atspi_tests" = yes; then
+        AC_MSG_ERROR([--enable-atspi-tests requires --enable-gtk3])
+    fi
+    enable_atspi_tests=no
+fi
+if ! test "$enable_atspi_tests" = no; then
+    AC_PATH_PROGS([XVFB_RUN], [xvfb-run], no)
+    if ! test "$XVFB_RUN" = no; then
+        dnl make sure the found xvfb-run actually works
+        AC_MSG_CHECKING([whether $XVFB_RUN works...])
+        if $XVFB_RUN --auto-servernum true >&AS_MESSAGE_LOG_FD 2>&AS_MESSAGE_LOG_FD; then
+            AC_MSG_RESULT([yes])
+        else
+            AC_MSG_RESULT([no])
+            XVFB_RUN=no
+        fi
+    fi
+    if test "$XVFB_RUN" = no; then
+        if test "$enable_atspi_tests" = yes; then
+            AC_MSG_ERROR([xvfb-run required by --enable-atspi-tests not found])
+        fi
+        enable_atspi_tests=no
+    fi
+fi
+if ! test "$enable_atspi_tests" = no; then
+    AC_PATH_PROGS([DBUS_LAUNCH], [dbus-launch], no)
+    if test "$DBUS_LAUNCH" = no; then
+        if test "$enable_atspi_tests" = yes; then
+            AC_MSG_ERROR([dbus-launch required by --enable-atspi-tests not found])
+        fi
+        enable_atspi_tests=no
+    fi
+fi
+if ! test "$enable_atspi_tests" = no; then
+    PKG_CHECK_MODULES([ATSPI2], [atspi-2 gobject-2.0],,
+                      [if test "$enable_atspi_tests" = yes; then
+                           AC_MSG_ERROR([$ATSPI2_PKG_ERRORS])
+                       else
+                           enable_atspi_tests=no
+                       fi])
+fi
+if ! test "x$enable_atspi_tests" = xno; then
+    PKG_CHECK_MODULES([ATSPI2_2_32], [atspi-2 >= 2.32],
+                      [have_atspi_scroll_to=1],
+                      [have_atspi_scroll_to=0])
+    AC_DEFINE_UNQUOTED([HAVE_ATSPI2_SCROLL_TO], [$have_atspi_scroll_to],
+                       [Whether AT-SPI2 has the scrollTo API])
+fi
+ENABLE_ATSPI_TESTS=
+test "$enable_atspi_tests" = no || ENABLE_ATSPI_TESTS=TRUE
+AC_SUBST([ENABLE_ATSPI_TESTS])
 
 dnl ===================================================================
 dnl check for dbus support
@@ -12041,7 +12235,7 @@ dnl Check whether to build with dconf support.
 dnl =================================================
 
 if test $_os != Android -a $_os != iOS -a "$enable_dconf" != no; then
-    PKG_CHECK_MODULES([DCONF], [dconf >= 0.15.2], [], [
+    PKG_CHECK_MODULES([DCONF], [dconf >= 0.40.0], [], [
         if test "$enable_dconf" = yes; then
             AC_MSG_ERROR([dconf not found])
         else
@@ -12113,7 +12307,7 @@ if test "$ENABLE_PDFIUM" = "TRUE"; then
                      [AC_MSG_ERROR([libabsl_bad_optional_access library not found.])])
         AC_CHECK_LIB([absl_bad_variant_access], [main], [],
                      [AC_MSG_ERROR([libabsl_bad_variant_access library not found.])])
-	ABSEIL_LIBS="-labsl_bad_optional_access -labsl_bad_variant_access"
+        ABSEIL_LIBS="-labsl_bad_optional_access -labsl_bad_variant_access"
         AC_LANG_POP([C++])
         ABSEIL_CFLAGS=$(printf '%s' "$ABSEIL_CFLAGS" | sed -e "s/-I/${ISYSTEM?}/g")
         FilterLibs "${ABSEIL_LIBS}"
@@ -12194,20 +12388,20 @@ if test "$enable_skia" != "no" -a "$build_skia" = "yes" -a -z "$DISABLE_GUI"; th
             ENABLE_SKIA_DEBUG=
         fi
         ENABLE_SKIA=TRUE
-	if test "$ENDIANNESS" = "big" && test "$ENABLE_SKIA" = "TRUE"; then
-		AC_MSG_ERROR([skia doesn't work/isn't supported upstream on big-endian. Use --disable-skia])
-	fi
+        if test "$ENDIANNESS" = "big" && test "$ENABLE_SKIA" = "TRUE"; then
+            AC_MSG_ERROR([skia doesn't work/isn't supported upstream on big-endian. Use --disable-skia])
+        fi
 
         AC_DEFINE(HAVE_FEATURE_SKIA)
         BUILD_TYPE="$BUILD_TYPE SKIA"
 
         if test "$OS" = "MACOSX"; then
-            AC_DEFINE(SK_SUPPORT_GPU,1)
+            AC_DEFINE(SK_GANESH,1)
             AC_DEFINE(SK_METAL,1)
             SKIA_GPU=METAL
             AC_SUBST(SKIA_GPU)
         else
-            AC_DEFINE(SK_SUPPORT_GPU,1)
+            AC_DEFINE(SK_GANESH,1)
             AC_DEFINE(SK_VULKAN,1)
             SKIA_GPU=VULKAN
             AC_SUBST(SKIA_GPU)
@@ -12234,6 +12428,7 @@ LO_CLANG_CXXFLAGS_INTRINSICS_AVX512=
 LO_CLANG_CXXFLAGS_INTRINSICS_AVX512F=
 LO_CLANG_CXXFLAGS_INTRINSICS_F16C=
 LO_CLANG_CXXFLAGS_INTRINSICS_FMA=
+LO_CLANG_VERSION=
 HAVE_LO_CLANG_DLLEXPORTINLINES=
 
 if test "$ENABLE_SKIA" = TRUE -a "$COM_IS_CLANG" != TRUE; then
@@ -12276,8 +12471,8 @@ if test "$ENABLE_SKIA" = TRUE -a "$COM_IS_CLANG" != TRUE; then
     fi
     if test -n "$LO_CLANG_CC" -a -n "$LO_CLANG_CXX"; then
         clang2_version=`echo __clang_major__.__clang_minor__.__clang_patchlevel__ | $LO_CLANG_CC -E - | tail -1 | sed 's/ //g'`
-        clang2_ver=`echo "$clang2_version" | $AWK -F. '{ print \$1*10000+(\$2<100?\$2:99)*100+(\$3<100?\$3:99) }'`
-        if test "$clang2_ver" -lt 50002; then
+        LO_CLANG_VERSION=`echo "$clang2_version" | $AWK -F. '{ print \$1*10000+(\$2<100?\$2:99)*100+(\$3<100?\$3:99) }'`
+        if test "$LO_CLANG_VERSION" -lt 50002; then
             AC_MSG_WARN(["$clang2_version" is too old or unrecognized, must be at least Clang 5.0.2])
             LO_CLANG_CC=
             LO_CLANG_CXX=
@@ -12577,6 +12772,7 @@ AC_SUBST(LO_CLANG_CXXFLAGS_INTRINSICS_AVX512F)
 AC_SUBST(LO_CLANG_CXXFLAGS_INTRINSICS_F16C)
 AC_SUBST(LO_CLANG_CXXFLAGS_INTRINSICS_FMA)
 AC_SUBST(LO_CLANG_SHOWINCLUDES_PREFIX)
+AC_SUBST(LO_CLANG_VERSION)
 AC_SUBST(CLANG_USE_LD)
 AC_SUBST([HAVE_LO_CLANG_DLLEXPORTINLINES])
 
@@ -12586,7 +12782,7 @@ AC_MSG_CHECKING([whether to enable gpgmepp])
 if test "$enable_gpgmepp" = no; then
     AC_MSG_RESULT([no])
 elif test "$enable_mpl_subset" = "yes"; then
-    AC_MSG_RESULT([no (MPL only])
+    AC_MSG_RESULT([no (MPL only)])
 elif test "$enable_fuzzers" = "yes"; then
     AC_MSG_RESULT([no (oss-fuzz)])
 elif test \( \( "$_os" = "Linux" -o "$_os" = "Darwin" \) -a "$ENABLE_NSS" = TRUE \) -o "$_os" = "WINNT" ; then
@@ -12606,7 +12802,7 @@ elif test \( \( "$_os" = "Linux" -o "$_os" = "Darwin" \) -a "$ENABLE_NSS" = TRUE
             [AC_MSG_ERROR([gpgme headers not found, install gpgme development package])], [])
         AC_CHECK_LIB(gpgmepp, main, [],
             [AC_MSG_ERROR(gpgmepp not found or not functional)], [])
-	GPGMEPP_LIBS=-lgpgmepp
+        GPGMEPP_LIBS=-lgpgmepp
     else
         AC_MSG_RESULT([internal])
         BUILD_TYPE="$BUILD_TYPE LIBGPGERROR LIBASSUAN GPGMEPP"
@@ -12930,7 +13126,7 @@ AC_SUBST(ENABLE_SCRIPTING_JAVASCRIPT)
 AC_SUBST(SYSTEM_RHINO)
 AC_SUBST(RHINO_JAR)
 
-# This is only used in Qt5/Qt6/KF5 checks to determine if /usr/lib64
+# This is only used in Qt5/Qt6/KF5/KF6 checks to determine if /usr/lib64
 # paths should be added to library search path. So lets put all 64-bit
 # platforms there.
 supports_multilib=
@@ -12988,7 +13184,7 @@ then
             AC_MSG_ERROR([Wrong qmake for Qt5 found. Please specify the root of your Qt5 installation by exporting QT5DIR before running "configure".])
         fi
         qmake5_minor_version="`echo $qmake5_test_ver | cut -d. -f2`"
-        qt5_minimal_minor="6"
+        qt5_minimal_minor="15"
         if test "$qmake5_minor_version" -lt "$qt5_minimal_minor"; then
             AC_MSG_ERROR([The minimal supported Qt5 version is 5.${qt5_minimal_minor}, but your 'qmake -v' reports Qt5 version $qmake5_test_ver.])
         else
@@ -13068,13 +13264,6 @@ then
 
     if test "$USING_X11" = TRUE; then
         PKG_CHECK_MODULES(QT5_XCB,[xcb],,[AC_MSG_ERROR([XCB not found, which is needed for correct app grouping in X11.])])
-        PKG_CHECK_MODULES(QT5_XCB_ICCCM,[xcb-icccm],[
-            QT5_HAVE_XCB_ICCCM=1
-            AC_DEFINE(QT5_HAVE_XCB_ICCCM)
-        ],[
-            AC_MSG_WARN([XCB ICCCM not found, which is needed for old Qt versions (< 5.12) on some WMs to correctly group dialogs (like QTBUG-46626)])
-            add_warning "XCB ICCCM not found, which is needed for Qt versions (< 5.12) on some WMs to correctly group dialogs (like QTBUG-46626)"
-        ])
         QT5_CFLAGS="$QT5_CFLAGS $QT5_XCB_CFLAGS $QT5_XCB_ICCCM_CFLAGS"
         QT5_LIBS="$QT5_LIBS $QT5_XCB_LIBS $QT5_XCB_ICCCM_LIBS -lQt5X11Extras"
         QT5_USING_X11=1
@@ -13115,7 +13304,8 @@ QT6_LIBS=""
 QMAKE6="qmake"
 MOC6="moc"
 QT6_PLATFORMS_SRCDIR=""
-if test \( "$test_qt6" = "yes" -a "$ENABLE_QT6" = "TRUE" \)
+if test \( "$test_kf6" = "yes" -a "$ENABLE_KF6" = "TRUE" \) -o \
+        \( "$test_qt6" = "yes" -a "$ENABLE_QT6" = "TRUE" \)
 then
     qt6_incdirs="$QT6INC /usr/include/qt6 /usr/include $x_includes"
     qt6_libdirs="$QT6LIB /usr/lib/qt6 /usr/lib $x_libraries"
@@ -13219,10 +13409,16 @@ then
             qt6_libexec_dirs="$qt6_libexec_dirs:$lib_dir/libexec"
         fi
     done
-    AC_PATH_PROGS( MOC6, [moc-qt6 moc], no, [`dirname $qt6_libdir`/libexec:$QT6DIR/libexec:$qt6_libexec_dirs:$PATH])
+    AC_PATH_PROGS( MOC6, [moc-qt6 moc], no, [`dirname $qt6_libdir`/libexec:$QT6DIR/libexec:$qt6_libexec_dirs:`echo $qt6_libdirs | $SED -e 's/ /:/g'`:$PATH])
     if test "$MOC6" = "no"; then
         AC_MSG_ERROR([Qt Meta Object Compiler not found.  Please specify
 the root of your Qt installation by exporting QT6DIR before running "configure".])
+    else
+        moc6_test_ver="`$MOC6 -v 2>&1 | $SED -n -e 's/^moc \(6.*\)/\1/p'`"
+        if test -z "$moc6_test_ver"; then
+            AC_MSG_ERROR([Wrong moc for Qt6 found.])
+        fi
+        AC_MSG_NOTICE([Detected moc version: $moc_test_ver])
     fi
 fi
 AC_SUBST(QT6_CFLAGS)
@@ -13319,6 +13515,82 @@ AC_SUBST(KF5_CFLAGS)
 AC_SUBST(KF5_LIBS)
 
 dnl ===================================================================
+dnl KF6 Integration
+dnl ===================================================================
+
+KF6_CFLAGS=""
+KF6_LIBS=""
+if test \( "$test_kf6" = "yes" -a "$ENABLE_KF6" = "TRUE" \)
+then
+    if test "$OS" = "HAIKU"; then
+        haiku_arch="`echo $RTL_ARCH | tr X x`"
+        kf6_haiku_incdirs="`findpaths -c ' ' -a $haiku_arch B_FIND_PATH_HEADERS_DIRECTORY`"
+        kf6_haiku_libdirs="`findpaths -c ' ' -a $haiku_arch B_FIND_PATH_DEVELOP_LIB_DIRECTORY`"
+    fi
+
+    kf6_incdirs="$KF6INC /usr/include $kf6_haiku_incdirs $x_includes"
+    kf6_libdirs="$KF6LIB /usr/lib /usr/lib/kf6 /usr/lib/kf6/devel $kf6_haiku_libdirs $x_libraries"
+    if test -n "$supports_multilib"; then
+        kf6_libdirs="$kf6_libdirs /usr/lib64 /usr/lib64/kf6 /usr/lib64/kf6/devel"
+    fi
+
+    kf6_test_include="KF6/KIOFileWidgets/KFileWidget"
+    kf6_test_library="libKF6KIOFileWidgets.so"
+    kf6_libdirs="$qt6_libdir $kf6_libdirs"
+
+    dnl Check for KF6 headers
+    AC_MSG_CHECKING([for KF6 headers])
+    kf6_incdir="no"
+    for kf6_check in $kf6_incdirs; do
+        if test -r "$kf6_check/$kf6_test_include"; then
+            kf6_incdir="$kf6_check/KF6"
+            break
+        fi
+    done
+    AC_MSG_RESULT([$kf6_incdir])
+    if test "x$kf6_incdir" = "xno"; then
+        AC_MSG_ERROR([KF6 headers not found.  Please specify the root of your KF6 installation by exporting KF6DIR before running "configure".])
+    fi
+
+    dnl Check for KF6 libraries
+    AC_MSG_CHECKING([for KF6 libraries])
+    kf6_libdir="no"
+    for kf6_check in $kf6_libdirs; do
+        if test -r "$kf6_check/$kf6_test_library"; then
+            kf6_libdir="$kf6_check"
+            break
+        fi
+    done
+
+    AC_MSG_RESULT([$kf6_libdir])
+    if test "x$kf6_libdir" = "xno"; then
+        AC_MSG_ERROR([KF6 libraries not found.  Please specify the root of your KF6 installation by exporting KF6DIR before running "configure".])
+    fi
+
+    KF6_CFLAGS="-I$kf6_incdir -I$kf6_incdir/KCoreAddons -I$kf6_incdir/KI18n -I$kf6_incdir/KConfig -I$kf6_incdir/KConfigCore -I$kf6_incdir/KWindowSystem -I$kf6_incdir/KIO -I$kf6_incdir/KIOCore -I$kf6_incdir/KIOWidgets -I$kf6_incdir/KIOFileWidgets -I$qt6_incdir -I$qt6_incdir/QtCore -I$qt6_incdir/QtGui -I$qt6_incdir/QtWidgets -I$qt6_incdir/QtNetwork -DQT_CLEAN_NAMESPACE -DQT_THREAD_SUPPORT -DQT_NO_VERSION_TAGGING"
+    KF6_LIBS="-L$kf6_libdir -lKF6CoreAddons -lKF6I18n -lKF6ConfigCore -lKF6WindowSystem -lKF6KIOCore -lKF6KIOWidgets -lKF6KIOFileWidgets -L$qt6_libdir -lQt6Core -lQt6Gui -lQt6Widgets -lQt6Network"
+    KF6_CFLAGS=$(printf '%s' "$KF6_CFLAGS" | sed -e "s/-I/${ISYSTEM?}/g")
+
+    AC_LANG_PUSH([C++])
+    save_CXXFLAGS=$CXXFLAGS
+    CXXFLAGS="$CXXFLAGS $KF6_CFLAGS"
+    dnl KF6 development version as of 2023-06 uses version number 5.240
+    AC_MSG_CHECKING([whether KDE is >= 5.240])
+       AC_RUN_IFELSE([AC_LANG_SOURCE([[
+#include <kcoreaddons_version.h>
+
+int main(int argc, char **argv) {
+       if (KCOREADDONS_VERSION_MAJOR == 6 || (KCOREADDONS_VERSION_MAJOR == 5 && KCOREADDONS_VERSION_MINOR >= 240)) return 0;
+       else return 1;
+}
+       ]])],[AC_MSG_RESULT([yes])],[AC_MSG_ERROR([KDE version too old])],[])
+    CXXFLAGS=$save_CXXFLAGS
+    AC_LANG_POP([C++])
+fi
+AC_SUBST(KF6_CFLAGS)
+AC_SUBST(KF6_LIBS)
+
+dnl ===================================================================
 dnl Test whether to include Evolution 2 support
 dnl ===================================================================
 AC_MSG_CHECKING([whether to enable evolution 2 support])
@@ -13349,22 +13621,13 @@ WITH_THEMES=""
 if test "x$with_theme" != "xno"; then
     for theme in $with_theme; do
         case $theme in
-        breeze|breeze_dark|breeze_dark_svg|breeze_svg|colibre|colibre_svg|colibre_dark|colibre_dark_svg|elementary|elementary_svg|karasa_jaga|karasa_jaga_svg|sifr|sifr_svg|sifr_dark|sifr_dark_svg|sukapura|sukapura_dark|sukapura_dark_svg|sukapura_svg) real_theme="$theme" ;;
-        default) real_theme=colibre ;;
+        breeze|breeze_dark|breeze_dark_svg|breeze_svg|colibre|colibre_svg|colibre_dark|colibre_dark_svg|elementary|elementary_svg|karasa_jaga|karasa_jaga_svg|sifr|sifr_svg|sifr_dark|sifr_dark_svg|sukapura|sukapura_dark|sukapura_dark_svg|sukapura_svg) WITH_THEMES="${WITH_THEMES:+$WITH_THEMES }$theme" ;;
         *) AC_MSG_ERROR([Unknown value for --with-theme: $theme]) ;;
         esac
-        WITH_THEMES=`echo "$WITH_THEMES $real_theme"|tr '\ ' '\n'|sort|uniq|tr '\n' '\ '`
     done
 fi
 AC_MSG_RESULT([$WITH_THEMES])
 AC_SUBST([WITH_THEMES])
-# FIXME: remove this, and the convenience default->colibre remapping after a grace period
-for theme in $with_theme; do
-    case $theme in
-    default) AC_MSG_WARN([--with-theme=default is deprecated and will be removed, use --with-theme=colibre]) ;;
-    *) ;;
-    esac
-done
 
 ###############################################################################
 # Extensions checking
@@ -13438,20 +13701,15 @@ dnl Test whether to enable online update service
 dnl ===================================================================
 AC_MSG_CHECKING([whether to enable online update])
 ENABLE_ONLINE_UPDATE=
-ENABLE_ONLINE_UPDATE_MAR=
-UPDATE_CONFIG=
 if test "$enable_online_update" = ""; then
     AC_MSG_RESULT([no])
 else
     if test "$enable_online_update" = "mar"; then
-        AC_MSG_RESULT([yes - MAR-based online update])
-        ENABLE_ONLINE_UPDATE_MAR="TRUE"
-        if test "$with_update_config" = ""; then
-            AC_MSG_ERROR([mar based online updater needs an update config specified with "with-update-config])
-        fi
-        UPDATE_CONFIG="$with_update_config"
-        AC_DEFINE(HAVE_FEATURE_UPDATE_MAR)
+        AC_MSG_ERROR([--enable-online-update=mar is deprecated, use --enable-online-update-mar instead])
     elif test "$enable_online_update" = "yes"; then
+        if test "$enable_curl" != "yes"; then
+            AC_MSG_ERROR([--disable-online-update must be used when --disable-curl is used])
+        fi
         AC_MSG_RESULT([yes])
         ENABLE_ONLINE_UPDATE="TRUE"
     else
@@ -13459,8 +13717,67 @@ else
     fi
 fi
 AC_SUBST(ENABLE_ONLINE_UPDATE)
+
+
+dnl ===================================================================
+dnl Test whether to enable mar online update service
+dnl ===================================================================
+AC_MSG_CHECKING([whether to enable mar online update])
+ENABLE_ONLINE_UPDATE_MAR=
+if test "$enable_online_update_mar" = yes; then
+    AC_MSG_RESULT([yes])
+    BUILD_TYPE="$BUILD_TYPE ONLINEUPDATE"
+    ENABLE_ONLINE_UPDATE_MAR="TRUE"
+    AC_DEFINE(HAVE_FEATURE_UPDATE_MAR)
+else
+    AC_MSG_RESULT([no])
+fi
 AC_SUBST(ENABLE_ONLINE_UPDATE_MAR)
-AC_SUBST(UPDATE_CONFIG)
+
+AC_MSG_CHECKING([for mar online update baseurl])
+ONLINEUPDATE_MAR_BASEURL=$with_online_update_mar_baseurl
+if test -n "$ONLINEUPDATE_MAR_BASEURL"; then
+    AC_MSG_RESULT([yes])
+else
+    AC_MSG_RESULT([no])
+fi
+AC_SUBST(ONLINEUPDATE_MAR_BASEURL)
+
+AC_MSG_CHECKING([for mar online update certificateder])
+ONLINEUPDATE_MAR_CERTIFICATEDER=$with_online_update_mar_certificateder
+if test -n "$ONLINEUPDATE_MAR_CERTIFICATEDER"; then
+    AC_MSG_RESULT([yes])
+else
+    AC_MSG_RESULT([no])
+fi
+AC_SUBST(ONLINEUPDATE_MAR_CERTIFICATEDER)
+
+AC_MSG_CHECKING([for mar online update certificatename])
+ONLINEUPDATE_MAR_CERTIFICATENAME=$with_online_update_mar_certificatename
+if test -n "$ONLINEUPDATE_MAR_CERTIFICATENAME"; then
+    AC_MSG_RESULT([yes])
+else
+    AC_MSG_RESULT([no])
+fi
+AC_SUBST(ONLINEUPDATE_MAR_CERTIFICATENAME)
+
+AC_MSG_CHECKING([for mar online update certificatepath])
+ONLINEUPDATE_MAR_CERTIFICATEPATH=$with_online_update_mar_certificatepath
+if test -n "$ONLINEUPDATE_MAR_CERTIFICATEPATH"; then
+    AC_MSG_RESULT([yes])
+else
+    AC_MSG_RESULT([no])
+fi
+AC_SUBST(ONLINEUPDATE_MAR_CERTIFICATEPATH)
+
+AC_MSG_CHECKING([for mar online update uploadurl])
+ONLINEUPDATE_MAR_UPLOADURL=$with_online_update_mar_uploadurl
+if test -n "$ONLINEUPDATE_MAR_UPLOADURL"; then
+    AC_MSG_RESULT([yes])
+else
+    AC_MSG_RESULT([no])
+fi
+AC_SUBST(ONLINEUPDATE_MAR_UPLOADURL)
 
 
 PRIVACY_POLICY_URL="$with_privacy_policy_url"
@@ -13474,7 +13791,7 @@ dnl ===================================================================
 dnl Test whether we need bzip2
 dnl ===================================================================
 SYSTEM_BZIP2=
-if test "$ENABLE_ONLINE_UPDATE_MAR" = "TRUE"; then
+if test "$ENABLE_ONLINE_UPDATE_MAR" = "TRUE" -o "$enable_python" = internal; then
     AC_MSG_CHECKING([whether to use system bzip2])
     if test "$with_system_bzip2" = yes; then
         SYSTEM_BZIP2=TRUE
@@ -13521,8 +13838,25 @@ else
 fi
 AC_SUBST(ENABLE_SILENT_MSI)
 
+dnl ===================================================================
+dnl Check for WiX tools.
+dnl ===================================================================
+if test "$enable_wix" = "" -o "enable_wix" = "no"; then
+    AC_MSG_RESULT([no])
+    ENABLE_WIX=
+else
+    AC_MSG_RESULT([yes])
+    # FIXME: this should do proper detection, but the path is currently
+    # hardcoded in msicreator/createmsi.py
+    if ! test -x "/cygdrive/c/Program Files (x86)/WiX Toolset v3.11/bin/candle"; then
+      AC_MSG_ERROR([WiX requested but WiX toolset v3.11 not found at the expected location])
+    fi
+    ENABLE_WIX=TRUE
+fi
+AC_SUBST(ENABLE_WIX)
+
 AC_MSG_CHECKING([whether and how to use Xinerama])
-if test "$_os" = "Linux" -o "$_os" = "FreeBSD"; then
+if test "$USING_X11" = TRUE; then
     if test "$x_libraries" = "default_x_libraries"; then
         XINERAMALIB=`$PKG_CONFIG --variable=libdir xinerama`
         if test "x$XINERAMALIB" = x; then
@@ -13576,14 +13910,13 @@ if test "$_os" = "Linux" -o "$_os" = "FreeBSD"; then
         AC_CHECK_LIB([Xinerama], [XineramaIsActive], [:],
             [AC_MSG_ERROR(Xinerama not functional?)], [$XINERAMA_EXTRA_LIBS])
     else
-        AC_MSG_RESULT([no, libXinerama not found or wrong architecture.])
+        AC_MSG_ERROR([libXinerama not found or wrong architecture.])
     fi
 else
     USE_XINERAMA=
     XINERAMA_LINK=none
     AC_MSG_RESULT([no])
 fi
-AC_SUBST(USE_XINERAMA)
 AC_SUBST(XINERAMA_LINK)
 
 AC_MSG_CHECKING([whether to use non-standard RGBA32 cairo pixel order])
@@ -13737,6 +14070,9 @@ dnl ===================================================================
 dnl Test for the presence of Ant and that it works
 dnl ===================================================================
 
+# java takes the encoding from LC_ALL, and since autoconf forces it to C it
+# breaks filename decoding, so for the ant section, set it to LANG
+LC_ALL=$LANG
 if test "$ENABLE_JAVA" != "" -a "$NEED_ANT" = "TRUE" -a "$cross_compiling" != "yes"; then
     ANT_HOME=; export ANT_HOME
     WITH_ANT_HOME=; export WITH_ANT_HOME
@@ -13955,7 +14291,8 @@ if test "$ENABLE_JAVA" != "" -a "$with_junit" != "no" -a "$cross_compiling" != "
 fi
 AC_SUBST(OOO_JUNIT_JAR)
 AC_SUBST(HAMCREST_JAR)
-
+# set back LC_ALL to C after the java related tests...
+LC_ALL=C
 
 AC_SUBST(SCPDEFS)
 
@@ -14464,13 +14801,13 @@ dnl from consteval constructor initializing const variable",
 dnl <https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98752> "wrong 'error: ‘this’ is not a constant
 dnl expression' with consteval constructor", <https://bugs.llvm.org/show_bug.cgi?id=50063> "code
 dnl using consteval: 'clang/lib/CodeGen/Address.h:38: llvm::Value*
-dnl clang::CodeGen::Address::getPointer() const: Assertion `isValid()' failed.'",
-dnl <https://developercommunity.visualstudio.com/t/1581879> "Bogus error C7595 with consteval
-dnl constructor in ternary expression (/std:c++latest)", or
+dnl clang::CodeGen::Address::getPointer() const: Assertion `isValid()' failed.'" (which should be
+dnl fixed since Clang 14), <https://developercommunity.visualstudio.com/t/1581879> "Bogus error
+dnl C7595 with consteval constructor in ternary expression (/std:c++latest)", or
 dnl <https://github.com/llvm/llvm-project/issues/54612> "C++20, consteval, anonymous union:
 dnl llvm/lib/IR/Instructions.cpp:1491: void llvm::StoreInst::AssertOK(): Assertion
 dnl `cast<PointerType>(getOperand(1)->getType())->isOpaqueOrPointeeTypeMatches(getOperand(0)->getType())
-dnl && "Ptr must be a pointer to Val type!"' failed.":
+dnl && "Ptr must be a pointer to Val type!"' failed." (which should be fixed since Clang 17):
 AC_LANG_PUSH([C++])
 save_CXX=$CXX
 if test "$COM" = MSC && test "$COM_IS_CLANG" != TRUE; then
@@ -14485,7 +14822,10 @@ AC_RUN_IFELSE([AC_LANG_PROGRAM([
         };
         S const s;
 
-        struct S1 { consteval S1(int) {} };
+        struct S1 {
+             int a;
+             consteval S1(int n): a(n) {}
+        };
         struct S2 {
             S1 x;
             S2(): x(0) {}
@@ -14527,6 +14867,7 @@ AC_LANG_POP([C++])
 # ===================================================================
 AC_MSG_CHECKING([whether to create huge library])
 MERGELIBS=
+MERGELIBS_MORE=
 
 if test $_os = iOS -o $_os = Android; then
     # Never any point in mergelibs for these as we build just static
@@ -14535,16 +14876,29 @@ if test $_os = iOS -o $_os = Android; then
 fi
 
 if test -n "$enable_mergelibs" -a "$enable_mergelibs" != "no"; then
-    if test $_os != Linux -a $_os != WINNT; then
-        add_warning "--enable-mergelibs is not tested for this platform"
+    if test "$enable_mergelibs" = "more"; then
+        if test $_os != Linux; then
+            add_warning "--enable-mergelibs=more is not tested for this platform"
+        fi
+        MERGELIBS="TRUE"
+        MERGELIBS_MORE="TRUE"
+        AC_MSG_RESULT([yes (more)])
+        AC_DEFINE(ENABLE_MERGELIBS)
+    elif test "$enable_mergelibs" = "yes" -o "$enable_mergelibs" = ""; then
+        if test $_os != Linux -a $_os != WINNT; then
+            add_warning "--enable-mergelibs is not tested for this platform"
+        fi
+        MERGELIBS="TRUE"
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(ENABLE_MERGELIBS)
+    else
+        AC_MSG_ERROR([unknown value --enable-mergelibs=$enable_mergelibs])
     fi
-    MERGELIBS="TRUE"
-    AC_MSG_RESULT([yes])
-    AC_DEFINE(ENABLE_MERGELIBS)
 else
     AC_MSG_RESULT([no])
 fi
 AC_SUBST([MERGELIBS])
+AC_SUBST([MERGELIBS_MORE])
 
 dnl ===================================================================
 dnl icerun is a wrapper that stops us spawning tens of processes
@@ -14579,6 +14933,8 @@ MPL_SUBSET=
 LICENSE="LGPL"
 
 if test "$enable_mpl_subset" = "yes"; then
+    mpl_error_string=
+    newline=$'\n    *'
     warn_report=false
     if test "$enable_report_builder" != "no" -a "$with_java" != "no"; then
         warn_report=true
@@ -14586,35 +14942,48 @@ if test "$enable_mpl_subset" = "yes"; then
         warn_report=true
     fi
     if test "$warn_report" = "true"; then
-        AC_MSG_ERROR([need to --disable-report-builder - extended database report builder.])
+        mpl_error_string="$mpl_error_string$newline Need to --disable-report-builder - extended database report builder."
     fi
     if test "x$enable_postgresql_sdbc" != "xno"; then
-        AC_MSG_ERROR([need to --disable-postgresql-sdbc - the PostgreSQL database backend.])
+        mpl_error_string="$mpl_error_string$newline Need to --disable-postgresql-sdbc - the PostgreSQL database backend."
     fi
     if test "$enable_lotuswordpro" = "yes"; then
-        AC_MSG_ERROR([need to --disable-lotuswordpro - a Lotus Word Pro file format import filter.])
+        mpl_error_string="$mpl_error_string$newline Need to --disable-lotuswordpro - a Lotus Word Pro file format import filter."
     fi
     if test -n "$ENABLE_POPPLER"; then
         if test "x$SYSTEM_POPPLER" = "x"; then
-            AC_MSG_ERROR([need to disable PDF import via poppler or use system library])
+            mpl_error_string="$mpl_error_string$newline Need to disable PDF import via poppler (--disable-poppler) or use system library."
         fi
     fi
     # cf. m4/libo_check_extension.m4
     if test "x$WITH_EXTRA_EXTENSIONS" != "x"; then
-        AC_MSG_ERROR([need to disable extra extensions '$WITH_EXTRA_EXTENSIONS'])
+        mpl_error_string="$mpl_error_string$newline Need to disable extra extensions enabled using --enable-ext-XXXX."
     fi
+    denied_themes=
+    filtered_themes=
     for theme in $WITH_THEMES; do
         case $theme in
         breeze|breeze_dark|breeze_dark_svg|breeze_svg|elementary|elementary_svg|karasa_jaga|karasa_jaga_svg) #denylist of icon themes under GPL or LGPL
-            AC_MSG_ERROR([need to disable icon themes from '$WITH_THEMES': $theme present, use --with-theme=colibre]) ;;
-        *) : ;;
+            denied_themes="${denied_themes:+$denied_themes }$theme" ;;
+        *)
+            filtered_themes="${filtered_themes:+$filtered_themes }$theme" ;;
         esac
     done
+    if test "x$denied_themes" != "x"; then
+        if test "x$filtered_themes" == "x"; then
+            filtered_themes="colibre"
+        fi
+        mpl_error_string="$mpl_error_string$newline Need to disable icon themes: $denied_themes, use --with-theme=$filtered_themes."
+    fi
 
     ENABLE_OPENGL_TRANSITIONS=
 
     if test "$enable_lpsolve" != "no" -o "x$ENABLE_LPSOLVE" = "xTRUE"; then
-        AC_MSG_ERROR([need to --disable-lpsolve - calc linear programming solver.])
+        mpl_error_string="$mpl_error_string$newline Need to --disable-lpsolve - calc linear programming solver."
+    fi
+
+    if test "x$mpl_error_string" != "x"; then
+        AC_MSG_ERROR([$mpl_error_string])
     fi
 
     MPL_SUBSET="TRUE"
@@ -14680,6 +15049,53 @@ if test $_os = WINNT -a -f "$SRC_ROOT/antivirusDetection.vbs" ; then
 fi
 
 dnl ===================================================================
+
+AC_MSG_CHECKING([for coredumpctl support])
+if test -z "$with_coredumpctl" && test $_os != Linux; then
+    with_coredumpctl=no
+fi
+if test "$with_coredumpctl" = no; then
+    WITH_COREDUMPCTL=
+else
+    AC_PATH_PROG(COREDUMPCTL, coredumpctl)
+    AC_PATH_PROG(JQ, jq)
+    AC_PATH_PROG(SYSTEMD_ESCAPE, systemd-escape)
+    AC_PATH_PROG(SYSTEMD_RUN, systemd-run)
+    if test -z "$COREDUMPCTL" || test -z "$JQ" || test -z "$SYSTEMD_ESCAPE" \
+        || test -z "$SYSTEMD_RUN"
+    then
+        if test -z "$with_coredumpctl"; then
+            WITH_COREDUMPCTL=
+        else
+            if test -z "$COREDUMPCTL"; then
+                AC_MSG_ERROR([coredumpctl not found])
+            fi
+            if test -z "$JQ"; then
+                AC_MSG_ERROR([jq not found])
+            fi
+            if test -z "$SYSTEMD_ESCAPE"; then
+                AC_MSG_ERROR([systemd-escape not found])
+            fi
+            if test -z "$SYSTEMD_RUN"; then
+                AC_MSG_ERROR([systemd-run not found])
+            fi
+        fi
+    else
+        WITH_COREDUMPCTL=TRUE
+    fi
+fi
+if test -z "$WITH_COREDUMPCTL"; then
+    AC_MSG_RESULT([no])
+else
+    AC_MSG_RESULT([yes])
+fi
+AC_SUBST(COREDUMPCTL)
+AC_SUBST(JQ)
+AC_SUBST(SYSTEMD_ESCAPE)
+AC_SUBST(SYSTEMD_RUN)
+AC_SUBST(WITH_COREDUMPCTL)
+
+dnl ===================================================================
 dnl Setting up the environment.
 dnl ===================================================================
 AC_MSG_NOTICE([setting up the build environment variables...])
@@ -14740,10 +15156,13 @@ if test -n "$TMPDIR"; then
 else
     TEMP_DIRECTORY="/tmp"
 fi
+CYGWIN_BASH="C:/cygwin64/bin/bash.exe"
 if test "$build_os" = "cygwin"; then
     TEMP_DIRECTORY=`cygpath -m "$TEMP_DIRECTORY"`
+    CYGWIN_BASH=`cygpath -m /usr/bin/bash`
 fi
 AC_SUBST(TEMP_DIRECTORY)
+AC_SUBST(CYGWIN_BASH)
 
 # setup the PATH for the environment
 if test -n "$LO_PATH_FOR_BUILD"; then
@@ -14758,7 +15177,7 @@ else
 
     case "$host_os" in
 
-    aix*|dragonfly*|freebsd*|linux-gnu*|*netbsd*|openbsd*)
+    dragonfly*|freebsd*|linux-gnu*|*netbsd*|openbsd*)
         if test "$ENABLE_JAVA" != ""; then
             pathmunge "$JAVA_HOME/bin" "after"
         fi
@@ -14772,6 +15191,11 @@ else
         if test "$WIN_BUILD_ARCH" = "x64"; then
             # needed for msi packaging
             pathmunge "$WINDOWS_SDK_BINDIR_NO_ARCH/x86" "before"
+        fi
+        if test "$WIN_BUILD_ARCH" = "arm64"; then
+            # needed for msi packaging - as of 10.0.22621 SDK no arm64 ones yet
+            # the x86 ones probably would work just as well...
+            pathmunge "$WINDOWS_SDK_BINDIR_NO_ARCH/arm" "before"
         fi
         # .NET 4.6 and higher don't have bin directory
         if test -f "$DOTNET_FRAMEWORK_HOME/bin"; then
@@ -14840,15 +15264,16 @@ AC_CONFIG_LINKS([include:include])
 AC_CONFIG_FILES([config_host.mk
                  config_host_lang.mk
                  Makefile
-                 lo.xcent
                  bin/bffvalidator.sh
                  bin/odfvalidator.sh
                  bin/officeotron.sh
-                 hardened_runtime.xcent
                  instsetoo_native/util/openoffice.lst
                  sysui/desktop/macosx/Info.plist
+                 hardened_runtime.xcent:sysui/desktop/macosx/hardened_runtime.xcent.in
+                 lo.xcent:sysui/desktop/macosx/lo.xcent.in
                  vs-code.code-workspace.template:.vscode/vs-code-template.code-workspace.in])
 
+AC_CONFIG_HEADERS([config_host/config_atspi.h])
 AC_CONFIG_HEADERS([config_host/config_buildconfig.h])
 AC_CONFIG_HEADERS([config_host/config_buildid.h])
 AC_CONFIG_HEADERS([config_host/config_box2d.h])
@@ -14886,7 +15311,6 @@ AC_CONFIG_HEADERS([config_host/config_skia.h])
 AC_CONFIG_HEADERS([config_host/config_typesizes.h])
 AC_CONFIG_HEADERS([config_host/config_validation.h])
 AC_CONFIG_HEADERS([config_host/config_vendor.h])
-AC_CONFIG_HEADERS([config_host/config_vcl.h])
 AC_CONFIG_HEADERS([config_host/config_vclplug.h])
 AC_CONFIG_HEADERS([config_host/config_version.h])
 AC_CONFIG_HEADERS([config_host/config_oauth2.h])

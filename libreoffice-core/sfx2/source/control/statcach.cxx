@@ -31,6 +31,7 @@
 #include <svl/intitem.hxx>
 #include <svl/stritem.hxx>
 #include <svl/visitem.hxx>
+#include <svl/voiditem.hxx>
 
 #include <sfx2/app.hxx>
 #include <statcach.hxx>
@@ -242,7 +243,7 @@ const SfxSlotServer* SfxStateCache::GetSlotServer( SfxDispatcher &rDispat , cons
                 // get the slot - even if it is disabled on the dispatcher
                 pSlot = SfxSlotPool::GetSlotPool( rDispat.GetFrame() ).GetSlot( nId );
 
-            if ( !pSlot || !pSlot->pUnoName )
+            if ( !pSlot || pSlot->pUnoName.isEmpty() )
             {
                 bSlotDirty = false;
                 bCtrlDirty = true;
@@ -253,7 +254,7 @@ const SfxSlotServer* SfxStateCache::GetSlotServer( SfxDispatcher &rDispat , cons
             css::util::URL aURL;
             OUString aCmd = ".uno:";
             aURL.Protocol = aCmd;
-            aURL.Path = OUString::createFromAscii( pSlot->GetUnoName() );
+            aURL.Path = pSlot->GetUnoName();
             aCmd += aURL.Path;
             aURL.Complete = aCmd;
             aURL.Main = aCmd;
@@ -263,8 +264,7 @@ const SfxSlotServer* SfxStateCache::GetSlotServer( SfxDispatcher &rDispat , cons
             if ( xDisp.is() )
             {
                 // test the dispatch object if it is just a wrapper for a SfxDispatcher
-                css::uno::Reference< css::lang::XUnoTunnel > xTunnel( xDisp, css::uno::UNO_QUERY );
-                if (auto pDisp = comphelper::getFromUnoTunnel<SfxOfficeDispatch>(xTunnel))
+                if (auto pDisp = dynamic_cast<SfxOfficeDispatch*>(xDisp.get()))
                 {
                     // The intercepting object is an SFX component
                     // If this dispatch object does not use the wanted dispatcher or the AppDispatcher, it's treated like any other UNO component
@@ -404,14 +404,7 @@ void SfxStateCache::SetState_Impl
     bool bNotify = bItemDirty;
     if ( !bItemDirty )
     {
-        bool bBothAvailable = pLastItem && pState &&
-                    !IsInvalidItem(pState) && !IsInvalidItem(pLastItem);
-        DBG_ASSERT( !bBothAvailable || pState != pLastItem, "setting state with own item" );
-        if ( bBothAvailable )
-            bNotify = typeid(*pState) != typeid(*pLastItem) ||
-                      *pState != *pLastItem;
-        else
-            bNotify = ( pState != pLastItem ) || ( eState != eLastState );
+        bNotify = !SfxPoolItem::areSame(pLastItem, pState) || (eState != eLastState);
     }
 
     if ( bNotify )

@@ -43,7 +43,7 @@
 
 #include <canvasbitmap.hxx>
 #include <vcl/canvastools.hxx>
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 
 using namespace ::com::sun::star;
 
@@ -115,7 +115,7 @@ namespace vcl::unotools
                                                                       toByteColor(rColor.Green),
                                                                       toByteColor(rColor.Blue))))) );
                                 rAlphaAcc->SetPixelOnData( pScanlineAlpha, x,
-                                                     BitmapColor( 255 - toByteColor(rColor.Alpha) ));
+                                                     BitmapColor( toByteColor(rColor.Alpha) ));
                             }
                         }
                         else
@@ -128,7 +128,7 @@ namespace vcl::unotools
                                                                   toByteColor(rColor.Green),
                                                                   toByteColor(rColor.Blue) ));
                                 rAlphaAcc->SetPixelOnData( pScanlineAlpha, x,
-                                                     BitmapColor( 255 - toByteColor(rColor.Alpha) ));
+                                                     BitmapColor( toByteColor(rColor.Alpha) ));
                             }
                         }
                     }
@@ -267,12 +267,9 @@ namespace vcl::unotools
 
                 // normalize bitcount
                 auto ePixelFormat =
-                    ( nDepth <= 1 ) ? vcl::PixelFormat::N1_BPP :
                     ( nDepth <= 8 ) ? vcl::PixelFormat::N8_BPP :
                                       vcl::PixelFormat::N24_BPP;
-                auto eAlphaPixelFormat =
-                    ( nAlphaDepth <= 1 ) ? vcl::PixelFormat::N1_BPP :
-                                           vcl::PixelFormat::N8_BPP;
+                auto eAlphaPixelFormat = vcl::PixelFormat::N8_BPP;
 
                 ::Bitmap aBitmap( aPixelSize,
                                   ePixelFormat,
@@ -286,8 +283,9 @@ namespace vcl::unotools
 
                 { // limit scoped access
                     BitmapScopedWriteAccess pWriteAccess( aBitmap );
-                    BitmapScopedWriteAccess pAlphaWriteAccess( nAlphaDepth ? aAlpha.AcquireWriteAccess() : nullptr,
-                                                               aAlpha );
+                    BitmapScopedWriteAccess pAlphaWriteAccess;
+                    if (nAlphaDepth)
+                        pAlphaWriteAccess = aAlpha;
 
                     ENSURE_OR_THROW(pWriteAccess.get() != nullptr,
                                     "Cannot get write access to bitmap");

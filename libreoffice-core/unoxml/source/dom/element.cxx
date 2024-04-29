@@ -58,7 +58,6 @@ namespace DOM
         if (!i_xHandler.is()) throw RuntimeException();
         rtl::Reference<comphelper::AttributeList> pAttrs =
             new comphelper::AttributeList();
-        OUString type = "";
         // add namespace definitions to attributes
         for (xmlNsPtr pNs = m_aNodePtr->nsDef; pNs != nullptr; pNs = pNs->next) {
             const xmlChar *pPrefix = pNs->prefix ? pNs->prefix : reinterpret_cast<const xmlChar*>("");
@@ -71,7 +70,7 @@ namespace DOM
             OUString val(reinterpret_cast<const char*>(pHref),
                 strlen(reinterpret_cast<const char*>(pHref)),
                 RTL_TEXTENCODING_UTF8);
-            pAttrs->AddAttribute(name, type, val);
+            pAttrs->AddAttribute(name, val);
         }
         // add attributes
         for (xmlAttrPtr pAttr = m_aNodePtr->properties;
@@ -84,7 +83,7 @@ namespace DOM
                 ? pNode->getLocalName()
                 : prefix + ":" + pNode->getLocalName();
             OUString val  = pNode->getNodeValue();
-            pAttrs->AddAttribute(name, type, val);
+            pAttrs->AddAttribute(name, val);
         }
         OUString prefix = getPrefix();
         OUString name = (prefix.isEmpty())
@@ -471,7 +470,7 @@ namespace DOM
         }
 
         ::rtl::Reference<CNode> const pCNode(
-            comphelper::getFromUnoTunnel<CNode>(Reference<XNode>(oldAttr)));
+            dynamic_cast<CNode*>(oldAttr.get()));
         if (!pCNode.is()) { throw RuntimeException(); }
 
         xmlNodePtr const pNode = pCNode->GetNodePtr();
@@ -530,8 +529,7 @@ namespace DOM
         }
 
         // get the implementation
-        CAttr *const pCAttr = dynamic_cast<CAttr*>(
-                comphelper::getFromUnoTunnel<CNode>(xNewAttr));
+        CAttr *const pCAttr = dynamic_cast<CAttr*>(xNewAttr.get());
         if (!pCAttr) { throw RuntimeException(); }
         xmlAttrPtr const pAttr =
             reinterpret_cast<xmlAttrPtr>(pCAttr->GetNodePtr());

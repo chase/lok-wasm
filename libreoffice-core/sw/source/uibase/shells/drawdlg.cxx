@@ -47,11 +47,11 @@ void SwDrawShell::ExecDrawDlg(SfxRequest& rReq)
 {
     SwWrtShell*     pSh     = &GetShell();
     SdrView*        pView   = pSh->GetDrawView();
-    SdrModel*       pDoc    = pView->GetModel();
-    bool            bChanged = pDoc->IsChanged();
-    pDoc->SetChanged(false);
+    SdrModel& rModel = pView->GetModel();
+    bool            bChanged = rModel.IsChanged();
+    rModel.SetChanged(false);
 
-    SfxItemSet aNewAttr( pDoc->GetItemPool() );
+    SfxItemSet aNewAttr(rModel.GetItemPool());
     pView->GetAttributes( aNewAttr );
 
     GetView().NoRotate();
@@ -110,13 +110,13 @@ void SwDrawShell::ExecDrawDlg(SfxRequest& rReq)
             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
             VclPtr<AbstractSvxAreaTabDialog> pDlg(pFact->CreateSvxAreaTabDialog(rReq.GetFrameWeld(),
                                                                             &aNewAttr,
-                                                                            pDoc,
+                                                                            &rModel,
                                                                             true,
                                                                             false));
 
-            pDlg->StartExecuteAsync([bChanged, bHasMarked, pDoc, pDlg, pSh, pView, this](
+            pDlg->StartExecuteAsync([bChanged, bHasMarked, &rModel, pDlg, pSh, pView, this](
                                         sal_Int32 nResult){
-                pDoc->SetChanged(false);
+                rModel.SetChanged(false);
 
                 if (nResult == RET_OK)
                 {
@@ -135,7 +135,7 @@ void SwDrawShell::ExecDrawDlg(SfxRequest& rReq)
                         SID_ATTR_FILL_FLOATTRANSPARENCE,
                         0
                     };
-                    SfxBindings &rBnd = GetView().GetViewFrame()->GetBindings();
+                    SfxBindings &rBnd = GetView().GetViewFrame().GetBindings();
                     rBnd.Invalidate(aInval);
                     rBnd.Update(SID_ATTR_FILL_STYLE);
                     rBnd.Update(SID_ATTR_FILL_COLOR);
@@ -143,10 +143,10 @@ void SwDrawShell::ExecDrawDlg(SfxRequest& rReq)
                     rBnd.Update(SID_ATTR_FILL_FLOATTRANSPARENCE);
                 }
 
-                if (pDoc->IsChanged())
+                if (rModel.IsChanged())
                     GetShell().SetModified();
                 else if (bChanged)
-                    pDoc->SetChanged();
+                    rModel.SetChanged();
 
                 pDlg->disposeOnce();
             });
@@ -165,13 +165,13 @@ void SwDrawShell::ExecDrawDlg(SfxRequest& rReq)
             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
             VclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSvxLineTabDialog(rReq.GetFrameWeld(),
                     &aNewAttr,
-                pDoc,
+                &rModel,
                 pObj,
                 bHasMarked));
 
-            pDlg->StartExecuteAsync([bChanged, bHasMarked, pDoc, pDlg, pSh, pView, this](
+            pDlg->StartExecuteAsync([bChanged, bHasMarked, &rModel, pDlg, pSh, pView, this](
                                         sal_Int32 nResult){
-                pDoc->SetChanged(false);
+                rModel.SetChanged(false);
 
                 if (nResult == RET_OK)
                 {
@@ -196,13 +196,13 @@ void SwDrawShell::ExecDrawDlg(SfxRequest& rReq)
                         0
                     };
 
-                    GetView().GetViewFrame()->GetBindings().Invalidate(aInval);
+                    GetView().GetViewFrame().GetBindings().Invalidate(aInval);
                 }
 
-                if (pDoc->IsChanged())
+                if (rModel.IsChanged())
                     GetShell().SetModified();
                 else if (bChanged)
-                    pDoc->SetChanged();
+                    rModel.SetChanged();
 
                 pDlg->disposeOnce();
             });
@@ -213,46 +213,17 @@ void SwDrawShell::ExecDrawDlg(SfxRequest& rReq)
             break;
     }
 
-    if (pDoc->IsChanged())
+    if (rModel.IsChanged())
         GetShell().SetModified();
     else if (bChanged)
-        pDoc->SetChanged();
+        rModel.SetChanged();
 }
 
 namespace
 {
-    void lcl_convertStringArguments(sal_uInt16 nSlot, const std::unique_ptr<SfxItemSet>& pArgs)
+    void lcl_convertStringArguments(const std::unique_ptr<SfxItemSet>& pArgs)
     {
-        Color aColor;
-        const SfxPoolItem* pItem = nullptr;
-
-        if (SfxItemState::SET == pArgs->GetItemState(SID_ATTR_COLOR_STR, false, &pItem))
-        {
-            OUString sColor = static_cast<const SfxStringItem*>(pItem)->GetValue();
-
-            if (sColor == "transparent")
-                aColor = COL_TRANSPARENT;
-            else
-                aColor = Color(ColorTransparency, sColor.toInt32(16));
-
-            switch (nSlot)
-            {
-                case SID_ATTR_LINE_COLOR:
-                {
-                    XLineColorItem aLineColorItem(OUString(), aColor);
-                    pArgs->Put(aLineColorItem);
-                    break;
-                }
-
-                case SID_ATTR_FILL_COLOR:
-                {
-                    XFillColorItem aFillColorItem(OUString(), aColor);
-                    pArgs->Put(aFillColorItem);
-                    break;
-                }
-            }
-        }
-        else if (const SvxDoubleItem* pWidthItem = pArgs->GetItemIfSet(SID_ATTR_LINE_WIDTH_ARG, false))
+        if (const SvxDoubleItem* pWidthItem = pArgs->GetItemIfSet(SID_ATTR_LINE_WIDTH_ARG, false))
         {
             double fValue = pWidthItem->GetValue();
             // FIXME: different units...
@@ -276,8 +247,8 @@ void SwDrawShell::ExecDrawAttrArgs(SfxRequest const & rReq)
     SwWrtShell* pSh   = &GetShell();
     SdrView*    pView = pSh->GetDrawView();
     const SfxItemSet* pArgs = rReq.GetArgs();
-    bool        bChanged = pView->GetModel()->IsChanged();
-    pView->GetModel()->SetChanged(false);
+    bool        bChanged = pView->GetModel().IsChanged();
+    pView->GetModel().SetChanged(false);
 
     GetView().NoRotate();
 
@@ -286,7 +257,7 @@ void SwDrawShell::ExecDrawAttrArgs(SfxRequest const & rReq)
         if(pView->AreObjectsMarked())
         {
             std::unique_ptr<SfxItemSet> pNewArgs = pArgs->Clone();
-            lcl_convertStringArguments(rReq.GetSlot(), pNewArgs);
+            lcl_convertStringArguments(pNewArgs);
             pView->SetAttrToMarked(*pNewArgs, false);
         }
         else
@@ -294,7 +265,7 @@ void SwDrawShell::ExecDrawAttrArgs(SfxRequest const & rReq)
     }
     else
     {
-        SfxDispatcher* pDis = pSh->GetView().GetViewFrame()->GetDispatcher();
+        SfxDispatcher* pDis = pSh->GetView().GetViewFrame().GetDispatcher();
         switch (rReq.GetSlot())
         {
             case SID_ATTR_FILL_STYLE:
@@ -317,16 +288,16 @@ void SwDrawShell::ExecDrawAttrArgs(SfxRequest const & rReq)
                 break;
         }
     }
-    if (pView->GetModel()->IsChanged())
+    if (pView->GetModel().IsChanged())
         GetShell().SetModified();
     else
         if (bChanged)
-            pView->GetModel()->SetChanged();
+            pView->GetModel().SetChanged();
 }
 
 static void lcl_unifyFillTransparencyItems(const SfxItemSet& rSet)
 {
-    // Transparent fill options are None, Solid, Linear, Axial, Radial, Elliptical, Quadratic, Square.
+    // Transparent fill options are None, Solid, Linear, Axial, Radial, Elliptical, Square, Rectangular.
     // But this is represented across two items namely XFillTransparenceItem (for None and Solid)
     // and XFillFloatTransparenceItem (for the rest). To simplify the representation in LOKit case let's
     // use XFillFloatTransparenceItem to carry the information of XFillTransparenceItem when gradients

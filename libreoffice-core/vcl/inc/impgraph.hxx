@@ -217,7 +217,7 @@ public:
     bool swapIn();
     bool swapOut();
     bool isSwappedOut() const { return mbSwapOut; }
-    OUString getSwapFileURL() const;
+    SvStream* getSwapFileStream() const;
     // public only because of use in GraphicFilter
     void updateFromLoadedGraphic(const ImpGraphic* graphic);
     void dumpState(rtl::OStringBuffer &rState);

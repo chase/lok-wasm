@@ -41,6 +41,7 @@
 #include <editeng/postitem.hxx>
 #include <editeng/fhgtitem.hxx>
 #include <editeng/langitem.hxx>
+#include <editeng/editund2.hxx>
 
 #include <editeng/editview.hxx>
 #include <editeng/outliner.hxx>
@@ -189,7 +190,7 @@ void SwAnnotationWin::SetPostItText()
     else
     {
         mpOutliner->Clear();
-        GetOutlinerView()->SetAttribs(DefaultItem());
+        GetOutlinerView()->SetStyleSheet(SwResId(STR_POOLCOLL_COMMENT));
         GetOutlinerView()->InsertText(sNewText);
     }
 
@@ -243,8 +244,9 @@ void SwAnnotationWin::ToggleResolved()
 
 void SwAnnotationWin::ToggleResolvedForThread()
 {
-    GetTopReplyNote()->ToggleResolved();
-    mrMgr.UpdateResolvedStatus(GetTopReplyNote());
+    auto pTop = GetTopReplyNote();
+    pTop->ToggleResolved();
+    mrMgr.UpdateResolvedStatus(pTop);
     mrMgr.LayoutPostIts();
 }
 
@@ -263,12 +265,6 @@ sal_uInt32 SwAnnotationWin::GetParaId()
     return nParaId;
 }
 
-sal_uInt32 SwAnnotationWin::GetPostItId()
-{
-    auto pField = static_cast<SwPostItField*>(mpFormatField->GetField());
-    return pField->GetPostItId();
-}
-
 sal_uInt32 SwAnnotationWin::CreateUniqueParaId()
 {
     return comphelper::rng::uniform_uint_distribution(0, std::numeric_limits<sal_uInt32>::max());
@@ -277,17 +273,15 @@ sal_uInt32 SwAnnotationWin::CreateUniqueParaId()
 void SwAnnotationWin::DeleteThread()
 {
     // Go to the top and delete each comment one by one
-    SwAnnotationWin *current, *topNote;
-    current = topNote = GetTopReplyNote();
-    SwAnnotationWin* next = mrMgr.GetNextPostIt(KEY_PAGEDOWN, current);
-
-    while(next && next->GetTopReplyNote() == topNote)
+    SwAnnotationWin* topNote = GetTopReplyNote();
+    for (SwAnnotationWin* current = topNote;;)
     {
+        SwAnnotationWin* next = mrMgr.GetNextPostIt(KEY_PAGEDOWN, current);
         current->mnDeleteEventId = Application::PostUserEvent( LINK( current, SwAnnotationWin, DeleteHdl), nullptr, true );
+        if (!next || next->GetTopReplyNote() != topNote)
+            return;
         current = next;
-        next = mrMgr.GetNextPostIt(KEY_PAGEDOWN, current);
     }
-    current->mnDeleteEventId = Application::PostUserEvent( LINK( current, SwAnnotationWin, DeleteHdl), nullptr, true );
 }
 
 bool SwAnnotationWin::IsResolved() const
@@ -299,21 +293,15 @@ bool SwAnnotationWin::IsThreadResolved()
 {
     /// First Get the top note
     // then iterate downwards checking resolved status
-    SwAnnotationWin *pTopNote, *TopNote;
-    pTopNote = TopNote = GetTopReplyNote();
-    if (!pTopNote->IsResolved())
-        return false;
-
-    SwAnnotationWin* pSidebarWin = mrMgr.GetNextPostIt(KEY_PAGEDOWN, pTopNote);
-
-    while (pSidebarWin && pSidebarWin->GetTopReplyNote() == TopNote)
+    SwAnnotationWin* topNote = GetTopReplyNote();
+    for (SwAnnotationWin* current = topNote;;)
     {
-        pTopNote = pSidebarWin;
-        if (!pTopNote->IsResolved())
+        if (!current->IsResolved())
             return false;
-        pSidebarWin = mrMgr.GetNextPostIt(KEY_PAGEDOWN, pSidebarWin);
+        current = mrMgr.GetNextPostIt(KEY_PAGEDOWN, current);
+        if (!current || current->GetTopReplyNote() != topNote)
+            return true;
     }
-    return true;
 }
 
 void SwAnnotationWin::UpdateData()
@@ -334,7 +322,7 @@ void SwAnnotationWin::UpdateData()
             SwTextField *const pTextField = mpFormatField->GetTextField();
             SwPosition aPosition( pTextField->GetTextNode(), pTextField->GetStart() );
             rUndoRedo.AppendUndo(
-                std::make_unique<SwUndoFieldFromDoc>(aPosition, *pOldField, *mpField, nullptr, true));
+                std::make_unique<SwUndoFieldFromDoc>(aPosition, *pOldField, *mpField, true));
         }
         // so we get a new layout of notes (anchor position is still the same and we would otherwise not get one)
         mrMgr.SetLayout();
@@ -390,27 +378,20 @@ sal_uInt32 SwAnnotationWin::MoveCaret()
 // counts how many SwPostItField we have right after the current one
 sal_uInt32 SwAnnotationWin::CountFollowing()
 {
-    sal_uInt32 aCount = 1;  // we start with 1, so we have to subtract one at the end again
     SwTextField* pTextField = mpFormatField->GetTextField();
     SwPosition aPosition( pTextField->GetTextNode(), pTextField->GetStart() );
 
-    SwTextAttr * pTextAttr = pTextField->GetTextNode().GetTextAttrForCharAt(
-                                        aPosition.GetContentIndex() + 1,
-                                        RES_TXTATR_ANNOTATION );
-    SwField* pField = pTextAttr
-                    ? const_cast<SwField*>(pTextAttr->GetFormatField().GetField())
-                    : nullptr;
-    while ( pField && ( pField->Which()== SwFieldIds::Postit ) )
+    for (sal_Int32 n = 1;; ++n)
     {
-        aCount++;
-        pTextAttr = pTextField->GetTextNode().GetTextAttrForCharAt(
-                                        aPosition.GetContentIndex() + aCount,
-                                        RES_TXTATR_ANNOTATION );
-        pField = pTextAttr
-               ? const_cast<SwField*>(pTextAttr->GetFormatField().GetField())
-               : nullptr;
+        SwTextAttr * pTextAttr = pTextField->GetTextNode().GetTextAttrForCharAt(
+                                            aPosition.GetContentIndex() + n,
+                                            RES_TXTATR_ANNOTATION );
+        if (!pTextAttr)
+            return n - 1;
+        const SwField* pField = pTextAttr->GetFormatField().GetField();
+        if (!pField || pField->Which() != SwFieldIds::Postit)
+            return n - 1;
     }
-    return aCount - 1;
 }
 
 void SwAnnotationWin::InitAnswer(OutlinerParaObject const & rText)
@@ -451,7 +432,6 @@ void SwAnnotationWin::InitAnswer(OutlinerParaObject const & rText)
 
     //remove all attributes and reset our standard ones
     GetOutlinerView()->GetEditView().RemoveAttribsKeepLanguages(true);
-    GetOutlinerView()->SetAttribs(DefaultItem());
     // lets insert an undo step so the initial text can be easily deleted
     // but do not use UpdateData() directly, would set modified state again and reentrance into Mgr
     mpOutliner->SetModifyHdl( Link<LinkParamNone*,void>() );
@@ -469,7 +449,7 @@ void SwAnnotationWin::InitAnswer(OutlinerParaObject const & rText)
         SwTextField *const pTextField = mpFormatField->GetTextField();
         SwPosition aPosition( pTextField->GetTextNode(), pTextField->GetStart() );
         rUndoRedo.AppendUndo(
-            std::make_unique<SwUndoFieldFromDoc>(aPosition, *pOldField, *mpField, nullptr, true));
+            std::make_unique<SwUndoFieldFromDoc>(aPosition, *pOldField, *mpField, true));
     }
     mpOutliner->SetModifyHdl( LINK( this, SwAnnotationWin, ModifyHdl ) );
     mpOutliner->ClearModifyFlag();
@@ -483,22 +463,7 @@ void SwAnnotationWin::UpdateText(const OUString& aText)
     UpdateData();
 }
 
-SvxLanguageItem SwAnnotationWin::GetLanguage() const
-{
-    // set initial language for outliner
-    SvtScriptType nScriptType = SvtLanguageOptions::GetScriptTypeOfLanguage( mpField->GetLanguage() );
-    sal_uInt16 nLangWhichId = 0;
-    switch (nScriptType)
-    {
-        case SvtScriptType::LATIN :    nLangWhichId = EE_CHAR_LANGUAGE ; break;
-        case SvtScriptType::ASIAN :    nLangWhichId = EE_CHAR_LANGUAGE_CJK; break;
-        case SvtScriptType::COMPLEX :  nLangWhichId = EE_CHAR_LANGUAGE_CTL; break;
-        default: OSL_FAIL("GetLanguage: wrong script type");
-    }
-    return SvxLanguageItem(mpField->GetLanguage(),nLangWhichId);
-}
-
-bool SwAnnotationWin::IsProtected() const
+bool SwAnnotationWin::IsReadOnlyOrProtected() const
 {
     return mbReadonly ||
            GetLayoutStatus() == SwPostItHelper::DELETED ||

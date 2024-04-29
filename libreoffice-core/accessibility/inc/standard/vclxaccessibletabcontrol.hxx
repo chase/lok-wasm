@@ -21,22 +21,21 @@
 
 #include <toolkit/awt/vclxaccessiblecomponent.hxx>
 #include <com/sun/star/accessibility/XAccessibleSelection.hpp>
+#include <cppuhelper/implbase.hxx>
 #include <vcl/tabctrl.hxx>
 #include <vcl/vclptr.hxx>
 
 #include <vector>
 
+class VCLXAccessibleTabPage;
 
 
-
-typedef ::cppu::ImplHelper1 <
-    css::accessibility::XAccessibleSelection > VCLXAccessibleTabControl_BASE;
-
-class VCLXAccessibleTabControl final : public VCLXAccessibleComponent,
-                                    public VCLXAccessibleTabControl_BASE
+class VCLXAccessibleTabControl final : public cppu::ImplInheritanceHelper<
+                                           VCLXAccessibleComponent,
+                                           css::accessibility::XAccessibleSelection>
 {
 private:
-    typedef std::vector< css::uno::Reference< css::accessibility::XAccessible > > AccessibleChildren;
+    typedef std::vector< rtl::Reference< VCLXAccessibleTabPage > > AccessibleChildren;
 
     AccessibleChildren      m_aAccessibleChildren;
     VclPtr<TabControl>      m_pTabControl;
@@ -62,12 +61,6 @@ private:
 
 public:
     VCLXAccessibleTabControl( VCLXWindow* pVCLXWindow );
-
-    // XInterface
-    DECLARE_XINTERFACE()
-
-    // XTypeProvider
-    DECLARE_XTYPEPROVIDER()
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;

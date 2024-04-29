@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_SW_INC_CALBCK_HXX
-#define INCLUDED_SW_INC_CALBCK_HXX
+#pragma once
 
 #include <cassert>
 
@@ -147,7 +146,7 @@ protected:
     // write access to pRegisteredIn shall be granted only to the object itself (protected access)
     SwModify* GetRegisteredInNonConst() const { return m_pRegisteredIn; }
 
-    // when overriding this, you MUST call SwClient::SwClientModify() in the override!
+    // when overriding this, you MUST call SwClient::SwClientNotify() in the override!
     virtual void SwClientNotify(const SwModify&, const SfxHint& rHint) override;
 
 public:
@@ -292,12 +291,12 @@ namespace sw
                 : m_rRoot(rModify)
             {
                 MoveTo(s_pClientIters);
-#if defined __GNUC__ && __GNUC__ >= 12 && !defined __clang__
+#if defined __GNUC__ && !defined __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
 #endif
                 s_pClientIters = this;
-#if defined __GNUC__ && __GNUC__ >= 12 && !defined __clang__
+#if defined __GNUC__ && !defined __clang__
 #pragma GCC diagnostic pop
 #endif
                 m_pCurrent = m_pPosition = m_rRoot.m_pWriterListeners;
@@ -427,7 +426,5 @@ SwClient::SwClient( SwModify* pToRegisterIn )
     if(pToRegisterIn)
         pToRegisterIn->Add(this);
 }
-
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

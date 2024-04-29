@@ -20,7 +20,9 @@
 #ifndef INCLUDED_VCL_INC_PRINTACCESSORYVIEW_HRC
 #define INCLUDED_VCL_INC_PRINTACCESSORYVIEW_HRC
 
-#define NC_(Context, String) TranslateId(Context, reinterpret_cast<char const *>(u8##String))
+#include <unotools/resmgr.hxx>
+
+#define NC_(Context, String) TranslateId(Context, u8##String)
 
 const TranslateId SV_PRINT_NATIVE_STRINGS[] =
 {

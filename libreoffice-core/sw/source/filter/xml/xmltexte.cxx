@@ -68,9 +68,7 @@ enum SvEmbeddedObjectTypes
 SwNoTextNode *SwXMLTextParagraphExport::GetNoTextNode(
     const Reference < XPropertySet >& rPropSet )
 {
-    Reference<XUnoTunnel> xCursorTunnel( rPropSet, UNO_QUERY );
-    assert(xCursorTunnel.is() && "missing XUnoTunnel for embedded");
-    SwXFrame* pFrame = comphelper::getFromUnoTunnel<SwXFrame>(xCursorTunnel);
+    SwXFrame* pFrame = dynamic_cast<SwXFrame*>(rPropSet.get());
     assert(pFrame && "SwXFrame missing");
     SwFrameFormat *pFrameFormat = pFrame->GetFrameFormat();
     const SwFormatContent& rContent = pFrameFormat->GetContent();
@@ -78,7 +76,7 @@ SwNoTextNode *SwXMLTextParagraphExport::GetNoTextNode(
     return  pNdIdx->GetNodes()[pNdIdx->GetIndex() + 1]->GetNoTextNode();
 }
 
-constexpr OUStringLiteral gsEmbeddedObjectProtocol( u"vnd.sun.star.EmbeddedObject:" );
+constexpr OUString gsEmbeddedObjectProtocol( u"vnd.sun.star.EmbeddedObject:"_ustr );
 
 SwXMLTextParagraphExport::SwXMLTextParagraphExport(
         SwXMLExport& rExp,
@@ -332,8 +330,7 @@ void SwXMLTextParagraphExport::_exportTextEmbedded(
                     case '\\':
                         if( aBuffer.isEmpty() )
                         {
-                            aBuffer.append( '\'' );
-                            aBuffer.append( sRange.subView(0, i) );
+                            aBuffer.append( OUString::Concat("\'") + sRange.subView(0, i) );
                         }
                         if( '\'' == c || '\\' == c )
                             aBuffer.append( '\\' );

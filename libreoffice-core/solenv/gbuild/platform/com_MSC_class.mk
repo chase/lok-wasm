@@ -179,7 +179,7 @@ define gb_AsmObject__command
 $(call gb_Output_announce,$(2),$(true),ASM,3)
 $(call gb_Helper_abbreviate_dirs,\
     mkdir -p $(dir $(1)) $(dir $(4)) && \
-    "$(CC)" -nologo -EP -D_M_ARM64 $(SOLARINC) $(3) > $(subst .o,.asm,$(1)) && \
+    $(CC) -nologo -EP -D_M_ARM64 $(SOLARINC) $(3) > $(subst .o,.asm,$(1)) && \
     "$(ML_EXE)" $(gb_AFLAGS) -g -errorReport:prompt -o $(1) $(subst .o,.asm,$(1)), \
     ) && \
     echo "$(1) : $(3)" > $(4)
@@ -268,7 +268,7 @@ $(call gb_Helper_abbreviate_dirs,\
 		$(if $(filter Library CppunitTest,$(TARGETTYPE)),$(gb_Library_TARGETTYPEFLAGS)) \
 		$(if $(filter StaticLibrary,$(TARGETTYPE)),-LIB) \
 		$(if $(filter Executable,$(TARGETTYPE)),$(gb_Executable_TARGETTYPEFLAGS)) \
-		$(if $(T_SYMBOLS),$(if $(filter Executable Library CppunitTest,$(TARGETTYPE)),$(gb_Windows_PE_TARGETTYPEFLAGS_DEBUGINFO)),) \
+		$(if $(T_SYMBOLS),$(if $(filter Executable Library CppunitTest,$(TARGETTYPE)),$(call gb_Windows_PE_TARGETTYPEFLAGS_DEBUGINFO,$(DEFS))),) \
 		$(if $(filter YES,$(TARGETGUI)), -SUBSYSTEM:WINDOWS$(gb_MSC_SUBSYSTEM_VERSION), -SUBSYSTEM:CONSOLE$(gb_MSC_SUBSYSTEM_VERSION)) \
 		$(if $(filter YES,$(LIBRARY_X64)), -MACHINE:X64) \
 		$(if $(filter YES,$(PE_X86)), -MACHINE:X86) \
@@ -332,9 +332,10 @@ gb_Windows_PE_TARGETTYPEFLAGS := \
 # link.exe in -LIB mode doesn't understand -debug, use it only for EXEs and DLLs
 ifeq ($(gb_ENABLE_DBGUTIL),$(true))
 # fastlink is faster but pdb files reference .obj files
-gb_Windows_PE_TARGETTYPEFLAGS_DEBUGINFO := -debug:fastlink
+# but don't do that for setup_native DLLs: this produces make error 139 in some configurations
+gb_Windows_PE_TARGETTYPEFLAGS_DEBUGINFO = $(if $(filter -U_DLL,$(1)),-debug,-debug:fastlink)
 else
-gb_Windows_PE_TARGETTYPEFLAGS_DEBUGINFO := -debug
+gb_Windows_PE_TARGETTYPEFLAGS_DEBUGINFO = -debug
 endif
 
 ifeq ($(ENABLE_LTO),TRUE)
@@ -663,8 +664,12 @@ gb_AUTOCONF_WRAPPERS = \
 gb_ExternalProject_INCLUDE := \
 	$(subst -I,,$(subst $(WHITESPACE),;,$(SOLARINC)))
 
+# Workaround for openssl build - it puts the CC var into additional pair of quotes. This breaks if
+# CC consists of more than a single element such as when using "ccache compiler". In case the
+# variables are exported for openssl, it closes and reopens the quotes after each element.
 gb_NMAKE_VARS = \
-	CC="$(shell cygpath -w $(filter-out -%,$(CC))) $(filter -%,$(CC))" \
+	CC="$(subst $(WHITESPACE),$(if $(filter openssl,$(1)),\" \", ),$(strip \
+		$(shell cygpath -ws $(filter-out -%,$(CC))) $(filter -%,$(CC))))" \
 	INCLUDE="$(gb_ExternalProject_INCLUDE)" \
 	LIB="$(ILIB)" \
 	MAKEFLAGS= \
@@ -735,7 +740,7 @@ gb_UIMenubarTarget_UIMenubarTarget_platform :=
 
 # Python
 gb_Python_HOME := $(INSTDIR_FOR_BUILD)/program/python-core-$(PYTHON_VERSION)
-gb_Python_PRECOMMAND := PATH="$(shell cygpath -w $(INSTDIR_FOR_BUILD)/program)" PYTHONHOME="$(gb_Python_HOME)" PYTHONPATH="$${PYPATH:+$$PYPATH:}$(gb_Python_HOME)/lib;$(gb_Python_HOME)/lib/lib-dynload:$(INSTDIR_FOR_BUILD)/program"
+gb_Python_PRECOMMAND := PATH="$(shell cygpath -w $(INSTDIR_FOR_BUILD)/program)" PYTHONHOME="$(gb_Python_HOME)" PYTHONPATH="$${PYPATH:+$$PYPATH;}$(gb_Python_HOME)/lib;$(gb_Python_HOME)/lib/lib-dynload:$(INSTDIR_FOR_BUILD)/program"
 gb_Python_INSTALLED_EXECUTABLE := $(INSTROOT_FOR_BUILD)/$(LIBO_BIN_FOLDER)/python.exe
 
 gb_ICU_PRECOMMAND := PATH="$(shell cygpath -w $(WORKDIR_FOR_BUILD)/UnpackedTarball/icu/source/lib)"

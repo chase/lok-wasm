@@ -223,17 +223,6 @@ static tools::Time setTime( util::DateTime const & rDate )
 
 
 
-const css::uno::Sequence< sal_Int8 > & SvxUnoTextField::getUnoTunnelId() noexcept
-{
-    static const comphelper::UnoIdInit theSvxUnoTextFieldUnoTunnelId;
-    return theSvxUnoTextFieldUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL SvxUnoTextField::getSomething( const css::uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
 SvxUnoTextField::SvxUnoTextField( sal_Int32 nServiceId ) noexcept
 :   OComponentHelper( m_aMutex )
 ,   mpPropSet(nullptr)
@@ -383,7 +372,7 @@ SvxUnoTextField::SvxUnoTextField( uno::Reference< text::XTextRange > xAnchor, co
                 break;
 
             default:
-                SAL_WARN("editeng", "Id service unknown: " << mnServiceId);
+                SAL_INFO("editeng", "Id service unknown: " << mnServiceId);
                 break;
             }
         }
@@ -547,7 +536,6 @@ uno::Any SAL_CALL SvxUnoTextField::queryAggregation( const uno::Type & rType )
     else QUERYINT( text::XTextContent );
     else QUERYINT( text::XTextField );
     else QUERYINT( lang::XServiceInfo );
-    else QUERYINT( lang::XUnoTunnel );
     else
         return OComponentHelper::queryAggregation( rType );
 
@@ -662,6 +650,7 @@ uno::Reference< text::XTextRange > SAL_CALL SvxUnoTextField::getAnchor()
 void SAL_CALL SvxUnoTextField::dispose()
 {
     OComponentHelper::dispose();
+    mxAnchor.clear();
 }
 
 void SAL_CALL SvxUnoTextField::addEventListener( const uno::Reference< lang::XEventListener >& xListener )
@@ -943,7 +932,7 @@ uno::Reference< uno::XInterface > SvxUnoTextCreateTextField( std::u16string_view
         }
 
         if (nId != text::textfield::Type::UNSPECIFIED)
-            xRet = static_cast<cppu::OWeakObject *>(new SvxUnoTextField( nId ));
+            xRet = getXWeak(new SvxUnoTextField( nId ));
     }
 
     return xRet;

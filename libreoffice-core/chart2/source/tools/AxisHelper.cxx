@@ -37,6 +37,7 @@
 #include <ExplicitCategoriesProvider.hxx>
 #include <unonames.hxx>
 #include <BaseCoordinateSystem.hxx>
+#include <GridProperties.hxx>
 
 #include <o3tl/safeint.hxx>
 #include <unotools/saveopt.hxx>
@@ -135,17 +136,6 @@ void AxisHelper::checkDateAxis( chart2::ScaleData& rScale, ExplicitCategoriesPro
 }
 
 sal_Int32 AxisHelper::getExplicitNumberFormatKeyForAxis(
-                  const Reference< chart2::XAxis >& xAxis
-                , const rtl::Reference< BaseCoordinateSystem > & xCorrespondingCoordinateSystem
-                , const rtl::Reference<ChartModel>& xChartDoc
-                , bool bSearchForParallelAxisIfNothingIsFound )
-{
-    rtl::Reference< Axis > pAxis = dynamic_cast<Axis*>(xAxis.get());
-    assert(pAxis || !xAxis);
-    return getExplicitNumberFormatKeyForAxis(pAxis, xCorrespondingCoordinateSystem, xChartDoc, bSearchForParallelAxisIfNothingIsFound);
-}
-
-sal_Int32 AxisHelper::getExplicitNumberFormatKeyForAxis(
                   const rtl::Reference< Axis >& xAxis
                 , const rtl::Reference< BaseCoordinateSystem > & xCorrespondingCoordinateSystem
                 , const rtl::Reference<ChartModel>& xChartDoc
@@ -194,7 +184,7 @@ sal_Int32 AxisHelper::getExplicitNumberFormatKeyForAxis(
             else if( xChartDoc.is() && xChartDoc->hasInternalDataProvider() && nDimensionIndex == 0 ) //maybe date axis
             {
                 rtl::Reference< Diagram > xDiagram( xChartDoc->getFirstChartDiagram() );
-                if( DiagramHelper::isSupportingDateAxis( xDiagram ) )
+                if( xDiagram->isSupportingDateAxis() )
                 {
                     nNumberFormatKey = DiagramHelper::getDateNumberFormat( xChartDoc );
                 }
@@ -207,7 +197,7 @@ sal_Int32 AxisHelper::getExplicitNumberFormatKeyForAxis(
                             DataSeriesHelper::getAllDataSequencesByRole( xSource->getDataSequences(), "values-x" ) );
                         if( aXValues.empty() )
                         {
-                            uno::Reference< chart2::data::XLabeledDataSequence > xCategories( DiagramHelper::getCategoriesFromDiagram( xDiagram ) );
+                            uno::Reference< chart2::data::XLabeledDataSequence > xCategories( xDiagram->getCategories() );
                             if( xCategories.is() )
                             {
                                 Reference< data::XDataSequence > xSeq( xCategories->getValues());
@@ -440,10 +430,10 @@ void AxisHelper::showGrid( sal_Int32 nDimensionIndex, sal_Int32 nCooSysIndex, bo
         return;
 
     if( bMainGrid )
-        AxisHelper::makeGridVisible( xAxis->getGridProperties() );
+        AxisHelper::makeGridVisible( xAxis->getGridProperties2() );
     else
     {
-        const Sequence< Reference< beans::XPropertySet > > aSubGrids( xAxis->getSubGridProperties() );
+        std::vector< rtl::Reference< GridProperties > > aSubGrids( xAxis->getSubGridProperties2() );
         for( auto const & i : aSubGrids )
             AxisHelper::makeGridVisible( i );
     }
@@ -459,7 +449,7 @@ void AxisHelper::makeAxisVisible( const rtl::Reference< Axis >& xAxis )
     }
 }
 
-void AxisHelper::makeGridVisible( const Reference< beans::XPropertySet >& xGridProperties )
+void AxisHelper::makeGridVisible( const rtl::Reference< GridProperties >& xGridProperties )
 {
     if( xGridProperties.is() )
     {
@@ -486,10 +476,10 @@ void AxisHelper::hideAxisIfNoDataIsAttached( const rtl::Reference< Axis >& xAxis
 {
     //axis is hidden if no data is attached anymore but data is available
     bool bOtherSeriesAttachedToThisAxis = false;
-    std::vector< rtl::Reference< DataSeries > > aSeriesVector = DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+    std::vector< rtl::Reference< DataSeries > > aSeriesVector = xDiagram->getDataSeries();
     for (auto const& series : aSeriesVector)
     {
-        rtl::Reference< Axis > xCurrentAxis = DiagramHelper::getAttachedAxis(series, xDiagram );
+        rtl::Reference< Axis > xCurrentAxis = xDiagram->getAttachedAxis(series);
         if( xCurrentAxis==xAxis )
         {
             bOtherSeriesAttachedToThisAxis = true;
@@ -515,16 +505,16 @@ void AxisHelper::hideGrid( sal_Int32 nDimensionIndex, sal_Int32 nCooSysIndex, bo
         return;
 
     if( bMainGrid )
-        AxisHelper::makeGridInvisible( xAxis->getGridProperties() );
+        AxisHelper::makeGridInvisible( xAxis->getGridProperties2() );
     else
     {
-        const Sequence< Reference< beans::XPropertySet > > aSubGrids( xAxis->getSubGridProperties() );
+        std::vector< rtl::Reference< ::chart::GridProperties > > aSubGrids( xAxis->getSubGridProperties2() );
         for( auto const & i : aSubGrids)
             AxisHelper::makeGridInvisible( i );
     }
 }
 
-void AxisHelper::makeGridInvisible( const Reference< beans::XPropertySet >& xGridProperties )
+void AxisHelper::makeGridInvisible( const rtl::Reference< ::chart::GridProperties >& xGridProperties )
 {
     if( xGridProperties.is() )
     {
@@ -546,11 +536,11 @@ bool AxisHelper::isGridShown( sal_Int32 nDimensionIndex, sal_Int32 nCooSysIndex,
         return bRet;
 
     if( bMainGrid )
-        bRet = AxisHelper::isGridVisible( xAxis->getGridProperties() );
+        bRet = AxisHelper::isGridVisible( xAxis->getGridProperties2() );
     else
     {
-        Sequence< Reference< beans::XPropertySet > > aSubGrids( xAxis->getSubGridProperties() );
-        if( aSubGrids.hasElements() )
+        std::vector< rtl::Reference< ::chart::GridProperties > > aSubGrids( xAxis->getSubGridProperties2() );
+        if( !aSubGrids.empty() )
             bRet = AxisHelper::isGridVisible( aSubGrids[0] );
     }
 
@@ -562,9 +552,9 @@ rtl::Reference< ::chart::BaseCoordinateSystem > AxisHelper::getCoordinateSystemB
 {
     if(!xDiagram.is())
         return nullptr;
-    auto & rCooSysList = xDiagram->getBaseCoordinateSystems();
-    if(0<=nIndex && o3tl::make_unsigned(nIndex) < rCooSysList.size())
-        return rCooSysList[nIndex];
+    auto aCooSysList = xDiagram->getBaseCoordinateSystems();
+    if(0<=nIndex && o3tl::make_unsigned(nIndex) < aCooSysList.size())
+        return aCooSysList[nIndex];
     return nullptr;
 }
 
@@ -602,14 +592,6 @@ rtl::Reference< Axis > AxisHelper::getAxis( sal_Int32 nDimensionIndex, sal_Int32
     return xRet;
 }
 
-rtl::Reference< Axis > AxisHelper::getCrossingMainAxis( const Reference< chart2::XAxis >& xAxis
-            , const rtl::Reference< BaseCoordinateSystem >& xCooSys )
-{
-    rtl::Reference< Axis > pAxis = dynamic_cast<Axis*>(xAxis.get());
-    assert(pAxis || !xAxis);
-    return getCrossingMainAxis(pAxis, xCooSys);
-}
-
 rtl::Reference< Axis > AxisHelper::getCrossingMainAxis( const rtl::Reference< Axis >& xAxis
             , const rtl::Reference< BaseCoordinateSystem >& xCooSys )
 {
@@ -630,7 +612,7 @@ rtl::Reference< Axis > AxisHelper::getCrossingMainAxis( const rtl::Reference< Ax
     return AxisHelper::getAxis( nDimensionIndex, 0, xCooSys );
 }
 
-rtl::Reference< Axis > AxisHelper::getParallelAxis( const Reference< XAxis >& xAxis
+rtl::Reference< Axis > AxisHelper::getParallelAxis( const rtl::Reference< Axis >& xAxis
             , const rtl::Reference< Diagram >& xDiagram )
 {
     try
@@ -656,32 +638,31 @@ bool AxisHelper::isAxisShown( sal_Int32 nDimensionIndex, bool bMainAxis
     return AxisHelper::isAxisVisible( AxisHelper::getAxis( nDimensionIndex, bMainAxis, xDiagram ) );
 }
 
-bool AxisHelper::isAxisVisible( const Reference< XAxis >& xAxis )
+bool AxisHelper::isAxisVisible( const rtl::Reference< Axis >& xAxis )
 {
     bool bRet = false;
 
-    Reference< beans::XPropertySet > xProps( xAxis, uno::UNO_QUERY );
-    if( xProps.is() )
+    if( xAxis.is() )
     {
-        xProps->getPropertyValue( "Show" ) >>= bRet;
-        bRet = bRet && ( LinePropertiesHelper::IsLineVisible( xProps )
-            || areAxisLabelsVisible( xProps ) );
+        xAxis->getPropertyValue( "Show" ) >>= bRet;
+        bRet = bRet && ( LinePropertiesHelper::IsLineVisible( xAxis )
+            || areAxisLabelsVisible( xAxis ) );
     }
 
     return bRet;
 }
 
-bool AxisHelper::areAxisLabelsVisible( const Reference< beans::XPropertySet >& xAxisProperties )
+bool AxisHelper::areAxisLabelsVisible( const rtl::Reference< Axis >& xAxis )
 {
     bool bRet = false;
-    if( xAxisProperties.is() )
+    if( xAxis.is() )
     {
-        xAxisProperties->getPropertyValue( "DisplayLabels" ) >>= bRet;
+        xAxis->getPropertyValue( "DisplayLabels" ) >>= bRet;
     }
     return bRet;
 }
 
-bool AxisHelper::isGridVisible( const Reference< beans::XPropertySet >& xGridproperties )
+bool AxisHelper::isGridVisible( const rtl::Reference< ::chart::GridProperties >& xGridproperties )
 {
     bool bRet = false;
 
@@ -694,22 +675,22 @@ bool AxisHelper::isGridVisible( const Reference< beans::XPropertySet >& xGridpro
     return bRet;
 }
 
-Reference< beans::XPropertySet > AxisHelper::getGridProperties(
+rtl::Reference< GridProperties > AxisHelper::getGridProperties(
             const rtl::Reference< BaseCoordinateSystem >& xCooSys
         , sal_Int32 nDimensionIndex, sal_Int32 nAxisIndex, sal_Int32 nSubGridIndex )
 {
-    Reference< beans::XPropertySet > xRet;
+    rtl::Reference< GridProperties > xRet;
 
     rtl::Reference< Axis > xAxis( AxisHelper::getAxis( nDimensionIndex, nAxisIndex, xCooSys ) );
     if( xAxis.is() )
     {
         if( nSubGridIndex<0 )
-            xRet.set( xAxis->getGridProperties() );
+            xRet = xAxis->getGridProperties2();
         else
         {
-            Sequence< Reference< beans::XPropertySet > > aSubGrids( xAxis->getSubGridProperties() );
-            if (nSubGridIndex < aSubGrids.getLength())
-                xRet.set( aSubGrids[nSubGridIndex] );
+            std::vector< rtl::Reference< GridProperties > > aSubGrids( xAxis->getSubGridProperties2() );
+            if (nSubGridIndex < static_cast<sal_Int32>(aSubGrids.size()))
+                xRet = aSubGrids[nSubGridIndex];
         }
     }
 
@@ -725,16 +706,6 @@ sal_Int32 AxisHelper::getDimensionIndexOfAxis(
     sal_Int32 nAxisIndex = -1;
     AxisHelper::getIndicesForAxis( xAxis, xDiagram, nCooSysIndex , nDimensionIndex, nAxisIndex );
     return nDimensionIndex;
-}
-
-bool AxisHelper::getIndicesForAxis(
-              const Reference< chart2::XAxis >& xAxis
-            , const rtl::Reference< BaseCoordinateSystem >& xCooSys
-            , sal_Int32& rOutDimensionIndex, sal_Int32& rOutAxisIndex )
-{
-    rtl::Reference< Axis > pAxis = dynamic_cast<Axis*>(xAxis.get());
-    assert(pAxis || !xAxis);
-    return getIndicesForAxis(pAxis, xCooSys, rOutDimensionIndex, rOutAxisIndex);
 }
 
 bool AxisHelper::getIndicesForAxis(
@@ -767,14 +738,6 @@ bool AxisHelper::getIndicesForAxis(
         }
     }
     return false;
-}
-
-bool AxisHelper::getIndicesForAxis( const Reference< chart2::XAxis >& xAxis, const rtl::Reference< Diagram >& xDiagram
-            , sal_Int32& rOutCooSysIndex, sal_Int32& rOutDimensionIndex, sal_Int32& rOutAxisIndex )
-{
-    rtl::Reference< Axis > pAxis = dynamic_cast<Axis*>(xAxis.get());
-    assert(pAxis || !xAxis);
-    return getIndicesForAxis(pAxis, xDiagram, rOutCooSysIndex, rOutDimensionIndex, rOutAxisIndex);
 }
 
 bool AxisHelper::getIndicesForAxis( const rtl::Reference< Axis >& xAxis, const rtl::Reference< Diagram >& xDiagram
@@ -858,26 +821,26 @@ std::vector< rtl::Reference< Axis > > AxisHelper::getAllAxesOfDiagram(
     return aAxisVector;
 }
 
-Sequence< Reference< beans::XPropertySet > > AxisHelper::getAllGrids( const rtl::Reference< Diagram >& xDiagram )
+std::vector< rtl::Reference< GridProperties > > AxisHelper::getAllGrids( const rtl::Reference< Diagram >& xDiagram )
 {
     const std::vector< rtl::Reference< Axis > > aAllAxes = AxisHelper::getAllAxesOfDiagram( xDiagram );
-    std::vector< Reference< beans::XPropertySet > > aGridVector;
+    std::vector< rtl::Reference< GridProperties > > aGridVector;
 
     for( rtl::Reference< Axis > const & xAxis : aAllAxes )
     {
-        Reference< beans::XPropertySet > xGridProperties( xAxis->getGridProperties() );
+        rtl::Reference< GridProperties > xGridProperties( xAxis->getGridProperties2() );
         if( xGridProperties.is() )
             aGridVector.push_back( xGridProperties );
 
-        const Sequence< Reference< beans::XPropertySet > > aSubGrids( xAxis->getSubGridProperties() );
-        for( Reference< beans::XPropertySet > const & xSubGrid : aSubGrids )
+        std::vector< rtl::Reference< GridProperties > > aSubGrids( xAxis->getSubGridProperties2() );
+        for( rtl::Reference< GridProperties > const & xSubGrid : aSubGrids )
         {
             if( xSubGrid.is() )
                 aGridVector.push_back( xSubGrid );
         }
     }
 
-    return comphelper::containerToSequence( aGridVector );
+    return aGridVector;
 }
 
 void AxisHelper::getAxisOrGridPossibilities( Sequence< sal_Bool >& rPossibilityList
@@ -886,11 +849,15 @@ void AxisHelper::getAxisOrGridPossibilities( Sequence< sal_Bool >& rPossibilityL
     rPossibilityList.realloc(6);
     sal_Bool* pPossibilityList = rPossibilityList.getArray();
 
-    sal_Int32 nDimensionCount = DiagramHelper::getDimension( xDiagram );
+    sal_Int32 nDimensionCount = -1;
+    if (xDiagram)
+        nDimensionCount = xDiagram->getDimension();
 
     //set possibilities:
     sal_Int32 nIndex=0;
-    rtl::Reference< ChartType > xChartType = DiagramHelper::getChartTypeByIndex( xDiagram, 0 );
+    rtl::Reference< ChartType > xChartType;
+    if (xDiagram)
+        xChartType = xDiagram->getChartTypeByIndex( 0 );
     for(nIndex=0;nIndex<3;nIndex++)
         pPossibilityList[nIndex]=ChartTypeHelper::isSupportingMainAxis(xChartType,nDimensionCount,nIndex);
     for(nIndex=3;nIndex<6;nIndex++)
@@ -1013,15 +980,6 @@ bool AxisHelper::changeVisibilityOfGrids( const rtl::Reference< Diagram >& xDiag
 }
 
 rtl::Reference< BaseCoordinateSystem > AxisHelper::getCoordinateSystemOfAxis(
-              const Reference< XAxis >& xAxis
-            , const rtl::Reference< Diagram >& xDiagram )
-{
-    rtl::Reference< Axis > pAxis = dynamic_cast<Axis*>(xAxis.get());
-    assert(pAxis || !xAxis);
-    return getCoordinateSystemOfAxis(pAxis, xDiagram);
-}
-
-rtl::Reference< BaseCoordinateSystem > AxisHelper::getCoordinateSystemOfAxis(
               const rtl::Reference< Axis >& xAxis
             , const rtl::Reference< Diagram >& xDiagram )
 {
@@ -1126,13 +1084,13 @@ void AxisHelper::setRTLAxisLayout( const rtl::Reference< BaseCoordinateSystem >&
 rtl::Reference< ChartType > AxisHelper::getFirstChartTypeWithSeriesAttachedToAxisIndex( const rtl::Reference< Diagram >& xDiagram, const sal_Int32 nAttachedAxisIndex )
 {
     rtl::Reference< ChartType > xChartType;
-    std::vector< rtl::Reference< DataSeries > > aSeriesVector = DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+    std::vector< rtl::Reference< DataSeries > > aSeriesVector = xDiagram->getDataSeries();
     for (auto const& series : aSeriesVector)
     {
         sal_Int32 nCurrentIndex = DataSeriesHelper::getAttachedAxisIndex(series);
         if( nAttachedAxisIndex == nCurrentIndex )
         {
-            xChartType = DiagramHelper::getChartTypeOfSeries(xDiagram, series);
+            xChartType = xDiagram->getChartTypeOfSeries(series);
             if(xChartType.is())
                 break;
         }

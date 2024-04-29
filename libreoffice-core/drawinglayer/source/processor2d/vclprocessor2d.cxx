@@ -163,7 +163,8 @@ void VclProcessor2D::RenderTextSimpleOrDecoratedPortionPrimitive2D(
 
             // tdf#153092 Ideally we don't have to scale the font and dxarray, but we might have
             // to nevertheless if dealing with non integer sizes
-            const bool bScaleFont(aFontSize.getY() != std::round(aFontSize.getY()) || comphelper::LibreOfficeKit::isActive());
+            const bool bScaleFont(aFontSize.getY() != std::round(aFontSize.getY())
+                                  || comphelper::LibreOfficeKit::isActive());
             vcl::Font aFont;
 
             // Get the VCL font
@@ -186,11 +187,8 @@ void VclProcessor2D::RenderTextSimpleOrDecoratedPortionPrimitive2D(
 
             // set FillColor Attribute
             const Color aFillColor(rTextCandidate.getTextFillColor());
-            if (aFillColor != COL_TRANSPARENT)
-            {
-                aFont.SetFillColor(aFillColor);
-                aFont.SetTransparent(false);
-            }
+            aFont.SetTransparent(aFillColor.IsTransparent());
+            aFont.SetFillColor(aFillColor);
 
             // handle additional font attributes
             const primitive2d::TextDecoratedPortionPrimitive2D* pTCPP = nullptr;
@@ -378,9 +376,23 @@ void VclProcessor2D::RenderTextSimpleOrDecoratedPortionPrimitive2D(
                 const Point aOrigin(
                     basegfx::fround(aCurrentTranslate.getX() / aCurrentScaling.getX()),
                     basegfx::fround(aCurrentTranslate.getY() / aCurrentScaling.getY()));
-                MapMode aMapMode(mpOutputDevice->GetMapMode().GetMapUnit(), aOrigin,
-                                 Fraction(aCurrentScaling.getX()),
-                                 Fraction(aCurrentScaling.getY()));
+
+                Fraction aScaleX(aCurrentScaling.getX());
+                if (!aScaleX.IsValid())
+                {
+                    SAL_WARN("drawinglayer", "invalid X Scale");
+                    return;
+                }
+
+                Fraction aScaleY(aCurrentScaling.getY());
+                if (!aScaleY.IsValid())
+                {
+                    SAL_WARN("drawinglayer", "invalid Y Scale");
+                    return;
+                }
+
+                MapMode aMapMode(mpOutputDevice->GetMapMode().GetMapUnit(), aOrigin, aScaleX,
+                                 aScaleY);
 
                 if (fCurrentRotate)
                     aTextTranslate *= basegfx::utils::createRotateB2DHomMatrix(fCurrentRotate);

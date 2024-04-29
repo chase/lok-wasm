@@ -798,6 +798,13 @@
       </object>
     </child>
     <child>
+      <object class="GtkMenuItem" id="MenuFile-WebHtml">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="action_name">.uno:WebHtml</property>
+      </object>
+    </child>
+    <child>
       <object class="GtkMenuItem" id="PrintD">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
@@ -806,7 +813,7 @@
     </child>
     <child>
       <object class="GtkMenuItem" id="PrintDefaultD">
-        <property name="visible">True</property>
+        <property name="visible">False</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:PrintDefault</property>
       </object>
@@ -1738,13 +1745,6 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuInsert-InsertObjectFloatingFrame">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:InsertObjectFloatingFrame</property>
-      </object>
-    </child>
-    <child>
       <object class="GtkSeparatorMenuItem" id="MenuInsert-separator4">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
@@ -2047,14 +2047,14 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <child>
-      <object class="GtkMenuItem" id="ParaLeftToRightD">
+      <object class="GtkRadioMenuItem" id="ParaLeftToRightD">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:ParaLeftToRight</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="ParaRightToLeftD">
+      <object class="GtkRadioMenuItem" id="ParaRightToLeftD">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:ParaRightToLeft</property>
@@ -2087,21 +2087,21 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="SpacePara1D">
+      <object class="GtkRadioMenuItem" id="SpacePara1D">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:SpacePara1</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="SpacePara15D">
+      <object class="GtkRadioMenuItem" id="SpacePara15D">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:SpacePara15</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="SpacePara2D">
+      <object class="GtkRadioMenuItem" id="SpacePara2D">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:SpacePara2</property>
@@ -2215,6 +2215,19 @@
   <object class="GtkMenu" id="Menu Rows Columns">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
+    <child>
+      <object class="GtkMenuItem" id="MenuTable-ObjectAlign">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="action_name">.uno:ObjectAlign</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="MenuTable-separator1">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+      </object>
+    </child>
     <child>
       <object class="GtkMenuItem" id="InsertRowsBeforeD">
         <property name="visible">True</property>
@@ -2414,14 +2427,14 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <child>
-      <object class="GtkMenuItem" id="MenuView-PageMode">
+      <object class="GtkRadioMenuItem" id="MenuView-PageMode">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:PageMode</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuView-MasterPage">
+      <object class="GtkRadioMenuItem" id="MenuView-MasterPage">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:MasterPage</property>
@@ -2530,14 +2543,14 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuView-OutputQualityColor">
+      <object class="GtkRadioMenuItem" id="MenuView-OutputQualityColor">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:OutputQualityColor</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuView-OutputQualityGrayscale">
+      <object class="GtkRadioMenuItem" id="MenuView-OutputQualityGrayscale">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:OutputQualityGrayscale</property>
@@ -2766,7 +2779,7 @@
       <object class="GtkMenuItem" id="MenuSlide-PresentationLayout">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
-        <property name="action_name">.uno:PresentationLayout</property>
+        <property name="action_name">.uno:DrawingLayout</property>
       </object>
     </child>
     <child>

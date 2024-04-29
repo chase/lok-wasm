@@ -13,8 +13,8 @@
 
 #include <comphelper/comphelperdllapi.h>
 #include <comphelper/interfacecontainer4.hxx>
+#include <comphelper/unoimplbase.hxx>
 #include <cppuhelper/weak.hxx>
-#include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XTypeProvider.hpp>
@@ -28,7 +28,8 @@ namespace comphelper
     (2) helps to handle the custom where we have conflicting interfaces
         e.g. multiple UNO interfaces that extend css::lang::XComponent
 */
-class COMPHELPER_DLLPUBLIC WeakComponentImplHelperBase : public cppu::OWeakObject,
+class COMPHELPER_DLLPUBLIC WeakComponentImplHelperBase : public virtual comphelper::UnoImplBase,
+                                                         public cppu::OWeakObject,
                                                          public css::lang::XComponent
 {
 public:
@@ -50,9 +51,12 @@ public:
     virtual void disposing(std::unique_lock<std::mutex>&);
 
 protected:
+    void throwIfDisposed(std::unique_lock<std::mutex>&)
+    {
+        if (m_bDisposed)
+            throw css::lang::DisposedException(OUString(), static_cast<cppu::OWeakObject*>(this));
+    }
     comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> maEventListeners;
-    mutable std::mutex m_aMutex;
-    bool m_bDisposed = false;
 };
 
 template <typename... Ifc>
@@ -61,9 +65,9 @@ class SAL_DLLPUBLIC_TEMPLATE WeakComponentImplHelper : public WeakComponentImplH
                                                        public Ifc...
 {
 public:
-    virtual void SAL_CALL acquire() noexcept final override { OWeakObject::acquire(); }
+    virtual void SAL_CALL acquire() noexcept override { OWeakObject::acquire(); }
 
-    virtual void SAL_CALL release() noexcept final override { OWeakObject::release(); }
+    virtual void SAL_CALL release() noexcept override { OWeakObject::release(); }
 
     // css::lang::XComponent
     virtual void SAL_CALL dispose() noexcept final override

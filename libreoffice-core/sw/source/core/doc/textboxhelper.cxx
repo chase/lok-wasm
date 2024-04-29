@@ -297,7 +297,7 @@ void SwTextBoxHelper::destroy(const SwFrameFormat* pShape, const SdrObject* pObj
 bool SwTextBoxHelper::isTextBox(const SwFrameFormat* pFormat, sal_uInt16 nType,
                                 const SdrObject* pObject)
 {
-    SolarMutexGuard aGuard;
+    DBG_TESTSOLARMUTEX();
     assert(nType == RES_FLYFRMFMT || nType == RES_DRAWFRMFMT);
     if (!pFormat || pFormat->Which() != nType)
         return false;
@@ -336,9 +336,8 @@ bool SwTextBoxHelper::hasTextFrame(const SdrObject* pObj)
 sal_Int32 SwTextBoxHelper::getCount(SdrPage const* pPage)
 {
     sal_Int32 nRet = 0;
-    for (std::size_t i = 0; i < pPage->GetObjCount(); ++i)
+    for (const rtl::Reference<SdrObject>& p : *pPage)
     {
-        SdrObject* p = pPage->GetObj(i);
         if (p && p->IsTextBox())
             continue;
         ++nRet;
@@ -349,8 +348,7 @@ sal_Int32 SwTextBoxHelper::getCount(SdrPage const* pPage)
 sal_Int32 SwTextBoxHelper::getCount(const SwDoc& rDoc)
 {
     sal_Int32 nRet = 0;
-    const SwFrameFormats& rSpzFrameFormats = *rDoc.GetSpzFrameFormats();
-    for (const auto pFormat : rSpzFrameFormats)
+    for (const sw::SpzFrameFormat* pFormat : *rDoc.GetSpzFrameFormats())
     {
         if (isTextBox(pFormat, RES_FLYFRMFMT))
             ++nRet;
@@ -365,14 +363,13 @@ uno::Any SwTextBoxHelper::getByIndex(SdrPage const* pPage, sal_Int32 nIndex)
 
     SdrObject* pRet = nullptr;
     sal_Int32 nCount = 0; // Current logical index.
-    for (std::size_t i = 0; i < pPage->GetObjCount(); ++i)
+    for (const rtl::Reference<SdrObject>& p : *pPage)
     {
-        SdrObject* p = pPage->GetObj(i);
         if (p && p->IsTextBox())
             continue;
         if (nCount == nIndex)
         {
-            pRet = p;
+            pRet = p.get();
             break;
         }
         ++nCount;
@@ -389,9 +386,8 @@ sal_Int32 SwTextBoxHelper::getOrdNum(const SdrObject* pObject)
     if (const SdrPage* pPage = pObject->getSdrPageFromSdrObject())
     {
         sal_Int32 nOrder = 0; // Current logical order.
-        for (std::size_t i = 0; i < pPage->GetObjCount(); ++i)
+        for (const rtl::Reference<SdrObject>& p : *pPage)
         {
-            SdrObject* p = pPage->GetObj(i);
             if (p && p->IsTextBox())
                 continue;
             if (p == pObject)
@@ -469,8 +465,7 @@ static void lcl_queryInterface(const SwFrameFormat* pShape, uno::Any& rAny, SdrO
         = SwTextBoxHelper::getOtherTextBoxFormat(pShape, RES_DRAWFRMFMT, pObj))
     {
         uno::Reference<T> const xInterface(
-            static_cast<cppu::OWeakObject*>(
-                SwXTextFrame::CreateXTextFrame(*pFormat->GetDoc(), pFormat).get()),
+            getXWeak(SwXTextFrame::CreateXTextFrame(*pFormat->GetDoc(), pFormat).get()),
             uno::UNO_QUERY);
         rAny <<= xInterface;
     }
@@ -960,7 +955,7 @@ void SwTextBoxHelper::syncProperty(SwFrameFormat* pShape, sal_uInt16 nWID, sal_u
     xPropertySet->setPropertyValue(aPropertyName, aValue);
 }
 
-void SwTextBoxHelper::saveLinks(const SwFrameFormats& rFormats,
+void SwTextBoxHelper::saveLinks(const sw::FrameFormats<sw::SpzFrameFormat*>& rFormats,
                                 std::map<const SwFrameFormat*, const SwFrameFormat*>& rLinks)
 {
     for (const auto pFormat : rFormats)
@@ -1580,8 +1575,8 @@ void SwTextBoxHelper::synchronizeGroupTextBoxProperty(bool pFunc(SwFrameFormat*,
 {
     if (auto pChildren = pObj->getChildrenOfSdrObject())
     {
-        for (size_t i = 0; i < pChildren->GetObjCount(); ++i)
-            synchronizeGroupTextBoxProperty(pFunc, pFormat, pChildren->GetObj(i));
+        for (const rtl::Reference<SdrObject>& pChildObj : *pChildren)
+            synchronizeGroupTextBoxProperty(pFunc, pFormat, pChildObj.get());
     }
     else
     {
@@ -1595,9 +1590,9 @@ std::vector<SwFrameFormat*> SwTextBoxHelper::CollectTextBoxes(const SdrObject* p
     std::vector<SwFrameFormat*> vRet;
     if (auto pChildren = pGroupObject->getChildrenOfSdrObject())
     {
-        for (size_t i = 0; i < pChildren->GetObjCount(); ++i)
+        for (const rtl::Reference<SdrObject>& pObj : *pChildren)
         {
-            auto pChildTextBoxes = CollectTextBoxes(pChildren->GetObj(i), pFormat);
+            auto pChildTextBoxes = CollectTextBoxes(pObj.get(), pFormat);
             for (auto& rChildTextBox : pChildTextBoxes)
                 vRet.push_back(rChildTextBox);
         }
@@ -1920,10 +1915,10 @@ void SwTextBoxNode::Clone_Impl(SwDoc* pDoc, const SwFormatAnchor& rNewAnc, SwFra
             return;
         }
 
-        for (size_t i = 0; i < pSrcList->GetObjCount(); ++i)
+        for (auto itSrc = pSrcList->begin(), itDest = pDestList->begin(); itSrc != pSrcList->end();
+             ++itSrc, ++itDest)
         {
-            Clone_Impl(pDoc, rNewAnc, o_pTarget, pSrcList->GetObj(i), pDestList->GetObj(i),
-                       bSetAttr, bMakeFrame);
+            Clone_Impl(pDoc, rNewAnc, o_pTarget, itSrc->get(), itDest->get(), bSetAttr, bMakeFrame);
         }
         return;
     }

@@ -33,6 +33,7 @@ enum ScViewOption
     VOPT_NULLVALS,
     VOPT_SYNTAX,
     VOPT_NOTES,
+    VOPT_FORMULAS_MARKS,
     VOPT_VSCROLL,
     VOPT_HSCROLL,
     VOPT_TABCONTROLS,
@@ -44,8 +45,9 @@ enum ScViewOption
     VOPT_ANCHOR,
     VOPT_PAGEBREAKS,
     VOPT_SUMMARY,
+    // tdf#96854 - move/copy sheet dialog: last used option for action (true: copy, false: move)
+    VOPT_COPY_SHEET,
     VOPT_THEMEDCURSOR,
-    VOPT_CLIPMARKS,
 };
 
 enum ScVObjType
@@ -55,12 +57,8 @@ enum ScVObjType
     VOBJ_TYPE_DRAW
 };
 
-#define MAX_OPT             sal_uInt16(VOPT_CLIPMARKS)+1
+#define MAX_OPT             sal_uInt16(VOPT_THEMEDCURSOR)+1
 #define MAX_TYPE            sal_uInt16(VOBJ_TYPE_DRAW)+1
-
-// SC_STD_GRIDCOLOR is obsolete since tdf#152184 since GridColor == COL_AUTO
-// converts now to either light or dark but still used on options > view > visual aids
-#define SC_STD_GRIDCOLOR    COL_LIGHTGRAY
 
 // SvxGrid options with standard operators
 

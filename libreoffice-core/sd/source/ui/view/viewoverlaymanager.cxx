@@ -62,7 +62,7 @@ class ImageButtonHdl;
 const sal_uInt16 gButtonSlots[] = { SID_INSERT_TABLE, SID_INSERT_DIAGRAM, SID_INSERT_GRAPHIC, SID_INSERT_AVMEDIA };
 const TranslateId gButtonToolTips[] = { STR_INSERT_TABLE, STR_INSERT_CHART, STR_INSERT_PICTURE, STR_INSERT_MOVIE };
 
-constexpr rtl::OUStringConstExpr aSmallPlaceHolders[] =
+constexpr OUString aSmallPlaceHolders[] =
 {
     BMP_PLACEHOLDER_TABLE_SMALL,
     BMP_PLACEHOLDER_CHART_SMALL,
@@ -74,7 +74,7 @@ constexpr rtl::OUStringConstExpr aSmallPlaceHolders[] =
     BMP_PLACEHOLDER_MOVIE_SMALL_HOVER
 };
 
-constexpr rtl::OUStringConstExpr aBigPlaceHolders[] =
+constexpr OUString aBigPlaceHolders[] =
 {
     BMP_PLACEHOLDER_TABLE_LARGE,
     BMP_PLACEHOLDER_CHART_LARGE,
@@ -86,7 +86,7 @@ constexpr rtl::OUStringConstExpr aBigPlaceHolders[] =
     BMP_PLACEHOLDER_MOVIE_LARGE_HOVER
 };
 
-static BitmapEx* getButtonImage( int index, bool large )
+static BitmapEx& getButtonImage( int index, bool large )
 {
     static vcl::DeleteOnDeinit< BitmapEx > gSmallButtonImages[SAL_N_ELEMENTS(aSmallPlaceHolders)] = { vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty };
     static vcl::DeleteOnDeinit< BitmapEx > gLargeButtonImages[SAL_N_ELEMENTS(aBigPlaceHolders)] = { vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty, vcl::DeleteOnDeinitFlag::Empty };
@@ -97,18 +97,18 @@ static BitmapEx* getButtonImage( int index, bool large )
     {
         for (size_t i = 0; i < SAL_N_ELEMENTS(aSmallPlaceHolders); i++ )
         {
-            gSmallButtonImages[i].set(OUString(aSmallPlaceHolders[i]));
-            gLargeButtonImages[i].set(OUString(aBigPlaceHolders[i]));
+            gSmallButtonImages[i].set(aSmallPlaceHolders[i]);
+            gLargeButtonImages[i].set(aBigPlaceHolders[i]);
         }
     }
 
     if( large )
     {
-        return gLargeButtonImages[index].get();
+        return *gLargeButtonImages[index].get();
     }
     else
     {
-        return gSmallButtonImages[index].get();
+        return *gSmallButtonImages[index].get();
     }
 }
 
@@ -184,10 +184,10 @@ void ImageButtonHdl::HideTip()
 
 void ImageButtonHdl::ShowTip()
 {
-    if (!pHdlList || !pHdlList->GetView() || mnHighlightId == -1)
+    if (!m_pHdlList || !m_pHdlList->GetView() || mnHighlightId == -1)
         return;
 
-    OutputDevice* pDev = pHdlList->GetView()->GetFirstOutputDevice();
+    OutputDevice* pDev = m_pHdlList->GetView()->GetFirstOutputDevice();
     if( pDev == nullptr )
         pDev = Application::GetDefaultDevice();
 
@@ -200,7 +200,7 @@ void ImageButtonHdl::ShowTip()
     else if (mnHighlightId == 3)
         aHelpPos.Move(maImageSize.Width(), maImageSize.Height());
     ::tools::Rectangle aLogicPix(aHelpPos, maImageSize);
-    vcl::Window* pWindow = pHdlList->GetView()->GetFirstOutputDevice()->GetOwnerWindow();
+    vcl::Window* pWindow = m_pHdlList->GetView()->GetFirstOutputDevice()->GetOwnerWindow();
     ::tools::Rectangle aScreenRect(pWindow->OutputToScreenPixel(aLogicPix.TopLeft()),
                                    pWindow->OutputToScreenPixel(aLogicPix.BottomRight()));
     Help::ShowQuickHelp(pWindow, aScreenRect, aHelpText);
@@ -213,11 +213,11 @@ void ImageButtonHdl::onHelpRequest()
 
 void ImageButtonHdl::onMouseEnter(const MouseEvent& rMEvt)
 {
-    if( !(pHdlList && pHdlList->GetView()))
+    if( !(m_pHdlList && m_pHdlList->GetView()))
         return;
 
     int nHighlightId = 0;
-    OutputDevice* pDev = pHdlList->GetView()->GetFirstOutputDevice();
+    OutputDevice* pDev = m_pHdlList->GetView()->GetFirstOutputDevice();
     if( pDev == nullptr )
         pDev = Application::GetDefaultDevice();
 
@@ -259,10 +259,10 @@ void ImageButtonHdl::CreateB2dIAObject()
     maImageSize.setWidth( maImageSize.Width() >> 1 );
     maImageSize.setHeight( maImageSize.Height() >> 1 );
 
-    if(!pHdlList)
+    if(!m_pHdlList)
         return;
 
-    SdrMarkView* pView = pHdlList->GetView();
+    SdrMarkView* pView = m_pHdlList->GetView();
 
     if(!pView || pView->areMarkHandlesHidden())
         return;
@@ -368,13 +368,13 @@ BitmapEx ChangePlaceholderTag::createOverlayImage( int nHighlight )
 
         bool bLarge = nShapeSizePix > 250;
 
-        Size aSize( getButtonImage( 0, bLarge )->GetSizePixel() );
+        Size aSize( getButtonImage( 0, bLarge ).GetSizePixel() );
 
         aRet.Scale(Size(aSize.Width() << 1, aSize.Height() << 1));
 
         const ::tools::Rectangle aRectSrc( Point( 0, 0 ), aSize );
 
-        aRet = *(getButtonImage((nHighlight == 0) ? 4 : 0, bLarge));
+        aRet = getButtonImage((nHighlight == 0) ? 4 : 0, bLarge);
         aRet.Expand( aSize.Width(), aSize.Height(), true );
 
         aRet.CopyPixel( ::tools::Rectangle( Point( aSize.Width(), 0              ), aSize ), aRectSrc, getButtonImage((nHighlight == 1) ? 5 : 1, bLarge) );
@@ -406,7 +406,7 @@ void ChangePlaceholderTag::addCustomHandles( SdrHdlList& rHandlerList )
 
     bool bLarge = nShapeSizePix > 250;
 
-    Size aButtonSize( pDev->PixelToLogic( getButtonImage(0, bLarge )->GetSizePixel()) );
+    Size aButtonSize( pDev->PixelToLogic( getButtonImage(0, bLarge ).GetSizePixel()) );
 
     const int nColumns = 2;
     const int nRows = 2;

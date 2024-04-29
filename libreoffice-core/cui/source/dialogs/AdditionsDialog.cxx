@@ -54,18 +54,14 @@
 #include <orcus/json_parser.hpp>
 #include <orcus/config.hpp>
 
+#include <bitmaps.hlst>
+
 #define PAGE_SIZE 30
 
 using namespace css;
 using ::com::sun::star::uno::Reference;
-using ::com::sun::star::uno::XComponentContext;
-using ::com::sun::star::uno::UNO_QUERY_THROW;
 using ::com::sun::star::uno::Exception;
-using ::com::sun::star::graphic::GraphicProvider;
-using ::com::sun::star::graphic::XGraphicProvider;
 using ::com::sun::star::uno::Sequence;
-using ::com::sun::star::beans::PropertyValue;
-using ::com::sun::star::graphic::XGraphic;
 
 using namespace com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -134,7 +130,7 @@ void parseResponse(const std::string& rResponse, std::vector<AdditionInfo>& aAdd
     {
         aJsonDoc.load(rResponse, aConfig);
     }
-    catch (const orcus::json::parse_error&)
+    catch (const orcus::parse_error&)
     {
         TOOLS_WARN_EXCEPTION("cui.dialogs", "Invalid JSON file from the extensions API");
         return;
@@ -279,6 +275,11 @@ SearchAndParseThread::SearchAndParseThread(AdditionsDialog* pDialog, const bool 
     , m_bExecute(true)
     , m_bIsFirstLoading(isFirstLoading)
 {
+    // if we are running a UITest, e.g. UITest_sw_options then
+    // don't attempt to downloading anything
+    static const bool bUITest = getenv("LIBO_TEST_UNIT");
+
+    m_bUITest = bUITest;
 }
 
 SearchAndParseThread::~SearchAndParseThread() {}
@@ -288,7 +289,8 @@ void SearchAndParseThread::Append(AdditionInfo& additionInfo)
     if (!m_bExecute)
         return;
     OUString aPreviewFile;
-    bool bResult = getPreviewFile(additionInfo, aPreviewFile); // info vector json data
+    bool bResult
+        = !m_bUITest && getPreviewFile(additionInfo, aPreviewFile); // info vector json data
 
     if (!bResult)
     {
@@ -402,7 +404,7 @@ void SearchAndParseThread::execute()
 
     if (m_bIsFirstLoading)
     {
-        std::string sResponse = ucbGet(m_pAdditionsDialog->m_sURL);
+        std::string sResponse = !m_bUITest ? ucbGet(m_pAdditionsDialog->m_sURL) : "";
         parseResponse(sResponse, m_pAdditionsDialog->m_aAllExtensionsVector);
         std::sort(m_pAdditionsDialog->m_aAllExtensionsVector.begin(),
                   m_pAdditionsDialog->m_aAllExtensionsVector.end(),
@@ -644,19 +646,19 @@ AdditionsItem::AdditionsItem(weld::Widget* pParent, AdditionsDialog* pParentDial
     switch (std::isnan(aExtensionRating) ? 0 : int(std::clamp(aExtensionRating, 0.0, 5.0)))
     {
         case 5:
-            m_xImageVoting5->set_from_icon_name("cmd/sc_stars-full.png");
+            m_xImageVoting5->set_from_icon_name(RID_SVXBMP_STARS_FULL);
             [[fallthrough]];
         case 4:
-            m_xImageVoting4->set_from_icon_name("cmd/sc_stars-full.png");
+            m_xImageVoting4->set_from_icon_name(RID_SVXBMP_STARS_FULL);
             [[fallthrough]];
         case 3:
-            m_xImageVoting3->set_from_icon_name("cmd/sc_stars-full.png");
+            m_xImageVoting3->set_from_icon_name(RID_SVXBMP_STARS_FULL);
             [[fallthrough]];
         case 2:
-            m_xImageVoting2->set_from_icon_name("cmd/sc_stars-full.png");
+            m_xImageVoting2->set_from_icon_name(RID_SVXBMP_STARS_FULL);
             [[fallthrough]];
         case 1:
-            m_xImageVoting1->set_from_icon_name("cmd/sc_stars-full.png");
+            m_xImageVoting1->set_from_icon_name(RID_SVXBMP_STARS_FULL);
             break;
     }
 
@@ -846,7 +848,7 @@ void TmpRepositoryCommandEnv::update(uno::Any const& /*Status */) {}
 
 void TmpRepositoryCommandEnv::pop() {}
 
-IMPL_LINK(AdditionsDialog, GearHdl, const OString&, rIdent, void)
+IMPL_LINK(AdditionsDialog, GearHdl, const OUString&, rIdent, void)
 {
     if (rIdent == "gear_sort_voting")
     {

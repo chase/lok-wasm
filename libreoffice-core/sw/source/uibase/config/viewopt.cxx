@@ -56,7 +56,6 @@ SwViewColors::SwViewColors() :
     m_aIndexShadingsColor(COL_LIGHTGRAY),
     m_aLinksColor(COL_BLUE),
     m_aVisitedLinksColor(COL_RED),
-    m_aDirectCursorColor(COL_BLUE),
     m_aTextGridColor(COL_LIGHTGRAY),
     m_aSpellColor(COL_LIGHTRED),
     m_aGrammarColor(COL_LIGHTBLUE),
@@ -66,7 +65,8 @@ SwViewColors::SwViewColors() :
     m_aPageBreakColor(COL_BLUE),
     m_aScriptIndicatorColor(COL_GREEN),
     m_aShadowColor(COL_GRAY),
-    m_aHeaderFooterMarkColor(COL_BLUE)
+    m_aHeaderFooterMarkColor(COL_BLUE),
+    m_nAppearanceFlags(ViewOptFlags::NONE)
 {}
 
 SwViewColors::SwViewColors(const svtools::ColorConfig& rConfig)
@@ -110,8 +110,6 @@ SwViewColors::SwViewColors(const svtools::ColorConfig& rConfig)
     m_aShadowColor = aValue.nColor;
     if(aValue.bIsVisible)
         m_nAppearanceFlags |= ViewOptFlags::Shadow;
-
-    m_aDirectCursorColor = rConfig.GetColorValue(svtools::WRITERDIRECTCURSOR).nColor;
 
     m_aTextGridColor = rConfig.GetColorValue(svtools::WRITERTEXTGRID).nColor;
 
@@ -282,11 +280,15 @@ SwViewOption::SwViewOption() :
     }
     m_nDivisionX = m_nDivisionY = 1;
 
-    m_bSelectionInReadonly = !utl::ConfigManager::IsFuzzing() && SW_MOD()->GetAccessibilityOptions().IsSelectionInReadonly();
+    m_bSelectionInReadonly = utl::ConfigManager::IsFuzzing() || SvtAccessibilityOptions::IsSelectionInReadonly();
 
     m_bIdle = true;
 
     m_nDefaultAnchor = 1; //FLY_TO_CHAR
+
+    // tdf#135266 - tox dialog: remember last used entry level depending on the index type
+    m_nTocEntryLvl = 0;
+    m_nIdxEntryLvl = 1;
 
 #ifdef DBG_UTIL
     // correspond to the statements in ui/config/cfgvw.src
@@ -329,6 +331,8 @@ SwViewOption::SwViewOption(const SwViewOption& rVOpt)
     m_bShowPlaceHolderFields = rVOpt.m_bShowPlaceHolderFields;
     m_bIdle           = rVOpt.m_bIdle;
     m_nDefaultAnchor  = rVOpt.m_nDefaultAnchor;
+    m_nTocEntryLvl = rVOpt.m_nTocEntryLvl;
+    m_nIdxEntryLvl = rVOpt.m_nIdxEntryLvl;
     m_aColorConfig    = rVOpt.m_aColorConfig;
 
 #ifdef DBG_UTIL
@@ -491,11 +495,6 @@ const Color& SwViewOption::GetVisitedLinksColor() const
     return m_aColorConfig.m_aVisitedLinksColor;
 }
 
-const Color& SwViewOption::GetDirectCursorColor() const
-{
-    return m_aColorConfig.m_aDirectCursorColor;
-}
-
 const Color& SwViewOption::GetTextGridColor() const
 {
     return m_aColorConfig.m_aTextGridColor;
@@ -603,6 +602,8 @@ rtl::Reference<comphelper::ConfigurationListener> const & getWCOptionListener()
 
 bool SwViewOption::IsIgnoreProtectedArea()
 {
+    if (utl::ConfigManager::IsFuzzing())
+        return false;
     static comphelper::ConfigurationListenerProperty<bool> gIgnoreProtectedArea(getWCOptionListener(), "IgnoreProtectedArea");
     return gIgnoreProtectedArea.get();
 }

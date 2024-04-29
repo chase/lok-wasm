@@ -32,6 +32,7 @@
 #include <com/sun/star/text/TextContentAnchorType.hpp>
 #include <com/sun/star/text/XTextDocument.hpp>
 #include <com/sun/star/util/SearchAlgorithms2.hpp>
+#include <com/sun/star/util/SearchFlags.hpp>
 
 #include <i18nutil/searchopt.hxx>
 #include <comphelper/processfactory.hxx>
@@ -67,6 +68,7 @@ public:
     void testBookmarkDeleteAndJoin();
     void testBookmarkDeleteTdf90816();
     void testControlShapeGrouping();
+    void testTdf151846();
     void testFdo55289();
     void testFdo68983();
     void testFdo87530();
@@ -78,6 +80,7 @@ public:
     CPPUNIT_TEST(testBookmarkDeleteAndJoin);
     CPPUNIT_TEST(testBookmarkDeleteTdf90816);
     CPPUNIT_TEST(testControlShapeGrouping);
+    CPPUNIT_TEST(testTdf151846);
     CPPUNIT_TEST(testFdo55289);
     CPPUNIT_TEST(testFdo68983);
     CPPUNIT_TEST(testFdo87530);
@@ -133,14 +136,14 @@ void SwMacrosTest::testVba()
         }
 
     };
-    for ( size_t  i=0; i<SAL_N_ELEMENTS( testInfo ); ++i )
+    for (auto const & [ sFileBaseName, sMacroUrl ] : testInfo)
     {
-        OUString sFileName("docm/" + testInfo[i].sFileBaseName);
-        loadFromURL(sFileName);
+        OUString sFileName("docm/" + sFileBaseName);
+        loadFromFile(sFileName);
 
-        uno::Any aRet = executeMacro(testInfo[i].sMacroUrl);
+        uno::Any aRet = executeMacro(sMacroUrl);
         OUString aStringRes;
-        CPPUNIT_ASSERT(aRet >>= aStringRes);
+        CPPUNIT_ASSERT_MESSAGE(sFileName.toUtf8().getStr(), aRet >>= aStringRes);
         CPPUNIT_ASSERT_EQUAL(OUString("OK"), aStringRes);
     }
 }
@@ -154,7 +157,7 @@ void SwMacrosTest::testModernVBADelete()
         };
 
     OUString sFileName("docm/" + testInfo.sFileBaseName);
-    loadFromURL(sFileName);
+    loadFromFile(sFileName);
 
     SwXTextDocument *const pTextDoc = dynamic_cast<SwXTextDocument *>(mxComponent.get());
     SwDoc *const pDoc = pTextDoc->GetDocShell()->GetDoc();
@@ -241,7 +244,7 @@ void SwMacrosTest::testBookmarkDeleteTdf90816()
 
 void SwMacrosTest::testControlShapeGrouping()
 {
-    loadFromURL(u"odt/testControlShapeGrouping.odt");
+    loadFromFile(u"odt/testControlShapeGrouping.odt");
 
     uno::Reference<frame::XModel> const xModel(mxComponent, UNO_QUERY);
     CPPUNIT_ASSERT(xModel.is());
@@ -339,6 +342,22 @@ void SwMacrosTest::testControlShapeGrouping()
 #endif
 }
 
+void SwMacrosTest::testTdf151846()
+{
+    loadFromFile(u"odt/tdf151846.odt");
+
+    // Without the fix in place, this test would have failed with
+    // Property or method not found: createDiagramByDataSource.
+    executeMacro("vnd.sun.Star.script:Standard.Module1.Main?language=Basic&location=document");
+
+    uno::Reference<text::XTextEmbeddedObjectsSupplier> xTEOSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XNameAccess> xAccess(xTEOSupplier->getEmbeddedObjects());
+    uno::Sequence<OUString> aSeq(xAccess->getElementNames());
+
+    // Check number of embedded objects.
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), aSeq.getLength());
+}
+
 void SwMacrosTest::testFdo55289()
 {
     SwDoc* const pDoc = new SwDoc;
@@ -374,7 +393,7 @@ void SwMacrosTest::testFdo55289()
 
 void SwMacrosTest::testFdo68983()
 {
-    loadFromURL(u"odt/fdo68983.odt");
+    loadFromFile(u"odt/fdo68983.odt");
     Reference< frame::XStorable > xDocStorable(mxComponent, UNO_QUERY_THROW);
 
     saveAndReload("writer8");
@@ -469,8 +488,7 @@ void SwMacrosTest::testFindReplace()
 
     bool bCancel(false);
     i18nutil::SearchOptions2 opts(
-            util::SearchAlgorithms_REGEXP,
-            65536,
+            css::util::SearchFlags::LEV_RELAXED,
             "$",
             "",
             lang::Locale("en", "US", ""),

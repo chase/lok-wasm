@@ -61,7 +61,7 @@ class SwMultiTOXTabDialog final : public SfxTabDialogController
     {
         std::unique_ptr<SwForm> m_pForm;
         std::unique_ptr<SwTOXDescription> m_pDescription;
-        std::unique_ptr<SwIndexSections_Impl> m_pxIndexSections;
+        std::optional<SwIndexSections_Impl> m_oIndexSections;
     };
     std::vector<TypeData>   m_vTypeData;
 
@@ -94,7 +94,7 @@ public:
                         bool bGlobal);
     virtual ~SwMultiTOXTabDialog() override;
 
-    virtual void        PageCreated(const OString& rId, SfxTabPage &rPage) override;
+    virtual void        PageCreated(const OUString& rId, SfxTabPage &rPage) override;
 
     SwForm*             GetForm(CurTOXType eType);
 
@@ -161,6 +161,8 @@ class SwTOXSelectTabPage final : public SfxTabPage
     std::unique_ptr<weld::ComboBox> m_xCaptionSequenceLB;
     std::unique_ptr<weld::Label> m_xDisplayTypeFT;
     std::unique_ptr<weld::ComboBox> m_xDisplayTypeLB;
+    std::unique_ptr<weld::CheckButton> m_xParaStyleCB;
+    std::unique_ptr<weld::ComboBox> m_xParaStyleLB;
 
     //all but illustration and table
     std::unique_ptr<weld::CheckButton> m_xTOXMarksCB;
@@ -192,7 +194,7 @@ class SwTOXSelectTabPage final : public SfxTabPage
     DECL_LINK(TOXTypeHdl,   weld::ComboBox&, void );
     DECL_LINK(AddStylesHdl, weld::Button&, void );
     DECL_LINK(MenuEnableHdl, weld::Toggleable&, void);
-    DECL_LINK(MenuExecuteHdl, const OString&, void);
+    DECL_LINK(MenuExecuteHdl, const OUString&, void);
     DECL_LINK(LanguageListBoxHdl, weld::ComboBox&, void);
     void LanguageHdl(const weld::ComboBox*);
     DECL_LINK(CheckBoxHdl, weld::Toggleable&, void );

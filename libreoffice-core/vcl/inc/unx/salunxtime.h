@@ -17,16 +17,11 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_SALUNXTIME_H
-#define INCLUDED_VCL_INC_UNX_SALUNXTIME_H
+#pragma once
 
 #if defined LINUX || defined FREEBSD || \
     defined NETBSD || defined OPENBSD || defined DRAGONFLY
 #include <sys/time.h>
-#elif defined AIX
-#include <time.h>
-#include <sys/time.h>
-#include <strings.h>
 #endif
 #include <sal/types.h>
 
@@ -74,7 +69,5 @@ inline timeval operator - ( const timeval &t1, const timeval &t2 )
     t0 -= t2;
     return t0;
 }
-
-#endif // INCLUDED_VCL_INC_UNX_SALUNXTIME_H
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

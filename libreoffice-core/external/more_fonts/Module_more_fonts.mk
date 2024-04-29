@@ -54,12 +54,14 @@ $(eval $(call gb_Module_add_targets,more_fonts,\
 	ExternalPackage_carlito \
 	ExternalPackage_liberation \
 	ExternalPackage_liberation_narrow \
-	ExternalPackage_noto \
+	ExternalPackage_noto_sans \
+	ExternalPackage_noto_serif \
 	UnpackedTarball_caladea \
 	UnpackedTarball_carlito \
 	UnpackedTarball_liberation \
 	UnpackedTarball_liberation_narrow \
-	UnpackedTarball_noto \
+	UnpackedTarball_noto_sans \
+	UnpackedTarball_noto_serif \
 ))
 
 # vim: set noet sw=4 ts=4:

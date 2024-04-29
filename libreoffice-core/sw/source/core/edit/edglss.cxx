@@ -179,7 +179,7 @@ bool SwEditShell::CopySelToDoc( SwDoc& rInsDoc )
             if( bCpyTableNm )
             {
                 const OUString rTableName = pTableNd->GetTable().GetFrameFormat()->GetName();
-                const SwFrameFormats& rTableFormats = *rInsDoc.GetTableFrameFormats();
+                const sw::TableFrameFormats& rTableFormats = *rInsDoc.GetTableFrameFormats();
                 for( auto n = rTableFormats.size(); n; )
                     if( rTableFormats[ --n ]->GetName() == rTableName )
                     {
@@ -229,6 +229,14 @@ bool SwEditShell::CopySelToDoc( SwDoc& rInsDoc )
                         // but we want to copy the table and the start node before
                         // the first cell as well.
                         aPaM.Start()->Assign(*oSelectAll->first);
+                        if (SwSectionNode const* pSection = oSelectAll->first->GetSectionNode())
+                        {
+                            if (aPaM.End()->GetNodeIndex() < pSection->EndOfSectionIndex())
+                            {
+                                // include section end so that section is copied
+                                aPaM.End()->Assign(*oSelectAll->first->GetNodes()[pSection->EndOfSectionIndex() + 1]);
+                            }
+                        }
                     }
                     bRet = GetDoc()->getIDocumentContentOperations().CopyRange( aPaM, aPos, SwCopyFlags::CheckPosInFly)
                         || bRet;
@@ -259,11 +267,7 @@ void SwEditShell::GetSelectedText( OUString &rBuf, ParaBreakType nHndlParaBrk )
         else if( IsSelFullPara() &&
             ParaBreakType::ToOnlyCR != nHndlParaBrk )
         {
-#ifdef _WIN32
-                rBuf += "\015\012";
-#else
-                rBuf += "\012";
-#endif
+            rBuf += SAL_NEWLINE_STRING;
         }
     }
     else if( IsSelection() )

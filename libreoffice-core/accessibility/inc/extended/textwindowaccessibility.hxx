@@ -36,9 +36,10 @@
 #include <com/sun/star/accessibility/XAccessibleComponent.hpp>
 #include <toolkit/awt/vclxwindow.hxx>
 #include <cppuhelper/basemutex.hxx>
-#include <cppuhelper/compbase7.hxx>
+#include <cppuhelper/compbase.hxx>
 #include <comphelper/accessibletexthelper.hxx>
 #include <rtl/ref.hxx>
+#include <unotools/weakref.hxx>
 
 #include <unotools/accessiblerelationsethelper.hxx>
 #include <queue>
@@ -91,31 +92,31 @@ private:
     VclPtr<vcl::Window> m_pNotifier;
 };
 
+class Paragraph;
+
 class ParagraphInfo
 {
 public:
     ParagraphInfo(::sal_Int32 nHeight): m_nHeight(nHeight) {}
 
-    css::uno::WeakReference< css::accessibility::XAccessible > const &
+    unotools::WeakReference< Paragraph > const &
     getParagraph() const { return m_xParagraph; }
 
     ::sal_Int32 getHeight() const { return m_nHeight; }
 
-    void setParagraph(
-        css::uno::Reference< css::accessibility::XAccessible > const &
-        rParagraph) { m_xParagraph = rParagraph; }
+    void setParagraph( rtl::Reference< Paragraph > const & rParagraph)
+    { m_xParagraph = rParagraph.get(); }
 
     void changeHeight(::sal_Int32 nHeight) { m_nHeight = nHeight; }
 
 private:
-    css::uno::WeakReference< css::accessibility::XAccessible >
-    m_xParagraph;
+    unotools::WeakReference< Paragraph > m_xParagraph;
     ::sal_Int32 m_nHeight;
 };
 
 typedef std::vector< ParagraphInfo > Paragraphs;
 
-typedef ::cppu::WeakAggComponentImplHelper7<
+typedef ::cppu::WeakComponentImplHelper<
     css::accessibility::XAccessible,
     css::accessibility::XAccessibleContext,
     css::accessibility::XAccessibleComponent,

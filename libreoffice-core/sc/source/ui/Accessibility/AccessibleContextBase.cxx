@@ -36,6 +36,37 @@
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::accessibility;
 
+/**
+ The listener is an internal class to prevent reference-counting cycles and therefore memory leaks.
+*/
+typedef cppu::WeakComponentImplHelper<
+                css::accessibility::XAccessibleEventListener
+                > ScAccessibleContextBaseEventListenerWeakImpl;
+class ScAccessibleContextBase::ScAccessibleContextBaseEventListener : public cppu::BaseMutex, public ScAccessibleContextBaseEventListenerWeakImpl
+{
+public:
+    ScAccessibleContextBaseEventListener(ScAccessibleContextBase& rBase)
+        : ScAccessibleContextBaseEventListenerWeakImpl(m_aMutex), mrBase(rBase) {}
+
+    using WeakComponentImplHelperBase::disposing;
+
+    ///=====  XAccessibleEventListener  ========================================
+
+    virtual void SAL_CALL disposing( const lang::EventObject& rSource ) override
+    {
+        SolarMutexGuard aGuard;
+        if (rSource.Source == mrBase.mxParent)
+            dispose();
+    }
+
+    virtual void SAL_CALL
+        notifyEvent(
+        const css::accessibility::AccessibleEventObject& /*aEvent*/ ) override {}
+private:
+    ScAccessibleContextBase& mrBase;
+};
+
+
 ScAccessibleContextBase::ScAccessibleContextBase(
                                                  uno::Reference<XAccessible> xParent,
                                                  const sal_Int16 aRole)
@@ -67,7 +98,11 @@ void ScAccessibleContextBase::Init()
     {
         uno::Reference< XAccessibleEventBroadcaster > xBroadcaster (mxParent->getAccessibleContext(), uno::UNO_QUERY);
         if (xBroadcaster.is())
-            xBroadcaster->addAccessibleEventListener(this);
+        {
+            if (!mxEventListener)
+                mxEventListener = new ScAccessibleContextBaseEventListener(*this);
+            xBroadcaster->addAccessibleEventListener(mxEventListener);
+        }
     }
     msName = createAccessibleName();
     msDescription = createAccessibleDescription();
@@ -91,33 +126,12 @@ void SAL_CALL ScAccessibleContextBase::disposing()
     if (mxParent.is())
     {
         uno::Reference< XAccessibleEventBroadcaster > xBroadcaster (mxParent->getAccessibleContext(), uno::UNO_QUERY);
-        if (xBroadcaster.is())
-            xBroadcaster->removeAccessibleEventListener(this);
+        if (xBroadcaster && mxEventListener)
+            xBroadcaster->removeAccessibleEventListener(mxEventListener);
         mxParent = nullptr;
     }
-
-    ScAccessibleContextBaseWeakImpl::disposing();
 }
 
-//=====  XInterface  =====================================================
-
-uno::Any SAL_CALL ScAccessibleContextBase::queryInterface( uno::Type const & rType )
-{
-    uno::Any aAny (ScAccessibleContextBaseWeakImpl::queryInterface(rType));
-    return aAny.hasValue() ? aAny : ScAccessibleContextBaseImplEvent::queryInterface(rType);
-}
-
-void SAL_CALL ScAccessibleContextBase::acquire()
-    noexcept
-{
-    ScAccessibleContextBaseWeakImpl::acquire();
-}
-
-void SAL_CALL ScAccessibleContextBase::release()
-    noexcept
-{
-    ScAccessibleContextBaseWeakImpl::release();
-}
 
 //=====  SfxListener  =====================================================
 
@@ -399,21 +413,6 @@ void SAL_CALL
     }
 }
 
-    //=====  XAccessibleEventListener  ========================================
-
-void SAL_CALL ScAccessibleContextBase::disposing(
-    const lang::EventObject& rSource )
-{
-    SolarMutexGuard aGuard;
-    if (rSource.Source == mxParent)
-        dispose();
-}
-
-void SAL_CALL ScAccessibleContextBase::notifyEvent(
-        const AccessibleEventObject& /* aEvent */ )
-{
-}
-
 // XServiceInfo
 OUString SAL_CALL ScAccessibleContextBase::getImplementationName()
 {
@@ -430,19 +429,6 @@ uno::Sequence< OUString> SAL_CALL
 {
     return {"com.sun.star.accessibility.Accessible",
             "com.sun.star.accessibility.AccessibleContext"};
-}
-
-//=====  XTypeProvider  =======================================================
-
-uno::Sequence< uno::Type > SAL_CALL ScAccessibleContextBase::getTypes()
-{
-    return comphelper::concatSequences(ScAccessibleContextBaseWeakImpl::getTypes(), ScAccessibleContextBaseImplEvent::getTypes());
-}
-
-uno::Sequence<sal_Int8> SAL_CALL
-    ScAccessibleContextBase::getImplementationId()
-{
-    return css::uno::Sequence<sal_Int8>();
 }
 
 //=====  internal  ============================================================
@@ -486,10 +472,10 @@ void ScAccessibleContextBase::CommitFocusLost() const
     CommitChange(aEvent);
 }
 
-tools::Rectangle ScAccessibleContextBase::GetBoundingBoxOnScreen() const
+AbsoluteScreenPixelRectangle ScAccessibleContextBase::GetBoundingBoxOnScreen() const
 {
     OSL_FAIL("not implemented");
-    return tools::Rectangle();
+    return AbsoluteScreenPixelRectangle();
 }
 
 tools::Rectangle ScAccessibleContextBase::GetBoundingBox() const

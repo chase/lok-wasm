@@ -49,6 +49,7 @@ namespace sdr::properties
             }
             else
             {
+                RectangleProperties::applyDefaultStyleSheetFromSdrModel();
                 SetMergedItem(XFillStyleItem(com::sun::star::drawing::FillStyle_NONE));
                 SetMergedItem(XLineStyleItem(com::sun::star::drawing::LineStyle_NONE));
             }
@@ -93,7 +94,7 @@ namespace sdr::properties
             return std::unique_ptr<BaseProperties>(new GraphicProperties(*this, rObj));
         }
 
-        void GraphicProperties::ItemSetChanged(o3tl::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
+        void GraphicProperties::ItemSetChanged(std::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
         {
             SdrGrafObj& rObj = static_cast<SdrGrafObj&>(GetSdrObject());
 
@@ -131,19 +132,16 @@ namespace sdr::properties
             // call parent
             RectangleProperties::ForceDefaultAttributes();
 
-            // force ItemSet
-            GetObjectItemSet();
-
-            mxItemSet->Put( SdrGrafLuminanceItem( 0 ) );
-            mxItemSet->Put( SdrGrafContrastItem( 0 ) );
-            mxItemSet->Put( SdrGrafRedItem( 0 ) );
-            mxItemSet->Put( SdrGrafGreenItem( 0 ) );
-            mxItemSet->Put( SdrGrafBlueItem( 0 ) );
-            mxItemSet->Put( SdrGrafGamma100Item( 100 ) );
-            mxItemSet->Put( SdrGrafTransparenceItem( 0 ) );
-            mxItemSet->Put( SdrGrafInvertItem( false ) );
-            mxItemSet->Put( SdrGrafModeItem( GraphicDrawMode::Standard ) );
-            mxItemSet->Put( SdrGrafCropItem( 0, 0, 0, 0 ) );
+            moItemSet->Put( SdrGrafLuminanceItem( 0 ) );
+            moItemSet->Put( SdrGrafContrastItem( 0 ) );
+            moItemSet->Put( SdrGrafRedItem( 0 ) );
+            moItemSet->Put( SdrGrafGreenItem( 0 ) );
+            moItemSet->Put( SdrGrafBlueItem( 0 ) );
+            moItemSet->Put( SdrGrafGamma100Item( 100 ) );
+            moItemSet->Put( SdrGrafTransparenceItem( 0 ) );
+            moItemSet->Put( SdrGrafInvertItem( false ) );
+            moItemSet->Put( SdrGrafModeItem( GraphicDrawMode::Standard ) );
+            moItemSet->Put( SdrGrafCropItem( 0, 0, 0, 0 ) );
         }
 } // end of namespace
 

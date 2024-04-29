@@ -24,6 +24,7 @@
 #include <jobs/joburl.hxx>
 
 #include <vcl/svapp.hxx>
+#include <o3tl/string_view.hxx>
 
 namespace framework{
 
@@ -99,7 +100,6 @@ JobURL::JobURL( /*IN*/ const OUString& sURL )
 */
 bool JobURL::isValid() const
 {
-    SolarMutexGuard g;
     return (m_eRequest!=E_UNKNOWN);
 }
 
@@ -121,8 +121,6 @@ bool JobURL::isValid() const
 */
 bool JobURL::getEvent( /*OUT*/ OUString& sEvent ) const
 {
-    SolarMutexGuard g;
-
     sEvent.clear();
     bool bSet   = ((m_eRequest & E_EVENT) == E_EVENT);
     if (bSet)
@@ -149,8 +147,6 @@ bool JobURL::getEvent( /*OUT*/ OUString& sEvent ) const
 */
 bool JobURL::getAlias( /*OUT*/ OUString& sAlias ) const
 {
-    SolarMutexGuard g;
-
     sAlias.clear();
     bool bSet   = ((m_eRequest & E_ALIAS) == E_ALIAS);
     if (bSet)
@@ -177,8 +173,6 @@ bool JobURL::getAlias( /*OUT*/ OUString& sAlias ) const
 */
 bool JobURL::getService( /*OUT*/ OUString& sService ) const
 {
-    SolarMutexGuard g;
-
     sService.clear();
     bool bSet     = ((m_eRequest & E_SERVICE) == E_SERVICE);
     if (bSet)
@@ -212,14 +206,14 @@ bool JobURL::getService( /*OUT*/ OUString& sService ) const
     @return     <TRUE/> if the identifier could be found and the string was split.
                 <FALSE/> otherwise.
 */
-bool JobURL::implst_split( /*IN*/  const OUString& sPart           ,
+bool JobURL::implst_split( /*IN*/  std::u16string_view sPart           ,
                                /*IN*/  const char*        pPartIdentifier ,
                                /*IN*/        sal_Int32        nPartLength     ,
                                /*OUT*/       OUString& rPartValue      ,
                                /*OUT*/       OUString& rPartArguments  )
 {
     // first search for the given identifier
-    bool bPartFound = sPart.matchIgnoreAsciiCaseAsciiL(pPartIdentifier,nPartLength);
+    bool bPartFound = o3tl::matchIgnoreAsciiCase(sPart, std::string_view(pPartIdentifier,nPartLength));
 
     // If it exist - we can split the part and return sal_True.
     // Otherwise we do nothing and return sal_False.
@@ -229,16 +223,16 @@ bool JobURL::implst_split( /*IN*/  const OUString& sPart           ,
         // Do so - we set the return value with the whole part string.
         // Arguments will be set to an empty string as default.
         // If we detect the right sign - we split the arguments and overwrite the default.
-        OUString sValueAndArguments = sPart.copy(nPartLength);
-        OUString sValue             = sValueAndArguments;
+        std::u16string_view sValueAndArguments = sPart.substr(nPartLength);
+        std::u16string_view sValue             = sValueAndArguments;
         OUString sArguments;
 
-        sal_Int32 nArgStart = sValueAndArguments.indexOf('?');
-        if (nArgStart!=-1)
+        size_t nArgStart = sValueAndArguments.find('?');
+        if (nArgStart != std::u16string_view::npos)
         {
-            sValue     = sValueAndArguments.copy(0,nArgStart);
+            sValue     = sValueAndArguments.substr(0,nArgStart);
             ++nArgStart; // ignore '?'!
-            sArguments = sValueAndArguments.copy(nArgStart);
+            sArguments = sValueAndArguments.substr(nArgStart);
         }
 
         rPartValue     = sValue;

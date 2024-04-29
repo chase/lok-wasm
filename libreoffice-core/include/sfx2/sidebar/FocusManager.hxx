@@ -107,7 +107,6 @@ private:
 
     void FocusDeckTitle();
     bool IsDeckTitleVisible() const;
-    bool IsPanelTitleVisible(const sal_Int32 nPanelIndex) const;
 
     /** Set the focus to the title bar of the panel or, if the
         title bar is not visible, directly to the panel.
@@ -125,8 +124,6 @@ private:
     void FocusButton(const sal_Int32 nButtonIndex);
     void MoveFocusInsidePanel(const FocusLocation& rLocation,
                               const sal_Int32 nDirection);
-    bool MoveFocusInsideDeckTitle(const FocusLocation& rLocation,
-                                  const sal_Int32 nDirection);
 
     bool HandleKeyEvent(const vcl::KeyCode& rKeyCode,
                         const FocusLocation& rLocation);

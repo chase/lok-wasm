@@ -8,7 +8,7 @@
  *
  */
 
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <bitmap/BitmapDisabledImageFilter.hxx>
 
 BitmapEx BitmapDisabledImageFilter::execute(BitmapEx const& rBitmapEx) const
@@ -28,7 +28,7 @@ BitmapEx BitmapDisabledImageFilter::execute(BitmapEx const& rBitmapEx) const
 
     BitmapEx aReturnBitmap;
     Bitmap aReadBitmap(rBitmapEx.GetBitmap());
-    Bitmap::ScopedReadAccess pRead(aReadBitmap);
+    BitmapScopedReadAccess pRead(aReadBitmap);
     if (pRead && pGrey)
     {
         for (sal_Int32 nY = 0; nY < sal_Int32(aSize.Height()); ++nY)
@@ -49,7 +49,7 @@ BitmapEx BitmapDisabledImageFilter::execute(BitmapEx const& rBitmapEx) const
 
     if (rBitmapEx.IsAlpha())
     {
-        aReturnBitmap = BitmapEx(aGrey, rBitmapEx.GetAlpha());
+        aReturnBitmap = BitmapEx(aGrey, rBitmapEx.GetAlphaMask());
     }
     else
         aReturnBitmap = BitmapEx(aGrey);

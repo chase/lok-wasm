@@ -60,6 +60,7 @@
 #include <htmlpars.hxx>
 #include <global.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <rangelst.hxx>
 
 #include <orcus/css_parser.hpp>
@@ -169,11 +170,11 @@ ScHTMLStyles::ScHTMLStyles() : maEmpty() {}
 void ScHTMLStyles::add(const char* pElemName, size_t nElemName, const char* pClassName, size_t nClassName,
                        const OUString& aProp, const OUString& aValue)
 {
-    if (pElemName)
+    if (nElemName)
     {
         OUString aElem(pElemName, nElemName, RTL_TEXTENCODING_UTF8);
         aElem = aElem.toAsciiLowerCase();
-        if (pClassName)
+        if (nClassName)
         {
             // Both element and class names given.
             ElemsType::iterator itrElem = m_ElemProps.find(aElem);
@@ -201,7 +202,7 @@ void ScHTMLStyles::add(const char* pElemName, size_t nElemName, const char* pCla
     }
     else
     {
-        if (pClassName)
+        if (nClassName)
         {
             // Class name only. Add it to the global.
             OUString aClass(pClassName, nClassName, RTL_TEXTENCODING_UTF8);
@@ -303,7 +304,7 @@ ScHTMLLayoutParser::ScHTMLLayoutParser(
         aPageSize( aPageSizeP ),
         aBaseURL(std::move( _aBaseURL )),
         xLockedList( new ScRangeList ),
-        pLocalColOffset( new ScHTMLColOffset ),
+        xLocalColOffset( new ScHTMLColOffset ),
         nFirstTableCell(0),
         nTableLevel(0),
         nTable(0),
@@ -319,20 +320,15 @@ ScHTMLLayoutParser::ScHTMLLayoutParser(
         bInCell( false ),
         bInTitle( false )
 {
-    MakeColNoRef( pLocalColOffset, 0, 0, 0, 0 );
+    MakeColNoRef( xLocalColOffset.get(), 0, 0, 0, 0 );
     MakeColNoRef( &maColOffset, 0, 0, 0, 0 );
 }
 
 ScHTMLLayoutParser::~ScHTMLLayoutParser()
 {
-    while ( !aTableStack.empty() )
-    {
-        ScHTMLTableStackEntry * pS = aTableStack.top().get();
-        if ( pS->pLocalColOffset != pLocalColOffset )
-             delete pS->pLocalColOffset;
+    while (!aTableStack.empty())
         aTableStack.pop();
-    }
-    delete pLocalColOffset;
+    xLocalColOffset.reset();
     if ( pTables )
     {
         for( const auto& rEntry : *pTables)
@@ -346,7 +342,7 @@ ErrCode ScHTMLLayoutParser::Read( SvStream& rStream, const OUString& rBaseURL )
     Link<HtmlImportInfo&,void> aOldLink = pEdit->GetHtmlImportHdl();
     pEdit->SetHtmlImportHdl( LINK( this, ScHTMLLayoutParser, HTMLImportHdl ) );
 
-    SfxObjectShell* pObjSh = mpDoc->GetDocumentShell();
+    ScDocShell* pObjSh = mpDoc->GetDocumentShell();
     bool bLoading = pObjSh && pObjSh->IsLoading();
 
     SvKeyValueIteratorRef xValues;
@@ -539,8 +535,20 @@ void ScHTMLLayoutParser::SkipLocked( ScEEParseEntry* pE, bool bJoin )
 // Or else this would create a wrong value at ScAddress (chance for an infinite loop)!
     bool bBadCol = false;
     bool bAgain;
-    ScRange aRange( pE->nCol, pE->nRow, 0,
-        pE->nCol + pE->nColOverlap - 1, pE->nRow + pE->nRowOverlap - 1, 0 );
+
+    SCCOL nEndCol(0);
+    SCROW nEndRow(0);
+    bool bFail = o3tl::checked_add<SCCOL>(pE->nCol, pE->nColOverlap - 1, nEndCol) ||
+                 o3tl::checked_add<SCROW>(pE->nRow, pE->nRowOverlap - 1, nEndRow);
+
+    if (bFail)
+    {
+        SAL_WARN("sc", "invalid range: " << pE->nCol << " " << pE->nColOverlap <<
+                                     " " << pE->nRow << " " << pE->nRowOverlap);
+        return;
+    }
+
+    ScRange aRange(pE->nCol, pE->nRow, 0, nEndCol, nEndRow, 0);
     do
     {
         bAgain = false;
@@ -678,8 +686,8 @@ void ScHTMLLayoutParser::Adjust()
         SkipLocked(pE.get(), false);
         if ( pE->nCol != nColBeforeSkip )
         {
-            SCCOL nCount = static_cast<SCCOL>(maColOffset.size());
-            if ( nCount <= pE->nCol )
+            size_t nCount = maColOffset.size();
+            if ( nCount <= o3tl::make_unsigned(pE->nCol) )
             {
                 pE->nOffset = static_cast<sal_uInt16>(maColOffset[nCount-1]);
                 MakeCol( &maColOffset, pE->nOffset, pE->nWidth, nOffsetTolerance, nOffsetTolerance );
@@ -715,9 +723,9 @@ sal_uInt16 ScHTMLLayoutParser::GetWidth( const ScEEParseEntry* pE )
         return pE->nWidth;
     sal_Int32 nTmp = std::min( static_cast<sal_Int32>( pE->nCol -
                 nColCntStart + pE->nColOverlap),
-            static_cast<sal_Int32>( pLocalColOffset->size() - 1));
+            static_cast<sal_Int32>( xLocalColOffset->size() - 1));
     SCCOL nPos = (nTmp < 0 ? 0 : static_cast<SCCOL>(nTmp));
-    sal_uInt16 nOff2 = static_cast<sal_uInt16>((*pLocalColOffset)[nPos]);
+    sal_uInt16 nOff2 = static_cast<sal_uInt16>((*xLocalColOffset)[nPos]);
     if ( pE->nOffset < nOff2 )
         return nOff2 - pE->nOffset;
     return 0;
@@ -725,28 +733,27 @@ sal_uInt16 ScHTMLLayoutParser::GetWidth( const ScEEParseEntry* pE )
 
 void ScHTMLLayoutParser::SetWidths()
 {
-    SCCOL nCol;
     if ( !nTableWidth )
         nTableWidth = static_cast<sal_uInt16>(aPageSize.Width());
     SCCOL nColsPerRow = nMaxCol - nColCntStart;
     if ( nColsPerRow <= 0 )
         nColsPerRow = 1;
-    if ( pLocalColOffset->size() <= 2 )
+    if ( xLocalColOffset->size() <= 2 )
     {   // Only PageSize, there was no width setting
         sal_uInt16 nWidth = nTableWidth / static_cast<sal_uInt16>(nColsPerRow);
         sal_uInt16 nOff = nColOffsetStart;
-        pLocalColOffset->clear();
-        for ( nCol = 0; nCol <= nColsPerRow; ++nCol, nOff = nOff + nWidth )
+        xLocalColOffset->clear();
+        for (int nCol = 0; nCol <= nColsPerRow; ++nCol, nOff = nOff + nWidth)
         {
-            MakeColNoRef( pLocalColOffset, nOff, 0, 0, 0 );
+            MakeColNoRef( xLocalColOffset.get(), nOff, 0, 0, 0 );
         }
-        nTableWidth = static_cast<sal_uInt16>(pLocalColOffset->back() - pLocalColOffset->front());
+        nTableWidth = static_cast<sal_uInt16>(xLocalColOffset->back() - xLocalColOffset->front());
         for ( size_t i = nFirstTableCell, nListSize = maList.size(); i < nListSize; ++i )
         {
             auto& pE = maList[ i ];
             if ( pE->nTab == nTable )
             {
-                pE->nOffset = static_cast<sal_uInt16>((*pLocalColOffset)[pE->nCol - nColCntStart]);
+                pE->nOffset = static_cast<sal_uInt16>((*xLocalColOffset)[pE->nCol - nColCntStart]);
                 pE->nWidth = 0; // to be recalculated later
             }
         }
@@ -766,7 +773,7 @@ void ScHTMLLayoutParser::SetWidths()
                 auto& pE = maList[ i ];
                 if ( pE->nTab == nTable && pE->nWidth )
                 {
-                    nCol = pE->nCol - nColCntStart;
+                    SCCOL nCol = pE->nCol - nColCntStart;
                     if ( nCol < nColsPerRow )
                     {
                         if ( pE->nColOverlap == 1 )
@@ -803,7 +810,7 @@ void ScHTMLLayoutParser::SetWidths()
             }
             sal_uInt16 nWidths = 0;
             sal_uInt16 nUnknown = 0;
-            for ( nCol = 0; nCol < nColsPerRow; nCol++ )
+            for (SCCOL nCol = 0; nCol < nColsPerRow; nCol++)
             {
                 if ( pWidths[nCol] )
                     nWidths = nWidths + pWidths[nCol];
@@ -815,55 +822,62 @@ void ScHTMLLayoutParser::SetWidths()
                 sal_uInt16 nW = ((nWidths < nTableWidth) ?
                     ((nTableWidth - nWidths) / nUnknown) :
                     (nTableWidth / nUnknown));
-                for ( nCol = 0; nCol < nColsPerRow; nCol++ )
+                for (SCCOL nCol = 0; nCol < nColsPerRow; nCol++)
                 {
                     if ( !pWidths[nCol] )
                         pWidths[nCol] = nW;
                 }
             }
-            for ( nCol = 1; nCol <= nColsPerRow; nCol++ )
+            for (int nCol = 1; nCol <= nColsPerRow; nCol++)
             {
                 pOffsets[nCol] = pOffsets[nCol-1] + pWidths[nCol-1];
             }
-            pLocalColOffset->clear();
-            for ( nCol = 0; nCol <= nColsPerRow; nCol++ )
+            xLocalColOffset->clear();
+            for (int nCol = 0; nCol <= nColsPerRow; nCol++)
             {
-                MakeColNoRef( pLocalColOffset, pOffsets[nCol], 0, 0, 0 );
+                MakeColNoRef( xLocalColOffset.get(), pOffsets[nCol], 0, 0, 0 );
             }
             nTableWidth = pOffsets[nColsPerRow] - pOffsets[0];
 
             for ( size_t i = nFirstTableCell, nListSize = maList.size(); i < nListSize; ++i )
             {
                 auto& pE = maList[ i ];
-                if ( pE->nTab == nTable )
+                if (pE->nTab != nTable)
+                    continue;
+                SCCOL nCol = pE->nCol - nColCntStart;
+                OSL_ENSURE( nCol < nColsPerRow, "ScHTMLLayoutParser::SetWidths: column overflow" );
+                if (nCol >= nColsPerRow)
+                    continue;
+                if (nCol < 0)
                 {
-                    nCol = pE->nCol - nColCntStart;
-                    OSL_ENSURE( nCol < nColsPerRow, "ScHTMLLayoutParser::SetWidths: column overflow" );
-                    if ( nCol < nColsPerRow )
-                    {
-                        pE->nOffset = pOffsets[nCol];
-                        nCol = nCol + pE->nColOverlap;
-                        if ( nCol > nColsPerRow )
-                            nCol = nColsPerRow;
-                        pE->nWidth = pOffsets[nCol] - pE->nOffset;
-                    }
+                    SAL_WARN("sc", "negative offset: " << nCol);
+                    continue;
                 }
+                pE->nOffset = pOffsets[nCol];
+                nCol = nCol + pE->nColOverlap;
+                if ( nCol > nColsPerRow )
+                    nCol = nColsPerRow;
+                if (nCol < 0)
+                {
+                    SAL_WARN("sc", "negative offset: " << nCol);
+                    continue;
+                }
+                pE->nWidth = pOffsets[nCol] - pE->nOffset;
             }
         }
     }
-    if ( !pLocalColOffset->empty() )
+    if ( !xLocalColOffset->empty() )
     {
-        sal_uInt16 nMax = static_cast<sal_uInt16>(pLocalColOffset->back());
+        sal_uInt16 nMax = static_cast<sal_uInt16>(xLocalColOffset->back());
         if ( aPageSize.Width() < nMax )
             aPageSize.setWidth( nMax );
         if (nTableLevel == 0)
         {
             // Local table is very outer table, create missing offsets.
-            for (auto it = pLocalColOffset->begin(); it != pLocalColOffset->end(); ++it)
+            for (auto it = xLocalColOffset->begin(); it != xLocalColOffset->end(); ++it)
             {
                 // Only exact offsets, do not use MakeColNoRef().
-                if (maColOffset.find(*it) == maColOffset.end())
-                    maColOffset.insert(*it);
+                maColOffset.insert(*it);
             }
         }
     }
@@ -894,15 +908,15 @@ void ScHTMLLayoutParser::Colonize( ScEEParseEntry* pE )
     if ( nCol < pE->nCol )
     {   // Replaced
         nCol = pE->nCol - nColCntStart;
-        SCCOL nCount = static_cast<SCCOL>(pLocalColOffset->size());
-        if ( nCol < nCount )
-            nColOffset = static_cast<sal_uInt16>((*pLocalColOffset)[nCol]);
+        SCCOL nCount = static_cast<SCCOL>(xLocalColOffset->size());
+        if (nCol >= 0 && nCol < nCount)
+            nColOffset = static_cast<sal_uInt16>((*xLocalColOffset)[nCol]);
         else
-            nColOffset = static_cast<sal_uInt16>((*pLocalColOffset)[nCount - 1]);
+            nColOffset = static_cast<sal_uInt16>((*xLocalColOffset)[nCount - 1]);
     }
     pE->nOffset = nColOffset;
     sal_uInt16 nWidth = GetWidth( pE );
-    MakeCol( pLocalColOffset, pE->nOffset, nWidth, nOffsetTolerance, nOffsetTolerance );
+    MakeCol( xLocalColOffset.get(), pE->nOffset, nWidth, nOffsetTolerance, nOffsetTolerance );
     if ( pE->nWidth )
         pE->nWidth = nWidth;
     nColOffset = pE->nOffset + nWidth;
@@ -916,7 +930,8 @@ void ScHTMLLayoutParser::CloseEntry( const HtmlImportInfo* pInfo )
     if ( bTabInTabCell )
     {   // From the stack in TableOff
         bTabInTabCell = false;
-        NewActEntry(maList.back().get()); // New free flying mxActEntry
+        SAL_WARN_IF(maList.empty(), "sc", "unexpected close entry without open");
+        NewActEntry(maList.empty() ? nullptr : maList.back().get()); // New free flying mxActEntry
         return ;
     }
     if (mxActEntry->nTab == 0)
@@ -1038,12 +1053,20 @@ void ScHTMLLayoutParser::TableDataOn( HtmlImportInfo* pInfo )
         {
             case HtmlOptionId::COLSPAN:
             {
-                mxActEntry->nColOverlap = static_cast<SCCOL>(rOption.GetString().toInt32());
+                sal_Int32 nColOverlap = rOption.GetString().toInt32();
+                if (nColOverlap >= 0 && nColOverlap <= mpDoc->MaxCol())
+                    mxActEntry->nColOverlap = static_cast<SCCOL>(nColOverlap);
+                else
+                    SAL_WARN("sc", "ScHTMLLayoutParser::TableDataOn ignoring colspan: " << nColOverlap);
             }
             break;
             case HtmlOptionId::ROWSPAN:
             {
-                mxActEntry->nRowOverlap = static_cast<SCROW>(rOption.GetString().toInt32());
+                sal_Int32 nRowOverlap = rOption.GetString().toInt32();
+                if (nRowOverlap >= 0 && nRowOverlap <= mpDoc->MaxRow())
+                    mxActEntry->nRowOverlap = static_cast<SCROW>(nRowOverlap);
+                else
+                    SAL_WARN("sc", "ScHTMLLayoutParser::TableDataOn ignoring rowspan: " << nRowOverlap);
             }
             break;
             case HtmlOptionId::ALIGN:
@@ -1146,7 +1169,7 @@ void ScHTMLLayoutParser::TableOn( HtmlImportInfo* pInfo )
         sal_uInt16 nTmpColOffset = nColOffset; // Will be changed in Colonize()
         Colonize(mxActEntry.get());
         aTableStack.push( std::make_unique<ScHTMLTableStackEntry>(
-            mxActEntry, xLockedList, pLocalColOffset, nFirstTableCell,
+            mxActEntry, xLockedList, xLocalColOffset, nFirstTableCell,
             nRowCnt, nColCntStart, nMaxCol, nTable,
             nTableWidth, nColOffset, nColOffsetStart,
             bFirstRow ) );
@@ -1202,7 +1225,7 @@ void ScHTMLLayoutParser::TableOn( HtmlImportInfo* pInfo )
             NextRow( pInfo );
         }
         aTableStack.push( std::make_unique<ScHTMLTableStackEntry>(
-            mxActEntry, xLockedList, pLocalColOffset, nFirstTableCell,
+            mxActEntry, xLockedList, xLocalColOffset, nFirstTableCell,
             nRowCnt, nColCntStart, nMaxCol, nTable,
             nTableWidth, nColOffset, nColOffsetStart,
             bFirstRow ) );
@@ -1235,8 +1258,8 @@ void ScHTMLLayoutParser::TableOn( HtmlImportInfo* pInfo )
     bFirstRow = true;
     nFirstTableCell = maList.size();
 
-    pLocalColOffset = new ScHTMLColOffset;
-    MakeColNoRef( pLocalColOffset, nColOffsetStart, 0, 0, 0 );
+    xLocalColOffset.reset(new ScHTMLColOffset);
+    MakeColNoRef( xLocalColOffset.get(), nColOffsetStart, 0, 0, 0 );
 }
 
 void ScHTMLLayoutParser::TableOff( const HtmlImportInfo* pInfo )
@@ -1352,7 +1375,7 @@ void ScHTMLLayoutParser::TableOff( const HtmlImportInfo* pInfo )
             {
                 sal_uInt16 nOldOffset = pE->nOffset + pE->nWidth;
                 sal_uInt16 nNewOffset = pE->nOffset + nTableWidth;
-                ModifyOffset( pS->pLocalColOffset, nOldOffset, nNewOffset, nOffsetTolerance );
+                ModifyOffset( pS->xLocalColOffset.get(), nOldOffset, nNewOffset, nOffsetTolerance );
                 sal_uInt16 nTmp = nNewOffset - pE->nOffset - pE->nWidth;
                 pE->nWidth = nNewOffset - pE->nOffset;
                 pS->nTableWidth = pS->nTableWidth + nTmp;
@@ -1371,7 +1394,7 @@ void ScHTMLLayoutParser::TableOff( const HtmlImportInfo* pInfo )
             nColOffsetStart = pS->nColOffsetStart;
             bFirstRow = pS->bFirstRow;
             xLockedList = pS->xLockedList;
-            pLocalColOffset = pS->pLocalColOffset;
+            xLocalColOffset = pS->xLocalColOffset;
             // mxActEntry is kept around if a table is started in the same row
             // (anything's possible in HTML); will be deleted by CloseEntry
             mxActEntry = pE;
@@ -1387,8 +1410,7 @@ void ScHTMLLayoutParser::TableOff( const HtmlImportInfo* pInfo )
         if ( !aTableStack.empty() )
         {
             ScHTMLTableStackEntry* pS = aTableStack.top().get();
-            delete pLocalColOffset;
-            pLocalColOffset = pS->pLocalColOffset;
+            xLocalColOffset = std::move(pS->xLocalColOffset);
             aTableStack.pop();
         }
     }
@@ -1501,7 +1523,7 @@ void ScHTMLLayoutParser::ColOn( HtmlImportInfo* pInfo )
         if( rOption.GetToken() == HtmlOptionId::WIDTH )
         {
             sal_uInt16 nVal = GetWidthPixel( rOption );
-            MakeCol( pLocalColOffset, nColOffset, nVal, 0, 0 );
+            MakeCol( xLocalColOffset.get(), nColOffset, nVal, 0, 0 );
             nColOffset = nColOffset + nVal;
         }
     }
@@ -1605,13 +1627,14 @@ void ScHTMLLayoutParser::ProcToken( HtmlImportInfo* pInfo )
     switch ( pInfo->nToken )
     {
         case HtmlTokenId::META:
+        if (ScDocShell* pDocSh = mpDoc->GetDocumentShell())
         {
             HTMLParser* pParser = static_cast<HTMLParser*>(pInfo->pParser);
             uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
-                mpDoc->GetDocumentShell()->GetModel(), uno::UNO_QUERY_THROW);
+                static_cast<cppu::OWeakObject*>(pDocSh->GetModel()), uno::UNO_QUERY_THROW);
             pParser->ParseMetaOptions(
                 xDPS->getDocumentProperties(),
-                mpDoc->GetDocumentShell()->GetHeaderAttributes() );
+                pDocSh->GetHeaderAttributes() );
         }
         break;
         case HtmlTokenId::TITLE_ON:
@@ -1622,12 +1645,13 @@ void ScHTMLLayoutParser::ProcToken( HtmlImportInfo* pInfo )
         break;
         case HtmlTokenId::TITLE_OFF:
         {
-            if ( bInTitle && !aString.isEmpty() )
+            ScDocShell* pDocSh = mpDoc->GetDocumentShell();
+            if ( bInTitle && !aString.isEmpty() && pDocSh )
             {
                 // Remove blanks from line breaks
                 aString = aString.trim();
                 uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
-                    mpDoc->GetDocumentShell()->GetModel(),
+                    static_cast<cppu::OWeakObject*>(pDocSh->GetModel()),
                     uno::UNO_QUERY_THROW);
                 xDPS->getDocumentProperties()->setTitle(aString);
             }
@@ -2936,7 +2960,7 @@ ErrCode ScHTMLQueryParser::Read( SvStream& rStrm, const OUString& rBaseURL  )
     SvKeyValueIteratorRef xValues;
     SvKeyValueIterator* pAttributes = nullptr;
 
-    SfxObjectShell* pObjSh = mpDoc->GetDocumentShell();
+    ScDocShell* pObjSh = mpDoc->GetDocumentShell();
     if( pObjSh && pObjSh->IsLoading() )
     {
         pAttributes = pObjSh->GetHeaderAttributes();
@@ -3115,7 +3139,7 @@ void ScHTMLQueryParser::MetaOn( const HtmlImportInfo& rInfo )
         HTMLParser* pParser = static_cast< HTMLParser* >( rInfo.pParser );
 
         uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
-            mpDoc->GetDocumentShell()->GetModel(), uno::UNO_QUERY_THROW);
+            static_cast<cppu::OWeakObject*>(mpDoc->GetDocumentShell()->GetModel()), uno::UNO_QUERY_THROW);
         pParser->ParseMetaOptions(
             xDPS->getDocumentProperties(),
             mpDoc->GetDocumentShell()->GetHeaderAttributes() );
@@ -3137,7 +3161,7 @@ void ScHTMLQueryParser::TitleOff( const HtmlImportInfo& rInfo )
     if (!aTitle.isEmpty() && mpDoc->GetDocumentShell())
     {
         uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
-            mpDoc->GetDocumentShell()->GetModel(), uno::UNO_QUERY_THROW);
+            static_cast<cppu::OWeakObject*>(mpDoc->GetDocumentShell()->GetModel()), uno::UNO_QUERY_THROW);
 
         xDPS->getDocumentProperties()->setTitle(aTitle);
     }
@@ -3177,53 +3201,32 @@ namespace {
  */
 class CSSHandler: public orcus::css_handler
 {
-    struct MemStr
-    {
-        const char* mp;
-        size_t      mn;
-
-        MemStr() : mp(nullptr), mn(0) {}
-        MemStr(const char* p, size_t n) : mp(p), mn(n) {}
-        MemStr(const MemStr& r) : mp(r.mp), mn(r.mn) {}
-        MemStr& operator=(const MemStr& r) = default;
-    };
-
-    typedef std::pair<MemStr, MemStr> SelectorName;     // element : class
+    typedef std::pair<std::string_view, std::string_view> SelectorName; // element : class
     typedef std::vector<SelectorName> SelectorNames;
 
     SelectorNames maSelectorNames;      // current selector names
-    MemStr maPropName;                  // current property name.
-    MemStr maPropValue;                 // current property value.
+    std::string_view maPropName;        // current property name.
+    std::string_view maPropValue;                 // current property value.
     ScHTMLStyles& mrStyles;
 
 public:
     explicit CSSHandler(ScHTMLStyles& rStyles):
-        maPropName(),
-        maPropValue(),
         mrStyles(rStyles)
      {}
 
-    // selector name starting with "@"
-    static void at_rule_name(const char* /*p*/, size_t /*n*/)
-    {
-        // TODO: For now, we ignore at-rule properties
-    }
-
     // selector name not starting with "." or "#" (i.e. element selectors)
-    void simple_selector_type(const char* pElem, size_t nElem)
+    void simple_selector_type(std::string_view aElem)
     {
-        MemStr aElem(pElem, nElem); // element given
-        MemStr aClass(nullptr, 0);  // class name not given - to be added in the "element global" storage
+        std::string_view aClass{};  // class name not given - to be added in the "element global" storage
         SelectorName aName(aElem, aClass);
 
         maSelectorNames.push_back(aName);
     }
 
     // selector names starting with a "." (i.e. class selector)
-    void simple_selector_class(const char* pClassName, size_t nClassName)
+    void simple_selector_class(std::string_view aClass)
     {
-        MemStr aElem(nullptr, 0);   // no element given - should be added in the "global" storage
-        MemStr aClass(pClassName, nClassName);
+        std::string_view aElem{};   // no element given - should be added in the "global" storage
         SelectorName aName(aElem, aClass);
 
         maSelectorNames.push_back(aName);
@@ -3231,35 +3234,34 @@ public:
 
     // TODO: Add other selectors
 
-    void property_name(const char* p, size_t n)
+    void property_name(std::string_view aPropName)
     {
-        maPropName = MemStr(p, n);
+        maPropName = aPropName;
     }
 
-    void value(const char* p, size_t n)
+    void value(std::string_view aValue)
     {
-        maPropValue = MemStr(p, n);
+        maPropValue = aValue;
     }
 
-    void end_block() {
+    void end_block()
+    {
         maSelectorNames.clear();
     }
 
     void end_property()
     {
-        SelectorNames::const_iterator itr = maSelectorNames.begin(), itrEnd = maSelectorNames.end();
-        for (; itr != itrEnd; ++itr)
+        for (const auto& rSelName : maSelectorNames)
         {
             // Add this property to the collection for each selector.
-            const SelectorName& rSelName = *itr;
-            const MemStr& rElem = rSelName.first;
-            const MemStr& rClass = rSelName.second;
-            OUString aName(maPropName.mp, maPropName.mn, RTL_TEXTENCODING_UTF8);
-            OUString aValue(maPropValue.mp, maPropValue.mn, RTL_TEXTENCODING_UTF8);
-            mrStyles.add(rElem.mp, rElem.mn, rClass.mp, rClass.mn, aName, aValue);
+            std::string_view aElem = rSelName.first;
+            std::string_view aClass = rSelName.second;
+            OUString aName(maPropName.data(), maPropName.size(), RTL_TEXTENCODING_UTF8);
+            OUString aValue(maPropValue.data(), maPropValue.size(), RTL_TEXTENCODING_UTF8);
+            mrStyles.add(aElem.data(), aElem.size(), aClass.data(), aClass.size(), aName, aValue);
         }
-        maPropName = MemStr();
-        maPropValue = MemStr();
+        maPropName = std::string_view{};
+        maPropValue = std::string_view{};
     }
 
 };
@@ -3270,12 +3272,12 @@ void ScHTMLQueryParser::ParseStyle(std::u16string_view rStrm)
 {
     OString aStr = OUStringToOString(rStrm, RTL_TEXTENCODING_UTF8);
     CSSHandler aHdl(GetStyles());
-    orcus::css_parser<CSSHandler> aParser(aStr.getStr(), aStr.getLength(), aHdl);
+    orcus::css_parser<CSSHandler> aParser(aStr, aHdl);
     try
     {
         aParser.parse();
     }
-    catch (const orcus::css::parse_error& rOrcusParseError)
+    catch (const orcus::parse_error& rOrcusParseError)
     {
         SAL_WARN("sc", "ScHTMLQueryParser::ParseStyle: " << rOrcusParseError.what());
         // TODO: Parsing of CSS failed.  Do nothing for now.

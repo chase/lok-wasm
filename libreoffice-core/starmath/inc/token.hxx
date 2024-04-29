@@ -84,6 +84,7 @@ enum SmTokenType
     TIM,            TRE,            THBAR,          TLAMBDABAR,     // Complex and constants
     TPLUSMINUS,     TMINUSPLUS,     TSIM,           TSIMEQ,         // +- -+ ~ ~=
     TLIM,           TLIMSUP,        TLIMINF,        TTOWARD,        // Limits
+    THADD,          TNAHA,
     TOVER,          TTIMES,         TCDOT,          TDIV,           // Product type
     TSLASH,         TBACKSLASH,     TWIDESLASH,     TWIDEBACKSLASH, //Slash
     TFRAC,          TIT,                                            // mathml related
@@ -138,6 +139,7 @@ enum SmTokenType
     // Function
     TFUNC,          TLN,            TLOG,           TEXP,           // Exp - Log
     TSIN,           TCOS,           TTAN,           TCOT,           // Trigo
+    TSEC,           TCSC,           TSECH,          TCSCH,
     TSINH,          TCOSH,          TTANH,          TCOTH,          // Trigo hyperbolic
     TASIN,          TACOS,          TATAN,          TACOT,          // Arctrigo
     TASINH,         TACOSH,         TATANH,         TACOTH,         // Arctrigo hyperbolic
@@ -152,7 +154,7 @@ struct SmTokenTableEntry
 {
     OUString aIdent;
     SmTokenType eType;
-    sal_Unicode cMathChar;
+    sal_uInt32 cMathChar;
     TG nGroup;
     sal_uInt16 nLevel;
 };
@@ -225,11 +227,11 @@ struct SmToken
     {
     }
 
-    SmToken(SmTokenType eTokenType, sal_Unicode cMath, OUString rText, TG nTokenGroup = TG::NONE,
+    SmToken(SmTokenType eTokenType, sal_uInt32 cMath, OUString rText, TG nTokenGroup = TG::NONE,
             sal_uInt16 nTokenLevel = 0)
         : aText(std::move(rText))
         , eType(eTokenType)
-        , cMathChar(cMath)
+        , cMathChar(&cMath, 1)
         , nGroup(nTokenGroup)
         , nLevel(nTokenLevel)
     {
@@ -255,7 +257,7 @@ struct SmToken
 
     void operator=(const SmColorTokenTableEntry& aTokenTableEntry)
     {
-        aText = u"";
+        aText = u""_ustr;
         eType = aTokenTableEntry.eType;
         cMathChar = OUString::number(static_cast<sal_uInt32>(aTokenTableEntry.cColor), 16);
         nGroup = TG::Color;
@@ -264,7 +266,7 @@ struct SmToken
 
     void operator=(const SmColorTokenTableEntry* aTokenTableEntry)
     {
-        aText = u"";
+        aText = u""_ustr;
         eType = aTokenTableEntry->eType;
         cMathChar = OUString::number(static_cast<sal_uInt32>(aTokenTableEntry->cColor), 16);
         nGroup = TG::Color;
@@ -273,14 +275,15 @@ struct SmToken
 
     void operator=(const std::unique_ptr<SmColorTokenTableEntry>& aTokenTableEntry)
     {
-        aText = u"";
+        aText = u""_ustr;
         eType = aTokenTableEntry->eType;
         cMathChar = OUString::number(static_cast<sal_uInt32>(aTokenTableEntry->cColor), 16);
         nGroup = TG::Color;
         nLevel = 0;
     }
 
-    void setChar(sal_Unicode cChar) { cMathChar = OUString(&cChar, 1); }
+    void setChar(sal_uInt32 cChar) { cMathChar = OUString(&cChar, 1); }
+    void setChar(const OUString& rText) { cMathChar = rText; }
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

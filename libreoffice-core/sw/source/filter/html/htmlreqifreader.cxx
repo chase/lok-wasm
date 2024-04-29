@@ -175,7 +175,7 @@ OString InsertOLE1HeaderFromOle10NativeStream(const tools::SvRef<SotStorage>& xS
     OString aClassName;
     if (xStorage->GetClassName() == SvGlobalName(0x0003000A, 0, 0, 0xc0, 0, 0, 0, 0, 0, 0, 0x46))
     {
-        aClassName = "PBrush";
+        aClassName = "PBrush"_ostr;
     }
     else
     {
@@ -185,7 +185,7 @@ OString InsertOLE1HeaderFromOle10NativeStream(const tools::SvRef<SotStorage>& xS
             SAL_WARN("sw.html", "InsertOLE1HeaderFromOle10NativeStream: unexpected class id: "
                                     << xStorage->GetClassName().GetHexName());
         }
-        aClassName = "Package";
+        aClassName = "Package"_ostr;
     }
 
     // Write ObjectHeader, see [MS-OLEDS] 2.2.4.
@@ -240,7 +240,7 @@ OString InsertOLE1HeaderFromOle10NativeStream(const tools::SvRef<SotStorage>& xS
     // FormatID: constant means the ClassName field is present.
     rOle1.WriteUInt32(0x00000005);
     // ClassName: null terminated pascal string.
-    OString aPresentationClassName("METAFILEPICT");
+    OString aPresentationClassName("METAFILEPICT"_ostr);
     rOle1.WriteUInt32(aPresentationClassName.getLength() + 1);
     rOle1.WriteOString(aPresentationClassName);
     rOle1.WriteChar(0);
@@ -319,7 +319,7 @@ OString InsertOLE1Header(SvStream& rOle2, SvStream& rOle1, sal_uInt32& nWidth, s
     // FormatID: constant means the ClassName field is present.
     rOle1.WriteUInt32(0x00000005);
     // ClassName: null terminated pascal string.
-    OString aPresentationClassName("METAFILEPICT");
+    OString aPresentationClassName("METAFILEPICT"_ostr);
     rOle1.WriteUInt32(aPresentationClassName.getLength() + 1);
     rOle1.WriteOString(aPresentationClassName);
     rOle1.WriteChar(0);
@@ -358,31 +358,31 @@ void WrapOleGraphicInRtf(SvStream& rRtf, sal_uInt32 nWidth, sal_uInt32 nHeight,
                          const sal_uInt8* pPresentationData, sal_uInt64 nPresentationData)
 {
     // Start result.
-    rRtf.WriteCharPtr("{" OOO_STRING_SVTOOLS_RTF_RESULT);
+    rRtf.WriteOString("{" OOO_STRING_SVTOOLS_RTF_RESULT);
 
     // Start pict.
-    rRtf.WriteCharPtr("{" OOO_STRING_SVTOOLS_RTF_PICT);
+    rRtf.WriteOString("{" OOO_STRING_SVTOOLS_RTF_PICT);
 
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_WMETAFILE "8");
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_PICW);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_WMETAFILE "8");
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_PICW);
     rRtf.WriteOString(OString::number(nWidth));
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_PICH);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_PICH);
     rRtf.WriteOString(OString::number(nHeight));
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_PICWGOAL);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_PICWGOAL);
     rRtf.WriteOString(OString::number(nWidth));
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_PICHGOAL);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_PICHGOAL);
     rRtf.WriteOString(OString::number(nHeight));
     if (pPresentationData)
     {
-        rRtf.WriteCharPtr(SAL_NEWLINE_STRING);
+        rRtf.WriteOString(SAL_NEWLINE_STRING);
         msfilter::rtfutil::WriteHex(pPresentationData, nPresentationData, &rRtf);
     }
 
     // End pict.
-    rRtf.WriteCharPtr("}");
+    rRtf.WriteOString("}");
 
     // End result.
-    rRtf.WriteCharPtr("}");
+    rRtf.WriteOString("}");
 }
 }
 
@@ -462,28 +462,28 @@ bool WrapOleInRtf(SvStream& rOle2, SvStream& rRtf, SwOLENode& rOLENode,
                                           pPresentationData, nPresentationData);
 
     // Start object.
-    rRtf.WriteCharPtr("{" OOO_STRING_SVTOOLS_RTF_OBJECT);
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_OBJEMB);
+    rRtf.WriteOString("{" OOO_STRING_SVTOOLS_RTF_OBJECT);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_OBJEMB);
 
     // Start objclass.
-    rRtf.WriteCharPtr("{" OOO_STRING_SVTOOLS_RTF_IGNORE OOO_STRING_SVTOOLS_RTF_OBJCLASS " ");
+    rRtf.WriteOString("{" OOO_STRING_SVTOOLS_RTF_IGNORE OOO_STRING_SVTOOLS_RTF_OBJCLASS " ");
     rRtf.WriteOString(aClassName);
     // End objclass.
-    rRtf.WriteCharPtr("}");
+    rRtf.WriteOString("}");
 
     // Object size.
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_OBJW);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_OBJW);
     rRtf.WriteOString(OString::number(nWidth));
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_OBJH);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_OBJH);
     rRtf.WriteOString(OString::number(nHeight));
 
     // Start objdata.
-    rRtf.WriteCharPtr(
+    rRtf.WriteOString(
         "{" OOO_STRING_SVTOOLS_RTF_IGNORE OOO_STRING_SVTOOLS_RTF_OBJDATA SAL_NEWLINE_STRING);
     msfilter::rtfutil::WriteHex(static_cast<const sal_uInt8*>(aOLE1.GetData()), aOLE1.GetSize(),
                                 &rRtf);
     // End objdata.
-    rRtf.WriteCharPtr("}");
+    rRtf.WriteOString("}");
 
     if (pPresentationData)
     {
@@ -491,7 +491,7 @@ bool WrapOleInRtf(SvStream& rOle2, SvStream& rRtf, SwOLENode& rOLENode,
     }
 
     // End object.
-    rRtf.WriteCharPtr("}");
+    rRtf.WriteOString("}");
 
     return true;
 }
@@ -499,29 +499,29 @@ bool WrapOleInRtf(SvStream& rOle2, SvStream& rRtf, SwOLENode& rOLENode,
 bool WrapGraphicInRtf(const Graphic& rGraphic, const SwFrameFormat& rFormat, SvStream& rRtf)
 {
     // Start object.
-    rRtf.WriteCharPtr("{" OOO_STRING_SVTOOLS_RTF_OBJECT);
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_OBJEMB);
+    rRtf.WriteOString("{" OOO_STRING_SVTOOLS_RTF_OBJECT);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_OBJEMB);
 
     // Object size: as used in the document model (not pixel size)
     Size aSize = rFormat.GetFrameSize().GetSize();
     sal_uInt32 nWidth = aSize.getWidth();
     sal_uInt32 nHeight = aSize.getHeight();
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_OBJW);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_OBJW);
     rRtf.WriteOString(OString::number(nWidth));
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_OBJH);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_OBJH);
     rRtf.WriteOString(OString::number(nHeight));
     rRtf.WriteOString(SAL_NEWLINE_STRING);
 
     // Start objclass.
-    rRtf.WriteCharPtr("{" OOO_STRING_SVTOOLS_RTF_IGNORE OOO_STRING_SVTOOLS_RTF_OBJCLASS " ");
-    OString aClassName("PBrush");
+    rRtf.WriteOString("{" OOO_STRING_SVTOOLS_RTF_IGNORE OOO_STRING_SVTOOLS_RTF_OBJCLASS " ");
+    OString aClassName("PBrush"_ostr);
     rRtf.WriteOString(aClassName);
     // End objclass.
-    rRtf.WriteCharPtr("}");
+    rRtf.WriteOString("}");
     rRtf.WriteOString(SAL_NEWLINE_STRING);
 
     // Start objdata.
-    rRtf.WriteCharPtr("{" OOO_STRING_SVTOOLS_RTF_IGNORE OOO_STRING_SVTOOLS_RTF_OBJDATA " ");
+    rRtf.WriteOString("{" OOO_STRING_SVTOOLS_RTF_IGNORE OOO_STRING_SVTOOLS_RTF_OBJDATA " ");
 
     SvMemoryStream aOle1;
     // Write ObjectHeader, see [MS-OLEDS] 2.2.4.
@@ -587,7 +587,7 @@ bool WrapGraphicInRtf(const Graphic& rGraphic, const SwFrameFormat& rFormat, SvS
     // FormatID: constant means the ClassName field is present.
     aOle1.WriteUInt32(0x00000005);
     // ClassName: null terminated pascal string.
-    OString aPresentationClassName("METAFILEPICT");
+    OString aPresentationClassName("METAFILEPICT"_ostr);
     aOle1.WriteUInt32(aPresentationClassName.getLength() + 1);
     aOle1.WriteOString(aPresentationClassName);
     aOle1.WriteChar(0);
@@ -612,23 +612,23 @@ bool WrapGraphicInRtf(const Graphic& rGraphic, const SwFrameFormat& rFormat, SvS
     // End objdata.
     msfilter::rtfutil::WriteHex(static_cast<const sal_uInt8*>(aOle1.GetData()), aOle1.GetSize(),
                                 &rRtf);
-    rRtf.WriteCharPtr("}");
+    rRtf.WriteOString("}");
     rRtf.WriteOString(SAL_NEWLINE_STRING);
 
-    rRtf.WriteCharPtr("{" OOO_STRING_SVTOOLS_RTF_RESULT);
-    rRtf.WriteCharPtr("{" OOO_STRING_SVTOOLS_RTF_PICT);
+    rRtf.WriteOString("{" OOO_STRING_SVTOOLS_RTF_RESULT);
+    rRtf.WriteOString("{" OOO_STRING_SVTOOLS_RTF_PICT);
 
     Size aMapped(rGraphic.GetPrefSize());
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_PICW);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_PICW);
     rRtf.WriteOString(OString::number(aMapped.Width()));
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_PICH);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_PICH);
     rRtf.WriteOString(OString::number(aMapped.Height()));
 
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_PICWGOAL);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_PICWGOAL);
     rRtf.WriteOString(OString::number(nWidth));
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_PICHGOAL);
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_PICHGOAL);
     rRtf.WriteOString(OString::number(nHeight));
-    rRtf.WriteCharPtr(OOO_STRING_SVTOOLS_RTF_WMETAFILE "8");
+    rRtf.WriteOString(OOO_STRING_SVTOOLS_RTF_WMETAFILE "8");
     rRtf.WriteOString(SAL_NEWLINE_STRING);
 
     if (pPresentationData)
@@ -638,13 +638,13 @@ bool WrapGraphicInRtf(const Graphic& rGraphic, const SwFrameFormat& rFormat, SvS
     }
 
     // End pict.
-    rRtf.WriteCharPtr("}");
+    rRtf.WriteOString("}");
 
     // End result.
-    rRtf.WriteCharPtr("}");
+    rRtf.WriteOString("}");
 
     // End object.
-    rRtf.WriteCharPtr("}");
+    rRtf.WriteOString("}");
     return true;
 }
 }

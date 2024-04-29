@@ -82,42 +82,6 @@
 
 using namespace ::com::sun::star;
 
-namespace
-{
-    void lcl_convertStringArguments(sal_uInt16 nSlot, SfxItemSet& rArgs)
-    {
-        Color aColor;
-        OUString sColor;
-        const SfxStringItem* pItem = rArgs.GetItemIfSet(SID_ATTR_COLOR_STR, false);
-        if (!pItem)
-            return;
-
-        sColor = pItem->GetValue();
-
-        if (sColor == "transparent")
-            aColor = COL_TRANSPARENT;
-        else
-            aColor = Color(ColorTransparency, sColor.toInt32(16));
-
-        switch (nSlot)
-        {
-            case SID_ATTR_CHAR_COLOR:
-            {
-                SvxColorItem aColorItem(aColor, EE_CHAR_COLOR);
-                rArgs.Put(aColorItem);
-                break;
-            }
-
-            case SID_ATTR_CHAR_BACK_COLOR:
-            {
-                SvxColorItem pBackgroundItem(aColor, EE_CHAR_BKGCOLOR);
-                rArgs.Put(pBackgroundItem);
-                break;
-            }
-        }
-    }
-}
-
 void SwDrawTextShell::Execute( SfxRequest &rReq )
 {
     SwWrtShell &rSh = GetShell();
@@ -397,7 +361,7 @@ void SwDrawTextShell::Execute( SfxRequest &rReq )
                 }
                 else if (pItem)
                 {
-                    pDlg->SetCurPageId(OUStringToOString(pItem->GetValue(), RTL_TEXTENCODING_UTF8));
+                    pDlg->SetCurPageId(pItem->GetValue());
                 }
 
                 sal_uInt16 nRet = pDlg->Execute();
@@ -518,7 +482,7 @@ void SwDrawTextShell::Execute( SfxRequest &rReq )
         {
             // Ensure the field is selected first
             pOLV->SelectFieldAtCursor();
-            GetView().GetViewFrame()->GetDispatcher()->Execute(SID_HYPERLINK_DIALOG);
+            GetView().GetViewFrame().GetDispatcher()->Execute(SID_HYPERLINK_DIALOG);
         }
         break;
 
@@ -530,7 +494,9 @@ void SwDrawTextShell::Execute( SfxRequest &rReq )
 
         case SID_OPEN_HYPERLINK:
         {
-            const SvxFieldData* pField = pOLV->GetFieldAtCursor();
+            const SvxFieldItem* pFieldItem
+                = pOLV->GetFieldAtSelection(/*AlsoCheckBeforeCursor=*/true);
+            const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
             if (const SvxURLField* pURLField = dynamic_cast<const SvxURLField*>(pField))
             {
                 ::LoadURL(GetShell(), pURLField->GetURL(), LoadUrlFlags::NONE,
@@ -541,7 +507,9 @@ void SwDrawTextShell::Execute( SfxRequest &rReq )
 
         case SID_COPY_HYPERLINK_LOCATION:
         {
-            const SvxFieldData* pField = pOLV->GetFieldAtCursor();
+            const SvxFieldItem* pFieldItem
+                = pOLV->GetFieldAtSelection(/*AlsoCheckBeforeCursor=*/true);
+            const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
             if (const SvxURLField* pURLField = dynamic_cast<const SvxURLField*>(pField))
             {
                 uno::Reference<datatransfer::clipboard::XClipboard> xClipboard
@@ -634,23 +602,21 @@ void SwDrawTextShell::Execute( SfxRequest &rReq )
     }
     if (nEEWhich && pNewAttrs)
     {
-        lcl_convertStringArguments(nSlot, *pNewAttrs);
-
         aNewAttr.Put(pNewAttrs->Get(nWhich).CloneSetWhich(nEEWhich));
     }
     else if (nEEWhich == EE_CHAR_COLOR)
     {
-        GetView().GetViewFrame()->GetDispatcher()->Execute(SID_CHAR_DLG_EFFECT);
+        GetView().GetViewFrame().GetDispatcher()->Execute(SID_CHAR_DLG_EFFECT);
     }
     else if (nEEWhich == EE_CHAR_KERNING)
     {
-        GetView().GetViewFrame()->GetDispatcher()->Execute(SID_CHAR_DLG_POSITION);
+        GetView().GetViewFrame().GetDispatcher()->Execute(SID_CHAR_DLG_POSITION);
     }
 
 
     SetAttrToMarked(aNewAttr);
 
-    GetView().GetViewFrame()->GetBindings().InvalidateAll(false);
+    GetView().GetViewFrame().GetBindings().InvalidateAll(false);
 
     if (IsTextEdit() && pOLV->GetOutliner()->IsModified())
         rSh.SetModified();
@@ -856,10 +822,11 @@ void SwDrawTextShell::GetState(SfxItemSet& rSet)
             case SID_THESAURUS:
             {
                 // disable "Thesaurus" if the language is not supported
-                const SfxPoolItem& rItem = GetShell().GetDoc()->GetDefault(GetWhichOfScript(
+                TypedWhichId<SvxLanguageItem> nLangWhich = GetWhichOfScript(
                     RES_CHRATR_LANGUAGE,
-                    SvtLanguageOptions::GetI18NScriptTypeOfLanguage(GetAppLanguage())));
-                LanguageType nLang = static_cast<const SvxLanguageItem&>(rItem).GetLanguage();
+                    SvtLanguageOptions::GetI18NScriptTypeOfLanguage(GetAppLanguage()));
+                const SvxLanguageItem& rItem = GetShell().GetDoc()->GetDefault(nLangWhich);
+                LanguageType nLang = rItem.GetLanguage();
 
                 uno::Reference<linguistic2::XThesaurus> xThes(::GetThesaurus());
                 if (!xThes.is() || nLang == LANGUAGE_NONE
@@ -873,11 +840,11 @@ void SwDrawTextShell::GetState(SfxItemSet& rSet)
             {
                 if (!SvtCJKOptions::IsAnyEnabled())
                 {
-                    GetView().GetViewFrame()->GetBindings().SetVisibleState(nWhich, false);
+                    GetView().GetViewFrame().GetBindings().SetVisibleState(nWhich, false);
                     rSet.DisableItem(nWhich);
                 }
                 else
-                    GetView().GetViewFrame()->GetBindings().SetVisibleState(nWhich, true);
+                    GetView().GetViewFrame().GetBindings().SetVisibleState(nWhich, true);
             }
             break;
 
@@ -912,7 +879,7 @@ void SwDrawTextShell::GetState(SfxItemSet& rSet)
             case SID_ATTR_PARA_LEFT_TO_RIGHT:
             case SID_ATTR_PARA_RIGHT_TO_LEFT:
             {
-                if (!SvtCTLOptions().IsCTLFontEnabled())
+                if (!SvtCTLOptions::IsCTLFontEnabled())
                 {
                     rSet.DisableItem(nWhich);
                     nSlotId = 0;
@@ -951,18 +918,17 @@ void SwDrawTextShell::GetState(SfxItemSet& rSet)
                 if (!SvtCJKOptions::IsChangeCaseMapEnabled())
                 {
                     rSet.DisableItem(nWhich);
-                    GetView().GetViewFrame()->GetBindings().SetVisibleState(nWhich, false);
+                    GetView().GetViewFrame().GetBindings().SetVisibleState(nWhich, false);
                 }
                 else
-                    GetView().GetViewFrame()->GetBindings().SetVisibleState(nWhich, true);
+                    GetView().GetViewFrame().GetBindings().SetVisibleState(nWhich, true);
             }
             break;
             case SID_INSERT_RLM:
             case SID_INSERT_LRM:
             {
-                SvtCTLOptions aCTLOptions;
-                bool bEnabled = aCTLOptions.IsCTLFontEnabled();
-                GetView().GetViewFrame()->GetBindings().SetVisibleState(nWhich, bEnabled);
+                bool bEnabled = SvtCTLOptions::IsCTLFontEnabled();
+                GetView().GetViewFrame().GetBindings().SetVisibleState(nWhich, bEnabled);
                 if (!bEnabled)
                     rSet.DisableItem(nWhich);
             }
@@ -972,7 +938,7 @@ void SwDrawTextShell::GetState(SfxItemSet& rSet)
             case SID_OPEN_HYPERLINK:
             case SID_COPY_HYPERLINK_LOCATION:
             {
-                if (!URLFieldHelper::IsCursorAtURLField(pOLV))
+                if (!URLFieldHelper::IsCursorAtURLField(pOLV, /*AlsoCheckBeforeCursor=*/true))
                     rSet.DisableItem(nWhich);
                 nSlotId = 0;
             }
@@ -1034,9 +1000,9 @@ void SwDrawTextShell::GetDrawTextCtrlState(SfxItemSet& rSet)
             case SID_ATTR_CHAR_STRIKEOUT: nEEWhich = EE_CHAR_STRIKEOUT;break;
             case SID_AUTOSPELL_CHECK:
             {
-                const SfxPoolItem* pState = m_rView.GetSlotState(nWhich);
-                if (pState)
-                    rSet.Put(SfxBoolItem(nWhich, static_cast<const SfxBoolItem*>(pState)->GetValue()));
+                const SfxPoolItemHolder aResult(m_rView.GetSlotState(nWhich));
+                if (nullptr != aResult.getItem())
+                    rSet.Put(SfxBoolItem(nWhich, static_cast<const SfxBoolItem*>(aResult.getItem())->GetValue()));
                 else
                     rSet.DisableItem( nWhich );
                 break;
@@ -1147,7 +1113,7 @@ void SwDrawTextShell::ExecClpbrd(SfxRequest const &rReq)
                 if (nFormat == SotClipboardFormatId::STRING)
                     pOLV->Paste();
                 else
-                    pOLV->PasteSpecial();
+                    pOLV->PasteSpecial(nFormat);
             }
 
             break;
@@ -1172,7 +1138,8 @@ void SwDrawTextShell::StateClpbrd(SfxItemSet &rSet)
     TransferableDataHelper aDataHelper( TransferableDataHelper::CreateFromSystemClipboard( &GetView().GetEditWin() ) );
     const bool bPaste = aDataHelper.HasFormat( SotClipboardFormatId::STRING ) ||
                         aDataHelper.HasFormat( SotClipboardFormatId::RTF ) ||
-                        aDataHelper.HasFormat( SotClipboardFormatId::RICHTEXT );
+                        aDataHelper.HasFormat( SotClipboardFormatId::RICHTEXT ) ||
+                        aDataHelper.HasFormat( SotClipboardFormatId::HTML_SIMPLE);
 
     SfxWhichIter aIter(rSet);
     sal_uInt16 nWhich = aIter.FirstWhich();
@@ -1205,6 +1172,8 @@ void SwDrawTextShell::StateClpbrd(SfxItemSet &rSet)
                     aFormats.AddClipbrdFormat( SotClipboardFormatId::RTF );
                 if ( aDataHelper.HasFormat( SotClipboardFormatId::RICHTEXT ) )
                     aFormats.AddClipbrdFormat( SotClipboardFormatId::RICHTEXT );
+                if (aDataHelper.HasFormat(SotClipboardFormatId::HTML_SIMPLE))
+                    aFormats.AddClipbrdFormat(SotClipboardFormatId::HTML_SIMPLE);
 
                 rSet.Put( aFormats );
             }

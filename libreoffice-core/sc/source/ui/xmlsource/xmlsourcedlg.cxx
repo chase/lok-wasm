@@ -49,11 +49,12 @@ OUString getXPath(
             rNamespaces.push_back(pData->mnNamespaceID);
 
         // element separator is '/' whereas attribute separator is '/@' in xpath.
-        aBuf.insert(0, rTree.get_text(*xEntry, 0));
+        std::u16string_view sSeparator;
         if (isAttribute(rTree, *xEntry))
-            aBuf.insert(0, "/@");
+            sSeparator = u"/@";
         else
-            aBuf.insert(0, '/');
+            sSeparator = u"/";
+        aBuf.insert(0, sSeparator + rTree.get_text(*xEntry, 0));
     }
     while (rTree.iter_parent(*xEntry));
 
@@ -533,7 +534,7 @@ void ScXMLSourceDlg::OkPressed()
     mpXMLContext->importXML(aParam);
 
     // Don't forget to broadcast the change.
-    SfxObjectShell* pShell = mpDoc->GetDocumentShell();
+    ScDocShell* pShell = mpDoc->GetDocumentShell();
     pShell->Broadcast(SfxHint(SfxHintId::ScDataChanged));
 
     // Repaint the grid to force repaint the cell values.

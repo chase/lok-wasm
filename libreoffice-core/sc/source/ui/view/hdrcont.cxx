@@ -270,12 +270,8 @@ void ScHeaderControl::Paint( vcl::RenderContext& /*rRenderContext*/, const tools
     tools::Long nInitScrPos = 0;
     if ( bLayoutRTL )
     {
-        tools::Long nTemp = nPStart;       // swap nPStart / nPEnd
-        nPStart = nPEnd;
-        nPEnd = nTemp;
-        nTemp = nTransStart;        // swap nTransStart / nTransEnd
-        nTransStart = nTransEnd;
-        nTransEnd = nTemp;
+        std::swap(nPStart, nPEnd);
+        std::swap(nTransStart, nTransEnd);
         if ( bVertical )            // start loops from the end
             nInitScrPos = GetSizePixel().Height() - 1;
         else
@@ -365,7 +361,14 @@ void ScHeaderControl::Paint( vcl::RenderContext& /*rRenderContext*/, const tools
             {
                 // background for selection
                 GetOutDev()->SetLineColor();
-                GetOutDev()->SetFillColor( rStyleSettings.GetHighlightColor() );
+                Color aColor( rStyleSettings.GetAccentColor() );
+// merging the highlightcolor (which is used if accent does not exist) with the background
+// fails in many cases such as Breeze Dark (highlight is too close to background) and
+// Breeze Light (font color is white and not readable anymore)
+#ifdef MACOSX
+                aColor.Merge( rStyleSettings.GetFaceColor(), 80 );
+#endif
+                GetOutDev()->SetFillColor( aColor );
                 GetOutDev()->DrawRect( aFillRect );
             }
         }

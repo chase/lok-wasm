@@ -26,6 +26,7 @@
 #include <DrawViewWrapper.hxx>
 #include <ChartWindow.hxx>
 #include <ChartModel.hxx>
+#include <ChartView.hxx>
 #include <TitleHelper.hxx>
 #include <ObjectIdentifier.hxx>
 #include <ControllerLockGuard.hxx>
@@ -72,9 +73,8 @@ void ChartController::StartTextEdit( const Point* pMousePixel )
     SdrOutliner* pOutliner = m_pDrawViewWrapper->getOutliner();
 
     //#i77362 change notification for changes on additional shapes are missing
-    uno::Reference< beans::XPropertySet > xChartViewProps( m_xChartView, uno::UNO_QUERY );
-    if( xChartViewProps.is() )
-        xChartViewProps->setPropertyValue( "SdrViewIsInEditMode", uno::Any(true) );
+    if( m_xChartView.is() )
+        m_xChartView->setPropertyValue( "SdrViewIsInEditMode", uno::Any(true) );
 
     auto pChartWindow(GetChartWindow());
 
@@ -117,9 +117,8 @@ bool ChartController::EndTextEdit()
     m_pDrawViewWrapper->SdrEndTextEdit();
 
     //#i77362 change notification for changes on additional shapes are missing
-    uno::Reference< beans::XPropertySet > xChartViewProps( m_xChartView, uno::UNO_QUERY );
-    if( xChartViewProps.is() )
-        xChartViewProps->setPropertyValue( "SdrViewIsInEditMode", uno::Any(false) );
+    if( m_xChartView.is() )
+        m_xChartView->setPropertyValue( "SdrViewIsInEditMode", uno::Any(false) );
 
     SdrObject* pTextObject = m_pDrawViewWrapper->getTextEditObject();
     if(!pTextObject)
@@ -145,8 +144,8 @@ bool ChartController::EndTextEdit()
         // lock controllers till end of block
         ControllerLockGuardUNO aCLGuard( getChartModel() );
 
-        TitleHelper::setCompleteString( aString, uno::Reference<
-            css::chart2::XTitle >::query( xPropSet ), m_xCC );
+        Title* pTitle = dynamic_cast<Title*>(xPropSet.get());
+        TitleHelper::setCompleteString( aString, pTitle, m_xCC );
 
         OSL_ENSURE(m_pTextActionUndoGuard, "ChartController::EndTextEdit: no TextUndoGuard!");
         if (m_pTextActionUndoGuard)
@@ -216,16 +215,13 @@ void ChartController::executeDispatch_InsertSpecialCharacter()
     pOutlinerView->ShowCursor();
 }
 
-uno::Reference< css::accessibility::XAccessibleContext >
-    ChartController::impl_createAccessibleTextContext()
+rtl::Reference< ::chart::AccessibleTextHelper >
+    ChartController::createAccessibleTextContext()
 {
 #if !ENABLE_WASM_STRIP_ACCESSIBILITY
-    uno::Reference< css::accessibility::XAccessibleContext > xResult(
-        new AccessibleTextHelper( m_pDrawViewWrapper.get() ));
-
-    return xResult;
+    return new AccessibleTextHelper( m_pDrawViewWrapper.get() );
 #else
-    return uno::Reference< css::accessibility::XAccessibleContext >();
+    return {};
 #endif
 }
 

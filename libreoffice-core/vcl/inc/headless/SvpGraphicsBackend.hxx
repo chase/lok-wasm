@@ -27,7 +27,7 @@
 
 #include <headless/CairoCommon.hxx>
 
-class VCL_DLLPUBLIC SvpGraphicsBackend : public SalGraphicsImpl
+class VCL_DLLPUBLIC SvpGraphicsBackend final : public SalGraphicsImpl
 {
     CairoCommon& m_rCairoCommon;
 
@@ -40,7 +40,7 @@ public:
 
     OUString getRenderBackendName() const override { return "svp"; }
 
-    bool setClipRegion(vcl::Region const& rRegion) override;
+    void setClipRegion(vcl::Region const& rRegion) override;
     void ResetClipRegion() override;
 
     sal_uInt16 GetBitCount() const override;
@@ -65,7 +65,7 @@ public:
     void drawPolyPolygon(sal_uInt32 nPoly, const sal_uInt32* pPoints,
                          const Point** pPointArray) override;
 
-    bool drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
+    void drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
                          const basegfx::B2DPolyPolygon&, double fTransparency) override;
 
     bool drawPolyLine(const basegfx::B2DHomMatrix& rObjectToDevice, const basegfx::B2DPolygon&,
@@ -134,9 +134,6 @@ public:
 
     void drawBitmapBuffer(const SalTwoRect& rPosAry, const BitmapBuffer* pBuffer,
                           cairo_operator_t eOp);
-
-private:
-    void implDrawRect(double nX, double nY, double nWidth, double nHeight);
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

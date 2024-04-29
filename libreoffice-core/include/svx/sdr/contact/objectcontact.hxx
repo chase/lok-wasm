@@ -136,6 +136,12 @@ public:
     // print? Default is false
     virtual bool isOutputToPrinter() const;
 
+    // display page decoration? Default is true
+    virtual bool isPageDecorationActive() const;
+
+    // display mster page content (ViewContactOfMasterPage)? Default is true
+    virtual bool isMasterPageActive() const;
+
     // recording MetaFile? Default is false
     virtual bool isOutputToRecordingMetaFile() const;
 
@@ -164,7 +170,7 @@ public:
 
     // interface to support GridOffset for non-linear ViewToDevice transformation (calc)
     virtual bool supportsGridOffsets() const;
-    virtual void calculateGridOffsetForViewOjectContact(
+    virtual void calculateGridOffsetForViewObjectContact(
         basegfx::B2DVector& rTarget,
         const ViewObjectContact& rClient) const;
     virtual void calculateGridOffsetForB2DRange(

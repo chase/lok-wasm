@@ -103,6 +103,23 @@ enum PageMarElement
     PAGE_MAR_GUTTER
 };
 
+struct PaperSource
+{
+    sal_Int32 first;
+    sal_Int32 other;
+    public:
+        PaperSource() :
+            first(0),
+            other(0)
+            {}
+};
+
+enum PaperSourceElement
+{
+    PAPER_SOURCE_FIRST,
+    PAPER_SOURCE_OTHER,
+};
+
 /// property stack element
 enum ContextType
 {
@@ -146,22 +163,57 @@ enum StoredRedlines
     NONE
 };
 
+enum class SubstreamType
+{
+    Body,
+    Header,
+    Footer,
+    Footnote,
+    Endnote,
+    Annotation,
+};
+
 /**
  * Storage for state that is relevant outside a header/footer, but not inside it.
  *
  * In case some state of DomainMapper_Impl should be reset before handling the
  * header/footer and should be restored once handling of header/footer is done,
  * then you can use this class to do so.
+ *
+ * note: presumably more state should be moved here.
  */
-class HeaderFooterContext
+struct SubstreamContext
 {
-    bool      m_bTextInserted;
-    sal_Int32 m_nTableDepth;
-
-public:
-    explicit HeaderFooterContext(bool bTextInserted, sal_Int32 nTableDepth);
-    bool getTextInserted() const;
-    sal_Int32 getTableDepth() const;
+    SubstreamType eSubstreamType = SubstreamType::Body;
+    bool      bTextInserted = false;
+    /**
+     * This contains the raw table depth. nTableDepth > 0 is the same as
+     * getTableManager().isInTable(), unless we're in the first paragraph of a
+     * table, or first paragraph after a table, as the table manager is only
+     * updated once we ended the paragraph (and know if the para has the
+     * inTbl SPRM or not).
+     */
+    sal_Int32 nTableDepth = 0;
+    // deferred breaks need to be saved for RTF, also for DOCX annotations
+    bool bIsColumnBreakDeferred = false;
+    bool bIsPageBreakDeferred = false;
+    sal_Int32 nLineBreaksDeferred = 0;
+    /// Current paragraph had at least one field in it.
+    bool bParaHadField = false;
+    /// Current paragraph in a table is first paragraph of a cell
+    bool bFirstParagraphInCell = true;
+    /// If the current paragraph has any runs.
+    bool bParaChanged = false;
+    bool bIsFirstParaInSectionAfterRedline = true;
+    bool bIsFirstParaInSection = true;
+    bool bIsLastParaInSection = false;
+    /// If the current paragraph contains section property definitions.
+    bool bParaSectpr = false;
+    bool bIsPreviousParagraphFramed = false;
+    /// Current paragraph had at least one inline object in it.
+    bool bParaWithInlineObject = false;
+    /// This is a continuation of already finished paragraph - e.g., first in an index section
+    bool bRemoveThisParagraph = false;
 };
 
 /// Information about a paragraph to be finished after a field end.
@@ -177,11 +229,16 @@ class FieldContext : public virtual SvRefBase
     bool m_bFieldCommandCompleted;
     css::uno::Reference<css::text::XTextRange> m_xStartRange;
 
-    OUString m_sCommand;
+    // Two command string:
+    // 0: Normal, inserted command line
+    // 1: Deleted command line
+    OUString m_sCommand[2];
     OUString m_sResult;
     OUString m_sVariableValue;
     std::optional<FieldId> m_eFieldId;
     bool m_bFieldLocked;
+    // Current command line type: normal or deleted
+    bool m_bCommandType;
 
     css::uno::Reference<css::text::XTextField> m_xTextField;
     css::uno::Reference<css::text::XFormField> m_xFormField;
@@ -192,6 +249,7 @@ class FieldContext : public virtual SvRefBase
     OUString m_sHyperlinkURL;
     /// A frame for the hyperlink when one exists.
     OUString m_sHyperlinkTarget;
+    OUString m_sHyperlinkStyle;
 
     FFDataHandler::Pointer_t m_pFFDataHandler;
     FormControlHelper::Pointer_t m_pFormControlHelper;
@@ -207,7 +265,9 @@ public:
     const css::uno::Reference<css::text::XTextRange>& GetStartRange() const { return m_xStartRange; }
 
     void                    AppendCommand(std::u16string_view rPart);
-    const OUString&  GetCommand() const {return m_sCommand; }
+    const OUString&  GetCommand() const {return m_sCommand[m_bCommandType]; }
+    bool GetCommandIsEmpty(bool bType) const { return m_sCommand[bType].isEmpty(); }
+    void SetCommandType(bool cType) { m_bCommandType = cType; }
 
     void SetFieldId(FieldId eFieldId ) { m_eFieldId = eFieldId; }
     std::optional<FieldId> const & GetFieldId() const { return m_eFieldId; }
@@ -241,6 +301,8 @@ public:
     const OUString& GetHyperlinkURL() const { return m_sHyperlinkURL; }
     void SetHyperlinkTarget(const OUString& rTarget) { m_sHyperlinkTarget = rTarget; }
     const OUString& GetHyperlinkTarget() const { return m_sHyperlinkTarget; }
+    void  SetHyperlinkStyle(const OUString& rStyle) { m_sHyperlinkStyle = rStyle; }
+    const OUString& GetHyperlinkStyle() const { return m_sHyperlinkStyle; }
 
     void setFFDataHandler(FFDataHandler::Pointer_t pFFDataHandler) { m_pFFDataHandler = pFFDataHandler; }
     const FFDataHandler::Pointer_t& getFFDataHandler() const { return m_pFFDataHandler; }
@@ -378,34 +440,6 @@ struct LineNumberSettings
 
 };
 
-/// Contains information about a table that will be potentially converted to a floating one at the section end.
-struct FloatingTableInfo
-{
-    css::uno::Reference<css::text::XTextRange> m_xStart;
-    css::uno::Reference<css::text::XTextRange> m_xEnd;
-    css::uno::Sequence<css::beans::PropertyValue> m_aFrameProperties;
-    sal_Int32 m_nTableWidth;
-    sal_Int32 m_nTableWidthType;
-    /// Break type of the section that contains this table.
-    sal_Int32 m_nBreakType = -1;
-    /// Tables in footnotes and endnotes are always floating
-    bool m_bConvertToFloatingInFootnote = false;
-
-    FloatingTableInfo(css::uno::Reference<css::text::XTextRange> xStart,
-            css::uno::Reference<css::text::XTextRange> xEnd,
-            const css::uno::Sequence<css::beans::PropertyValue>& aFrameProperties,
-            sal_Int32 nTableWidth, sal_Int32 nTableWidthType, bool bConvertToFloatingInFootnote)
-        : m_xStart(std::move(xStart)),
-        m_xEnd(std::move(xEnd)),
-        m_aFrameProperties(aFrameProperties),
-        m_nTableWidth(nTableWidth),
-        m_nTableWidthType(nTableWidthType),
-        m_bConvertToFloatingInFootnote(bConvertToFloatingInFootnote)
-    {
-    }
-    css::uno::Any getPropertyValue(std::u16string_view propertyName);
-};
-
 /// Stores original/in-file-format info about a single anchored object.
 struct AnchoredObjectInfo
 {
@@ -472,6 +506,8 @@ private:
     // cache next available number, expensive to repeatedly compute
     std::optional<int> m_xNextUnusedPageStyleNo;
     css::uno::Reference<css::container::XNameContainer> m_xCharacterStyles;
+    css::uno::Reference<css::container::XNameContainer> m_xParagraphStyles;
+
     // cache next available number, expensive to repeatedly compute
     std::optional<int> m_xNextUnusedCharacterStyleNo;
     css::uno::Reference<css::text::XText> m_xBodyText;
@@ -479,7 +515,9 @@ private:
 
     std::stack<TextAppendContext>                                                   m_aTextAppendStack;
     std::stack<AnchoredContext>                                                     m_aAnchoredStack;
-    std::stack<HeaderFooterContext>                                                 m_aHeaderFooterStack;
+public: // DomainMapper needs it
+    std::stack<SubstreamContext> m_StreamStateStack;
+private:
     std::stack<std::pair<TextAppendContext, PagePartType>> m_aHeaderFooterTextAppendStack;
 
     std::deque<FieldContextPtr> m_aFieldStack;
@@ -490,9 +528,6 @@ private:
     bool                                                                            m_bSetCitation;
     bool                                                                            m_bSetDateValue;
     bool                                                                            m_bIsFirstSection;
-    bool                                                                            m_bIsColumnBreakDeferred;
-    bool                                                                            m_bIsPageBreakDeferred;
-    sal_Int32                                                                       m_nLineBreaksDeferred;
     /// If we want to set "sdt end" on the next character context.
     bool                                                                            m_bSdtEndDeferred;
     /// If we want to set "paragraph sdt end" on the next paragraph context.
@@ -504,7 +539,7 @@ private:
     bool                                                                            m_bStartIndex;
     bool                                                                            m_bStartBibliography;
     unsigned int                                                                    m_nStartGenericField;
-    bool                                                                            m_bTextInserted;
+    bool                                                                            m_bTextDeleted;
     LineNumberSettings                                                              m_aLineNumberSettings;
 
     std::vector<OUString>                                                           m_aRedlineMoveIDs;
@@ -522,6 +557,7 @@ private:
     OUString                                                                        m_sCurrentPermEdGrp;
 
     PageMar                                                                        m_aPageMargins;
+    PaperSource                                                                     m_aPaperSource;
     SymbolData                                                                      m_aSymbolData;
 
     // TableManagers are stacked: one for each stream to avoid any confusion
@@ -545,7 +581,7 @@ private:
     std::unique_ptr<ThemeHandler> m_pThemeHandler;
 
     PropertyMapPtr                  m_pTopContext;
-    PropertyMapPtr           m_pLastSectionContext;
+    tools::SvRef<SectionPropertyMap> m_pLastSectionContext;
     PropertyMapPtr           m_pLastCharacterContext;
 
     ::std::vector<DeletableTabStop> m_aCurrentTabStops;
@@ -555,15 +591,7 @@ private:
     bool                            m_bInStyleSheetImport; //in import of fonts, styles, lists or lfos
     bool                            m_bInNumberingImport; //in import of numbering (i.e. numbering.xml)
     bool                            m_bInAnyTableImport; //in import of fonts, styles, lists or lfos
-    enum class HeaderFooterImportState
-    {
-        none,
-        header,
-        footer,
-    }                               m_eInHeaderFooterImport;
     bool                            m_bDiscardHeaderFooter;
-    bool                            m_bInFootOrEndnote;
-    bool                            m_bInFootnote;
     PropertyMapPtr m_pFootnoteContext;
     bool m_bHasFootnoteStyle;
     bool m_bCheckFootnoteStyle;
@@ -601,28 +629,19 @@ private:
     // text ZWSPs to keep the change tracking of the image in Writer.)
     bool                            m_bRedlineImageInPreviousRun;
 
-    /// If the current paragraph has any runs.
-    bool                            m_bParaChanged;
-    bool                            m_bIsFirstParaInSection;
-    bool                            m_bIsFirstParaInSectionAfterRedline;
     bool                            m_bIsFirstParaInShape = false;
     bool                            m_bDummyParaAddedForTableInSection;
     bool                            m_bTextFrameInserted;
-    bool                            m_bIsPreviousParagraphFramed;
-    bool                            m_bIsLastParaInSection;
     bool                            m_bIsLastSectionGroup;
-    bool                            m_bIsInComments;
-    /// If the current paragraph contains section property definitions.
-    bool                            m_bParaSectpr;
     bool                            m_bUsingEnhancedFields;
     /// If the current paragraph is inside a structured document element.
     bool                            m_bSdt;
     bool                            m_bIsFirstRun;
     bool                            m_bIsOutsideAParagraph;
-    /// This is a continuation of already finished paragraph - e.g., first in an index section
-    bool                            m_bRemoveThisParagraph = false;
 
     css::uno::Reference< css::text::XTextCursor > m_xTOCMarkerCursor;
+
+    ::std::set<::std::pair<PagePartType, PageType>> m_HeaderFooterSeen;
 
     //annotation import
     css::uno::Reference< css::beans::XPropertySet > m_xAnnotationField;
@@ -673,12 +692,13 @@ public:
 
     SectionPropertyMap* GetLastSectionContext( )
     {
-        return dynamic_cast< SectionPropertyMap* >( m_pLastSectionContext.get( ) );
+        return m_pLastSectionContext.get( );
     }
 
     css::uno::Reference<css::container::XNameContainer> const & GetPageStyles();
     OUString GetUnusedPageStyleName();
     css::uno::Reference<css::container::XNameContainer> const & GetCharacterStyles();
+    css::uno::Reference<css::container::XNameContainer> const& GetParagraphStyles();
     OUString GetUnusedCharacterStyleName();
     css::uno::Reference<css::text::XText> const & GetBodyText();
     const css::uno::Reference<css::lang::XMultiServiceFactory>& GetTextFactory() const
@@ -718,7 +738,7 @@ public:
 
     void SetIsDecimalComma() { m_bIsDecimalComma = true; };
     void SetIsLastParagraphInSection( bool bIsLast );
-    bool GetIsLastParagraphInSection() const { return m_bIsLastParaInSection;}
+    bool GetIsLastParagraphInSection() const { return m_StreamStateStack.top().bIsLastParaInSection; }
     void SetRubySprmId( sal_uInt32 nSprmId) { m_aRubyInfo.nSprmId = nSprmId ; }
     void SetRubyText( OUString const &sText, OUString const &sStyle) {
         m_aRubyInfo.sRubyText = sText;
@@ -740,11 +760,13 @@ public:
     /// Track if a textframe has been inserted into this section
     void SetIsTextFrameInserted( bool bIsInserted );
     bool GetIsTextFrameInserted() const { return m_bTextFrameInserted;}
+    void SetIsTextDeleted(bool bIsTextDeleted) { m_bTextDeleted = bIsTextDeleted; }
 
-    void SetIsPreviousParagraphFramed( bool bIsFramed ) { m_bIsPreviousParagraphFramed = bIsFramed; }
-    bool GetIsPreviousParagraphFramed() const { return m_bIsPreviousParagraphFramed; }
+    void SetIsPreviousParagraphFramed(bool const bIsFramed)
+    { m_StreamStateStack.top().bIsPreviousParagraphFramed = bIsFramed; }
+    bool GetIsPreviousParagraphFramed() const { return m_StreamStateStack.top().bIsPreviousParagraphFramed; }
     void SetParaSectpr(bool bParaSectpr);
-    bool GetParaSectpr() const { return m_bParaSectpr;}
+    bool GetParaSectpr() const { return m_StreamStateStack.top().bParaSectpr; }
 
     void SetSymbolChar( sal_Int32 nSymbol) { m_aSymbolData.cSymbol = sal_Unicode(nSymbol); }
     void SetSymbolFont( OUString const &rName ) { m_aSymbolData.sFont = rName; }
@@ -760,9 +782,9 @@ public:
 
     /// Getter method for m_bSdt.
     bool GetSdt() const { return m_bSdt;}
-    bool GetParaChanged() const { return m_bParaChanged;}
-    bool GetParaHadField() const { return m_bParaHadField; }
-    bool GetRemoveThisPara() const { return m_bRemoveThisParagraph; }
+    bool GetParaChanged() const { return m_StreamStateStack.top().bParaChanged; }
+    bool GetParaHadField() const { return m_StreamStateStack.top().bParaHadField; }
+    bool GetRemoveThisPara() const { return m_StreamStateStack.top().bRemoveThisParagraph; }
 
     void deferBreak( BreakType deferredBreakType );
     bool isBreakDeferred( BreakType deferredBreakType );
@@ -775,6 +797,8 @@ public:
     bool isParaSdtEndDeferred() const;
 
     void finishParagraph( const PropertyMapPtr& pPropertyMap, const bool bRemove = false, const bool bNoNumbering = false);
+    void applyToggleAttributes( const PropertyMapPtr& pPropertyMap );
+    void MergeAtContentImageRedlineWithNext(const css::uno::Reference<css::text::XTextAppend>& xTextAppend);
     void appendTextPortion( const OUString& rString, const PropertyMapPtr& pPropertyMap );
     void appendTextContent(const css::uno::Reference<css::text::XTextContent>&, const css::uno::Sequence<css::beans::PropertyValue>&);
     void appendOLE( const OUString& rStreamName, const std::shared_ptr<OLEHandler>& pOleHandler );
@@ -880,7 +904,7 @@ public:
     css::uno::Reference<css::drawing::XShape> PopPendingShape();
 
     void PopPageHeaderFooter(PagePartType ePagePartType, PageType eType);
-    bool IsInHeaderFooter() const { return m_eInHeaderFooterImport != HeaderFooterImportState::none; }
+    bool IsInHeaderFooter() const { auto const type(m_StreamStateStack.top().eSubstreamType); return type == SubstreamType::Header || type == SubstreamType::Footer; }
     void ConvertHeaderFooterToTextFrame(bool, bool);
     static void fillEmptyFrameProperties(std::vector<css::beans::PropertyValue>& rFrameProperties, bool bSetAnchorToChar);
 
@@ -888,8 +912,8 @@ public:
 
     void PushFootOrEndnote( bool bIsFootnote );
     void PopFootOrEndnote();
-    bool IsInFootOrEndnote() const { return m_bInFootOrEndnote; }
-    bool IsInFootnote() const { return IsInFootOrEndnote() && m_bInFootnote; }
+    bool IsInFootOrEndnote() const { auto const type(m_StreamStateStack.top().eSubstreamType); return type == SubstreamType::Footnote || type == SubstreamType::Endnote; }
+    bool IsInFootnote() const { return m_StreamStateStack.top().eSubstreamType == SubstreamType::Footnote; }
 
     void StartCustomFootnote(const PropertyMapPtr pContext);
     void EndCustomFootnote();
@@ -913,6 +937,7 @@ public:
 
     void PushAnnotation();
     void PopAnnotation();
+    sal_Int32 GetAnnotationId() { return m_nAnnotationId; }
 
     /// A field context starts with a cFieldStart.
     void PushFieldContext();
@@ -1028,15 +1053,20 @@ public:
     void SetPageMarginTwip( PageMarElement eElement, sal_Int32 nValue );
     const PageMar& GetPageMargins() const {return m_aPageMargins;}
 
+    void InitPaperSource() { m_aPaperSource = PaperSource(); }
+    void SetPaperSource( PaperSourceElement eElement, sal_Int32 nValue );
+    const PaperSource& GetPaperSource() {return m_aPaperSource;}
+
     const LineNumberSettings& GetLineNumberSettings() const { return m_aLineNumberSettings;}
     void SetLineNumberSettings(const LineNumberSettings& rSet) { m_aLineNumberSettings = rSet;}
 
     void SetInFootnoteProperties(bool bSet) { m_bIsInFootnoteProperties = bSet;}
     bool IsInFootnoteProperties() const { return m_bIsInFootnoteProperties;}
 
-    bool IsInComments() const { return m_bIsInComments; };
+    bool IsInComments() const { return m_StreamStateStack.top().eSubstreamType == SubstreamType::Annotation; };
 
-    void CheckUnregisteredFrameConversion( );
+    std::vector<css::beans::PropertyValue> MakeFrameProperties(const ParagraphProperties& rProps);
+    void CheckUnregisteredFrameConversion(bool bPreventOverlap = false);
 
     void RegisterFrameConversion(css::uno::Reference<css::text::XTextRange> const& xFrameStartRange,
                                  css::uno::Reference<css::text::XTextRange> const& xFrameEndRange,
@@ -1116,19 +1146,10 @@ public:
 
     /// Document background color, applied to every page style.
     std::optional<sal_Int32> m_oBackgroundColor;
+    bool m_bCopyStandardPageStyleFill = false;
 
-    /**
-     * This contains the raw table depth. m_nTableDepth > 0 is the same as
-     * getTableManager().isInTable(), unless we're in the first paragraph of a
-     * table, or first paragraph after a table, as the table manager is only
-     * updated once we ended the paragraph (and know if the para has the
-     * inTbl SPRM or not).
-     */
-    sal_Int32 m_nTableDepth;
     /// Raw table cell depth.
     sal_Int32 m_nTableCellDepth;
-    /// Table cell depth of the last finished paragraph.
-    sal_Int32 m_nLastTableCellParagraphDepth;
 
     /// If the current section has footnotes.
     bool m_bHasFtn;
@@ -1197,7 +1218,9 @@ public:
     bool m_bIsActualParagraphFramed;
     std::deque<css::uno::Any> m_aStoredRedlines[StoredRedlines::NONE];
 
-    bool IsParaWithInlineObject() const { return m_bParaWithInlineObject; }
+    bool IsParaWithInlineObject() const { return m_StreamStateStack.top().bParaWithInlineObject; }
+
+    bool SeenHeaderFooter(PagePartType, PageType) const;
 
     css::uno::Reference< css::embed::XStorage > m_xDocumentStorage;
 
@@ -1215,26 +1238,18 @@ public:
 
     void commentProps(const OUString& sId, const CommentProperties& rProps);
 
-    OUString getFontNameForTheme(const Id id);
-
     OUString ConvertTOCStyleName(OUString const&);
+
+    OUString getFontNameForTheme(const Id id);
 
 private:
     void PushPageHeaderFooter(PagePartType ePagePartType, PageType eType);
     // Start a new index section; if needed, finish current paragraph
     css::uno::Reference<css::beans::XPropertySet> StartIndexSectionChecked(const OUString& sServiceName);
     std::vector<css::uno::Reference< css::drawing::XShape > > m_vTextFramesForChaining ;
-    /// Current paragraph had at least one field in it.
-    bool m_bParaHadField;
-    bool m_bSaveParaHadField;
     css::uno::Reference<css::beans::XPropertySet> m_xPreviousParagraph;
     /// Current paragraph has automatic before spacing.
     bool m_bParaAutoBefore;
-    /// Current paragraph in a table is first paragraph of a cell
-    bool m_bFirstParagraphInCell;
-    bool m_bSaveFirstParagraphInCell;
-    /// Current paragraph had at least one inline object in it.
-    bool m_bParaWithInlineObject;
     /// SAXException was seen so document will be abandoned
     bool m_bSaxError;
 

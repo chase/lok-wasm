@@ -19,8 +19,9 @@ class VCL_DLLPUBLIC DocWindow : public Window
 {
     // inherit all Window constructors
     using Window::Window;
+
 public:
-    virtual void SetPointer( PointerStyle ) override;
+    virtual void SetPointer(PointerStyle) override;
 };
 } // namespace vcl
 

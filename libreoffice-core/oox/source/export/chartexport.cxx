@@ -26,6 +26,7 @@
 #include <oox/export/utils.hxx>
 #include <drawingml/chart/typegroupconverter.hxx>
 #include <basegfx/utils/gradienttools.hxx>
+#include <docmodel/uno/UnoGradientTools.hxx>
 
 #include <cstdio>
 #include <limits>
@@ -105,6 +106,10 @@
 
 #include <set>
 #include <unordered_set>
+
+#include <frozen/bits/defines.h>
+#include <frozen/bits/elsa_std.h>
+#include <frozen/unordered_map.h>
 
 #include <o3tl/temporary.hxx>
 #include <o3tl/sorted_vector.hxx>
@@ -439,41 +444,41 @@ static ::std::vector< double > lcl_getAllValuesFromSequence( const Reference< ch
     return aResult;
 }
 
-static sal_Int32 lcl_getChartType( std::u16string_view sChartType )
+namespace
 {
-    chart::TypeId eChartTypeId = chart::TYPEID_UNKNOWN;
-    if( sChartType == u"com.sun.star.chart.BarDiagram"
-        || sChartType == u"com.sun.star.chart2.ColumnChartType" )
-        eChartTypeId = chart::TYPEID_BAR;
-    else if( sChartType == u"com.sun.star.chart.AreaDiagram"
-             || sChartType == u"com.sun.star.chart2.AreaChartType" )
-        eChartTypeId = chart::TYPEID_AREA;
-    else if( sChartType == u"com.sun.star.chart.LineDiagram"
-             || sChartType == u"com.sun.star.chart2.LineChartType" )
-        eChartTypeId = chart::TYPEID_LINE;
-    else if( sChartType == u"com.sun.star.chart.PieDiagram"
-             || sChartType == u"com.sun.star.chart2.PieChartType" )
-        eChartTypeId = chart::TYPEID_PIE;
-    else if( sChartType == u"com.sun.star.chart.DonutDiagram"
-             || sChartType == u"com.sun.star.chart2.DonutChartType" )
-        eChartTypeId = chart::TYPEID_DOUGHNUT;
-    else if( sChartType == u"com.sun.star.chart.XYDiagram"
-             || sChartType == u"com.sun.star.chart2.ScatterChartType" )
-        eChartTypeId = chart::TYPEID_SCATTER;
-    else if( sChartType == u"com.sun.star.chart.NetDiagram"
-             || sChartType == u"com.sun.star.chart2.NetChartType" )
-        eChartTypeId = chart::TYPEID_RADARLINE;
-    else if( sChartType == u"com.sun.star.chart.FilledNetDiagram"
-             || sChartType == u"com.sun.star.chart2.FilledNetChartType" )
-        eChartTypeId = chart::TYPEID_RADARAREA;
-    else if( sChartType == u"com.sun.star.chart.StockDiagram"
-             || sChartType == u"com.sun.star.chart2.CandleStickChartType" )
-        eChartTypeId = chart::TYPEID_STOCK;
-    else if( sChartType == u"com.sun.star.chart.BubbleDiagram"
-             || sChartType == u"com.sun.star.chart2.BubbleChartType" )
-        eChartTypeId = chart::TYPEID_BUBBLE;
 
-    return eChartTypeId;
+constexpr auto constChartTypeMap = frozen::make_unordered_map<std::u16string_view, chart::TypeId>(
+{
+    { u"com.sun.star.chart.BarDiagram", chart::TYPEID_BAR },
+    { u"com.sun.star.chart2.ColumnChartType",  chart::TYPEID_BAR },
+    { u"com.sun.star.chart.AreaDiagram",  chart::TYPEID_AREA },
+    { u"com.sun.star.chart2.AreaChartType",  chart::TYPEID_AREA },
+    { u"com.sun.star.chart.LineDiagram",  chart::TYPEID_LINE },
+    { u"com.sun.star.chart2.LineChartType",  chart::TYPEID_LINE },
+    { u"com.sun.star.chart.PieDiagram",  chart::TYPEID_PIE },
+    { u"com.sun.star.chart2.PieChartType",  chart::TYPEID_PIE },
+    { u"com.sun.star.chart.DonutDiagram",  chart::TYPEID_DOUGHNUT },
+    { u"com.sun.star.chart2.DonutChartType",  chart::TYPEID_DOUGHNUT },
+    { u"com.sun.star.chart.XYDiagram",  chart::TYPEID_SCATTER },
+    { u"com.sun.star.chart2.ScatterChartType",  chart::TYPEID_SCATTER },
+    { u"com.sun.star.chart.NetDiagram",  chart::TYPEID_RADARLINE },
+    { u"com.sun.star.chart2.NetChartType",  chart::TYPEID_RADARLINE },
+    { u"com.sun.star.chart.FilledNetDiagram",  chart::TYPEID_RADARAREA },
+    { u"com.sun.star.chart2.FilledNetChartType",  chart::TYPEID_RADARAREA },
+    { u"com.sun.star.chart.StockDiagram",  chart::TYPEID_STOCK },
+    { u"com.sun.star.chart2.CandleStickChartType",  chart::TYPEID_STOCK },
+    { u"com.sun.star.chart.BubbleDiagram",  chart::TYPEID_BUBBLE },
+    { u"com.sun.star.chart2.BubbleChartType",  chart::TYPEID_BUBBLE },
+});
+
+} // end anonymous namespace
+
+static sal_Int32 lcl_getChartType(std::u16string_view sChartType)
+{
+    auto aIterator = constChartTypeMap.find(sChartType);
+    if (aIterator == constChartTypeMap.end())
+        return chart::TYPEID_UNKNOWN;
+    return aIterator->second;
 }
 
 static sal_Int32 lcl_generateRandomValue()
@@ -852,7 +857,7 @@ void ChartExport::WriteChartObj( const Reference< XShape >& xShape, sal_Int32 nI
             sRelativeStream,
             pFS->getOutputStream(),
             "application/vnd.openxmlformats-officedocument.drawingml.chart+xml",
-            OUStringToOString(oox::getRelationship(Relationship::CHART), RTL_TEXTENCODING_UTF8).getStr(),
+            oox::getRelationship(Relationship::CHART),
             &sId );
 
     XmlFilterBase* pFB = GetFB();
@@ -1074,7 +1079,7 @@ void ChartExport::exportAdditionalShapes( const Reference< css::chart::XChartDoc
                 sRelativeStream,
                 GetFS()->getOutputStream(),
                 "application/vnd.openxmlformats-officedocument.drawingml.chartshapes+xml",
-                OUStringToOString(oox::getRelationship(Relationship::CHARTUSERSHAPES), RTL_TEXTENCODING_UTF8).getStr(),
+                oox::getRelationship(Relationship::CHARTUSERSHAPES),
                 &sId);
 
             GetFS()->singleElementNS(XML_c, XML_userShapes, FSNS(XML_r, XML_id), sId);
@@ -1913,9 +1918,9 @@ void ChartExport::exportSolidFill(const Reference< XPropertySet >& xPropSet)
     {
         uno::Reference< lang::XMultiServiceFactory > xFact( getModel(), uno::UNO_QUERY );
         uno::Reference< container::XNameAccess > xTransparenceGradient(xFact->createInstance("com.sun.star.drawing.TransparencyGradientTable"), uno::UNO_QUERY);
-        const uno::Any rTransparenceValue = xTransparenceGradient->getByName(sFillTransparenceGradientName);
+        const uno::Any rTransparenceAny = xTransparenceGradient->getByName(sFillTransparenceGradientName);
 
-        aTransparenceGradient = basegfx::BGradient(rTransparenceValue);
+        aTransparenceGradient = model::gradient::getFromAny(rTransparenceAny);
         basegfx::BColor aSingleColor;
         bNeedGradientFill = !aTransparenceGradient.GetColorStops().isSingleColor(aSingleColor);
 
@@ -2001,8 +2006,8 @@ void ChartExport::exportGradientFill( const Reference< XPropertySet >& xPropSet 
     try
     {
         uno::Reference< container::XNameAccess > xGradient( xFact->createInstance("com.sun.star.drawing.GradientTable"), uno::UNO_QUERY );
-        const uno::Any rGradientValue(xGradient->getByName( sFillGradientName ));
-        const basegfx::BGradient aGradient(rGradientValue);
+        const uno::Any rGradientAny(xGradient->getByName( sFillGradientName ));
+        const basegfx::BGradient aGradient = model::gradient::getFromAny(rGradientAny);
         basegfx::BColor aSingleColor;
 
         if (!aGradient.GetColorStops().isSingleColor(aSingleColor))
@@ -2014,9 +2019,9 @@ void ChartExport::exportGradientFill( const Reference< XPropertySet >& xPropSet 
             if( (xPropSet->getPropertyValue("FillTransparenceGradientName") >>= sFillTransparenceGradientName) && !sFillTransparenceGradientName.isEmpty())
             {
                 uno::Reference< container::XNameAccess > xTransparenceGradient(xFact->createInstance("com.sun.star.drawing.TransparencyGradientTable"), uno::UNO_QUERY);
-                const uno::Any rTransparenceValue(xTransparenceGradient->getByName(sFillTransparenceGradientName));
+                const uno::Any rTransparenceAny(xTransparenceGradient->getByName(sFillTransparenceGradientName));
 
-                aTransparenceGradient = basegfx::BGradient(rTransparenceValue);
+                aTransparenceGradient = model::gradient::getFromAny(rTransparenceAny);
 
                 WriteGradientFill(&aGradient, 0, &aTransparenceGradient);
             }
@@ -2953,8 +2958,11 @@ void ChartExport::exportSeriesValues( const Reference< chart2::data::XDataSequen
     sal_Int32 ptCount = aValues.size();
     pFS->startElement(FSNS(XML_c, XML_numCache));
     pFS->startElement(FSNS(XML_c, XML_formatCode));
-    // TODO: what format code?
-    pFS->writeEscaped( "General" );
+    OUString sNumberFormatString("General");
+    const sal_Int32 nKey = xValueSeq.is() ? xValueSeq->getNumberFormatKeyByIndex(-1) : 0;
+    if (nKey > 0)
+        sNumberFormatString = getNumberFormatCode(nKey);
+    pFS->writeEscaped(sNumberFormatString);
     pFS->endElement( FSNS( XML_c, XML_formatCode ) );
     pFS->singleElement(FSNS(XML_c, XML_ptCount), XML_val, OString::number(ptCount));
 
@@ -3330,10 +3338,8 @@ void ChartExport::_exportAxis(
     }
 
     // only export each axis only once non-deleted
-    bool bDeleted = maExportedAxis.find(rAxisIdPair.nAxisType) != maExportedAxis.end();
-
-    if (!bDeleted)
-        maExportedAxis.insert(rAxisIdPair.nAxisType);
+    auto aItInsertedPair = maExportedAxis.insert(rAxisIdPair.nAxisType);
+    bool bDeleted = !aItInsertedPair.second;
 
     pFS->singleElement(FSNS(XML_c, XML_delete), XML_val, !bDeleted && bVisible ? "0" : "1");
 

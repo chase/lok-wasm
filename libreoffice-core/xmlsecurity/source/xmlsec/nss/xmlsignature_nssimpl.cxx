@@ -110,9 +110,8 @@ SAL_CALL XMLSignature_NssImpl::generate(
         throw RuntimeException() ;
     }
 
-    Reference< XUnoTunnel > xNodTunnel( xElement , UNO_QUERY_THROW ) ;
     XMLElementWrapper_XmlSecImpl* pElement
-        = comphelper::getFromUnoTunnel<XMLElementWrapper_XmlSecImpl>(xNodTunnel);
+        = dynamic_cast<XMLElementWrapper_XmlSecImpl*>(xElement.get());
     if( pElement == nullptr ) {
         throw RuntimeException() ;
     }
@@ -128,11 +127,10 @@ SAL_CALL XMLSignature_NssImpl::generate(
     }
 
     //Get Keys Manager
-    Reference< XUnoTunnel > xSecTunnel( aEnvironment , UNO_QUERY_THROW ) ;
 
     // the key manager should be retrieved from SecurityEnvironment, instead of SecurityContext
     SecurityEnvironment_NssImpl* pSecEnv
-        = comphelper::getFromUnoTunnel<SecurityEnvironment_NssImpl>(xSecTunnel);
+        = dynamic_cast<SecurityEnvironment_NssImpl*>(aEnvironment.get());
     if( pSecEnv == nullptr )
         throw RuntimeException() ;
 
@@ -193,9 +191,8 @@ SAL_CALL XMLSignature_NssImpl::validate(
     if( !xElement.is() )
         throw RuntimeException() ;
 
-    Reference< XUnoTunnel > xNodTunnel( xElement , UNO_QUERY_THROW ) ;
     XMLElementWrapper_XmlSecImpl* pElement
-        = comphelper::getFromUnoTunnel<XMLElementWrapper_XmlSecImpl>(xNodTunnel);
+        = dynamic_cast<XMLElementWrapper_XmlSecImpl*>(xElement.get());
     if( pElement == nullptr )
         throw RuntimeException() ;
 
@@ -219,9 +216,8 @@ SAL_CALL XMLSignature_NssImpl::validate(
         Reference< XSecurityEnvironment > aEnvironment = aSecurityCtx->getSecurityEnvironmentByIndex(i);
 
         //Get Keys Manager
-        Reference< XUnoTunnel > xSecTunnel( aEnvironment , UNO_QUERY_THROW ) ;
         SecurityEnvironment_NssImpl* pSecEnv
-            = comphelper::getFromUnoTunnel<SecurityEnvironment_NssImpl>(xSecTunnel);
+            = dynamic_cast<SecurityEnvironment_NssImpl*>(aEnvironment.get());
         if( pSecEnv == nullptr )
             throw RuntimeException() ;
 

@@ -31,7 +31,6 @@ namespace framework
     using ::com::sun::star::uno::Reference;
     using ::com::sun::star::uno::XInterface;
     using ::com::sun::star::uno::UNO_QUERY;
-    using ::com::sun::star::uno::UNO_QUERY_THROW;
     using ::com::sun::star::uno::Exception;
     using ::com::sun::star::document::XUndoManagerSupplier;
     using ::com::sun::star::document::XUndoManager;
@@ -43,8 +42,6 @@ namespace framework
 
     typedef ::cppu::WeakImplHelper <   XUndoManagerListener
                                     >   UndoManagerContextListener_Base;
-
-    namespace {
 
     class UndoManagerContextListener : public UndoManagerContextListener_Base
     {
@@ -99,8 +96,6 @@ namespace framework
         oslInterlockedCount             m_nRelativeContextDepth;
         bool                            m_documentDisposed;
     };
-
-    }
 
     void SAL_CALL UndoManagerContextListener::undoActionAdded( const UndoManagerEvent& )
     {
@@ -162,60 +157,37 @@ namespace framework
         m_documentDisposed = true;
     }
 
-    //= DocumentUndoGuard_Data
-
-    struct DocumentUndoGuard_Data
-    {
-        Reference< XUndoManager >                       xUndoManager;
-        ::rtl::Reference< UndoManagerContextListener >  pContextListener;
-    };
-
-    namespace
-    {
-
-        void lcl_init( DocumentUndoGuard_Data& i_data, const Reference< XInterface >& i_undoSupplierComponent )
-        {
-            try
-            {
-                Reference< XUndoManagerSupplier > xUndoSupplier( i_undoSupplierComponent, UNO_QUERY );
-                if ( xUndoSupplier.is() )
-                    i_data.xUndoManager.set( xUndoSupplier->getUndoManager(), css::uno::UNO_SET_THROW );
-
-                if ( i_data.xUndoManager.is() )
-                    i_data.pContextListener.set( new UndoManagerContextListener( i_data.xUndoManager ) );
-            }
-            catch( const Exception& )
-            {
-                DBG_UNHANDLED_EXCEPTION("fwk");
-            }
-        }
-
-        void lcl_restore( DocumentUndoGuard_Data& i_data )
-        {
-            try
-            {
-                if ( i_data.pContextListener.is() )
-                    i_data.pContextListener->finish();
-                i_data.pContextListener.clear();
-            }
-            catch( const Exception& )
-            {
-                DBG_UNHANDLED_EXCEPTION("fwk");
-            }
-        }
-    }
-
     //= DocumentUndoGuard
 
     DocumentUndoGuard::DocumentUndoGuard( const Reference< XInterface >& i_undoSupplierComponent )
-        :m_xData( new DocumentUndoGuard_Data )
     {
-        lcl_init( *m_xData, i_undoSupplierComponent );
+        try
+        {
+            Reference< XUndoManagerSupplier > xUndoSupplier( i_undoSupplierComponent, UNO_QUERY );
+            if ( xUndoSupplier.is() )
+                mxUndoManager.set( xUndoSupplier->getUndoManager(), css::uno::UNO_SET_THROW );
+
+            if ( mxUndoManager.is() )
+                mxContextListener.set( new UndoManagerContextListener( mxUndoManager ) );
+        }
+        catch( const Exception& )
+        {
+            DBG_UNHANDLED_EXCEPTION("fwk");
+        }
     }
 
     DocumentUndoGuard::~DocumentUndoGuard()
     {
-        lcl_restore( *m_xData );
+        try
+        {
+            if ( mxContextListener.is() )
+                mxContextListener->finish();
+            mxContextListener.clear();
+        }
+        catch( const Exception& )
+        {
+            DBG_UNHANDLED_EXCEPTION("fwk");
+        }
     }
 
 } // namespace framework

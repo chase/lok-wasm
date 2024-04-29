@@ -18,6 +18,11 @@
  */
 
 #include <framework/ModuleController.hxx>
+#include <framework/PresentationFactory.hxx>
+#include <framework/factories/BasicPaneFactory.hxx>
+#include <framework/factories/BasicViewFactory.hxx>
+#include <framework/factories/BasicToolBarFactory.hxx>
+#include <DrawController.hxx>
 #include <com/sun/star/frame/XController.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
@@ -26,55 +31,49 @@
 #include <comphelper/processfactory.hxx>
 
 #include <comphelper/diagnose_ex.hxx>
+#include <rtl/ref.hxx>
 #include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::drawing::framework;
-using ::sd::tools::ConfigurationAccess;
 
 namespace sd::framework {
 
-const sal_uInt32 snFactoryPropertyCount (2);
-const sal_uInt32 snStartupPropertyCount (1);
-
-//===== ModuleController ======================================================
-Reference<XModuleController> ModuleController::CreateInstance (
-    const Reference<XComponentContext>& rxContext)
+ModuleController::ModuleController(const rtl::Reference<::sd::DrawController>& rxController)
 {
-    return new ModuleController(rxContext);
-}
+    assert(rxController);
 
-ModuleController::ModuleController (const Reference<XComponentContext>& rxContext)
-{
-    /** Load a list of URL to service mappings from the
-        /org.openoffice.Office.Impress/MultiPaneGUI/Framework/ResourceFactories
-        configuration entry.  The mappings are stored in the
+    /** Load a list of URL to service mappings.
+        The mappings are stored in the
         mpResourceToFactoryMap member.
     */
+    ProcessFactory(
+        "com.sun.star.drawing.framework.BasicPaneFactory",
+        { "private:resource/pane/CenterPane",
+          "private:resource/pane/LeftImpressPane",
+          "private:resource/pane/LeftDrawPane" });
+    ProcessFactory(
+        "com.sun.star.drawing.framework.BasicViewFactory",
+        { "private:resource/view/ImpressView",
+          "private:resource/view/GraphicView",
+          "private:resource/view/OutlineView",
+          "private:resource/view/NotesView",
+          "private:resource/view/HandoutView",
+          "private:resource/view/SlideSorter",
+        "private:resource/view/PresentationView" });
+    ProcessFactory(
+        "com.sun.star.drawing.framework.BasicToolBarFactory",
+        { "private:resource/toolbar/ViewTabBar" });
+
     try
     {
-        ConfigurationAccess aConfiguration (
-            rxContext,
-            "/org.openoffice.Office.Impress/",
-            ConfigurationAccess::READ_ONLY);
-        Reference<container::XNameAccess> xFactories (
-            aConfiguration.GetConfigurationNode("MultiPaneGUI/Framework/ResourceFactories"),
-            UNO_QUERY);
-        ::std::vector<OUString> aProperties (snFactoryPropertyCount);
-        aProperties[0] = "ServiceName";
-        aProperties[1] = "ResourceList";
-        ConfigurationAccess::ForAll(
-            xFactories,
-            aProperties,
-            [this] (OUString const&, ::std::vector<Any> const& xs) {
-                return this->ProcessFactory(xs);
-            } );
+        mxController = rxController;
+
+        InstantiateStartupServices();
     }
-    catch (Exception&)
-    {
-        DBG_UNHANDLED_EXCEPTION("sd");
-    }
+    catch (RuntimeException&)
+    {}
 }
 
 ModuleController::~ModuleController() noexcept
@@ -89,21 +88,9 @@ void ModuleController::disposing(std::unique_lock<std::mutex>&)
     mxController.clear();
 }
 
-void ModuleController::ProcessFactory (const ::std::vector<Any>& rValues)
+void ModuleController::ProcessFactory (const OUString& sServiceName, ::std::vector<OUString> aURLs)
 {
-    OSL_ASSERT(rValues.size() == snFactoryPropertyCount);
-
-    // Get the service name of the factory.
-    OUString sServiceName;
-    rValues[0] >>= sServiceName;
-
     // Get all resource URLs that are created by the factory.
-    Reference<container::XNameAccess> xResources (rValues[1], UNO_QUERY);
-    ::std::vector<OUString> aURLs;
-    tools::ConfigurationAccess::FillList(
-        xResources,
-        "URL",
-        aURLs);
 
     SAL_INFO("sd.fwk", __func__ << ": ModuleController::adding factory " << sServiceName);
 
@@ -119,54 +106,16 @@ void ModuleController::InstantiateStartupServices()
 {
     try
     {
-        tools::ConfigurationAccess aConfiguration (
-            "/org.openoffice.Office.Impress/",
-            tools::ConfigurationAccess::READ_ONLY);
-        Reference<container::XNameAccess> xFactories (
-            aConfiguration.GetConfigurationNode("MultiPaneGUI/Framework/StartupServices"),
-            UNO_QUERY);
-        ::std::vector<OUString> aProperties (snStartupPropertyCount);
-        aProperties[0] = "ServiceName";
-        tools::ConfigurationAccess::ForAll(
-            xFactories,
-            aProperties,
-            [this] (OUString const&, ::std::vector<Any> const& xs) {
-                return this->ProcessStartupService(xs);
-            } );
-    }
-    catch (Exception&)
-    {
-        SAL_WARN("sd.fwk", "ERROR in ModuleController::InstantiateStartupServices");
-    }
-}
-
-void ModuleController::ProcessStartupService (const ::std::vector<Any>& rValues)
-{
-    OSL_ASSERT(rValues.size() == snStartupPropertyCount);
-
-    try
-    {
-        // Get the service name of the startup service.
-        OUString sServiceName;
-        rValues[0] >>= sServiceName;
-
         // Instantiate service.
-        Reference<uno::XComponentContext> xContext =
-            ::comphelper::getProcessComponentContext();
-
-        // Create the startup service.
-        Sequence<Any> aArguments{ Any(mxController) };
         // Note that when the new object will be destroyed at the end of
         // this scope when it does not register itself anywhere.
         // Typically it will add itself as ConfigurationChangeListener
         // at the configuration controller.
-        xContext->getServiceManager()->createInstanceWithArgumentsAndContext(sServiceName, aArguments, xContext);
-
-        SAL_INFO("sd.fwk", __func__ << ": ModuleController::created startup service " << sServiceName);
+        sd::framework::PresentationFactory::install(mxController);
     }
     catch (Exception&)
     {
-        SAL_WARN("sd.fwk", "ERROR in ModuleController::ProcessStartupServices");
+        SAL_WARN("sd.fwk", "ERROR in ModuleController::InstantiateStartupServices");
     }
 }
 
@@ -192,53 +141,20 @@ void SAL_CALL ModuleController::requestResource (const OUString& rsResourceURL)
         ::comphelper::getProcessComponentContext();
 
     // Create the factory service.
-    Sequence<Any> aArguments{ Any(mxController) };
-    try
-    {
-        xFactory = xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
-            iFactory->second,
-            aArguments,
-            xContext);
-    }
-    catch (const Exception&)
-    {
-        TOOLS_WARN_EXCEPTION("sd.fwk", "caught exception while creating factory");
-    }
+    if (iFactory->second == "com.sun.star.drawing.framework.BasicPaneFactory")
+        xFactory = uno::Reference<css::drawing::framework::XResourceFactory>(new BasicPaneFactory(xContext, mxController));
+    else if (iFactory->second == "com.sun.star.drawing.framework.BasicViewFactory")
+        xFactory = uno::Reference<css::drawing::framework::XResourceFactory>(new BasicViewFactory(mxController));
+    else if (iFactory->second == "com.sun.star.drawing.framework.BasicToolBarFactory")
+        xFactory = uno::Reference<css::drawing::framework::XResourceFactory>(new BasicToolBarFactory(mxController));
+    else
+        throw RuntimeException("unknown factory");
 
     // Remember that this factory has been instanced.
     maLoadedFactories[iFactory->second] = xFactory;
 }
 
-//----- XInitialization -------------------------------------------------------
-
-void SAL_CALL ModuleController::initialize (const Sequence<Any>& aArguments)
-{
-    if (aArguments.hasElements())
-    {
-        try
-        {
-            // Get the XController from the first argument.
-            mxController.set(aArguments[0], UNO_QUERY_THROW);
-
-            InstantiateStartupServices();
-        }
-        catch (RuntimeException&)
-        {}
-    }
-}
-
 } // end of namespace sd::framework
-
-
-extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*
-com_sun_star_comp_Draw_framework_module_ModuleController_get_implementation(
-        css::uno::XComponentContext* context,
-        css::uno::Sequence<css::uno::Any> const &)
-{
-    css::uno::Reference< css::uno::XInterface > xModCont ( sd::framework::ModuleController::CreateInstance(context) );
-    xModCont->acquire();
-    return xModCont.get();
-}
 
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

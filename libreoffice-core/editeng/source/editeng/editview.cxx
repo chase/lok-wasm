@@ -88,7 +88,7 @@ LanguageType EditView::CheckLanguage(
 
         // If the result from language guessing does not provide a 'Country'
         // part, try to get it by looking up the locale setting of the office,
-        // "Tools/Options - Language Settings - Languages: Locale setting", if
+        // "Tools/Options - Languages and Locales - General: Locale setting", if
         // the language matches.
         if ( aGuessTag.getCountry().isEmpty() )
         {
@@ -115,12 +115,12 @@ LanguageType EditView::CheckLanguage(
         const AllSettings& rSettings  = Application::GetSettings();
         SvtLinguOptions aLinguOpt;
         SvtLinguConfig().GetOptions( aLinguOpt );
-        // The default document language from "Tools/Options - Language Settings - Languages: Western"
+        // The default document language from "Tools/Options - Languages and Locales - General: Western"
         aLangList[0] = MsLangId::resolveSystemLanguageByScriptType( aLinguOpt.nDefaultLanguage,
                 css::i18n::ScriptType::LATIN);
-        // The one from "Tools/Options - Language Settings - Languages: User interface"
+        // The one from "Tools/Options - Languages and Locales - General: User interface"
         aLangList[1] = rSettings.GetUILanguageTag().getLanguageType();
-        // The one from "Tools/Options - Language Settings - Languages: Locale setting"
+        // The one from "Tools/Options - Languages and Locales - General: Locale setting"
         aLangList[2] = rSettings.GetLanguageTag().getLanguageType();
         // en-US
         aLangList[3] = LANGUAGE_ENGLISH_US;
@@ -155,6 +155,7 @@ EditViewCallbacks::~EditViewCallbacks()
 EditView::EditView( EditEngine* pEng, vcl::Window* pWindow )
 {
     pImpEditView.reset( new ImpEditView( this, pEng, pWindow ) );
+    pImpEditView->bReadOnly = pImpEditView->bReadOnly || SfxViewShell::IsCurrentLokViewReadOnly();
 }
 
 EditView::~EditView()
@@ -252,7 +253,7 @@ void EditView::Invalidate()
 
 void EditView::SetReadOnly( bool bReadOnly )
 {
-    pImpEditView->bReadOnly = bReadOnly;
+    pImpEditView->bReadOnly = bReadOnly || SfxViewShell::IsCurrentLokViewReadOnly();
 }
 
 bool EditView::IsReadOnly() const
@@ -268,8 +269,9 @@ void EditView::SetSelection( const ESelection& rESel )
     {
         // tdf#113591 Get node from EditDoc, as the selection might have a pointer to an
         // already deleted node.
-        const ContentNode* pNode = pImpEditView->pEditEngine->GetEditDoc().GetEndPaM().GetNode();
-        pImpEditView->pEditEngine->CursorMoved( pNode );
+        const ContentNode* pNode(pImpEditView->pEditEngine->GetEditDoc().GetEndPaM().GetNode());
+        if (nullptr != pNode)
+            pNode->checkAndDeleteEmptyAttribs();
     }
     EditSelection aNewSelection( pImpEditView->pEditEngine->pImpEditEngine->ConvertSelection(
                                             rESel.nStartPara, rESel.nStartPos, rESel.nEndPara, rESel.nEndPos ) );
@@ -321,6 +323,16 @@ ESelection EditView::GetSelection() const
 bool EditView::HasSelection() const
 {
     return pImpEditView->HasSelection();
+}
+
+bool EditView::IsSelectionFullPara() const
+{
+    return pImpEditView->IsSelectionFullPara();
+}
+
+bool EditView::IsSelectionWithinSinglePara() const
+{
+    return pImpEditView->IsSelectionInSinglePara();
 }
 
 bool EditView::IsSelectionAtPoint(const Point& rPointPixel)
@@ -531,8 +543,8 @@ void EditView::ShowCursor( bool bGotoCursor, bool bForceVisCursor, bool bActivat
             return;
 
         static const OString aPayload = OString::boolean(true);
-        pImpEditView->mpViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CURSOR_VISIBLE, aPayload.getStr());
-        pImpEditView->mpViewShell->NotifyOtherViews(LOK_CALLBACK_VIEW_CURSOR_VISIBLE, "visible", aPayload);
+        pImpEditView->mpViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CURSOR_VISIBLE, aPayload);
+        pImpEditView->mpViewShell->NotifyOtherViews(LOK_CALLBACK_VIEW_CURSOR_VISIBLE, "visible"_ostr, aPayload);
     }
 }
 
@@ -549,8 +561,8 @@ void EditView::HideCursor(bool bDeactivate)
             return;
 
         OString aPayload = OString::boolean(false);
-        pImpEditView->mpViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CURSOR_VISIBLE, aPayload.getStr());
-        pImpEditView->mpViewShell->NotifyOtherViews(LOK_CALLBACK_VIEW_CURSOR_VISIBLE, "visible", aPayload);
+        pImpEditView->mpViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CURSOR_VISIBLE, aPayload);
+        pImpEditView->mpViewShell->NotifyOtherViews(LOK_CALLBACK_VIEW_CURSOR_VISIBLE, "visible"_ostr, aPayload);
     }
 }
 
@@ -931,7 +943,7 @@ static void LOKSendSpellPopupMenu(const weld::Menu& rMenu, LanguageType nGuessLa
     {
         for(int i = 0; i < nSuggestions; ++i)
         {
-            OString sItemId = OString::number(MN_ALTSTART + i);
+            OUString sItemId = OUString::number(MN_ALTSTART + i);
             OUString sText = rMenu.get_label(sItemId);
             aItemTree.put("text", sText.toUtf8().getStr());
             aItemTree.put("type", "command");
@@ -983,7 +995,7 @@ static void LOKSendSpellPopupMenu(const weld::Menu& rMenu, LanguageType nGuessLa
 
     std::stringstream aStream;
     boost::property_tree::write_json(aStream, aRoot, true);
-    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CONTEXT_MENU, aStream.str().c_str());
+    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CONTEXT_MENU, OString(aStream.str()));
 }
 
 bool EditView::ExecuteSpellPopup(const Point& rPosPixel, const Link<SpellCallbackInfo&,void> &rCallBack)
@@ -1083,10 +1095,11 @@ bool EditView::ExecuteSpellPopup(const Point& rPosPixel, const Link<SpellCallbac
         for ( sal_uInt16 nW = 0; nW < nWords; nW++ )
         {
             OUString aAlternate( pAlt[nW] );
-            xPopupMenu->append(OUString::number(MN_ALTSTART + nW), aAlternate);
-            xAutoMenu->append(OUString::number(MN_AUTOSTART + nW), aAlternate);
+            OUString sId(OUString::number(MN_ALTSTART + nW));
+            xPopupMenu->insert(nW, sId, aAlternate, nullptr, nullptr, nullptr, TRISTATE_INDET);
+            xAutoMenu->append(sId, aAlternate);
         }
-        xPopupMenu->append_separator("separator2");
+        xPopupMenu->insert_separator(nWords, "separator2");
     }
     else
     {
@@ -1178,7 +1191,7 @@ bool EditView::ExecuteSpellPopup(const Point& rPosPixel, const Link<SpellCallbac
         return true;
     }
 
-    OString sId = xPopupMenu->popup_at_rect(pPopupParent, aTempRect);
+    OUString sId = xPopupMenu->popup_at_rect(pPopupParent, aTempRect);
 
     aPaM2 = pImpEditView->pEditEngine->pImpEditEngine->CreateEditPaM(aP2);
     aPaM = pImpEditView->pEditEngine->pImpEditEngine->CreateEditPaM(aP);
@@ -1341,63 +1354,91 @@ const SvxFieldItem* EditView::GetFieldUnderMousePointer( sal_Int32& nPara, sal_I
     return GetField( aPos, &nPara, &nPos );
 }
 
-const SvxFieldItem* EditView::GetFieldAtSelection() const
+const SvxFieldItem* EditView::GetFieldAtSelection(bool bAlsoCheckBeforeCursor) const
 {
+    bool* pIsBeforeCursor = bAlsoCheckBeforeCursor ? &bAlsoCheckBeforeCursor : nullptr;
+    return GetFieldAtSelection(pIsBeforeCursor);
+}
+
+// If pIsBeforeCursor != nullptr, the position before the cursor will also be checked for a field
+// and pIsBeforeCursor will return true if that fallback field is returned.
+// If no field is returned, the value in pIsBeforeCursor is meaningless.
+const SvxFieldItem* EditView::GetFieldAtSelection(bool* pIsBeforeCursor) const
+{
+    // a field is a dummy character - so it cannot span nodes or be a selection larger than 1
     EditSelection aSel( pImpEditView->GetEditSelection() );
+    if (aSel.Min().GetNode() != aSel.Max().GetNode())
+        return nullptr;
+
+    // normalize: min < max
     aSel.Adjust( pImpEditView->pEditEngine->GetEditDoc() );
+
+    const sal_Int32 nMinIndex =  aSel.Min().GetIndex();
+    const sal_Int32 nMaxIndex =  aSel.Max().GetIndex();
+    if (nMaxIndex > nMinIndex + 1)
+        return nullptr;
+
     // Only when cursor is in font of field, no selection,
     // or only selecting field
-    if ( ( aSel.Min().GetNode() == aSel.Max().GetNode() ) &&
-         ( ( aSel.Max().GetIndex() == aSel.Min().GetIndex() ) ||
-           ( aSel.Max().GetIndex() == aSel.Min().GetIndex()+1 ) ) )
+    bool bAlsoCheckBeforeCursor = false;
+    if (pIsBeforeCursor)
     {
-        EditPaM aPaM = aSel.Min();
-        const CharAttribList::AttribsType& rAttrs = aPaM.GetNode()->GetCharAttribs().GetAttribs();
-        const sal_Int32 nXPos = aPaM.GetIndex();
-        for (size_t nAttr = rAttrs.size(); nAttr; )
+        *pIsBeforeCursor = false;
+        bAlsoCheckBeforeCursor = nMaxIndex == nMinIndex;
+    }
+    const SvxFieldItem* pFoundBeforeCursor = nullptr;
+    const CharAttribList::AttribsType& rAttrs = aSel.Min().GetNode()->GetCharAttribs().GetAttribs();
+    for (const auto& rAttr: rAttrs)
+    {
+        if (rAttr->Which() == EE_FEATURE_FIELD)
         {
-            const EditCharAttrib& rAttr = *rAttrs[--nAttr];
-            if (rAttr.GetStart() == nXPos)
-                if (rAttr.Which() == EE_FEATURE_FIELD)
-                {
-                    DBG_ASSERT(dynamic_cast<const SvxFieldItem* >(rAttr.GetItem() ) != nullptr, "No FieldItem...");
-                    return static_cast<const SvxFieldItem*>(rAttr.GetItem());
-                }
+            DBG_ASSERT(dynamic_cast<const SvxFieldItem*>(rAttr->GetItem()), "No FieldItem...");
+            if (rAttr->GetStart() == nMinIndex)
+                return static_cast<const SvxFieldItem*>(rAttr->GetItem());
+
+            // perhaps the cursor is behind the field?
+            if (nMinIndex && rAttr->GetStart() == nMinIndex - 1)
+                pFoundBeforeCursor = static_cast<const SvxFieldItem*>(rAttr->GetItem());
         }
+    }
+    if (bAlsoCheckBeforeCursor)
+    {
+        *pIsBeforeCursor = /*(bool)*/pFoundBeforeCursor;
+        return pFoundBeforeCursor;
     }
     return nullptr;
 }
 
 void EditView::SelectFieldAtCursor()
 {
-    const SvxFieldItem* pFieldItem = GetFieldAtSelection();
-    if (pFieldItem)
-    {
-        // Make sure the whole field is selected
-        ESelection aSel = GetSelection();
-        if (aSel.nStartPos == aSel.nEndPos)
-        {
-            aSel.nEndPos++;
-            SetSelection(aSel);
-        }
-    }
+    bool bIsBeforeCursor = false;
+    const SvxFieldItem* pFieldItem = GetFieldAtSelection(&bIsBeforeCursor);
     if (!pFieldItem)
+        return;
+
+    // Make sure the whole field is selected
+    // A field is represented by a dummy character - so it cannot be a selection larger than 1
+    ESelection aSel = GetSelection();
+    if (aSel.nStartPos == aSel.nEndPos) // not yet selected
     {
-        // Cursor probably behind the field - extend selection to select the field
-        ESelection aSel = GetSelection();
-        if (aSel.nStartPos > 0 && aSel.nStartPos == aSel.nEndPos)
+        if (bIsBeforeCursor)
         {
-            aSel.nStartPos--;
-            SetSelection(aSel);
+            assert (aSel.nStartPos);
+            --aSel.nStartPos;
         }
+        else
+            aSel.nEndPos++;
+        SetSelection(aSel);
     }
+    else
+        assert(std::abs(aSel.nStartPos - aSel.nEndPos) == 1);
 }
 
-const SvxFieldData* EditView::GetFieldAtCursor() const
+const SvxFieldData* EditView::GetFieldUnderMouseOrInSelectionOrAtCursor(bool bAlsoCheckBeforeCursor) const
 {
     const SvxFieldItem* pFieldItem = GetFieldUnderMousePointer();
     if (!pFieldItem)
-        pFieldItem = GetFieldAtSelection();
+        pFieldItem = GetFieldAtSelection(bAlsoCheckBeforeCursor);
 
     return pFieldItem ? pFieldItem->GetField() : nullptr;
 }
@@ -1688,7 +1729,12 @@ void EditView::SetCursorLogicPosition(const Point& rPosition, bool bPoint, bool 
         aSelection.Min() = aPaM;
 
     if (pImpEditView->GetEditSelection().Min() != aSelection.Min())
-        pImpEditView->pEditEngine->CursorMoved(pImpEditView->GetEditSelection().Min().GetNode());
+    {
+        const ContentNode* pNode(pImpEditView->GetEditSelection().Min().GetNode());
+        if (nullptr != pNode)
+            pNode->checkAndDeleteEmptyAttribs();
+    }
+
     pImpEditView->DrawSelectionXOR(aSelection);
     if (pImpEditView->GetEditSelection() != aSelection)
         pImpEditView->SetEditSelection(aSelection);

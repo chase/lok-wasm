@@ -36,7 +36,6 @@ public:
     }
 
     void setUp() override;
-    void tearDown() override;
     void doTestCommentsInMargin(bool commentsInMarginEnabled);
 };
 
@@ -44,14 +43,7 @@ void Test::setUp()
 {
     UnoApiTest::setUp();
 
-    MacrosTest::setUpNssGpg(m_directories, "filter_pdf");
-}
-
-void Test::tearDown()
-{
-    MacrosTest::tearDownNssGpg();
-
-    UnoApiTest::tearDown();
+    MacrosTest::setUpX509(m_directories, "filter_pdf");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testSignCertificateSubjectName)
@@ -151,7 +143,7 @@ void Test::doTestCommentsInMargin(bool commentsInMarginEnabled)
     if (!pPDFium)
         return;
 
-    loadFromURL(u"commentsInMargin.odt");
+    loadFromFile(u"commentsInMargin.odt");
     uno::Reference<css::lang::XMultiServiceFactory> xFactory = getMultiServiceFactory();
     uno::Reference<document::XFilter> xFilter(
         xFactory->createInstance("com.sun.star.document.PDFFilter"), uno::UNO_QUERY);
@@ -172,8 +164,14 @@ void Test::doTestCommentsInMargin(bool commentsInMarginEnabled)
     std::unique_ptr<vcl::pdf::PDFiumDocument> pPdfDocument
         = pPDFium->openDocument(aStream.GetData(), aStream.GetSize(), OString());
     CPPUNIT_ASSERT(pPdfDocument);
-    CPPUNIT_ASSERT_EQUAL(commentsInMarginEnabled ? 9 : 1,
-                         pPdfDocument->openPage(0)->getObjectCount());
+    if (commentsInMarginEnabled)
+    {
+        // Unfortunately, the comment box is DPI dependent, and the lines there may split
+        // at higher DPIs, creating additional objects on import, hence the "_GREATER"
+        CPPUNIT_ASSERT_GREATER(8, pPdfDocument->openPage(0)->getObjectCount());
+    }
+    else
+        CPPUNIT_ASSERT_EQUAL(1, pPdfDocument->openPage(0)->getObjectCount());
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testCommentsInMargin)

@@ -200,8 +200,8 @@ private:
     void                ImplPolyLine( const tools::Polygon & rPolygon );
 
     void                ImplSetClipRegion( vcl::Region const & rRegion );
-    void                ImplBmp( Bitmap const *, Bitmap const *, const Point &, double nWidth, double nHeight );
-    void                ImplText( const OUString& rUniString, const Point& rPos, KernArraySpan pDXArry, o3tl::span<const sal_Bool> pKashidaArry, sal_Int32 nWidth, VirtualDevice const & rVDev );
+    void                ImplBmp( Bitmap const *, AlphaMask const *, const Point &, double nWidth, double nHeight );
+    void                ImplText( const OUString& rUniString, const Point& rPos, KernArraySpan pDXArry, std::span<const sal_Bool> pKashidaArry, sal_Int32 nWidth, VirtualDevice const & rVDev );
     void                ImplSetAttrForText( const Point & rPoint );
     void                ImplWriteCharacter( char );
     void                ImplWriteString( const OString&, VirtualDevice const & rVDev, KernArraySpan pDXArry, bool bStretch );
@@ -442,7 +442,7 @@ bool PSWriter::WritePS( const Graphic& rGraphic, SvStream& rTargetStream, Filter
 void PSWriter::ImplWriteProlog( const Graphic* pPreview )
 {
     ImplWriteLine( "%!PS-Adobe-3.0 EPSF-3.0 " );
-    mpPS->WriteCharPtr( "%%BoundingBox: " );                         // BoundingBox
+    mpPS->WriteOString( "%%BoundingBox: " );                         // BoundingBox
     ImplWriteLong( 0 );
     ImplWriteLong( 0 );
     Size aSizePoint = OutputDevice::LogicToLogic( pMTF->GetPrefSize(),
@@ -463,7 +463,7 @@ void PSWriter::ImplWriteProlog( const Graphic* pPreview )
 
 // defaults
 
-    mpPS->WriteCharPtr( "%%LanguageLevel: " );                       // Language level
+    mpPS->WriteOString( "%%LanguageLevel: " );                       // Language level
     ImplWriteLong( mnLevel, PS_RET );
     if ( !mbGrayScale && mnLevel == 1 )
         ImplWriteLine( "%%Extensions: CMYK" );          // CMYK extension is to set in color mode in level 1
@@ -474,13 +474,13 @@ void PSWriter::ImplWriteProlog( const Graphic* pPreview )
         Bitmap aTmpBitmap( pPreview->GetBitmapEx().GetBitmap() );
         aTmpBitmap.Scale( aSizeBitmap, BmpScaleFlag::BestQuality );
         aTmpBitmap.Convert( BmpConversion::N1BitThreshold );
-        BitmapReadAccess* pAcc = aTmpBitmap.AcquireReadAccess();
+        BitmapScopedReadAccess pAcc(aTmpBitmap);
         if ( pAcc )
         {
-            mpPS->WriteCharPtr( "%%BeginPreview: " );                    // BoundingBox
+            mpPS->WriteOString( "%%BeginPreview: " );                    // BoundingBox
             ImplWriteLong( aSizeBitmap.Width() );
             ImplWriteLong( aSizeBitmap.Height() );
-            mpPS->WriteCharPtr( "1 " );
+            mpPS->WriteOString( "1 " );
             sal_Int32 nLines = aSizeBitmap.Width() / 312;
             if ( ( nLines * 312 ) != aSizeBitmap.Width() )
                 nLines++;
@@ -498,7 +498,7 @@ void PSWriter::ImplWriteProlog( const Graphic* pPreview )
                     if ( !nCount2 )
                     {
                         ImplExecMode( PS_RET );
-                        mpPS->WriteCharPtr( "%" );
+                        mpPS->WriteOString( "%" );
                         nCount2 = 312;
                     }
                     nVal <<= 1;
@@ -517,7 +517,7 @@ void PSWriter::ImplWriteProlog( const Graphic* pPreview )
                     nCount2--;
                 }
             }
-            Bitmap::ReleaseAccess( pAcc );
+            pAcc.reset();
             ImplExecMode( PS_RET );
             ImplWriteLine( "%%EndPreview" );
         }
@@ -819,7 +819,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
                 Bitmap aBitmap( aBitmapEx.GetBitmap() );
                 if ( mbGrayScale )
                     aBitmap.Convert( BmpConversion::N8BitGreys );
-                Bitmap aMask( aBitmapEx.GetAlpha() );
+                AlphaMask aMask( aBitmapEx.GetAlphaMask() );
                 Point aPoint( static_cast<const MetaBmpExAction*>(pMA)->GetPoint() );
                 Size aSize( rVDev.PixelToLogic( aBitmap.GetSizePixel() ) );
                 ImplBmp( &aBitmap, &aMask, aPoint, aSize.Width(), aSize.Height() );
@@ -832,7 +832,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
                 Bitmap aBitmap( aBitmapEx.GetBitmap() );
                 if ( mbGrayScale )
                     aBitmap.Convert( BmpConversion::N8BitGreys );
-                Bitmap aMask( aBitmapEx.GetAlpha() );
+                AlphaMask aMask( aBitmapEx.GetAlphaMask() );
                 Point aPoint = static_cast<const MetaBmpExScaleAction*>(pMA)->GetPoint();
                 Size aSize( static_cast<const MetaBmpExScaleAction*>(pMA)->GetSize() );
                 ImplBmp( &aBitmap, &aMask, aPoint, aSize.Width(), aSize.Height() );
@@ -847,7 +847,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
                 Bitmap      aBitmap( aBitmapEx.GetBitmap() );
                 if ( mbGrayScale )
                     aBitmap.Convert( BmpConversion::N8BitGreys );
-                Bitmap      aMask( aBitmapEx.GetAlpha() );
+                AlphaMask   aMask( aBitmapEx.GetAlphaMask() );
                 Point aPoint = static_cast<const MetaBmpExScalePartAction*>(pMA)->GetDestPoint();
                 Size aSize = static_cast<const MetaBmpExScalePartAction*>(pMA)->GetDestSize();
                 ImplBmp( &aBitmap, &aMask, aPoint, aSize.Width(), aSize.Height() );
@@ -907,7 +907,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
                         // gradient action
 
                         }
-                        Bitmap aMask( aBitmapEx.GetAlpha() );
+                        AlphaMask aMask( aBitmapEx.GetAlphaMask() );
                         ImplBmp( &aBitmap, &aMask, Point( aRect.Left(), aRect.Top() ), aRect.GetWidth(), aRect.GetHeight() );
                     }
                     else
@@ -1230,7 +1230,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
 
                         if( pA->GetComment() == "XPATHSTROKE_SEQ_BEGIN" )
                         {
-                            sSeqEnd = "XPATHSTROKE_SEQ_END";
+                            sSeqEnd = "XPATHSTROKE_SEQ_END"_ostr;
                             SvtGraphicStroke aStroke;
                             ReadSvtGraphicStroke( aMemStm, aStroke );
 
@@ -1265,7 +1265,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
                         }
                         else if (pA->GetComment() == "XPATHFILL_SEQ_BEGIN")
                         {
-                            sSeqEnd = "XPATHFILL_SEQ_END";
+                            sSeqEnd = "XPATHFILL_SEQ_END"_ostr;
                             SvtGraphicFill aFill;
                             ReadSvtGraphicFill( aMemStm, aFill );
                             switch( aFill.getFillType() )
@@ -1285,12 +1285,12 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
                                             ImplAddPath( aPolyPoly.GetObject( i ) );
                                             if ( ++i < nPolyCount )
                                             {
-                                                mpPS->WriteCharPtr( "p" );
+                                                mpPS->WriteOString( "p" );
                                                 mnCursorPos += 2;
                                                 ImplExecMode( PS_RET );
                                             }
                                         }
-                                        mpPS->WriteCharPtr( "p ef" );
+                                        mpPS->WriteOString( "p ef" );
                                         mnCursorPos += 4;
                                         ImplExecMode( PS_RET );
                                     }
@@ -1416,7 +1416,7 @@ void PSWriter::ImplCurveTo( const Point& rP1, const Point& rP2, const Point& rP3
     ImplWritePoint( rP1 );
     ImplWritePoint( rP2 );
     ImplWritePoint( rP3 );
-    mpPS->WriteCharPtr( "ct " );
+    mpPS->WriteOString( "ct " );
     ImplExecMode( nMode );
 }
 
@@ -1448,11 +1448,11 @@ void PSWriter::ImplRect( const tools::Rectangle & rRect )
         ImplWriteLineColor( PS_SPACE );
         ImplMoveTo( rRect.TopLeft() );
         ImplWriteDouble( nWidth );
-        mpPS->WriteCharPtr( "0 rl 0 " );
+        mpPS->WriteOString( "0 rl 0 " );
         ImplWriteDouble( nHeight );
-        mpPS->WriteCharPtr( "rl " );
+        mpPS->WriteOString( "rl " );
         ImplWriteDouble( nWidth );
-        mpPS->WriteCharPtr( "neg 0 rl " );
+        mpPS->WriteOString( "neg 0 rl " );
         ImplClosePathDraw();
     }
     mpPS->WriteUChar( 10 );
@@ -1467,12 +1467,12 @@ void PSWriter::ImplRectFill( const tools::Rectangle & rRect )
     ImplWriteFillColor( PS_SPACE );
     ImplMoveTo( rRect.TopLeft() );
     ImplWriteDouble( nWidth );
-    mpPS->WriteCharPtr( "0 rl 0 " );
+    mpPS->WriteOString( "0 rl 0 " );
     ImplWriteDouble( nHeight );
-    mpPS->WriteCharPtr( "rl " );
+    mpPS->WriteOString( "rl " );
     ImplWriteDouble( nWidth );
-    mpPS->WriteCharPtr( "neg 0 rl ef " );
-    mpPS->WriteCharPtr( "p ef" );
+    mpPS->WriteOString( "neg 0 rl ef " );
+    mpPS->WriteOString( "p ef" );
     mnCursorPos += 2;
     ImplExecMode( PS_RET );
 }
@@ -1508,7 +1508,7 @@ void PSWriter::ImplIntersect( const tools::PolyPolygon& rPolyPoly )
         ImplAddPath( rPolyPoly.GetObject( i ) );
         if ( ++i < nPolyCount )
         {
-            mpPS->WriteCharPtr( "p" );
+            mpPS->WriteOString( "p" );
             mnCursorPos += 2;
             ImplExecMode( PS_RET );
         }
@@ -1543,12 +1543,12 @@ void PSWriter::ImplPolyPoly( const tools::PolyPolygon & rPolyPoly, bool bTextOut
             ImplAddPath( rPolyPoly.GetObject( i ) );
             if ( ++i < nPolyCount )
             {
-                mpPS->WriteCharPtr( "p" );
+                mpPS->WriteOString( "p" );
                 mnCursorPos += 2;
                 ImplExecMode( PS_RET );
             }
         }
-        mpPS->WriteCharPtr( "p ef" );
+        mpPS->WriteOString( "p ef" );
         mnCursorPos += 4;
         ImplExecMode( PS_RET );
     }
@@ -1641,7 +1641,7 @@ void PSWriter::ImplSetClipRegion( vcl::Region const & rClipRegion )
 //          color       1(pal), 4(pal), 8(pal), 24 Bit
 //
 
-void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, const Point & rPoint, double nXWidth, double nYHeightOrg )
+void PSWriter::ImplBmp( Bitmap const * pBitmap, AlphaMask const * pAlphaMaskBitmap, const Point & rPoint, double nXWidth, double nYHeightOrg )
 {
     if ( !pBitmap )
         return;
@@ -1662,7 +1662,7 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
         tools::Rectangle   aRect;
         vcl::Region      aRegion;
 
-        if ( pMaskBitmap )
+        if ( pAlphaMaskBitmap )
         {
             bDoTrans = true;
             while (true)
@@ -1670,7 +1670,7 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
                 if ( mnLevel == 1 && nHeight > 10 )
                     nHeight = 8;
                 aRect = tools::Rectangle( Point( 0, nHeightOrg - nHeightLeft ), Size( nWidth, nHeight ) );
-                aRegion = pMaskBitmap->CreateRegion( COL_BLACK, aRect );
+                aRegion = pAlphaMaskBitmap->CreateRegion( COL_ALPHA_OPAQUE, aRect );
 
                 if( mnLevel == 1 )
                 {
@@ -1725,7 +1725,7 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
             ImplWriteLine( "eoclip newpath" );
             ImplWriteLine( "pom" );
         }
-        BitmapReadAccess* pAcc = aTileBitmap.AcquireReadAccess();
+        BitmapScopedReadAccess pAcc(aTileBitmap);
 
         if (!bDoTrans )
             ImplWriteLine( "pum" );
@@ -1736,14 +1736,14 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
         {
             ImplWriteLong( nWidth );
             ImplWriteLong( nHeight );
-            mpPS->WriteCharPtr( "8 [" );
+            mpPS->WriteOString( "8 [" );
             ImplWriteLong( nWidth );
-            mpPS->WriteCharPtr( "0 0 " );
+            mpPS->WriteOString( "0 0 " );
             ImplWriteLong( -nHeight );
             ImplWriteLong( 0 );
             ImplWriteLong( nHeight );
             ImplWriteLine( "]" );
-            mpPS->WriteCharPtr( "{currentfile " );
+            mpPS->WriteOString( "{currentfile " );
             ImplWriteLong( nWidth );
             ImplWriteLine( "string readhexstring pop}" );
             ImplWriteLine( "image" );
@@ -1764,15 +1764,15 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
                 ImplWriteLine( "/DeviceGray setcolorspace" );
                 ImplWriteLine( "<<" );
                 ImplWriteLine( "/ImageType 1" );
-                mpPS->WriteCharPtr( "/Width " );
+                mpPS->WriteOString( "/Width " );
                 ImplWriteLong( nWidth, PS_RET );
-                mpPS->WriteCharPtr( "/Height " );
+                mpPS->WriteOString( "/Height " );
                 ImplWriteLong( nHeight, PS_RET );
                 ImplWriteLine( "/BitsPerComponent 8" );
                 ImplWriteLine( "/Decode[0 1]" );
-                mpPS->WriteCharPtr( "/ImageMatrix[" );
+                mpPS->WriteOString( "/ImageMatrix[" );
                 ImplWriteLong( nWidth );
-                mpPS->WriteCharPtr( "0 0 " );
+                mpPS->WriteOString( "0 0 " );
                 ImplWriteLong( -nHeight );
                 ImplWriteLong( 0 );
                 ImplWriteLong( nHeight, PS_NONE );
@@ -1829,15 +1829,15 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
                     ImplWriteLine( "] setcolorspace" );
                     ImplWriteLine( "<<" );
                     ImplWriteLine( "/ImageType 1" );
-                    mpPS->WriteCharPtr( "/Width " );
+                    mpPS->WriteOString( "/Width " );
                     ImplWriteLong( nWidth, PS_RET );
-                    mpPS->WriteCharPtr( "/Height " );
+                    mpPS->WriteOString( "/Height " );
                     ImplWriteLong( nHeight, PS_RET );
                     ImplWriteLine( "/BitsPerComponent 8" );
                     ImplWriteLine( "/Decode[0 255]" );
-                    mpPS->WriteCharPtr( "/ImageMatrix[" );
+                    mpPS->WriteOString( "/ImageMatrix[" );
                     ImplWriteLong( nWidth );
-                    mpPS->WriteCharPtr( "0 0 " );
+                    mpPS->WriteOString( "0 0 " );
                     ImplWriteLong( -nHeight );
                     ImplWriteLong( 0);
                     ImplWriteLong( nHeight, PS_NONE );
@@ -1878,15 +1878,15 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
                     ImplWriteLine( "/DeviceRGB setcolorspace" );
                     ImplWriteLine( "<<" );
                     ImplWriteLine( "/ImageType 1" );
-                    mpPS->WriteCharPtr( "/Width " );
+                    mpPS->WriteOString( "/Width " );
                     ImplWriteLong( nWidth, PS_RET );
-                    mpPS->WriteCharPtr( "/Height " );
+                    mpPS->WriteOString( "/Height " );
                     ImplWriteLong( nHeight, PS_RET );
                     ImplWriteLine( "/BitsPerComponent 8" );
                     ImplWriteLine( "/Decode[0 1 0 1 0 1]" );
-                    mpPS->WriteCharPtr( "/ImageMatrix[" );
+                    mpPS->WriteOString( "/ImageMatrix[" );
                     ImplWriteLong( nWidth );
-                    mpPS->WriteCharPtr( "0 0 " );
+                    mpPS->WriteOString( "0 0 " );
                     ImplWriteLong( -nHeight );
                     ImplWriteLong( 0 );
                     ImplWriteLong( nHeight, PS_NONE );
@@ -1936,7 +1936,7 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
         else
             ImplWriteLine( "pom" );
 
-        Bitmap::ReleaseAccess( pAcc );
+        pAcc.reset();
         nHeightLeft -= nHeight;
         if ( nHeightLeft )
         {
@@ -1988,7 +1988,7 @@ void PSWriter::ImplWriteString( const OString& rString, VirtualDevice const & rV
     }
 }
 
-void PSWriter::ImplText( const OUString& rUniString, const Point& rPos, KernArraySpan pDXArry, o3tl::span<const sal_Bool> pKashidaArry, sal_Int32 nWidth, VirtualDevice const & rVDev )
+void PSWriter::ImplText( const OUString& rUniString, const Point& rPos, KernArraySpan pDXArry, std::span<const sal_Bool> pKashidaArry, sal_Int32 nWidth, VirtualDevice const & rVDev )
 {
     if ( rUniString.isEmpty() )
         return;
@@ -1997,7 +1997,7 @@ void PSWriter::ImplText( const OUString& rUniString, const Point& rPos, KernArra
         vcl::Font    aNotRotatedFont( maFont );
         aNotRotatedFont.SetOrientation( 0_deg10 );
 
-        ScopedVclPtrInstance< VirtualDevice > pVirDev(DeviceFormat::DEFAULT);
+        ScopedVclPtrInstance< VirtualDevice > pVirDev(DeviceFormat::WITHOUT_ALPHA);
         pVirDev->SetMapMode( rVDev.GetMapMode() );
         pVirDev->SetFont( aNotRotatedFont );
         pVirDev->SetTextAlign( eTextAlign );
@@ -2025,7 +2025,7 @@ void PSWriter::ImplText( const OUString& rUniString, const Point& rPos, KernArra
             if ( nRotation )
             {
                 ImplWriteF( nRotation.get(), 1 );
-                mpPS->WriteCharPtr( "r " );
+                mpPS->WriteOString( "r " );
             }
             for (auto const& elem : aPolyPolyVec)
                 ImplPolyPoly( elem, true );
@@ -2069,7 +2069,7 @@ void PSWriter::ImplSetAttrForText( const Point& rPoint )
         maLastFont = maFont;
         aSize = maFont.GetFontSize();
         ImplWriteDouble( aSize.Height() );
-        mpPS->WriteCharPtr( "sf " );
+        mpPS->WriteOString( "sf " );
     }
     if ( eTextAlign != ALIGN_BASELINE )
     {                                                       // PostScript does not know about FontAlignment
@@ -2081,29 +2081,29 @@ void PSWriter::ImplSetAttrForText( const Point& rPoint )
     ImplMoveTo( aPoint );
     if ( nRotation )
     {
-        mpPS->WriteCharPtr( "gs " );
+        mpPS->WriteOString( "gs " );
         ImplWriteF( nRotation.get(), 1 );
-        mpPS->WriteCharPtr( "r " );
+        mpPS->WriteOString( "r " );
     }
 }
 
 void PSWriter::ImplDefineFont( const char* pOriginalName, const char* pItalic )
 {
     mpPS->WriteUChar( '/' );             //convert the font pOriginalName using ISOLatin1Encoding
-    mpPS->WriteCharPtr( pOriginalName );
+    mpPS->WriteOString( pOriginalName );
     switch ( maFont.GetWeight() )
     {
         case WEIGHT_SEMIBOLD :
         case WEIGHT_BOLD :
         case WEIGHT_ULTRABOLD :
         case WEIGHT_BLACK :
-            mpPS->WriteCharPtr( "-Bold" );
+            mpPS->WriteOString( "-Bold" );
             if ( maFont.GetItalic() != ITALIC_NONE )
-                mpPS->WriteCharPtr( pItalic );
+                mpPS->WriteOString( pItalic );
             break;
         default:
             if ( maFont.GetItalic() != ITALIC_NONE )
-                mpPS->WriteCharPtr( pItalic );
+                mpPS->WriteOString( pItalic );
             break;
     }
     ImplWriteLine( " f" );
@@ -2111,14 +2111,14 @@ void PSWriter::ImplDefineFont( const char* pOriginalName, const char* pItalic )
 
 void PSWriter::ImplClosePathDraw()
 {
-    mpPS->WriteCharPtr( "pc" );
+    mpPS->WriteOString( "pc" );
     mnCursorPos += 2;
     ImplExecMode( PS_RET );
 }
 
 void PSWriter::ImplPathDraw()
 {
-    mpPS->WriteCharPtr( "ps" );
+    mpPS->WriteOString( "ps" );
     mnCursorPos += 2;
     ImplExecMode( PS_RET );
 }
@@ -2166,7 +2166,7 @@ void PSWriter::ImplWriteColor( NMode nMode )
         ImplWriteB1 ( aColor.GetGreen() );
         ImplWriteB1 ( aColor.GetBlue() );
     }
-    mpPS->WriteCharPtr( "c" );                               // ( c is defined as setrgbcolor or setgray )
+    mpPS->WriteOString( "c" );                               // ( c is defined as setrgbcolor or setgray )
     ImplExecMode( nMode );
 }
 

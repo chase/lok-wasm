@@ -85,14 +85,12 @@ css::uno::Sequence< css::uno::Type > SAL_CALL SoundHandler::getTypes()
     return aTypeCollection.getTypes();
 }
 
-constexpr OUStringLiteral IMPLEMENTATIONNAME_SOUNDHANDLER = u"com.sun.star.comp.framework.SoundHandler";
-
 /*===========================================================================================================*/
 /* XServiceInfo */
 /*===========================================================================================================*/
 OUString SAL_CALL SoundHandler::getImplementationName()
 {
-    return IMPLEMENTATIONNAME_SOUNDHANDLER;
+    return u"com.sun.star.comp.framework.SoundHandler"_ustr;
 }
 
 // XServiceInfo
@@ -104,7 +102,7 @@ sal_Bool SAL_CALL SoundHandler::supportsService( const OUString& sServiceName )
 // XServiceInfo
 css::uno::Sequence< OUString > SAL_CALL SoundHandler::getSupportedServiceNames()
 {
-    return { "com.sun.star.frame.ContentHandler" };
+    return { u"com.sun.star.frame.ContentHandler"_ustr };
 }
 
 /*-************************************************************************************************************
@@ -195,7 +193,7 @@ void SAL_CALL SoundHandler::dispatchWithNotification(const css::util::URL&      
         m_xPlayer.set( avmedia::MediaWindow::createPlayer( aURL.Complete, aDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_REFERRER, OUString()) ), css::uno::UNO_SET_THROW );
         // OK- we can start async playing ...
         // Count this request and initialize self-holder against dying by uno ref count ...
-        m_xSelfHold.set(static_cast< ::cppu::OWeakObject* >(this), css::uno::UNO_QUERY);
+        m_xSelfHold.set(getXWeak());
         m_xPlayer->start();
         m_aUpdateIdle.SetPriority( TaskPriority::HIGH_IDLE );
         m_aUpdateIdle.Start();
@@ -255,7 +253,7 @@ OUString SAL_CALL SoundHandler::detect( css::uno::Sequence< css::beans::Property
         // I think we can the following ones:
         //  a) look for given extension of url to map our type decision HARD CODED!!!
         //  b) return preferred type every time... it's easy :-)
-        sTypeName = "wav_Wave_Audio_File";
+        sTypeName = u"wav_Wave_Audio_File"_ustr;
         aDescriptor[utl::MediaDescriptor::PROP_TYPENAME] <<= sTypeName;
         aDescriptor >> lDescriptor;
     }

@@ -193,17 +193,6 @@ bool StgWriter::IsStgWriter() const { return true; }
 
 /*
 <FilterFlags>
-        <Excel_Lotus>
-                <MinRow cfg:type="long">0</MinRow>
-                <MaxRow cfg:type="long">0</MaxRow>
-                <MinCol cfg:type="long">0</MinCol>
-                <MaxCol cfg:type="long">0</MaxCol>
-        </Excel_Lotus>
-        <W4W>
-                <W4WHD cfg:type="long">0</W4WHD>
-                <W4WFT cfg:type="long">0</W4WFT>
-                <W4W000 cfg:type="long">0</W4W000>
-        </W4W>
         <WinWord>
                 <WW1F cfg:type="long">0</WW1F>
                 <WW cfg:type="long">0</WW>
@@ -220,9 +209,6 @@ bool StgWriter::IsStgWriter() const { return true; }
                 <WWFT cfg:type="long">0</WWFT>
                 <WWWR cfg:type="long">0</WWWR>
         </WinWord>
-        <Writer>
-                <SW3Imp cfg:type="long">0</SW3Imp>
-        </Writer>
 </FilterFlags>
 */
 
@@ -490,14 +476,14 @@ const CharSetNameMap *GetCharSetNameMap()
 /*
  Get a rtl_TextEncoding from its name
  */
-rtl_TextEncoding CharSetFromName(const OUString& rChrSetStr)
+rtl_TextEncoding CharSetFromName(std::u16string_view rChrSetStr)
 {
     const CharSetNameMap *pStart = GetCharSetNameMap();
     rtl_TextEncoding nRet = pStart->eCode;
 
     for(const CharSetNameMap *pMap = pStart; pMap->pName; ++pMap)
     {
-        if(rChrSetStr.equalsIgnoreAsciiCaseAscii(pMap->pName))
+        if(o3tl::equalsIgnoreAsciiCase(rChrSetStr, pMap->pName))
         {
             nRet = pMap->eCode;
             break;
@@ -549,7 +535,7 @@ void SwAsciiOptions::ReadUserData( std::u16string_view rStr )
     sal_Int32 nToken = 0;
     std::u16string_view sToken = o3tl::getToken(rStr, 0, ',', nToken); // 1. Charset name
     if (!sToken.empty())
-        m_eCharSet = CharSetFromName(OUString(sToken));
+        m_eCharSet = CharSetFromName(sToken);
     if (nToken >= 0 && !(sToken = o3tl::getToken(rStr, 0, ',', nToken)).empty()) // 2. Line ending type
     {
         if (o3tl::equalsIgnoreAsciiCase(sToken, u"CRLF"))

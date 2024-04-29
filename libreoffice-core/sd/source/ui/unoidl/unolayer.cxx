@@ -63,12 +63,12 @@ static const SvxItemPropertySet* ImplGetSdLayerPropertySet()
 {
     static const SfxItemPropertyMapEntry aSdLayerPropertyMap_Impl[] =
     {
-        { u"" UNO_NAME_LAYER_LOCKED,      WID_LAYER_LOCKED,   cppu::UnoType<bool>::get(),            0, 0 },
-        { u"" UNO_NAME_LAYER_PRINTABLE,   WID_LAYER_PRINTABLE,cppu::UnoType<bool>::get(),            0, 0 },
-        { u"" UNO_NAME_LAYER_VISIBLE,     WID_LAYER_VISIBLE,  cppu::UnoType<bool>::get(),            0, 0 },
-        { u"" UNO_NAME_LAYER_NAME,        WID_LAYER_NAME,     ::cppu::UnoType<OUString>::get(), 0, 0 },
-        { u"Title",                    WID_LAYER_TITLE,    ::cppu::UnoType<OUString>::get(), 0, 0 },
-        { u"Description",              WID_LAYER_DESC,     ::cppu::UnoType<OUString>::get(), 0, 0 },
+        { u"" UNO_NAME_LAYER_LOCKED ""_ustr,      WID_LAYER_LOCKED,   cppu::UnoType<bool>::get(),            0, 0 },
+        { u"" UNO_NAME_LAYER_PRINTABLE ""_ustr,   WID_LAYER_PRINTABLE,cppu::UnoType<bool>::get(),            0, 0 },
+        { u"" UNO_NAME_LAYER_VISIBLE ""_ustr,     WID_LAYER_VISIBLE,  cppu::UnoType<bool>::get(),            0, 0 },
+        { u"" UNO_NAME_LAYER_NAME ""_ustr,        WID_LAYER_NAME,     ::cppu::UnoType<OUString>::get(), 0, 0 },
+        { u"Title"_ustr,                    WID_LAYER_TITLE,    ::cppu::UnoType<OUString>::get(), 0, 0 },
+        { u"Description"_ustr,              WID_LAYER_DESC,     ::cppu::UnoType<OUString>::get(), 0, 0 },
     };
     static SvxItemPropertySet aSDLayerPropertySet_Impl( aSdLayerPropertyMap_Impl, SdrObject::GetGlobalDrawObjectItemPool() );
     return &aSDLayerPropertySet_Impl;
@@ -87,9 +87,6 @@ SdLayer::SdLayer(SdLayerManager* pLayerManager_, SdrLayer* pSdrLayer_)
 SdLayer::~SdLayer() noexcept
 {
 }
-
-// uno helper
-UNO3_GETIMPLEMENTATION_IMPL( SdLayer );
 
 // XServiceInfo
 OUString SAL_CALL SdLayer::getImplementationName()
@@ -379,9 +376,6 @@ SdLayerManager::~SdLayerManager() noexcept
     dispose();
 }
 
-// uno helper
-UNO3_GETIMPLEMENTATION_IMPL( SdLayerManager );
-
 // XComponent
 void SAL_CALL SdLayerManager::dispose(  )
 {
@@ -459,7 +453,7 @@ void SAL_CALL SdLayerManager::remove( const uno::Reference< drawing::XLayer >& x
     if( mpModel == nullptr )
         throw lang::DisposedException();
 
-    SdLayer* pSdLayer = comphelper::getFromUnoTunnel<SdLayer>(xLayer);
+    SdLayer* pSdLayer = dynamic_cast<SdLayer*>(xLayer.get());
 
     if(pSdLayer && GetView())
     {
@@ -479,8 +473,10 @@ void SAL_CALL SdLayerManager::attachShapeToLayer( const uno::Reference< drawing:
     if( mpModel == nullptr )
         throw lang::DisposedException();
 
-    SdLayer* pSdLayer = comphelper::getFromUnoTunnel<SdLayer>(xLayer);
-    SdrLayer* pSdrLayer = pSdLayer?pSdLayer->GetSdrLayer():nullptr;
+    SdLayer* pSdLayer = dynamic_cast<SdLayer*>(xLayer.get());
+    if(pSdLayer==nullptr)
+        return;
+    SdrLayer* pSdrLayer = pSdLayer->GetSdrLayer();
     if(pSdrLayer==nullptr)
         return;
 
@@ -665,7 +661,7 @@ bool compare_layers (const uno::WeakReference<uno::XInterface>& xRef, void const
     uno::Reference<uno::XInterface> xLayer (xRef);
     if (xLayer.is())
     {
-        SdLayer* pSdLayer = comphelper::getFromUnoTunnel<SdLayer> (xRef);
+        SdLayer* pSdLayer = dynamic_cast<SdLayer*> (xLayer.get());
         if (pSdLayer != nullptr)
         {
             SdrLayer* pSdrLayer = pSdLayer->GetSdrLayer ();

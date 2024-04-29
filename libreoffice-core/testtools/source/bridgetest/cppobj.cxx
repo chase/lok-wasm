@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <thread>
 #include <utility>
 
 #include <cppu/unotype.hxx>
@@ -60,8 +61,8 @@ using namespace test::testtools::bridgetest;
 #pragma warning (disable : 4503) // irrelevant for test code
 #endif
 
-constexpr OUStringLiteral SERVICENAME = u"com.sun.star.test.bridge.CppTestObject";
-constexpr OUStringLiteral IMPLNAME = u"com.sun.star.comp.bridge.CppTestObject";
+constexpr OUString SERVICENAME = u"com.sun.star.test.bridge.CppTestObject"_ustr;
+constexpr OUString IMPLNAME = u"com.sun.star.comp.bridge.CppTestObject"_ustr;
 
 namespace bridge_object
 {
@@ -512,7 +513,7 @@ namespace {
 
 void wait(sal_Int32 microSeconds) {
     OSL_ASSERT(microSeconds >= 0 && microSeconds <= SAL_MAX_INT32 / 1000);
-    osl::Thread::wait(std::chrono::microseconds(microSeconds));
+    std::this_thread::sleep_for(std::chrono::microseconds(microSeconds));
 }
 
 }
@@ -681,19 +682,16 @@ void Test_Impl::setValues( sal_Bool bBool,
 
 ::test::testtools::bridgetest::TestDataElements Test_Impl::raiseException( sal_Int16 nArgumentPos, const OUString & rMsg, const Reference< XInterface > & xContext )
 {
-    IllegalArgumentException aExc;
-    aExc.ArgumentPosition = nArgumentPos;
-    aExc.Message          = _aData.String = rMsg;
-    aExc.Context          = _aData.Interface = xContext;
-    throw aExc;
+    _aData.String = rMsg;
+    _aData.Interface = xContext;
+    throw IllegalArgumentException(rMsg, xContext, nArgumentPos);
 }
 
 void Test_Impl::raiseRuntimeExceptionOneway( const OUString & rMsg, const Reference< XInterface > & xContext )
 {
-    RuntimeException aExc;
-    aExc.Message          = _aData.String = rMsg;
-    aExc.Context          = _aData.Interface = xContext;
-    throw aExc;
+    _aData.String = rMsg;
+    _aData.Interface = xContext;
+    throw RuntimeException(rMsg, xContext);
 }
 
 static void dothrow2(const RuntimeException& e)
@@ -744,9 +742,7 @@ sal_Int32 Test_Impl::getRuntimeException()
 
 void Test_Impl::setRuntimeException( sal_Int32 )
 {
-    RuntimeException aExc;
-    aExc.Message          = _aData.String;
-    aExc.Context          = _aData.Interface;
+    RuntimeException aExc(_aData.String, _aData.Interface);
     throwException( Any( aExc ) );
 }
 

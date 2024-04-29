@@ -21,6 +21,7 @@
 #define INCLUDED_EDITENG_EDITENG_HXX
 
 #include <memory>
+#include <span>
 #include <vector>
 
 #include <optional>
@@ -29,7 +30,6 @@
 #include <com/sun/star/i18n/WordType.hpp>
 #include <com/sun/star/i18n/CharacterIteratorMode.hpp>
 
-#include <o3tl/span.hxx>
 #include <sot/formats.hxx>
 #include <svl/typedwhich.hxx>
 #include <editeng/editdata.hxx>
@@ -41,6 +41,7 @@
 #include <tools/lineend.hxx>
 #include <tools/degree.hxx>
 #include <tools/long.hxx>
+#include <tools/fontenum.hxx>
 #include <basegfx/tuple/b2dtuple.hxx>
 
 #include <editeng/eedata.hxx>
@@ -76,6 +77,7 @@ namespace editeng {
 }
 
 class ImpEditEngine;
+class EditUndoManager;
 class EditView;
 class OutputDevice;
 class SvxFont;
@@ -164,7 +166,6 @@ private:
                        EditEngine&     operator=( const EditEngine& ) = delete;
     EDITENG_DLLPRIVATE bool            PostKeyEvent( const KeyEvent& rKeyEvent, EditView* pView, vcl::Window const * pFrameWin );
 
-    EDITENG_DLLPRIVATE void CursorMoved(const ContentNode* pPrevNode);
     EDITENG_DLLPRIVATE void CheckIdleFormatter();
     EDITENG_DLLPRIVATE bool IsIdleFormatterActive() const;
     EDITENG_DLLPRIVATE ParaPortion* FindParaPortion(ContentNode const * pNode);
@@ -348,8 +349,8 @@ public:
 
     void            ShowParagraph( sal_Int32 nParagraph, bool bShow );
 
-    SfxUndoManager& GetUndoManager();
-    SfxUndoManager* SetUndoManager(SfxUndoManager* pNew);
+    EditUndoManager& GetUndoManager();
+    EditUndoManager* SetUndoManager(EditUndoManager* pNew);
     void            UndoActionStart( sal_uInt16 nId );
     void            UndoActionStart(sal_uInt16 nId, const ESelection& rSel);
     void            UndoActionEnd();
@@ -368,7 +369,6 @@ public:
     bool            IsModified() const;
 
     void            SetModifyHdl( const Link<LinkParamNone*,void>& rLink );
-    Link<LinkParamNone*,void> const & GetModifyHdl() const;
 
     bool            IsInSelectionMode() const;
 
@@ -419,12 +419,10 @@ public:
     void            QuickDelete( const ESelection& rSel );
     void            QuickMarkToBeRepainted( sal_Int32 nPara );
 
-    void setGlobalScale(double fFontScaleX, double fFontScaleY, double fSpacingScaleX, double fSpacingScaleY);
 
-    void getGlobalSpacingScale(double& rX, double& rY) const;
-    basegfx::B2DTuple getGlobalSpacingScale() const;
-    void getGlobalFontScale(double& rX, double& rY) const;
-    basegfx::B2DTuple getGlobalFontScale() const;
+    void setScalingParameters(ScalingParameters const& rScalingParameters);
+    void resetScalingParameters();
+    ScalingParameters getScalingParameters() const;
 
     void setRoundFontSizeToPt(bool bRound) const;
 
@@ -509,8 +507,8 @@ public:
 
     virtual void DrawingText( const Point& rStartPos, const OUString& rText,
                               sal_Int32 nTextStart, sal_Int32 nTextLen,
-                              o3tl::span<const sal_Int32> pDXArray,
-                              o3tl::span<const sal_Bool> pKashidaArray,
+                              std::span<const sal_Int32> pDXArray,
+                              std::span<const sal_Bool> pKashidaArray,
                               const SvxFont& rFont,
                               sal_Int32 nPara, sal_uInt8 nRightToLeft,
                               const EEngineData::WrongSpellVector* pWrongSpellVector,
@@ -531,7 +529,7 @@ public:
     virtual bool    SpellNextDocument();
     /** @return true, when click was consumed. false otherwise. */
     virtual bool    FieldClicked( const SvxFieldItem& rField );
-    virtual OUString CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rTxtColor, std::optional<Color>& rFldColor );
+    virtual OUString CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rTxtColor, std::optional<Color>& rFldColor, std::optional<FontLineStyle>& rFldLineStyle );
 
     // override this if access to bullet information needs to be provided
     virtual const SvxNumberFormat * GetNumberFormat( sal_Int32 nPara ) const;

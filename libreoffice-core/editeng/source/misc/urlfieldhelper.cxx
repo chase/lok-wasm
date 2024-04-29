@@ -16,7 +16,8 @@
 void URLFieldHelper::RemoveURLField(EditView& pEditView)
 {
     pEditView.SelectFieldAtCursor();
-    const SvxFieldData* pField = pEditView.GetFieldAtCursor();
+    const SvxFieldItem* pFieldItem = pEditView.GetFieldAtSelection();
+    const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
     if (auto pUrlField = dynamic_cast<const SvxURLField*>(pField))
     {
         ESelection aSel = pEditView.GetSelection();
@@ -25,7 +26,7 @@ void URLFieldHelper::RemoveURLField(EditView& pEditView)
     }
 }
 
-bool URLFieldHelper::IsCursorAtURLField(const EditView& pEditView)
+bool URLFieldHelper::IsCursorAtURLField(const EditView& pEditView, bool bAlsoCheckBeforeCursor)
 {
     // tdf#128666 Make sure only URL field (or nothing) is selected
     ESelection aSel = pEditView.GetSelection();
@@ -37,7 +38,8 @@ bool URLFieldHelper::IsCursorAtURLField(const EditView& pEditView)
     if (!bIsValidSelection)
         return false;
 
-    const SvxFieldData* pField = pEditView.GetFieldAtCursor();
+    const SvxFieldData* pField
+        = pEditView.GetFieldUnderMouseOrInSelectionOrAtCursor(bAlsoCheckBeforeCursor);
     if (dynamic_cast<const SvxURLField*>(pField))
         return true;
 

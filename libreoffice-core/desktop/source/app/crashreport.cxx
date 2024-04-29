@@ -76,7 +76,7 @@ static bool dumpCallback(const wchar_t* path, const wchar_t* id,
     std::string aPath = conv1.to_bytes(std::wstring(path)) + conv1.to_bytes(std::wstring(id)) + ".dmp";
     CrashReporter::addKeyValue("Active-SfxObject",CrashReporter::getActiveSfxObjectName(),CrashReporter::AddItem);
     CrashReporter::addKeyValue("Last-4-Uno-Commands",CrashReporter::getLoggedUnoCommands(),CrashReporter::AddItem);
-    CrashReporter::addKeyValue("DumpFile", OStringToOUString(aPath.c_str(), RTL_TEXTENCODING_UTF8), CrashReporter::AddItem);
+    CrashReporter::addKeyValue("DumpFile", OStringToOUString(aPath, RTL_TEXTENCODING_UTF8), CrashReporter::AddItem);
     CrashReporter::addKeyValue("GDIHandles", OUString::number(::GetGuiResources(::GetCurrentProcess(), GR_GDIOBJECTS)), CrashReporter::Write);
     SAL_WARN("desktop", "minidump generated: " << aPath);
     return succeeded;
@@ -135,11 +135,11 @@ void CrashReporter::writeCommonInfo()
 
     ucbhelper::InternetProxyDecider proxy_decider(::comphelper::getProcessComponentContext());
 
-    static const OUStringLiteral protocol = u"https";
-    static const OUStringLiteral url = u"crashreport.collaboraoffice.com";
+    static constexpr OUString protocol = u"https"_ustr;
+    static constexpr OUString url = u"crashreport.libreoffice.org"_ustr;
     const sal_Int32 port = 443;
 
-    const ucbhelper::InternetProxyServer proxy_server = proxy_decider.getProxy(protocol, url, port);
+    const OUString proxy_server = proxy_decider.getProxy(protocol, url, port);
 
     // save the new Keys
     vmaKeyValues atlast = maKeyValues;
@@ -147,14 +147,14 @@ void CrashReporter::writeCommonInfo()
     maKeyValues.clear();
 
     // limit the amount of code that needs to be executed before the crash reporting
-    addKeyValue("ProductName", "CollaboraOffice", AddItem);
+    addKeyValue("ProductName", "LibreOffice", AddItem);
     addKeyValue("Version", LIBO_VERSION_DOTTED, AddItem);
     addKeyValue("BuildID", utl::Bootstrap::getBuildIdData(""), AddItem);
     addKeyValue("URL", protocol + "://" + url + "/submit/", AddItem);
 
-    if (!proxy_server.aName.isEmpty())
+    if (!proxy_server.isEmpty())
     {
-        addKeyValue("Proxy", proxy_server.aName + ":" + OUString::number(proxy_server.nPort), AddItem);
+        addKeyValue("Proxy", proxy_server, AddItem);
     }
 
     // write the new keys at the end
@@ -198,8 +198,7 @@ OUString CrashReporter::getLoggedUnoCommands()
 
     for( auto& unocommand: maloggedUnoCommands)
     {
-        aUnoCommandBuffer.append(aCommandSeperator);
-        aUnoCommandBuffer.append(unocommand);
+        aUnoCommandBuffer.append(aCommandSeperator + unocommand);
         aCommandSeperator=",";
     }
     return aUnoCommandBuffer.makeStringAndClear();
@@ -235,7 +234,7 @@ void CrashReporter::updateMinidumpLocation()
 #if defined( UNX ) && !defined MACOSX && !defined IOS && !defined ANDROID
     OUString aURL = getCrashDirectory();
     OString aOStringUrl = OUStringToOString(aURL, RTL_TEXTENCODING_UTF8);
-    google_breakpad::MinidumpDescriptor descriptor(aOStringUrl.getStr());
+    google_breakpad::MinidumpDescriptor descriptor(std::string{aOStringUrl});
     mpExceptionHandler->set_minidump_descriptor(descriptor);
 #elif defined _WIN32
     OUString aURL = getCrashDirectory();
@@ -293,7 +292,7 @@ std::string CrashReporter::getIniFileName()
 {
     OUString url = getCrashDirectory() + "dump.ini";
     OString aUrl = OUStringToOString(url, RTL_TEXTENCODING_UTF8);
-    std::string aRet(aUrl.getStr());
+    std::string aRet(aUrl);
     return aRet;
 }
 

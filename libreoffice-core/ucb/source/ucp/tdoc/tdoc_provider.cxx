@@ -49,7 +49,7 @@ using namespace tdoc_ucp;
 
 ContentProvider::ContentProvider(
             const uno::Reference< uno::XComponentContext >& rxContext )
-: ::ucbhelper::ContentProviderImplHelper( rxContext ),
+: ContentProvider_Base( rxContext ),
   m_xDocsMgr( new OfficeDocumentsManager( rxContext, this ) ),
   m_xStgElemFac( new StorageElementFactory( rxContext, m_xDocsMgr ) )
 {
@@ -62,42 +62,6 @@ ContentProvider::~ContentProvider()
     if ( m_xDocsMgr.is() )
         m_xDocsMgr->destroy();
 }
-
-
-// XInterface methods.
-void SAL_CALL ContentProvider::acquire()
-    noexcept
-{
-    OWeakObject::acquire();
-}
-
-void SAL_CALL ContentProvider::release()
-    noexcept
-{
-    OWeakObject::release();
-}
-
-css::uno::Any SAL_CALL ContentProvider::queryInterface( const css::uno::Type & rType )
-{
-    css::uno::Any aRet = cppu::queryInterface( rType,
-                                               static_cast< lang::XTypeProvider* >(this),
-                                               static_cast< lang::XServiceInfo* >(this),
-                                               static_cast< ucb::XContentProvider* >(this),
-                                               static_cast< frame::XTransientDocumentsDocumentContentIdentifierFactory* >(this),
-                                               static_cast< frame::XTransientDocumentsDocumentContentFactory* >(this)
-                                               );
-    return aRet.hasValue() ? aRet : OWeakObject::queryInterface( rType );
-}
-
-// XTypeProvider methods.
-
-
-XTYPEPROVIDER_IMPL_5( ContentProvider,
-                      lang::XTypeProvider,
-                      lang::XServiceInfo,
-                      ucb::XContentProvider,
-                      frame::XTransientDocumentsDocumentContentIdentifierFactory,
-                      frame::XTransientDocumentsDocumentContentFactory );
 
 
 // XServiceInfo methods.
@@ -173,7 +137,7 @@ ContentProvider::createDocumentContentIdentifier(
     {
         throw lang::IllegalArgumentException(
             "No Document Manager!",
-            static_cast< cppu::OWeakObject * >( this ),
+            getXWeak(),
             1 );
     }
 
@@ -182,7 +146,7 @@ ContentProvider::createDocumentContentIdentifier(
     {
         throw lang::IllegalArgumentException(
             "Unable to obtain document id from model!",
-            static_cast< cppu::OWeakObject * >( this ),
+            getXWeak(),
             1 );
     }
 
@@ -220,7 +184,7 @@ ContentProvider::createDocumentContent(
     // no content.
     throw lang::IllegalArgumentException(
         "Illegal Content Identifier!",
-        static_cast< cppu::OWeakObject * >( this ),
+        getXWeak(),
         1 );
 }
 

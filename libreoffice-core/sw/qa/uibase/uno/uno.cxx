@@ -149,8 +149,8 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testCreateTextRangeByPixelPositionGraphic)
         = xController->createTextRangeByPixelPosition(aPoint);
 
     // Then make sure that the anchor of the image is returned:
-    const SwFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
-    const SwFrameFormat* pFormat = rFormats[0];
+    const auto& rFormats = *pDoc->GetSpzFrameFormats();
+    const auto pFormat = rFormats[0];
     SwPosition aAnchorPos(*pFormat->GetAnchor().GetContentAnchor());
     auto pTextRange = dynamic_cast<SwXTextRange*>(xTextRange.get());
     SwPaM aPaM(pDoc->GetNodes());
@@ -208,7 +208,7 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetTextFormFields)
     for (int i = 0; i < 2; ++i)
     {
         uno::Sequence<css::beans::PropertyValue> aArgs = {
-            comphelper::makePropertyValue("FieldType", uno::Any(OUString(ODF_UNHANDLED))),
+            comphelper::makePropertyValue("FieldType", uno::Any(ODF_UNHANDLED)),
             comphelper::makePropertyValue("FieldCommand",
                                           uno::Any(OUString("ADDIN ZOTERO_ITEM foo bar"))),
             comphelper::makePropertyValue("FieldResult", uno::Any(OUString("result"))),
@@ -217,7 +217,7 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetTextFormFields)
     }
     {
         uno::Sequence<css::beans::PropertyValue> aArgs = {
-            comphelper::makePropertyValue("FieldType", uno::Any(OUString(ODF_UNHANDLED))),
+            comphelper::makePropertyValue("FieldType", uno::Any(ODF_UNHANDLED)),
             comphelper::makePropertyValue("FieldCommand",
                                           uno::Any(OUString("ADDIN ZOTERO_BIBL foo bar"))),
             comphelper::makePropertyValue("FieldResult",
@@ -234,8 +234,8 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetTextFormFields)
     pXTextDocument->getCommandValues(aJsonWriter, aCommand);
 
     // Then make sure we find the 2 items and ignore the bibliography:
-    std::unique_ptr<char[], o3tl::free_delete> pJSON(aJsonWriter.extractData());
-    std::stringstream aStream(pJSON.get());
+    OString pJSON(aJsonWriter.finishAndGetAsOString());
+    std::stringstream aStream((std::string(pJSON)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     // Without the accompanying fix in place, this test would have failed with:
@@ -246,7 +246,7 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetTextFormFields)
 
 CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetDocumentProperties)
 {
-    // Given a document with 3 custom properties: 2 zotero ones and an other one:
+    // Given a document with 3 custom properties: 2 Zotero ones and one other:
     createSwDoc();
     SwDoc* pDoc = getSwDoc();
     SwDocShell* pDocShell = pDoc->GetDocShell();
@@ -267,8 +267,8 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetDocumentProperties)
     pXTextDocument->getCommandValues(aJsonWriter, aCommand);
 
     // Then make sure we find the 2 properties and ignore the other one:
-    std::unique_ptr<char[], o3tl::free_delete> pJSON(aJsonWriter.extractData());
-    std::stringstream aStream(pJSON.get());
+    OString pJSON(aJsonWriter.finishAndGetAsOString());
+    std::stringstream aStream((std::string(pJSON)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     // Without the accompanying fix in place, this test would have failed with:
@@ -308,8 +308,8 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetBookmarks)
     pXTextDocument->getCommandValues(aJsonWriter, aCommand);
 
     // Then make sure we get the 2 references but not the bibliography:
-    std::unique_ptr<char[], o3tl::free_delete> pJSON(aJsonWriter.extractData());
-    std::stringstream aStream(pJSON.get());
+    OString pJSON(aJsonWriter.finishAndGetAsOString());
+    std::stringstream aStream((std::string(pJSON)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     // Without the accompanying fix in place, this test would have failed with:
@@ -345,8 +345,8 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetFields)
     pXTextDocument->getCommandValues(aJsonWriter, aCommand);
 
     // Then make sure we get the 1 refmark:
-    std::unique_ptr<char[], o3tl::free_delete> pJSON(aJsonWriter.extractData());
-    std::stringstream aStream(pJSON.get());
+    OString pJSON(aJsonWriter.finishAndGetAsOString());
+    std::stringstream aStream((std::string(pJSON)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     // Without the accompanying fix in place, this test would have failed with:
@@ -380,7 +380,7 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetTextFormField)
     // Given a document with a fieldmark:
     createSwDoc();
     uno::Sequence<css::beans::PropertyValue> aArgs = {
-        comphelper::makePropertyValue("FieldType", uno::Any(OUString(ODF_UNHANDLED))),
+        comphelper::makePropertyValue("FieldType", uno::Any(ODF_UNHANDLED)),
         comphelper::makePropertyValue("FieldCommand",
                                       uno::Any(OUString("ADDIN ZOTERO_ITEM foo bar"))),
         comphelper::makePropertyValue("FieldResult", uno::Any(OUString("result"))),
@@ -400,8 +400,8 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetTextFormField)
     pXTextDocument->getCommandValues(aJsonWriter, aCommand);
 
     // Then make sure we find the inserted fieldmark:
-    std::unique_ptr<char[], o3tl::free_delete> pJSON(aJsonWriter.extractData());
-    std::stringstream aStream(pJSON.get());
+    OString pJSON(aJsonWriter.finishAndGetAsOString());
+    std::stringstream aStream((std::string(pJSON)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     // Without the accompanying fix in place, this test would have failed with:
@@ -432,8 +432,8 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetSections)
     pXTextDocument->getCommandValues(aJsonWriter, aCommand);
 
     // Make sure we find our just inserted section:
-    std::unique_ptr<char[], o3tl::free_delete> pJSON(aJsonWriter.extractData());
-    std::stringstream aStream(pJSON.get());
+    OString pJSON(aJsonWriter.finishAndGetAsOString());
+    std::stringstream aStream((std::string(pJSON)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     // Without the accompanying fix in place, this test would have failed with:
@@ -464,8 +464,8 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetBookmark)
     pXTextDocument->getCommandValues(aJsonWriter, aCommand);
 
     // Then make sure we find the inserted bookmark:
-    std::unique_ptr<char[], o3tl::free_delete> pJSON(aJsonWriter.extractData());
-    std::stringstream aStream(pJSON.get());
+    OString pJSON(aJsonWriter.finishAndGetAsOString());
+    std::stringstream aStream((std::string(pJSON)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     boost::property_tree::ptree aBookmark = aTree.get_child("bookmark");
@@ -498,8 +498,8 @@ CPPUNIT_TEST_FIXTURE(SwUibaseUnoTest, testGetField)
     pXTextDocument->getCommandValues(aJsonWriter, aCommand);
 
     // Then make sure we find the inserted refmark:
-    std::unique_ptr<char[], o3tl::free_delete> pJSON(aJsonWriter.extractData());
-    std::stringstream aStream(pJSON.get());
+    OString pJSON(aJsonWriter.finishAndGetAsOString());
+    std::stringstream aStream((std::string(pJSON)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     boost::property_tree::ptree aBookmark = aTree.get_child("setRef");

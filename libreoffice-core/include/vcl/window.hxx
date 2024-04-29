@@ -77,7 +77,7 @@ namespace com::sun::star {
         class XSpriteCanvas;
     }
     namespace awt {
-        class XWindowPeer;
+        class XVclWindowPeer;
     }
     namespace uno {
         class Any;
@@ -528,8 +528,6 @@ public:
 
     SAL_DLLPRIVATE WindowImpl*          ImplGetWindowImpl() const { return mpWindowImpl.get(); }
 
-    SAL_DLLPRIVATE Point                ImplFrameToOutput( const Point& rPos );
-
     SAL_DLLPRIVATE void                 ImplGrabFocus( GetFocusFlags nFlags );
     SAL_DLLPRIVATE void                 ImplGrabFocusToDocument( GetFocusFlags nFlags );
     SAL_DLLPRIVATE void                 ImplInvertFocus( const tools::Rectangle& rRect );
@@ -572,8 +570,6 @@ protected:
 
     SAL_DLLPRIVATE void                 ImplInit( vcl::Window* pParent, WinBits nStyle, SystemParentData* pSystemParentData );
 
-    SAL_DLLPRIVATE Point                ImplOutputToFrame( const Point& rPos );
-
     SAL_DLLPRIVATE void                 ImplInvalidateParentFrameRegion( const vcl::Region& rRegion );
     SAL_DLLPRIVATE void                 ImplValidateFrameRegion( const vcl::Region* rRegion, ValidateFlags nFlags );
     SAL_DLLPRIVATE void                 ImplValidate();
@@ -582,7 +578,7 @@ protected:
 
     SAL_DLLPRIVATE vcl::Window*         ImplGetBorderWindow() const;
 
-    SAL_DLLPRIVATE void                 ImplInvalidate( const vcl::Region* rRegion, InvalidateFlags nFlags );
+    virtual void                        ImplInvalidate( const vcl::Region* pRegion, InvalidateFlags nFlags );
 
     virtual WindowHitTest               ImplHitTest( const Point& rFramePos );
 
@@ -691,16 +687,14 @@ private:
 
     SAL_DLLPRIVATE static void          ImplHandleScroll(Scrollable* pHScrl, double nX, Scrollable* pVScrl, double nY);
 
-    SAL_DLLPRIVATE tools::Rectangle     ImplOutputToUnmirroredAbsoluteScreenPixel( const tools::Rectangle& rRect ) const;
-    SAL_DLLPRIVATE tools::Rectangle     ImplUnmirroredAbsoluteScreenToOutputPixel( const tools::Rectangle& rRect ) const;
-    SAL_DLLPRIVATE tools::Long                 ImplGetUnmirroredOutOffX();
+    SAL_DLLPRIVATE AbsoluteScreenPixelRectangle ImplOutputToUnmirroredAbsoluteScreenPixel( const tools::Rectangle& rRect ) const;
+    SAL_DLLPRIVATE tools::Rectangle     ImplUnmirroredAbsoluteScreenToOutputPixel( const AbsoluteScreenPixelRectangle& rRect ) const;
+    SAL_DLLPRIVATE tools::Long          ImplGetUnmirroredOutOffX() const;
 
     // retrieves the list of owner draw decorated windows for this window hierarchy
     SAL_DLLPRIVATE ::std::vector<VclPtr<vcl::Window> >& ImplGetOwnerDrawList();
 
     SAL_DLLPRIVATE vcl::Window*         ImplGetTopmostFrameWindow();
-
-    SAL_DLLPRIVATE tools::Rectangle     ImplGetWindowExtentsRelative(const vcl::Window *pRelativeWindow) const;
 
     SAL_DLLPRIVATE bool                 ImplStopDnd();
     SAL_DLLPRIVATE void                 ImplStartDnd();
@@ -786,6 +780,7 @@ public:
     bool                                IsDialog() const;
     bool                                IsMenuFloatingWindow() const;
     bool                                IsToolbarFloatingWindow() const;
+    bool                                IsNativeFrame() const;
     bool                                IsTopWindow() const;
     SystemWindow*                       GetSystemWindow() const;
 
@@ -949,20 +944,22 @@ public:
     //  the normalized screen methods work independent from UI mirroring
     Point                               OutputToNormalizedScreenPixel( const Point& rPos ) const;
     Point                               NormalizedScreenToOutputPixel( const Point& rPos ) const;
-    Point                               OutputToAbsoluteScreenPixel( const Point& rPos ) const;
-    Point                               AbsoluteScreenToOutputPixel( const Point& rPos ) const;
-    tools::Rectangle                    GetDesktopRectPixel() const;
-    //  window extents including border and decoration
-    tools::Rectangle                    GetWindowExtentsRelative(const vcl::Window *pRelativeWindow) const;
+    AbsoluteScreenPixelPoint            OutputToAbsoluteScreenPixel( const Point& rPos ) const;
+    Point                               AbsoluteScreenToOutputPixel( const AbsoluteScreenPixelPoint& rPos ) const;
+    AbsoluteScreenPixelRectangle        GetDesktopRectPixel() const;
+    //  window extents including border and decoration, relative to passed in window
+    tools::Rectangle                    GetWindowExtentsRelative(const vcl::Window& rRelativeWindow) const;
+    //  window extents including border and decoration, in absolute screen coordinates
+    AbsoluteScreenPixelRectangle        GetWindowExtentsAbsolute() const;
 
     bool                                IsScrollable() const;
     virtual void                        Scroll( tools::Long nHorzScroll, tools::Long nVertScroll,
                                                 ScrollFlags nFlags = ScrollFlags::NONE );
     void                                Scroll( tools::Long nHorzScroll, tools::Long nVertScroll,
                                                 const tools::Rectangle& rRect, ScrollFlags nFlags = ScrollFlags::NONE );
-    virtual void                        Invalidate( InvalidateFlags nFlags = InvalidateFlags::NONE );
-    virtual void                        Invalidate( const tools::Rectangle& rRect, InvalidateFlags nFlags = InvalidateFlags::NONE );
-    virtual void                        Invalidate( const vcl::Region& rRegion, InvalidateFlags nFlags = InvalidateFlags::NONE );
+    void                                Invalidate( InvalidateFlags nFlags = InvalidateFlags::NONE );
+    void                                Invalidate( const tools::Rectangle& rRect, InvalidateFlags nFlags = InvalidateFlags::NONE );
+    void                                Invalidate( const vcl::Region& rRegion, InvalidateFlags nFlags = InvalidateFlags::NONE );
     /**
      * Notification about some rectangle of the output device got invalidated.Used for the main
      * document window.
@@ -1058,8 +1055,8 @@ public:
     void                                SetQuickHelpText( const OUString& rHelpText );
     const OUString&                     GetQuickHelpText() const;
 
-    void                                SetHelpId( const OString& );
-    const OString&                      GetHelpId() const;
+    void                                SetHelpId( const OUString& );
+    const OUString&                     GetHelpId() const;
 
     sal_uInt16                          GetChildCount() const;
     vcl::Window*                        GetChild( sal_uInt16 nChild ) const;
@@ -1095,10 +1092,10 @@ public:
     virtual const SystemEnvData*        GetSystemData() const;
 
     // API to set/query the component interfaces
-    virtual css::uno::Reference< css::awt::XWindowPeer >
+    virtual css::uno::Reference< css::awt::XVclWindowPeer >
                                         GetComponentInterface( bool bCreate = true );
 
-    void                        SetComponentInterface( css::uno::Reference< css::awt::XWindowPeer > const & xIFace );
+    void                                SetComponentInterface( css::uno::Reference< css::awt::XVclWindowPeer > const & xIFace );
 
     void                                SetUseFrameData(bool bUseFrameData);
 
@@ -1193,7 +1190,6 @@ protected:
 private:
 
     SAL_DLLPRIVATE bool                 ImplIsAccessibleCandidate() const;
-    SAL_DLLPRIVATE bool                 ImplIsAccessibleNativeFrame() const;
     ///@}
 
     /*
@@ -1218,7 +1214,7 @@ public:
 
     // set and retrieve for Toolkit
     VCLXWindow*                         GetWindowPeer() const;
-    void                                SetWindowPeer( css::uno::Reference< css::awt::XWindowPeer > const & xPeer, VCLXWindow* pVCLXWindow );
+    void                                SetWindowPeer( css::uno::Reference< css::awt::XVclWindowPeer > const & xPeer, VCLXWindow* pVCLXWindow );
 
     // remember if it was generated by Toolkit
     bool                                IsCreatedWithToolkit() const;
@@ -1386,14 +1382,14 @@ public:
      *
      * @return false if property is unknown
      */
-    virtual bool set_property(const OString &rKey, const OUString &rValue);
+    virtual bool set_property(const OUString &rKey, const OUString &rValue);
 
     /*
      * Sets a font attribute
      *
      * @return false if attribute is unknown
      */
-    bool set_font_attribute(const OString &rKey, std::u16string_view rValue);
+    bool set_font_attribute(const OUString &rKey, std::u16string_view rValue);
 
     /*
      * Adds this widget to the xGroup VclSizeGroup
@@ -1500,7 +1496,7 @@ public:
     tools::Rectangle            GetTextRect( const tools::Rectangle& rRect,
                                              const OUString& rStr, DrawTextFlags nStyle = DrawTextFlags::WordBreak,
                                              TextRectInfo* pInfo = nullptr,
-                                             const vcl::ITextLayout* _pTextLayout = nullptr ) const;
+                                             const vcl::TextLayoutCommon* _pTextLayout = nullptr ) const;
     float                       GetDPIScaleFactor() const;
     tools::Long                 GetOutOffXPixel() const;
     tools::Long                 GetOutOffYPixel() const;

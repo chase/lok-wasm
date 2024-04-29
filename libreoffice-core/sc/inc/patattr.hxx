@@ -31,6 +31,7 @@
 
 namespace vcl { class Font; }
 namespace model { class ComplexColor; }
+struct ScInterpreterContext;
 class OutputDevice;
 class Fraction;
 class ScStyleSheet;
@@ -40,24 +41,22 @@ enum class ScRotateDir : sal_uInt8;
 
 ///  how to treat COL_AUTO in GetFont:
 
-enum ScAutoFontColorMode
+enum class ScAutoFontColorMode
 {
-    SC_AUTOCOL_RAW,         ///< COL_AUTO is returned
-    SC_AUTOCOL_BLACK,       ///< always use black
-    SC_AUTOCOL_PRINT,       ///< black or white, depending on background
-    SC_AUTOCOL_DISPLAY,     ///< from style settings, or black/white if needed
-    SC_AUTOCOL_IGNOREFONT,  ///< like DISPLAY, but ignore stored font color (assume COL_AUTO)
-    SC_AUTOCOL_IGNOREBACK,  ///< like DISPLAY, but ignore stored background color (use configured color)
-    SC_AUTOCOL_IGNOREALL    ///< like DISPLAY, but ignore stored font and background colors
+    Raw,         ///< COL_AUTO is returned
+    Print,       ///< black or white, depending on background
+    Display,     ///< from style settings, or black/white if needed
+    IgnoreFont,  ///< like DISPLAY, but ignore stored font color (assume COL_AUTO)
+    IgnoreBack,  ///< like DISPLAY, but ignore stored background color (use configured color)
+    IgnoreAll    ///< like DISPLAY, but ignore stored font and background colors
 };
 
 class SC_DLLPUBLIC ScPatternAttr final : public SfxSetItem
 {
     std::optional<OUString>  pName;
-    mutable std::optional<size_t> mxHashCode;
     mutable std::optional<bool> mxVisible;
     ScStyleSheet*              pStyle;
-    sal_uInt64                 mnKey;
+    sal_uInt64                 mnPAKey;
 public:
                             ScPatternAttr(SfxItemSet&& pItemSet, const OUString& rStyleName);
                             ScPatternAttr(SfxItemSet&& pItemSet);
@@ -67,9 +66,6 @@ public:
     virtual ScPatternAttr*  Clone( SfxItemPool *pPool = nullptr ) const override;
 
     virtual bool            operator==(const SfxPoolItem& rCmp) const override;
-    // Class cannot be IsSortable() because it's mutable, implement at least Lookup().
-    virtual bool            HasLookup() const override { return true; }
-    virtual lookup_iterator Lookup(lookup_iterator begin, lookup_iterator end ) const override;
 
     const SfxPoolItem&      GetItem( sal_uInt16 nWhichP ) const
                                         { return GetItemSet().Get(nWhichP); }
@@ -176,25 +172,23 @@ public:
     bool                    IsSymbolFont() const;
 
     sal_uInt32              GetNumberFormat( SvNumberFormatter* ) const;
+    sal_uInt32              GetNumberFormat( const ScInterpreterContext& rContext ) const;
     sal_uInt32              GetNumberFormat( SvNumberFormatter* pFormatter,
                                              const SfxItemSet* pCondSet ) const;
 
     Degree100               GetRotateVal( const SfxItemSet* pCondSet ) const;
     ScRotateDir             GetRotateDir( const SfxItemSet* pCondSet ) const;
 
-    void                    SetKey(sal_uInt64 nKey);
-    sal_uInt64              GetKey() const;
-
-    static std::optional<bool> FastEqualPatternSets( const SfxItemSet& rSet1, const SfxItemSet& rSet2 );
+    void                    SetPAKey(sal_uInt64 nKey);
+    sal_uInt64              GetPAKey() const;
 
     // TODO: tdf#135215: This is a band-aid to detect changes and invalidate the hash,
     // a proper way would be probably to override SfxItemSet::Changed(), but 6cb400f41df0dd10
     // hardcoded SfxSetItem to contain SfxItemSet.
-    SfxItemSet& GetItemSet() { mxHashCode.reset(); mxVisible.reset(); return SfxSetItem::GetItemSet(); }
+    SfxItemSet& GetItemSet() { mxVisible.reset(); return SfxSetItem::GetItemSet(); }
     using SfxSetItem::GetItemSet;
 
 private:
-    void                    CalcHashCode() const;
     bool                    CalcVisible() const;
 };
 

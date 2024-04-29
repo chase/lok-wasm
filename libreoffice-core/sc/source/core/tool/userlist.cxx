@@ -17,7 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <memory>
+#include <sal/config.h>
+
 #include <unotools/charclass.hxx>
 
 #include <global.hxx>
@@ -29,60 +30,19 @@
 #include <algorithm>
 #include <utility>
 
-namespace {
-
-class FindByName
-{
-    const OUString& mrName;
-    bool mbUpper;
-public:
-    FindByName(const OUString& rName, bool bUpper) : mrName(rName), mbUpper(bUpper) {}
-    bool operator() (const ScUserListData::SubStr& r) const
-    {
-        return mbUpper ? r.maUpper == mrName : r.maReal == mrName;
-    }
-};
-
-}
-
-ScUserListData::SubStr::SubStr(OUString aReal, OUString aUpper) :
-    maReal(std::move(aReal)), maUpper(std::move(aUpper)) {}
+ScUserListData::SubStr::SubStr(OUString&& aReal) :
+    maReal(std::move(aReal)), maUpper(ScGlobal::getCharClass().uppercase(maReal)) {}
 
 void ScUserListData::InitTokens()
 {
-    sal_Unicode cSep = ScGlobal::cListDelimiter;
     maSubStrings.clear();
-    const sal_Unicode* p = aStr.getStr();
-    const sal_Unicode* p0 = p;
-    sal_Int32 nLen = 0;
-    bool bFirst = true;
-    for (sal_Int32 i = 0, n = aStr.getLength(); i < n; ++i, ++p, ++nLen)
+    sal_Int32 nIndex = 0;
+    do
     {
-        if (bFirst)
-        {
-            // very first character, or the first character after a separator.
-            p0 = p;
-            nLen = 0;
-            bFirst = false;
-        }
-        if (*p == cSep)
-        {
-            if (nLen)
-            {
-                OUString aSub(p0, nLen);
-                OUString aUpStr = ScGlobal::getCharClass().uppercase(aSub);
-                maSubStrings.emplace_back(aSub, aUpStr);
-            }
-            bFirst = true;
-        }
-    }
-
-    if (nLen)
-    {
-        OUString aSub(p0, nLen);
-        OUString aUpStr = ScGlobal::getCharClass().uppercase(aSub);
-        maSubStrings.emplace_back(aSub, aUpStr);
-    }
+        OUString aSub = aStr.getToken(0, ScGlobal::cListDelimiter, nIndex);
+        if (!aSub.isEmpty())
+            maSubStrings.emplace_back(std::move(aSub));
+    } while (nIndex >= 0);
 }
 
 ScUserListData::ScUserListData(OUString _aStr) :
@@ -91,32 +51,17 @@ ScUserListData::ScUserListData(OUString _aStr) :
     InitTokens();
 }
 
-ScUserListData::ScUserListData(const ScUserListData& rData) :
-    aStr(rData.aStr)
-{
-    InitTokens();
-}
-
-ScUserListData::~ScUserListData()
-{
-}
-
 void ScUserListData::SetString( const OUString& rStr )
 {
     aStr = rStr;
     InitTokens();
 }
 
-size_t ScUserListData::GetSubCount() const
-{
-    return maSubStrings.size();
-}
-
 bool ScUserListData::GetSubIndex(const OUString& rSubStr, sal_uInt16& rIndex, bool& bMatchCase) const
 {
     // First, case sensitive search.
-    SubStringsType::const_iterator itr = ::std::find_if(
-        maSubStrings.begin(), maSubStrings.end(), FindByName(rSubStr, false));
+    auto itr = ::std::find_if(maSubStrings.begin(), maSubStrings.end(),
+                              [&rSubStr](const SubStr& item) { return item.maReal == rSubStr; });
     if (itr != maSubStrings.end())
     {
         rIndex = ::std::distance(maSubStrings.begin(), itr);
@@ -125,16 +70,15 @@ bool ScUserListData::GetSubIndex(const OUString& rSubStr, sal_uInt16& rIndex, bo
     }
 
     // When that fails, do a case insensitive search.
+    bMatchCase = false;
     OUString aUpStr = ScGlobal::getCharClass().uppercase(rSubStr);
-    itr = ::std::find_if(
-        maSubStrings.begin(), maSubStrings.end(), FindByName(aUpStr, true));
+    itr = ::std::find_if(maSubStrings.begin(), maSubStrings.end(),
+                         [&aUpStr](const SubStr& item) { return item.maUpper == aUpStr; });
     if (itr != maSubStrings.end())
     {
         rIndex = ::std::distance(maSubStrings.begin(), itr);
-        bMatchCase = false;
         return true;
     }
-    bMatchCase = false;
     return false;
 }
 
@@ -198,20 +142,18 @@ sal_Int32 ScUserListData::ICompare(const OUString& rSubStr1, const OUString& rSu
         return ScGlobal::GetTransliteration().compareString( rSubStr1, rSubStr2 );
 }
 
-ScUserList::ScUserList()
+ScUserList::ScUserList(bool initDefault)
 {
-    using namespace ::com::sun::star;
+    if (initDefault)
+        AddDefaults();
+}
 
+void ScUserList::AddDefaults()
+{
     sal_Unicode cDelimiter = ScGlobal::cListDelimiter;
-    uno::Sequence< i18n::CalendarItem2 > xCal;
-
-    const uno::Sequence< i18n::Calendar2 > xCalendars(
-            ScGlobal::getLocaleData().getAllCalendars() );
-
-    for ( const auto& rCalendar : xCalendars )
+    for (const auto& rCalendar : ScGlobal::getLocaleData().getAllCalendars())
     {
-        xCal = rCalendar.Days;
-        if ( xCal.hasElements() )
+        if (const auto& xCal = rCalendar.Days; xCal.hasElements())
         {
             OUStringBuffer aDayShortBuf(32), aDayLongBuf(64);
             sal_Int32 i;
@@ -237,13 +179,12 @@ ScUserList::ScUserList()
             OUString aDayLong = aDayLongBuf.makeStringAndClear();
 
             if ( !HasEntry( aDayShort ) )
-                maData.push_back( std::make_unique<ScUserListData>( aDayShort ));
+                emplace_back(aDayShort);
             if ( !HasEntry( aDayLong ) )
-                maData.push_back( std::make_unique<ScUserListData>( aDayLong ));
+                emplace_back(aDayLong);
         }
 
-        xCal = rCalendar.Months;
-        if ( xCal.hasElements() )
+        if (const auto& xCal = rCalendar.Months; xCal.hasElements())
         {
             OUStringBuffer aMonthShortBuf(128), aMonthLongBuf(128);
             sal_Int32 i;
@@ -262,17 +203,11 @@ ScUserList::ScUserList()
             OUString aMonthLong = aMonthLongBuf.makeStringAndClear();
 
             if ( !HasEntry( aMonthShort ) )
-                maData.push_back( std::make_unique<ScUserListData>( aMonthShort ));
+                emplace_back(aMonthShort);
             if ( !HasEntry( aMonthLong ) )
-                maData.push_back( std::make_unique<ScUserListData>( aMonthLong ));
+                emplace_back(aMonthLong);
         }
     }
-}
-
-ScUserList::ScUserList(const ScUserList& rOther)
-{
-    for (const std::unique_ptr<ScUserListData>& rData : rOther.maData)
-        maData.push_back(std::make_unique<ScUserListData>(*rData));
 }
 
 const ScUserListData* ScUserList::GetData(const OUString& rSubStr) const
@@ -283,79 +218,31 @@ const ScUserListData* ScUserList::GetData(const OUString& rSubStr) const
 
     for (const auto& rxItem : maData)
     {
-        if (rxItem->GetSubIndex(rSubStr, nIndex, bMatchCase))
+        if (rxItem.GetSubIndex(rSubStr, nIndex, bMatchCase))
         {
             if (bMatchCase)
-                return rxItem.get();
+                return &rxItem;
             if (!pFirstCaseInsensitive)
-                pFirstCaseInsensitive = rxItem.get();
+                pFirstCaseInsensitive = &rxItem;
         }
     }
 
     return pFirstCaseInsensitive;
 }
 
-const ScUserListData& ScUserList::operator[](size_t nIndex) const
-{
-    return *maData[nIndex];
-}
-
-ScUserListData& ScUserList::operator[](size_t nIndex)
-{
-    return *maData[nIndex];
-}
-
-ScUserList& ScUserList::operator=( const ScUserList& rOther )
-{
-    maData.clear();
-    for (const std::unique_ptr<ScUserListData>& rData : rOther.maData)
-        maData.push_back(std::make_unique<ScUserListData>(*rData));
-    return *this;
-}
-
 bool ScUserList::operator==( const ScUserList& r ) const
 {
     return std::equal(maData.begin(), maData.end(), r.maData.begin(), r.maData.end(),
-        [](const std::unique_ptr<ScUserListData>& lhs, const std::unique_ptr<ScUserListData>& rhs) {
-            return (lhs->GetString() == rhs->GetString()) && (lhs->GetSubCount() == rhs->GetSubCount());
+        [](const ScUserListData& lhs, const ScUserListData& rhs) {
+            return lhs.GetString() == rhs.GetString();
         });
-}
-
-bool ScUserList::operator!=( const ScUserList& r ) const
-{
-    return !operator==( r );
 }
 
 bool ScUserList::HasEntry( std::u16string_view rStr ) const
 {
     return ::std::any_of(maData.begin(), maData.end(),
-        [&] (std::unique_ptr<ScUserListData> const& pData)
-            { return pData->GetString() == rStr; } );
-}
-
-ScUserList::iterator ScUserList::begin()
-{
-    return maData.begin();
-}
-
-void ScUserList::clear()
-{
-    maData.clear();
-}
-
-size_t ScUserList::size() const
-{
-    return maData.size();
-}
-
-void ScUserList::push_back(ScUserListData* p)
-{
-    maData.push_back(std::unique_ptr<ScUserListData>(p));
-}
-
-void ScUserList::erase(const iterator& itr)
-{
-    maData.erase(itr);
+        [&] (ScUserListData const& pData)
+            { return pData.GetString() == rStr; } );
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

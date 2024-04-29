@@ -25,9 +25,9 @@
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/view/SelectionType.hpp>
 #include <toolkit/controls/unocontrolbase.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 #include <osl/diagnose.h>
-#include <cppuhelper/implbase.hxx>
+#include <cppuhelper/implbase1.hxx>
 
 #include <helper/unopropertyarrayhelper.hxx>
 
@@ -120,7 +120,7 @@ Reference< XPropertySetInfo > UnoTreeModel::getPropertySetInfo(  )
 
 namespace {
 
-typedef ::cppu::ImplInheritanceHelper< UnoControlBase, css::awt::tree::XTreeControl > UnoTreeControl_Base;
+typedef ::cppu::AggImplInheritanceHelper1< UnoControlBase, css::awt::tree::XTreeControl > UnoTreeControl_Base;
 class UnoTreeControl : public UnoTreeControl_Base
 {
 public:
@@ -430,7 +430,7 @@ void SAL_CALL UnoTreeControl::removeTreeEditListener( const Reference< XTreeEdit
 void SAL_CALL UnoTreeControl::dispose(  )
 {
     lang::EventObject aEvt;
-    aEvt.Source = static_cast< ::cppu::OWeakObject* >(this);
+    aEvt.Source = getXWeak();
     maSelectionListeners.disposeAndClear( aEvt );
     maTreeExpansionListeners.disposeAndClear( aEvt );
     UnoControl::dispose();
@@ -451,7 +451,9 @@ void UnoTreeControl::createPeer( const uno::Reference< awt::XToolkit > & rxToolk
 
 void SAL_CALL TreeEditListenerMultiplexer::nodeEditing( const Reference< XTreeNode >& Node )
 {
-    ::comphelper::OInterfaceIteratorHelper3 aIt(*this);
+    std::unique_lock g(m_aMutex);
+    ::comphelper::OInterfaceIteratorHelper4 aIt(g, maListeners);
+    g.unlock();
     while( aIt.hasMoreElements() )
     {
         Reference<XTreeEditListener> xListener(aIt.next());
@@ -463,7 +465,10 @@ void SAL_CALL TreeEditListenerMultiplexer::nodeEditing( const Reference< XTreeNo
         {
             OSL_ENSURE( e.Context.is(), "caught DisposedException with empty Context field" );
             if ( e.Context == xListener || !e.Context.is() )
-                aIt.remove();
+            {
+                std::unique_lock g2(m_aMutex);
+                aIt.remove(g2);
+            }
         }
         catch( const RuntimeException& )
         {
@@ -474,7 +479,9 @@ void SAL_CALL TreeEditListenerMultiplexer::nodeEditing( const Reference< XTreeNo
 
 void SAL_CALL TreeEditListenerMultiplexer::nodeEdited( const Reference< XTreeNode >& Node, const OUString& NewText )
 {
-    ::comphelper::OInterfaceIteratorHelper3 aIt(*this);
+    std::unique_lock g(m_aMutex);
+    ::comphelper::OInterfaceIteratorHelper4 aIt(g, maListeners);
+    g.unlock();
     while( aIt.hasMoreElements() )
     {
         Reference<XTreeEditListener> xListener(aIt.next());
@@ -486,7 +493,10 @@ void SAL_CALL TreeEditListenerMultiplexer::nodeEdited( const Reference< XTreeNod
         {
             OSL_ENSURE( e.Context.is(), "caught DisposedException with empty Context field" );
             if ( e.Context == xListener || !e.Context.is() )
-                aIt.remove();
+            {
+                std::unique_lock g2(m_aMutex);
+                aIt.remove(g2);
+            }
         }
         catch( const RuntimeException& )
         {

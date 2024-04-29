@@ -31,10 +31,10 @@
 #include <cppuhelper/typeprovider.hxx>
 #include <sal/log.hxx>
 
-using namespace rtl;
-
 #include <cstdlib>
+#include <typeindex>
 
+using namespace rtl;
 using namespace connectivity::mysqlc;
 using namespace connectivity;
 using namespace cppu;
@@ -48,8 +48,6 @@ using namespace com::sun::star::io;
 using namespace com::sun::star::util;
 using namespace ::comphelper;
 using ::osl::MutexGuard;
-
-#include <typeindex>
 
 namespace
 {
@@ -183,7 +181,7 @@ OPreparedResultSet::OPreparedResultSet(OConnection& rConn, OPreparedStatement* p
     : OPreparedResultSet_BASE(m_aMutex)
     , OPropertySetHelper(OPreparedResultSet_BASE::rBHelper)
     , m_rConnection(rConn)
-    , m_aStatement(css::uno::Reference<css::uno::XWeak>(static_cast<OWeakObject*>(pStmt)))
+    , m_aStatement(css::uno::Reference(cppu::getXWeak(pStmt)))
     , m_pStmt(pMyStmt)
     , m_encoding(rConn.getConnectionEncoding())
     , m_nColumnCount(mysql_stmt_field_count(pMyStmt))

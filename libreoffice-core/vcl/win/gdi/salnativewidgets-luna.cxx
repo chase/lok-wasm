@@ -40,6 +40,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <toolbarvalue.hxx>
+#include <menubarvalue.hxx>
 
 #include <win/svsys.h>
 #include <win/salgdi.h>
@@ -189,6 +190,7 @@ bool WinSalGraphics::isNativeControlSupported( ControlType nType, ControlPart nP
             }
             break;
         case ControlType::Progress:
+        case ControlType::LevelBar:
             if( nPart == ControlPart::Entire )
                 hTheme = getThemeHandle(mhWnd, L"Progress", mWinSalGraphicsImplBase);
             break;
@@ -988,6 +990,17 @@ static bool ImplDrawNativeControl( HDC hDC, HTHEME hTheme, RECT rc,
                     iState = MBI_HOT;
                 else
                     iState = MBI_NORMAL;
+
+                if(GetSalData()->mbThemeMenuSupport && Application::GetSettings().GetStyleSettings().GetHighContrastMode()
+                    && ( nState & (ControlState::SELECTED | nState & ControlState::ROLLOVER )))
+                {
+                    Color aColor(Application::GetSettings().GetStyleSettings().GetHighlightColor());
+                    ScopedHBRUSH hbrush(CreateSolidBrush(RGB(aColor.GetRed(),
+                        aColor.GetGreen(),
+                        aColor.GetBlue())));
+                    FillRect(hDC, &rc, hbrush.get());
+                    return true;
+                }
             }
             else
             {
@@ -1002,12 +1015,19 @@ static bool ImplDrawNativeControl( HDC hDC, HTHEME hTheme, RECT rc,
         }
     }
 
-    if( nType == ControlType::Progress )
+    if( nType == ControlType::Progress || nType == ControlType::LevelBar )
     {
         if( nPart != ControlPart::Entire )
             return false;
 
-        if( ! ImplDrawTheme( hTheme, hDC, PP_BAR, iState, rc, aCaption) )
+        int nPartIdBackground = PP_BAR;
+        if( nType == ControlType::LevelBar )
+        {
+            nPartIdBackground = PP_TRANSPARENTBAR;
+            iState = PBBS_PARTIAL;
+        }
+
+        if( ! ImplDrawTheme( hTheme, hDC, nPartIdBackground, iState, rc, aCaption) )
             return false;
         RECT aProgressRect = rc;
         if( GetThemeBackgroundContentRect( hTheme, hDC, PP_BAR, iState, &rc, &aProgressRect) != S_OK )
@@ -1020,6 +1040,26 @@ static bool ImplDrawNativeControl( HDC hDC, HTHEME hTheme, RECT rc,
             aProgressRect.left = aProgressRect.right - nProgressWidth;
         else
             aProgressRect.right = aProgressRect.left + nProgressWidth;
+
+        if (nType == ControlType::LevelBar)
+        {
+            const auto nPercentage
+                = aValue.getNumericVal() * 100 / std::max(LONG{ 1 }, (rc.right - rc.left));
+
+            COLORREF aBrushColor{};
+            if (nPercentage < 25)
+                aBrushColor = RGB(255, 0, 0);
+            else if (nPercentage < 50)
+                aBrushColor = RGB(255, 255, 0);
+            else if (nPercentage < 75)
+                aBrushColor = RGB(0, 0, 255);
+            else
+                aBrushColor = RGB(0, 255, 0);
+
+            ScopedHBRUSH hBrush(CreateSolidBrush(aBrushColor));
+            FillRect(hDC, &aProgressRect, hBrush.get());
+            return true;
+        }
 
         return ImplDrawTheme( hTheme, hDC, PP_CHUNK, iState, aProgressRect, aCaption );
     }
@@ -1271,6 +1311,7 @@ bool WinSalGraphics::drawNativeControl( ControlType nType,
             }
             break;
         case ControlType::Progress:
+        case ControlType::LevelBar:
             if( nPart == ControlPart::Entire )
                 hTheme = getThemeHandle(mhWnd, L"Progress", mWinSalGraphicsImplBase);
             break;
@@ -1574,9 +1615,14 @@ void WinSalGraphics::updateSettingsNative( AllSettings& rSettings )
     // FIXME get the color directly from the theme, not from the settings
     Color aMenuBarTextColor = aStyleSettings.GetPersonaMenuBarTextColor().value_or( aStyleSettings.GetMenuTextColor() );
     // in aero menuitem highlight text is drawn in the same color as normal
-    aStyleSettings.SetMenuHighlightTextColor( aStyleSettings.GetMenuTextColor() );
-    aStyleSettings.SetMenuBarRolloverTextColor( aMenuBarTextColor );
-    aStyleSettings.SetMenuBarHighlightTextColor( aMenuBarTextColor );
+    // high contrast highlight color is not related to persona and not apply blur or transparency
+    if( !aStyleSettings.GetHighContrastMode() )
+    {
+        aStyleSettings.SetMenuHighlightTextColor( aStyleSettings.GetMenuTextColor() );
+        aStyleSettings.SetMenuBarRolloverTextColor( aMenuBarTextColor );
+        aStyleSettings.SetMenuBarHighlightTextColor( aMenuBarTextColor );
+    }
+
     pSVData->maNWFData.mnMenuFormatBorderX = 2;
     pSVData->maNWFData.mnMenuFormatBorderY = 2;
     pSVData->maNWFData.maMenuBarHighlightTextColor = aMenuBarTextColor;

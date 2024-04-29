@@ -16,19 +16,13 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
-
-#ifndef INCLUDED_HELPCOMPILER_INC_HELPLINKER_HXX
-#define INCLUDED_HELPCOMPILER_INC_HELPLINKER_HXX
+#pragma once
 
 #include <memory>
 #include <vector>
 #include <helpcompiler/dllapi.h>
 #include "HelpCompiler.hxx"
 #include <libxslt/xsltInternals.h>
-
-#ifdef AIX
-#    undef _THREAD_SAFE
-#endif
 
 class L10N_DLLPUBLIC IndexerPreProcessor
 {
@@ -91,7 +85,5 @@ private:
         const std::string& fileB, const std::string& anchorB,
         const std::string& jarfileB, const std::string& titleB );
 };
-
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

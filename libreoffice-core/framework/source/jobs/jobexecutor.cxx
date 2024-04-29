@@ -31,8 +31,7 @@
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/document/XEventListener.hpp>
 
-#include <cppuhelper/basemutex.hxx>
-#include <cppuhelper/compbase.hxx>
+#include <comphelper/compbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/configpaths.hxx>
@@ -44,7 +43,7 @@ using namespace framework;
 
 namespace {
 
-typedef cppu::WeakComponentImplHelper<
+typedef comphelper::WeakComponentImplHelper<
           css::lang::XServiceInfo
         , css::task::XJobExecutor
         , css::container::XContainerListener // => lang.XEventListener
@@ -57,7 +56,7 @@ typedef cppu::WeakComponentImplHelper<
             inside the configuration and execute it. Of course it controls the
             lifetime of such jobs too.
  */
-class JobExecutor : private cppu::BaseMutex, public Base
+class JobExecutor : public Base
 {
 private:
 
@@ -73,7 +72,7 @@ private:
     /** helper to allow us listen to the configuration without a cyclic dependency */
     css::uno::Reference<css::container::XContainerListener> m_xConfigListener;
 
-    virtual void SAL_CALL disposing() final override;
+    virtual void disposing(std::unique_lock<std::mutex>& rGuard) final override;
 
 public:
 
@@ -121,8 +120,7 @@ public:
                     reference to the uno service manager
  */
 JobExecutor::JobExecutor( /*IN*/ const css::uno::Reference< css::uno::XComponentContext >& xContext )
-    : Base                (m_aMutex)
-    , m_xContext          (xContext                                                        )
+    : m_xContext          (xContext                                                        )
     , m_aConfig           (xContext, "/org.openoffice.Office.Jobs/Events")
 {
 }
@@ -162,21 +160,19 @@ void JobExecutor::initListeners()
 
 JobExecutor::~JobExecutor()
 {
-    disposing();
+    std::unique_lock g(m_aMutex);
+    disposing(g);
 }
 
-void JobExecutor::disposing() {
+void JobExecutor::disposing(std::unique_lock<std::mutex>& /*rGuard*/) {
     css::uno::Reference<css::container::XContainer> notifier;
     css::uno::Reference<css::container::XContainerListener> listener;
-    {
-        osl::MutexGuard g(rBHelper.rMutex);
-        if (m_aConfig.getMode() != ConfigAccess::E_CLOSED) {
-            notifier.set(m_aConfig.cfg(), css::uno::UNO_QUERY);
-            listener = m_xConfigListener;
-            m_aConfig.close();
-        }
-        m_xConfigListener.clear();
+    if (m_aConfig.getMode() != ConfigAccess::E_CLOSED) {
+        notifier.set(m_aConfig.cfg(), css::uno::UNO_QUERY);
+        listener = m_xConfigListener;
+        m_aConfig.close();
     }
+    m_xConfigListener.clear();
     if (notifier.is()) {
         notifier->removeContainerListener(listener);
     }
@@ -195,45 +191,38 @@ void SAL_CALL JobExecutor::trigger( const OUString& sEvent )
 {
     SAL_INFO( "fwk", "JobExecutor::trigger()");
 
-    std::vector< OUString > lJobs;
+    /* SAFE */
+    {
+        std::unique_lock g(m_aMutex);
 
-    /* SAFE */ {
-    osl::MutexGuard g(rBHelper.rMutex);
+        // Optimization!
+        // Check if the given event name exist inside configuration and reject wrong requests.
+        // This optimization suppress using of the cfg api for getting event and job descriptions ...
+        if (std::find(m_lEvents.begin(), m_lEvents.end(), sEvent) == m_lEvents.end())
+            return;
 
-    // Optimization!
-    // Check if the given event name exist inside configuration and reject wrong requests.
-    // This optimization suppress using of the cfg api for getting event and job descriptions ...
-    if (std::find(m_lEvents.begin(), m_lEvents.end(), sEvent) == m_lEvents.end())
-        return;
+    } /* SAFE */
 
     // get list of all enabled jobs
     // The called static helper methods read it from the configuration and
     // filter disabled jobs using it's time stamp values.
-    lJobs = JobData::getEnabledJobsForEvent(m_xContext, sEvent);
-    } /* SAFE */
+    std::vector< OUString > lJobs = JobData::getEnabledJobsForEvent(m_xContext, sEvent);
 
     // step over all enabled jobs and execute it
     size_t c = lJobs.size();
     for (size_t j=0; j<c; ++j)
     {
-        rtl::Reference<Job> pJob;
+        JobData aCfg(m_xContext);
+        aCfg.setEvent(sEvent, lJobs[j]);
+        aCfg.setEnvironment(JobData::E_EXECUTION);
 
-        /* SAFE */
-        {
-            SolarMutexGuard g2;
-
-            JobData aCfg(m_xContext);
-            aCfg.setEvent(sEvent, lJobs[j]);
-            aCfg.setEnvironment(JobData::E_EXECUTION);
-
-            /*Attention!
-                Jobs implements interfaces and dies by ref count!
-                And freeing of such uno object is done by uno itself.
-                So we have to use dynamic memory everytimes.
-             */
-            pJob = new Job(m_xContext, css::uno::Reference< css::frame::XFrame >());
-            pJob->setJobData(aCfg);
-        } /* SAFE */
+        /*Attention!
+            Jobs implements interfaces and dies by ref count!
+            And freeing of such uno object is done by uno itself.
+            So we have to use dynamic memory everytimes.
+         */
+        rtl::Reference<Job> pJob = new Job(m_xContext, css::uno::Reference< css::frame::XFrame >());
+        pJob->setJobData(aCfg);
 
         pJob->execute(css::uno::Sequence< css::beans::NamedValue >());
     }
@@ -241,14 +230,11 @@ void SAL_CALL JobExecutor::trigger( const OUString& sEvent )
 
 void SAL_CALL JobExecutor::notifyEvent( const css::document::EventObject& aEvent )
 {
-    static constexpr OUStringLiteral EVENT_ON_DOCUMENT_OPENED(u"onDocumentOpened");   // Job UI  event : OnNew    or OnLoad
-    static constexpr OUStringLiteral EVENT_ON_DOCUMENT_ADDED(u"onDocumentAdded");     // Job API event : OnCreate or OnLoadFinished
+    static constexpr OUString EVENT_ON_DOCUMENT_OPENED(u"onDocumentOpened"_ustr);   // Job UI  event : OnNew    or OnLoad
+    static constexpr OUString EVENT_ON_DOCUMENT_ADDED(u"onDocumentAdded"_ustr);     // Job API event : OnCreate or OnLoadFinished
 
     OUString aModuleIdentifier;
     ::std::vector< JobData::TJob2DocEventBinding > lJobs;
-
-    /* SAFE */ {
-    osl::MutexGuard g(rBHelper.rMutex);
 
     // Optimization!
     // Check if the given event name exist inside configuration and reject wrong requests.
@@ -263,38 +249,39 @@ void SAL_CALL JobExecutor::notifyEvent( const css::document::EventObject& aEvent
     catch( const css::uno::Exception& )
     {}
 
-    // Special feature: If the events "OnNew" or "OnLoad" occurs - we generate our own event "onDocumentOpened".
-    if (
-        (aEvent.EventName == "OnNew") ||
-        (aEvent.EventName == "OnLoad")
-       )
+    /* SAFE */
     {
-        if (std::find(m_lEvents.begin(), m_lEvents.end(), EVENT_ON_DOCUMENT_OPENED) != m_lEvents.end())
-            JobData::appendEnabledJobsForEvent(m_xContext, EVENT_ON_DOCUMENT_OPENED, lJobs);
-    }
+        std::unique_lock g(m_aMutex);
 
-    // Special feature: If the events "OnCreate" or "OnLoadFinished" occurs - we generate our own event "onDocumentAdded".
-    if (
-        (aEvent.EventName == "OnCreate") ||
-        (aEvent.EventName == "OnLoadFinished")
-       )
-    {
-        if (std::find(m_lEvents.begin(), m_lEvents.end(), EVENT_ON_DOCUMENT_ADDED) != m_lEvents.end())
-            JobData::appendEnabledJobsForEvent(m_xContext, EVENT_ON_DOCUMENT_ADDED, lJobs);
-    }
+        // Special feature: If the events "OnNew" or "OnLoad" occurs - we generate our own event "onDocumentOpened".
+        if (
+            (aEvent.EventName == "OnNew") ||
+            (aEvent.EventName == "OnLoad")
+           )
+        {
+            if (std::find(m_lEvents.begin(), m_lEvents.end(), EVENT_ON_DOCUMENT_OPENED) != m_lEvents.end())
+                JobData::appendEnabledJobsForEvent(m_xContext, EVENT_ON_DOCUMENT_OPENED, lJobs);
+        }
 
-    // Add all jobs for "real" notified event too .-)
-    if (std::find(m_lEvents.begin(), m_lEvents.end(), aEvent.EventName) != m_lEvents.end())
-        JobData::appendEnabledJobsForEvent(m_xContext, aEvent.EventName, lJobs);
+        // Special feature: If the events "OnCreate" or "OnLoadFinished" occurs - we generate our own event "onDocumentAdded".
+        if (
+            (aEvent.EventName == "OnCreate") ||
+            (aEvent.EventName == "OnLoadFinished")
+           )
+        {
+            if (std::find(m_lEvents.begin(), m_lEvents.end(), EVENT_ON_DOCUMENT_ADDED) != m_lEvents.end())
+                JobData::appendEnabledJobsForEvent(m_xContext, EVENT_ON_DOCUMENT_ADDED, lJobs);
+        }
+
+        // Add all jobs for "real" notified event too .-)
+        if (std::find(m_lEvents.begin(), m_lEvents.end(), aEvent.EventName) != m_lEvents.end())
+            JobData::appendEnabledJobsForEvent(m_xContext, aEvent.EventName, lJobs);
     } /* SAFE */
 
     // step over all enabled jobs and execute it
     for (auto const& lJob : lJobs)
     {
         rtl::Reference<Job> pJob;
-
-        /* SAFE */ {
-        SolarMutexGuard g2;
 
         const JobData::TJob2DocEventBinding& rBinding = lJob;
 
@@ -313,7 +300,6 @@ void SAL_CALL JobExecutor::notifyEvent( const css::document::EventObject& aEvent
         css::uno::Reference< css::frame::XModel > xModel(aEvent.Source, css::uno::UNO_QUERY);
         pJob = new Job(m_xContext, xModel);
         pJob->setJobData(aCfg);
-        } /* SAFE */
 
         pJob->execute(css::uno::Sequence< css::beans::NamedValue >());
     }
@@ -371,7 +357,7 @@ void SAL_CALL JobExecutor::elementReplaced( const css::container::ContainerEvent
 void SAL_CALL JobExecutor::disposing( const css::lang::EventObject& aEvent )
 {
     /* SAFE { */
-    osl::MutexGuard g(rBHelper.rMutex);
+    std::unique_lock g(m_aMutex);
     css::uno::Reference< css::uno::XInterface > xCFG(m_aConfig.cfg(), css::uno::UNO_QUERY);
     if (
         (xCFG                == aEvent.Source        ) &&

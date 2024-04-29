@@ -96,8 +96,8 @@ void ScTabViewShell::SwitchBetweenRefDialogs(SfxModelessDialogController* pDialo
         static_cast<ScNameDefDlg*>(pDialog)->GetNewData(maName, maScope);
         static_cast<ScNameDefDlg*>(pDialog)->Close();
         sal_uInt16 nId  = ScNameDlgWrapper::GetChildWindowId();
-        SfxViewFrame* pViewFrm = GetViewFrame();
-        SfxChildWindow* pWnd = pViewFrm->GetChildWindow( nId );
+        SfxViewFrame& rViewFrm = GetViewFrame();
+        SfxChildWindow* pWnd = rViewFrm.GetChildWindow( nId );
 
         SC_MOD()->SetRefDialog( nId, pWnd == nullptr );
    }
@@ -107,8 +107,8 @@ void ScTabViewShell::SwitchBetweenRefDialogs(SfxModelessDialogController* pDialo
         static_cast<ScNameDlg*>(pDialog)->GetRangeNames(m_RangeMap);
         static_cast<ScNameDlg*>(pDialog)->Close();
         sal_uInt16 nId  = ScNameDefDlgWrapper::GetChildWindowId();
-        SfxViewFrame* pViewFrm = GetViewFrame();
-        SfxChildWindow* pWnd = pViewFrm->GetChildWindow( nId );
+        SfxViewFrame& rViewFrm = GetViewFrame();
+        SfxChildWindow* pWnd = rViewFrm.GetChildWindow( nId );
 
         SC_MOD()->SetRefDialog( nId, pWnd == nullptr );
    }
@@ -442,7 +442,7 @@ std::shared_ptr<SfxModelessDialogController> ScTabViewShell::CreateRefDialogCont
                 xResult = std::make_shared<ScCondFormatDlg>(pB, pCW, pParent, &rViewData, pDlgItem);
 
                 // Remove the pool item stored by Conditional Format Manager Dialog.
-                GetPool().Remove(*pDlgItem);
+                GetPool().DirectRemoveItemFromPool(*pDlgItem);
             }
 
             break;
@@ -527,8 +527,6 @@ void ScTabViewShell::NotifyCursor(SfxViewShell* pOtherShell) const
             O3TL_UNREACHABLE;
         }
     }
-
-    return {};
 }
 
 css::uno::Reference<css::datatransfer::XTransferable2> ScTabViewShell::GetClipData(vcl::Window* pWin)
@@ -556,14 +554,14 @@ void ScTabViewShell::notifyAllViewsHeaderInvalidation(const SfxViewShell* pForVi
     switch (eHeaderType)
     {
         case COLUMN_HEADER:
-            aPayload = "column";
+            aPayload = "column"_ostr;
             break;
         case ROW_HEADER:
-            aPayload = "row";
+            aPayload = "row"_ostr;
             break;
         case BOTH_HEADERS:
         default:
-            aPayload = "all";
+            aPayload = "all"_ostr;
             break;
     }
 
@@ -574,7 +572,7 @@ void ScTabViewShell::notifyAllViewsHeaderInvalidation(const SfxViewShell* pForVi
         if (pTabViewShell && pViewShell->GetDocId() == pForViewShell->GetDocId()
             && (nCurrentTabIndex == -1 || pTabViewShell->getPart() == nCurrentTabIndex))
         {
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_INVALIDATE_HEADER, aPayload.getStr());
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_INVALIDATE_HEADER, aPayload);
         }
         pViewShell = SfxViewShell::GetNext(*pViewShell);
     }
@@ -643,7 +641,7 @@ void ScTabViewShell::notifyAllViewsSheetGeomInvalidation(const SfxViewShell* pFo
         if (pTabViewShell && pViewShell->GetDocId() == pForViewShell->GetDocId() &&
                 (nCurrentTabIndex == -1 || pTabViewShell->getPart() == nCurrentTabIndex))
         {
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_INVALIDATE_SHEET_GEOMETRY, aPayload.getStr());
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_INVALIDATE_SHEET_GEOMETRY, aPayload);
         }
         pViewShell = SfxViewShell::GetNext(*pViewShell);
     }

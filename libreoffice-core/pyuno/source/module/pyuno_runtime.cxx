@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/log.hxx>
 #include <config_folders.h>
 
 #include "pyuno_impl.hxx"
@@ -138,6 +139,9 @@ static PyTypeObject RuntimeImpl_Type =
 #pragma clang diagnostic pop
 #endif
 #endif
+#if PY_VERSION_HEX >= 0x030C00A1
+    , 0 // tp_watched
+#endif
 #endif
 #endif
 };
@@ -239,14 +243,17 @@ static void readLoggingConfig( sal_Int32 *pLevel, FILE **ppFile )
         *ppFile = stderr;
     else
     {
-        oslProcessInfo data;
-        data.Size = sizeof( data );
-        osl_getProcessInfo(
-            nullptr , osl_Process_IDENTIFIER , &data );
         osl_getSystemPathFromFileURL( str.pData, &str.pData);
         OString o = OUStringToOString( str, osl_getThreadTextEncoding() );
-        o += ".";
-        o += OString::number( data.Ident );
+
+        oslProcessInfo data;
+        data.Size = sizeof( data );
+        if (osl_getProcessInfo(
+            nullptr , osl_Process_IDENTIFIER , &data ) == osl_Process_E_None)
+        {
+            o += ".";
+            o += OString::number(data.Ident);
+        }
 
         *ppFile = fopen( o.getStr() , "w" );
         if ( *ppFile )
@@ -940,12 +947,8 @@ Any Runtime::extractUnoException( const PyRef & excType, const PyRef &excValue, 
         {
             buf.append( ", no traceback available\n" );
         }
-        RuntimeException e;
-        e.Message = buf.makeStringAndClear();
-#if OSL_DEBUG_LEVEL > 0
-        fprintf( stderr, "Python exception: %s\n",
-                 OUStringToOString(e.Message, RTL_TEXTENCODING_UTF8).getStr() );
-#endif
+        RuntimeException e(buf.makeStringAndClear());
+        SAL_WARN("pyuno.runtime", "Python exception: " << e.Message);
         ret <<= e;
     }
     return ret;

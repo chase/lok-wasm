@@ -41,7 +41,10 @@ $(eval $(call gb_Library_add_defs,xo,\
     -DXMLOFF_DLLIMPLEMENTATION \
 ))
 
-$(eval $(call gb_Library_use_external,xo,boost_headers))
+$(eval $(call gb_Library_use_externals,xo,\
+    boost_headers \
+    frozen \
+))
 
 $(eval $(call gb_Library_use_custom_headers,xo,\
 	officecfg/registry \
@@ -120,7 +123,6 @@ $(eval $(call gb_Library_add_exception_objects,xo,\
     xmloff/source/core/XMLBasicExportFilter \
     xmloff/source/core/XMLEmbeddedObjectExportFilter \
     xmloff/source/core/XMLEmbeddedObjectImportContext \
-    xmloff/source/core/attrlist \
     xmloff/source/core/i18nmap \
     xmloff/source/core/namespacemap \
     xmloff/source/core/unoatrcn \

@@ -87,14 +87,14 @@ const sal_Int32 nCellHeight = 7; // one pixel is shared with the next cell!
 const sal_Int32 nBitmapWidth = (nCellWidth * nPreviewColumns) - (nPreviewColumns - 1);
 const sal_Int32 nBitmapHeight = (nCellHeight * nPreviewRows) - (nPreviewRows - 1);
 
-const std::string_view gPropNames[CB_COUNT] =
+const std::u16string_view gPropNames[CB_COUNT] =
 {
-    "UseFirstRowStyle",
-    "UseLastRowStyle",
-    "UseBandingRowStyle",
-    "UseFirstColumnStyle",
-    "UseLastColumnStyle",
-    "UseBandingColumnStyle"
+    u"UseFirstRowStyle",
+    u"UseLastRowStyle",
+    u"UseBandingRowStyle",
+    u"UseFirstColumnStyle",
+    u"UseLastColumnStyle",
+    u"UseBandingColumnStyle"
 };
 
 constexpr std::u16string_view aTableStyleBaseName = u"table";
@@ -114,7 +114,7 @@ TableDesignWidget::TableDesignWidget(weld::Builder& rBuilder, ViewShellBase& rBa
 
     for (sal_uInt16 i = CB_HEADER_ROW; i <= CB_BANDED_COLUMNS; ++i)
     {
-        m_aCheckBoxes[i] = rBuilder.weld_check_button(OString(gPropNames[i].data(), gPropNames[i].size()));
+        m_aCheckBoxes[i] = rBuilder.weld_check_button(OUString(gPropNames[i]));
         m_aCheckBoxes[i]->connect_toggled(LINK(this, TableDesignWidget, implCheckBoxHdl));
     }
 
@@ -193,7 +193,7 @@ IMPL_LINK(TableDesignWidget, implContextMenuHandler, const Point*, pPoint, void)
     m_xValueSet->SelectItem(nClickedItemId);
 
     Point aPosition = pPoint ? *pPoint : m_xValueSet->GetItemRect(nClickedItemId).Center();
-    OString aCommand = m_xMenu->popup_at_rect(m_xValueSet->GetDrawingArea(), ::tools::Rectangle(aPosition, Size(1,1)));
+    OUString aCommand = m_xMenu->popup_at_rect(m_xValueSet->GetDrawingArea(), ::tools::Rectangle(aPosition, Size(1,1)));
 
     if (aCommand == "new")
         InsertStyle();
@@ -352,12 +352,12 @@ void TableDesignWidget::DeleteStyle()
     }
 }
 
-void TableDesignWidget::EditStyle(std::string_view rCommand)
+void TableDesignWidget::EditStyle(const OUString& rCommand)
 {
     try
     {
         Reference<XNameReplace> xTableStyle(mxTableFamily->getByIndex(m_xValueSet->GetSelectedItemId() - 1), UNO_QUERY_THROW);
-        Reference<XStyle> xCellStyle(xTableStyle->getByName(OUString::fromUtf8(rCommand)), UNO_QUERY_THROW);
+        Reference<XStyle> xCellStyle(xTableStyle->getByName(rCommand), UNO_QUERY_THROW);
         rtl::Reference xStyleSheet = static_cast<SdStyleSheet*>(xCellStyle.get());
 
         bool bUserDefined = xStyleSheet->IsEditable();
@@ -382,7 +382,7 @@ void TableDesignWidget::EditStyle(std::string_view rCommand)
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact ? pFact->CreateSvxFormatCellsDialog(
-            mrBase.GetFrameWeld(), &aNewAttr, *mrBase.GetDrawView()->GetModel(), true) : nullptr);
+            mrBase.GetFrameWeld(), aNewAttr, mrBase.GetDrawView()->GetModel(), true) : nullptr);
         if (pDlg && pDlg->Execute() == RET_OK)
         {
             endTextEditForStyle(xTableStyle);
@@ -390,9 +390,9 @@ void TableDesignWidget::EditStyle(std::string_view rCommand)
             if (!bUserDefined)
             {
                 Reference<XNamed> xNamed(xTableStyle, UNO_QUERY_THROW);
-                const OUString aStyleName(getNewStyleName(mxCellFamily, Concat2View(xNamed->getName() + "-" + OUString::fromUtf8(rCommand))));
+                const OUString aStyleName(getNewStyleName(mxCellFamily, Concat2View(xNamed->getName() + "-" + rCommand)));
                 mxCellFamily->insertByName(aStyleName, Any(xCellStyle));
-                xTableStyle->replaceByName(OUString::fromUtf8(rCommand), Any(xCellStyle));
+                xTableStyle->replaceByName(rCommand, Any(xCellStyle));
             }
 
             SfxItemSet aNewSet(*pDlg->GetOutputItemSet());
@@ -475,6 +475,7 @@ void TableDesignWidget::ApplyStyle()
                     pBindings->Invalidate( SID_REDO );
                 }
             }
+            setDocumentModified();
         }
         else
         {
@@ -530,6 +531,7 @@ void TableDesignWidget::ApplyOptions()
             pBindings->Invalidate( SID_REDO );
         }
     }
+    setDocumentModified();
 }
 
 void TableDesignWidget::onSelectionChanged()
@@ -649,7 +651,7 @@ void TableDesignWidget::updateControls()
         bool bUse = gDefaults[i];
         if( bHasTable ) try
         {
-            mxSelectedTable->getPropertyValue( OUString::createFromAscii(gPropNames[i]) ) >>= bUse;
+            mxSelectedTable->getPropertyValue( OUString(gPropNames[i]) ) >>= bUse;
         }
         catch( Exception& )
         {
@@ -755,8 +757,7 @@ CellInfo::CellInfo( const Reference< XStyle >& xStyle )
     SfxItemSet& rSet = pStyleSheet->GetItemSet();
 
     // get style fill color
-    if( !GetDraftFillColor(rSet, maCellColor) )
-        maCellColor = COL_TRANSPARENT;
+    maCellColor = GetDraftFillColor(rSet).value_or(COL_TRANSPARENT);
 
     // get style text color
     const SvxColorItem* pTextColor = rSet.GetItem(EE_CHAR_COLOR);

@@ -214,7 +214,7 @@ CUPSManager::~CUPSManager()
     }
 
     if (m_nDests && m_pDests)
-        cupsFreeDests( m_nDests, static_cast<cups_dest_t*>(m_pDests) );
+        cupsFreeDests( m_nDests, m_pDests );
 }
 
 void CUPSManager::runDestThread( void* pThis )
@@ -325,23 +325,7 @@ void CUPSManager::initialize()
     // introduced in dests with 1.2
     // this is needed to check for %%IncludeFeature support
     // (#i65684#, #i65491#)
-    bool bUsePDF = false;
-    cups_dest_t* pDest = static_cast<cups_dest_t*>(m_pDests);
-    const char* pOpt = cupsGetOption( "printer-info",
-                                                      pDest->num_options,
-                                                      pDest->options );
-    if( pOpt )
-    {
-        m_bUseIncludeFeature = true;
-        bUsePDF = officecfg::Office::Common::Print::Option::Printer::PDFAsStandardPrintJobFormat::get();
-    }
-
-    m_aGlobalDefaults.setDefaultBackend(bUsePDF);
-
-    // do not send include JobPatch; CUPS will insert that itself
-    // TODO: currently unknown which versions of CUPS insert JobPatches
-    // so currently it is assumed CUPS = don't insert JobPatch files
-    m_bUseJobPatch = false;
+    cups_dest_t* pDest = m_pDests;
 
     rtl_TextEncoding aEncoding = osl_getThreadTextEncoding();
     int nPrinter = m_nDests;
@@ -354,7 +338,7 @@ void CUPSManager::initialize()
     // with the same name as a CUPS printer, overwrite it
     while( nPrinter-- )
     {
-        pDest = static_cast<cups_dest_t*>(m_pDests)+nPrinter;
+        pDest = m_pDests+nPrinter;
         OUString aPrinterName = OStringToOUString( pDest->name, aEncoding );
         if( pDest->instance && *pDest->instance )
         {
@@ -386,7 +370,6 @@ void CUPSManager::initialize()
             aPrinter.m_aInfo.m_pParser = c_it->second.getParser();
             aPrinter.m_aInfo.m_aContext = c_it->second;
         }
-        aPrinter.m_aInfo.setDefaultBackend(bUsePDF);
         aPrinter.m_aInfo.m_aDriverName = "CUPS:" + aPrinterName;
 
         for( int k = 0; k < pDest->num_options; k++ )
@@ -487,7 +470,7 @@ const PPDParser* CUPSManager::createCUPSParser( const OUString& rPrinter )
             m_aCUPSDestMap.find( aPrinter );
             if( dest_it != m_aCUPSDestMap.end() )
             {
-                cups_dest_t* pDest = static_cast<cups_dest_t*>(m_pDests) + dest_it->second;
+                cups_dest_t* pDest = m_pDests + dest_it->second;
                 OString aPPDFile = threadedCupsGetPPD( pDest->name );
                 SAL_INFO("vcl.unx.print",
                         "PPD for " << aPrinter << " is " << aPPDFile);
@@ -692,7 +675,7 @@ void CUPSManager::getOptionsFromDocumentSetup( const JobData& rJob, bool bBanner
         }
     }
 
-    if( rJob.m_nPDFDevice > 0 && rJob.m_nCopies > 1 )
+    if( rJob.m_nCopies > 1 )
     {
         OString aVal( OString::number( rJob.m_nCopies ) );
         rNumOptions = cupsAddOption( "copies", aVal.getStr(), rNumOptions, reinterpret_cast<cups_option_t**>(rOptions) );
@@ -907,7 +890,7 @@ bool CUPSManager::endSpool( const OUString& rPrintername, const OUString& rJobTi
             sJobName = OUStringToOString(rFaxNumber, aEnc);
         }
 
-        cups_dest_t* pDest = static_cast<cups_dest_t*>(m_pDests) + dest_it->second;
+        cups_dest_t* pDest = m_pDests + dest_it->second;
         nJobID = cupsPrintFile(pDest->name,
             it->second.getStr(),
             sJobName.getStr(),
@@ -960,7 +943,7 @@ bool CUPSManager::checkPrintersChanged( bool bWait )
             // there is no way to query CUPS whether the printer list has changed
             // so get the dest list anew
             if( m_nDests && m_pDests )
-                cupsFreeDests( m_nDests, static_cast<cups_dest_t*>(m_pDests) );
+                cupsFreeDests( m_nDests, m_pDests );
             m_nDests = 0;
             m_pDests = nullptr;
             runDests();

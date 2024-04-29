@@ -41,9 +41,9 @@ struct Notifier {
 }
 
 UIObjectUnoObj::UIObjectUnoObj(std::unique_ptr<UIObject> pObj):
-    UIObjectBase(m_aMutex),
     mpObj(std::move(pObj))
 {
+    assert(mpObj);
 }
 
 UIObjectUnoObj::~UIObjectUnoObj()
@@ -54,11 +54,9 @@ UIObjectUnoObj::~UIObjectUnoObj()
 
 css::uno::Reference<css::ui::test::XUIObject> SAL_CALL UIObjectUnoObj::getChild(const OUString& rID)
 {
-    if (!mpObj)
-        throw css::uno::RuntimeException();
-
     SolarMutexGuard aGuard;
     std::unique_ptr<UIObject> pObj = mpObj->get_child(rID);
+    SAL_WARN_IF(!pObj, "vcl", "child " << rID << " of parent " << mpObj->dumpState() << " does not exist");
     return new UIObjectUnoObj(std::move(pObj));
 }
 
@@ -117,9 +115,6 @@ IMPL_LINK_NOARG(ExecuteWrapper, ExecuteActionHdl, Timer*, void)
 
 void SAL_CALL UIObjectUnoObj::executeAction(const OUString& rAction, const css::uno::Sequence<css::beans::PropertyValue>& rPropValues)
 {
-    if (!mpObj)
-        throw css::uno::RuntimeException();
-
     auto aIdle = std::make_unique<Idle>("UI Test Idle Handler");
     aIdle->SetPriority(TaskPriority::HIGHEST);
 
@@ -159,9 +154,6 @@ void SAL_CALL UIObjectUnoObj::executeAction(const OUString& rAction, const css::
 
 css::uno::Sequence<css::beans::PropertyValue> UIObjectUnoObj::getState()
 {
-    if (!mpObj)
-        throw css::uno::RuntimeException();
-
     SolarMutexGuard aGuard;
     StringMap aMap = mpObj->get_state();
     css::uno::Sequence<css::beans::PropertyValue> aProps(aMap.size());
@@ -174,9 +166,6 @@ css::uno::Sequence<css::beans::PropertyValue> UIObjectUnoObj::getState()
 
 css::uno::Sequence<OUString> UIObjectUnoObj::getChildren()
 {
-    if (!mpObj)
-        throw css::uno::RuntimeException();
-
     std::set<OUString> aChildren;
 
     {
@@ -192,9 +181,6 @@ css::uno::Sequence<OUString> UIObjectUnoObj::getChildren()
 
 OUString SAL_CALL UIObjectUnoObj::getType()
 {
-    if (!mpObj)
-        throw css::uno::RuntimeException();
-
     SolarMutexGuard aGuard;
     return mpObj->get_type();
 }
@@ -216,9 +202,6 @@ css::uno::Sequence<OUString> UIObjectUnoObj::getSupportedServiceNames()
 
 OUString SAL_CALL UIObjectUnoObj::getHierarchy()
 {
-    if (!mpObj)
-        throw css::uno::RuntimeException();
-
     SolarMutexGuard aGuard;
     return mpObj->dumpHierarchy();
 }

@@ -24,7 +24,7 @@
 #include <vcl/graph.hxx>
 #include <vcl/BitmapTools.hxx>
 #include <vcl/animate/Animation.hxx>
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <tools/fract.hxx>
 #include <tools/stream.hxx>
 #include <unotools/configmgr.hxx>
@@ -130,6 +130,7 @@ bool ImportTiffGraphicImport(SvStream& rTIFF, Graphic& rGraphic)
     Animation aAnimation;
 
     const bool bFuzzing = utl::ConfigManager::IsFuzzing();
+    uint64_t nTotalPixelsRequired = 0;
 
     do
     {
@@ -160,11 +161,30 @@ bool ImportTiffGraphicImport(SvStream& rTIFF, Graphic& rGraphic)
         bool bOk = !o3tl::checked_multiply(w, h, nPixelsRequired) && nPixelsRequired <= nMaxPixelsAllowed / 2;
         SAL_WARN_IF(!bOk, "filter.tiff", "skipping oversized tiff image " << w << " x " << h);
 
+        if (!TIFFIsTiled(tif))
+        {
+            size_t nStripSize = TIFFStripSize(tif);
+            if (nStripSize > SAL_MAX_INT32)
+            {
+                SAL_WARN("filter.tiff", "skipping oversized tiff strip size " << nStripSize);
+                bOk = false;
+            }
+        }
+
+        uint16_t PhotometricInterpretation(0);
+        uint16_t Compression(COMPRESSION_NONE);
+        if (bOk)
+        {
+            TIFFGetField(tif, TIFFTAG_PHOTOMETRIC, &PhotometricInterpretation);
+            TIFFGetField(tif, TIFFTAG_COMPRESSION, &Compression);
+        }
+
         if (bOk && bFuzzing)
         {
-            const uint64_t MAX_PIXEL_SIZE = 150000000;
+            const uint64_t MAX_PIXEL_SIZE = 120000000;
             const uint64_t MAX_TILE_SIZE = 100000000;
-            if (TIFFTileSize64(tif) > MAX_TILE_SIZE || nPixelsRequired > MAX_PIXEL_SIZE)
+            nTotalPixelsRequired += nPixelsRequired;
+            if (TIFFTileSize64(tif) > MAX_TILE_SIZE || nTotalPixelsRequired > MAX_PIXEL_SIZE)
             {
                 SAL_WARN("filter.tiff", "skipping large tiffs");
                 break;
@@ -182,26 +202,18 @@ bool ImportTiffGraphicImport(SvStream& rTIFF, Graphic& rGraphic)
                     SAL_WARN_IF(!bOk, "filter.tiff", "skipping slow bizarre ratio tile of " << tw << " x " << th << " for image of " << w << " x " << h);
                 }
 
-                uint16_t PhotometricInterpretation;
-                if (TIFFGetField(tif, TIFFTAG_PHOTOMETRIC, &PhotometricInterpretation) == 1)
+                if (PhotometricInterpretation == PHOTOMETRIC_LOGL)
                 {
-                    if (PhotometricInterpretation == PHOTOMETRIC_LOGL)
-                    {
-                        uint32_t nLogLBufferRequired;
-                        bOk &= !o3tl::checked_multiply(tw, th, nLogLBufferRequired) && nLogLBufferRequired < MAX_PIXEL_SIZE;
-                        SAL_WARN_IF(!bOk, "filter.tiff", "skipping oversized tiff tile " << tw << " x " << th);
-                    }
+                    uint32_t nLogLBufferRequired;
+                    bOk &= !o3tl::checked_multiply(tw, th, nLogLBufferRequired) && nLogLBufferRequired < MAX_PIXEL_SIZE;
+                    SAL_WARN_IF(!bOk, "filter.tiff", "skipping oversized tiff tile " << tw << " x " << th);
                 }
 
-                uint16_t Compression;
-                if (TIFFGetField(tif, TIFFTAG_COMPRESSION, &Compression) == 1)
+                if (Compression == COMPRESSION_CCITTFAX4)
                 {
-                    if (Compression == COMPRESSION_CCITTFAX4)
-                    {
-                        uint32_t DspRuns;
-                        bOk &= !o3tl::checked_multiply(tw, static_cast<uint32_t>(4), DspRuns) && DspRuns < MAX_PIXEL_SIZE;
-                        SAL_WARN_IF(!bOk, "filter.tiff", "skipping oversized tiff tile width: " << tw);
-                    }
+                    uint32_t DspRuns;
+                    bOk &= !o3tl::checked_multiply(tw, static_cast<uint32_t>(4), DspRuns) && DspRuns < MAX_PIXEL_SIZE;
+                    SAL_WARN_IF(!bOk, "filter.tiff", "skipping oversized tiff tile width: " << tw);
                 }
             }
         }
@@ -210,7 +222,15 @@ bool ImportTiffGraphicImport(SvStream& rTIFF, Graphic& rGraphic)
             break;
 
         std::vector<uint32_t> raster(nPixelsRequired);
-        aContext.bAllowOneShortRead = true;
+
+        const bool bNewCodec = Compression >= COMPRESSION_ZSTD; // >= 50000 at time of writing
+        // For tdf#149417 we generally allow one short read for fidelity with the old
+        // parser that this replaced. But don't allow that for:
+        // a) new compression variations that the old parser didn't handle
+        // b) complicated pixel layout variations that the old parser didn't handle
+        // so we don't take libtiff into uncharted territory.
+        aContext.bAllowOneShortRead = !bNewCodec && PhotometricInterpretation != PHOTOMETRIC_YCBCR;
+
         if (TIFFReadRGBAImageOriented(tif, w, h, raster.data(), ORIENTATION_TOPLEFT, 1))
         {
             Bitmap bitmap(Size(w, h), vcl::PixelFormat::N24_BPP);
@@ -222,7 +242,7 @@ bool ImportTiffGraphicImport(SvStream& rTIFF, Graphic& rGraphic)
             }
 
             AlphaMask bitmapAlpha(Size(w, h));
-            AlphaScopedWriteAccess accessAlpha(bitmapAlpha);
+            BitmapScopedWriteAccess accessAlpha(bitmapAlpha);
             if (!accessAlpha)
             {
                 SAL_WARN("filter.tiff", "cannot create alpha " << w << " x " << h);
@@ -265,7 +285,7 @@ bool ImportTiffGraphicImport(SvStream& rTIFF, Graphic& rGraphic)
                     }
 
                     access->SetPixel(y, dest, Color(r, g, b));
-                    accessAlpha->SetPixelIndex(y, dest, 255 - a);
+                    accessAlpha->SetPixelIndex(y, dest, a);
                     ++src;
                 }
             }

@@ -20,6 +20,7 @@
 #ifndef INCLUDED_VCL_INC_TOOLBOX_H
 #define INCLUDED_VCL_INC_TOOLBOX_H
 
+#include <vcl/ctrl.hxx>
 #include <vcl/toolbox.hxx>
 
 #include <optional>
@@ -44,7 +45,7 @@ struct ImplToolItem
     OUString            maQuickHelpText;
     OUString            maHelpText;
     OUString            maCommandStr;
-    OString             maHelpId;
+    OUString            maHelpId;
     tools::Rectangle           maRect;
     tools::Rectangle           maCalcRect;
     /// Widget layout may request size; set it as the minimal size (like, the item will always have at least this size).

@@ -19,6 +19,7 @@
 
 #include <ChartDocumentWrapper.hxx>
 #include <ChartView.hxx>
+#include <ChartViewHelper.hxx>
 #include <ChartTypeManager.hxx>
 #include <ChartTypeTemplate.hxx>
 #include <servicenames.hxx>
@@ -221,30 +222,20 @@ void lcl_AddPropertiesToVector(
                   beans::PropertyAttribute::MAYBEDEFAULT );
 }
 
-struct StaticChartDocumentWrapperPropertyArray_Initializer
+const Sequence< Property > &  StaticChartDocumentWrapperPropertyArray()
 {
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence() );
-        return &aPropSeq;
-    }
+    static Sequence< Property > aPropSeq = []()
+        {
+            std::vector< css::beans::Property > aProperties;
+            lcl_AddPropertiesToVector( aProperties );
 
-private:
-    static uno::Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< css::beans::Property > aProperties;
-        lcl_AddPropertiesToVector( aProperties );
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
 
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
-};
-
-struct StaticChartDocumentWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticChartDocumentWrapperPropertyArray_Initializer >
-{
-};
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropSeq;
+}
 
 } //  anonymous namespace
 
@@ -653,6 +644,7 @@ ChartDocumentWrapper::~ChartDocumentWrapper()
 }
 
 // ____ XInterface (for new interfaces) ____
+// [-loplugin:unoaggregation]
 uno::Any SAL_CALL ChartDocumentWrapper::queryInterface( const uno::Type& aType )
 {
     if( m_xDelegator.is())
@@ -864,8 +856,7 @@ Reference< uno::XInterface > SAL_CALL ChartDocumentWrapper::getCurrentSelection(
 void SAL_CALL ChartDocumentWrapper::dispose()
 {
     if( m_bIsDisposed )
-        throw lang::DisposedException("ChartDocumentWrapper is disposed",
-            static_cast< ::cppu::OWeakObject* >( this ));
+        return;
 
     m_bIsDisposed = true;
 
@@ -878,9 +869,9 @@ void SAL_CALL ChartDocumentWrapper::dispose()
         DisposeHelper::DisposeAndClear( m_xChartData );
         DisposeHelper::DisposeAndClear( m_xDiagram );
         DisposeHelper::DisposeAndClear( m_xArea );
-        m_xChartView.set( nullptr );
-        m_xShapeFactory.set( nullptr );
-        m_xDelegator.set( nullptr );
+        m_xChartView.clear();
+        m_xShapeFactory.clear();
+        m_xDelegator.clear();
 
         clearWrappedPropertySet();
         m_spChart2ModelContact->clear();
@@ -907,7 +898,7 @@ void SAL_CALL ChartDocumentWrapper::dispose()
 void ChartDocumentWrapper::impl_resetAddIn()
 {
     Reference< util::XRefreshable > xAddIn( m_xAddIn );
-    m_xAddIn.set( nullptr );
+    m_xAddIn.clear();
 
     if( !xAddIn.is() )
         return;
@@ -1045,11 +1036,10 @@ rtl::Reference<SvxDrawPage> ChartDocumentWrapper::impl_getDrawPage() const
 
 namespace {
 
-uno::Reference< lang::XMultiServiceFactory > getShapeFactory(const uno::Reference<uno::XInterface>& xChartView)
+uno::Reference< lang::XMultiServiceFactory > getShapeFactory(const rtl::Reference<ChartView>& xChartView)
 {
-    auto pProvider = comphelper::getFromUnoTunnel<ExplicitValueProvider>(xChartView);
-    if( pProvider )
-        return pProvider->getDrawModelWrapper()->getShapeFactory();
+    if( xChartView )
+        return xChartView->getDrawModelWrapper()->getShapeFactory();
 
     return uno::Reference< lang::XMultiServiceFactory >();
 }
@@ -1189,17 +1179,17 @@ uno::Reference< uno::XInterface > SAL_CALL ChartDocumentWrapper::createInstance(
                 {
                     // locked controllers
                     ControllerLockGuardUNO aCtrlLockGuard( xChartDoc );
-                    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xChartDoc );
-                    ThreeDLookScheme e3DScheme = ThreeDHelper::detectScheme( xDiagram );
+                    rtl::Reference< Diagram > xDiagram = xChartDoc->getFirstChartDiagram();
+                    ThreeDLookScheme e3DScheme = xDiagram->detectScheme();
                     rtl::Reference< ::chart::ChartTypeManager > xTemplateManager = xChartDoc->getTypeManager();
-                    DiagramHelper::tTemplateWithServiceName aTemplateWithService(
-                        DiagramHelper::getTemplateForDiagram( xDiagram, xTemplateManager ));
+                    Diagram::tTemplateWithServiceName aTemplateWithService(
+                        xDiagram->getTemplate( xTemplateManager ));
                     if( aTemplateWithService.xChartTypeTemplate.is())
                         aTemplateWithService.xChartTypeTemplate->resetStyles2( xDiagram );//#i109371#
                     xTemplate->changeDiagram( xDiagram );
                     if( AllSettings::GetMathLayoutRTL() )
                         AxisHelper::setRTLAxisLayout( AxisHelper::getCoordinateSystemByIndex( xDiagram, 0 ) );
-                    ThreeDHelper::setScheme( xDiagram, e3DScheme );
+                    xDiagram->setScheme( e3DScheme );
                 }
                 else
                 {
@@ -1257,7 +1247,7 @@ uno::Reference< uno::XInterface > SAL_CALL ChartDocumentWrapper::createInstance(
         {
             if( !m_xShapeFactory.is() && m_xChartView.is() )
             {
-                m_xShapeFactory = getShapeFactory( static_cast<cppu::OWeakObject*>(m_xChartView.get()) );
+                m_xShapeFactory = getShapeFactory( m_xChartView );
             }
             else
             {
@@ -1265,7 +1255,7 @@ uno::Reference< uno::XInterface > SAL_CALL ChartDocumentWrapper::createInstance(
                 if(pModel)
                 {
                     m_xChartView = pModel->getChartView();
-                    m_xShapeFactory = getShapeFactory( static_cast<cppu::OWeakObject*>(m_xChartView.get()) );
+                    m_xShapeFactory = getShapeFactory( m_xChartView );
                 }
             }
 
@@ -1360,21 +1350,35 @@ uno::Any SAL_CALL ChartDocumentWrapper::queryAggregation( const uno::Type& rType
 void ChartDocumentWrapper::_disposing( const lang::EventObject& rSource )
 {
     if( rSource.Source == m_xTitle )
-        m_xTitle.set( nullptr );
+        m_xTitle.clear();
     else if( rSource.Source == m_xSubTitle )
-        m_xSubTitle.set( nullptr );
+        m_xSubTitle.clear();
     else if( rSource.Source == m_xLegend )
-        m_xLegend.set( nullptr );
+        m_xLegend.clear();
     else if( rSource.Source == m_xChartData )
-        m_xChartData.set( nullptr );
+        m_xChartData.clear();
     else if( rSource.Source == m_xDiagram )
-        m_xDiagram.set( nullptr );
+        m_xDiagram.clear();
     else if( rSource.Source == m_xArea )
-        m_xArea.set( nullptr );
+        m_xArea.clear();
     else if( rSource.Source == m_xAddIn )
-        m_xAddIn.set( nullptr );
+        m_xAddIn.clear();
     else if( rSource.Source == static_cast<cppu::OWeakObject*>(m_xChartView.get()) )
-        m_xChartView.set( nullptr );
+        m_xChartView.clear();
+}
+
+// ____ XPropertySet ____
+void SAL_CALL ChartDocumentWrapper::setPropertyValue(const OUString& rPropertyName, const css::uno::Any& rValue)
+{
+    if (rPropertyName == u"ODFImport_UpdateView")
+    {
+        // A hack used at load time to notify the view that it needs an update
+        // See SchXMLImport::~SchXMLImport
+        if (auto xChartModel = rValue.query<css::chart2::XChartDocument>())
+            ChartViewHelper::setViewToDirtyState_UNO(xChartModel);
+        return;
+    }
+    ChartDocumentWrapper_Base::setPropertyValue(rPropertyName, rValue);
 }
 
 // WrappedPropertySet
@@ -1384,7 +1388,7 @@ Reference< beans::XPropertySet > ChartDocumentWrapper::getInnerPropertySet()
 }
 const Sequence< beans::Property >& ChartDocumentWrapper::getPropertySequence()
 {
-    return *StaticChartDocumentWrapperPropertyArray::get();
+    return StaticChartDocumentWrapperPropertyArray();
 }
 
 std::vector< std::unique_ptr<WrappedProperty> > ChartDocumentWrapper::createWrappedProperties()

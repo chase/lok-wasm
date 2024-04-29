@@ -26,21 +26,6 @@
 #include <vcl/graphicfilter.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <graphic/GraphicFormatDetector.hxx>
-#include "graphicfilter_internal.hxx"
-
-namespace
-{
-enum class MetafileType : sal_uInt16
-{
-    Memory = 0x0001,
-    Disk   = 0x0002,
-};
-enum class MetafileVersion : sal_uInt16
-{
-    Version100 = 0x0100,
-    Version300 = 0x0300,
-};
-}
 
 GraphicDescriptor::GraphicDescriptor( const INetURLObject& rPath ) :
     pFileStm( ::utl::UcbStreamHelper::CreateStream( rPath.GetMainURL( INetURLObject::DecodeMechanism::NONE ), StreamMode::READ ).release() ),
@@ -166,7 +151,7 @@ bool GraphicDescriptor::ImpDetectJPG( SvStream& rStm,  bool bExtendedInfo )
     sal_uInt32  nTemp32 = 0;
     bool    bRet = false;
 
-    sal_Int32 nStmPos = rStm.Tell();
+    sal_uInt64 nStmPos = rStm.Tell();
 
     rStm.SetEndian( SvStreamEndian::BIG );
     rStm.ReadUInt32( nTemp32 );
@@ -223,7 +208,7 @@ bool GraphicDescriptor::ImpDetectJPG( SvStream& rStm,  bool bExtendedInfo )
                             bScanFailure = true;
                         else
                         {
-                            sal_uInt32 nNextMarkerPos = rStm.Tell() + nLength - 2;
+                            sal_uInt64 nNextMarkerPos = rStm.Tell() + nLength - 2;
                             switch( nMarker )
                             {
                                 case 0xe0 : // APP0 Marker

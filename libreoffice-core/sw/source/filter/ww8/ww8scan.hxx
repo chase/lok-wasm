@@ -42,14 +42,14 @@ class SvStream;
 //Commonly used string literals for stream and storage names in word docs
 namespace SL
 {
-    inline constexpr OUStringLiteral aObjectPool = u"ObjectPool";
-    inline constexpr OUStringLiteral a1Table = u"1Table";
-    inline constexpr OUStringLiteral a0Table = u"0Table";
-    inline constexpr OUStringLiteral aData = u"Data";
-    inline constexpr OUStringLiteral aCheckBox = u"CheckBox";
-    inline constexpr OUStringLiteral aListBox = u"ListBox";
-    inline constexpr OUStringLiteral aTextField = u"TextField";
-    inline constexpr OUStringLiteral aMSMacroCmds = u"MSMacroCmds";
+    inline constexpr OUString aObjectPool = u"ObjectPool"_ustr;
+    inline constexpr OUString a1Table = u"1Table"_ustr;
+    inline constexpr OUString a0Table = u"0Table"_ustr;
+    inline constexpr OUString aData = u"Data"_ustr;
+    inline constexpr OUString aCheckBox = u"CheckBox"_ustr;
+    inline constexpr OUString aListBox = u"ListBox"_ustr;
+    inline constexpr OUString aTextField = u"TextField"_ustr;
+    inline constexpr OUString aMSMacroCmds = u"MSMacroCmds"_ustr;
 }
 
 struct SprmInfo
@@ -437,8 +437,7 @@ private:
     WW8PLCFpcd_Iter* m_pPcdI;
     WW8PLCFx_PCD* m_pPcd;
     std::vector<std::unique_ptr<sal_uInt8[]>> const & mrGrpprls; // attribute of Piece-table
-    SVBT32 m_aShortSprm;          // mini storage: can contain ONE sprm with
-                                // 1 byte param
+    sal_uInt8 m_aShortSprm[4]; // mini storage: can contain ONE sprm with 1 byte param
 
     WW8PLCFx_PCDAttrs(const WW8PLCFx_PCDAttrs&) = delete;
     WW8PLCFx_PCDAttrs& operator=(const WW8PLCFx_PCDAttrs&) = delete;
@@ -1081,6 +1080,7 @@ public:
     ~WW8ScannerBase();
     bool AreThereFootnotes() const { return m_pFootnotePLCF->Count() > 0; };
     bool AreThereEndnotes()  const { return m_pEdnPLCF->Count() > 0; };
+    tools::Long GetEndnoteCount()  const { return m_pEdnPLCF->Count(); };
 
     //If you use WW8Fc2Cp you are almost certainly doing the wrong thing
     //when it comes to fastsaved files, avoid like the plague. For export

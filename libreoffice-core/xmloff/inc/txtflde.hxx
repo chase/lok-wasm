@@ -28,12 +28,13 @@
 
 #include <rtl/ustring.hxx>
 #include <xmloff/xmltoken.hxx>
-#include <txtfld.hxx>
 
 #include <map>
 #include <set>
 #include <memory>
 #include <string_view>
+
+#include "txtfld.hxx"
 
 class SvXMLExport;
 struct XMLPropertyState;

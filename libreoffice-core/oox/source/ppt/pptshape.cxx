@@ -182,7 +182,7 @@ void PPTShape::addShape(
         if (sServiceName != "com.sun.star.drawing.GraphicObjectShape" &&
             sServiceName != "com.sun.star.drawing.OLE2Shape")
         {
-            static const OUStringLiteral sOutlinerShapeService(u"com.sun.star.presentation.OutlinerShape");
+            static constexpr OUString sOutlinerShapeService(u"com.sun.star.presentation.OutlinerShape"_ustr);
             SAL_INFO("oox.ppt","has master: " << std::hex << rSlidePersist.getMasterPersist().get());
             switch (mnSubType)
             {
@@ -457,10 +457,6 @@ void PPTShape::addShape(
                 Reference < XText > xText(mxShape, UNO_QUERY);
                 if (xText.is())
                 {
-                    if (mpPlaceholder && mpPlaceholder->getTextBody() && !mpPlaceholder->getTextBody()->isEmpty()
-                        && mpPlaceholder->hasCustomPrompt())
-                        xText->setString(mpPlaceholder->getTextBody()->toString());
-
                     TextCharacterProperties aCharStyleProperties;
                     getTextBody()->ApplyStyleEmpty(rFilterBase, xText, aCharStyleProperties, mpMasterTextListStyle);
                 }

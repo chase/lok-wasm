@@ -211,7 +211,6 @@ Reference< XAccessible > SAL_CALL VCLXAccessibleListItem::getAccessibleParent(  
 
 sal_Int64 SAL_CALL VCLXAccessibleListItem::getAccessibleIndexInParent(  )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
     return m_nIndexInParent;
 }
 
@@ -342,7 +341,7 @@ awt::Point SAL_CALL VCLXAccessibleListItem::getLocationOnScreen(  )
     {
         tools::Rectangle aRect = pListBoxHelper->GetBoundingRectangle(static_cast<sal_uInt16>(m_nIndexInParent));
         aPoint = aRect.TopLeft();
-        aPoint += pListBoxHelper->GetWindowExtentsRelative().TopLeft();
+        aPoint += Point(pListBoxHelper->GetWindowExtentsAbsolute().TopLeft());
     }
     return AWTPoint( aPoint );
 }

@@ -399,12 +399,12 @@ tools::Rectangle AccessibleBrowseBoxBase::getBoundingBox()
     return aRect;
 }
 
-tools::Rectangle AccessibleBrowseBoxBase::getBoundingBoxOnScreen()
+AbsoluteScreenPixelRectangle AccessibleBrowseBoxBase::getBoundingBoxOnScreen()
 {
     SolarMethodGuard aGuard(getMutex());
     ensureIsAlive();
 
-    tools::Rectangle aRect = implGetBoundingBoxOnScreen();
+    AbsoluteScreenPixelRectangle aRect = implGetBoundingBoxOnScreen();
     if ( aRect.Left() == 0 && aRect.Top() == 0 && aRect.Right() == 0 && aRect.Bottom() == 0 )
     {
         SAL_WARN( "accessibility", "rectangle doesn't exist" );
@@ -422,11 +422,7 @@ void AccessibleBrowseBoxBase::commitEvent(
             return;
 
     // build an event object
-    AccessibleEventObject aEvent;
-    aEvent.Source = *this;
-    aEvent.EventId = _nEventId;
-    aEvent.OldValue = _rOldValue;
-    aEvent.NewValue = _rNewValue;
+    AccessibleEventObject aEvent(*this, _nEventId, _rNewValue, _rOldValue,  -1);
 
     // let the notifier handle this event
 

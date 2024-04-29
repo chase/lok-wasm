@@ -283,11 +283,9 @@ namespace
 
                 basegfx::B2DPolyPolygon aPolyB;
 
-                for(sal_uInt32 a(1); a < rPageView.GetPage()->GetObjCount(); a++)
+                for (const rtl::Reference<SdrObject>& pObjB : *rPageView.GetPage())
                 {
-                    SdrObject* pObjB = pPage->GetObj(a);
-
-                    if(dynamic_cast<const SdrPathObj*>( pObjB))
+                    if(dynamic_cast<const SdrPathObj*>( pObjB.get()))
                     {
                         basegfx::B2DPolyPolygon aCandidate(pObjB->GetPathPoly());
                         aCandidate = basegfx::utils::correctOrientations(aCandidate);
@@ -324,7 +322,7 @@ void SdrPageWindow::RedrawAll( sdr::contact::ViewObjectContactRedirector* pRedir
 
     // set PaintingPageView
     const SdrView& rView = mpImpl->mrPageView.GetView();
-    SdrModel& rModel = *(rView.GetModel());
+    SdrModel& rModel = rView.GetModel();
 
     // get to be processed layers
     const bool bPrinter(GetPaintWindow().OutputToPrinter());
@@ -349,9 +347,6 @@ void SdrPageWindow::RedrawAll( sdr::contact::ViewObjectContactRedirector* pRedir
 
         // Set region as redraw area
         aDisplayInfo.SetRedrawArea(rRegion);
-
-        // Draw/Impress
-        aDisplayInfo.SetPageProcessingActive(rView.IsPagePaintingAllowed()); // #i72889#
 
         // paint page
         GetObjectContact().ProcessDisplay(aDisplayInfo);
@@ -378,7 +373,7 @@ void SdrPageWindow::RedrawLayer(const SdrLayerID* pId,
 
     // set PaintingPageView
     const SdrView& rView = mpImpl->mrPageView.GetView();
-    SdrModel& rModel = *(rView.GetModel());
+    SdrModel& rModel = rView.GetModel();
 
     // get the layers to process
     const bool bPrinter(GetPaintWindow().OutputToPrinter());
@@ -411,8 +406,11 @@ void SdrPageWindow::RedrawLayer(const SdrLayerID* pId,
         aDisplayInfo.SetRedrawArea(rRegion);
 
         // Writer or calc, coming from original RedrawOneLayer.
-        // #i72889# no page painting for layer painting
-        aDisplayInfo.SetPageProcessingActive(false);
+        // #i72889# no page painting or MasterPage painting for layer painting
+        const bool bOldPageDecorationAllowed(GetPageView().GetView().IsPageDecorationAllowed());
+        const bool bOldMasterPageVisualizationAllowed(GetPageView().GetView().IsMasterPageVisualizationAllowed());
+        GetPageView().GetView().SetPageDecorationAllowed(false);
+        GetPageView().GetView().SetMasterPageVisualizationAllowed(false);
 
         if (pPageFrame) // Writer page frame for anchor based clipping
         {
@@ -421,6 +419,10 @@ void SdrPageWindow::RedrawLayer(const SdrLayerID* pId,
 
         // paint page
         GetObjectContact().ProcessDisplay(aDisplayInfo);
+
+        // reset temporarily changed flags
+        GetPageView().GetView().SetPageDecorationAllowed(bOldPageDecorationAllowed);
+        GetPageView().GetView().SetMasterPageVisualizationAllowed(bOldMasterPageVisualizationAllowed);
     }
 
     // reset redirector

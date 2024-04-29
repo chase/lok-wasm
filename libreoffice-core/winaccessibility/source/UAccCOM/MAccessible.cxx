@@ -38,6 +38,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <sal/log.hxx>
 #include <unotools/configmgr.hxx>
+#include <vcl/accessibility/AccessibleTextAttributeHelper.hxx>
 #include <vcl/svapp.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 #include <comphelper/AccessibleImplementationHelper.hxx>
@@ -64,7 +65,6 @@
 
 using namespace com::sun::star::uno;
 using namespace com::sun::star::accessibility;
-using namespace com::sun::star::accessibility::AccessibleStateType;
 
 namespace {
 
@@ -127,58 +127,68 @@ bool queryTableCell(XAccessible* pXAcc, XInterface** ppXI)
     return true;
 }
 
+
+void lcl_addIA2State(AccessibleStates& rStates, sal_Int64 nUnoState, sal_Int16 nRole)
+{
+    switch (nUnoState)
+    {
+        case css::accessibility::AccessibleStateType::ACTIVE:
+            rStates |= IA2_STATE_ACTIVE;
+            break;
+        case css::accessibility::AccessibleStateType::ARMED:
+            rStates |= IA2_STATE_ARMED;
+            break;
+        case css::accessibility::AccessibleStateType::CHECKABLE:
+            // STATE_SYSTEM_PRESSED is used instead of STATE_SYSTEM_CHECKED for these button
+            // roles (s. AccObject::GetMSAAStateFromUNO), so don't set CHECKABLE state for them
+            if (nRole != AccessibleRole::PUSH_BUTTON && nRole != AccessibleRole::TOGGLE_BUTTON)
+                rStates |= IA2_STATE_CHECKABLE;
+            break;
+        case css::accessibility::AccessibleStateType::DEFUNC:
+            rStates |= IA2_STATE_DEFUNCT;
+            break;
+        case css::accessibility::AccessibleStateType::EDITABLE:
+            rStates |= IA2_STATE_EDITABLE;
+            break;
+        case css::accessibility::AccessibleStateType::HORIZONTAL:
+            rStates |= IA2_STATE_HORIZONTAL;
+            break;
+        case css::accessibility::AccessibleStateType::ICONIFIED:
+            rStates |= IA2_STATE_ICONIFIED;
+            break;
+        case css::accessibility::AccessibleStateType::MANAGES_DESCENDANTS:
+            rStates |= IA2_STATE_MANAGES_DESCENDANTS;
+            break;
+        case css::accessibility::AccessibleStateType::MODAL:
+            rStates |= IA2_STATE_MODAL;
+            break;
+        case css::accessibility::AccessibleStateType::MULTI_LINE:
+            rStates |= IA2_STATE_MULTI_LINE;
+            break;
+        case css::accessibility::AccessibleStateType::OPAQUE:
+            rStates |= IA2_STATE_OPAQUE;
+            break;
+        case css::accessibility::AccessibleStateType::SINGLE_LINE:
+            rStates |= IA2_STATE_SINGLE_LINE;
+            break;
+        case css::accessibility::AccessibleStateType::STALE:
+            rStates |= IA2_STATE_STALE;
+            break;
+        case css::accessibility::AccessibleStateType::TRANSIENT:
+            rStates |= IA2_STATE_TRANSIENT;
+            break;
+        case css::accessibility::AccessibleStateType::VERTICAL:
+            rStates |= IA2_STATE_VERTICAL;
+            break;
+        default:
+            // no match
+            break;
+    }
 }
 
-// IA2 states mapping, and name
-// maintenance the consistency, change one array, change the three all
-long const IA2_STATES[] =
-{
-    IA2_STATE_ACTIVE,                   // =                    0x1;
-    IA2_STATE_ARMED,                    // =                    0x2;
-    IA2_STATE_DEFUNCT,                  // =                    0x4;
-    IA2_STATE_EDITABLE,                 // =                    0x8;
-    IA2_STATE_HORIZONTAL,               // =                    0x10;
-    IA2_STATE_ICONIFIED,                // =                    0x20;
-    IA2_STATE_INVALID_ENTRY,            // =                    0x80;
-    IA2_STATE_MANAGES_DESCENDANTS,      // =                    0x100;
-    IA2_STATE_MODAL,                    // =                    0x200;
-    IA2_STATE_MULTI_LINE,               // =                    0x400;
-    IA2_STATE_OPAQUE,                   // =                    0x800;
-    IA2_STATE_REQUIRED,                 // =                    0x2000;
-    IA2_STATE_SELECTABLE_TEXT,          // =                    0x3000;
-    IA2_STATE_SINGLE_LINE,              // =                    0x4000;
-    IA2_STATE_STALE,                    // =                    0x8000;
-    IA2_STATE_SUPPORTS_AUTOCOMPLETION,  // =                    0x10000;
-    IA2_STATE_TRANSIENT,                //=                     0x20000;
-    IA2_STATE_VERTICAL                  // =                    0x40000;
-};
+}
 
-sal_Int64 const UNO_STATES[] =
-{
-    ACTIVE,
-    ARMED,
-    DEFUNC,
-    EDITABLE,
-    HORIZONTAL,
-    ICONIFIED,
-    -1,             //IA2_STATE_INVALID_ENTRY
-    MANAGES_DESCENDANTS,
-    MODAL,
-    MULTI_LINE,
-    OPAQUE,
-    -1,             //IA2_STATE_REQUIRED
-    -1,             //IA2_STATE_SELECTABLE_TEXT
-    SINGLE_LINE,
-    STALE,
-    -1,             //IA2_STATE_SUPPORTS_AUTOCOMPLETION
-    TRANSIENT,      //IA2_STATE_TRANSIENT
-    VERTICAL
-};
-
-using namespace com::sun::star::accessibility::AccessibleRole;
-
-
-AccObjectManagerAgent* CMAccessible::g_pAgent = nullptr;
+AccObjectWinManager* CMAccessible::g_pAccObjectManager = nullptr;
 
 CMAccessible::CMAccessible():
 m_pszName(nullptr),
@@ -237,7 +247,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accParent(IDispatch **ppdisp
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(ppdispParent == nullptr)
         {
             return E_INVALIDARG;
@@ -274,7 +284,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accChildCount(long *pcountCh
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pcountChildren == nullptr)
         {
             return E_INVALIDARG;
@@ -316,7 +326,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accChild(VARIANT varChild, I
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(ppdispChild == nullptr)
         {
             return E_INVALIDARG;
@@ -354,7 +364,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accName(VARIANT varChild, BS
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pszName == nullptr)
         {
             return E_INVALIDARG;
@@ -393,7 +403,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accValue(VARIANT varChild, B
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if( pszValue == nullptr )
         {
             return E_INVALIDARG;
@@ -438,7 +448,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accDescription(VARIANT varCh
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pszDescription == nullptr)
         {
             return E_INVALIDARG;
@@ -485,7 +495,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accRole(VARIANT varChild, VA
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pvarRole == nullptr)
         {
             return E_INVALIDARG;
@@ -532,7 +542,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accState(VARIANT varChild, V
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pvarState == nullptr)
         {
             return E_INVALIDARG;
@@ -634,7 +644,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accKeyboardShortcut(VARIANT 
     try {
 
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pszKeyboardShortcut == nullptr)
         {
             return E_INVALIDARG;
@@ -786,7 +796,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accFocus(VARIANT *pvarChild)
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pvarChild == nullptr)
         {
             return E_INVALIDARG;
@@ -799,8 +809,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accFocus(VARIANT *pvarChild)
         //if the descendant of current object has focus indicated by m_dFocusChildID, return the IDispatch of this focused object
         else
         {
-            IMAccessible* pIMAcc = nullptr;
-            g_pAgent->GetIAccessibleFromResID(m_dFocusChildID,&pIMAcc);
+            IMAccessible* pIMAcc = g_pAccObjectManager->GetIAccessibleFromResID(m_dFocusChildID);
             if (pIMAcc == nullptr)
             {
                 return E_FAIL;
@@ -829,7 +838,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_accSelection(VARIANT *pvarCh
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pvarChildren == nullptr)
         {
             return E_INVALIDARG;
@@ -881,7 +890,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::accLocation(long *pxLeft, long *
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pxLeft == nullptr || pyTop == nullptr || pcxWidth == nullptr || pcyHeight == nullptr)
         {
             return E_INVALIDARG;
@@ -929,7 +938,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::accNavigate(long navDir, VARIANT
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pvarEndUpAt == nullptr)
         {
             return E_INVALIDARG;
@@ -969,54 +978,43 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::accHitTest(long xLeft, long yTop
 {
     SolarMutexGuard g;
 
-    try {
-        if (m_isDestroy) return S_FALSE;
-        // #CHECK#
-        if(pvarChild == nullptr)
-        {
-            return E_INVALIDARG;
-        }
-        long x, y, w, h;
-        VARIANT varSelf;
-        VariantInit(&varSelf);
-        varSelf.vt = VT_I4;
-        varSelf.lVal = CHILDID_SELF;
-        accLocation(&x,&y,&w,&h,varSelf);
-        if( (x < xLeft && (x + w) >xLeft) && (y < yTop && (y + h) >yTop) )
-        {
-            sal_Int64 i, nCount;
-            pvarChild->vt = VT_EMPTY;
-            Reference< XAccessibleContext > pRContext = GetContextByXAcc(m_xAccessible.get());
-            nCount = pRContext->getAccessibleChildCount();
-            if(nCount > 256)
-                return E_FAIL;
-            IMAccessible* child = nullptr;
-            for( i = 0; i<nCount; i++)
-            {
-
-                child = GetChildInterface(i + 1);
-                if(child && child->accHitTest(xLeft,yTop,pvarChild) == S_OK)
-                    break;
-            }
-
-            if(pvarChild->vt == VT_DISPATCH)
-                return S_OK;
-
-            if( i < nCount)
-            {
-                pvarChild->vt = VT_DISPATCH;
-                pvarChild->pdispVal = child;
-                child->AddRef();
-            }
-            else
-            {
-                pvarChild->vt = VT_I4;
-                pvarChild->lVal = CHILDID_SELF;
-            }
-            return S_OK;
-        }
+    if (m_isDestroy)
         return S_FALSE;
 
+    if (!pvarChild)
+        return E_INVALIDARG;
+
+    try
+    {
+        pvarChild->vt = VT_EMPTY;
+
+        Reference<XAccessibleContext> xContext = GetContextByXAcc(m_xAccessible.get());
+        Reference<XAccessibleComponent> xComponent(xContext, UNO_QUERY);
+        if (!xComponent.is())
+            return S_FALSE;
+
+        // convert from screen to object-local coordinates
+        css::awt::Point aTopLeft = xComponent->getLocationOnScreen();
+        css::awt::Point aPoint(xLeft - aTopLeft.X, yTop - aTopLeft.Y);
+
+        Reference<XAccessible> xAccAtPoint = xComponent->getAccessibleAtPoint(aPoint);
+        if (!xAccAtPoint.is())
+            return S_FALSE;
+
+        IAccessible* pRet = get_IAccessibleFromXAccessible(xAccAtPoint.get());
+        if (!pRet)
+        {
+            g_pAccObjectManager->InsertAccObj(xAccAtPoint.get(), m_xAccessible.get(), m_hwnd);
+            pRet = get_IAccessibleFromXAccessible(xAccAtPoint.get());
+        }
+        if (!pRet)
+            return S_FALSE;
+
+        pvarChild->vt = VT_DISPATCH;
+        pvarChild->pdispVal = pRet;
+        pRet->AddRef();
+
+        return S_OK;
     } catch(...) { return E_FAIL; }
 }
 
@@ -1087,7 +1085,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::Put_XAccName(const OLECHAR __RPC
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pszName == nullptr)
         {
             return E_INVALIDARG;
@@ -1165,7 +1163,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::Put_XAccValue(const OLECHAR __RP
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pszAccValue == nullptr)
         {
             return E_INVALIDARG;
@@ -1263,15 +1261,15 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::Put_XAccChildID(long dChildID)
 }
 
 /**
-* Set AccObjectManagerAgent object pointer to COM
-* @param    pAgent, the AccObjectManagerAgent point.
+* Set AccObjectWinManager object pointer to COM
+* @param    pManager, the AccObjectWinManager pointer.
 * @return   S_OK if successful and E_FAIL if failure.
 */
-COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::Put_XAccAgent(hyper pAgent)
+COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::Put_XAccObjectManager(hyper pManager)
 {
     // internal IMAccessible - no mutex meeded
 
-    g_pAgent = reinterpret_cast<AccObjectManagerAgent*>(pAgent);
+    g_pAccObjectManager = reinterpret_cast<AccObjectWinManager*>(pManager);
     return S_OK;
 }
 
@@ -1303,10 +1301,9 @@ IMAccessible* CMAccessible::GetChildInterface(long dChildID)//for test
 {
     if(dChildID<0)
     {
-        if(g_pAgent)
+        if(g_pAccObjectManager)
         {
-            IMAccessible* pIMAcc = nullptr;
-            g_pAgent->GetIAccessibleFromResID(dChildID,&pIMAcc);
+            IMAccessible* pIMAcc = g_pAccObjectManager->GetIAccessibleFromResID(dChildID);
             return pIMAcc;
         }
         return nullptr;
@@ -1324,17 +1321,16 @@ IMAccessible* CMAccessible::GetChildInterface(long dChildID)//for test
         if(dChildID<1 || dChildID>pRContext->getAccessibleChildCount())
             return nullptr;
 
-        IAccessible* pChild = nullptr;
         Reference< XAccessible > pXChild = pRContext->getAccessibleChild(dChildID-1);
-        bool isGet = get_IAccessibleFromXAccessible(pXChild.get(), &pChild);
+        IAccessible* pChild = get_IAccessibleFromXAccessible(pXChild.get());
 
-        if(!isGet)
+        if(!pChild)
         {
-            g_pAgent->InsertAccObj(pXChild.get(), m_xAccessible.get(), m_hwnd);
-            isGet = get_IAccessibleFromXAccessible(pXChild.get(), &pChild);
+            g_pAccObjectManager->InsertAccObj(pXChild.get(), m_xAccessible.get(), m_hwnd);
+            pChild = get_IAccessibleFromXAccessible(pXChild.get());
         }
 
-        if(isGet)
+        if (pChild)
         {
             IMAccessible* pIMAcc =  static_cast<IMAccessible*>(pChild);
             return pIMAcc;
@@ -1417,8 +1413,8 @@ IMAccessible* CMAccessible::GetNavigateChildForDM(VARIANT varCur, short flags)
         return nullptr;
     }
     pChildXAcc = pRChildXAcc.get();
-    g_pAgent->InsertAccObj(pChildXAcc, m_xAccessible.get());
-    return g_pAgent->GetIMAccByXAcc(pChildXAcc);
+    g_pAccObjectManager->InsertAccObj(pChildXAcc, m_xAccessible.get());
+    return g_pAccObjectManager->GetIAccessibleFromXAccessible(pChildXAcc);
 }
 
 /**
@@ -1437,7 +1433,7 @@ HRESULT CMAccessible::GetFirstChild(VARIANT varStart,VARIANT* pvarEndUpAt)
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pvarEndUpAt == nullptr)
         {
             return E_INVALIDARG;
@@ -1474,7 +1470,7 @@ HRESULT CMAccessible::GetLastChild(VARIANT varStart,VARIANT* pvarEndUpAt)
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pvarEndUpAt == nullptr)
         {
             return E_INVALIDARG;
@@ -1545,7 +1541,7 @@ HRESULT CMAccessible::GetPreSibling(VARIANT varStart,VARIANT* pvarEndUpAt)
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pvarEndUpAt == nullptr)
         {
             return E_INVALIDARG;
@@ -1584,7 +1580,6 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_nRelations( long __RPC_FAR *
     try {
         if (m_isDestroy) return S_FALSE;
 
-        // #CHECK#
         if(nRelations == nullptr)
         {
             return E_INVALIDARG;
@@ -1614,7 +1609,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_relation( long relationIndex
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(relation == nullptr)
         {
             return E_INVALIDARG;
@@ -1677,12 +1672,10 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_relations( long, IAccessible
     try {
         if (m_isDestroy) return S_FALSE;
 
-        // #CHECK#
         if(relation == nullptr || nRelations == nullptr)
         {
             return E_INVALIDARG;
         }
-        // #CHECK XInterface#
 
         if (!m_xContext.is())
             return E_FAIL;
@@ -1752,7 +1745,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_nActions(long __RPC_FAR *nAc
     try
     {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(nActions == nullptr)
         {
             return E_INVALIDARG;
@@ -1788,7 +1781,6 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::scrollTo(enum IA2ScrollType)
 
 static XAccessible* getTheParentOfMember(XAccessible* pXAcc)
 {
-    // #CHECK#
     if(pXAcc == nullptr)
     {
         return nullptr;
@@ -1814,7 +1806,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_groupPosition(long __RPC_FAR
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(groupLevel == nullptr || similarItemsInGroup == nullptr || positionInGroup == nullptr)
         {
             return E_INVALIDARG;
@@ -1827,14 +1819,14 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_groupPosition(long __RPC_FAR
             m_xAccessible->getAccessibleContext();
         if(!pRContext.is())
             return E_FAIL;
-        long Role = pRContext->getAccessibleRole();
+        const sal_Int16 nRole = pRContext->getAccessibleRole();
 
         *groupLevel = 0;
         *similarItemsInGroup = 0;
         *positionInGroup = 0;
 
-        if (Role != AccessibleRole::DOCUMENT && Role != AccessibleRole::DOCUMENT_PRESENTATION &&
-                Role != AccessibleRole::DOCUMENT_SPREADSHEET && Role != AccessibleRole::DOCUMENT_TEXT)
+        if (nRole != AccessibleRole::DOCUMENT && nRole != AccessibleRole::DOCUMENT_PRESENTATION &&
+                nRole != AccessibleRole::DOCUMENT_SPREADSHEET && nRole != AccessibleRole::DOCUMENT_TEXT)
         {
             Reference< XAccessibleGroupPosition > xGroupPosition( pRContext, UNO_QUERY );
             if ( xGroupPosition.is() )
@@ -1859,7 +1851,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_groupPosition(long __RPC_FAR
 
         Reference<XAccessibleContext> pRParentContext = pParentAcc->getAccessibleContext();
 
-        if( Role ==  RADIO_BUTTON )
+        if (nRole == AccessibleRole::RADIO_BUTTON)
         {
             int index = 0;
             int number = 0;
@@ -1879,7 +1871,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_groupPosition(long __RPC_FAR
                     {
                         if( getTheParentOfMember(pRParentContext->getAccessibleChild(j).get())
                             == static_cast<XAccessible*>(pRAcc.get()) &&
-                            pRParentContext->getAccessibleChild(j)->getAccessibleContext()->getAccessibleRole() == RADIO_BUTTON)
+                            pRParentContext->getAccessibleChild(j)->getAccessibleContext()->getAccessibleRole() == AccessibleRole::RADIO_BUTTON)
                             number++;
                         if (pRParentContext->getAccessibleChild(j).get() == m_xAccessible.get())
                             index = number;
@@ -1892,7 +1884,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_groupPosition(long __RPC_FAR
             return S_OK;
         }
 
-        else if ( COMBO_BOX == Role )
+        else if (nRole == AccessibleRole::COMBO_BOX)
         {
             *groupLevel = 1;
             *similarItemsInGroup = 0;
@@ -1940,7 +1932,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_groupPosition(long __RPC_FAR
             }
             return S_OK;
         }
-        else if ( PAGE_TAB == Role )
+        else if (nRole == AccessibleRole::PAGE_TAB)
         {
             *groupLevel = 1;
             sal_Int64 nChildCount = pRParentContext->getAccessibleChildCount();
@@ -1963,8 +1955,8 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_groupPosition(long __RPC_FAR
         {
             level++;
             pRParentContext = pParentAcc->getAccessibleContext();
-            Role = pRParentContext->getAccessibleRole();
-            if( (Role == TREE) || (Role == LIST) )
+            const sal_Int16 nParentRole = pRParentContext->getAccessibleRole();
+            if ((nParentRole == AccessibleRole::TREE) || (nParentRole == AccessibleRole::LIST))
                 isFound = true;
             pParentAcc = pRParentContext->getAccessibleParent();
         }
@@ -2002,7 +1994,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_uniqueID(long __RPC_FAR *uni
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(uniqueID == nullptr)
         {
             return E_INVALIDARG;
@@ -2019,7 +2011,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_windowHandle(HWND __RPC_FAR 
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(windowHandle == nullptr)
         {
             return E_INVALIDARG;
@@ -2223,7 +2215,7 @@ COM_DECLSPEC_NOTHROW HRESULT STDMETHODCALLTYPE CMAccessible::get_accDefaultActio
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(pszDefaultAction == nullptr)
         {
             return E_INVALIDARG;
@@ -2297,7 +2289,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::Put_ActionDescription( const OLE
 
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(szAction == nullptr)
         {
             return E_INVALIDARG;
@@ -2444,234 +2436,17 @@ HRESULT WINAPI CMAccessible::SmartQI(void* /*pv*/, REFIID iid, void** ppvObject)
     } catch(...) { return E_FAIL; }
 }
 
-bool CMAccessible::get_IAccessibleFromXAccessible(XAccessible* pXAcc, IAccessible** ppIA)
+IAccessible* CMAccessible::get_IAccessibleFromXAccessible(XAccessible* pXAcc)
 {
     try
     {
-        // #CHECK#
-        if(ppIA == nullptr)
-        {
-            return false;
-        }
-        bool isGet = false;
-        if(g_pAgent)
-            isGet = g_pAgent->GetIAccessibleFromXAccessible(pXAcc, ppIA);
-
-        return isGet;
+        if (g_pAccObjectManager)
+            return g_pAccObjectManager->GetIAccessibleFromXAccessible(pXAcc);
     }
     catch(...)
     {
-        return false;
     }
-}
-
-OUString CMAccessible::get_StringFromAny(Any const & pAny)
-{
-    switch(pAny.getValueTypeClass())
-    {
-    case TypeClass_CHAR:
-        {
-            sal_Int8 val;
-            pAny >>= val;
-            return OUString::number(val);
-        }
-    case TypeClass_BOOLEAN:
-        {
-            bool val;
-            pAny >>= val;
-            return OUString::number(int(val));
-        }
-    case TypeClass_BYTE:
-        {
-            sal_Int8 val;
-            pAny >>= val;
-            return OUString::number(val);
-        }
-    case TypeClass_SHORT:
-        {
-            sal_Int16 val;
-            pAny >>= val;
-            return OUString::number(val);
-        }
-    case TypeClass_UNSIGNED_SHORT:
-        {
-            sal_uInt16 val;
-            pAny >>= val;
-            return OUString::number(val);
-        }
-    case TypeClass_LONG:
-        {
-            sal_Int32 val;
-            pAny >>= val;
-            return OUString::number(val);
-        }
-    case TypeClass_UNSIGNED_LONG:
-        {
-            sal_uInt32 val;
-            pAny >>= val;
-            return OUString::number(val);
-        }
-    case TypeClass_FLOAT:
-        {
-            float val;
-            pAny >>= val;
-            return OUString::number(val);
-        }
-    case TypeClass_DOUBLE:
-        {
-            double val;
-            pAny >>= val;
-            return OUString::number(val);
-        }
-    case TypeClass_STRING:
-        {
-            OUString val;
-            pAny >>= val;
-            return val;
-        }
-    case TypeClass_SEQUENCE:
-        {
-            if(pAny.getValueType() == cppu::UnoType<Sequence< OUString >>::get())
-            {
-                Sequence < OUString > val;
-                pAny >>= val;
-
-                OUStringBuffer pString;
-
-                for (const OUString& rElem : val)
-                    pString.append(rElem);
-
-                return pString.makeStringAndClear();
-            }
-            else if (pAny.getValueType() == cppu::UnoType<Sequence< css::style::TabStop >>::get())
-            {
-                Sequence < css::style::TabStop > val;
-                pAny >>= val;
-
-                OUStringBuffer buf;
-                for (const css::style::TabStop& rSingleVal : val)
-                {
-                    buf.append("Position=");
-                    buf.append(rSingleVal.Position);
-                    buf.append(",TabAlign=");
-                    buf.append(sal_Int32(rSingleVal.Alignment));
-                    buf.append(",");
-
-                    buf.append("DecimalChar=");
-                    if (rSingleVal.DecimalChar==';' || rSingleVal.DecimalChar == ':' || rSingleVal.DecimalChar == ',' ||
-                        rSingleVal.DecimalChar == '=' || rSingleVal.DecimalChar == '\\')
-                        buf.append('\\');
-                    buf.append(rSingleVal.DecimalChar);
-                    buf.append(",");
-
-                    buf.append("FillChar=");
-                    if (rSingleVal.FillChar==';' || rSingleVal.FillChar == ':' || rSingleVal.FillChar == ',' ||
-                        rSingleVal.FillChar == '=' || rSingleVal.FillChar == '\\')
-                        buf.append('\\');
-                    buf.append(rSingleVal.FillChar);
-                    buf.append(",");
-                }
-                return buf.makeStringAndClear();
-            }
-            break;
-        }
-    case TypeClass_ENUM:
-        {
-            if (pAny.getValueType() == cppu::UnoType<css::awt::FontSlant>::get())
-            {
-                css::awt::FontSlant val;
-                pAny >>= val;
-                return OUString::number(sal_Int32(val));
-            }
-            break;
-        }
-    case TypeClass_STRUCT:
-        {
-            if (pAny.getValueType() == cppu::UnoType<css::style::LineSpacing>::get())
-            {
-                css::style::LineSpacing val;
-                pAny >>= val;
-                return "Mode=" + OUString::number(val.Mode) + ",Height="
-                    + OUString::number(val.Height) + ",";
-            }
-            else if (pAny.getValueType() == cppu::UnoType<css::accessibility::TextSegment>::get())
-            {
-                css::accessibility::TextSegment val;
-                pAny >>= val;
-                return val.SegmentText;
-            }
-            break;
-        }
-    case TypeClass_VOID:
-    case TypeClass_HYPER:
-    case TypeClass_UNSIGNED_HYPER:
-    case TypeClass_TYPE:
-    case TypeClass_ANY:
-    case TypeClass_TYPEDEF:
-    case TypeClass_EXCEPTION:
-    case TypeClass_INTERFACE:
-    case TypeClass_SERVICE:
-    case TypeClass_MODULE:
-    case TypeClass_INTERFACE_METHOD:
-    case TypeClass_INTERFACE_ATTRIBUTE:
-    case TypeClass_UNKNOWN:
-    case TypeClass_PROPERTY:
-    case TypeClass_CONSTANT:
-    case TypeClass_CONSTANTS:
-    case TypeClass_SINGLETON:
-        break;
-    default:
-        break;
-    }
-    return OUString();
-}
-
-OUString CMAccessible::get_String4Numbering(const Any& pAny, sal_Int16 numberingLevel,std::u16string_view numberingPrefix)
-{
-    Reference< css::container::XIndexReplace > pXIndex;
-    if((pAny>>=pXIndex) && (numberingLevel !=-1))//numbering level is -1,means invalid value
-    {
-        Any aAny = pXIndex->getByIndex(numberingLevel);
-        Sequence< css::beans::PropertyValue > aProps;
-        aAny >>= aProps;
-        OUStringBuffer buf("Numbering:NumberingLevel=");
-        buf.append(sal_Int32(numberingLevel));
-        buf.append(',');
-        for (const css::beans::PropertyValue& rProp : aProps)
-        {
-            if( (rProp.Name == "BulletChar" ) ||
-                (rProp.Name == "NumberingType" ))
-            {
-                buf.append(rProp.Name);
-                buf.append('=');
-                auto const pTemp = CMAccessible::get_StringFromAny(rProp.Value);
-                buf.append(pTemp);
-                buf.append(',');
-
-                if (rProp.Name == "NumberingType" && !numberingPrefix.empty())
-                {
-                    buf.append("NumberingPrefix=");
-                    buf.append(numberingPrefix);
-                }
-            }
-        }
-        return buf.makeStringAndClear();
-    }
-
-    //Because now have three types numbering level:
-    //1.real numbering list,numbering level>=0 and numbering Rule !=NULL;
-    //2.common paragraph, numbering level >=0, and numbering Rule == NULL;
-    //3.TOC paragraph, numbering level >0, and numbering Rule ==NULL;
-    // IAText:numberinglevel base on 0, but TOC's level base on 1,
-    // so NumberingLevel value will be decreased 1 in bridge code.
-    else if(numberingLevel >0)
-    {
-        return "Numbering:NumberingLevel=" + OUString::number(numberingLevel-1) + ",NumberingType=4,NumberingPrefix=,";
-    }
-    else
-    {
-        return "Numbering:";
-    }
+    return nullptr;
 }
 
 void CMAccessible::ConvertAnyToVariant(const css::uno::Any &rAnyVal, VARIANT *pvData)
@@ -2758,13 +2533,12 @@ void CMAccessible::ConvertAnyToVariant(const css::uno::Any &rAnyVal, VARIANT *pv
                 {
                     if(pXAcc.is())
                     {
-                        IAccessible* pIAcc = nullptr;
-                        get_IAccessibleFromXAccessible(pXAcc.get(), &pIAcc);
+                        IAccessible* pIAcc = get_IAccessibleFromXAccessible(pXAcc.get());
                         if(pIAcc == nullptr)
                         {
                             Reference< XAccessibleContext > pXAccContext = pXAcc->getAccessibleContext();
-                            g_pAgent->InsertAccObj(pXAcc.get(),pXAccContext->getAccessibleParent().get());
-                            get_IAccessibleFromXAccessible(pXAcc.get(), &pIAcc);
+                            g_pAccObjectManager->InsertAccObj(pXAcc.get(),pXAccContext->getAccessibleParent().get());
+                            pIAcc = get_IAccessibleFromXAccessible(pXAcc.get());
                         }
                         if(pIAcc)
                         {
@@ -2817,13 +2591,13 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_states(AccessibleStates __RP
         m_xContext->getAccessibleStateSet();
 
     *states = 0x0;
-    for( std::size_t j = 0; j < SAL_N_ELEMENTS(UNO_STATES); j++ )
+    for (int i = 0; i < 63; ++i)
     {
-        if( (UNO_STATES[j] != -1) && (nRStateSet & UNO_STATES[j]) )
-        {
-            *states |= IA2_STATES[j];
-        }
+        sal_Int64 nUnoState = sal_Int64(1) << i;
+        if (nRStateSet & nUnoState)
+            lcl_addIA2State(*states, nUnoState, m_xContext->getAccessibleRole());
     }
+
     return S_OK;
 
 
@@ -2857,7 +2631,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_indexInParent(long __RPC_FAR
 {
     try {
         if (m_isDestroy) return S_FALSE;
-        // #CHECK#
+
         if(accParentIndex == nullptr)
             return E_INVALIDARG;
 
@@ -2947,34 +2721,46 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CMAccessible::get_attributes(/*[out]*/ BSTR *p
     SolarMutexGuard g;
 
     try {
-    if (m_isDestroy) return S_FALSE;
+        if (m_isDestroy) return S_FALSE;
 
-    if (!m_xAccessible.is())
-        return E_FAIL;
+        if (!m_xAccessible.is())
+            return E_FAIL;
 
-    Reference<XAccessibleContext> pRContext = m_xAccessible->getAccessibleContext();
-    if( !pRContext.is() )
-    {
-        return E_FAIL;
-    }
-    Reference<XAccessibleExtendedAttributes> pRXI(pRContext,UNO_QUERY);
-    if( !pRXI.is() )
-        return E_FAIL;
-    else
-    {
-        css::uno::Reference<css::accessibility::XAccessibleExtendedAttributes> pRXAttr;
-        pRXAttr = pRXI.get();
-        css::uno::Any  anyVal = pRXAttr->getExtendedAttributes();
+        Reference<XAccessibleContext> pRContext = m_xAccessible->getAccessibleContext();
+        if( !pRContext.is() )
+        {
+            return E_FAIL;
+        }
 
-        OUString val;
-        anyVal >>= val;
+        OUString sAttributes;
+        Reference<XAccessibleExtendedAttributes> pRXI(pRContext,UNO_QUERY);
+        if (pRXI.is())
+        {
+            css::uno::Reference<css::accessibility::XAccessibleExtendedAttributes> pRXAttr;
+            pRXAttr = pRXI.get();
+            css::uno::Any  anyVal = pRXAttr->getExtendedAttributes();
 
-        if(*pAttr)
+            OUString val;
+            anyVal >>= val;
+            sAttributes += val;
+        }
+
+        // some text-specific IAccessible2 object attributes (like text alignment
+        // of a paragraph) are handled as text attributes in LibreOffice
+        Reference<XAccessibleText> xText(pRContext, UNO_QUERY);
+        if (xText.is())
+        {
+            sal_Int32 nStartOffset = 0;
+            sal_Int32 nEndOffset = 0;
+            sAttributes += AccessibleTextAttributeHelper::GetIAccessible2TextAttributes(
+                xText, IA2AttributeType::ObjectAttributes, 0, nStartOffset, nEndOffset);
+        }
+
+        if (*pAttr)
             SysFreeString(*pAttr);
-        *pAttr = SysAllocString(o3tl::toW(val.getStr()));
+        *pAttr = SysAllocString(o3tl::toW(sAttributes.getStr()));
 
         return S_OK;
-    }
     } catch(...) { return E_FAIL; }
 }
 

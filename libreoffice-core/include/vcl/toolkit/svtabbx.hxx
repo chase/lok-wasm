@@ -93,12 +93,10 @@ namespace vcl {
 class VCL_DLLPUBLIC SvHeaderTabListBox : public SvTabListBox, public vcl::IAccessibleTableProvider
 {
 private:
-    typedef ::std::vector< css::uno::Reference< css::accessibility::XAccessible > > AccessibleChildren;
-
     bool                            m_bFirstPaint;
     std::unique_ptr<::vcl::SvHeaderTabListBoxImpl>  m_pImpl;
     ::vcl::IAccessibleTabListBox*   m_pAccessible;
-    AccessibleChildren              m_aAccessibleChildren;
+    std::vector<css::uno::Reference<css::accessibility::XAccessible>> m_aAccessibleChildren;
 
     DECL_DLLPRIVATE_LINK( ScrollHdl_Impl, SvTreeListBox*, void );
     DECL_DLLPRIVATE_LINK( CreateAccessibleHdl_Impl, HeaderBar*, void );
@@ -166,7 +164,7 @@ public:
 
     virtual tools::Rectangle               calcHeaderRect( bool _bIsColumnBar, bool _bOnScreen = true ) override;
     virtual tools::Rectangle               calcTableRect( bool _bOnScreen = true ) override;
-    virtual tools::Rectangle               GetFieldRectPixelAbs( sal_Int32 _nRow, sal_uInt16 _nColumn, bool _bIsHeader, bool _bOnScreen = true ) override;
+    virtual tools::Rectangle               GetFieldRectPixel( sal_Int32 _nRow, sal_uInt16 _nColumn, bool _bIsHeader, bool _bOnScreen ) override;
 
     virtual css::uno::Reference< css::accessibility::XAccessible > CreateAccessibleCell( sal_Int32 _nRow, sal_uInt16 _nColumn ) override;
     virtual css::uno::Reference< css::accessibility::XAccessible > CreateAccessibleRowHeader( sal_Int32 _nRow ) override;
@@ -192,7 +190,8 @@ public:
     virtual bool                    GetGlyphBoundRects( const Point& rOrigin, const OUString& rStr, int nIndex, int nLen, std::vector< tools::Rectangle >& rVector ) override;
 
     // Window
-    virtual tools::Rectangle        GetWindowExtentsRelative(const vcl::Window *pRelativeWindow) const override;
+    virtual AbsoluteScreenPixelRectangle GetWindowExtentsAbsolute() const override;
+    virtual tools::Rectangle        GetWindowExtentsRelative(const vcl::Window& rRelativeWindow) const override;
     virtual void                    GrabFocus() override;
     virtual css::uno::Reference< css::accessibility::XAccessible > GetAccessible() override;
     /** Creates and returns the accessible object of the whole BrowseBox. */

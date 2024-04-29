@@ -72,12 +72,12 @@ SdPageDlg::SdPageDlg(SfxObjectShell const* pDocSh, weld::Window* pParent, const 
     }
 }
 
-void SdPageDlg::PageCreated(const OString& rId, SfxTabPage& rPage)
+void SdPageDlg::PageCreated(const OUString& rId, SfxTabPage& rPage)
 {
     SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
     if (rId == "RID_SVXPAGE_PAGE")
     {
-        aSet.Put(SfxUInt16Item(sal_uInt16(SID_ENUM_PAGE_MODE), SVX_PAGE_MODE_PRESENTATION));
+        aSet.Put(SfxUInt16Item(SID_ENUM_PAGE_MODE, SVX_PAGE_MODE_PRESENTATION));
         aSet.Put(SfxUInt16Item(SID_PAPER_START, PAPER_A0));
         aSet.Put(SfxUInt16Item(SID_PAPER_END, PAPER_E));
 

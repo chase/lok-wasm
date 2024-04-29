@@ -35,8 +35,8 @@ VCL_DLLPUBLIC lookup_table const & get_premultiply_table();
 VCL_DLLPUBLIC lookup_table const & get_unpremultiply_table();
 #endif
 
-sal_uInt8 unpremultiply(sal_uInt8 c, sal_uInt8 a);
-sal_uInt8 premultiply(sal_uInt8 c, sal_uInt8 a);
+VCL_DLLPUBLIC sal_uInt8 unpremultiply(sal_uInt8 c, sal_uInt8 a);
+VCL_DLLPUBLIC sal_uInt8 premultiply(sal_uInt8 c, sal_uInt8 a);
 
 BitmapEx VCL_DLLPUBLIC loadFromName(const OUString& rFileName, const ImageLoadFlags eFlags = ImageLoadFlags::NONE);
 
@@ -52,7 +52,7 @@ void loadFromSvg(SvStream& rStream, const OUString& sPath, BitmapEx& rBitmapEx, 
 */
 BitmapEx VCL_DLLPUBLIC CreateFromData(sal_uInt8 const *pData,
                                       sal_Int32 nWidth, sal_Int32 nHeight, sal_Int32 nStride,
-                                      vcl::PixelFormat ePixelFormat,
+                                      sal_Int8 nBitsPerPixel,
                                       bool bReversColors = false, bool bReverseAlpha = false);
 
 BitmapEx VCL_DLLPUBLIC CreateFromData( RawBitmap && data );

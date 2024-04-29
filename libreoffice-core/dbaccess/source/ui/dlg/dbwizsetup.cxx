@@ -106,6 +106,7 @@ ODbTypeWizDialogSetup::ODbTypeWizDialogSetup(weld::Window* _pParent
     , m_sRM_JDBCText( DBA_RES( STR_PAGETITLE_JDBC ) )
     , m_sRM_MySQLNativePageTitle( DBA_RES( STR_PAGETITLE_MYSQL_NATIVE ) )
     , m_sRM_OracleText( DBA_RES( STR_PAGETITLE_ORACLE ) )
+    , m_sRM_PostgresText( DBA_RES( STR_PAGETITLE_POSTGRES ) )
     , m_sRM_MySQLText( DBA_RES( STR_PAGETITLE_MYSQL ) )
     , m_sRM_ODBCText( DBA_RES( STR_PAGETITLE_ODBC ) )
     , m_sRM_DocumentOrSpreadSheetText( DBA_RES( STR_PAGETITLE_DOCUMENT_OR_SPREADSHEET ) )
@@ -213,6 +214,9 @@ OUString ODbTypeWizDialogSetup::getStateDisplayName(WizardState _nState) const
         case PAGE_DBSETUPWIZARD_ORACLE:
             sRoadmapItem = m_sRM_OracleText;
             break;
+        case PAGE_DBSETUPWIZARD_POSTGRES:
+            sRoadmapItem = m_sRM_PostgresText;
+            break;
         case PAGE_DBSETUPWIZARD_MYSQL_INTRO:
             sRoadmapItem = m_sRM_MySQLText;
             break;
@@ -308,6 +312,9 @@ void ODbTypeWizDialogSetup::activateDatabasePath()
     {
         OUString sOld = m_sURL;
         m_sURL = m_pGeneralPage->GetSelectedType();
+        if (m_sURL.startsWith("sdbc:mysql:") && sOld.startsWith("sdbc:mysql:"))
+            m_sURL = sOld; // The type of MySQL connection was already set elsewhere; just use it,
+                           // instead of the hardcoded one from the selector
         DataSourceInfoConverter::convert(getORB(), m_pCollection,sOld,m_sURL,m_pImpl->getCurrentDataSource());
         ::dbaccess::DATASOURCE_TYPE eType = VerifyDataSourceType(m_pCollection->determineType(m_sURL));
         if (eType ==  ::dbaccess::DST_UNKNOWN)
@@ -460,7 +467,7 @@ std::unique_ptr<BuilderPage> ODbTypeWizDialogSetup::createPage(WizardState _nSta
 {
     std::unique_ptr<OGenericAdministrationPage> xPage;
 
-    OString sIdent(OString::number(_nState));
+    OUString sIdent(OUString::number(_nState));
     weld::Container* pPageContainer = m_xAssistant->append_page(sIdent);
 
     switch(_nState)
@@ -505,6 +512,10 @@ std::unique_ptr<BuilderPage> ODbTypeWizDialogSetup::createPage(WizardState _nSta
 
         case PAGE_DBSETUPWIZARD_ORACLE:
             xPage = OGeneralSpecialJDBCConnectionPageSetup::CreateOracleJDBCTabPage(pPageContainer, this, *m_pOutSet);
+            break;
+
+        case PAGE_DBSETUPWIZARD_POSTGRES:
+            xPage = OPostgresConnectionPageSetup::CreatePostgresTabPage(pPageContainer, this, *m_pOutSet);
             break;
 
         case PAGE_DBSETUPWIZARD_LDAP:
@@ -694,15 +705,12 @@ bool ODbTypeWizDialogSetup::SaveDatabaseDocument()
         {
             if ( !lcl_handle( xHandler, aError ) )
             {
-                InteractiveIOException aRequest;
-                aRequest.Classification = InteractionClassification_ERROR;
-                if ( aError.isExtractableTo( ::cppu::UnoType< IOException >::get() ) )
-                    // assume saving the document failed
-                    aRequest.Code = IOErrorCode_CANT_WRITE;
-                else
-                    aRequest.Code = IOErrorCode_GENERAL;
-                aRequest.Message = e.Message;
-                aRequest.Context = e.Context;
+                css::ucb::IOErrorCode code
+                    = aError.isExtractableTo(::cppu::UnoType<IOException>::get())
+                          ? IOErrorCode_CANT_WRITE // assume saving the document failed
+                          : IOErrorCode_GENERAL;
+                InteractiveIOException aRequest(e.Message, e.Context,
+                                                InteractionClassification_ERROR, code);
                 lcl_handle( xHandler, Any( aRequest ) );
             }
         }

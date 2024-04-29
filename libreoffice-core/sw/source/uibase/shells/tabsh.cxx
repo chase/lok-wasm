@@ -181,7 +181,7 @@ static std::shared_ptr<SwTableRep> lcl_TableParamToItemSet( SfxItemSet& rSet, Sw
     {
         rSh.StartAllAction();
         rSh.Push();
-        rSh.GetView().GetViewFrame()->GetDispatcher()->Execute( FN_TABLE_SELECT_ALL );
+        rSh.GetView().GetViewFrame().GetDispatcher()->Execute( FN_TABLE_SELECT_ALL );
     }
     SvxBoxInfoItem aBoxInfo( SID_ATTR_BORDER_INNER );
 
@@ -329,7 +329,7 @@ void ItemSetToTableParam( const SfxItemSet& rSet,
             rSh.Push();
             if(!bTableSel)
             {
-                rSh.GetView().GetViewFrame()->GetDispatcher()->Execute( FN_TABLE_SELECT_ALL );
+                rSh.GetView().GetViewFrame().GetDispatcher()->Execute( FN_TABLE_SELECT_ALL );
             }
             if(bBorder)
                 rSh.SetTabBorders( rSet );
@@ -603,7 +603,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
         {
             //#127012# get the bindings before the dialog is called
             // it might happen that this shell is removed after closing the dialog
-            SfxBindings& rBindings = GetView().GetViewFrame()->GetBindings();
+            SfxBindings& rBindings = GetView().GetViewFrame().GetBindings();
             SfxItemSet aCoreSet( GetPool(), aUITableAttrRange);
 
             FieldUnit eMetric = ::GetDfltMetric(dynamic_cast<SwWebView*>( &rSh.GetView()) != nullptr );
@@ -625,7 +625,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
             if (pDlg)
             {
                 if (pItem)
-                    pDlg->SetCurPageId(OUStringToOString(static_cast<const SfxStringItem *>(pItem)->GetValue(), RTL_TEXTENCODING_UTF8));
+                    pDlg->SetCurPageId(static_cast<const SfxStringItem *>(pItem)->GetValue());
 
                 auto pRequest = std::make_shared<SfxRequest>(rReq);
                 rReq.Ignore(); // the 'old' request is not relevant any more
@@ -708,11 +708,10 @@ void SwTableShell::Execute(SfxRequest &rReq)
                                     aBoxSet.Get(
                                     RES_BOXATR_FORMAT ).GetValue() ));
 
-                OUString sCurText( rSh.GetTableBoxText() );
                 pCoreSet->Put( SvxNumberInfoItem( pFormatter,
                                     aBoxSet.Get(
                                         RES_BOXATR_VALUE).GetValue(),
-                                    sCurText, SID_ATTR_NUMBERFORMAT_INFO ));
+                                    rSh.GetTableBoxText(), SID_ATTR_NUMBERFORMAT_INFO ));
 
                 SwWrtShell* pSh = &rSh;
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
@@ -995,15 +994,14 @@ void SwTableShell::Execute(SfxRequest &rReq)
                                                                                         nSlot == FN_TABLE_INSERT_COL_DLG, pSlot->GetCommand()));
                 if( pDlg->Execute() == 1 )
                 {
-                    const sal_uInt16 nDispatchSlot = (nSlot == FN_TABLE_INSERT_COL_DLG)
+                    const TypedWhichId<SfxUInt16Item> nDispatchSlot = (nSlot == FN_TABLE_INSERT_COL_DLG)
                         ? FN_TABLE_INSERT_COL_AFTER : FN_TABLE_INSERT_ROW_AFTER;
                     SfxUInt16Item aCountItem( nDispatchSlot, pDlg->getInsertCount() );
                     SfxBoolItem  aAfter( FN_PARAM_INSERT_AFTER, !pDlg->isInsertBefore() );
-                    SfxViewFrame* pVFrame = GetView().GetViewFrame();
-                    if( pVFrame )
-                        pVFrame->GetDispatcher()->ExecuteList(nDispatchSlot,
-                            SfxCallMode::SYNCHRON|SfxCallMode::RECORD,
-                            { &aCountItem, &aAfter });
+                    SfxViewFrame& rVFrame = GetView().GetViewFrame();
+                    rVFrame.GetDispatcher()->ExecuteList(nDispatchSlot,
+                        SfxCallMode::SYNCHRON|SfxCallMode::RECORD,
+                        { &aCountItem, &aAfter });
                 }
             }
             break;
@@ -1127,7 +1125,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
                                         ? TableChgMode::FixedWidthChangeProp
                                         : TableChgMode::VarWidthChangeAbs );
 
-            SfxBindings& rBind = GetView().GetViewFrame()->GetBindings();
+            SfxBindings& rBind = GetView().GetViewFrame().GetBindings();
             static sal_uInt16 aInva[] =
                             {   FN_TABLE_MODE_FIX,
                                 FN_TABLE_MODE_FIX_PROP,
@@ -1140,10 +1138,10 @@ void SwTableShell::Execute(SfxRequest &rReq)
         }
         case FN_TABLE_AUTOSUM:
         {
-            SfxViewFrame* pVFrame = GetView().GetViewFrame();
-            pVFrame->GetDispatcher()->Execute(FN_EDIT_FORMULA, SfxCallMode::SYNCHRON);
+            SfxViewFrame& rVFrame = GetView().GetViewFrame();
+            rVFrame.GetDispatcher()->Execute(FN_EDIT_FORMULA, SfxCallMode::SYNCHRON);
             const sal_uInt16 nId = SwInputChild::GetChildWindowId();
-            SwInputChild* pChildWin = static_cast<SwInputChild*>(pVFrame->
+            SwInputChild* pChildWin = static_cast<SwInputChild*>(rVFrame.
                                                 GetChildWindow( nId ));
             OUString sSum;
             GetShell().GetAutoSum(sSum);
@@ -1165,7 +1163,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
         {
             rSh.StartAction();
             rSh.StartUndo();
-            rSh.GetView().GetViewFrame()->GetDispatcher()->Execute(FN_TABLE_SELECT_ALL);
+            rSh.GetView().GetViewFrame().GetDispatcher()->Execute(FN_TABLE_SELECT_ALL);
             rSh.DeleteTable();
             rSh.EndUndo();
             rSh.EndAction();
@@ -1518,7 +1516,7 @@ void SwTableShell::GetState(SfxItemSet &rSet)
                         OUString sPayload = ".uno:TableRowHeight=" + sHeight;
 
                         GetViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                            OUStringToOString(sPayload, RTL_TEXTENCODING_ASCII_US).getStr());
+                            OUStringToOString(sPayload, RTL_TEXTENCODING_ASCII_US));
                     }
                 }
                 break;
@@ -1542,7 +1540,7 @@ void SwTableShell::GetState(SfxItemSet &rSet)
                     OUString sPayload = ".uno:TableColumWidth=" + sWidth;
 
                     GetViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                        OUStringToOString(sPayload, RTL_TEXTENCODING_ASCII_US).getStr());
+                        OUStringToOString(sPayload, RTL_TEXTENCODING_ASCII_US));
                 }
 
                 break;

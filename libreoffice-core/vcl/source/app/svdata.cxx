@@ -22,6 +22,7 @@
 #include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/diagnose_ex.hxx>
+#include <o3tl/string_view.hxx>
 #include <unotools/resmgr.hxx>
 #include <sal/log.hxx>
 
@@ -48,6 +49,7 @@
 #include <windowdev.hxx>
 #include <units.hrc>
 #include <print.h>
+#include <rtl/no_destructor.hxx> // MACRO:
 
 #include <com/sun/star/accessibility/MSAAService.hpp>
 
@@ -61,8 +63,6 @@ using namespace com::sun::star::awt;
 
 namespace
 {
-    struct private_aImplSVData :
-        public rtl::Static<ImplSVData, private_aImplSVData> {};
     /// Default instance ensures that ImplSVData::mpHelpData is never null.
     struct private_aImplSVHelpData :
         public rtl::Static<ImplSVHelpData, private_aImplSVHelpData> {};
@@ -73,8 +73,10 @@ namespace
 
 }
 
+// MACRO:
 ImplSVData* ImplGetSVData() {
-    return &private_aImplSVData::get();
+    static rtl::NoDestructor<ImplSVData> instance;
+    return instance.get();
 }
 
 SalSystem* ImplGetSalSystem()
@@ -267,7 +269,7 @@ const FieldUnitStringList& ImplGetFieldUnits()
     ImplSVData* pSVData = ImplGetSVData();
     if( pSVData->maCtrlData.maFieldUnitStrings.empty() )
     {
-        sal_uInt32 nUnits = SAL_N_ELEMENTS(SV_FUNIT_STRINGS);
+        sal_uInt32 nUnits = std::size(SV_FUNIT_STRINGS);
         pSVData->maCtrlData.maFieldUnitStrings.reserve( nUnits );
         for (sal_uInt32 i = 0; i < nUnits; i++)
         {
@@ -280,12 +282,12 @@ const FieldUnitStringList& ImplGetFieldUnits()
 
 namespace vcl
 {
-    FieldUnit EnglishStringToMetric(std::string_view rEnglishMetricString)
+    FieldUnit EnglishStringToMetric(std::u16string_view rEnglishMetricString)
     {
-        sal_uInt32 nUnits = SAL_N_ELEMENTS(SV_FUNIT_STRINGS);
+        sal_uInt32 nUnits = std::size(SV_FUNIT_STRINGS);
         for (sal_uInt32 i = 0; i < nUnits; ++i)
         {
-            if (rEnglishMetricString == SV_FUNIT_STRINGS[i].first.mpId)
+            if (o3tl::equalsAscii(rEnglishMetricString, SV_FUNIT_STRINGS[i].first.getId()))
                 return SV_FUNIT_STRINGS[i].second;
         }
         return FieldUnit::NONE;

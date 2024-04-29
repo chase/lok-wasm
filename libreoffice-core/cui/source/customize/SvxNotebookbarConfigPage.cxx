@@ -107,14 +107,11 @@ SvxNotebookbarConfigPage::SvxNotebookbarConfigPage(weld::Container* pPage,
     m_xDescriptionField->set_visible(false);
     m_xMoveUpButton->set_visible(false);
     m_xMoveDownButton->set_visible(false);
-    m_xAddCommandButton->set_visible(false);
-    m_xRemoveCommandButton->set_visible(false);
+    m_xCommandButtons->set_visible(false);
     m_xLeftFunctionLabel->set_visible(false);
     m_xSearchLabel->set_visible(false);
     m_xCategoryLabel->set_visible(false);
-    m_xInsertBtn->set_visible(false);
-    m_xModifyBtn->set_visible(false);
-    m_xResetBtn->set_visible(false);
+    m_xCustomizeBox->set_visible(false);
     m_xCustomizeLabel->set_visible(false);
 
     weld::TreeView& rCommandCategoryBox = m_xFunctions->get_widget();
@@ -145,7 +142,6 @@ void SvxNotebookbarConfigPage::Init()
     m_xTopLevelListBox->clear();
     m_xContentsListBox->clear();
     m_xSaveInListBox->clear();
-    CustomNotebookbarGenerator::createCustomizedUIFile();
     OUString sNotebookbarInterface = getFileName(m_sFileName);
 
     OUString sScopeName
@@ -184,9 +180,8 @@ short SvxNotebookbarConfigPage::QueryReset()
     int nValue = xQueryBox->run();
     if (nValue == RET_YES)
     {
-        OUString sOriginalUIPath = CustomNotebookbarGenerator::getOriginalUIPath();
-        OUString sCustomizedUIPath = CustomNotebookbarGenerator::getCustomizedUIPath();
-        osl::File::copy(sOriginalUIPath, sCustomizedUIPath);
+        osl::File::remove(CustomNotebookbarGenerator::getCustomizedUIPath());
+
         OUString sNotebookbarInterface = getFileName(m_sFileName);
         Sequence<OUString> sSequenceEntries;
         CustomNotebookbarGenerator::setCustomizedUIItem(sSequenceEntries, sNotebookbarInterface);
@@ -400,6 +395,13 @@ void SvxNotebookbarConfigPage::SelectElement()
         CustomNotebookbarGenerator::getCustomizedUIPath());
     xmlDocPtr pDoc = xmlParseFile(sUIFileUIPath.getStr());
     if (!pDoc)
+    {
+        sUIFileUIPath = CustomNotebookbarGenerator::getSystemPath(
+            CustomNotebookbarGenerator::getOriginalUIPath());
+        pDoc = xmlParseFile(sUIFileUIPath.getStr());
+    }
+
+    if (!pDoc)
         return;
     xmlNodePtr pNodePtr = xmlDocGetRootElement(pDoc);
 
@@ -410,9 +412,8 @@ void SvxNotebookbarConfigPage::SelectElement()
 
     if (m_xTopLevelListBox->get_count() == 1)
     {
-        for (std::size_t nIdx = 0; nIdx < aCategoryList.size(); nIdx++)
-            m_xTopLevelListBox->append(aCategoryList[nIdx].sUIItemId,
-                                       aCategoryList[nIdx].sDisplayName);
+        for (const auto& rCategory : aCategoryList)
+            m_xTopLevelListBox->append(rCategory.sUIItemId, rCategory.sDisplayName);
     }
     tools::ULong nStart = 0;
     if (aEntries[nStart].sClassId == "sfxlo-PriorityHBox"

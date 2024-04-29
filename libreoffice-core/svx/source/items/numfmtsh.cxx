@@ -347,6 +347,13 @@ sal_uInt16 SvxNumberFormatShell::GetFormatIntegerDigits(std::u16string_view rFor
     return pFormatter->GetFormatIntegerDigits(nFmtKey);
 }
 
+bool SvxNumberFormatShell::IsNatNum12(std::u16string_view rFormat) const
+{
+    sal_uInt32 nFmtKey = pFormatter->GetEntryKey(rFormat, eCurLanguage);
+
+    return pFormatter->IsNatNum12(nFmtKey);
+}
+
 void SvxNumberFormatShell::GetOptions(const OUString& rFormat, bool& rThousand, bool& rNegRed,
                                       sal_uInt16& rPrecision, sal_uInt16& rLeadingZeroes,
                                       sal_uInt16& rCatLbPos)
@@ -707,7 +714,7 @@ bool SvxNumberFormatShell::IsEssentialFormat_Impl(SvNumFormatType eType, sal_uIn
     if (nKey == nCurFormatKey)
         return true;
 
-    const NfIndexTableOffset nIndex = pFormatter->GetIndexTableOffset(nKey);
+    const NfIndexTableOffset nIndex = SvNumberFormatter::GetIndexTableOffset(nKey);
     switch (nIndex)
     {
         // These are preferred or edit formats.

@@ -60,10 +60,9 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccActionBase::nActions(/*[out,retval]*/long*
 
     try {
 
-    // #CHECK#
     if( pRXAct.is() && nActions != nullptr )
     {
-        *nActions = GetXInterface()->getAccessibleActionCount();
+        *nActions = pRXAct->getAccessibleActionCount();
         return S_OK;
     }
     *nActions = 0;
@@ -86,7 +85,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccActionBase::doAction(/* [in] */ long actio
 
     if( pRXAct.is() )
     {
-        return GetXInterface()->doAccessibleAction( actionIndex )?S_OK:E_FAIL;
+        return pRXAct->doAccessibleAction(actionIndex) ? S_OK : E_FAIL;
     }
     return E_FAIL;
 
@@ -105,16 +104,13 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccActionBase::get_description(long actionInd
 
     try {
 
-    // #CHECK#
     if(description == nullptr)
         return E_INVALIDARG;
 
-    // #CHECK XInterface#
     if(!pRXAct.is())
         return E_FAIL;
 
-    OUString ouStr = GetXInterface()->getAccessibleActionDescription(actionIndex);
-    // #CHECK#
+    OUString ouStr = pRXAct->getAccessibleActionDescription(actionIndex);
 
     SysFreeString(*description);
     *description = SysAllocString(o3tl::toW(ouStr.getStr()));
@@ -160,7 +156,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccActionBase::get_keyBinding(
     if( !pRXAct.is() )
         return E_FAIL;
 
-    Reference< XAccessibleKeyBinding > binding = GetXInterface()->getAccessibleActionKeyBinding(actionIndex);
+    Reference< XAccessibleKeyBinding > binding = pRXAct->getAccessibleActionKeyBinding(actionIndex);
     if( !binding.is() )
         return E_FAIL;
 

@@ -46,6 +46,7 @@
 #include <charthelper.hxx>
 #include <docuno.hxx>
 #include <docsh.hxx>
+#include <stlpool.hxx>
 
 //  maximal permitted mouse movement to start Drag&Drop
 //! fusel,fuconstr,futext - combine them!
@@ -340,7 +341,7 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
     SetMouseButtonCode(rMEvt.GetButtons());
 
     bool bReturn = FuDraw::MouseButtonUp(rMEvt);
-    bool bOle = rViewShell.GetViewFrame()->GetFrame().IsInPlace();
+    bool bOle = rViewShell.GetViewFrame().GetFrame().IsInPlace();
 
     SdrObject* pObj = nullptr;
     if (aDragTimer.IsActive() )
@@ -440,6 +441,13 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
                 }
             }
         }
+
+        if (SC_MOD()->GetIsWaterCan())
+        {
+            auto pStyleSheet = rViewData.GetDocument().GetStyleSheetPool()->GetActualStyleSheet();
+            if (pStyleSheet && pStyleSheet->GetFamily() == SfxStyleFamily::Frame)
+                pView->SetStyleSheet(static_cast<SfxStyleSheet*>(pStyleSheet), false);
+        }
     }
 
     // maybe consider OLE object
@@ -481,6 +489,10 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
                         {
                             if (static_cast<SdrOle2Obj*>(pObj)->GetObjRef().is())
                             {
+                                // release so if ActivateObject launches a warning dialog, then that dialog
+                                // can get mouse events
+                                if (pWindow->IsMouseCaptured())
+                                    pWindow->ReleaseMouse();
                                 rViewShell.ActivateObject(static_cast<SdrOle2Obj*>(pObj), css::embed::EmbedVerbs::MS_OLEVERB_PRIMARY);
                             }
                         }
@@ -531,7 +543,7 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
     if ( bCopy && pPage )
     {
         ScDocShell* pDocShell = rViewData.GetDocShell();
-        ScModelObj* pModelObj = ( pDocShell ? comphelper::getFromUnoTunnel<ScModelObj>( pDocShell->GetModel() ) : nullptr );
+        ScModelObj* pModelObj = ( pDocShell ? pDocShell->GetModel() : nullptr );
         if ( pModelObj )
         {
             SCTAB nTab = rViewData.GetTabNo();

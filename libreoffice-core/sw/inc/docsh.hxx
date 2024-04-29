@@ -52,6 +52,7 @@ class IDocumentChartDataProviderAccess;
 class SwDocShell;
 class SwDrawModel;
 class SwViewShell;
+class SwDocStyleSheetPool;
 namespace svt
 {
 class EmbeddedObjectRef;
@@ -69,7 +70,7 @@ class SW_DLLPUBLIC SwDocShell
     , public SfxListener
 {
     rtl::Reference< SwDoc >                 m_xDoc;      ///< Document.
-    rtl::Reference< SfxStyleSheetBasePool > m_xBasePool; ///< Passing through for formats.
+    rtl::Reference< SwDocStyleSheetPool > m_xBasePool; ///< Passing through for formats.
     std::unique_ptr<FontList> m_pFontList;          ///< Current Fontlist.
     bool        m_IsInUpdateFontList; ///< prevent nested calls of UpdateFontList
 
@@ -134,7 +135,7 @@ class SW_DLLPUBLIC SwDocShell
         const SfxStyleFamily nFamily,
         SfxStyleSearchBits nMask,
         const bool bNew,
-        const OString& sPageId,
+        const OUString& sPageId,
         SwWrtShell* pActShell,
         SfxRequest* pRequest = nullptr,
         sal_uInt16 nSlot = 0);
@@ -268,7 +269,7 @@ public:
     void FormatPage(
         weld::Window* pDialogParent,
         const OUString& rPage,
-        const OString& rPageId,
+        const OUString& rPageId,
         SwWrtShell& rActShell,
         SfxRequest* pRequest = nullptr);
 
@@ -289,7 +290,7 @@ public:
 
     void ToggleLayoutMode(SwView* pView);
 
-    ErrCode LoadStylesFromFile(const OUString& rURL, SwgReaderOption& rOpt, bool bUnoCall);
+    ErrCodeMsg LoadStylesFromFile(const OUString& rURL, SwgReaderOption& rOpt, bool bUnoCall);
     void InvalidateModel();
     void ReactivateModel();
 

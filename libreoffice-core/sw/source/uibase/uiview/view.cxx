@@ -113,6 +113,14 @@
 #include <svtools/embedhlp.hxx>
 #include <tools/UnitConversion.hxx>
 
+#include <svx/sdr/overlay/overlayselection.hxx>
+#include <svx/sdr/overlay/overlayobject.hxx>
+#include <svx/sdr/overlay/overlaymanager.hxx>
+#include <svx/sdrpaintwindow.hxx>
+#include <svx/svdview.hxx>
+#include <node2lay.hxx>
+#include <cntfrm.hxx>
+
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
@@ -137,13 +145,13 @@ std::unique_ptr<SearchAttrItemList>  SwView::s_xReplaceList;
 
 SfxDispatcher &SwView::GetDispatcher()
 {
-    return *GetViewFrame()->GetDispatcher();
+    return *GetViewFrame().GetDispatcher();
 }
 
 void SwView::ImpSetVerb( SelectionType nSelType )
 {
     bool bResetVerbs = m_bVerbsActive;
-    if ( !GetViewFrame()->GetFrame().IsInPlace() &&
+    if ( !GetViewFrame().GetFrame().IsInPlace() &&
          (SelectionType::Ole|SelectionType::Graphic) & nSelType )
     {
         FlyProtectFlags eProtectFlags = m_pWrtShell->IsSelObjProtected(FlyProtectFlags::Content);
@@ -242,7 +250,7 @@ uno::Reference<frame::XLayoutManager> getLayoutManager(const SfxViewFrame& rView
 
 void SwView::ShowUIElement(const OUString& sElementURL) const
 {
-    if (auto xLayoutManager = getLayoutManager(*GetViewFrame()))
+    if (auto xLayoutManager = getLayoutManager(GetViewFrame()))
     {
         if (!xLayoutManager->getElement(sElementURL).is())
         {
@@ -276,12 +284,13 @@ void SwView::SelectShell()
     // Determine if a different fly frame was selected.
     bool bUpdateFly = false;
     const SwFrameFormat* pCurFlyFormat = nullptr;
-    if (m_nSelectionType & SelectionType::Ole || m_nSelectionType & SelectionType::Graphic)
+    if (m_pWrtShell->IsSelFrameMode())
     {
         pCurFlyFormat = m_pWrtShell->GetFlyFrameFormat();
     }
-    if (pCurFlyFormat && pCurFlyFormat != m_pLastFlyFormat)
+    if (pCurFlyFormat && m_pLastFlyFormat && pCurFlyFormat != m_pLastFlyFormat)
     {
+        // Only do an explicit update when switching between flys.
         bUpdateFly = true;
     }
     m_pLastFlyFormat = pCurFlyFormat;
@@ -291,7 +300,7 @@ void SwView::SelectShell()
 
     if ( nNewSelectionType == m_nSelectionType )
     {
-        GetViewFrame()->GetBindings().InvalidateAll( false );
+        GetViewFrame().GetBindings().InvalidateAll( false );
         if ( m_nSelectionType & SelectionType::Ole ||
              m_nSelectionType & SelectionType::Graphic )
             // For graphs and OLE the verb can be modified of course!
@@ -299,15 +308,12 @@ void SwView::SelectShell()
 
         if (bUpdateFly)
         {
-            SfxViewFrame* pViewFrame = GetViewFrame();
-            if (pViewFrame)
+            SfxViewFrame& rViewFrame = GetViewFrame();
+            uno::Reference<frame::XFrame> xFrame = rViewFrame.GetFrame().GetFrameInterface();
+            if (xFrame.is())
             {
-                uno::Reference<frame::XFrame> xFrame = pViewFrame->GetFrame().GetFrameInterface();
-                if (xFrame.is())
-                {
-                    // Invalidate cached dispatch objects.
-                    xFrame->contextChanged();
-                }
+                // Invalidate cached dispatch objects.
+                xFrame->contextChanged();
             }
         }
     }
@@ -482,7 +488,7 @@ void SwView::SelectShell()
         }
 
         // Show Mail Merge toolbar initially for documents with Database fields
-        if (!m_bInitOnceCompleted && GetWrtShell().IsAnyDatabaseFieldInDoc())
+        if (!m_bInitOnceCompleted && GetWrtShell().IsAnyDatabaseFieldInDoc() && !utl::ConfigManager::IsFuzzing())
             ShowUIElement("private:resource/toolbar/mailmerge");
 
         // Activate the toolbar to the new selection which also was active last time.
@@ -549,17 +555,17 @@ IMPL_LINK_NOARG(SwView, AttrChangedNotify, LinkParamNone*, void)
     {
         if (m_pWrtShell->ActionPend() || g_bNoInterrupt ||
              GetDispatcher().IsLocked() ||               //do not confuse the SFX
-             GetViewFrame()->GetBindings().IsInUpdate() )//do not confuse the SFX
+             GetViewFrame().GetBindings().IsInUpdate() )//do not confuse the SFX
         {
             m_bAttrChgNotified = true;
             m_aTimer.Start();
 
             const SfxBoolItem *pItem =
-                GetObjectShell()->GetMedium()->GetItemSet()->
+                GetObjectShell()->GetMedium()->GetItemSet().
                                     GetItemIfSet( SID_HIDDEN, false );
             if ( !pItem || !pItem->GetValue() )
             {
-                GetViewFrame()->GetBindings().ENTERREGISTRATIONS();
+                GetViewFrame().GetBindings().ENTERREGISTRATIONS();
                 m_bAttrChgNotifiedWithRegistrations = true;
             }
 
@@ -588,7 +594,7 @@ IMPL_LINK_NOARG(SwView, TimeoutHdl, Timer *, void)
 
     if ( m_bAttrChgNotifiedWithRegistrations )
     {
-        GetViewFrame()->GetBindings().LEAVEREGISTRATIONS();
+        GetViewFrame().GetBindings().LEAVEREGISTRATIONS();
         m_bAttrChgNotifiedWithRegistrations = false;
     }
 
@@ -608,11 +614,11 @@ void SwView::CheckReadonlyState()
     SfxDispatcher &rDis = GetDispatcher();
     // To be able to recognize if it is already disabled!
     SfxItemState eStateRO, eStateProtAll;
-    const SfxPoolItem *pItem;
+    SfxPoolItemHolder aResult;
     // Query the status from a slot which is only known to us.
     // Otherwise the slot is known from other; like the BasicIde
-    eStateRO = rDis.QueryState( FN_INSERT_BOOKMARK, pItem );
-    eStateProtAll = rDis.QueryState( FN_EDIT_REGION, pItem );
+    eStateRO = rDis.QueryState(FN_INSERT_BOOKMARK, aResult);
+    eStateProtAll = rDis.QueryState(FN_EDIT_REGION, aResult);
     bool bChgd = false;
 
     if ( !m_pWrtShell->IsCursorReadonly() )
@@ -640,6 +646,7 @@ void SwView::CheckReadonlyState()
             SID_ATTR_PARA_ADJUST_RIGHT, SID_ATTR_PARA_ADJUST_CENTER,SID_ATTR_PARA_ADJUST_BLOCK,
             SID_ATTR_PARA_LINESPACE_10, SID_ATTR_PARA_LINESPACE_15, SID_ATTR_PARA_LINESPACE_20,
             SID_ATTR_CHAR_FONT,         SID_ATTR_CHAR_FONTHEIGHT,   SID_ATTR_CHAR_COLOR_BACKGROUND,
+            SID_ATTR_CHAR_BACK_COLOR,
             SID_ATTR_CHAR_COLOR_BACKGROUND_EXT,                     SID_ATTR_CHAR_COLOR_EXT,
             SID_ATTR_CHAR_COLOR,        SID_ATTR_CHAR_WEIGHT,       SID_ATTR_CHAR_POSTURE,
             SID_ATTR_CHAR_OVERLINE,
@@ -691,7 +698,7 @@ void SwView::CheckReadonlyState()
         rDis.SetSlotFilter();
     }
     if ( bChgd )
-        GetViewFrame()->GetBindings().InvalidateAll(true);
+        GetViewFrame().GetBindings().InvalidateAll(true);
 }
 
 void SwView::CheckReadonlySelection()
@@ -745,25 +752,25 @@ void SwView::CheckReadonlySelection()
     if( nDisableFlags != rDis.GetDisableFlags() )
     {
         rDis.SetDisableFlags( nDisableFlags );
-        GetViewFrame()->GetBindings().InvalidateAll( true );
+        GetViewFrame().GetBindings().InvalidateAll( true );
     }
 }
 
-SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
-    : SfxViewShell( _pFrame, SWVIEWFLAGS ),
+SwView::SwView(SfxViewFrame& _rFrame, SfxViewShell* pOldSh)
+    : SfxViewShell(_rFrame, SWVIEWFLAGS),
     m_aTimer( "sw::SwView m_aTimer" ),
     m_nNewPage(USHRT_MAX),
     m_nOldPageNum(0),
     m_pNumRuleNodeFromDoc(nullptr),
-    m_pEditWin( VclPtr<SwEditWin>::Create( &_pFrame->GetWindow(), *this ) ),
+    m_pEditWin( VclPtr<SwEditWin>::Create( &_rFrame.GetWindow(), *this ) ),
     m_pShell(nullptr),
     m_pFormShell(nullptr),
     m_pHScrollbar(nullptr),
     m_pVScrollbar(nullptr),
-    m_pVRuler(VclPtr<SvxRuler>::Create(&GetViewFrame()->GetWindow(), m_pEditWin,
+    m_pVRuler(VclPtr<SvxRuler>::Create(&GetViewFrame().GetWindow(), m_pEditWin,
                             SvxRulerSupportFlags::TABS | SvxRulerSupportFlags::PARAGRAPH_MARGINS_VERTICAL|
                                 SvxRulerSupportFlags::BORDERS | SvxRulerSupportFlags::REDUCED_METRIC,
-                            GetViewFrame()->GetBindings(),
+                            GetViewFrame().GetBindings(),
                             WB_VSCROLL |  WB_EXTRAFIELD | WB_BORDER )),
     m_pLastTableFormat(nullptr),
     m_pLastFlyFormat(nullptr),
@@ -800,7 +807,9 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     m_bIsPreviewDoubleClick(false),
     m_bMakeSelectionVisible(false),
     m_bForceChangesToolbar(true),
-    m_nLOKPageUpDownOffset(0)
+    m_nLOKPageUpDownOffset(0),
+    m_aBringToAttentionBlinkTimer("SwView m_aBringToAttentionBlinkTimer"),
+    m_nBringToAttentionBlinkTimeOutsRemaining(0)
 {
     static bool bRequestDoubleBuffering = getenv("VCL_DOUBLEBUFFERING_ENABLE");
     if (bRequestDoubleBuffering)
@@ -815,8 +824,13 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
 
     bDocSzUpdated = true;
 
-    CreateScrollbar( true );
-    CreateScrollbar( false );
+    static bool bFuzzing = utl::ConfigManager::IsFuzzing();
+
+    if (!bFuzzing)
+    {
+        CreateScrollbar( true );
+        CreateScrollbar( false );
+    }
 
     m_pViewImpl.reset(new SwView_Impl(this));
     SetName("View");
@@ -824,7 +838,7 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
 
     m_aTimer.SetTimeout( 120 );
 
-    SwDocShell& rDocSh = dynamic_cast<SwDocShell&>(*_pFrame->GetObjectShell());
+    SwDocShell& rDocSh = dynamic_cast<SwDocShell&>(*_rFrame.GetObjectShell());
     bool bOldModifyFlag = rDocSh.IsEnableSetModified();
     if (bOldModifyFlag)
         rDocSh.EnableSetModified( false );
@@ -920,13 +934,13 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
         }
     }
     SAL_INFO( "sw.ui", "after create WrtShell" );
-    m_pHRuler = VclPtr<SwCommentRuler>::Create(m_pWrtShell.get(), &GetViewFrame()->GetWindow(), m_pEditWin,
+    m_pHRuler = VclPtr<SwCommentRuler>::Create(m_pWrtShell.get(), &GetViewFrame().GetWindow(), m_pEditWin,
                 SvxRulerSupportFlags::TABS |
                 SvxRulerSupportFlags::PARAGRAPH_MARGINS |
                 SvxRulerSupportFlags::BORDERS |
                 SvxRulerSupportFlags::NEGATIVE_MARGINS|
                 SvxRulerSupportFlags::REDUCED_METRIC,
-                GetViewFrame()->GetBindings(),
+                GetViewFrame().GetBindings(),
                 WB_STDRULER | WB_EXTRAFIELD | WB_BORDER);
 
     // assure that modified state of document
@@ -951,9 +965,9 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     m_pHRuler->SetActive();
     m_pVRuler->SetActive();
 
-    SfxViewFrame* pViewFrame = GetViewFrame();
+    SfxViewFrame& rViewFrame = GetViewFrame();
 
-    StartListening(*pViewFrame, DuplicateHandling::Prevent);
+    StartListening(rViewFrame, DuplicateHandling::Prevent);
     StartListening(rDocSh, DuplicateHandling::Prevent);
 
     // Set Zoom-factor from HRuler
@@ -989,7 +1003,7 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     SAL_WARN_IF(
         officecfg::Office::Common::Undo::Steps::get() <= 0,
         "sw.ui", "/org.openoffice.Office.Common/Undo/Steps <= 0");
-    if (!utl::ConfigManager::IsFuzzing() && 0 < officecfg::Office::Common::Undo::Steps::get())
+    if (!bFuzzing && 0 < officecfg::Office::Common::Undo::Steps::get())
     {
         m_pWrtShell->DoUndo();
     }
@@ -1001,7 +1015,8 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
 
     m_bVScrollbarEnabled = aUsrPref.IsViewVScrollBar();
     m_bHScrollbarEnabled = aUsrPref.IsViewHScrollBar();
-    m_pHScrollbar->SetAuto(bBrowse);
+    if (m_pHScrollbar)
+        m_pHScrollbar->SetAuto(bBrowse);
     if( aUsrPref.IsViewHRuler() )
         CreateTab();
     if( aUsrPref.IsViewVRuler() )
@@ -1010,7 +1025,7 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     m_pWrtShell->SetUIOptions( aUsrPref );
     m_pWrtShell->SetReadOnlyAvailable( aUsrPref.IsCursorInProtectedArea() );
 #if !ENABLE_WASM_STRIP_ACCESSIBILITY
-    m_pWrtShell->ApplyAccessibilityOptions(SW_MOD()->GetAccessibilityOptions());
+    m_pWrtShell->ApplyAccessibilityOptions();
 #endif
 
     if( m_pWrtShell->GetDoc()->getIDocumentState().IsUpdateExpField() )
@@ -1036,7 +1051,7 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     }
 
     // No ResetModified, if there is already a view to this doc.
-    SfxViewFrame* pVFrame = GetViewFrame();
+    SfxViewFrame& rVFrame = GetViewFrame();
     SfxViewFrame* pFirst = SfxViewFrame::GetFirst(&rDocSh);
     // Currently(360) the view is registered firstly after the CTOR,
     // the following expression is also working if this changes.
@@ -1045,7 +1060,7 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     // no reset of modified state, if document
     // was already modified.
     if (!m_pWrtShell->GetDoc()->GetIDocumentUndoRedo().IsUndoNoResetModified() &&
-         ( !pFirst || pFirst == pVFrame ) &&
+         ( !pFirst || pFirst == &rVFrame ) &&
          !bIsDocModified )
     {
         m_pWrtShell->ResetModified();
@@ -1055,13 +1070,13 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
 
     // If a new GlobalDoc will be created, the navigator will also be generated.
     if( dynamic_cast<const SwGlobalDocShell*>(&rDocSh) != nullptr &&
-        !pVFrame->GetChildWindow( SID_NAVIGATOR ))
+        !rVFrame.GetChildWindow( SID_NAVIGATOR ))
     {
         SfxBoolItem aNavi(SID_NAVIGATOR, true);
         GetDispatcher().ExecuteList(SID_NAVIGATOR, SfxCallMode::ASYNCHRON, { &aNavi });
     }
 
-    uno::Reference< frame::XFrame >  xFrame = pVFrame->GetFrame().GetFrameInterface();
+    uno::Reference< frame::XFrame >  xFrame = rVFrame.GetFrame().GetFrameInterface();
 
     uno::Reference< frame::XFrame >  xBeamerFrame = xFrame->findFrame(
             "_beamer", frame::FrameSearchFlag::CHILDREN);
@@ -1074,7 +1089,7 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     // has anybody calls the attrchanged handler in the constructor?
     if( m_bAttrChgNotifiedWithRegistrations )
     {
-        GetViewFrame()->GetBindings().LEAVEREGISTRATIONS();
+        GetViewFrame().GetBindings().LEAVEREGISTRATIONS();
         if( m_aTimer.IsActive() )
             m_aTimer.Stop();
     }
@@ -1085,15 +1100,23 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
         rDocSh.EnableSetModified();
     InvalidateBorder();
 
-    if( !m_pHScrollbar->IsScrollbarVisible(true) )
-        ShowHScrollbar( false );
-    if( !m_pVScrollbar->IsScrollbarVisible(true) )
-        ShowVScrollbar( false );
+    if (!bFuzzing)
+    {
+        if (!m_pHScrollbar->IsScrollbarVisible(true))
+            ShowHScrollbar( false );
+        if (!m_pVScrollbar->IsScrollbarVisible(true))
+            ShowVScrollbar( false );
+    }
 
     if (m_pWrtShell->GetViewOptions()->IsShowOutlineContentVisibilityButton())
         m_pWrtShell->InvalidateOutlineContentVisibility();
 
-    GetViewFrame()->GetWindow().AddChildEventListener( LINK( this, SwView, WindowChildEventListener ) );
+    if (!bFuzzing)
+        GetViewFrame().GetWindow().AddChildEventListener(LINK(this, SwView, WindowChildEventListener));
+
+    m_aBringToAttentionBlinkTimer.SetInvokeHandler(
+                LINK(this, SwView, BringToAttentionBlinkTimerHdl));
+    m_aBringToAttentionBlinkTimer.SetTimeout(350);
 
     if (comphelper::LibreOfficeKit::isActive())
     {
@@ -1122,14 +1145,14 @@ SwViewGlueDocShell::~SwViewGlueDocShell()
 SwView::~SwView()
 {
     // Notify other LOK views that we are going away.
-    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_VIEW_CURSOR_VISIBLE, "visible", "false");
-    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", "");
-    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_GRAPHIC_VIEW_SELECTION, "selection", "EMPTY");
+    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_VIEW_CURSOR_VISIBLE, "visible", "false"_ostr);
+    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", ""_ostr);
+    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_GRAPHIC_VIEW_SELECTION, "selection", "EMPTY"_ostr);
 
     // Need to remove activated field's button before disposing EditWin.
     GetWrtShell().getIDocumentMarkAccess()->ClearFieldActivation();
 
-    GetViewFrame()->GetWindow().RemoveChildEventListener( LINK( this, SwView, WindowChildEventListener ) );
+    GetViewFrame().GetWindow().RemoveChildEventListener( LINK( this, SwView, WindowChildEventListener ) );
     m_pPostItMgr.reset();
 
     m_bInDtor = true;
@@ -1139,7 +1162,7 @@ SwView::~SwView()
     m_xGlueDocShell.reset();
 
     if( m_aTimer.IsActive() && m_bAttrChgNotifiedWithRegistrations )
-        GetViewFrame()->GetBindings().LEAVEREGISTRATIONS();
+        GetViewFrame().GetBindings().LEAVEREGISTRATIONS();
 
     // the last view must end the text edit
     SdrView *pSdrView = m_pWrtShell->GetDrawView();
@@ -1153,7 +1176,7 @@ SwView::~SwView()
     SetWindow( nullptr );
 
     m_pViewImpl->Invalidate();
-    EndListening(*GetViewFrame());
+    EndListening(GetViewFrame());
     EndListening(*GetDocShell());
 
     // tdf#155410 speedup shutdown, prevent unnecessary broadcasting during teardown of draw model
@@ -1203,7 +1226,7 @@ void SwView::afterCallbackRegistered()
 
 SwDocShell* SwView::GetDocShell()
 {
-    SfxObjectShell* pDocShell = GetViewFrame()->GetObjectShell();
+    SfxObjectShell* pDocShell = GetViewFrame().GetObjectShell();
     return dynamic_cast<SwDocShell*>( pDocShell );
 }
 
@@ -1242,6 +1265,10 @@ void SwView::WriteUserData( OUString &rUserData, bool bBrowse )
 
 static bool lcl_IsOwnDocument( SwView& rView )
 {
+    if (::officecfg::Office::Common::Load::ViewPositionForAnyUser::get())
+    {
+        return true;
+    }
     uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
         rView.GetDocShell()->GetModel(), uno::UNO_QUERY_THROW);
     uno::Reference<document::XDocumentProperties> xDocProps
@@ -1600,7 +1627,7 @@ void SwView::WriteUserDataSequence ( uno::Sequence < beans::PropertyValue >& rSe
 
     std::vector<beans::PropertyValue> aVector;
 
-    sal_uInt16 nViewID( GetViewFrame()->GetCurViewId());
+    sal_uInt16 nViewID( GetViewFrame().GetCurViewId());
     aVector.push_back(comphelper::makePropertyValue("ViewId", "view" + OUString::number(nViewID)));
 
     aVector.push_back(comphelper::makePropertyValue("ViewLeft", convertTwipToMm100 ( rRect.Left() )));
@@ -1660,7 +1687,7 @@ void SwView::ShowCursor( bool bOn )
 
 ErrCode SwView::DoVerb(sal_Int32 nVerb)
 {
-    if ( !GetViewFrame()->GetFrame().IsInPlace() )
+    if ( !GetViewFrame().GetFrame().IsInPlace() )
     {
         SwWrtShell &rSh = GetWrtShell();
         const SelectionType nSel = rSh.GetSelectionType();
@@ -1726,7 +1753,7 @@ void SwView::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
             // dispatcher, if the view frame is dying. Thus, reset member <pShell>.
             case SfxHintId::Dying:
                 {
-                    if ( &rBC == GetViewFrame() )
+                    if ( &rBC == &GetViewFrame() )
                     {
                         ResetSubShell();
                     }
@@ -1797,7 +1824,7 @@ void SwView::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
                         FN_REDLINE_REJECT_ALL,
                         0
                     };
-                    GetViewFrame()->GetBindings().Invalidate(aSlotRedLine);
+                    GetViewFrame().GetBindings().Invalidate(aSlotRedLine);
                 }
                 break;
             default: break;
@@ -1834,7 +1861,7 @@ void SwView::ScannerEventHdl()
             }
         }
     }
-    SfxBindings& rBind = GetViewFrame()->GetBindings();
+    SfxBindings& rBind = GetViewFrame().GetBindings();
     rBind.Invalidate( SID_TWAIN_SELECT );
     rBind.Invalidate( SID_TWAIN_TRANSFER );
 }
@@ -1847,7 +1874,7 @@ void    SwView::StopShellTimer()
         m_aTimer.Stop();
         if ( m_bAttrChgNotifiedWithRegistrations )
         {
-            GetViewFrame()->GetBindings().LEAVEREGISTRATIONS();
+            GetViewFrame().GetBindings().LEAVEREGISTRATIONS();
             m_bAttrChgNotifiedWithRegistrations = false;
         }
         SelectShell();
@@ -1857,10 +1884,10 @@ void    SwView::StopShellTimer()
 
 bool SwView::PrepareClose( bool bUI )
 {
-    SfxViewFrame* pVFrame = GetViewFrame();
-    pVFrame->SetChildWindow( SwInputChild::GetChildWindowId(), false );
-    if( pVFrame->GetDispatcher()->IsLocked() )
-        pVFrame->GetDispatcher()->Lock(false);
+    SfxViewFrame& rVFrame = GetViewFrame();
+    rVFrame.SetChildWindow( SwInputChild::GetChildWindowId(), false );
+    if( rVFrame.GetDispatcher()->IsLocked() )
+        rVFrame.GetDispatcher()->Lock(false);
 
     if ( m_pFormShell && !m_pFormShell->PrepareClose( bUI ) )
     {
@@ -1992,6 +2019,94 @@ bool SwView::IsDataSourceAvailable(const OUString sDataSourceName)
     Reference< XDatabaseContext> xDatabaseContext = DatabaseContext::create(xContext);
 
     return xDatabaseContext->hasByName(sDataSourceName);
+}
+
+void SwView::BringToAttention(std::vector<basegfx::B2DRange>&& aRanges)
+{
+    m_nBringToAttentionBlinkTimeOutsRemaining = 0;
+    m_aBringToAttentionBlinkTimer.Stop();
+    if (aRanges.empty())
+        m_xBringToAttentionOverlayObject.reset();
+    else
+    {
+        m_xBringToAttentionOverlayObject.reset(
+                    new sdr::overlay::OverlaySelection(sdr::overlay::OverlayType::Invert,
+                                                       Color(), std::move(aRanges),
+                                                       true /*unused for Invert type*/));
+        m_nBringToAttentionBlinkTimeOutsRemaining = 4;
+        m_aBringToAttentionBlinkTimer.Start();
+    }
+}
+
+void SwView::BringToAttention(const tools::Rectangle& rRect)
+{
+    std::vector<basegfx::B2DRange> aRanges{ basegfx::B2DRange(rRect.Left(), rRect.Top(),
+                                                              rRect.Right(), rRect.Bottom()) };
+    BringToAttention(std::move(aRanges));
+}
+
+void SwView::BringToAttention(const SwNode* pNode)
+{
+    if (!pNode)
+        return;
+
+    std::vector<basegfx::B2DRange> aRanges;
+    const SwFrame* pFrame;
+    if (pNode->IsContentNode())
+    {
+        pFrame = pNode->GetContentNode()->getLayoutFrame(GetWrtShell().GetLayout());
+    }
+    else
+    {
+        // section and table nodes
+        SwNode2Layout aTmp(*pNode, pNode->GetIndex() - 1);
+        pFrame = aTmp.NextFrame();
+    }
+    while (pFrame)
+    {
+        const SwRect& rFrameRect = pFrame->getFrameArea();
+        if (!rFrameRect.IsEmpty())
+            aRanges.emplace_back(rFrameRect.Left(), rFrameRect.Top() + pFrame->GetTopMargin(),
+                                 rFrameRect.Right(), rFrameRect.Bottom());
+        if (!pFrame->IsFlowFrame())
+            break;
+        const SwFlowFrame* pFollow = SwFlowFrame::CastFlowFrame(pFrame)->GetFollow();
+        if (!pFollow)
+            break;
+        pFrame = &pFollow->GetFrame();
+    }
+    BringToAttention(std::move(aRanges));
+}
+
+IMPL_LINK_NOARG(SwView, BringToAttentionBlinkTimerHdl, Timer*, void)
+{
+    if (GetDrawView() && m_xBringToAttentionOverlayObject)
+    {
+        if (SdrView* pView = GetDrawView())
+        {
+            if (SdrPaintWindow* pPaintWindow = pView->GetPaintWindow(0))
+            {
+                const rtl::Reference<sdr::overlay::OverlayManager>& xOverlayManager
+                    = pPaintWindow->GetOverlayManager();
+                if (m_nBringToAttentionBlinkTimeOutsRemaining % 2 == 0)
+                    xOverlayManager->add(*m_xBringToAttentionOverlayObject);
+                else
+                    xOverlayManager->remove(*m_xBringToAttentionOverlayObject);
+                --m_nBringToAttentionBlinkTimeOutsRemaining;
+            }
+            else
+                m_nBringToAttentionBlinkTimeOutsRemaining = 0;
+        }
+        else
+            m_nBringToAttentionBlinkTimeOutsRemaining = 0;
+    }
+    else
+        m_nBringToAttentionBlinkTimeOutsRemaining = 0;
+    if (m_nBringToAttentionBlinkTimeOutsRemaining == 0)
+    {
+        m_xBringToAttentionOverlayObject.reset();
+        m_aBringToAttentionBlinkTimer.Stop();
+    }
 }
 
 namespace sw {

@@ -136,7 +136,7 @@ struct WW8LFOInfo;
 class WW8Reader : public StgReader
 {
     std::shared_ptr<SvStream> mDecodedStream;
-    virtual ErrCode Read(SwDoc &, const OUString& rBaseURL, SwPaM &, const OUString &) override;
+    virtual ErrCodeMsg Read(SwDoc &, const OUString& rBaseURL, SwPaM &, const OUString &) override;
     ErrCode OpenMainStream( tools::SvRef<SotStorageStream>& rRef, sal_uInt16& rBuffSize );
     ErrCode DecryptDRMPackage();
 public:
@@ -249,7 +249,9 @@ public:
 
     sal_uInt16  m_n81Flags;           // for bold, italic, ...
     sal_uInt16  m_n81BiDiFlags;       // for bold, italic, ...
-    std::shared_ptr<SvxLRSpaceItem> maWordLR;
+    std::shared_ptr<SvxFirstLineIndentItem> m_pWordFirstLine;
+    std::shared_ptr<SvxTextLeftMarginItem> m_pWordLeftMargin;
+    std::shared_ptr<SvxRightMarginItem> m_pWordRightMargin;
     bool m_bValid;            // empty of valid
     bool m_bImported;         // for recursive imports
     bool m_bColl;             // true-> pFormat is SwTextFormatColl
@@ -281,7 +283,9 @@ public:
         mnWW8OutlineLevel( MAXLEVEL ),
         m_n81Flags( 0 ),
         m_n81BiDiFlags(0),
-        maWordLR(std::make_shared<SvxLRSpaceItem>(RES_LR_SPACE)),
+        m_pWordFirstLine(std::make_shared<SvxFirstLineIndentItem>(RES_MARGIN_FIRSTLINE)),
+        m_pWordLeftMargin(std::make_shared<SvxTextLeftMarginItem>(RES_MARGIN_TEXTLEFT)),
+        m_pWordRightMargin(std::make_shared<SvxRightMarginItem>(RES_MARGIN_RIGHT)),
         m_bValid(false),
         m_bImported(false),
         m_bColl(false),
@@ -1060,7 +1064,6 @@ struct WW8TabBandDesc
     bool bLEmptyCol;    // SW: an additional empty column at the left
     bool bREmptyCol;    // SW: same at the right
     bool bCantSplit;
-    bool bCantSplit90;
     WW8_TCell* pTCs;
     sal_uInt8 nOverrideSpacing[MAX_COL + 1];
     short nOverrideValues[MAX_COL + 1][4];
@@ -1205,7 +1208,7 @@ private:
     /*
     Knows how to split a series of bytes into sprms and their arguments
     */
-    std::unique_ptr<wwSprmParser> m_xSprmParser;
+    std::optional<wwSprmParser> m_oSprmParser;
 
     /*
     Creates unique names to give to graphics
@@ -1288,7 +1291,7 @@ private:
     std::unique_ptr<EditEngine> m_pDrawEditEngine;
     std::unique_ptr<wwZOrderer> m_xWWZOrder;
 
-    SwFieldType* m_pNumFieldType;   // for number circle
+    SwSetExpFieldType* m_pNumFieldType;   // for number circle
 
     std::unique_ptr<SwMSDffManager> m_xMSDffManager;
 
@@ -1489,6 +1492,11 @@ private:
     void ResetCJKCharSetVars();
 
     const SfxPoolItem* GetFormatAttr( sal_uInt16 nWhich );
+    template<class T> const T* GetFormatAttr( TypedWhichId<T> nWhich )
+    {
+        return static_cast<const T*>(GetFormatAttr(sal_uInt16(nWhich)));
+    }
+
     bool JoinNode(SwPaM &rPam, bool bStealAttr = false);
 
     static bool IsBorder(const WW8_BRCVer9* pbrc, bool bChkBtwn = false);
@@ -1913,8 +1921,6 @@ public:     // really private, but can only be done public
     short ImportSprm(const sal_uInt8* pPos, sal_Int32 nMemLen, sal_uInt16 nId = 0);
 
     bool SearchRowEnd(WW8PLCFx_Cp_FKP* pPap,WW8_CP &rStartCp, int nLevel) const;
-    /// Seek to the end of the table with pPap, returns true on success.
-    bool SearchTableEnd(WW8PLCFx_Cp_FKP* pPap) const;
 
     const WW8Fib& GetFib() const    { return *m_xWwFib; }
     SwDoc& GetDoc() const           { return m_rDoc; }
@@ -1951,7 +1957,8 @@ void UseListIndent(SwWW8StyInf &rStyle, const SwNumFormat &rFormat);
 void SetStyleIndent(SwWW8StyInf &rStyleInfo, const SwNumFormat &rFormat);
 // #i103711#
 // #i105414#
-void SyncIndentWithList( SvxLRSpaceItem &rLR,
+void SyncIndentWithList( SvxFirstLineIndentItem & rFirstLine,
+                         SvxTextLeftMarginItem & rLeftMargin,
                          const SwNumFormat &rFormat,
                          const bool bFirstLineOfStSet,
                          const bool bLeftIndentSet );

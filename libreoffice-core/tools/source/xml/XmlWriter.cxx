@@ -82,76 +82,78 @@ void XmlWriter::endDocument()
 void XmlWriter::startElement(const OString& sPrefix, const OString& sName,
                              const OString& sNamespaceUri)
 {
-    xmlChar* xmlName = xmlCharStrdup(sName.getStr());
+    xmlChar* xmlName = BAD_CAST(sName.getStr());
     xmlChar* xmlPrefix = nullptr;
     xmlChar* xmlNamespaceUri = nullptr;
     if (!sPrefix.isEmpty())
-        xmlPrefix = xmlCharStrdup(sPrefix.getStr());
+        xmlPrefix = BAD_CAST(sPrefix.getStr());
     if (!sNamespaceUri.isEmpty())
-        xmlNamespaceUri = xmlCharStrdup(sNamespaceUri.getStr());
+        xmlNamespaceUri = BAD_CAST(sNamespaceUri.getStr());
 
     (void)xmlTextWriterStartElementNS(mpImpl->mpWriter, xmlPrefix, xmlName, xmlNamespaceUri);
-
-    xmlFree(xmlName);
-    if (!sPrefix.isEmpty())
-        xmlFree(xmlPrefix);
-    if (!sNamespaceUri.isEmpty())
-        xmlFree(xmlNamespaceUri);
 }
 
-void XmlWriter::startElement(const OString& sName)
+void XmlWriter::startElement(const char* pName)
 {
-    xmlChar* xmlName = xmlCharStrdup(sName.getStr());
+    xmlChar* xmlName = BAD_CAST(pName);
     (void)xmlTextWriterStartElement(mpImpl->mpWriter, xmlName);
-    xmlFree(xmlName);
+}
+
+void XmlWriter::startElement(const OString& rName)
+{
+    xmlChar* xmlName = BAD_CAST(rName.getStr());
+    (void)xmlTextWriterStartElement(mpImpl->mpWriter, xmlName);
 }
 
 void XmlWriter::endElement() { (void)xmlTextWriterEndElement(mpImpl->mpWriter); }
 
-void XmlWriter::attributeBase64(const OString& rsName, std::vector<sal_uInt8> const& rValueInBytes)
+void XmlWriter::attributeBase64(const char* pName, std::vector<sal_uInt8> const& rValueInBytes)
 {
     std::vector<char> aSignedBytes(rValueInBytes.begin(), rValueInBytes.end());
-    attributeBase64(rsName, aSignedBytes);
+    attributeBase64(pName, aSignedBytes);
 }
 
-void XmlWriter::attributeBase64(const OString& rsName, std::vector<char> const& rValueInBytes)
+void XmlWriter::attributeBase64(const char* pName, std::vector<char> const& rValueInBytes)
 {
-    xmlChar* xmlName = xmlCharStrdup(rsName.getStr());
+    xmlChar* xmlName = BAD_CAST(pName);
     (void)xmlTextWriterStartAttribute(mpImpl->mpWriter, xmlName);
     (void)xmlTextWriterWriteBase64(mpImpl->mpWriter, rValueInBytes.data(), 0, rValueInBytes.size());
     (void)xmlTextWriterEndAttribute(mpImpl->mpWriter);
-    xmlFree(xmlName);
+}
+
+void XmlWriter::attribute(const char* name, const OString& value)
+{
+    xmlChar* xmlName = BAD_CAST(name);
+    xmlChar* xmlValue = BAD_CAST(value.getStr());
+    (void)xmlTextWriterWriteAttribute(mpImpl->mpWriter, xmlName, xmlValue);
 }
 
 void XmlWriter::attribute(const OString& name, const OString& value)
 {
-    xmlChar* xmlName = xmlCharStrdup(name.getStr());
-    xmlChar* xmlValue = xmlCharStrdup(value.getStr());
+    xmlChar* xmlName = BAD_CAST(name.getStr());
+    xmlChar* xmlValue = BAD_CAST(value.getStr());
     (void)xmlTextWriterWriteAttribute(mpImpl->mpWriter, xmlName, xmlValue);
-    xmlFree(xmlValue);
-    xmlFree(xmlName);
 }
 
-void XmlWriter::attribute(const OString& name, std::u16string_view value)
+void XmlWriter::attribute(const char* name, std::u16string_view value)
 {
-    attribute(name, OUStringToOString(value, RTL_TEXTENCODING_UTF8).getStr());
+    attribute(name, OUStringToOString(value, RTL_TEXTENCODING_UTF8));
 }
 
-void XmlWriter::attribute(const OString& name, const sal_Int32 aNumber)
+void XmlWriter::attribute(const char* name, const sal_Int32 aNumber)
 {
-    attribute(name, OUString::number(aNumber));
+    attribute(name, OString::number(aNumber));
 }
 
-void XmlWriter::attributeDouble(const OString& name, const double aNumber)
+void XmlWriter::attributeDouble(const char* name, const double aNumber)
 {
-    attribute(name, OUString::number(aNumber));
+    attribute(name, OString::number(aNumber));
 }
 
 void XmlWriter::content(const OString& sValue)
 {
-    xmlChar* xmlValue = xmlCharStrdup(sValue.getStr());
+    xmlChar* xmlValue = BAD_CAST(sValue.getStr());
     (void)xmlTextWriterWriteString(mpImpl->mpWriter, xmlValue);
-    xmlFree(xmlValue);
 }
 
 void XmlWriter::content(std::u16string_view sValue)
@@ -159,7 +161,7 @@ void XmlWriter::content(std::u16string_view sValue)
     content(OUStringToOString(sValue, RTL_TEXTENCODING_UTF8));
 }
 
-void XmlWriter::element(const OString& sName)
+void XmlWriter::element(const char* sName)
 {
     startElement(sName);
     endElement();

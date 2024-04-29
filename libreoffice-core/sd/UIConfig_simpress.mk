@@ -32,6 +32,7 @@ $(eval $(call gb_UIConfig_add_popupmenufiles,modules/simpress,\
 	sd/uiconfig/simpress/popupmenu/media \
 	sd/uiconfig/simpress/popupmenu/multiselect \
 	sd/uiconfig/simpress/popupmenu/notebookbar \
+	sd/uiconfig/simpress/popupmenu/objectalign \
 	sd/uiconfig/simpress/popupmenu/oleobject \
 	sd/uiconfig/simpress/popupmenu/outline \
 	sd/uiconfig/simpress/popupmenu/pagepanemaster \
@@ -158,7 +159,6 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/simpress,\
 	sd/uiconfig/simpress/ui/pmsummarypage \
 	sd/uiconfig/simpress/ui/presentationdialog \
 	sd/uiconfig/simpress/ui/prntopts \
-	sd/uiconfig/simpress/ui/publishingdialog \
 	sd/uiconfig/simpress/ui/remotedialog \
 	sd/uiconfig/simpress/ui/rotatemenu \
 	sd/uiconfig/simpress/ui/scalemenu \

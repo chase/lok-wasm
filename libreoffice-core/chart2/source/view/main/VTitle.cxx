@@ -20,6 +20,7 @@
 #include "VTitle.hxx"
 #include <CommonConverters.hxx>
 #include <ShapeFactory.hxx>
+#include <Title.hxx>
 #include <com/sun/star/chart2/XTitle.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <utility>
@@ -91,14 +92,13 @@ void VTitle::changePosition( const awt::Point& rPos )
     }
 }
 
-bool VTitle::isVisible(const uno::Reference< XTitle >& xTitle) {
+bool VTitle::isVisible(const rtl::Reference< Title >& xTitle) {
     if (!xTitle.is()) {
         return false;
     }
     bool bShow = true;
     try {
-        uno::Reference< beans::XPropertySet > xTitleProps(xTitle, uno::UNO_QUERY_THROW);
-        xTitleProps->getPropertyValue("Visible") >>= bShow;
+        xTitle->getPropertyValue("Visible") >>= bShow;
     } catch (const uno::Exception &) {
         DBG_UNHANDLED_EXCEPTION("chart2");
     }

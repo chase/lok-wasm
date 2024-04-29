@@ -5,6 +5,7 @@ import { Show, createSignal } from 'solid-js';
 import { CallbackType } from '@lok/lok_enums';
 import { OfficeDocument } from './OfficeDocument/OfficeDocument';
 import { cleanup } from './OfficeDocument/cleanup';
+import { downloadFile } from './utils';
 
 const [loading, setLoading] = createSignal(false);
 const [getDoc, setDoc] = createSignal<DocumentClient | null>(null);
@@ -32,6 +33,11 @@ async function fileOpen(files: FileList | null) {
   doc.on(CallbackType.TEXT_SELECTION, console.log);
   // doc.on(CallbackType.STATE_CHANGED, (payload) => console.log(payload));
 }
+async function saveAsPDF(doc: DocumentClient | null) {
+  if (!doc) return;
+  const buffer = await doc.save("pdf")
+  downloadFile("Pdf Export.pdf", buffer, "application/pdf");
+};
 
 function App() {
   return (
@@ -48,6 +54,13 @@ function App() {
           onChange={(evt) => fileOpen(evt.target.files)}
         />
       </div>
+      <Show when={getDoc()}>
+        <div class = "h-[70px] border-b border border-gray-300 flex items-center bg-gray-200 px-2">
+          <button onClick={() => saveAsPDF(getDoc())}>
+            Save As PDF
+          </button>
+        </div>
+      </Show>
       <Show when={loading()}>
         <div class="loadsection">
           <span class="loader" />

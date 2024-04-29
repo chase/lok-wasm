@@ -38,7 +38,7 @@
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 
-constexpr OUStringLiteral aVndSunStarUNO = u"vnd.sun.star.UNO:";
+constexpr OUString aVndSunStarUNO = u"vnd.sun.star.UNO:"_ustr;
 
 SvxMacroTabPage_Impl::SvxMacroTabPage_Impl( const SfxItemSet& rAttrSet )
     : bReadOnly(false)
@@ -72,7 +72,7 @@ void SvxMacroTabPage_::EnableButtons()
 }
 
 SvxMacroTabPage_::SvxMacroTabPage_(weld::Container* pPage, weld::DialogController* pController, const OUString& rUIXMLDescription,
-    const OString& rID, const SfxItemSet& rAttrSet)
+    const OUString& rID, const SfxItemSet& rAttrSet)
     : SfxTabPage(pPage, pController, rUIXMLDescription, rID, &rAttrSet)
     , m_nAssignedEvents(0)
     , bDocModified(false)
@@ -296,7 +296,7 @@ namespace
             return OUString();
         size_t nIndex = rURL.find(aVndSunStarUNO);
         bool bUNO = nIndex == 0;
-        return bUNO ? OUString(RID_SVXBMP_COMPONENT) : OUString(RID_SVXBMP_MACRO);
+        return bUNO ? RID_SVXBMP_COMPONENT : RID_SVXBMP_MACRO;
     }
 }
 
@@ -514,12 +514,14 @@ IMPL_LINK_NOARG(SvxMacroTabPage_, DeleteAllHdl_Impl, weld::Button&, void)
         if (bAppEvents)
         {
             EventsHash::iterator h_it = m_appEventsHash.find(sEventName);
+            assert(h_it != m_appEventsHash.end());
             h_it->second.first = sEventType;
             h_it->second.second = sEmptyString;
         }
         else
         {
             EventsHash::iterator h_it = m_docEventsHash.find(sEventName);
+            assert(h_it != m_docEventsHash.end());
             h_it->second.first = sEventType;
             h_it->second.second = sEmptyString;
         }

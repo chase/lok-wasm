@@ -24,6 +24,7 @@
 #include <vcl/event.hxx>
 #include <vcl/i18nhelp.hxx>
 #include <vcl/naturalsort.hxx>
+#include <vcl/vcllayout.hxx>
 #include <vcl/toolkit/lstbox.hxx>
 #include <vcl/toolkit/scrbar.hxx>
 
@@ -2587,6 +2588,10 @@ void ImplWin::ImplDraw(vcl::RenderContext& rRenderContext, bool bLayout)
             if( bMouseOver )
                 nState |= ControlState::ROLLOVER;
 
+            Color aBackgroundColor = COL_AUTO;
+            if (IsControlBackground())
+                aBackgroundColor = GetControlBackground();
+
             // if parent has no border, then nobody has drawn the background
             // since no border window exists. so draw it here.
             WinBits nParentStyle = pWin->GetStyle();
@@ -2594,11 +2599,11 @@ void ImplWin::ImplDraw(vcl::RenderContext& rRenderContext, bool bLayout)
             {
                 tools::Rectangle aParentRect( Point( 0, 0 ), pWin->GetSizePixel() );
                 pWin->GetOutDev()->DrawNativeControl( ControlType::Listbox, ControlPart::Entire, aParentRect,
-                                         nState, aControlValue, OUString() );
+                                         nState, aControlValue, OUString(), aBackgroundColor);
             }
 
             bNativeOK = rRenderContext.DrawNativeControl(ControlType::Listbox, ControlPart::Entire, aCtrlRegion,
-                                                         nState, aControlValue, OUString());
+                                                         nState, aControlValue, OUString(), aBackgroundColor);
         }
 
         if (bIsEnabled)
@@ -3006,7 +3011,7 @@ void ImplListBoxFloatingWindow::StartFloat( bool bStartTracking )
         pGrandparentOutDev->ReMirror( aRect );
 
     // mouse-button right: close the List-Box-Float-win and don't stop the handling fdo#84795
-    StartPopupMode( aRect, FloatWinPopupFlags::Down | FloatWinPopupFlags::NoHorzPlacement | FloatWinPopupFlags::AllMouseButtonClose );
+    StartPopupMode( aRect, LISTBOX_FLOATWINPOPUPFLAGS );
 
     if( nPos != LISTBOX_ENTRY_NOTFOUND )
         mpImplLB->ShowProminentEntry( nPos );

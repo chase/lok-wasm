@@ -70,6 +70,8 @@
 #include <memory>
 #include <string_view>
 
+#include <unicode/uchar.h>
+
 #include <osl/endian.h>
 
 // We don't want to end up with 2GB read in one line just because of malformed
@@ -108,13 +110,13 @@ enum class SylkVersion
 
 // Whole document without Undo
 ScImportExport::ScImportExport( ScDocument& r )
-    : pDocSh( dynamic_cast< ScDocShell* >(r.GetDocumentShell()) ), rDoc( r ),
+    : pDocSh( r.GetDocumentShell() ), rDoc( r ),
       nSizeLimit( 0 ), nMaxImportRow(!utl::ConfigManager::IsFuzzing() ? rDoc.MaxRow() : SCROWS32K),
       cSep( '\t' ), cStr( '"' ),
       bFormulas( false ), bIncludeFiltered( true ),
       bAll( true ), bSingle( true ), bUndo( false ),
       bOverflowRow( false ), bOverflowCol( false ), bOverflowCell( false ),
-      mbApi( true ), mbImportBroadcast(false), mbOverwriting( false )
+      mbApi( true ), mbImportBroadcast(false), mbOverwriting( false ), mbIncludeBOM(false)
 {
     pUndoDoc = nullptr;
     pExtOptions = nullptr;
@@ -122,14 +124,14 @@ ScImportExport::ScImportExport( ScDocument& r )
 
 // Insert am current cell without range(es)
 ScImportExport::ScImportExport( ScDocument& r, const ScAddress& rPt )
-    : pDocSh( dynamic_cast< ScDocShell* >(r.GetDocumentShell()) ), rDoc( r ),
+    : pDocSh( r.GetDocumentShell() ), rDoc( r ),
       aRange( rPt ),
       nSizeLimit( 0 ), nMaxImportRow(!utl::ConfigManager::IsFuzzing() ? rDoc.MaxRow() : SCROWS32K),
       cSep( '\t' ), cStr( '"' ),
       bFormulas( false ), bIncludeFiltered( true ),
       bAll( false ), bSingle( true ), bUndo( pDocSh != nullptr ),
       bOverflowRow( false ), bOverflowCol( false ), bOverflowCell( false ),
-      mbApi( true ), mbImportBroadcast(false), mbOverwriting( false )
+      mbApi( true ), mbImportBroadcast(false), mbOverwriting( false ), mbIncludeBOM(false)
 {
     pUndoDoc = nullptr;
     pExtOptions = nullptr;
@@ -138,14 +140,14 @@ ScImportExport::ScImportExport( ScDocument& r, const ScAddress& rPt )
 //  ctor with a range is only used for export
 //! ctor with a string (and bSingle=true) is also used for DdeSetData
 ScImportExport::ScImportExport( ScDocument& r, const ScRange& rRange )
-    : pDocSh( dynamic_cast<ScDocShell* >(r.GetDocumentShell()) ), rDoc( r ),
+    : pDocSh( r.GetDocumentShell() ), rDoc( r ),
       aRange( rRange ),
       nSizeLimit( 0 ), nMaxImportRow(!utl::ConfigManager::IsFuzzing() ? rDoc.MaxRow() : SCROWS32K),
       cSep( '\t' ), cStr( '"' ),
       bFormulas( false ), bIncludeFiltered( true ),
       bAll( false ), bSingle( false ), bUndo( pDocSh != nullptr ),
       bOverflowRow( false ), bOverflowCol( false ), bOverflowCell( false ),
-      mbApi( true ), mbImportBroadcast(false), mbOverwriting( false )
+      mbApi( true ), mbImportBroadcast(false), mbOverwriting( false ), mbIncludeBOM(false)
 {
     pUndoDoc = nullptr;
     pExtOptions = nullptr;
@@ -156,13 +158,13 @@ ScImportExport::ScImportExport( ScDocument& r, const ScRange& rRange )
 // Evaluate input string - either range, cell or the whole document (when error)
 // If a View exists, the TabNo of the view will be used.
 ScImportExport::ScImportExport( ScDocument& r, const OUString& rPos )
-    : pDocSh( dynamic_cast< ScDocShell* >(r.GetDocumentShell()) ), rDoc( r ),
+    : pDocSh( r.GetDocumentShell() ), rDoc( r ),
       nSizeLimit( 0 ), nMaxImportRow(!utl::ConfigManager::IsFuzzing() ? rDoc.MaxRow() : SCROWS32K),
       cSep( '\t' ), cStr( '"' ),
       bFormulas( false ), bIncludeFiltered( true ),
       bAll( false ), bSingle( true ), bUndo( pDocSh != nullptr ),
       bOverflowRow( false ), bOverflowCol( false ), bOverflowCell( false ),
-      mbApi( true ), mbImportBroadcast(false), mbOverwriting( false )
+      mbApi( true ), mbImportBroadcast(false), mbOverwriting( false ), mbIncludeBOM(false)
 {
     pUndoDoc = nullptr;
     pExtOptions = nullptr;
@@ -284,7 +286,7 @@ void ScImportExport::EndPaste(bool bAutoRowHeight)
 
 }
 
-bool ScImportExport::ExportData( const OUString& rMimeType,
+bool ScImportExport::ExportData( std::u16string_view rMimeType,
                                  css::uno::Any & rValue )
 {
     SvMemoryStream aStrm;
@@ -454,7 +456,7 @@ bool ScImportExport::ExportStream( SvStream& rStrm, const OUString& rBaseURL, So
             aDocName = ScGlobal::GetClipDocName();
         else
         {
-            SfxObjectShell* pShell = rDoc.GetDocumentShell();
+            ScDocShell* pShell = rDoc.GetDocumentShell();
             if (pShell)
                 aDocName = pShell->GetTitle( SFX_TITLE_FULLNAME );
         }
@@ -552,6 +554,8 @@ void ScImportExport::WriteUnicodeOrByteEndl( SvStream& rStrm )
         endl( rStrm );
 }
 
+// tdf#104927
+// http://www.unicode.org/reports/tr11/
 sal_Int32 ScImportExport::CountVisualWidth(const OUString& rStr, sal_Int32& nIdx, sal_Int32 nMaxWidth)
 {
     sal_Int32 nWidth = 0;
@@ -559,9 +563,10 @@ sal_Int32 ScImportExport::CountVisualWidth(const OUString& rStr, sal_Int32& nIdx
     {
         sal_uInt32 nCode = rStr.iterateCodePoints(&nIdx);
 
-        if (unicode::isCJKIVSCharacter(nCode) || (nCode >= 0x3000 && nCode <= 0x303F))
+        auto nEaWidth = u_getIntPropertyValue(nCode, UCHAR_EAST_ASIAN_WIDTH);
+        if (nEaWidth == U_EA_FULLWIDTH || nEaWidth == U_EA_WIDE)
             nWidth += 2;
-        else if (!unicode::isIVSSelector(nCode))
+        else if (!u_getIntPropertyValue(nCode, UCHAR_DEFAULT_IGNORABLE_CODE_POINT))
             nWidth += 1;
     }
 
@@ -570,7 +575,7 @@ sal_Int32 ScImportExport::CountVisualWidth(const OUString& rStr, sal_Int32& nIdx
         sal_Int32 nTmpIdx = nIdx;
         sal_uInt32 nCode = rStr.iterateCodePoints(&nTmpIdx);
 
-        if (unicode::isIVSSelector(nCode))
+        if (u_getIntPropertyValue(nCode, UCHAR_DEFAULT_IGNORABLE_CODE_POINT))
             nIdx = nTmpIdx;
     }
     return nWidth;
@@ -1067,7 +1072,7 @@ bool ScImportExport::Text2Doc( SvStream& rStrm )
 static bool lcl_PutString(
     ScDocumentImport& rDocImport, bool bUseDocImport,
     SCCOL nCol, SCROW nRow, SCTAB nTab, const OUString& rStr, sal_uInt8 nColFormat,
-    SvNumberFormatter* pFormatter, bool bDetectNumFormat, bool bEvaluateFormulas, bool bSkipEmptyCells,
+    SvNumberFormatter* pFormatter, bool bDetectNumFormat, bool bDetectSciNumFormat, bool bEvaluateFormulas, bool bSkipEmptyCells,
     const ::utl::TransliterationWrapper& rTransliteration, CalendarWrapper& rCalendar,
     const ::utl::TransliterationWrapper* pSecondTransliteration, CalendarWrapper* pSecondCalendar )
 {
@@ -1314,7 +1319,7 @@ static bool lcl_PutString(
             sal_Int16 nMonth = static_cast<sal_Int16>(aMStr.toInt32());
             if (!nMonth)
             {
-                static constexpr OUStringLiteral aSepShortened = u"SEP";
+                static constexpr OUString aSepShortened = u"SEP"_ustr;
                 uno::Sequence< i18n::CalendarItem2 > xMonths;
                 sal_Int32 i, nMonthCount;
                 //  first test all month names from local international
@@ -1426,8 +1431,9 @@ static bool lcl_PutString(
                 pCalendar->setValue( i18n::CalendarFieldIndex::MILLISECOND, 0 );
                 if ( pCalendar->isValid() )
                 {
-                    double fDiff = DateTime(pDocFormatter->GetNullDate()) -
-                        pCalendar->getEpochStart();
+                    // Whole days diff.
+                    double fDiff = DateTime::Sub( DateTime(pDocFormatter->GetNullDate()),
+                            pCalendar->getEpochStart());
                     // #i14974# must use getLocalDateTime to get the same
                     // date values as set above
                     double fDays = pCalendar->getLocalDateTime() + fFrac;
@@ -1504,6 +1510,7 @@ static bool lcl_PutString(
         ScSetStringParam aParam;
         aParam.mpNumFormatter = pFormatter;
         aParam.mbDetectNumberFormat = bDetectNumFormat;
+        aParam.mbDetectScientificNumberFormat = bDetectSciNumFormat;
         aParam.meSetTextNumFormat = ScSetStringParam::SpecialNumberOnly;
         aParam.mbHandleApostrophe = false;
         aParam.mbCheckLinkFormula = true;
@@ -1577,6 +1584,9 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
     std::unique_ptr<ScProgress> xProgress( new ScProgress( pDocSh,
             ScResId( STR_LOAD_DOC ), nRemaining, true ));
     rStrm.StartReadingUnicodeText( rStrm.GetStreamCharSet() );
+    // tdf#82254 - check whether to include a byte-order-mark in the output
+    if (nOldPos != rStrm.Tell())
+        mbIncludeBOM = true;
 
     SCCOL nStartCol = aRange.aStart.Col();
     SCCOL nEndCol = aRange.aEnd.Col();
@@ -1596,6 +1606,7 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
     LanguageType eDocLang = pExtOptions->GetLanguage();
     SvNumberFormatter aNumFormatter( comphelper::getProcessComponentContext(), eDocLang);
     bool bDetectNumFormat = pExtOptions->IsDetectSpecialNumber();
+    bool bDetectSciNumFormat = pExtOptions->IsDetectScientificNumber();
     bool bEvaluateFormulas = pExtOptions->IsEvaluateFormulas();
     bool bSkipEmptyCells = pExtOptions->IsSkipEmptyCells();
 
@@ -1651,6 +1662,7 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
     ScDocumentImport aDocImport(rDoc);
     do
     {
+        const SCCOL nLastCol = nEndCol; // tdf#129701 preserve value of nEndCol
         for( ;; )
         {
             aLine = ReadCsvLine(rStrm, !bFixed, aSeps, cStr, cDetectSep);
@@ -1719,7 +1731,7 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
 
                                 bMultiLine |= lcl_PutString(
                                         aDocImport, !mbOverwriting, nCol, nRow, nTab, aCell, nFmt,
-                                        &aNumFormatter, bDetectNumFormat, bEvaluateFormulas, bSkipEmptyCells,
+                                        &aNumFormatter, bDetectNumFormat, bDetectSciNumFormat, bEvaluateFormulas, bSkipEmptyCells,
                                         aTransliteration, aCalendar,
                                         pEnglishTransliteration.get(), pEnglishCalendar.get());
                             }
@@ -1734,11 +1746,14 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
                 SCCOL nSourceCol = 0;
                 sal_uInt16 nInfoStart = 0;
                 const sal_Unicode* p = aLine.getStr();
+                // tdf#129701 if there is only one column, and user wants to treat empty cells,
+                // we need to detect *p = null
+                bool bIsLastColEmpty = !(*p) && !bSkipEmptyCells && !bDetermineRange;
                 // Yes, the check is nCol<=rDoc.MaxCol()+1, +1 because it is only an
                 // overflow if there is really data following to be put behind
                 // the last column, which doesn't happen if info is
                 // SC_COL_SKIP.
-                while (*p && nCol <= rDoc.MaxCol()+1)
+                while ( (*p || bIsLastColEmpty) && nCol <= rDoc.MaxCol()+1)
                 {
                     bool bIsQuoted = false;
                     p = ScImportExport::ScanNextFieldFromString( p, aCell,
@@ -1765,13 +1780,22 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
 
                             bMultiLine |= lcl_PutString(
                                 aDocImport, !mbOverwriting, nCol, nRow, nTab, aCell, nFmt,
-                                &aNumFormatter, bDetectNumFormat, bEvaluateFormulas, bSkipEmptyCells,
+                                &aNumFormatter, bDetectNumFormat, bDetectSciNumFormat, bEvaluateFormulas, bSkipEmptyCells,
                                 aTransliteration, aCalendar,
                                 pEnglishTransliteration.get(), pEnglishCalendar.get());
                         }
                         ++nCol;
-                    }
+                        if (bIsLastColEmpty)
+                        {
+                            bIsLastColEmpty = false; // toggle to stop
+                        }
+                        else
+                        {
+                            // tdf#129701 detect if there is a last empty column when we need it
+                            bIsLastColEmpty = (nCol == nLastCol) && !(*p) && !bSkipEmptyCells && !bDetermineRange;
+                        }
 
+                    }
                     ++nSourceCol;
                 }
             }
@@ -2645,7 +2669,8 @@ bool ScImportExport::HTML2Doc( SvStream& rStrm, const OUString& rBaseURL )
             LanguageType eLang = pExtOptions->GetLanguage();
             SvNumberFormatter aNumFormatter( comphelper::getProcessComponentContext(), eLang);
             bool bSpecialNumber = pExtOptions->IsDetectSpecialNumber();
-            pImp->WriteToDocument(false, 1.0, &aNumFormatter, bSpecialNumber);
+            bool bScientificNumber = pExtOptions->IsDetectScientificNumber();
+            pImp->WriteToDocument(false, 1.0, &aNumFormatter, bSpecialNumber, bScientificNumber);
         }
         else
             // Regular import, with no options.

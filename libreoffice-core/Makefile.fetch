@@ -101,6 +101,7 @@ $(WORKDIR)/download: $(BUILDDIR)/config_$(gb_Side).mk $(SRCDIR)/download.lst $(S
 	@date >> $(fetch_LOGFILE)
 	$(foreach item, \
 		$(call fetch_Optional,ABW,ABW_TARBALL) \
+		$(call fetch_Optional,ARGON2,ARGON2_TARBALL) \
 		$(call fetch_Optional,BOOST,BOOST_TARBALL) \
 		$(call fetch_Optional,BOX2D,BOX2D_TARBALL) \
 		$(call fetch_Optional,BREAKPAD,BREAKPAD_TARBALL) \
@@ -125,6 +126,7 @@ $(WORKDIR)/download: $(BUILDDIR)/config_$(gb_Side).mk $(SRCDIR)/download.lst $(S
 		$(call fetch_Optional,FONTCONFIG,FONTCONFIG_TARBALL) \
 		$(call fetch_Optional,FREEHAND,FREEHAND_TARBALL) \
 		$(call fetch_Optional,FREETYPE,FREETYPE_TARBALL) \
+		FROZEN_TARBALL \
 		$(call fetch_Optional,EPOXY,EPOXY_TARBALL) \
 		$(call fetch_Optional,GLM,GLM_TARBALL) \
 		$(call fetch_Optional,GPGMEPP,GPGME_TARBALL) \
@@ -133,6 +135,7 @@ $(WORKDIR)/download: $(BUILDDIR)/config_$(gb_Side).mk $(SRCDIR)/download.lst $(S
 		$(call fetch_Optional,HSQLDB,HSQLDB_TARBALL) \
 		$(call fetch_Optional,HUNSPELL,HUNSPELL_TARBALL) \
 		$(call fetch_Optional,HYPHEN,HYPHEN_TARBALL) \
+		$(if $(filter WNT,$(OS)),IACCESSIBLE2_TARBALL) \
 		$(call fetch_Optional,ICU,ICU_TARBALL) \
 		$(call fetch_Optional,ICU,ICU_DATA_TARBALL) \
 		$(call fetch_Optional,JAVA_WEBSOCKET,JAVA_WEBSOCKET_TARBALL) \
@@ -169,6 +172,7 @@ $(WORKDIR)/download: $(BUILDDIR)/config_$(gb_Side).mk $(SRCDIR)/download.lst $(S
 		$(call fetch_Optional,LXML,LXML_TARBALL) \
 		$(call fetch_Optional,MARIADB_CONNECTOR_C,MARIADB_CONNECTOR_C_TARBALL) \
 		$(call fetch_Optional,MDDS,MDDS_TARBALL) \
+		ZXCVBN_C_TARBALL \
 		$(call fetch_Optional,ZXING,ZXING_TARBALL) \
 		$(call fetch_Optional,MDNSRESPONDER,MDNSRESPONDER_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_CALADEA_TARBALL) \
@@ -179,8 +183,8 @@ $(WORKDIR)/download: $(BUILDDIR)/config_$(gb_Side).mk $(SRCDIR)/download.lst $(S
 		$(call fetch_Optional,MORE_FONTS,FONT_LIBERATION_NARROW_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_LIBERATION_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_LINLIBERTINEG_TARBALL) \
-		$(call fetch_Optional,MORE_FONTS,FONT_SOURCESANS_TARBALL) \
-		$(call fetch_Optional,MORE_FONTS,FONT_NOTO_TARBALL) \
+		$(call fetch_Optional,MORE_FONTS,FONT_NOTO_SANS_TARBALL) \
+		$(call fetch_Optional,MORE_FONTS,FONT_NOTO_SERIF_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_CULMUS_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_LIBRE_HEBREW_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_ALEF_TARBALL) \
@@ -194,6 +198,7 @@ $(WORKDIR)/download: $(BUILDDIR)/config_$(gb_Side).mk $(SRCDIR)/download.lst $(S
 		$(call fetch_Optional,NSS,NSS_TARBALL) \
 		$(call fetch_Optional_pack,NUMBERTEXT_EXTENSION_PACK) \
 		$(call fetch_Optional,ODFGEN,ODFGEN_TARBALL) \
+		$(call fetch_Optional,ONLINEUPDATE,ONLINEUPDATE_TARBALL) \
 		$(call fetch_Optional,OPENLDAP,OPENLDAP_TARBALL) \
 		$(call fetch_Optional,OPENSSL,OPENSSL_TARBALL) \
 		$(call fetch_Optional,ORCUS,ORCUS_TARBALL) \

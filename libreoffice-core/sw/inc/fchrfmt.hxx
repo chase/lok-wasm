@@ -27,6 +27,8 @@
 class SwTextCharFormat;
 class IntlWrapper;
 
+/// This pool item subclass can appear in the hint array of a text node. It refers to a character
+/// style. It's owned by SwTextCharFormat.
 class SW_DLLPUBLIC SwFormatCharFormat final : public SfxPoolItem, public SwClient
 {
     friend class SwTextCharFormat;
@@ -60,14 +62,14 @@ public:
     virtual bool QueryValue( css::uno::Any& rVal, sal_uInt8 nMemberId = 0 ) const override;
     virtual bool PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId ) override;
 
-    virtual bool    GetInfo( SfxPoolItem& rInfo ) const override;
-
     void SetCharFormat( SwFormat* pFormat )
     {
         assert(!pFormat->IsDefault()); // expose cases that lead to use-after-free
         pFormat->Add(this);
     }
     SwCharFormat* GetCharFormat() const { return const_cast<SwCharFormat*>(static_cast<const SwCharFormat*>(GetRegisteredIn())); }
+
+    void dumpAsXml(xmlTextWriterPtr pWriter) const override;
 };
 #endif
 

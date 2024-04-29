@@ -10,11 +10,8 @@
 #include <tools/hostfilter.hxx>
 #include <regex>
 
-namespace
-{
 static std::regex g_AllowedHostsRegex("");
 static bool g_AllowedHostsSet = false;
-}
 
 void HostFilter::setAllowedHostsRegex(const char* sAllowedRegex)
 {

@@ -25,7 +25,6 @@
 #include <basegfx/basegfxdllapi.h>
 #include <basegfx/vector/b2dvector.hxx>
 #include <basegfx/point/b2dpoint.hxx>
-#include <basegfx/tuple/b2dtuple.hxx>
 #include <basegfx/range/basicrange.hxx>
 #include <basegfx/range/Range2D.hxx>
 
@@ -125,7 +124,7 @@ namespace basegfx
         BASEGFX_DLLPUBLIC B2DRange& operator*=( const ::basegfx::B2DHomMatrix& rMat );
 
         /** Get a range filled with (0.0, 0.0, 1.0, 1.0) */
-        static const B2DRange& getUnitB2DRange();
+        BASEGFX_DLLPUBLIC static const B2DRange& getUnitB2DRange();
     };
 
     /** Transform B2DRange by given transformation matrix (see operator*=())

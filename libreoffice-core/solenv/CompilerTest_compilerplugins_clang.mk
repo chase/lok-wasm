@@ -19,6 +19,7 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/collapseif \
     compilerplugins/clang/test/commaoperator \
     compilerplugins/clang/test/conditionalstring \
+    compilerplugins/clang/test/constexprliteral \
     compilerplugins/clang/test/constmethod \
     compilerplugins/clang/test/constmove \
     compilerplugins/clang/test/consttobool \
@@ -34,12 +35,15 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/external \
     compilerplugins/clang/test/faileddyncast \
     compilerplugins/clang/test/fakebool \
+    compilerplugins/clang/test/fieldcast \
     compilerplugins/clang/test/flatten \
     compilerplugins/clang/test/fragiledestructor \
     compilerplugins/clang/test/getstr \
     compilerplugins/clang/test/implicitboolconversion \
+    compilerplugins/clang/test/implinheritancehelper \
     compilerplugins/clang/test/indentation \
     compilerplugins/clang/test/intvsfloat \
+    compilerplugins/clang/test/locking2 \
     compilerplugins/clang/test/logexceptionnicely \
     compilerplugins/clang/test/loopvartoosmall \
     compilerplugins/clang/test/mapindex \
@@ -49,13 +53,16 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/noexcept \
     compilerplugins/clang/test/noexceptmove \
     compilerplugins/clang/test/nullptr \
+    compilerplugins/clang/test/optionalbool \
     compilerplugins/clang/test/oslendian-1 \
     compilerplugins/clang/test/oslendian-2 \
     compilerplugins/clang/test/oslendian-3 \
+    compilerplugins/clang/test/ostr \
     compilerplugins/clang/test/overridevirtual \
     compilerplugins/clang/test/passparamsbyref \
     compilerplugins/clang/test/passstuffbyref \
     compilerplugins/clang/test/pointerbool \
+    compilerplugins/clang/test/rangedforcopy \
     compilerplugins/clang/test/reducevarscope \
     compilerplugins/clang/test/redundantcast \
     compilerplugins/clang/test/redundantfcast \
@@ -75,6 +82,7 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/singlevalfields \
     compilerplugins/clang/test/staticconstfield \
     compilerplugins/clang/test/staticdynamic \
+    compilerplugins/clang/test/staticmethods \
     compilerplugins/clang/test/stdfunction \
     compilerplugins/clang/test/stringadd \
     compilerplugins/clang/test/stringconcatauto \
@@ -91,10 +99,12 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/typedefparam \
     compilerplugins/clang/test/typeidcomparison \
     compilerplugins/clang/test/unnecessarycatchthrow \
+    compilerplugins/clang/test/unnecessarygetstr \
     compilerplugins/clang/test/unnecessaryoverride \
     compilerplugins/clang/test/unnecessaryoverride-dtor \
     compilerplugins/clang/test/unnecessaryparen \
     compilerplugins/clang/test/unnecessarylocking \
+    compilerplugins/clang/test/unoaggregation \
     compilerplugins/clang/test/unoany \
     compilerplugins/clang/test/unoquery \
     compilerplugins/clang/test/unreffun \
@@ -109,7 +119,6 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/useuniqueptr \
     compilerplugins/clang/test/vclwidgets \
     compilerplugins/clang/test/weakbase \
-    compilerplugins/clang/test/weakobject \
     compilerplugins/clang/test/writeonlyvars \
     compilerplugins/clang/test/xmlimport \
 ))

@@ -979,31 +979,13 @@ public:
 
      @see GetScreenCount
     */
-    static tools::Rectangle            GetScreenPosSizePixel( unsigned int nScreen );
-
-    /** Determines if the screens that make up a display are separate or
-     form one large display area.
-
-     @returns true when screens form up one large display area windows can be
-        moved between single screens (e.g. Xserver with Xinerama, Windows)
-        and false when different screens are separate and windows cannot be moved
-        between them (e.g. Xserver with multiple screens)
-
-     @see GetBestScreen, GetDisplayBuiltInScreen
-    */
-    static bool                 IsUnifiedDisplay();
+    static AbsoluteScreenPixelRectangle GetScreenPosSizePixel( unsigned int nScreen );
 
     /** Get the "best" screen.
 
-     @returns If IsUnifiedDisplay() == true the return value will be
-       nearest screen of the target rectangle.
-
-       In case of IsUnifiedDisplay() == false the return value
-       will always be GetDisplayDefaultScreen().
-
-     @see IsUnifiedDisplay, GetDisplayBuiltInScreen
+     @returns the return value will be nearest screen of the target rectangle.
     */
-    SAL_DLLPRIVATE static unsigned int GetBestScreen( const tools::Rectangle& );
+    SAL_DLLPRIVATE static unsigned int GetBestScreen( const AbsoluteScreenPixelRectangle& );
 
     /** Get the built-in screen.
 
@@ -1243,20 +1225,6 @@ public:
 
     ///@}
 
-    /** @name Event Testing Mode
-    */
-
-    /** Enables event testing mode.
-
-    */
-    static void                 EnableEventTestingMode();
-
-    /** Determines if event testing mode is enabled
-
-     @return True if event testing mode is enabled, false if not.
-    */
-    static bool                 IsEventTestingModeEnabled();
-
     /** Set safe mode to enabled */
     static void                 EnableSafeMode();
 
@@ -1328,14 +1296,6 @@ public:
     static css::uno::Reference< css::ui::dialogs::XFolderPicker2 >
         createFolderPicker( const css::uno::Reference< css::uno::XComponentContext >& rServiceManager );
 
-    /** Cancel all open dialogs
-    */
-    static void                 EndAllDialogs();
-
-    /** Cancel all open popups
-    */
-    static void                 EndAllPopups();
-
     /** Returns true, if the VCL plugin runs on the system event loop.
      *
      *  AKA the VCL plugin can't handle nested event loops, like WASM or mobile.
@@ -1364,7 +1324,7 @@ public:
     virtual void notifyWindow(vcl::LOKWindowId nLOKWindowId,
                               const OUString& rAction,
                               const std::vector<vcl::LOKPayloadItem>& rPayload = std::vector<vcl::LOKPayloadItem>()) const override;
-    virtual void libreOfficeKitViewCallback(int nType, const char* pPayload) const override;
+    virtual void libreOfficeKitViewCallback(int nType, const OString& pPayload) const override;
     virtual void notifyInvalidation(tools::Rectangle const *) const override;
 
 

@@ -23,9 +23,9 @@
 #include <editeng/outliner.hxx>
 #include <svx/svxdllapi.h>
 #include <tools/link.hxx>
-#include <tools/fract.hxx>
 #include <svx/svdobj.hxx>
 #include <svl/whichranges.hxx>
+#include <unotools/syslocale.hxx>
 #include <memory>
 
 
@@ -77,9 +77,6 @@ namespace SdrEngineDefaults
     // Incidentally, every newly instantiated SdrModel is assigned this MapMode by default.
     // Default MapUnit is MapUnit::Map100thMM
     inline MapUnit GetMapUnit() { return MapUnit::Map100thMM; }
-
-    // Default MapFraction is 1/1.
-    inline Fraction GetMapFraction() { return Fraction(1, 1); }
 };
 
 class SfxItemSet;
@@ -89,7 +86,7 @@ class SfxItemSet;
  *
  * @returns false for XFILL_NONE and rCol remains unchanged
  */
-SVXCORE_DLLPUBLIC bool GetDraftFillColor(const SfxItemSet& rSet, Color& rCol);
+SVXCORE_DLLPUBLIC std::optional<Color> GetDraftFillColor(const SfxItemSet& rSet);
 
 
 /**
@@ -182,18 +179,16 @@ public:
 
 class SVXCORE_DLLPUBLIC SdrGlobalData
 {
-    const SvtSysLocale*         pSysLocale;     // follows always locale settings
+    SvtSysLocale  maSysLocale;     // follows always locale settings
 public:
     std::vector<Link<SdrObjCreatorParams, rtl::Reference<SdrObject>>>
                         aUserMakeObjHdl;
     OLEObjCache         aOLEObjCache;
 
-
-    const SvtSysLocale*         GetSysLocale();     // follows always locale settings
-    const LocaleDataWrapper*    GetLocaleData();    // follows always SysLocale
-public:
     SdrGlobalData();
 
+    const SvtSysLocale& GetSysLocale() { return maSysLocale;  } // follows always locale settings
+    const LocaleDataWrapper& GetLocaleData();    // follows always SysLocale
     OLEObjCache&        GetOLEObjCache() { return aOLEObjCache; }
 };
 

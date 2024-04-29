@@ -765,4 +765,24 @@ void SwPageFrame::PrepareFooter()
     }
 }
 
+void SwHeaderFrame::dumpAsXml(xmlTextWriterPtr writer) const
+{
+    (void)xmlTextWriterStartElement(writer, reinterpret_cast<const xmlChar*>("header"));
+    dumpAsXmlAttributes(writer);
+
+    SwHeadFootFrame::dumpAsXml(writer);
+
+    (void)xmlTextWriterEndElement(writer);
+}
+
+void SwFooterFrame::dumpAsXml(xmlTextWriterPtr writer) const
+{
+    (void)xmlTextWriterStartElement(writer, reinterpret_cast<const xmlChar*>("footer"));
+    dumpAsXmlAttributes(writer);
+
+    SwHeadFootFrame::dumpAsXml(writer);
+
+    (void)xmlTextWriterEndElement(writer);
+}
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

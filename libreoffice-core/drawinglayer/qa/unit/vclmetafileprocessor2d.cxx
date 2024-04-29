@@ -61,9 +61,8 @@ public:
 
     void setupCanvas(const Size& size, Color backgroundColor = COL_WHITE, bool alpha = false)
     {
-        mVclDevice
-            = alpha ? VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT, DeviceFormat::DEFAULT)
-                    : VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+        mVclDevice = alpha ? VclPtr<VirtualDevice>::Create(DeviceFormat::WITH_ALPHA)
+                           : VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
         mVclDevice->SetOutputSizePixel(size);
         mVclDevice->SetBackground(Wallpaper(backgroundColor));
         mVclDevice->Erase();
@@ -134,7 +133,7 @@ public:
         CPPUNIT_ASSERT(renderer->draw());
         exportDevice("test-tdf136957", mVclDevice);
         Bitmap bitmap = mVclDevice->GetBitmap(Point(), Size(1920, 1080));
-        Bitmap::ScopedReadAccess access(bitmap);
+        BitmapScopedReadAccess access(bitmap);
         // There should be a dotted line, without the fix it wouldn't be there, so check
         // there's a sufficient amount of non-white pixels and that's the line.
         int nonWhiteCount = 0;

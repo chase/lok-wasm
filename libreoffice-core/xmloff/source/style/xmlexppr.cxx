@@ -29,6 +29,7 @@
 #include <com/sun/star/beans/TolerantPropertySetResultType.hpp>
 #include <rtl/ustrbuf.hxx>
 #include <comphelper/anycompare.hxx>
+#include <comphelper/diagnose_ex.hxx>
 #include <cppuhelper/weakref.hxx>
 #include <osl/diagnose.h>
 #include <list>
@@ -38,7 +39,6 @@
 #include <utility>
 #include <xmloff/xmlexppr.hxx>
 #include <xmloff/xmltoken.hxx>
-#include <xmloff/attrlist.hxx>
 #include <xmloff/namespacemap.hxx>
 #include <xmloff/xmlnamespace.hxx>
 #include <xmloff/xmlexp.hxx>
@@ -47,7 +47,6 @@
 #include <xmloff/xmltypes.hxx>
 #include <xmloff/xmlprhdl.hxx>
 
-using namespace ::std;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::uno;
@@ -55,7 +54,6 @@ using namespace ::com::sun::star::lang;
 using namespace ::xmloff::token;
 
 #define GET_PROP_TYPE( f ) static_cast<sal_uInt16>((f & XML_TYPE_PROP_MASK) >> XML_TYPE_PROP_SHIFT)
-#define ENTRY(t) { GET_PROP_TYPE(XML_TYPE_PROP_##t), XML_##t##_PROPERTIES }
 
 namespace {
 
@@ -71,20 +69,20 @@ const sal_uInt16 MAX_PROP_TYPES =
 
 XMLPropTokens_Impl const aPropTokens[MAX_PROP_TYPES] =
 {
-    ENTRY(CHART),
-    ENTRY(GRAPHIC),
-    ENTRY(TABLE),
-    ENTRY(TABLE_COLUMN),
-    ENTRY(TABLE_ROW),
-    ENTRY(TABLE_CELL),
-    ENTRY(LIST_LEVEL),
-    ENTRY(PARAGRAPH),
-    ENTRY(TEXT),
-    ENTRY(DRAWING_PAGE),
-    ENTRY(PAGE_LAYOUT),
-    ENTRY(HEADER_FOOTER),
-    ENTRY(RUBY),
-    ENTRY(SECTION)
+    { GET_PROP_TYPE(XML_TYPE_PROP_CHART), XML_CHART_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_GRAPHIC), XML_GRAPHIC_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_TABLE), XML_TABLE_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_TABLE_COLUMN), XML_TABLE_COLUMN_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_TABLE_ROW), XML_TABLE_ROW_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_TABLE_CELL), XML_TABLE_CELL_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_LIST_LEVEL), XML_LIST_LEVEL_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_PARAGRAPH), XML_PARAGRAPH_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_TEXT), XML_TEXT_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_DRAWING_PAGE), XML_DRAWING_PAGE_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_PAGE_LAYOUT), XML_PAGE_LAYOUT_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_HEADER_FOOTER), XML_HEADER_FOOTER_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_RUBY), XML_RUBY_PROPERTIES },
+    { GET_PROP_TYPE(XML_TYPE_PROP_SECTION), XML_SECTION_PROPERTIES }
 };
 
 // public methods
@@ -168,11 +166,10 @@ public:
     void AddProperty(const OUString& rApiName, const sal_uInt32 nIndex);
     const uno::Sequence<OUString>& GetApiNames();
     void FillPropertyStateArray(
-            vector< XMLPropertyState >& rPropStates,
+            std::vector< XMLPropertyState >& rPropStates,
             const Reference< XPropertySet >& xPropSet,
             const rtl::Reference< XMLPropertySetMapper >& maPropMapper,
-            const bool bDefault,
-            const uno::Sequence<OUString>* pOnlyTheseProps);
+            const bool bDefault);
     sal_uInt32 GetPropertyCount() const { return aPropInfos.size(); }
 };
 
@@ -248,25 +245,21 @@ const uno::Sequence<OUString>& FilterPropertiesInfo_Impl::GetApiNames()
 }
 
 void FilterPropertiesInfo_Impl::FillPropertyStateArray(
-        vector< XMLPropertyState >& rPropStates,
+        std::vector< XMLPropertyState >& rPropStates,
         const Reference< XPropertySet >& rPropSet,
         const rtl::Reference< XMLPropertySetMapper >& rPropMapper,
-        const bool bDefault,
-        const uno::Sequence<OUString>* pOnlyTheseProps )
+        const bool bDefault )
 {
-
     XMLPropertyStates_Impl aPropStates;
 
-    const uno::Sequence<OUString>* pApiNames = pOnlyTheseProps;
-    if (!pApiNames)
-        pApiNames = &GetApiNames();
+    const uno::Sequence<OUString>& rApiNames = GetApiNames();
 
     Reference < XTolerantMultiPropertySet > xTolPropSet( rPropSet, UNO_QUERY );
     if (xTolPropSet.is())
     {
         if (!bDefault)
         {
-            Sequence < beans::GetDirectPropertyTolerantResult > aResults(xTolPropSet->getDirectPropertyValuesTolerant(*pApiNames));
+            Sequence < beans::GetDirectPropertyTolerantResult > aResults(xTolPropSet->getDirectPropertyValuesTolerant(rApiNames));
             sal_Int32 nResultCount(aResults.getLength());
             if (nResultCount > 0)
             {
@@ -294,8 +287,8 @@ void FilterPropertiesInfo_Impl::FillPropertyStateArray(
         }
         else
         {
-            const Sequence < beans::GetPropertyTolerantResult > aResults(xTolPropSet->getPropertyValuesTolerant(*pApiNames));
-            OSL_ENSURE( pApiNames->getLength() == aResults.getLength(), "wrong implemented XTolerantMultiPropertySet" );
+            const Sequence < beans::GetPropertyTolerantResult > aResults(xTolPropSet->getPropertyValuesTolerant(rApiNames));
+            OSL_ENSURE( rApiNames.getLength() == aResults.getLength(), "wrong implemented XTolerantMultiPropertySet" );
             FilterPropertyInfoList_Impl::iterator aPropIter(aPropInfos.begin());
             XMLPropertyState aNewProperty( -1 );
             OSL_ENSURE( aPropInfos.size() == static_cast<sal_uInt32>(aResults.getLength()), "wrong implemented XTolerantMultiPropertySet??" );
@@ -324,7 +317,7 @@ void FilterPropertiesInfo_Impl::FillPropertyStateArray(
         Reference< XPropertyState > xPropState( rPropSet, UNO_QUERY );
         if( xPropState.is() )
         {
-            aStates = xPropState->getPropertyStates( *pApiNames );
+            aStates = xPropState->getPropertyStates( rApiNames );
             pStates = aStates.getConstArray();
         }
 
@@ -394,7 +387,7 @@ void FilterPropertiesInfo_Impl::FillPropertyStateArray(
             }
             else
             {
-                aValues = xMultiPropSet->getPropertyValues( *pApiNames );
+                aValues = xMultiPropSet->getPropertyValues( rApiNames );
                 const Any *pValues = aValues.getConstArray();
 
                 FilterPropertyInfoList_Impl::iterator aItr = aPropInfos.begin();
@@ -445,7 +438,7 @@ void FilterPropertiesInfo_Impl::FillPropertyStateArray(
                             catch( UnknownPropertyException& )
                             {
                                 // might be a problem of getImplementationId
-                                OSL_ENSURE( false, "unknown property in getPropertyValue" );
+                                TOOLS_WARN_EXCEPTION("xmloff.style", "unknown property in getPropertyValue" );
                             }
 
                         }
@@ -519,26 +512,23 @@ void SvXMLExportPropertyMapper::ChainExportMapper(
 
 std::vector<XMLPropertyState> SvXMLExportPropertyMapper::Filter(
     SvXMLExport const& rExport,
-    const uno::Reference<beans::XPropertySet>& rPropSet,
-    bool bEnableFoFontFamily,
-    const uno::Sequence<OUString>* pOnlyTheseProps ) const
+    const uno::Reference<beans::XPropertySet>& rPropSet, bool bEnableFoFontFamily ) const
 {
-    return Filter_(rExport, rPropSet, false, bEnableFoFontFamily, pOnlyTheseProps);
+    return Filter_(rExport, rPropSet, false, bEnableFoFontFamily);
 }
 
 std::vector<XMLPropertyState> SvXMLExportPropertyMapper::FilterDefaults(
     SvXMLExport const& rExport,
     const uno::Reference<beans::XPropertySet>& rPropSet ) const
 {
-    return Filter_(rExport, rPropSet, true, false/*bEnableFoFontFamily*/, nullptr);
+    return Filter_(rExport, rPropSet, true, false/*bEnableFoFontFamily*/);
 }
 
-vector<XMLPropertyState> SvXMLExportPropertyMapper::Filter_(
+std::vector<XMLPropertyState> SvXMLExportPropertyMapper::Filter_(
     SvXMLExport const& rExport,
-    const Reference<XPropertySet>& xPropSet, bool bDefault, bool bEnableFoFontFamily,
-    const uno::Sequence<OUString>* pOnlyTheseProps ) const
+    const Reference<XPropertySet>& xPropSet, bool bDefault, bool bEnableFoFontFamily ) const
 {
-    vector< XMLPropertyState > aPropStateArray;
+    std::vector< XMLPropertyState > aPropStateArray;
 
     // Retrieve XPropertySetInfo and XPropertyState
     Reference< XPropertySetInfo > xInfo( xPropSet->getPropertySetInfo() );
@@ -649,12 +639,12 @@ vector<XMLPropertyState> SvXMLExportPropertyMapper::Filter_(
         try
         {
             pFilterInfo->FillPropertyStateArray(
-                aPropStateArray, xPropSet, mpImpl->mxPropMapper, bDefault, pOnlyTheseProps);
+                aPropStateArray, xPropSet, mpImpl->mxPropMapper, bDefault);
         }
         catch( UnknownPropertyException& )
         {
             // might be a problem of getImplementationId
-            OSL_ENSURE( false, "unknown property in getPropertyStates" );
+            TOOLS_WARN_EXCEPTION("xmloff.style", "unknown property in getPropertyStates" );
         }
     }
 
@@ -672,7 +662,7 @@ vector<XMLPropertyState> SvXMLExportPropertyMapper::Filter_(
 
 void SvXMLExportPropertyMapper::ContextFilter(
         bool bEnableFoFontFamily,
-        vector< XMLPropertyState >& rProperties,
+        std::vector< XMLPropertyState >& rProperties,
         const Reference< XPropertySet >& rPropSet ) const
 {
     // Derived class could implement this.
@@ -685,8 +675,8 @@ void SvXMLExportPropertyMapper::ContextFilter(
 //  2.Index of each element equal ? (So I know whether the propertynames are the same)
 //  3.Value of each element equal ?
 bool SvXMLExportPropertyMapper::Equals(
-        const vector< XMLPropertyState >& aProperties1,
-        const vector< XMLPropertyState >& aProperties2 ) const
+        const std::vector< XMLPropertyState >& aProperties1,
+        const std::vector< XMLPropertyState >& aProperties2 ) const
 {
     if (aProperties1.size() < aProperties2.size())
         return true;
@@ -735,8 +725,8 @@ bool SvXMLExportPropertyMapper::Equals(
 //  2.Index of each element equal ? (So I know whether the propertynames are the same)
 //  3.Value of each element equal ?
 bool SvXMLExportPropertyMapper::LessPartial(
-        const vector< XMLPropertyState >& aProperties1,
-        const vector< XMLPropertyState >& aProperties2 ) const
+        const std::vector< XMLPropertyState >& aProperties1,
+        const std::vector< XMLPropertyState >& aProperties2 ) const
 {
     if (aProperties1.size() < aProperties2.size())
         return true;
@@ -856,7 +846,7 @@ void SvXMLExportPropertyMapper::exportXML(
 /** this method is called for every item that has the
     MID_FLAG_SPECIAL_ITEM_EXPORT flag set */
 void SvXMLExportPropertyMapper::handleSpecialItem(
-        SvXMLAttributeList& rAttrList,
+        comphelper::AttributeList& rAttrList,
         const XMLPropertyState& rProperty,
         const SvXMLUnitConverter& rUnitConverter,
         const SvXMLNamespaceMap& rNamespaceMap,
@@ -888,7 +878,7 @@ void SvXMLExportPropertyMapper::handleElementItem(
 /** fills the given attribute list with the items in the given set */
 void SvXMLExportPropertyMapper::_exportXML(
         sal_uInt16 nPropType, sal_uInt16& rPropTypeFlags,
-        SvXMLAttributeList& rAttrList,
+        comphelper::AttributeList& rAttrList,
         const ::std::vector< XMLPropertyState >& rProperties,
         const SvXMLUnitConverter& rUnitConverter,
         const SvXMLNamespaceMap& rNamespaceMap,
@@ -958,7 +948,7 @@ sal_Int8 CheckExtendedNamespace(std::u16string_view sXMLAttributeName, std::u16s
 }
 
 void SvXMLExportPropertyMapper::_exportXML(
-        SvXMLAttributeList& rAttrList,
+        comphelper::AttributeList& rAttrList,
         const XMLPropertyState& rProperty,
         const SvXMLUnitConverter& rUnitConverter,
         const SvXMLNamespaceMap& rNamespaceMap,
@@ -975,7 +965,6 @@ void SvXMLExportPropertyMapper::_exportXML(
 
             const uno::Sequence< OUString > aAttribNames( xAttrContainer->getElementNames() );
 
-            OUStringBuffer sNameBuffer;
             xml::AttributeData aData;
             for( const auto& rAttribName : aAttribNames )
             {
@@ -1018,9 +1007,7 @@ void SvXMLExportPropertyMapper::_exportXML(
                                 OUString sOrigPrefix( sPrefix );
                                 do
                                 {
-                                    sNameBuffer.append( sOrigPrefix );
-                                    sNameBuffer.append( ++n );
-                                    sPrefix = sNameBuffer.makeStringAndClear();
+                                    sPrefix = sOrigPrefix + OUString::number( ++n );
                                     nKey = pNamespaceMap->GetKeyByPrefix( sPrefix );
                                 }
                                 while( nKey != USHRT_MAX );
@@ -1034,8 +1021,7 @@ void SvXMLExportPropertyMapper::_exportXML(
                                 sPrefix = pNamespaceMap->GetPrefixByKey( nKey );
                             }
                             // In any case, the attribute name has to be adapted.
-                            sNameBuffer.append(sPrefix + ":" + rAttribName.subView(nColonPos+1));
-                            sAttribName = sNameBuffer.makeStringAndClear();
+                            sAttribName = sPrefix + ":" + rAttribName.subView(nColonPos+1);
                         }
 
                         if( bAddNamespace )
@@ -1134,11 +1120,6 @@ void SvXMLExportPropertyMapper::SetStyleName( const OUString& rStyleName )
 const OUString& SvXMLExportPropertyMapper::GetStyleName() const
 {
     return mpImpl->maStyleName;
-}
-
-void SvXMLExportPropertyMapper::GetEntryAPINames(o3tl::sorted_vector<OUString>& rNames) const
-{
-    mpImpl->mxPropMapper->GetEntryAPINames(rNames);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

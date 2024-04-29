@@ -2414,7 +2414,7 @@ OpenGLZone::relaxWatchdogTimings()
 Outliner::Collapse(Paragraph const*)
 Outliner::DepthChangedHdl(Paragraph*, ParaFlag)
 Outliner::DrawingTab(Point const&, long, rtl::OUString const&, SvxFont const&, int, unsigned char, bool, bool, Color const&, Color const&)
-Outliner::DrawingText(Point const&, rtl::OUString const&, int, int, o3tl::span<int const>, SvxFont const&, int, unsigned char, std::vector<EEngineData::WrongSpellClass, std::allocator<EEngineData::WrongSpellClass> > const*, SvxFieldData const*, bool, bool, bool, com::sun::star::lang::Locale const*, Color const&, Color const&)
+Outliner::DrawingText(Point const&, rtl::OUString const&, int, int, std::span<int const>, SvxFont const&, int, unsigned char, std::vector<EEngineData::WrongSpellClass, std::allocator<EEngineData::WrongSpellClass> > const*, SvxFieldData const*, bool, bool, bool, com::sun::star::lang::Locale const*, Color const&, Color const&)
 Outliner::Expand(Paragraph const*)
 Outliner::GetBulletsNumberingStatus(int, int) const
 Outliner::GetDocPos(Point const&) const
@@ -9405,7 +9405,6 @@ SvNumberFormatter::GetTimeFormat(double, o3tl::strong_int<unsigned short, Langua
 SvNumberFormatter::GetTransliteration() const
 SvNumberFormatter::GetUserDefColor(unsigned short)
 SvNumberFormatter::ImpLookupCurrencyEntryLoopBody(NfCurrencyEntry const*&, bool&, NfCurrencyEntry const*, unsigned short, std::basic_string_view<char16_t, std::char_traits<char16_t> >)
-SvNumberFormatter::ImpPosToken(rtl::OUStringBuffer const&, char16_t, int) const
 SvNumberFormatter::ImpSubstituteEntry(SvNumberformat*, unsigned int*)
 SvNumberFormatter::InvalidateDateAcceptancePatterns()
 SvNumberFormatter::IsDecimalSep(std::basic_string_view<char16_t, std::char_traits<char16_t> >) const
@@ -9556,7 +9555,6 @@ SvTreeListBox::ScrollOutputArea(short)
 SvTreeListBox::ScrollToAbsPos(long)
 SvTreeListBox::SelectChildren(SvTreeListEntry*, bool)
 SvTreeListBox::SelectHdl()
-SvTreeListBox::SetAlternatingRowColors(bool)
 SvTreeListBox::SetCheckButtonData(SvLBoxButtonData*)
 SvTreeListBox::SetCurEntry(SvTreeListEntry*)
 SvTreeListBox::SetDefaultCollapsedEntryBmp(Image const&)
@@ -10426,7 +10424,7 @@ SvxFont::DrawCapital(OutputDevice*, Point const&, rtl::OUString const&, int, int
 SvxFont::GetCapitalSize(OutputDevice const*, rtl::OUString const&, int, int) const
 SvxFont::GetPhysTxtSize(OutputDevice const*)
 SvxFont::GetPhysTxtSize(OutputDevice const*, rtl::OUString const&, int, int) const
-SvxFont::QuickDrawText(OutputDevice*, Point const&, rtl::OUString const&, int, int, o3tl::span<int const>) const
+SvxFont::QuickDrawText(OutputDevice*, Point const&, rtl::OUString const&, int, int, std::span<int const>) const
 SvxFont::QuickGetTextSize(OutputDevice const*, rtl::OUString const&, int, int, std::vector<int, std::allocator<int> >*) const
 SvxFont::SetNonAutoEscapement(short, OutputDevice const*)
 SvxFont::SetPhysFont(OutputDevice&) const
@@ -11940,7 +11938,6 @@ SwDoc::CloneSdrObj(SdrObject const&, bool, bool)
 SwDoc::CompareDoc(SwDoc const&)
 SwDoc::ContainsHiddenChars() const
 SwDoc::ContainsPageDesc(SwPageDesc const*, unsigned long*) const
-SwDoc::ConvertFieldsToText(SwRootFrame const&)
 SwDoc::CopyCharFormat(SwCharFormat const&)
 SwDoc::CopyFormat(SwFormat const&, SwFormatsBase const&, SwFormat* (SwDoc::*)(rtl::OUString const&, SwFormat*, bool, bool), SwFormat const&)
 SwDoc::CopyFormatArr(SwFormatsBase const&, SwFormatsBase const&, SwFormat* (SwDoc::*)(rtl::OUString const&, SwFormat*, bool, bool), SwFormat&)
@@ -12355,7 +12352,6 @@ SwEditShell::ClearAutomaticContour()
 SwEditShell::CollectAdvancedClassification()
 SwEditShell::CollectParagraphClassification()
 SwEditShell::CompareDoc(SwDoc const&)
-SwEditShell::ConvertFieldsToText()
 SwEditShell::Copy(SwEditShell&)
 SwEditShell::CopySelToDoc(SwDoc&)
 SwEditShell::CreateExtTextInput(o3tl::strong_int<unsigned short, LanguageTypeTag>)
@@ -13280,21 +13276,6 @@ SwFrameFormat::dumpAsXml(_xmlTextWriter*) const
 SwFrameFormat::getSdrAllFillAttributesHelper() const
 SwFrameFormat::supportsFullDrawingLayerFillAttributeSet() const
 SwFrameFormat::~SwFrameFormat()
-SwFrameFormats::ContainsFormat(SwFrameFormat const&) const
-SwFrameFormats::DeleteAndDestroyAll(bool)
-SwFrameFormats::FindFormatByName(rtl::OUString const&) const
-SwFrameFormats::IsAlive(SwFrameFormat const*) const
-SwFrameFormats::SwFrameFormats()
-SwFrameFormats::dumpAsXml(_xmlTextWriter*, char const*) const
-SwFrameFormats::erase(SwFrameFormat* const&)
-SwFrameFormats::erase(boost::multi_index::detail::rnd_node_iterator<boost::multi_index::detail::random_access_index_node<boost::multi_index::detail::ordered_index_node<boost::multi_index::detail::null_augment_policy, boost::multi_index::detail::index_node_base<SwFrameFormat*, std::allocator<SwFrameFormat*> > > > > const&)
-SwFrameFormats::erase(unsigned long)
-SwFrameFormats::findByTypeAndName(unsigned short, rtl::OUString const&) const
-SwFrameFormats::findRangeByName(rtl::OUString const&) const
-SwFrameFormats::newDefault(SwFrameFormat* const&)
-SwFrameFormats::newDefault(boost::multi_index::detail::rnd_node_iterator<boost::multi_index::detail::random_access_index_node<boost::multi_index::detail::ordered_index_node<boost::multi_index::detail::null_augment_policy, boost::multi_index::detail::index_node_base<SwFrameFormat*, std::allocator<SwFrameFormat*> > > > > const&)
-SwFrameFormats::push_back(SwFrameFormat* const&)
-SwFrameFormats::~SwFrameFormats()
 SwGammaGrf::Clone(SfxItemPool*) const
 SwGammaGrf::GetPresentation(SfxItemPresentation, MapUnit, MapUnit, rtl::OUString&, IntlWrapper const&) const
 SwGammaGrf::PutValue(com::sun::star::uno::Any const&, unsigned char)
@@ -14369,7 +14350,6 @@ SwTextBoxHelper::isTextBoxShapeHasValidTextFrame(SwFrameFormat const*)
 SwTextBoxHelper::mapAnchorType(RndStdIds const&)
 SwTextBoxHelper::queryInterface(SwFrameFormat const*, com::sun::star::uno::Type const&)
 SwTextBoxHelper::restoreLinks(std::set<ZSortFly, std::less<ZSortFly>, std::allocator<ZSortFly> >&, std::vector<SwFrameFormat*, std::allocator<SwFrameFormat*> >&, std::map<SwFrameFormat const*, SwFrameFormat const*, std::less<SwFrameFormat const*>, std::allocator<std::pair<SwFrameFormat const* const, SwFrameFormat const*> > >&)
-SwTextBoxHelper::saveLinks(SwFrameFormats const&, std::map<SwFrameFormat const*, SwFrameFormat const*, std::less<SwFrameFormat const*>, std::allocator<std::pair<SwFrameFormat const* const, SwFrameFormat const*> > >&)
 SwTextBoxHelper::setWrapThrough(SwFrameFormat*)
 SwTextBoxHelper::syncFlyFrameAttr(SwFrameFormat&, SfxItemSet const&, SdrObject*)
 SwTextBoxHelper::syncProperty(SwFrameFormat*, std::basic_string_view<char16_t, std::char_traits<char16_t> >, com::sun::star::uno::Any const&, SdrObject*)
@@ -20171,6 +20151,7 @@ linguistic::SpellAlternatives::SetFailureType(short)
 linguistic::SpellAlternatives::SetWordLanguage(rtl::OUString const&, o3tl::strong_int<unsigned short, LanguageTypeTag>)
 linguistic::SpellAlternatives::SpellAlternatives()
 load_BLAS
+lok_open_urandom
 longdual_testset
 lower_utf(w_char, int)
 lp_solve_version
@@ -21108,9 +21089,7 @@ prod_xA
 prod_xA2
 psp::JobData::constructFromStreamBuffer(void const*, unsigned int, psp::JobData&)
 psp::JobData::getStreamBuffer(void*&, unsigned int&)
-psp::JobData::resolveDefaultBackend()
 psp::JobData::setCollate(bool)
-psp::JobData::setDefaultBackend(bool)
 psp::JobData::setPaper(int, int)
 psp::JobData::setPaperBin(int)
 psp::PrintFontManager::PrintFontManager()
@@ -21772,7 +21751,7 @@ sdr::contact::ObjectContact::RemoveViewObjectContact(sdr::contact::ViewObjectCon
 sdr::contact::ObjectContact::SetViewObjectContactRedirector(sdr::contact::ViewObjectContactRedirector*)
 sdr::contact::ObjectContact::TryToGetOutputDevice() const
 sdr::contact::ObjectContact::TryToGetSdrPageView() const
-sdr::contact::ObjectContact::calculateGridOffsetForViewOjectContact(basegfx::B2DVector&, sdr::contact::ViewObjectContact const&) const
+sdr::contact::ObjectContact::calculateGridOffsetForViewObjectContact(basegfx::B2DVector&, sdr::contact::ViewObjectContact const&) const
 sdr::contact::ObjectContact::getActiveViewContact() const
 sdr::contact::ObjectContact::isDrawModeGray() const
 sdr::contact::ObjectContact::isDrawModeHighContrast() const
@@ -23068,7 +23047,7 @@ vcl::PDFWriter::DrawPolygon(tools::Polygon const&)
 vcl::PDFWriter::DrawRect(tools::Rectangle const&)
 vcl::PDFWriter::DrawRect(tools::Rectangle const&, unsigned long, unsigned long)
 vcl::PDFWriter::DrawStretchText(Point const&, unsigned long, rtl::OUString const&, int, int)
-vcl::PDFWriter::DrawTextArray(Point const&, rtl::OUString const&, o3tl::span<int const>, int, int)
+vcl::PDFWriter::DrawTextArray(Point const&, rtl::OUString const&, std::span<int const>, int, int)
 vcl::PDFWriter::DrawTextLine(Point const&, long, FontStrikeout, FontLineStyle, FontLineStyle)
 vcl::PDFWriter::DrawTransparent(tools::PolyPolygon const&, unsigned short)
 vcl::PDFWriter::DrawWallpaper(tools::Rectangle const&, Wallpaper const&)

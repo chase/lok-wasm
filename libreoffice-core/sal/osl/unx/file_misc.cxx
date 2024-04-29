@@ -17,13 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <osl/file.hxx>
 #include <osl/detail/file.h>
 
 #include <osl/diagnose.h>
-#include <osl/thread.h>
-#include <osl/signal.h>
-#include <rtl/alloc.h>
 #include <rtl/string.hxx>
 #include <sal/log.hxx>
 
@@ -36,20 +32,17 @@
 #include "readwrite_helper.hxx"
 #include "unixerrnostring.hxx"
 
-#include <sys/types.h>
 #include <errno.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <utime.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
 
 #include <algorithm>
-#include <cassert>
-#include <cstring>
-#include <memory>
 #include <new>
 
 #ifdef ANDROID
@@ -150,7 +143,7 @@ oslFileError SAL_CALL osl_openDirectory(rtl_uString* ustrDirectoryURL, oslDirect
 
     osl_systemPathRemoveSeparator(path.pData);
 
-    if (isForbidden(path.getStr(), osl_File_OpenFlag_Read))
+    if (isForbidden(path, osl_File_OpenFlag_Read))
         return osl_File_E_ACCES;
 
 #ifdef MACOSX
@@ -328,10 +321,7 @@ oslFileError SAL_CALL osl_getNextDirectoryItem(oslDirectory pDirectory,
 
     DirectoryItem_Impl* pImpl = static_cast< DirectoryItem_Impl* >(*pItem);
     if (pImpl)
-    {
         pImpl->release();
-        pImpl = nullptr;
-    }
 #ifdef _DIRENT_HAVE_D_TYPE
     pImpl = new DirectoryItem_Impl(strFilePath, pEntry->d_type);
 #else
@@ -572,7 +562,7 @@ oslFileError SAL_CALL osl_createDirectoryPath(
 
     osl::systemPathRemoveSeparator(sys_path);
 
-    if (isForbidden(sys_path.getStr(), osl_File_OpenFlag_Create))
+    if (isForbidden(sys_path, osl_File_OpenFlag_Create))
         return osl_File_E_ACCES;
 
     // const_cast because sys_path is a local copy which we want to modify inplace instead of

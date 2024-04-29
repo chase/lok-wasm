@@ -75,12 +75,57 @@ Private _GridDataModel		As Object		&apos; com.sun.star.awt.grid.XGridDataModel
 Private	_ImplementationName	As String
 Private _ControlType		As String		&apos; One of the CTLxxx constants
 
+&apos;	Control initial position and dimensions in APPFONT units
+Private _Left				As Long
+Private _Top				As Long
+Private _Width				As Long
+Private _Height				As Long
+
 &apos;	Tree control on-select and on-expand attributes
 &apos;	Tree controls may be associated with events not defined in the Basic IDE
 Private _OnNodeSelected		As String		&apos; Script to invoke when a node is selected
 Private _OnNodeExpanded		As String		&apos; Script to invoke when a node is expanded
 Private _SelectListener		As Object		&apos; com.sun.star.view.XSelectionChangeListener
 Private _ExpandListener		As Object		&apos; com.sun.star.awt.tree.XTreeExpansionListener
+
+&apos;	Updatable events
+Private _ActionListener		As Object		&apos; com.sun.star.awt.XActionListener
+Private _OnActionPerformed	As String		&apos; Script to invoke when action triggered
+Private _ActionCounter		As Integer		&apos; Counts the number of events set on the listener
+&apos; ---
+Private _AdjustmentListener	As Object		&apos; com.sun.star.awt.XAdjustmentListener
+Private _OnAdjustmentValueChanged As String	&apos; Script to invoke when scrollbar value has changed
+Private _AdjustmentCounter	As Integer		&apos; Counts the number of events set on the listener
+&apos; ---
+Private _FocusListener		As Object		&apos; com.sun.star.awt.XFocusListener
+Private _OnFocusGained		As String		&apos; Script to invoke when control gets focus
+Private _OnFocusLost		As String		&apos; Script to invoke when control loses focus
+Private _FocusCounter		As Integer		&apos; Counts the number of events set on the listener
+&apos; ---
+Private _ItemListener		As Object		&apos; com.sun.star.awt.XItemListener
+Private _OnItemStateChanged	As String		&apos; Script to invoke when status of item changes
+Private _ItemCounter		As Integer		&apos; Counts the number of events set on the listener
+&apos; ---
+Private _KeyListener		As Object		&apos; com.sun.star.awt.XKeyListener
+Private _OnKeyPressed		As String		&apos; Script to invoke when Key clicked in control
+Private _OnKeyReleased		As String		&apos; Script to invoke when Key released in control
+Private _KeyCounter			As Integer		&apos; Counts the number of events set on the listener
+&apos; ---
+Private _MouseListener		As Object		&apos; com.sun.star.awt.XMouseListener
+Private _OnMouseEntered		As String		&apos; Script to invoke when mouse enters control
+Private _OnMouseExited		As String		&apos; Script to invoke when mouse leaves control
+Private _OnMousePressed		As String		&apos; Script to invoke when mouse clicked in control
+Private _OnMouseReleased	As String		&apos; Script to invoke when mouse released in control
+Private _MouseCounter		As Integer		&apos; Counts the number of events set on the listener
+&apos; ---
+Private _MouseMotionListener As Object		&apos; com.sun.star.awt.XMouseMotionListener
+Private _OnMouseDragged		As String		&apos; Script to invoke when mouse is dragged from the control
+Private _OnMouseMoved		As String		&apos; Script to invoke when mouse is moved across the control
+Private _MouseMotionCounter	As Integer	&apos; Counts the number of events set on the listener
+&apos; ---
+Private _TextListener		As Object		&apos; com.sun.star.awt.XTextListener
+Private _OnTextChanged		As String		&apos; Script to invoke when textual content has changed
+Private _TextCounter		As Integer		&apos; Counts the number of events set on the listener
 
 &apos;	Table control attributes
 Private _ColumnWidths		As Variant		&apos; Array of column widths
@@ -97,6 +142,7 @@ Private Const CTLFIXEDLINE		= &quot;FixedLine&quot;
 Private Const CTLFIXEDTEXT		= &quot;FixedText&quot;
 Private Const CTLFORMATTEDFIELD	= &quot;FormattedField&quot;
 Private Const CTLGROUPBOX		= &quot;GroupBox&quot;
+Private Const CTLHYPERLINK		= &quot;Hyperlink&quot;
 Private Const CTLIMAGECONTROL	= &quot;ImageControl&quot;
 Private Const CTLLISTBOX		= &quot;ListBox&quot;
 Private Const CTLNUMERICFIELD	= &quot;NumericField&quot;
@@ -127,10 +173,48 @@ Private Sub Class_Initialize()
 	Set _GridDataModel = Nothing
 	_ImplementationName = &quot;&quot;
 	_ControlType = &quot;&quot;
+
+	_Left = SF_DialogUtils.MINPOSITION
+	_Top = SF_DialogUtils.MINPOSITION
+	_Width = -1
+	_Height = -1
+
 	_OnNodeSelected = &quot;&quot;
 	_OnNodeExpanded = &quot;&quot;
 	Set _SelectListener = Nothing
 	Set _ExpandListener = Nothing
+
+	Set _ActionListener = Nothing
+	_OnActionPerformed = &quot;&quot;
+	_ActionCounter = 0
+	Set _AdjustmentListener = Nothing
+	_OnAdjustmentValueChanged = &quot;&quot;
+	_AdjustmentCounter = 0
+	Set _FocusListener = Nothing
+	_OnFocusGained = &quot;&quot;
+	_OnFocusLost = &quot;&quot;
+	_FocusCounter = 0
+	Set _KeyListener = Nothing
+	_OnKeyPressed = &quot;&quot;
+	_OnKeyReleased = &quot;&quot;
+	_KeyCounter = 0
+	Set _MouseListener = Nothing
+	_OnMouseEntered = &quot;&quot;
+	_OnMouseExited = &quot;&quot;
+	_OnMousePressed = &quot;&quot;
+	_OnMouseReleased = &quot;&quot;
+	_MouseCounter = 0
+	Set _MouseMotionListener = Nothing
+	_OnMouseDragged = &quot;&quot;
+	_OnMouseMoved = &quot;&quot;
+	_MouseMotionCounter = 0
+	Set _ItemListener = Nothing
+	_OnItemStateChanged = &quot;&quot;
+	_ItemCounter = 0
+	Set _TextListener = Nothing
+	_OnTextChanged = &quot;&quot;
+	_TextCounter = 0
+
 	_ColumnWidths = Array()
 End Sub		&apos;	SFDialogs.SF_DialogControl Constructor
 
@@ -146,6 +230,18 @@ Public Function Dispose() As Variant
 End Function	&apos;	SFDialogs.SF_DialogControl Explicit Destructor
 
 REM ================================================================== PROPERTIES
+
+REM -----------------------------------------------------------------------------
+Property Get Border() As Variant
+&apos;&apos;&apos;	The Border property refers to the surrounding of the control: 3D, FLAT or NONE
+	Border = _PropertyGet(&quot;Border&quot;, &quot;&quot;)
+End Property	&apos;	SFDialogs.SF_DialogControl.Border (get)
+
+REM -----------------------------------------------------------------------------
+Property Let Border(Optional ByVal pvBorder As Variant)
+&apos;&apos;&apos;	Set the updatable property Border
+	_PropertySet(&quot;Border&quot;, pvBorder)
+End Property	&apos;	SFDialogs.SF_DialogControl.Border (let)
 
 REM -----------------------------------------------------------------------------
 Property Get Cancel() As Variant
@@ -224,9 +320,20 @@ End Property	&apos;	SFDialogs.SF_DialogControl.Format (get)
 REM -----------------------------------------------------------------------------
 Property Let Format(Optional ByVal pvFormat As Variant)
 &apos;&apos;&apos;	Set the updatable property Format
-&apos;&apos;&apos;	NB: Format is read-only for formatted field controls
 	_PropertySet(&quot;Format&quot;, pvFormat)
 End Property	&apos;	SFDialogs.SF_DialogControl.Format (let)
+
+REM -----------------------------------------------------------------------------
+Property Get Height() As Variant
+&apos;&apos;&apos;	The Height property refers to the height of the control
+	Height = _PropertyGet(&quot;Height&quot;)
+End Property	&apos;	SFDialogs.SF_DialogControl.Height (get)
+
+REM -----------------------------------------------------------------------------
+Property Let Height(Optional ByVal pvHeight As Variant)
+&apos;&apos;&apos;	Set the updatable property Height
+	_PropertySet(&quot;Height&quot;, pvHeight)
+End Property	&apos;	SFDialogs.SF_DialogControl.Height (let)
 
 REM -----------------------------------------------------------------------------
 Property Get ListCount() As Long
@@ -284,10 +391,22 @@ Property Get OnActionPerformed() As Variant
 End Property	&apos;	SFDialogs.SF_DialogControl.OnActionPerformed (get)
 
 REM -----------------------------------------------------------------------------
+Property Let OnActionPerformed(Optional ByVal pvActionPerformed As Variant)
+&apos;&apos;&apos;	Set the updatable property OnActionPerformed
+	_PropertySet(&quot;OnActionPerformed&quot;, pvActionPerformed)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnActionPerformed (let)
+
+REM -----------------------------------------------------------------------------
 Property Get OnAdjustmentValueChanged() As Variant
 &apos;&apos;&apos;	Get the script associated with the OnAdjustmentValueChanged event
 	OnAdjustmentValueChanged = _PropertyGet(&quot;OnAdjustmentValueChanged&quot;)
 End Property	&apos;	SFDialogs.SF_DialogControl.OnAdjustmentValueChanged (get)
+
+REM -----------------------------------------------------------------------------
+Property Let OnAdjustmentValueChanged(Optional ByVal pvAdjustmentValueChanged As Variant)
+&apos;&apos;&apos;	Set the updatable property OnAdjustmentValueChanged
+	_PropertySet(&quot;OnAdjustmentValueChanged&quot;, pvAdjustmentValueChanged)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnAdjustmentValueChanged (let)
 
 REM -----------------------------------------------------------------------------
 Property Get OnFocusGained() As Variant
@@ -296,10 +415,22 @@ Property Get OnFocusGained() As Variant
 End Property	&apos;	SFDialogs.SF_DialogControl.OnFocusGained (get)
 
 REM -----------------------------------------------------------------------------
+Property Let OnFocusGained(Optional ByVal pvOnFocusGained As Variant)
+&apos;&apos;&apos;	Set the updatable property OnFocusGained
+	_PropertySet(&quot;OnFocusGained&quot;, pvOnFocusGained)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnFocusGained (let)
+
+REM -----------------------------------------------------------------------------
 Property Get OnFocusLost() As Variant
 &apos;&apos;&apos;	Get the script associated with the OnFocusLost event
 	OnFocusLost = _PropertyGet(&quot;OnFocusLost&quot;)
 End Property	&apos;	SFDialogs.SF_DialogControl.OnFocusLost (get)
+
+REM -----------------------------------------------------------------------------
+Property Let OnFocusLost(Optional ByVal pvOnFocusLost As Variant)
+&apos;&apos;&apos;	Set the updatable property OnFocusLost
+	_PropertySet(&quot;OnFocusLost&quot;, pvOnFocusLost)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnFocusLost (let)
 
 REM -----------------------------------------------------------------------------
 Property Get OnItemStateChanged() As Variant
@@ -308,10 +439,22 @@ Property Get OnItemStateChanged() As Variant
 End Property	&apos;	SFDialogs.SF_DialogControl.OnItemStateChanged (get)
 
 REM -----------------------------------------------------------------------------
+Property Let OnItemStateChanged(Optional ByVal pvItemStateChanged As Variant)
+&apos;&apos;&apos;	Set the updatable property OnItemStateChanged
+	_PropertySet(&quot;OnItemStateChanged&quot;, pvItemStateChanged)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnItemStateChanged (let)
+
+REM -----------------------------------------------------------------------------
 Property Get OnKeyPressed() As Variant
 &apos;&apos;&apos;	Get the script associated with the OnKeyPressed event
 	OnKeyPressed = _PropertyGet(&quot;OnKeyPressed&quot;)
 End Property	&apos;	SFDialogs.SF_DialogControl.OnKeyPressed (get)
+
+REM -----------------------------------------------------------------------------
+Property Let OnKeyPressed(Optional ByVal pvOnKeyPressed As Variant)
+&apos;&apos;&apos;	Set the updatable property OnKeyPressed
+	_PropertySet(&quot;OnKeyPressed&quot;, pvOnKeyPressed)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnKeyPressed (let)
 
 REM -----------------------------------------------------------------------------
 Property Get OnKeyReleased() As Variant
@@ -320,10 +463,22 @@ Property Get OnKeyReleased() As Variant
 End Property	&apos;	SFDialogs.SF_DialogControl.OnKeyReleased (get)
 
 REM -----------------------------------------------------------------------------
+Property Let OnKeyReleased(Optional ByVal pvOnKeyReleased As Variant)
+&apos;&apos;&apos;	Set the updatable property OnKeyReleased
+	_PropertySet(&quot;OnKeyReleased&quot;, pvOnKeyReleased)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnKeyReleased (let)
+
+REM -----------------------------------------------------------------------------
 Property Get OnMouseDragged() As Variant
 &apos;&apos;&apos;	Get the script associated with the OnMouseDragged event
 	OnMouseDragged = _PropertyGet(&quot;OnMouseDragged&quot;)
 End Property	&apos;	SFDialogs.SF_DialogControl.OnMouseDragged (get)
+
+REM -----------------------------------------------------------------------------
+Property Let OnMouseDragged(Optional ByVal pvOnMouseDragged As Variant)
+&apos;&apos;&apos;	Set the updatable property OnMouseDragged
+	_PropertySet(&quot;OnMouseDragged&quot;, pvOnMouseDragged)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnMouseDragged (let)
 
 REM -----------------------------------------------------------------------------
 Property Get OnMouseEntered() As Variant
@@ -332,10 +487,22 @@ Property Get OnMouseEntered() As Variant
 End Property	&apos;	SFDialogs.SF_DialogControl.OnMouseEntered (get)
 
 REM -----------------------------------------------------------------------------
+Property Let OnMouseEntered(Optional ByVal pvOnMouseEntered As Variant)
+&apos;&apos;&apos;	Set the updatable property OnMouseEntered
+	_PropertySet(&quot;OnMouseEntered&quot;, pvOnMouseEntered)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnMouseEntered (let)
+
+REM -----------------------------------------------------------------------------
 Property Get OnMouseExited() As Variant
 &apos;&apos;&apos;	Get the script associated with the OnMouseExited event
 	OnMouseExited = _PropertyGet(&quot;OnMouseExited&quot;)
 End Property	&apos;	SFDialogs.SF_DialogControl.OnMouseExited (get)
+
+REM -----------------------------------------------------------------------------
+Property Let OnMouseExited(Optional ByVal pvOnMouseExited As Variant)
+&apos;&apos;&apos;	Set the updatable property OnMouseExited
+	_PropertySet(&quot;OnMouseExited&quot;, pvOnMouseExited)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnMouseExited (let)
 
 REM -----------------------------------------------------------------------------
 Property Get OnMouseMoved() As Variant
@@ -344,16 +511,34 @@ Property Get OnMouseMoved() As Variant
 End Property	&apos;	SFDialogs.SF_DialogControl.OnMouseMoved (get)
 
 REM -----------------------------------------------------------------------------
+Property Let OnMouseMoved(Optional ByVal pvOnMouseMoved As Variant)
+&apos;&apos;&apos;	Set the updatable property OnMouseMoved
+	_PropertySet(&quot;OnMouseMoved&quot;, pvOnMouseMoved)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnMouseMoved (let)
+
+REM -----------------------------------------------------------------------------
 Property Get OnMousePressed() As Variant
 &apos;&apos;&apos;	Get the script associated with the OnMousePressed event
 	OnMousePressed = _PropertyGet(&quot;OnMousePressed&quot;)
 End Property	&apos;	SFDialogs.SF_DialogControl.OnMousePressed (get)
 
 REM -----------------------------------------------------------------------------
+Property Let OnMousePressed(Optional ByVal pvOnMousePressed As Variant)
+&apos;&apos;&apos;	Set the updatable property OnMousePressed
+	_PropertySet(&quot;OnMousePressed&quot;, pvOnMousePressed)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnMousePressed (let)
+
+REM -----------------------------------------------------------------------------
 Property Get OnMouseReleased() As Variant
 &apos;&apos;&apos;	Get the script associated with the OnMouseReleased event
 	OnMouseReleased = _PropertyGet(&quot;OnMouseReleased&quot;)
 End Property	&apos;	SFDialogs.SF_DialogControl.OnMouseReleased (get)
+
+REM -----------------------------------------------------------------------------
+Property Let OnMouseReleased(Optional ByVal pvOnMouseReleased As Variant)
+&apos;&apos;&apos;	Set the updatable property OnMouseReleased
+	_PropertySet(&quot;OnMouseReleased&quot;, pvOnMouseReleased)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnMouseReleased (let)
 
 REM -----------------------------------------------------------------------------
 Property Get OnNodeExpanded() As Variant
@@ -384,6 +569,12 @@ Property Get OnTextChanged() As Variant
 &apos;&apos;&apos;	Get the script associated with the OnTextChanged event
 	OnTextChanged = _PropertyGet(&quot;OnTextChanged&quot;)
 End Property	&apos;	SFDialogs.SF_DialogControl.OnTextChanged (get)
+
+REM -----------------------------------------------------------------------------
+Property Let OnTextChanged(Optional ByVal pvTextChanged As Variant)
+&apos;&apos;&apos;	Set the updatable property OnTextChanged
+	_PropertySet(&quot;OnTextChanged&quot;, pvTextChanged)
+End Property	&apos;	SFDialogs.SF_DialogControl.OnTextChanged (let)
 
 REM -----------------------------------------------------------------------------
 Property Get Page() As Variant
@@ -438,6 +629,19 @@ Property Let RowSource(Optional ByVal pvRowSource As Variant)
 End Property	&apos;	SFDialogs.SF_DialogControl.RowSource (let)
 
 REM -----------------------------------------------------------------------------
+Property Get TabIndex() As Variant
+&apos;&apos;&apos;	The TabIndex property specifies a control&apos;s place in the tab order in the dialog
+&apos;&apos;&apos;	Zero or negative means no tab set in the control
+	TabIndex = _PropertyGet(&quot;TabIndex&quot;, -1)
+End Property	&apos;	SFDialogs.SF_DialogControl.TabIndex (get)
+
+REM -----------------------------------------------------------------------------
+Property Let TabIndex(Optional ByVal pvTabIndex As Variant)
+&apos;&apos;&apos;	Set the updatable property TabIndex
+	_PropertySet(&quot;TabIndex&quot;, pvTabIndex)
+End Property	&apos;	SFDialogs.SF_DialogControl.TabIndex (let)
+
+REM -----------------------------------------------------------------------------
 Property Get Text() As Variant
 &apos;&apos;&apos;	The Text property specifies the actual content of the control like it is displayed on the screen
 	Text = _PropertyGet(&quot;Text&quot;, &quot;&quot;)
@@ -470,6 +674,18 @@ Property Let TripleState(Optional ByVal pvTripleState As Variant)
 End Property	&apos;	SFDialogs.SF_DialogControl.TripleState (let)
 
 REM -----------------------------------------------------------------------------
+Property Get URL() As Variant
+&apos;&apos;&apos;	The URL property refers to the URL to open when the control is clicked
+	URL = _PropertyGet(&quot;URL&quot;, &quot;&quot;)
+End Property	&apos;	SFDialogs.SF_DialogControl.URL (get)
+
+REM -----------------------------------------------------------------------------
+Property Let URL(Optional ByVal pvURL As Variant)
+&apos;&apos;&apos;	Set the updatable property URL
+	_PropertySet(&quot;URL&quot;, pvURL)
+End Property	&apos;	SFDialogs.SF_DialogControl.URL (let)
+
+REM -----------------------------------------------------------------------------
 Property Get Value() As Variant
 &apos;&apos;&apos;	The Value property specifies the data contained in the control
 	Value = _PropertyGet(&quot;Value&quot;, Empty)
@@ -492,6 +708,42 @@ Property Let Visible(Optional ByVal pvVisible As Variant)
 &apos;&apos;&apos;	Set the updatable property Visible
 	_PropertySet(&quot;Visible&quot;, pvVisible)
 End Property	&apos;	SFDialogs.SF_DialogControl.Visible (let)
+
+REM -----------------------------------------------------------------------------
+Property Get Width() As Variant
+&apos;&apos;&apos;	The Width property refers to the Width of the control
+	Width = _PropertyGet(&quot;Width&quot;)
+End Property	&apos;	SFDialogs.SF_DialogControl.Width (get)
+
+REM -----------------------------------------------------------------------------
+Property Let Width(Optional ByVal pvWidth As Variant)
+&apos;&apos;&apos;	Set the updatable property Width
+	_PropertySet(&quot;Width&quot;, pvWidth)
+End Property	&apos;	SFDialogs.SF_DialogControl.Width (let)
+
+REM -----------------------------------------------------------------------------
+Property Get X() As Variant
+&apos;&apos;&apos;	The X property refers to the X coordinate of the top-left corner of the control
+	X = _PropertyGet(&quot;X&quot;)
+End Property	&apos;	SFDialogs.SF_DialogControl.X (get)
+
+REM -----------------------------------------------------------------------------
+Property Let X(Optional ByVal pvX As Variant)
+&apos;&apos;&apos;	Set the updatable property X
+	_PropertySet(&quot;X&quot;, pvX)
+End Property	&apos;	SFDialogs.SF_DialogControl.X (let)
+
+REM -----------------------------------------------------------------------------
+Property Get Y() As Variant
+&apos;&apos;&apos;	The Y property refers to the Y coordinate of the top-left corner of the control
+	Y = _PropertyGet(&quot;Y&quot;)
+End Property	&apos;	SFDialogs.SF_DialogControl.Y (get)
+
+REM -----------------------------------------------------------------------------
+Property Let Y(Optional ByVal pvY As Variant)
+&apos;&apos;&apos;	Set the updatable property Y
+	_PropertySet(&quot;Y&quot;, pvY)
+End Property	&apos;	SFDialogs.SF_DialogControl.Y (let)
 
 REM -----------------------------------------------------------------------------
 Property Get XControlModel() As Object
@@ -880,13 +1132,15 @@ Public Function Properties() As Variant
 &apos;&apos;&apos;	Return the list or properties of the Timer class as an array
 
 	Properties = Array( _
-					&quot;Cancel&quot; _
+					&quot;Border&quot; _
+					, &quot;Cancel&quot; _
 					, &quot;Caption&quot; _
 					, &quot;ControlType&quot; _
 					, &quot;CurrentNode&quot; _
 					, &quot;Default&quot; _
 					, &quot;Enabled&quot; _
 					, &quot;Format&quot; _
+					, &quot;Height&quot; _
 					, &quot;ListCount&quot; _
 					, &quot;ListIndex&quot; _
 					, &quot;Locked&quot; _
@@ -913,19 +1167,52 @@ Public Function Properties() As Variant
 					, &quot;Picture&quot; _
 					, &quot;RootNode&quot; _
 					, &quot;RowSource&quot; _
+					, &quot;TabIndex&quot; _
 					, &quot;Text&quot; _
 					, &quot;TipText&quot; _
 					, &quot;TripleState&quot; _
+					, &quot;URL&quot; _
 					, &quot;Value&quot; _
 					, &quot;Visible&quot; _
+					, &quot;Width&quot; _
+					, &quot;X&quot; _
 					, &quot;XControlModel&quot; _
 					, &quot;XControlView&quot; _
 					, &quot;XGridColumnModel&quot; _
 					, &quot;XGridDataModel&quot; _
 					, &quot;XTreeDataModel&quot; _
+					, &quot;Y&quot; _
 					)
 
 End Function	&apos;	SFDialogs.SF_DialogControl.Properties
+
+REM -----------------------------------------------------------------------------
+Public Function Resize(Optional ByVal Left As Variant _
+								, Optional ByVal Top As Variant _
+								, Optional ByVal Width As Variant _
+								, Optional ByVal Height As Variant _
+								) As Boolean
+&apos;&apos;&apos;	Move the top-left corner of the control to new coordinates and/or modify its dimensions
+&apos;&apos;&apos;	Without arguments, the method resets the initial dimensions and position
+&apos;&apos;&apos;	Attributes denoting the position and size of a control are expressed in &quot;Map AppFont&quot; units.
+&apos;&apos;&apos;	Map AppFont units are device and resolution independent.
+&apos;&apos;&apos;	One Map AppFont unit is equal to one eighth of the average character (Systemfont) height and one quarter of the average character width.
+&apos;&apos;&apos;	The dialog editor (= the Basic IDE) also uses Map AppFont units.
+&apos;&apos;&apos;	Args:
+&apos;&apos;&apos;		Left : the horizontal distance from the top-left corner. It may be negative.
+&apos;&apos;&apos;		Top : the vertical distance from the top-left corner. It may be negative.
+&apos;&apos;&apos;		Width : the horizontal width of the rectangle containing the Dialog. It must be positive.
+&apos;&apos;&apos;		Height : the vertical height of the rectangle containing the Dialog. It must be positive.
+&apos;&apos;&apos;		Missing arguments are left unchanged.
+&apos;&apos;&apos;	Returns:
+&apos;&apos;&apos;		True when successful
+&apos;&apos;&apos;	Examples:
+&apos;&apos;&apos;		myControl.Resize(100, 200, Height := 600)	&apos;	Width is not changed
+
+Try:
+	Resize = SF_DialogUtils._Resize([Me], Left, Top, Width, Height)
+
+End Function	&apos;	SFDialogss.SF_Dialog.Resize
 
 REM -----------------------------------------------------------------------------
 Public Function SetFocus() As Boolean
@@ -1002,6 +1289,7 @@ REM ----------------------------------------------------------------------------
 Public Function SetTableData(Optional ByRef DataArray As Variant _
 								, Optional ByRef Widths As Variant _
 								, Optional ByRef Alignments As Variant _
+								, Optional ByVal RowHeaderWidth As Variant _
 								) As Boolean
 &apos;&apos;&apos;	Fill a table control with the given data. Preexisting data is erased
 &apos;&apos;&apos;	The Basic IDE allows to define if the control has a row and/or a column header
@@ -1013,15 +1301,17 @@ Public Function SetTableData(Optional ByRef DataArray As Variant _
 &apos;&apos;&apos;	Args:
 &apos;&apos;&apos;		DataArray: the set of data to display in the table control, including optional column/row headers
 &apos;&apos;&apos;			Is a 2D array in Basic, is a tuple of tuples when called from Python
-&apos;&apos;&apos;		Widths: the column&apos;s relative widths as a 1D array, each element corresponding with a column
+&apos;&apos;&apos;		Widths: the column&apos;s relative widths as a 1D array, each element corresponding with one data column
 &apos;&apos;&apos;				If the array is shorter than the number of columns, the last value is kept for the next columns.
 &apos;&apos;&apos;				Example:
 &apos;&apos;&apos;					Widths := Array(1, 2)
 &apos;&apos;&apos;				means that the first column is half as wide as all the other columns
-&apos;&apos;&apos;				When the argument is absent, the columns are evenly spread over the control
+&apos;&apos;&apos;				When the argument is absent, the columns are evenly spread over the available space in the control
 &apos;&apos;&apos;		Alignments: the column&apos;s horizontal alignment as a string with length = number of columns.
 &apos;&apos;&apos;				Possible characters are:
 &apos;&apos;&apos;					L(EFT), C(ENTER), R(IGHT) or space (default behaviour)
+&apos;&apos;&apos;		RowGeaderWidth: width of the row header column expressed in AppFont units. Default = 10.
+&apos;&apos;&apos;				The argument is ignored when the TableControl has no row header.
 &apos;&apos;&apos;	Returns:
 &apos;&apos;&apos;		True when successful
 &apos;&apos;&apos;	Examples:
@@ -1051,28 +1341,30 @@ Dim oColumn As Object			&apos;	com.sun.star.awt.grid.XGridColumn
 Dim dWidth As Double			&apos;	A single item of Widths
 Dim dRelativeWidth As Double	&apos;	Sum of Widths up to the number of columns
 Dim dWidthFactor As Double		&apos;	Factor to apply to relative widths to get absolute column widths
+Dim lHeaderWidth As Long		&apos;	Row header width when row header present, otherwise = 0
+Dim lAverageWidth As Long		&apos;	Width to apply when columns spread evenly across table
 Dim vDataRow As Variant			&apos;	A single row content in the tablecontrol
 Dim vDataItem As Variant		&apos;	A single DataArray item
 Dim sAlign As String			&apos;	Column&apos;s horizontal alignments (single chars: L, C, R, space)
 Dim lAlign As Long				&apos;	com.sun.star.style.HorizontalAlignment.XXX
 Dim i As Long, j As Long, k As Long
 
-Const cstRowHdrWidth = 12	&apos;	Estimated width of the row header
-
 Const cstThisSub = &quot;SFDialogs.DialogControl.SetTableData&quot;
-Const cstSubArgs = &quot;DataArray, [Widths=Array(1)], [Alignments=&quot;&quot;&quot;&quot;]&quot;
+Const cstSubArgs = &quot;DataArray, [Widths=Array(1)], [Alignments=&quot;&quot;&quot;&quot;], [RowHeaderWidth=10]&quot;
 
 	If ScriptForge.SF_Utils._ErrorHandling() Then On Local Error GoTo Catch
 	bData = False
 
 Check:
-	If IsMissing(Widths) Or IsEmpty(Widths) Then Widths = Array(1)
+	If IsMissing(Widths) Or IsEmpty(Widths) Then Widths = Array()
 	If IsMissing(Alignments) Or IsEmpty(Alignments) Then Alignments = &quot;&quot;
+	If IsMissing(RowHeaderWidth) Or IsEmpty(RowHeaderWidth) Then RowHeaderWidth = 10
 	If ScriptForge.SF_Utils._EnterFunction(cstThisSub, cstSubArgs) Then
 		If _ControlType &lt;&gt; CTLTABLECONTROL Then GoTo CatchType
 		If Not ScriptForge.SF_Utils._ValidateArray(DataArray, &quot;DataArray&quot;) Then GoTo Catch		&apos;	Dimensions are checked below
 		If Not ScriptForge.SF_Utils._ValidateArray(Widths, &quot;Widths&quot;, 1, ScriptForge.V_NUMERIC, True) Then GoTo Catch
 		If Not ScriptForge.SF_Utils._Validate(Alignments, &quot;Alignments&quot;, V_STRING) Then GoTo Catch
+		If Not ScriptForge.SF_Utils._Validate(RowHeaderWidth, &quot;RowHeaderWidth&quot;, ScriptForge.V_NUMERIC) Then GoTo Catch
 	End If
 
 Try:
@@ -1082,7 +1374,7 @@ Try:
 		_GridColumnModel.removeColumn(i)
 	Next i
 
-	&apos;	LBounds, UBounds - Basic or Pytho
+	&apos;	LBounds, UBounds - Basic or Python
 	iDims = ScriptForge.SF_Array.CountDims(DataArray)
 	Select Case iDims
 		Case -1, 0		:	GoTo Catch
@@ -1134,6 +1426,15 @@ Try:
 		If _ControlModel.ShowColumnHeader Then oColumn.Title = vColHeaders(j)
 		_GridColumnModel.addColumn(oColumn)
 	Next j
+
+	&apos;	Manage row headers width
+	If _ControlModel.ShowRowHeader Then
+		lHeaderWidth = RowHeaderWidth
+		_ControlModel.RowHeaderWidth = lHeaderWidth
+	Else
+		lHeaderWidth = 0
+	End If
+
 	&apos;	Size the columns. Column sizing cannot be done before all the columns are added
 	If lMaxW &gt;= lMinW Then		&apos;	There must be at least 1 width given as argument
 		&apos;	Size the columns proportionally with their relative widths
@@ -1144,8 +1445,9 @@ Try:
 			i = i + 1
 			If i &gt;= lMinW And i &lt;= lMaxW Then dRelativeWidth = dRelativeWidth + Widths(i) Else dRelativeWidth = dRelativeWidth + Widths(lMaxW)
 		Next j
-		&apos;	Set absolute widths
-		If dRelativeWidth &gt; 0.0 Then dWidthFactor = CDbl((_ControlModel.Width - cstRowHdrWidth) / dRelativeWidth) Else dWidthFactor = 1.0
+
+		&apos;	Set absolute column widths
+		If dRelativeWidth &gt; 0.0 Then dWidthFactor = CDbl(_ControlModel.Width - lHeaderWidth) / dRelativeWidth Else dWidthFactor = 1.0
 		i = lMinW - 1
 		For j = 0 To lMax2 - lMinCol
 			i = i + 1
@@ -1153,9 +1455,10 @@ Try:
 			_GridColumnModel.Columns(j).ColumnWidth = CLng(dWidthFactor * dWidth)
 		Next j
 	Else
-		&apos;	Size all columns evenly
+		&apos;	Size header and columns evenly
+		lAverageWidth = (_ControlModel.Width - lHeaderWidth) / (lMax2 - lMin2 + 1)
 		For j = 0 To lMax2 - lMinCol
-			_GridColumnModel.Columns(j).ColumnWidth = (_ControlModel.Width - cstRowHdrWidth) / (lMax2 - lMonCol + 1)
+			_GridColumnModel.Columns(j).ColumnWidth = lAverageWidth
 		Next j
 	End If
 
@@ -1337,43 +1640,6 @@ Finally:
 End Function	&apos;	SFDialogs.SF_DialogControl._FindNode
 
 REM -----------------------------------------------------------------------------
-Private Function _FormatsList() As Variant
-&apos;&apos;&apos;	Return the allowed format entries as a zero-based array for Date and Time control types
-
-Dim vFormats() As Variant		&apos;	Return value
-
-	Select Case _ControlType
-		Case CTLDATEFIELD
-			vFormats = Array( _
-				&quot;Standard (short)&quot; _
-				, &quot;Standard (short YY)&quot; _
-				, &quot;Standard (short YYYY)&quot; _
-				, &quot;Standard (long)&quot; _
-				, &quot;DD/MM/YY&quot; _
-				, &quot;MM/DD/YY&quot; _
-				, &quot;YY/MM/DD&quot; _
-				, &quot;DD/MM/YYYY&quot; _
-				, &quot;MM/DD/YYYY&quot; _
-				, &quot;YYYY/MM/DD&quot; _
-				, &quot;YY-MM-DD&quot; _
-				, &quot;YYYY-MM-DD&quot; _
-				)
-		Case CTLTIMEFIELD
-			vFormats = Array( _
-				&quot;24h short&quot; _
-				, &quot;24h long&quot; _
-				, &quot;12h short&quot; _
-				, &quot;12h long&quot; _
-				)
-		Case Else
-			vFormats = Array()
-	End Select
-	
-	_FormatsList = vFormats
-
-End Function	&apos;	SFDialogs.SF_DialogControl._FormatsList
-
-REM -----------------------------------------------------------------------------
 Public Function _GetEventName(ByVal psProperty As String) As String
 &apos;&apos;&apos;	Return the LO internal event name derived from the SF property name
 &apos;&apos;&apos;	The SF property name is not case sensitive, while the LO name is case-sensitive
@@ -1437,6 +1703,8 @@ Try:
 		Case &quot;UnoControlSpinButtonModel&quot;
 			_ControlType = &quot;&quot;	&apos; Not supported
 		Case &quot;Edit&quot;					:	_ControlType = CTLTEXTFIELD
+		Case &quot;UnoControlFixedHyperlinkModel&quot;
+			_ControlType = CTLHYPERLINK
 		Case &quot;TreeControlModel&quot;
 			&apos;	Initialize the data model
 			_ControlType = CTLTREECONTROL
@@ -1448,6 +1716,14 @@ Try:
 			Set _GridDataModel = _ControlModel.GridDataModel
 		Case Else					:	_ControlType = sType
 	End Select
+
+	&apos;	Store initial position and dimensions
+	With _ControlModel
+		_Left = .PositionX
+		_Top = .PositionY
+		_Width = .Width
+		_Height = .Height
+	End With
 
 	&apos;	Store  the SF_DialogControl object in the parent cache
 	Set _Parent._ControlCache(_IndexOfNames) = [Me]
@@ -1475,6 +1751,7 @@ Dim lIndex As Long							&apos;	Index in StringItemList
 Dim sItem As String							&apos;	A single item
 Dim vDate As Variant						&apos;	com.sun.star.util.Date or com.sun.star.util.Time
 Dim vValues As Variant						&apos;	Array of listbox values
+Dim oPosSize As Object						&apos;	com.sun.star.awt.Rectangle
 Dim oControlEvents As Object				&apos;	com.sun.star.container.XNameContainer
 Dim sEventName As String					&apos;	Internal event name
 Dim i As Long
@@ -1492,6 +1769,16 @@ Const cstSubArgs = &quot;&quot;
 
 	If IsNull(oSession) Then Set oSession = ScriptForge.SF_Services.CreateScriptService(&quot;Session&quot;)
 	Select Case UCase(psProperty)
+		Case UCase(&quot;Border&quot;)
+			Select Case _ControlType
+				Case CTLCOMBOBOX, CTLCURRENCYFIELD, CTLDATEFIELD, CTLFILECONTROL, CTLFIXEDTEXT, CTLFORMATTEDFIELD _
+						, CTLHYPERLINK, CTLIMAGECONTROL, CTLLISTBOX, CTLNUMERICFIELD, CTLPATTERNFIELD, CTLPROGRESSBAR _
+						, CTLSCROLLBAR , CTLTABLECONTROL, CTLTEXTFIELD, CTLTIMEFIELD, CTLTREECONTROL
+					If oSession.HasUNOProperty(_ControlModel, &quot;Border&quot;) Then _PropertyGet = Array(&quot;NONE&quot;, &quot;3D&quot;, &quot;FLAT&quot;)(_ControlModel.Border)
+				Case CTLCHECKBOX, CTLRADIOBUTTON
+					If oSession.HasUNOProperty(_ControlModel, &quot;VisualEffect&quot;) Then _PropertyGet = Array(&quot;NONE&quot;, &quot;3D&quot;, &quot;FLAT&quot;)(_ControlModel.VisualEffect)
+				Case Else	:	GoTo CatchType
+			End Select
 		Case UCase(&quot;Cancel&quot;)
 			Select Case _ControlType
 				Case CTLBUTTON
@@ -1500,7 +1787,7 @@ Const cstSubArgs = &quot;&quot;
 			End Select
 		Case UCase(&quot;Caption&quot;)
 			Select Case _ControlType
-				Case CTLBUTTON, CTLCHECKBOX, CTLFIXEDLINE, CTLFIXEDTEXT, CTLGROUPBOX, CTLRADIOBUTTON
+				Case CTLBUTTON, CTLCHECKBOX, CTLFIXEDLINE, CTLFIXEDTEXT, CTLGROUPBOX, CTLHYPERLINK, CTLRADIOBUTTON
 					If oSession.HasUNOProperty(_ControlModel, &quot;Label&quot;) Then _PropertyGet = _ControlModel.Label
 				Case Else	:	GoTo CatchType
 			End Select
@@ -1533,15 +1820,21 @@ Const cstSubArgs = &quot;&quot;
 		Case UCase(&quot;Format&quot;)
 			Select Case _ControlType
 				Case CTLDATEFIELD
-					If oSession.HasUNOProperty(_ControlModel, &quot;DateFormat&quot;) Then _PropertyGet = _FormatsList()(_ControlModel.DateFormat)
+					If oSession.HasUNOProperty(_ControlModel, &quot;DateFormat&quot;) Then _PropertyGet = SF_DialogUtils._FormatsList(_ControlType)(_ControlModel.DateFormat)
 				Case CTLTIMEFIELD
-					If oSession.HasUNOProperty(_ControlModel, &quot;TimeFormat&quot;) Then _PropertyGet = _FormatsList()(_ControlModel.TimeFormat)
+					If oSession.HasUNOProperty(_ControlModel, &quot;TimeFormat&quot;) Then _PropertyGet = SF_DialogUtils._FormatsList(_ControlType)(_ControlModel.TimeFormat)
 				Case CTLFORMATTEDFIELD
 					If oSession.HasUNOProperty(_ControlModel, &quot;FormatsSupplier&quot;) And oSession.HasUNOProperty(_ControlModel, &quot;FormatKey&quot;) Then
 						_PropertyGet = _ControlModel.FormatsSupplier.getNumberFormats.getByKey(_ControlModel.FormatKey).FormatString
 					End If
 				Case Else	:	GoTo CatchType
 			End Select
+		Case UCase(&quot;Height&quot;)
+			If [_parent]._Displayed Then	&apos;	Convert PosSize view property from pixels to APPFONT units
+				_PropertyGet = SF_DialogUtils._ConvertToAppFont(_ControlView, False).Height
+			Else
+				If oSession.HasUNOProperty(_ControlModel, &quot;Height&quot;) Then _PropertyGet = _ControlModel.Height
+			End If			
 		Case UCase(&quot;ListCount&quot;)
 			Select Case _ControlType
 				Case CTLCOMBOBOX, CTLLISTBOX
@@ -1606,7 +1899,24 @@ Const cstSubArgs = &quot;&quot;
 			If oControlEvents.hasByName(sEventName) Then
 				_PropertyGet = oControlEvents.getByName(sEventName).ScriptCode
 			Else
-				_PropertyGet = &quot;&quot;
+				&apos;	Check OnEvents set dynamically by code
+				Select Case UCase(psProperty)
+					Case UCase(&quot;OnActionPerformed&quot;)			:	_PropertyGet = _OnActionPerformed
+					Case UCase(&quot;OnAdjustmentValueChanged&quot;)	:	_PropertyGet = _OnAdjustmentValueChanged
+					Case UCase(&quot;OnFocusGained&quot;)				:	_PropertyGet = _OnFocusGained
+					Case UCase(&quot;OnFocusLost&quot;)				:	_PropertyGet = _OnFocusLost
+					Case UCase(&quot;OnItemStateChanged&quot;)		:	_PropertyGet = _OnItemStateChanged
+					Case UCase(&quot;OnKeyPressed&quot;)				:	_PropertyGet = _OnKeyPressed
+					Case UCase(&quot;OnKeyReleased&quot;)				:	_PropertyGet = _OnKeyReleased
+					Case UCase(&quot;OnMouseDragged&quot;)			:	_PropertyGet = _OnMouseDragged
+					Case UCase(&quot;OnMouseEntered&quot;)			:	_PropertyGet = _OnMouseEntered
+					Case UCase(&quot;OnMouseExited&quot;)				:	_PropertyGet = _OnMouseExited
+					Case UCase(&quot;OnMouseMoved&quot;)				:	_PropertyGet = _OnMouseMoved
+					Case UCase(&quot;OnMousePressed&quot;)			:	_PropertyGet = _OnMousePressed
+					Case UCase(&quot;OnMouseReleased&quot;)			:	_PropertyGet = _OnMouseReleased
+					Case UCase(&quot;OnTextChanged&quot;)				:	_PropertyGet = _OnTextChanged
+					Case Else								:	_PropertyGet = &quot;&quot;
+				End Select
 			End If
 		Case UCase(&quot;OnNodeExpanded&quot;)
 			Select Case _ControlType
@@ -1644,6 +1954,16 @@ Const cstSubArgs = &quot;&quot;
 					End If
 				Case Else	:	GoTo CatchType
 			End Select
+		Case UCase(&quot;TabIndex&quot;)
+			Select Case _ControlType
+				Case CTLBUTTON, CTLCHECKBOX, CTLCOMBOBOX, CTLCURRENCYFIELD, CTLDATEFIELD, CTLFILECONTROL, CTLFIXEDTEXT _
+						, CTLFORMATTEDFIELD, CTLHYPERLINK, CTLIMAGECONTROL, CTLLISTBOX, CTLNUMERICFIELD, CTLPATTERNFIELD _
+						, CTLRADIOBUTTON, CTLSCROLLBAR, CTLTABLECONTROL, CTLTEXTFIELD, CTLTIMEFIELD, CTLTREECONTROL
+					If oSession.HasUnoProperty(_ControlModel, &quot;TabIndex&quot;) Then
+						If CBool(_ControlModel.TabStop) Or IsEmpty(_ControlModel.TabStop) Then _PropertyGet = _ControlModel.TabIndex Else _PropertyGet = -1
+					End If
+				Case Else	:	GoTo CatchType
+			End Select
 		Case UCase(&quot;Text&quot;)
 			Select Case _ControlType
 				Case CTLCOMBOBOX, CTLFILECONTROL, CTLFORMATTEDFIELD, CTLPATTERNFIELD, CTLTEXTFIELD
@@ -1658,13 +1978,19 @@ Const cstSubArgs = &quot;&quot;
 					If oSession.HasUnoProperty(_ControlModel, &quot;TriState&quot;) Then _PropertyGet = _ControlModel.TriState
 				Case Else	:	GoTo CatchType
 			End Select
+		Case &quot;URL&quot;
+			Select Case _ControlType
+				Case CTLHYPERLINK
+					If oSession.HasUnoProperty(_ControlModel, &quot;URL&quot;) Then _PropertyGet = _ControlModel.URL
+				Case Else	:	GoTo CatchType
+			End Select
 		Case UCase(&quot;Value&quot;)	&apos;	Default values are set here by control type, not in the 2nd argument
 			vGet = pvDefault
 			Select Case _ControlType
 				Case CTLBUTTON		&apos;Boolean, toggle buttons only
 					vGet = False
 					If oSession.HasUnoProperty(_ControlModel, &quot;Toggle&quot;) Then
-						If oSession.HasUnoProperty(_ControlModel, &quot;State&quot;) Then vGet = ( _ControlModel.State = 1 )
+						If oSession.HasUnoProperty(_ControlModel, &quot;State&quot;) And _ControlMOdel.Toggle Then vGet = ( _ControlModel.State = 1 )
 					End If
 				Case CTLCHECKBOX	&apos;0 = Not checked, 1 = Checked, 2 = Don&apos;t know
 					If oSession.HasUnoProperty(_ControlModel, &quot;State&quot;) Then vGet = _ControlModel.State Else vGet = 2
@@ -1738,6 +2064,24 @@ Const cstSubArgs = &quot;&quot;
 			_PropertyGet = vGet
 		Case UCase(&quot;Visible&quot;)
 			If oSession.HasUnoMethod(_ControlView, &quot;isVisible&quot;) Then _PropertyGet = CBool(_ControlView.isVisible())
+		Case UCase(&quot;Width&quot;)
+			If [_parent]._Displayed Then	&apos;	Convert PosSize view property from pixels to APPFONT units
+				_PropertyGet = SF_DialogUtils._ConvertToAppFont(_ControlView, False).Width
+			Else
+				If oSession.HasUNOProperty(_ControlModel, &quot;Width&quot;) Then _PropertyGet = _ControlModel.Width
+			End If
+		Case UCase(&quot;X&quot;)
+			If [_parent]._Displayed Then	&apos;	Convert PosSize view property from pixels to APPFONT units
+				_PropertyGet = SF_DialogUtils._ConvertToAppFont(_ControlView, True).X
+			Else
+				If oSession.HasUNOProperty(_ControlModel, &quot;PositionX&quot;) Then _PropertyGet = _ControlModel.PositionX
+			End If
+		Case UCase(&quot;Y&quot;)
+			If [_parent]._Displayed Then	&apos;	Convert PosSize view property from pixels to APPFONT units
+				_PropertyGet = SF_DialogUtils._ConvertToAppFont(_ControlView, True).Y
+			Else
+				If oSession.HasUNOProperty(_ControlModel, &quot;PositionY&quot;) Then _PropertyGet = _ControlModel.PositionY
+			End If
 		Case UCase(&quot;XControlModel&quot;)
 			Set _PropertyGet = _ControlModel
 		Case UCase(&quot;XControlView&quot;)
@@ -1773,8 +2117,12 @@ Private Function _PropertySet(Optional ByVal psProperty As String _
 Dim bSet As Boolean							&apos;	Return value
 Static oSession As Object					&apos;	Alias of SF_Session
 Dim vSet As Variant							&apos;	Value to set in UNO model or view property
+Dim vBorders As Variant						&apos;	Array of allowed Border values
 Dim vFormats As Variant						&apos;	Format property: output of _FormatsList()
 Dim iFormat As Integer						&apos;	Format property: index in vFormats
+Dim oNumberFormats As Object				&apos;	com.sun.star.util.XNumberFormats
+Dim lFormatKey As Long						&apos;	Format index for formatted fields
+Dim oLocale As Object						&apos;	com.sun.star.lang.Locale
 Dim vSelection As Variant					&apos;	Alias of Model.SelectedItems
 Dim vList As Variant						&apos;	Alias of Model.StringItemList
 Dim lIndex As Long							&apos;	Index in StringItemList
@@ -1794,6 +2142,21 @@ Const cstSubArgs = &quot;Value&quot;
 	If IsNull(oSession) Then Set oSession = ScriptForge.SF_Services.CreateScriptService(&quot;Session&quot;)
 	bSet = True
 	Select Case UCase(psProperty)
+		Case UCase(&quot;Border&quot;)
+			Select Case _ControlType
+				Case CTLCHECKBOX, CTLCOMBOBOX, CTLCURRENCYFIELD, CTLDATEFIELD, CTLFILECONTROL, CTLFIXEDTEXT, CTLFORMATTEDFIELD _
+						, CTLHYPERLINK, CTLIMAGECONTROL, CTLLISTBOX, CTLNUMERICFIELD, CTLPATTERNFIELD, CTLPROGRESSBAR _
+						, CTLRADIOBUTTON, CTLSCROLLBAR , CTLTABLECONTROL, CTLTEXTFIELD, CTLTIMEFIELD, CTLTREECONTROL
+					vBorders = Array(&quot;NONE&quot;, &quot;3D&quot;, &quot;FLAT&quot;)
+					If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;Border&quot;, V_STRING, vBorders) Then GoTo Finally
+					vSet = ScriptForge.SF_Array.IndexOf(vBorders, pvValue)
+					If oSession.HasUNOProperty(_ControlModel, &quot;Border&quot;) Then
+						_ControlModel.Border = vSet
+					ElseIf oSession.HasUNOProperty(_ControlModel, &quot;VisualEffect&quot;) Then	&apos;	Checkbox case
+						_ControlModel.VisualEffect = vSet
+					End If
+				Case Else	:	GoTo CatchType
+			End Select
 		Case UCase(&quot;Cancel&quot;)
 			Select Case _ControlType
 				Case CTLBUTTON
@@ -1806,7 +2169,7 @@ Const cstSubArgs = &quot;Value&quot;
 			End Select
 		Case UCase(&quot;Caption&quot;)
 			Select Case _ControlType
-				Case CTLBUTTON, CTLCHECKBOX, CTLFIXEDLINE, CTLFIXEDTEXT, CTLGROUPBOX, CTLRADIOBUTTON
+				Case CTLBUTTON, CTLCHECKBOX, CTLFIXEDLINE, CTLFIXEDTEXT, CTLGROUPBOX, CTLHYPERLINK, CTLRADIOBUTTON
 					If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;Caption&quot;, V_STRING) Then GoTo Finally
 					If oSession.HasUNOProperty(_ControlModel, &quot;Label&quot;) Then _ControlModel.Label = pvValue
 				Case Else	:	GoTo CatchType
@@ -1841,7 +2204,7 @@ Const cstSubArgs = &quot;Value&quot;
 		Case UCase(&quot;Format&quot;)
 			Select Case _ControlType
 				Case CTLDATEFIELD, CTLTIMEFIELD
-					vFormats = _FormatsList()
+					vFormats = SF_DialogUtils._FormatsList(_ControlType)
 					If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;Format&quot;, V_STRING, vFormats) Then GoTo Finally
 					iFormat = ScriptForge.SF_Array.IndexOf(vFormats, pvValue, CaseSensitive := False)
 					If oSession.HasUNOProperty(_ControlModel, &quot;DateFormat&quot;) Then
@@ -1849,8 +2212,25 @@ Const cstSubArgs = &quot;Value&quot;
 					ElseIf oSession.HasUNOProperty(_ControlModel, &quot;TimeFormat&quot;) Then
 						_ControlModel.TimeFormat = iFormat
 					End If
+				Case CTLFORMATTEDFIELD		&apos;	The format may exist already or not yet
+					If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;Format&quot;, V_STRING) Then GoTo Finally
+					If oSession.HasUNOProperty(_ControlModel, &quot;FormatsSupplier&quot;) Then
+						If Not IsNull(_ControlModel.FormatsSupplier) Then
+							Set oLocale = ScriptForge.SF_Utils._GetUnoService(&quot;FormatLocale&quot;)
+							Set oNumberFormats = _ControlModel.FormatsSupplier.getNumberFormats()
+							lFormatKey = oNumberFormats.queryKey(pvValue, oLocale, True)
+							If lFormatKey &lt; 0 Then		&apos;	Format not found
+								_ControlModel.FormatKey = oNumberFormats.addNew(pvValue, oLocale)
+							Else
+								_ControlModel.FormatKey = lFormatKey
+							End If
+						End If
+					End If
 				Case Else	:	GoTo CatchType
 			End Select
+		Case UCase(&quot;Height&quot;)
+			If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;Height&quot;, ScriptForge.V_NUMERIC) Then GoTo Catch
+			bSet = Resize(Height := pvValue)
 		Case UCase(&quot;ListIndex&quot;)
 			If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;ListIndex&quot;, ScriptForge.V_NUMERIC) Then GoTo Finally
 			Select Case _ControlType
@@ -1893,6 +2273,29 @@ Const cstSubArgs = &quot;Value&quot;
 					End If
 				Case Else	:	GoTo CatchType
 			End Select
+		Case UCase(&quot;OnActionPerformed&quot;), UCase(&quot;OnAdjustmentValueChanged&quot;), UCase(&quot;OnFocusGained&quot;), UCase(&quot;OnFocusLost&quot;) _
+				, UCase(&quot;OnItemStateChanged&quot;), UCase(&quot;OnKeyPressed&quot;), UCase(&quot;OnKeyReleased&quot;) _
+				, UCase(&quot;OnMouseDragged&quot;), UCase(&quot;OnMouseEntered&quot;), UCase(&quot;OnMouseExited&quot;), UCase(&quot;OnMouseMoved&quot;) _
+				, UCase(&quot;OnMousePressed&quot;), UCase(&quot;OnMouseReleased&quot;), UCase(&quot;OnTextChanged&quot;)
+			If Not ScriptForge.SF_Utils._Validate(pvValue, psProperty, V_STRING) Then GoTo Catch
+			&apos;	Check control type for not universal event types
+			Select Case UCase(psProperty)
+				Case UCase(&quot;OnActionPerformed&quot;), UCase(&quot;OnItemStateChanged&quot;)
+					Select Case _ControlType
+						Case CTLBUTTON, CTLCHECKBOX, CTLCOMBOBOX, CTLHYPERLINK, CTLLISTBOX, CTLRADIOBUTTON
+						Case Else	:	GoTo CatchType
+					End Select
+				Case UCase(&quot;OnAdjustmentValueChanged&quot;)
+					If _ControlType &lt;&gt; CTLSCROLLBAR Then GoTo CatchType
+				Case UCase(&quot;OnTextChanged&quot;)
+					Select Case _ControlType
+						Case CTLCOMBOBOX, CTLCURRENCYFIELD, CTLDATEFIELD, CTLFILECONTROL, CTLFORMATTEDFIELD _
+								, CTLNUMERICFIELD, CTLPATTERNFIELD, CTLTEXTFIELD, CTLTIMEFIELD, CTLTREECONTROL
+						Case Else	:	GoTo CatchType
+					End Select
+				Case Else
+			End Select
+			bSet = SF_DialogListener._SetOnProperty([Me], psProperty, pvValue)
 		Case UCase(&quot;OnNodeExpanded&quot;)
 			Select Case _ControlType
 				Case CTLTREECONTROL
@@ -1951,6 +2354,18 @@ Const cstSubArgs = &quot;Value&quot;
 					If oSession.HasUnoProperty(_ControlModel, &quot;StringItemList&quot;) Then _ControlModel.StringItemList = pvValue
 				Case Else	:	GoTo CatchType
 			End Select
+		Case UCase(&quot;TabIndex&quot;)
+			Select Case _ControlType
+				Case CTLBUTTON, CTLCHECKBOX, CTLCOMBOBOX, CTLCURRENCYFIELD, CTLDATEFIELD, CTLFILECONTROL, CTLFIXEDTEXT _
+						, CTLFORMATTEDFIELD, CTLHYPERLINK, CTLIMAGECONTROL, CTLLISTBOX, CTLNUMERICFIELD, CTLPATTERNFIELD _
+						, CTLRADIOBUTTON, CTLSCROLLBAR, CTLTABLECONTROL, CTLTEXTFIELD, CTLTIMEFIELD, CTLTREECONTROL
+					If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;TabIndex&quot;, ScriptForge.V_NUMERIC) Then GoTo Finally
+					If oSession.HasUnoProperty(_ControlModel, &quot;TabIndex&quot;) Then
+						_ControlModel.TabStop = ( pvValue  &gt; 0 )
+						_ControlModel.TabIndex = Iif(pvValue &gt; 0, pvValue, -1)
+					End If
+				Case Else	:	GoTo CatchType
+			End Select
 		Case UCase(&quot;TipText&quot;)
 			If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;TipText&quot;, V_STRING) Then GoTo Finally
 			If oSession.HasUnoProperty(_ControlModel, &quot;HelpText&quot;) Then _ControlModel.HelpText = pvValue
@@ -1961,12 +2376,19 @@ Const cstSubArgs = &quot;Value&quot;
 					If oSession.HasUnoProperty(_ControlModel, &quot;TriState&quot;) Then _ControlModel.TriState = pvValue
 				Case Else	:	GoTo CatchType
 			End Select
+		Case &quot;URL&quot;
+			Select Case _ControlType
+				Case CTLHYPERLINK
+					If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;URL&quot;, V_STRING) Then GoTo Finally
+					If oSession.HasUnoProperty(_ControlModel, &quot;URL&quot;) Then _ControlModel.URL = pvValue
+				Case Else	:	GoTo CatchType
+			End Select
 		Case UCase(&quot;Value&quot;)
 			Select Case _ControlType
 				Case CTLBUTTON		&apos;Boolean, toggle buttons only
 					If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;Value&quot;, ScriptForge.V_BOOLEAN) Then GoTo Finally
 					If oSession.HasUnoProperty(_ControlModel, &quot;Toggle&quot;) And oSession.HasUnoProperty(_ControlModel, &quot;State&quot;) Then
-						_ControlModel.State = Iif(pvValue, 1, 0)
+						If _ControlModel.Toggle Then _ControlModel.State = Iif(pvValue, 1, 0) Else _ControlModel.State = 2
 					End If
 				Case CTLCHECKBOX	&apos;0 = Not checked, 1 = Checked, 2 = Don&apos;t know
 					If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;Value&quot;, Array(ScriptForge.V_BOOLEAN, ScriptForge.V_NUMERIC), Array(0, 1, 2, True, False)) Then GoTo Finally
@@ -2055,10 +2477,18 @@ Const cstSubArgs = &quot;Value&quot;
 				End If
 				_ControlView.setVisible(pvValue)
 			End If
+		Case UCase(&quot;Width&quot;)
+			If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;Width&quot;, ScriptForge.V_NUMERIC) Then GoTo Catch
+			bSet = Resize(Width := pvValue)
+		Case &quot;X&quot;
+			If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;Width&quot;, ScriptForge.V_NUMERIC) Then GoTo Catch
+			bSet = Resize(Left := pvValue)
+		Case &quot;Y&quot;
+			If Not ScriptForge.SF_Utils._Validate(pvValue, &quot;Width&quot;, ScriptForge.V_NUMERIC) Then GoTo Catch
+			bSet = Resize(Top := pvValue)
 		Case Else
 			bSet = False
 	End Select
-
 Finally:
 	_PropertySet = bSet
 	ScriptForge.SF_Utils._ExitFunction(cstThisSub)

@@ -39,7 +39,7 @@
 #include <vcl/graphictools.hxx>
 #include <vcl/metaact.hxx>
 #include <vcl/graph.hxx> // for PDFExtOutDevData Graphic support
-#include <toolkit/helper/formpdfexport.hxx> // for PDFExtOutDevData Graphic support
+#include <vcl/formpdfexport.hxx> // for PDFExtOutDevData Graphic support
 #include <drawinglayer/primitive2d/drawinglayer_primitivetypes2d.hxx>
 #include <drawinglayer/primitive2d/textprimitive2d.hxx>
 #include <drawinglayer/primitive2d/PolygonHairlinePrimitive2D.hxx>
@@ -299,7 +299,7 @@ void VclMetafileProcessor2D::impStartSvtGraphicFill(SvtGraphicFill const* pSvtGr
 
         WriteSvtGraphicFill(aMemStm, *pSvtGraphicFill);
         mpMetaFile->AddAction(new MetaCommentAction(
-            "XPATHFILL_SEQ_BEGIN", 0, static_cast<const sal_uInt8*>(aMemStm.GetData()),
+            "XPATHFILL_SEQ_BEGIN"_ostr, 0, static_cast<const sal_uInt8*>(aMemStm.GetData()),
             aMemStm.TellEnd()));
         mnSvtGraphicFillCount++;
     }
@@ -310,7 +310,7 @@ void VclMetafileProcessor2D::impEndSvtGraphicFill(SvtGraphicFill const* pSvtGrap
     if (pSvtGraphicFill && mnSvtGraphicFillCount)
     {
         mnSvtGraphicFillCount--;
-        mpMetaFile->AddAction(new MetaCommentAction("XPATHFILL_SEQ_END"));
+        mpMetaFile->AddAction(new MetaCommentAction("XPATHFILL_SEQ_END"_ostr));
     }
 }
 
@@ -483,7 +483,7 @@ void VclMetafileProcessor2D::impStartSvtGraphicStroke(SvtGraphicStroke const* pS
 
         WriteSvtGraphicStroke(aMemStm, *pSvtGraphicStroke);
         mpMetaFile->AddAction(new MetaCommentAction(
-            "XPATHSTROKE_SEQ_BEGIN", 0, static_cast<const sal_uInt8*>(aMemStm.GetData()),
+            "XPATHSTROKE_SEQ_BEGIN"_ostr, 0, static_cast<const sal_uInt8*>(aMemStm.GetData()),
             aMemStm.TellEnd()));
         mnSvtGraphicStrokeCount++;
     }
@@ -494,7 +494,7 @@ void VclMetafileProcessor2D::impEndSvtGraphicStroke(SvtGraphicStroke const* pSvt
     if (pSvtGraphicStroke && mnSvtGraphicStrokeCount)
     {
         mnSvtGraphicStrokeCount--;
-        mpMetaFile->AddAction(new MetaCommentAction("XPATHSTROKE_SEQ_END"));
+        mpMetaFile->AddAction(new MetaCommentAction("XPATHSTROKE_SEQ_END"_ostr));
     }
 }
 
@@ -520,7 +520,8 @@ void VclMetafileProcessor2D::popList()
 }
 
 // init static break iterator
-uno::Reference<css::i18n::XBreakIterator> VclMetafileProcessor2D::mxBreakIterator;
+vcl::DeleteOnDeinit<uno::Reference<css::i18n::XBreakIterator>>
+    VclMetafileProcessor2D::mxBreakIterator;
 
 VclMetafileProcessor2D::VclMetafileProcessor2D(const geometry::ViewInformation2D& rViewInformation,
                                                OutputDevice& rOutDev)
@@ -692,17 +693,7 @@ VclMetafileProcessor2D::~VclMetafileProcessor2D()
 
     - UnoControlPDFExportContact is only created when PDFExtOutDevData is used at the
       target and uno control data is created in UnoControlPDFExportContact::do_PaintObject.
-      This may be added in primitive MetaFile renderer.
-      Adding support...
-      OOps, the necessary helper stuff is in svx/source/form/formpdxexport.cxx in namespace
-      svxform. Have to talk to FS if this has to be like that. Especially since
-      vcl::PDFWriter::AnyWidget is filled out, which is already part of vcl.
-      Wrote an eMail to FS, he is on vacation currently. I see no reason why not to move
-      that stuff to somewhere else, maybe tools or svtools ?!? We will see...
-      Moved to toolkit, so I have to link against it. I tried VCL first, but it did
-      not work since VCLUnoHelper::CreateFont is unresolved in VCL (!). Other than the name
-      may imply, it is defined in toolkit (!). Since toolkit is linked against VCL itself,
-      the lowest movement plane is toolkit.
+      This was added in primitive MetaFile renderer.
       Checked form control export, it works well. Done.
 
     - In goodies, in GraphicObject::Draw, when the used Graphic is linked, infos are
@@ -936,6 +927,9 @@ void VclMetafileProcessor2D::processBasePrimitive2D(const primitive2d::BasePrimi
 void VclMetafileProcessor2D::processObjectInfoPrimitive2D(
     primitive2d::ObjectInfoPrimitive2D const& rObjectInfoPrimitive2D)
 {
+    // tdf#154982 process content first, so this object overrides any nested one
+    process(rObjectInfoPrimitive2D.getChildren());
+
     // currently StructureTagPrimitive2D is only used for SdrObjects - have to
     // avoid adding Alt text if the SdrObject is not actually tagged, as it
     // would then end up on an unrelated structure element.
@@ -973,9 +967,6 @@ void VclMetafileProcessor2D::processObjectInfoPrimitive2D(
             }
         }
     }
-
-    // process content
-    process(rObjectInfoPrimitive2D.getChildren());
 }
 
 void VclMetafileProcessor2D::processGraphicPrimitive2D(
@@ -1092,7 +1083,7 @@ void VclMetafileProcessor2D::processControlPrimitive2D(
             uno::Reference<beans::XPropertySetInfo> xPropertyInfo(
                 xModelProperties.is() ? xModelProperties->getPropertySetInfo()
                                       : uno::Reference<beans::XPropertySetInfo>());
-            static const OUStringLiteral sPrintablePropertyName(u"Printable");
+            static constexpr OUString sPrintablePropertyName(u"Printable"_ustr);
 
             if (xPropertyInfo.is() && xPropertyInfo->hasPropertyByName(sPrintablePropertyName))
             {
@@ -1110,6 +1101,18 @@ void VclMetafileProcessor2D::processControlPrimitive2D(
     // PDF export and printing only for printable controls
     if (!bIsPrintableControl)
         return;
+
+    ::std::optional<sal_Int32> oAnchorParent;
+    if (mpPDFExtOutDevData)
+    {
+        if (rControlPrimitive.GetAnchorStructureElementKey())
+        {
+            sal_Int32 const id = mpPDFExtOutDevData->EnsureStructureElement(
+                rControlPrimitive.GetAnchorStructureElementKey());
+            oAnchorParent.emplace(mpPDFExtOutDevData->GetCurrentStructureElement());
+            mpPDFExtOutDevData->SetCurrentStructureElement(id);
+        }
+    }
 
     const bool bPDFExport(mpPDFExtOutDevData && mpPDFExtOutDevData->GetIsExportFormFields());
     bool bDoProcessRecursively(true);
@@ -1136,7 +1139,7 @@ void VclMetafileProcessor2D::processControlPrimitive2D(
                                                    mpOutputDevice->GetMapMode());
             pPDFControl->TextFont.SetFontSize(aFontSize);
 
-            mpPDFExtOutDevData->BeginStructureElement(vcl::PDFWriter::Form);
+            mpPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::Form);
             vcl::PDFWriter::StructAttributeValue role;
             switch (pPDFControl->Type)
             {
@@ -1163,6 +1166,10 @@ void VclMetafileProcessor2D::processControlPrimitive2D(
             }
             mpPDFExtOutDevData->CreateControl(*pPDFControl);
             mpPDFExtOutDevData->EndStructureElement();
+            if (oAnchorParent)
+            {
+                mpPDFExtOutDevData->SetCurrentStructureElement(*oAnchorParent);
+            }
 
             // no normal paint needed (see original UnoControlPDFExportContact::do_PaintObject);
             // do not process recursively
@@ -1183,8 +1190,13 @@ void VclMetafileProcessor2D::processControlPrimitive2D(
 
     if (mpPDFExtOutDevData)
     { // no corresponding PDF Form, use Figure instead
-        mpPDFExtOutDevData->BeginStructureElement(vcl::PDFWriter::Figure);
+        mpPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::Figure);
         mpPDFExtOutDevData->SetStructureAttribute(vcl::PDFWriter::Placement, vcl::PDFWriter::Block);
+        auto const range(rControlPrimitive.getB2DRange(getViewInformation2D()));
+        tools::Rectangle const aLogicRect(
+            basegfx::fround(range.getMinX()), basegfx::fround(range.getMinY()),
+            basegfx::fround(range.getMaxX()), basegfx::fround(range.getMaxY()));
+        mpPDFExtOutDevData->SetStructureBoundingBox(aLogicRect);
         OUString const& rAltText(rControlPrimitive.GetAltText());
         if (!rAltText.isEmpty())
         {
@@ -1240,6 +1252,10 @@ void VclMetafileProcessor2D::processControlPrimitive2D(
     if (mpPDFExtOutDevData)
     {
         mpPDFExtOutDevData->EndStructureElement();
+        if (oAnchorParent)
+        {
+            mpPDFExtOutDevData->SetCurrentStructureElement(*oAnchorParent);
+        }
     }
 }
 
@@ -1248,7 +1264,7 @@ void VclMetafileProcessor2D::processTextHierarchyFieldPrimitive2D(
 {
     // support for FIELD_SEQ_BEGIN, FIELD_SEQ_END and URL. It wraps text primitives (but is not limited to)
     // thus do the MetafileAction embedding stuff but just handle recursively.
-    const OString aCommentStringCommon("FIELD_SEQ_BEGIN");
+    static constexpr OString aCommentStringCommon("FIELD_SEQ_BEGIN"_ostr);
     OUString aURL;
 
     switch (rFieldPrimitive.getType())
@@ -1260,7 +1276,7 @@ void VclMetafileProcessor2D::processTextHierarchyFieldPrimitive2D(
         }
         case drawinglayer::primitive2d::FIELD_TYPE_PAGE:
         {
-            mpMetaFile->AddAction(new MetaCommentAction("FIELD_SEQ_BEGIN;PageField"));
+            mpMetaFile->AddAction(new MetaCommentAction("FIELD_SEQ_BEGIN;PageField"_ostr));
             break;
         }
         case drawinglayer::primitive2d::FIELD_TYPE_URL:
@@ -1284,7 +1300,7 @@ void VclMetafileProcessor2D::processTextHierarchyFieldPrimitive2D(
     process(rContent);
 
     // for the end comment the type is not relevant yet, they are all the same. Just add.
-    mpMetaFile->AddAction(new MetaCommentAction("FIELD_SEQ_END"));
+    mpMetaFile->AddAction(new MetaCommentAction("FIELD_SEQ_END"_ostr));
 
     if (!(mpPDFExtOutDevData
           && drawinglayer::primitive2d::FIELD_TYPE_URL == rFieldPrimitive.getType()))
@@ -1309,7 +1325,7 @@ void VclMetafileProcessor2D::processTextHierarchyLinePrimitive2D(
 {
     // process recursively and add MetaFile comment
     process(rLinePrimitive);
-    mpMetaFile->AddAction(new MetaCommentAction("XTEXT_EOL"));
+    mpMetaFile->AddAction(new MetaCommentAction("XTEXT_EOL"_ostr));
 }
 
 void VclMetafileProcessor2D::processTextHierarchyBulletPrimitive2D(
@@ -1319,14 +1335,14 @@ void VclMetafileProcessor2D::processTextHierarchyBulletPrimitive2D(
     if (mbInListItem)
     {
         maListElements.push(vcl::PDFWriter::LILabel);
-        mpPDFExtOutDevData->BeginStructureElement(vcl::PDFWriter::LILabel);
+        mpPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::LILabel);
     }
 
     // process recursively and add MetaFile comment
     process(rBulletPrimitive);
     // in Outliner::PaintBullet(), a MetafileComment for bullets is added, too. The
     // "XTEXT_EOC" is used, use here, too.
-    mpMetaFile->AddAction(new MetaCommentAction("XTEXT_EOC"));
+    mpMetaFile->AddAction(new MetaCommentAction("XTEXT_EOC"_ostr));
 
     if (mbInListItem)
     {
@@ -1342,7 +1358,7 @@ void VclMetafileProcessor2D::processTextHierarchyBulletPrimitive2D(
 void VclMetafileProcessor2D::processTextHierarchyParagraphPrimitive2D(
     const primitive2d::TextHierarchyParagraphPrimitive2D& rParagraphPrimitive)
 {
-    const OString aCommentString("XTEXT_EOP");
+    static constexpr OString aCommentString("XTEXT_EOP"_ostr);
     static bool bSuppressPDFExtOutDevDataSupport(false); // loplugin:constvars:ignore
 
     if (nullptr == mpPDFExtOutDevData || bSuppressPDFExtOutDevDataSupport)
@@ -1358,7 +1374,7 @@ void VclMetafileProcessor2D::processTextHierarchyParagraphPrimitive2D(
     {
         // No Tagged PDF -> Dump as Paragraph
         // Emulate data handling from old ImpEditEngine::Paint
-        mpPDFExtOutDevData->BeginStructureElement(vcl::PDFWriter::Paragraph);
+        mpPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::Paragraph);
 
         // Process recursively and add MetaFile comment
         process(rParagraphPrimitive);
@@ -1384,7 +1400,7 @@ void VclMetafileProcessor2D::processTextHierarchyParagraphPrimitive2D(
             for (sal_Int16 a(mnCurrentOutlineLevel); a != nNewOutlineLevel; ++a)
             {
                 maListElements.push(vcl::PDFWriter::List);
-                mpPDFExtOutDevData->BeginStructureElement(vcl::PDFWriter::List);
+                mpPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::List);
             }
         }
         else // if(nNewOutlineLevel < mnCurrentOutlineLevel)
@@ -1415,13 +1431,13 @@ void VclMetafileProcessor2D::processTextHierarchyParagraphPrimitive2D(
     {
         // Dump as ListItem
         maListElements.push(vcl::PDFWriter::ListItem);
-        mpPDFExtOutDevData->BeginStructureElement(vcl::PDFWriter::ListItem);
+        mpPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::ListItem);
         mbInListItem = true;
     }
     else
     {
         // Dump as Paragraph
-        mpPDFExtOutDevData->BeginStructureElement(vcl::PDFWriter::Paragraph);
+        mpPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::Paragraph);
     }
 
     // Process recursively and add MetaFile comment
@@ -1438,7 +1454,7 @@ void VclMetafileProcessor2D::processTextHierarchyBlockPrimitive2D(
     const primitive2d::TextHierarchyBlockPrimitive2D& rBlockPrimitive)
 {
     // add MetaFile comment, process recursively and add MetaFile comment
-    mpMetaFile->AddAction(new MetaCommentAction("XTEXT_PAINTSHAPE_BEGIN"));
+    mpMetaFile->AddAction(new MetaCommentAction("XTEXT_PAINTSHAPE_BEGIN"_ostr));
     process(rBlockPrimitive);
 
     if (mnCurrentOutlineLevel >= 0)
@@ -1450,7 +1466,7 @@ void VclMetafileProcessor2D::processTextHierarchyBlockPrimitive2D(
         }
     }
 
-    mpMetaFile->AddAction(new MetaCommentAction("XTEXT_PAINTSHAPE_END"));
+    mpMetaFile->AddAction(new MetaCommentAction("XTEXT_PAINTSHAPE_END"_ostr));
 }
 
 void VclMetafileProcessor2D::processTextSimplePortionPrimitive2D(
@@ -1465,7 +1481,7 @@ void VclMetafileProcessor2D::processTextSimplePortionPrimitive2D(
     if (mbInListItem && mbBulletPresent)
     {
         maListElements.push(vcl::PDFWriter::LIBody);
-        mpPDFExtOutDevData->BeginStructureElement(vcl::PDFWriter::LIBody);
+        mpPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::LIBody);
     }
 
     // directdraw of text simple portion; use default processing
@@ -1480,12 +1496,13 @@ void VclMetafileProcessor2D::processTextSimplePortionPrimitive2D(
     // #i101169# if(pTextDecoratedCandidate)
     {
         // support for TEXT_ MetaFile actions only for decorated texts
-        if (!mxBreakIterator.is())
+        if (!mxBreakIterator.get() || !mxBreakIterator.get()->get())
         {
             uno::Reference<uno::XComponentContext> xContext(
                 ::comphelper::getProcessComponentContext());
-            mxBreakIterator = i18n::BreakIterator::create(xContext);
+            mxBreakIterator.set(i18n::BreakIterator::create(xContext));
         }
+        auto& rBreakIterator = *mxBreakIterator.get()->get();
 
         const OUString& rTxt = rTextCandidate.getText();
         const sal_Int32 nTextLength(rTextCandidate.getTextLength()); // rTxt.getLength());
@@ -1496,16 +1513,16 @@ void VclMetafileProcessor2D::processTextSimplePortionPrimitive2D(
             const sal_Int32 nTextPosition(rTextCandidate.getTextPosition());
 
             sal_Int32 nDone;
-            sal_Int32 nNextCellBreak(mxBreakIterator->nextCharacters(
+            sal_Int32 nNextCellBreak(rBreakIterator.nextCharacters(
                 rTxt, nTextPosition, rLocale, css::i18n::CharacterIteratorMode::SKIPCELL, 0,
                 nDone));
-            css::i18n::Boundary nNextWordBoundary(mxBreakIterator->getWordBoundary(
+            css::i18n::Boundary nNextWordBoundary(rBreakIterator.getWordBoundary(
                 rTxt, nTextPosition, rLocale, css::i18n::WordType::ANY_WORD, true));
             sal_Int32 nNextSentenceBreak(
-                mxBreakIterator->endOfSentence(rTxt, nTextPosition, rLocale));
-            const OString aCommentStringA("XTEXT_EOC");
-            const OString aCommentStringB("XTEXT_EOW");
-            const OString aCommentStringC("XTEXT_EOS");
+                rBreakIterator.endOfSentence(rTxt, nTextPosition, rLocale));
+            static constexpr OStringLiteral aCommentStringA("XTEXT_EOC");
+            static constexpr OStringLiteral aCommentStringB("XTEXT_EOW");
+            static constexpr OStringLiteral aCommentStringC("XTEXT_EOS");
 
             for (sal_Int32 i(nTextPosition); i < nTextPosition + nTextLength; i++)
             {
@@ -1514,21 +1531,21 @@ void VclMetafileProcessor2D::processTextSimplePortionPrimitive2D(
                 {
                     mpMetaFile->AddAction(
                         new MetaCommentAction(aCommentStringA, i - nTextPosition));
-                    nNextCellBreak = mxBreakIterator->nextCharacters(
+                    nNextCellBreak = rBreakIterator.nextCharacters(
                         rTxt, i, rLocale, css::i18n::CharacterIteratorMode::SKIPCELL, 1, nDone);
                 }
                 if (i == nNextWordBoundary.endPos)
                 {
                     mpMetaFile->AddAction(
                         new MetaCommentAction(aCommentStringB, i - nTextPosition));
-                    nNextWordBoundary = mxBreakIterator->getWordBoundary(
+                    nNextWordBoundary = rBreakIterator.getWordBoundary(
                         rTxt, i + 1, rLocale, css::i18n::WordType::ANY_WORD, true);
                 }
                 if (i == nNextSentenceBreak)
                 {
                     mpMetaFile->AddAction(
                         new MetaCommentAction(aCommentStringC, i - nTextPosition));
-                    nNextSentenceBreak = mxBreakIterator->endOfSentence(rTxt, i + 1, rLocale);
+                    nNextSentenceBreak = rBreakIterator.endOfSentence(rTxt, i + 1, rLocale);
                 }
             }
         }
@@ -2064,7 +2081,7 @@ void VclMetafileProcessor2D::processPolyPolygonGradientPrimitive2D(
             // use it while all others will work on the created decomposition of the
             // gradient for compatibility - which are single-color filled polygons
             pMetaFile->AddAction(new MetaCommentAction(
-                "BGRAD_SEQ_BEGIN", 0, static_cast<const sal_uInt8*>(aMemStm.GetData()),
+                "BGRAD_SEQ_BEGIN"_ostr, 0, static_cast<const sal_uInt8*>(aMemStm.GetData()),
                 aMemStm.TellEnd()));
 
             // create MetaActionType::GRADIENTEX
@@ -2090,7 +2107,7 @@ void VclMetafileProcessor2D::processPolyPolygonGradientPrimitive2D(
         if (nullptr != pMetaFile && pMetaFile->getSVG())
         {
             // close the BGRAD_SEQ_* actions range
-            pMetaFile->AddAction(new MetaCommentAction("BGRAD_SEQ_END"));
+            pMetaFile->AddAction(new MetaCommentAction("BGRAD_SEQ_END"_ostr));
         }
 
         return;
@@ -2303,6 +2320,11 @@ void VclMetafileProcessor2D::processUnifiedTransparencePrimitive2D(
 
                 // various content, create content-metafile
                 GDIMetaFile aContentMetafile;
+
+                // tdf#155479 always forward propagate SVG flag for sub-content,
+                // it may contain cannotBeHandledByVCL gradients or transparencyGradients
+                aContentMetafile.setSVG(mpOutputDevice->GetConnectMetaFile()->getSVG());
+
                 const tools::Rectangle aPrimitiveRectangle(
                     impDumpToMetaFile(rContent, aContentMetafile));
 
@@ -2356,7 +2378,7 @@ void VclMetafileProcessor2D::processTransparencePrimitive2D(
     // try to identify a single FillGradientPrimitive2D in the
     // transparence part of the primitive. The hope is to handle
     // the more specific case in a better way than the general
-    // TransparencePrimitive2D which has strongly seperated
+    // TransparencePrimitive2D which has strongly separated
     // definitions for transparency and content, both completely
     // free definable by primitives
     const primitive2d::FillGradientPrimitive2D* pFiGradient(nullptr);
@@ -2383,7 +2405,7 @@ void VclMetafileProcessor2D::processTransparencePrimitive2D(
     if (nullptr != pFiGradient && pFiGradient->getFillGradient().cannotBeHandledByVCL())
     {
         // If not, reset the pointer and do not make use of this special case.
-        // Adding a gradient in incomplete state that canot be handled by vcl
+        // Adding a gradient in incomplete state that can not be handled by vcl
         // makes no sense and will knowingly lead to errors, especially with
         // MCGR extended possibilities. I checked what happens with the
         // MetaFloatTransparentAction added by OutputDevice::DrawTransparent, but
@@ -2393,14 +2415,13 @@ void VclMetafileProcessor2D::processTransparencePrimitive2D(
         //   - vcl/source/filter/wmf/emfwr.cxx -> same
         //   - vcl/source/filter/eps/eps.cxx -> same
         // NOTE: Theoretically it would be possible to make the new extended Gradient data
-        // available in metafiles, with the known limitiations (not backward comp, all
+        // available in metafiles, with the known limitations (not backward comp, all
         // places using it would need adaption, ...), but combined with knowing that nearly
         // all usages ignore or render it locally anyways makes that a non-option.
 
-        // tdf#155479 Yepp, as already mentionmed above we need to add
+        // tdf#155479 Yepp, as already mentioned above we need to add
         // some MCGR infos in case of SVG export, prepare that here
-        if (nullptr != mpOutputDevice->GetConnectMetaFile()
-            && mpOutputDevice->GetConnectMetaFile()->getSVG())
+        if (mpOutputDevice->GetConnectMetaFile()->getSVG())
         {
             // for SVG, do not use decompose & prep extra data
             bSVGTransparencyColorStops = true;
@@ -2419,11 +2440,9 @@ void VclMetafileProcessor2D::processTransparencePrimitive2D(
         // vcl/metafile, so add it directly. various content, create content-metafile
         GDIMetaFile aContentMetafile;
 
-        // tdf#155479 do not forget to forward SVG flag for sub-content
-        if (bSVGTransparencyColorStops)
-        {
-            aContentMetafile.setSVG(true);
-        }
+        // tdf#155479 always forward propagate SVG flag for sub-content,
+        // it may contain cannotBeHandledByVCL gradients or transparencyGradients
+        aContentMetafile.setSVG(mpOutputDevice->GetConnectMetaFile()->getSVG());
 
         const tools::Rectangle aPrimitiveRectangle(impDumpToMetaFile(rContent, aContentMetafile));
 
@@ -2502,8 +2521,11 @@ void VclMetafileProcessor2D::processTransparencePrimitive2D(
     // primitive2d::TransparencePrimitive2D& rTrCand();
     primitive2d::Primitive2DContainer xEmbedSeq{ &const_cast<primitive2d::TransparencePrimitive2D&>(
         rTransparenceCandidate) };
+
+    // tdf#158743 when embedding, do not forget to 1st apply the evtl. used
+    // CurrentTransformation (right-to-left, apply that 1st)
     xEmbedSeq = primitive2d::Primitive2DContainer{ new primitive2d::TransformPrimitive2D(
-        aEmbedding, std::move(xEmbedSeq)) };
+        aEmbedding * maCurrentTransformation, std::move(xEmbedSeq)) };
 
     // use empty ViewInformation & a useful MaximumQuadraticPixels
     // limitation to paint the content
@@ -2528,7 +2550,7 @@ void VclMetafileProcessor2D::processStructureTagPrimitive2D(
     // structured tag primitive
     const vcl::PDFWriter::StructElement& rTagElement(rStructureTagCandidate.getStructureElement());
     bool bTagUsed((vcl::PDFWriter::NonStructElement != rTagElement));
-    sal_Int32 nPreviousElement(-1);
+    ::std::optional<sal_Int32> oAnchorParent;
 
     if (!rStructureTagCandidate.isTaggedSdrObject())
     {
@@ -2540,21 +2562,14 @@ void VclMetafileProcessor2D::processStructureTagPrimitive2D(
         // foreground object: tag as regular structure element
         if (!rStructureTagCandidate.isBackground())
         {
-            if (rStructureTagCandidate.GetAnchorStructureElementId() != -1)
+            if (rStructureTagCandidate.GetAnchorStructureElementKey() != nullptr)
             {
-                auto const nTemp = mpPDFExtOutDevData->GetCurrentStructureElement();
-                bool const bSuccess = mpPDFExtOutDevData->SetCurrentStructureElement(
-                    rStructureTagCandidate.GetAnchorStructureElementId());
-                if (bSuccess)
-                {
-                    nPreviousElement = nTemp;
-                }
-                else
-                {
-                    SAL_WARN("drawinglayer", "anchor structure element not found?");
-                }
+                sal_Int32 const id = mpPDFExtOutDevData->EnsureStructureElement(
+                    rStructureTagCandidate.GetAnchorStructureElementKey());
+                oAnchorParent.emplace(mpPDFExtOutDevData->GetCurrentStructureElement());
+                mpPDFExtOutDevData->SetCurrentStructureElement(id);
             }
-            mpPDFExtOutDevData->BeginStructureElement(rTagElement);
+            mpPDFExtOutDevData->WrapBeginStructureElement(rTagElement);
             switch (rTagElement)
             {
                 case vcl::PDFWriter::H1:
@@ -2571,6 +2586,7 @@ void VclMetafileProcessor2D::processStructureTagPrimitive2D(
                 case vcl::PDFWriter::TableRow:
                 case vcl::PDFWriter::Formula:
                 case vcl::PDFWriter::Figure:
+                case vcl::PDFWriter::Annot:
                     mpPDFExtOutDevData->SetStructureAttribute(vcl::PDFWriter::Placement,
                                                               vcl::PDFWriter::Block);
                     break;
@@ -2614,7 +2630,7 @@ void VclMetafileProcessor2D::processStructureTagPrimitive2D(
         {
             // background image: tag as artifact
             if (rStructureTagCandidate.isImage())
-                mpPDFExtOutDevData->BeginStructureElement(vcl::PDFWriter::NonStructElement);
+                mpPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::NonStructElement);
             // any other background object: do not tag
             else
                 assert(false);
@@ -2628,13 +2644,9 @@ void VclMetafileProcessor2D::processStructureTagPrimitive2D(
     {
         // write end tag
         mpPDFExtOutDevData->EndStructureElement();
-        if (nPreviousElement != -1)
+        if (oAnchorParent)
         {
-#ifndef NDEBUG
-            bool const bSuccess =
-#endif
-                mpPDFExtOutDevData->SetCurrentStructureElement(nPreviousElement);
-            assert(bSuccess);
+            mpPDFExtOutDevData->SetCurrentStructureElement(*oAnchorParent);
         }
     }
 }

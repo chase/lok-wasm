@@ -81,7 +81,7 @@ ImpSvNumberInputScan::ImpSvNumberInputScan( SvNumberFormatter* pFormatterP )
         eSetType( SvNumFormatType::UNDEFINED )
 {
     pFormatter = pFormatterP;
-    pNullDate.reset( new Date(30,12,1899) );
+    moNullDate.emplace( 30,12,1899 );
     nYear2000 = SvNumberFormatter::GetYear2000Default();
     Reset();
     ChangeIntl();
@@ -658,7 +658,7 @@ short ImpSvNumberInputScan::GetMonth( const OUString& rString, sal_Int32& nPos )
                     res = sal::static_int_cast< short >(-(i+1)); // negative
                     break;  // for
                 }
-                else if (pUpperAbbrevMonthText[i] == "MRZ" && StringContainsWord( u"M\u00C4R", rString, nPos))
+                else if (pUpperAbbrevMonthText[i] == "MRZ" && StringContainsWord( u"M\u00C4R"_ustr, rString, nPos))
                 {   // And vice versa, accept MÄR for MRZ
                     nPos = nPos + 3;
                     res = sal::static_int_cast< short >(-(i+1)); // negative
@@ -711,12 +711,12 @@ short ImpSvNumberInputScan::GetMonth( const OUString& rString, sal_Int32& nPos )
                 {
                     // Locale data has Januar/Jan
                     assert(pUpperMonthText[0] == "JANUAR");
-                    if (StringContainsWord( u"J\u00C4NNER", rString, nPos))
+                    if (StringContainsWord( u"J\u00C4NNER"_ustr, rString, nPos))
                     {
                         nPos += 6;
                         res = 1;
                     }
-                    else if (StringContainsWord( u"J\u00C4N", rString, nPos))
+                    else if (StringContainsWord( u"J\u00C4N"_ustr, rString, nPos))
                     {
                         nPos += 3;
                         res = -1;
@@ -983,9 +983,9 @@ bool ImpSvNumberInputScan::GetTimeRef( double& fOutNumber,
                                      ) const
 {
     bool bRet = true;
-    sal_uInt16 nHour;
-    sal_uInt16 nMinute = 0;
-    sal_uInt16 nSecond = 0;
+    sal_Int32 nHour;
+    sal_Int32 nMinute = 0;
+    sal_Int32 nSecond = 0;
     double fSecond100 = 0.0;
     sal_uInt16 nStartIndex = nIndex;
 
@@ -1000,7 +1000,10 @@ bool ImpSvNumberInputScan::GetTimeRef( double& fOutNumber,
     }
     else if (nIndex - nStartIndex < nCnt)
     {
-        nHour   = static_cast<sal_uInt16>(sStrArray[nNums[nIndex++]].toInt32());
+        const OUString& rValStr = sStrArray[nNums[nIndex++]];
+        nHour = rValStr.toInt32();
+        if (nHour == 0 && rValStr != "0" && rValStr != "00")
+            bRet = false;   // overflow -> Text
     }
     else
     {
@@ -1031,7 +1034,10 @@ bool ImpSvNumberInputScan::GetTimeRef( double& fOutNumber,
     }
     else if (nIndex - nStartIndex < nCnt)
     {
-        nMinute = static_cast<sal_uInt16>(sStrArray[nNums[nIndex++]].toInt32());
+        const OUString& rValStr = sStrArray[nNums[nIndex++]];
+        nMinute = rValStr.toInt32();
+        if (nMinute == 0 && rValStr != "0" && rValStr != "00")
+            bRet = false;   // overflow -> Text
         if (!(eInputOptions & SvNumInputOptions::LAX_TIME) && !bAllowDuration
                 && nIndex > 1 && nMinute > 59)
             bRet = false;   // 1:60 or 1:123 is invalid, 123:1 or 0:123 is valid
@@ -1040,7 +1046,10 @@ bool ImpSvNumberInputScan::GetTimeRef( double& fOutNumber,
     }
     if (nIndex - nStartIndex < nCnt)
     {
-        nSecond = static_cast<sal_uInt16>(sStrArray[nNums[nIndex++]].toInt32());
+        const OUString& rValStr = sStrArray[nNums[nIndex++]];
+        nSecond = rValStr.toInt32();
+        if (nSecond == 0 && rValStr != "0" && rValStr != "00")
+            bRet = false;   // overflow -> Text
         if (!(eInputOptions & SvNumInputOptions::LAX_TIME) && !bAllowDuration
                 && nIndex > 1 && nSecond > 59 && !(nHour == 23 && nMinute == 59 && nSecond == 60))
             bRet = false;   // 1:60 or 1:123 or 1:1:123 is invalid, 123:1 or 123:1:1 or 0:0:123 is valid, or leap second
@@ -2265,7 +2274,7 @@ input for the following reasons:
 
         if ( res && pCal->isValid() )
         {
-            double fDiff = DateTime(*pNullDate) - pCal->getEpochStart();
+            double fDiff = DateTime::Sub( DateTime(*moNullDate), pCal->getEpochStart());
             fDays = ::rtl::math::approxFloor( pCal->getLocalDateTime() );
             fDays -= fDiff;
             nTryOrder = nFormatOrder; // break for
@@ -3834,14 +3843,7 @@ void ImpSvNumberInputScan::ChangeNullDate( const sal_uInt16 Day,
                                            const sal_uInt16 Month,
                                            const sal_Int16 Year )
 {
-    if ( pNullDate )
-    {
-        *pNullDate = Date(Day, Month, Year);
-    }
-    else
-    {
-        pNullDate.reset(new Date(Day, Month, Year));
-    }
+    moNullDate = Date(Day, Month, Year);
 }
 
 

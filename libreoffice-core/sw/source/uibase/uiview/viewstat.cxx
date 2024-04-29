@@ -228,7 +228,7 @@ void SwView::GetState(SfxItemSet &rSet)
 
                 if (nWhich == SID_ATTR_PAGE_ORIENTATION && comphelper::LibreOfficeKit::isActive())
                 {
-                    OString aPayload = ".uno:Orientation=";
+                    OString aPayload = ".uno:Orientation="_ostr;
                     if (rDesc.GetLandscape())
                     {
                         aPayload += "IsLandscape";
@@ -237,7 +237,7 @@ void SwView::GetState(SfxItemSet &rSet)
                     {
                         aPayload += "IsPortrait";
                     }
-                    libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, aPayload.getStr());
+                    libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, aPayload);
                 }
             }
             break;
@@ -262,9 +262,9 @@ void SwView::GetState(SfxItemSet &rSet)
                 if( !m_pShell )
                     SelectShell();
 
-                const SfxPoolItem* pState = m_pShell->GetSlotState(SID_UNDO);
-                if(pState)
-                    rSet.Put(*pState);
+                const SfxPoolItemHolder aResult(m_pShell->GetSlotState(SID_UNDO));
+                if(nullptr != aResult.getItem())
+                    rSet.Put(*aResult.getItem());
                 else
                     rSet.DisableItem(nWhich);
             }
@@ -361,9 +361,9 @@ void SwView::GetState(SfxItemSet &rSet)
             case SID_AVMEDIA_PLAYER :
             case FN_REDLINE_ACCEPT :
             {
-                SfxViewFrame* pVFrame = GetViewFrame();
-                if (pVFrame->KnowsChildWindow(nWhich))
-                    rSet.Put(SfxBoolItem( nWhich, pVFrame->HasChildWindow(nWhich)));
+                SfxViewFrame& rVFrame = GetViewFrame();
+                if (rVFrame.KnowsChildWindow(nWhich))
+                    rSet.Put(SfxBoolItem( nWhich, rVFrame.HasChildWindow(nWhich)));
                 else
                     rSet.DisableItem(nWhich);
             }
@@ -429,7 +429,8 @@ void SwView::GetState(SfxItemSet &rSet)
                        // except in the case of an inserted or deleted table row
                        ( !m_pWrtShell->IsCursorInTable() ||
                            (pTableBox = pCursor->Start()->GetNode().GetTableBox() ) == nullptr ||
-                           RedlineType::None == pTableBox->GetUpper()->GetRedlineType() ) )
+                           (RedlineType::None == pTableBox->GetRedlineType() &&
+                           RedlineType::None == pTableBox->GetUpper()->GetRedlineType()) ) )
                     {
                         bDisable = true;
                     }
@@ -440,11 +441,15 @@ void SwView::GetState(SfxItemSet &rSet)
                     rSet.DisableItem(nWhich);
                 if (comphelper::LibreOfficeKit::isActive())
                 {
-                    OString aPayload(".uno:TrackedChangeIndex=");
+                    // MACRO: Use track change ID instead of index {
+                    OString aPayload(".uno:CurrentTrackedChangeId=");
                     SwRedlineTable::size_type nRedline = 0;
-                    if (pDoc->getIDocumentRedlineAccess().GetRedline(*pCursor->Start(), &nRedline))
-                        aPayload += OString::number(nRedline);
+                    const SwRangeRedline* pR = pDoc->getIDocumentRedlineAccess().GetRedline(*pCursor->Start(), &nRedline);
+                    if (pR) {
+                        aPayload += OString::number(pR->GetId());
+                    }
                     libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, aPayload.getStr());
+                    // MACRO: }
                 }
             }
             break;
@@ -483,11 +488,11 @@ void SwView::GetState(SfxItemSet &rSet)
             {
                 if (!SvtCJKOptions::IsAnyEnabled())
                 {
-                    GetViewFrame()->GetBindings().SetVisibleState( nWhich, false );
+                    GetViewFrame().GetBindings().SetVisibleState( nWhich, false );
                     rSet.DisableItem(nWhich);
                 }
                 else
-                    GetViewFrame()->GetBindings().SetVisibleState( nWhich, true );
+                    GetViewFrame().GetBindings().SetVisibleState( nWhich, true );
             }
             break;
             case SID_MAIL_SCROLLBODY_PAGEDOWN:
@@ -508,7 +513,7 @@ void SwView::GetState(SfxItemSet &rSet)
                 if ( !SvtModuleOptions().IsModuleInstalled( SvtModuleOptions::EModule::DATABASE ) )
                     rSet.Put( SfxVisibilityItem( nWhich, false ) );
                 else
-                    rSet.Put( SfxBoolItem( nWhich, GetViewFrame()->HasChildWindow( SID_BROWSER ) ) );
+                    rSet.Put( SfxBoolItem( nWhich, GetViewFrame().HasChildWindow( SID_BROWSER ) ) );
             break;
             case SID_READONLY_MODE:
                 rSet.Put(SfxBoolItem(nWhich,
@@ -525,7 +530,7 @@ void SwView::GetState(SfxItemSet &rSet)
             }
             break;
             case FN_INSERT_FIELD_DATA_ONLY :
-                if(!m_bInMailMerge && !GetViewFrame()->HasChildWindow(nWhich))
+                if(!m_bInMailMerge && !GetViewFrame().HasChildWindow(nWhich))
                     rSet.DisableItem(nWhich);
             break;
             case FN_MAILMERGE_SENDMAIL_CHILDWINDOW:
@@ -569,14 +574,14 @@ void SwView::GetState(SfxItemSet &rSet)
                     }
                 }
                 //these slots are either re-mapped to text or object alignment
-                const SfxPoolItem* pState = nullptr;
+                SfxPoolItemHolder aResult;
                 if(nAlias)
-                    GetViewFrame()->GetDispatcher()->QueryState( nAlias, pState );
-                if(pState)
+                    GetViewFrame().GetDispatcher()->QueryState(nAlias, aResult);
+                if(nullptr != aResult.getItem())
                 {
                     if (!(m_nSelectionType & SelectionType::DrawObject))
                     {
-                        rSet.Put(pState->CloneSetWhich(nWhich));
+                        rSet.Put(aResult.getItem()->CloneSetWhich(nWhich));
                     }
                 }
                 else

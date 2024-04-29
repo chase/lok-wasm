@@ -93,6 +93,7 @@ class SW_DLLPUBLIC SwEditWin final : public vcl::DocWindow,
     std::unique_ptr<SdrDropMarkerOverlay> m_pUserMarker;
     SdrObject               *m_pUserMarkerObj;
     std::unique_ptr<SwShadowCursor, o3tl::default_delete<SwShadowCursor>> m_pShadCursor;
+    sal_Int16 m_eOrient;
     std::optional<Point>                m_xRowColumnSelectionStart; // save position where table row/column selection has been started
 
     SwView         &m_rView;
@@ -121,7 +122,8 @@ class SW_DLLPUBLIC SwEditWin final : public vcl::DocWindow,
                         selection position depending on what has changed lately
                      */
                     m_bUseInputLanguage: 1,
-                    m_bObjectSelect   : 1;
+                    m_bObjectSelect   : 1,
+                    m_bMaybeShowTooltipAfterBufferFlush : 1 = false;
 
     sal_uInt16          m_nKS_NUMDOWN_Count; // #i23725#
     sal_uInt16          m_nKS_NUMINDENTINC_Count;
@@ -286,6 +288,8 @@ public:
     /// Allows starting or ending a graphic move or resize action.
     void SetGraphicTwipPosition(bool bStart, const Point& rPosition);
 
+    bool IsViewReadonly() const;
+
     const SwTextFrame* GetSavedOutlineFrame() const { return m_pSavedOutlineFrame; }
     void SetSavedOutlineFrame(SwTextFrame* pFrame) { m_pSavedOutlineFrame = pFrame; }
     // bSubs set true, sets all sub level outline content to same visibility as nOutlinePos.
@@ -295,6 +299,7 @@ public:
     virtual FactoryFunction GetUITestFactory() const override;
 };
 
+extern bool g_bModePushed;
 extern bool g_bFrameDrag;
 extern bool g_bDDTimerStarted;
 extern bool g_bDDINetAttr;

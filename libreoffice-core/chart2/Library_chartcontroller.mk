@@ -33,10 +33,11 @@ $(eval $(call gb_Library_use_libraries,chartcontroller,\
     cppu \
     cppuhelper \
     drawinglayer \
+    docmodel \
     editeng \
     sal \
     salhelper \
-	i18nlangtag \
+    i18nlangtag \
     sfx \
     sot \
     svl \
@@ -184,7 +185,6 @@ $(eval $(call gb_Library_add_exception_objects,chartcontroller,\
     chart2/source/controller/main/ChartWindow \
     chart2/source/controller/main/CommandDispatchContainer \
     chart2/source/controller/main/CommandDispatch \
-    chart2/source/controller/main/ConfigurationAccess \
     chart2/source/controller/main/ControllerCommandDispatch \
     chart2/source/controller/main/DragMethod_Base \
     chart2/source/controller/main/DragMethod_PieSegment \

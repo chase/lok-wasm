@@ -25,12 +25,14 @@
 #include <xmloff/dllapi.h>
 #include <rtl/ustring.hxx>
 #include <com/sun/star/uno/Reference.h>
+#include <xmloff/maptype.hxx>
 #include <xmloff/styleexp.hxx>
 #include <xmloff/xmltoken.hxx>
 #include <xmloff/SinglePropertySetInfoCache.hxx>
 #include <xmloff/XMLTextListAutoStylePool.hxx>
-#include <o3tl/span.hxx>
+#include <o3tl/sorted_vector.hxx>
 #include <memory>
+#include <span>
 #include <vector>
 
 class XMLTextListsHelper;
@@ -41,7 +43,6 @@ class XMLTextNumRuleInfo;
 class XMLSectionExport;
 class XMLIndexMarkExport;
 class XMLRedlineExport;
-struct XMLPropertyState;
 class MultiPropertySetHelper;
 enum class XMLShapeExportFlags;
 class SvXMLExportPropertyMapper;
@@ -51,6 +52,7 @@ namespace com::sun::star
     namespace beans { class XPropertySet; class XPropertyState;
                       class XPropertySetInfo; }
     namespace container { class XEnumeration; class XIndexAccess; class XNameReplace; }
+    namespace drawing { class XShape; }
     namespace text { class XTextContent; class XTextRange; class XText;
                      class XFootnote; class XTextFrame; class XTextSection;
                      class XTextField; }
@@ -80,38 +82,41 @@ class XMLOFF_DLLPUBLIC XMLTextParagraphExport : public XMLStyleExport
     std::unique_ptr<Impl> m_xImpl;
 
 //  SvXMLExport& rExport;
-    SvXMLAutoStylePoolP& rAutoStylePool;
-    rtl::Reference < SvXMLExportPropertyMapper > xParaPropMapper;
-    rtl::Reference < SvXMLExportPropertyMapper > xTextPropMapper;
-    rtl::Reference < SvXMLExportPropertyMapper > xFramePropMapper;
-    rtl::Reference < SvXMLExportPropertyMapper > xAutoFramePropMapper;
-    rtl::Reference < SvXMLExportPropertyMapper > xSectionPropMapper;
-    rtl::Reference < SvXMLExportPropertyMapper > xRubyPropMapper;
+    SvXMLAutoStylePoolP& m_rAutoStylePool;
+    rtl::Reference < SvXMLExportPropertyMapper > m_xParaPropMapper;
+    rtl::Reference < SvXMLExportPropertyMapper > m_xTextPropMapper;
+    rtl::Reference < SvXMLExportPropertyMapper > m_xFramePropMapper;
+    rtl::Reference < SvXMLExportPropertyMapper > m_xAutoFramePropMapper;
+    rtl::Reference < SvXMLExportPropertyMapper > m_xSectionPropMapper;
+    rtl::Reference < SvXMLExportPropertyMapper > m_xRubyPropMapper;
 
-    const ::std::unique_ptr< ::xmloff::BoundFrameSets > pBoundFrameSets;
-    std::unique_ptr<XMLTextFieldExport>          pFieldExport;
+    const ::std::unique_ptr< ::xmloff::BoundFrameSets > m_pBoundFrameSets;
+    std::unique_ptr<XMLTextFieldExport>          m_pFieldExport;
     std::vector<OUString>                        maListElements;
     XMLTextListAutoStylePool                     maListAutoPool;
-    std::unique_ptr<XMLSectionExport>            pSectionExport;
-    std::unique_ptr<XMLIndexMarkExport>          pIndexMarkExport;
+    std::unique_ptr<XMLSectionExport>            m_pSectionExport;
+    std::unique_ptr<XMLIndexMarkExport>          m_pIndexMarkExport;
 
     /// may be NULL (if no redlines should be exported; e.g. in block mode)
-    std::unique_ptr<XMLRedlineExport> pRedlineExport;
+    std::unique_ptr<XMLRedlineExport> m_pRedlineExport;
 
-    bool                        bProgress;
+    bool                        m_bProgress;
 
-    bool                        bBlock;
+    bool                        m_bBlock;
 
     // keep track of open rubies
-    OUString                    sOpenRubyText;
-    OUString                    sOpenRubyCharStyle;
-    bool                        bOpenRuby;
+    OUString                    m_sOpenRubyText;
+    OUString                    m_sOpenRubyCharStyle;
+    bool                        m_bOpenRuby;
 
     XMLTextListsHelper* mpTextListsHelper;
     ::std::vector< std::unique_ptr<XMLTextListsHelper> > maTextListsHelperStack;
 
     struct DocumentListNodes;
     std::unique_ptr<DocumentListNodes> mpDocumentListNodes;
+
+    o3tl::sorted_vector<css::uno::Reference<css::text::XTextFrame>> maFrameRecurseGuard;
+    o3tl::sorted_vector<css::uno::Reference<css::drawing::XShape>> maShapeRecurseGuard;
 
     bool mbCollected;
 
@@ -134,55 +139,55 @@ public:
 private:
 
     // Implement Title/Description Elements UI (#i73249#)
-    static constexpr OUStringLiteral gsAnchorCharStyleName = u"AnchorCharStyleName";
-    static constexpr OUStringLiteral gsBeginNotice = u"BeginNotice";
-    static constexpr OUStringLiteral gsCategory = u"Category";
-    static constexpr OUStringLiteral gsCharStyleName = u"CharStyleName";
-    static constexpr OUStringLiteral gsCharStyleNames = u"CharStyleNames";
-    static constexpr OUStringLiteral gsEndNotice = u"EndNotice";
-    static constexpr OUStringLiteral gsFootnote = u"Footnote";
-    static constexpr OUStringLiteral gsFootnoteCounting = u"FootnoteCounting";
-    static constexpr OUStringLiteral gsNumberingType = u"NumberingType";
-    static constexpr OUStringLiteral gsPageDescName = u"PageDescName";
-    static constexpr OUStringLiteral gsPageStyleName = u"PageStyleName";
-    static constexpr OUStringLiteral gsParaStyleName = u"ParaStyleName";
-    static constexpr OUStringLiteral gsPositionEndOfDoc = u"PositionEndOfDoc";
-    static constexpr OUStringLiteral gsPrefix = u"Prefix";
-    static constexpr OUStringLiteral gsReferenceId = u"ReferenceId";
-    static constexpr OUStringLiteral gsStartAt = u"StartAt";
-    static constexpr OUStringLiteral gsSuffix = u"Suffix";
-    static constexpr OUStringLiteral gsTextEndnoteService = u"com.sun.star.text.Endnote";
-    static constexpr OUStringLiteral gsTextSection = u"TextSection";
+    static constexpr OUString gsAnchorCharStyleName = u"AnchorCharStyleName"_ustr;
+    static constexpr OUString gsBeginNotice = u"BeginNotice"_ustr;
+    static constexpr OUString gsCategory = u"Category"_ustr;
+    static constexpr OUString gsCharStyleName = u"CharStyleName"_ustr;
+    static constexpr OUString gsCharStyleNames = u"CharStyleNames"_ustr;
+    static constexpr OUString gsEndNotice = u"EndNotice"_ustr;
+    static constexpr OUString gsFootnote = u"Footnote"_ustr;
+    static constexpr OUString gsFootnoteCounting = u"FootnoteCounting"_ustr;
+    static constexpr OUString gsNumberingType = u"NumberingType"_ustr;
+    static constexpr OUString gsPageDescName = u"PageDescName"_ustr;
+    static constexpr OUString gsPageStyleName = u"PageStyleName"_ustr;
+    static constexpr OUString gsParaStyleName = u"ParaStyleName"_ustr;
+    static constexpr OUString gsPositionEndOfDoc = u"PositionEndOfDoc"_ustr;
+    static constexpr OUString gsPrefix = u"Prefix"_ustr;
+    static constexpr OUString gsReferenceId = u"ReferenceId"_ustr;
+    static constexpr OUString gsStartAt = u"StartAt"_ustr;
+    static constexpr OUString gsSuffix = u"Suffix"_ustr;
+    static constexpr OUString gsTextEndnoteService = u"com.sun.star.text.Endnote"_ustr;
+    static constexpr OUString gsTextSection = u"TextSection"_ustr;
 
 protected:
-    static constexpr OUStringLiteral gsFrameStyleName = u"FrameStyleName";
-    SinglePropertySetInfoCache aCharStyleNamesPropInfoCache;
+    static constexpr OUString gsFrameStyleName = u"FrameStyleName"_ustr;
+    SinglePropertySetInfoCache m_aCharStyleNamesPropInfoCache;
 
-    SvXMLAutoStylePoolP& GetAutoStylePool() { return rAutoStylePool; }
-    const SvXMLAutoStylePoolP& GetAutoStylePool() const { return rAutoStylePool; }
+    SvXMLAutoStylePoolP& GetAutoStylePool() { return m_rAutoStylePool; }
+    const SvXMLAutoStylePoolP& GetAutoStylePool() const { return m_rAutoStylePool; }
 
 public:
     const rtl::Reference < SvXMLExportPropertyMapper >& GetParaPropMapper() const
     {
-        return xParaPropMapper;
+        return m_xParaPropMapper;
     }
 
     const rtl::Reference < SvXMLExportPropertyMapper >& GetTextPropMapper() const
     {
-        return xTextPropMapper;
+        return m_xTextPropMapper;
     }
 
     const rtl::Reference < SvXMLExportPropertyMapper >& GetAutoFramePropMapper() const
     {
-        return xAutoFramePropMapper;
+        return m_xAutoFramePropMapper;
     }
     const rtl::Reference < SvXMLExportPropertyMapper >& GetSectionPropMapper() const
     {
-        return xSectionPropMapper;
+        return m_xSectionPropMapper;
     }
     const rtl::Reference < SvXMLExportPropertyMapper >& GetRubyPropMapper() const
     {
-        return xRubyPropMapper;
+        return m_xRubyPropMapper;
     }
 
     OUString FindTextStyle(
@@ -209,7 +214,7 @@ protected:
 
     void exportPageFrames( bool bProgress );
     void exportFrameFrames( bool bAutoStyles, bool bProgress,
-            const css::uno::Reference< css::text::XTextFrame > *pParentTxtFrame );
+            const css::uno::Reference< css::text::XTextFrame >& rParentTxtFrame );
 
     void exportNumStyles( bool bUsed );
 
@@ -390,14 +395,14 @@ public:
     void Add(
         XmlStyleFamily nFamily,
         const css::uno::Reference< css::beans::XPropertySet > & rPropSet,
-        o3tl::span<const XMLPropertyState> aAddStates = {}, bool bDontSeek = false );
+        std::span<const XMLPropertyState> aAddStates = {}, bool bDontSeek = false );
 
     /// find style name for specified family and parent
     OUString Find(
         XmlStyleFamily nFamily,
         const css::uno::Reference< css::beans::XPropertySet > & rPropSet,
         const OUString& rParent,
-        const o3tl::span<const XMLPropertyState> aAddStates = {} ) const;
+        const std::span<const XMLPropertyState> aAddStates = {} ) const;
 
     static SvXMLExportPropertyMapper *CreateShapeExtPropMapper(
                                                 SvXMLExport& rExport );
@@ -503,13 +508,13 @@ public:
     }
     inline const XMLTextListAutoStylePool& GetListAutoStylePool() const;
 
-    void SetBlockMode( bool bSet ) { bBlock = bSet; }
-    bool IsBlockMode() const { return bBlock; }
+    void SetBlockMode( bool bSet ) { m_bBlock = bSet; }
+    bool IsBlockMode() const { return m_bBlock; }
 
 
     const rtl::Reference < SvXMLExportPropertyMapper >& GetParagraphPropertyMapper() const
     {
-        return xParaPropMapper;
+        return m_xParaPropMapper;
     }
 
 
@@ -528,7 +533,7 @@ public:
         const css::uno::Reference< css::container::XIndexAccess> & rShapes,
         const rtl::Reference<xmloff::OFormLayerXMLExport>& xFormExport );
 
-    SinglePropertySetInfoCache& GetCharStyleNamesPropInfoCache() { return aCharStyleNamesPropInfoCache; }
+    SinglePropertySetInfoCache& GetCharStyleNamesPropInfoCache() { return m_aCharStyleNamesPropInfoCache; }
 
     void PushNewTextListsHelper();
 
@@ -539,6 +544,7 @@ private:
     bool ExportListId() const;
 
         XMLTextParagraphExport(XMLTextParagraphExport const &) = delete;
+
 };
 
 inline const XMLTextListAutoStylePool&

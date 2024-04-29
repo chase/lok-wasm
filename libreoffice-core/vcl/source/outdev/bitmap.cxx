@@ -27,8 +27,8 @@
 #include <vcl/metaact.hxx>
 #include <vcl/skia/SkiaHelper.hxx>
 #include <vcl/virdev.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 
-#include <bitmap/BitmapWriteAccess.hxx>
 #include <bitmap/bmpfast.hxx>
 #include <drawmode.hxx>
 #include <salbmp.hxx>
@@ -190,93 +190,92 @@ void OutputDevice::DrawBitmap( const Point& rDestPt, const Size& rDestSize,
 
 Bitmap OutputDevice::GetBitmap( const Point& rSrcPt, const Size& rSize ) const
 {
-    Bitmap  aBmp;
+    if ( !mpGraphics && !AcquireGraphics() )
+        return Bitmap();
+
+    assert(mpGraphics);
+
     tools::Long    nX = ImplLogicXToDevicePixel( rSrcPt.X() );
     tools::Long    nY = ImplLogicYToDevicePixel( rSrcPt.Y() );
     tools::Long    nWidth = ImplLogicWidthToDevicePixel( rSize.Width() );
     tools::Long    nHeight = ImplLogicHeightToDevicePixel( rSize.Height() );
+    if ( nWidth <= 0 || nHeight <= 0 || nX > (mnOutWidth + mnOutOffX) || nY > (mnOutHeight + mnOutOffY))
+        return Bitmap();
 
-    if ( mpGraphics || AcquireGraphics() )
+    Bitmap  aBmp;
+    tools::Rectangle   aRect( Point( nX, nY ), Size( nWidth, nHeight ) );
+    bool bClipped = false;
+
+    // X-Coordinate outside of draw area?
+    if ( nX < mnOutOffX )
     {
-        assert(mpGraphics);
+        nWidth -= ( mnOutOffX - nX );
+        nX = mnOutOffX;
+        bClipped = true;
+    }
 
-        if ( nWidth > 0 && nHeight  > 0 && nX <= (mnOutWidth + mnOutOffX) && nY <= (mnOutHeight + mnOutOffY))
+    // Y-Coordinate outside of draw area?
+    if ( nY < mnOutOffY )
+    {
+        nHeight -= ( mnOutOffY - nY );
+        nY = mnOutOffY;
+        bClipped = true;
+    }
+
+    // Width outside of draw area?
+    if ( (nWidth + nX) > (mnOutWidth + mnOutOffX) )
+    {
+        nWidth  = mnOutOffX + mnOutWidth - nX;
+        bClipped = true;
+    }
+
+    // Height outside of draw area?
+    if ( (nHeight + nY) > (mnOutHeight + mnOutOffY) )
+    {
+        nHeight = mnOutOffY + mnOutHeight - nY;
+        bClipped = true;
+    }
+
+    if ( bClipped )
+    {
+        // If the visible part has been clipped, we have to create a
+        // Bitmap with the correct size in which we copy the clipped
+        // Bitmap to the correct position.
+        ScopedVclPtrInstance< VirtualDevice > aVDev(  *this  );
+
+        if ( aVDev->SetOutputSizePixel( aRect.GetSize() ) )
         {
-            tools::Rectangle   aRect( Point( nX, nY ), Size( nWidth, nHeight ) );
-            bool        bClipped = false;
-
-            // X-Coordinate outside of draw area?
-            if ( nX < mnOutOffX )
+            if ( aVDev->mpGraphics || aVDev->AcquireGraphics() )
             {
-                nWidth -= ( mnOutOffX - nX );
-                nX = mnOutOffX;
-                bClipped = true;
-            }
-
-            // Y-Coordinate outside of draw area?
-            if ( nY < mnOutOffY )
-            {
-                nHeight -= ( mnOutOffY - nY );
-                nY = mnOutOffY;
-                bClipped = true;
-            }
-
-            // Width outside of draw area?
-            if ( (nWidth + nX) > (mnOutWidth + mnOutOffX) )
-            {
-                nWidth  = mnOutOffX + mnOutWidth - nX;
-                bClipped = true;
-            }
-
-            // Height outside of draw area?
-            if ( (nHeight + nY) > (mnOutHeight + mnOutOffY) )
-            {
-                nHeight = mnOutOffY + mnOutHeight - nY;
-                bClipped = true;
-            }
-
-            if ( bClipped )
-            {
-                // If the visible part has been clipped, we have to create a
-                // Bitmap with the correct size in which we copy the clipped
-                // Bitmap to the correct position.
-                ScopedVclPtrInstance< VirtualDevice > aVDev(  *this  );
-
-                if ( aVDev->SetOutputSizePixel( aRect.GetSize() ) )
+                if ( (nWidth > 0) && (nHeight > 0) )
                 {
-                    if ( aVDev->mpGraphics || aVDev->AcquireGraphics() )
-                    {
-                        if ( (nWidth > 0) && (nHeight > 0) )
-                        {
-                            SalTwoRect aPosAry(nX, nY, nWidth, nHeight,
-                                              (aRect.Left() < mnOutOffX) ? (mnOutOffX - aRect.Left()) : 0L,
-                                              (aRect.Top() < mnOutOffY) ? (mnOutOffY - aRect.Top()) : 0L,
-                                              nWidth, nHeight);
-                            aVDev->mpGraphics->CopyBits(aPosAry, *mpGraphics, *this, *this);
-                        }
-                        else
-                        {
-                            OSL_ENSURE(false, "CopyBits with zero or negative width or height");
-                        }
-
-                        aBmp = aVDev->GetBitmap( Point(), aVDev->GetOutputSizePixel() );
-                    }
-                    else
-                        bClipped = false;
+                    SalTwoRect aPosAry(nX, nY, nWidth, nHeight,
+                                      (aRect.Left() < mnOutOffX) ? (mnOutOffX - aRect.Left()) : 0L,
+                                      (aRect.Top() < mnOutOffY) ? (mnOutOffY - aRect.Top()) : 0L,
+                                      nWidth, nHeight);
+                    aVDev->mpGraphics->CopyBits(aPosAry, *mpGraphics, *this, *this);
                 }
                 else
-                    bClipped = false;
-            }
-
-            if ( !bClipped )
-            {
-                std::shared_ptr<SalBitmap> pSalBmp = mpGraphics->GetBitmap( nX, nY, nWidth, nHeight, *this );
-
-                if( pSalBmp )
                 {
-                    aBmp.ImplSetSalBitmap(pSalBmp);
+                    OSL_ENSURE(false, "CopyBits with zero or negative width or height");
                 }
+
+                aBmp = aVDev->GetBitmap( Point(), aVDev->GetOutputSizePixel() );
             }
+            else
+                bClipped = false;
+        }
+        else
+            bClipped = false;
+    }
+
+    if ( !bClipped )
+    {
+        std::shared_ptr<SalBitmap> pSalBmp = mpGraphics->GetBitmap( nX, nY, nWidth, nHeight, *this );
+
+        if( pSalBmp )
+        {
+            aBmp.ImplSetSalBitmap(pSalBmp);
         }
     }
 
@@ -332,7 +331,7 @@ void OutputDevice::DrawDeviceAlphaBitmap( const Bitmap& rBmp, const AlphaMask& r
             alpha.Mirror(mirrorFlags);
         }
         SalBitmap* pSalSrcBmp = bitmap.ImplGetSalBitmap().get();
-        SalBitmap* pSalAlphaBmp = alpha.ImplGetSalBitmap().get();
+        SalBitmap* pSalAlphaBmp = alpha.GetBitmap().ImplGetSalBitmap().get();
 
         // #i83087# Naturally, system alpha blending (SalGraphics::DrawAlphaBitmap) cannot work
         // with separate alpha VDev
@@ -340,12 +339,14 @@ void OutputDevice::DrawDeviceAlphaBitmap( const Bitmap& rBmp, const AlphaMask& r
         // try to blend the alpha bitmap with the alpha virtual device
         if (mpAlphaVDev)
         {
+            if (ImplLogicToDevicePixel(aOutSz).IsEmpty()) // nothing to draw
+                return;
             Bitmap aAlphaBitmap( mpAlphaVDev->GetBitmap( aRelPt, aOutSz ) );
             if (SalBitmap* pSalAlphaBmp2 = aAlphaBitmap.ImplGetSalBitmap().get())
             {
                 if (mpGraphics->BlendAlphaBitmap(aTR, *pSalSrcBmp, *pSalAlphaBmp, *pSalAlphaBmp2, *this))
                 {
-                    mpAlphaVDev->BlendBitmap(aTR, rAlpha);
+                    mpAlphaVDev->BlendBitmap(aTR, rAlpha.GetBitmap());
                     return;
                 }
             }
@@ -358,7 +359,7 @@ void OutputDevice::DrawDeviceAlphaBitmap( const Bitmap& rBmp, const AlphaMask& r
 
         // we need to make sure Skia never reaches this slow code path
         // (but do not fail in no-op cases)
-        assert(!SkiaHelper::isVCLSkiaEnabled()
+        assert(!SkiaHelper::isVCLSkiaEnabled() || !SkiaHelper::isAlphaMaskBlendingEnabled()
             || tools::Rectangle(Point(), rBmp.GetSizePixel())
                 .Intersection(tools::Rectangle(rSrcPtPixel, rSrcSizePixel)).IsEmpty()
             || mpAlphaVDev->LogicToPixel(mpAlphaVDev->GetOutputSizePixel()).IsEmpty());
@@ -429,7 +430,7 @@ private:
         {
             double fTemp = std::abs((nOffset + i) * fReverseScale);
 
-            pMap[i] = MinMax(nDstLocation + tools::Long(fTemp), 0, nSampleRange);
+            pMap[i] = std::clamp(nDstLocation + tools::Long(fTemp), tools::Long(0), nSampleRange);
             pMapOffset[i] = static_cast<tools::Long>((fTemp - pMap[i]) * 128.0);
         }
     }
@@ -442,26 +443,26 @@ public:
             const tools::Long nDstWidth,
             const tools::Long nDstHeight)
     {
-        if (pSource && pSourceAlpha && pDestination)
-        {
-            ScanlineFormat nSourceFormat = pSource->GetScanlineFormat();
-            ScanlineFormat nDestinationFormat = pDestination->GetScanlineFormat();
+        if (!pSource || !pSourceAlpha || !pDestination)
+            return false;
 
-            switch (nSourceFormat)
+        ScanlineFormat nSourceFormat = pSource->GetScanlineFormat();
+        ScanlineFormat nDestinationFormat = pDestination->GetScanlineFormat();
+
+        switch (nSourceFormat)
+        {
+            case ScanlineFormat::N24BitTcRgb:
+            case ScanlineFormat::N24BitTcBgr:
             {
-                case ScanlineFormat::N24BitTcRgb:
-                case ScanlineFormat::N24BitTcBgr:
+                if ( (nSourceFormat == ScanlineFormat::N24BitTcBgr && nDestinationFormat == ScanlineFormat::N32BitTcBgra)
+                  || (nSourceFormat == ScanlineFormat::N24BitTcRgb && nDestinationFormat == ScanlineFormat::N32BitTcRgba))
                 {
-                    if ( (nSourceFormat == ScanlineFormat::N24BitTcBgr && nDestinationFormat == ScanlineFormat::N32BitTcBgra)
-                      || (nSourceFormat == ScanlineFormat::N24BitTcRgb && nDestinationFormat == ScanlineFormat::N32BitTcRgba))
-                    {
-                        blendBitmap24(pDestination, pSource, pSourceAlpha, nDstWidth, nDstHeight);
-                        return true;
-                    }
+                    blendBitmap24(pDestination, pSource, pSourceAlpha, nDstWidth, nDstHeight);
+                    return true;
                 }
-                break;
-                default: break;
             }
+            break;
+            default: break;
         }
         return false;
     }
@@ -649,11 +650,11 @@ void OutputDevice::DrawDeviceAlphaBitmapSlowPath(const Bitmap& rBitmap,
 
     TradScaleContext aTradContext(aDstRect, aBmpRect, aOutSize, nOffX, nOffY);
 
-    Bitmap::ScopedReadAccess pBitmapReadAccess(const_cast<Bitmap&>(rBitmap));
-    AlphaMask::ScopedReadAccess pAlphaReadAccess(const_cast<AlphaMask&>(rAlpha));
+    BitmapScopedReadAccess pBitmapReadAccess(rBitmap);
+    BitmapScopedReadAccess pAlphaReadAccess(rAlpha);
 
-    DBG_ASSERT( pAlphaReadAccess->GetScanlineFormat() == ScanlineFormat::N8BitPal,
-                "OutputDevice::ImplDrawAlpha(): non-8bit alpha no longer supported!" );
+    SAL_WARN_IF(pAlphaReadAccess->GetScanlineFormat() != ScanlineFormat::N8BitPal, "vcl.gdi", "non-8bit alpha no longer supported!");
+    assert(pAlphaReadAccess->GetScanlineFormat() == ScanlineFormat::N8BitPal);
 
     // #i38887# reading from screen may sometimes fail
     if (aBmp.ImplGetSalBitmap())
@@ -766,9 +767,8 @@ namespace
         aSrcCol = pP->GetColor( nMapY, nMapX );
         aDstCol = pB->GetColor( nY, nX );
 
-        // vcl stores transparency, not alpha - invert it
-        const sal_uInt8 nSrcAlpha = 255 - pA->GetPixelIndex( nMapY, nMapX );
-        const sal_uInt8 nDstAlpha = 255 - pAlphaW->GetPixelIndex( nY, nX );
+        const sal_uInt8 nSrcAlpha = pA->GetPixelIndex( nMapY, nMapX );
+        const sal_uInt8 nDstAlpha = pAlphaW->GetPixelIndex( nY, nX );
 
         // Perform porter-duff compositing 'over' operation
 
@@ -821,7 +821,7 @@ Bitmap OutputDevice::BlendBitmapWithAlpha(
     {
         Bitmap aDither(aBmp.GetSizePixel(), vcl::PixelFormat::N8_BPP);
         BitmapColor         aIndex( 0 );
-        Bitmap::ScopedReadAccess pB(aBmp);
+        BitmapScopedReadAccess pB(aBmp);
         BitmapScopedWriteAccess pW(aDither);
 
         if (pB && pP && pA && pW && pAlphaW)
@@ -848,9 +848,9 @@ Bitmap OutputDevice::BlendBitmapWithAlpha(
                                               nVCLBLut[ ( nVCLLut[ aDstCol.GetBlue() ] + nD ) >> 16 ] ) );
                     pW->SetPixelOnData( pScanline, nX, aIndex );
 
-                    aIndex.SetIndex( static_cast<sal_uInt8>( nVCLRLut[ ( nVCLLut[ 255-nResAlpha ] + nD ) >> 16 ] +
-                                                   nVCLGLut[ ( nVCLLut[ 255-nResAlpha ] + nD ) >> 16 ] +
-                                                   nVCLBLut[ ( nVCLLut[ 255-nResAlpha ] + nD ) >> 16 ] ) );
+                    aIndex.SetIndex( static_cast<sal_uInt8>( nVCLRLut[ ( nVCLLut[ nResAlpha ] + nD ) >> 16 ] +
+                                                   nVCLGLut[ ( nVCLLut[ nResAlpha ] + nD ) >> 16 ] +
+                                                   nVCLBLut[ ( nVCLLut[ nResAlpha ] + nD ) >> 16 ] ) );
                     pAlphaW->SetPixelOnData( pScanlineAlpha, nX, aIndex );
                 }
             }
@@ -876,7 +876,7 @@ Bitmap OutputDevice::BlendBitmapWithAlpha(
                     aDstCol = AlphaBlend( nX, nY, nMapX, nMapY, pP, pA, pB.get(), pAlphaW.get(), nResAlpha );
 
                     pB->SetPixelOnData(pScanlineB, nX, pB->GetBestMatchingColor(aDstCol));
-                    pAlphaW->SetPixelOnData(pScanlineAlpha, nX, pB->GetBestMatchingColor(Color(255L-nResAlpha, 255L-nResAlpha, 255L-nResAlpha)));
+                    pAlphaW->SetPixelOnData(pScanlineAlpha, nX, pB->GetBestMatchingColor(Color(nResAlpha, nResAlpha, nResAlpha)));
                 }
             }
         }
@@ -906,138 +906,88 @@ Bitmap OutputDevice::BlendBitmap(
             const sal_Int32*    pMapX,
             const sal_Int32*    pMapY )
 {
-    BitmapColor aDstCol;
-    Bitmap      res;
-    int         nX, nY;
+    if( !pP || !pA )
+        return aBmp;
 
     if( GetBitCount() <= 8 )
     {
         Bitmap aDither(aBmp.GetSizePixel(), vcl::PixelFormat::N8_BPP);
         BitmapColor         aIndex( 0 );
-        Bitmap::ScopedReadAccess pB(aBmp);
+        BitmapScopedReadAccess pB(aBmp);
         BitmapScopedWriteAccess pW(aDither);
 
-        if( pB && pP && pA && pW )
+        for( int nY = 0, nOutY = nOffY; nY < nDstHeight; nY++, nOutY++ )
         {
-            int nOutY;
-
-            for( nY = 0, nOutY = nOffY; nY < nDstHeight; nY++, nOutY++ )
+            tools::Long nMapY = pMapY[ nY ];
+            if (bVMirr)
             {
-                tools::Long nMapY = pMapY[ nY ];
-                if (bVMirr)
-                {
-                    nMapY = aBmpRect.Bottom() - nMapY;
-                }
-                const tools::Long nModY = ( nOutY & 0x0FL ) << 4;
-                int nOutX;
+                nMapY = aBmpRect.Bottom() - nMapY;
+            }
+            const tools::Long nModY = ( nOutY & 0x0FL ) << 4;
 
-                Scanline pScanline = pW->GetScanline(nY);
-                Scanline pScanlineAlpha = pA->GetScanline(nMapY);
-                for( nX = 0, nOutX = nOffX; nX < nDstWidth; nX++, nOutX++ )
+            Scanline pScanline = pW->GetScanline(nY);
+            Scanline pScanlineAlpha = pA->GetScanline(nMapY);
+            for( int nX = 0, nOutX = nOffX; nX < nDstWidth; nX++, nOutX++ )
+            {
+                tools::Long  nMapX = pMapX[ nX ];
+                if (bHMirr)
                 {
-                    tools::Long  nMapX = pMapX[ nX ];
-                    if (bHMirr)
-                    {
-                        nMapX = aBmpRect.Right() - nMapX;
-                    }
-                    const sal_uLong nD = nVCLDitherLut[ nModY | ( nOutX & 0x0FL ) ];
-
-                    aDstCol = pB->GetColor( nY, nX );
-                    aDstCol.Merge( pP->GetColor( nMapY, nMapX ), pA->GetIndexFromData( pScanlineAlpha, nMapX ) );
-                    aIndex.SetIndex( static_cast<sal_uInt8>( nVCLRLut[ ( nVCLLut[ aDstCol.GetRed() ] + nD ) >> 16 ] +
-                                              nVCLGLut[ ( nVCLLut[ aDstCol.GetGreen() ] + nD ) >> 16 ] +
-                                              nVCLBLut[ ( nVCLLut[ aDstCol.GetBlue() ] + nD ) >> 16 ] ) );
-                    pW->SetPixelOnData( pScanline, nX, aIndex );
+                    nMapX = aBmpRect.Right() - nMapX;
                 }
+                const sal_uLong nD = nVCLDitherLut[ nModY | ( nOutX & 0x0FL ) ];
+
+                BitmapColor aDstCol = pB->GetColor( nY, nX );
+                aDstCol.Merge( pP->GetColor( nMapY, nMapX ), 255 - pA->GetIndexFromData( pScanlineAlpha, nMapX ) );
+                aIndex.SetIndex( static_cast<sal_uInt8>( nVCLRLut[ ( nVCLLut[ aDstCol.GetRed() ] + nD ) >> 16 ] +
+                                          nVCLGLut[ ( nVCLLut[ aDstCol.GetGreen() ] + nD ) >> 16 ] +
+                                          nVCLBLut[ ( nVCLLut[ aDstCol.GetBlue() ] + nD ) >> 16 ] ) );
+                pW->SetPixelOnData( pScanline, nX, aIndex );
             }
         }
 
         pB.reset();
         pW.reset();
-        res = aDither;
+        return aDither;
     }
-    else
+
+    BitmapScopedWriteAccess pB(aBmp);
+
+    bool bFastBlend = false;
+    if (!bHMirr && !bVMirr)
     {
-        BitmapScopedWriteAccess pB(aBmp);
+        SalTwoRect aTR(aBmpRect.Left(), aBmpRect.Top(), aBmpRect.GetWidth(), aBmpRect.GetHeight(),
+                        nOffX, nOffY, aOutSz.Width(), aOutSz.Height());
 
-        bool bFastBlend = false;
-        if( pP && pA && pB && !bHMirr && !bVMirr )
+        bFastBlend = ImplFastBitmapBlending(*pB, *pP, *pA, aTR);
+    }
+
+    if (!bFastBlend)
+    {
+        for (int nY = 0; nY < nDstHeight; nY++)
         {
-            SalTwoRect aTR(aBmpRect.Left(), aBmpRect.Top(), aBmpRect.GetWidth(), aBmpRect.GetHeight(),
-                            nOffX, nOffY, aOutSz.Width(), aOutSz.Height());
+            tools::Long  nMapY = pMapY[nY];
 
-            bFastBlend = ImplFastBitmapBlending( *pB,*pP,*pA, aTR );
-        }
+            if (bVMirr)
+                nMapY = aBmpRect.Bottom() - nMapY;
 
-        if( pP && pA && pB && !bFastBlend )
-        {
-            switch( pP->GetScanlineFormat() )
+            Scanline pAScan = pA->GetScanline(nMapY);
+            Scanline pBScan = pB->GetScanline(nY);
+            for(int nX = 0; nX < nDstWidth; nX++)
             {
-                case ScanlineFormat::N8BitPal:
-                    {
-                        for( nY = 0; nY < nDstHeight; nY++ )
-                        {
-                            tools::Long  nMapY = pMapY[ nY ];
-                            if ( bVMirr )
-                            {
-                                nMapY = aBmpRect.Bottom() - nMapY;
-                            }
-                            Scanline pPScan = pP->GetScanline( nMapY );
-                            Scanline pAScan = pA->GetScanline( nMapY );
-                            Scanline pBScan = pB->GetScanline( nY );
+                tools::Long nMapX = pMapX[nX];
 
-                            for( nX = 0; nX < nDstWidth; nX++ )
-                            {
-                                tools::Long nMapX = pMapX[ nX ];
+                if (bHMirr)
+                    nMapX = aBmpRect.Right() - nMapX;
 
-                                if ( bHMirr )
-                                {
-                                    nMapX = aBmpRect.Right() - nMapX;
-                                }
-                                aDstCol = pB->GetPixelFromData( pBScan, nX );
-                                aDstCol.Merge( pP->GetPaletteColor( pPScan[ nMapX ] ), pAScan[ nMapX ] );
-                                pB->SetPixelOnData( pBScan, nX, aDstCol );
-                            }
-                        }
-                    }
-                    break;
-
-                default:
-                {
-
-                    for( nY = 0; nY < nDstHeight; nY++ )
-                    {
-                        tools::Long  nMapY = pMapY[ nY ];
-
-                        if ( bVMirr )
-                        {
-                            nMapY = aBmpRect.Bottom() - nMapY;
-                        }
-                        Scanline pAScan = pA->GetScanline( nMapY );
-                        Scanline pBScan = pB->GetScanline(nY);
-                        for( nX = 0; nX < nDstWidth; nX++ )
-                        {
-                            tools::Long nMapX = pMapX[ nX ];
-
-                            if ( bHMirr )
-                            {
-                                nMapX = aBmpRect.Right() - nMapX;
-                            }
-                            aDstCol = pB->GetPixelFromData( pBScan, nX );
-                            aDstCol.Merge( pP->GetColor( nMapY, nMapX ), pAScan[ nMapX ] );
-                            pB->SetPixelOnData( pBScan, nX, aDstCol );
-                        }
-                    }
-                }
-                break;
+                BitmapColor aDstCol = pB->GetPixelFromData(pBScan, nX);
+                aDstCol.Merge(pP->GetColor(nMapY, nMapX), pAScan[nMapX]);
+                pB->SetPixelOnData(pBScan, nX, aDstCol);
             }
         }
-
-        pB.reset();
-        res = aBmp;
     }
 
-    return res;
+    pB.reset();
+    return aBmp;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

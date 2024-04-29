@@ -272,7 +272,14 @@ void SwUndoInsTable::UndoImpl(::sw::UndoRedoContext & rContext)
     SwNodeIndex aIdx( rDoc.GetNodes(), m_nStartNode );
 
     SwTableNode* pTableNd = aIdx.GetNode().GetTableNode();
-    OSL_ENSURE( pTableNd, "no TableNode" );
+    // tdf#159025 skip undo if SwTableNode is a nullptr
+    // I don't know what causes the SwTableNode to be a nullptr in the
+    // case of tdf#159025, but at least stop the crashing by skipping
+    // this undo request.
+    SAL_WARN_IF( !pTableNd, "sw.core", "no TableNode" );
+    if( !pTableNd )
+        return;
+
     pTableNd->DelFrames();
 
     if( IDocumentRedlineAccess::IsRedlineOn( GetRedlineFlags() ))
@@ -384,7 +391,7 @@ SwTableToTextSave::SwTableToTextSave( SwDoc& rDoc, SwNodeOffset nNd, SwNodeOffse
     {
         m_pHstry.reset( new SwHistory );
 
-        m_pHstry->Add( pNd->GetTextColl(), nNd, SwNodeType::Text );
+        m_pHstry->AddColl(pNd->GetTextColl(), nNd, SwNodeType::Text);
         if ( pNd->GetpSwpHints() )
         {
             m_pHstry->CopyAttr( pNd->GetpSwpHints(), nNd, 0,
@@ -434,10 +441,8 @@ SwUndoTableToText::SwUndoTableToText( const SwTable& rTable, sal_Unicode cCh )
     const SwTableNode* pTableNd = rTable.GetTableNode();
     SwNodeOffset nTableStt = pTableNd->GetIndex(), nTableEnd = pTableNd->EndOfSectionIndex();
 
-    const SwFrameFormats& rFrameFormatTable = *pTableNd->GetDoc().GetSpzFrameFormats();
-    for( size_t n = 0; n < rFrameFormatTable.size(); ++n )
+    for(sw::SpzFrameFormat* pFormat: *pTableNd->GetDoc().GetSpzFrameFormats())
     {
-        SwFrameFormat* pFormat = rFrameFormatTable[ n ];
         SwFormatAnchor const*const pAnchor = &pFormat->GetAnchor();
         SwNode const*const pAnchorNode = pAnchor->GetAnchorNode();
         if (pAnchorNode &&
@@ -550,8 +555,13 @@ SwTableNode* SwNodes::UndoTableToText( SwNodeOffset nSttNd, SwNodeOffset nEndNd,
         SwNodeOffset n, nTmpEnd = aEndIdx.GetIndex();
         for( n = pTableNd->GetIndex() + 1; n < nTmpEnd; ++n )
         {
-            if( ( pNd = (*this)[ n ] )->IsContentNode() )
+            pNd = (*this)[n];
+            if (pNd->IsContentNode())
+            {
                 static_cast<SwContentNode*>(pNd)->DelFrames(nullptr);
+            }
+            // tdf#147938 reset merge flag in nodes
+            pNd->SetRedlineMergeFlag(SwNode::Merge::None);
             pNd->m_pStartOfSection = pTableNd;
         }
     }
@@ -563,7 +573,6 @@ SwTableNode* SwNodes::UndoTableToText( SwNodeOffset nSttNd, SwNodeOffset nEndNd,
     SwTableLine* pLine = new SwTableLine( pLineFormat, rSavedData.size(), nullptr );
     pTableNd->GetTable().GetTabLines().insert( pTableNd->GetTable().GetTabLines().begin(), pLine );
 
-    const std::shared_ptr<sw::mark::ContentIdxStore> pContentStore(sw::mark::ContentIdxStore::Create());
     for( size_t n = rSavedData.size(); n; )
     {
         const SwTableToTextSave *const pSave = rSavedData[ --n ].get();
@@ -578,6 +587,9 @@ SwTableNode* SwNodes::UndoTableToText( SwNodeOffset nSttNd, SwNodeOffset nEndNd,
             OSL_ENSURE( pTextNd, "Where is my TextNode?" );
             SwContentIndex aCntPos( pTextNd, pSave->m_nContent - 1 );
 
+            const std::shared_ptr<sw::mark::ContentIdxStore> pContentStore(sw::mark::ContentIdxStore::Create());
+            pContentStore->Save(GetDoc(), aSttIdx.GetIndex(), aCntPos.GetIndex());
+
             pTextNd->EraseText( aCntPos, 1 );
 
             std::function<void (SwTextNode *, sw::mark::RestoreMode, bool)> restoreFunc(
@@ -590,14 +602,6 @@ SwTableNode* SwNodes::UndoTableToText( SwNodeOffset nSttNd, SwNodeOffset nEndNd,
                 });
             pTextNd->SplitContentNode(
                         SwPosition(aSttIdx, aCntPos), &restoreFunc);
-        }
-        else
-        {
-            pContentStore->Clear();
-            if( pTextNd )
-            {
-                pContentStore->Save(GetDoc(), aSttIdx.GetIndex(), SAL_MAX_INT32);
-            }
         }
 
         if( pTextNd )
@@ -916,12 +920,11 @@ sal_uInt16 SaveTable::AddFormat( SwFrameFormat* pFormat, bool bIsLine )
             pSet->ClearItem( RES_BOXATR_VALUE );
             if (m_pSwTable && m_bSaveFormula)
             {
-                SwTableFormulaUpdate aMsgHint(m_pSwTable);
-                aMsgHint.m_eFlags = TBL_BOXNAME;
+                const_cast<SwTable*>(m_pSwTable)->SwitchFormulasToExternalRepresentation();
                 SwTableBoxFormula* pFormulaItem = const_cast<SwTableBoxFormula*>(pItem);
-                pFormulaItem->ChgDefinedIn( pFormat );
-                pFormulaItem->ChangeState( &aMsgHint );
-                pFormulaItem->ChgDefinedIn( nullptr );
+                pFormulaItem->ChgDefinedIn(pFormat);
+                pFormulaItem->ToRelBoxNm(m_pSwTable);
+                pFormulaItem->ChgDefinedIn(nullptr);
             }
         }
         nRet = m_aSets.size();
@@ -1657,10 +1660,7 @@ void SwUndoTableNdsChg::UndoImpl(::sw::UndoRedoContext & rContext)
 
     SwTableNode *const pTableNd = aIdx.GetNode().GetTableNode();
     OSL_ENSURE( pTableNd, "no TableNode" );
-
-    SwTableFormulaUpdate aMsgHint( &pTableNd->GetTable() );
-    aMsgHint.m_eFlags = TBL_BOXPTR;
-    rDoc.getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+    pTableNd->GetTable().SwitchFormulasToInternalRepresentation();
 
     CHECK_TABLE( pTableNd->GetTable() )
 
@@ -1824,10 +1824,8 @@ void SwUndoTableNdsChg::RedoImpl(::sw::UndoRedoContext & rContext)
     case SwUndoId::ROW_DELETE:
     case SwUndoId::COL_DELETE:
         {
-            SwTableFormulaUpdate aMsgHint( &pTableNd->GetTable() );
-            aMsgHint.m_eFlags = TBL_BOXPTR;
-            rDoc.getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
             SwTable &rTable = pTableNd->GetTable();
+            rTable.SwitchFormulasToInternalRepresentation();
             if( m_nMax > m_nMin && rTable.IsNewModel() )
                 rTable.PrepareDeleteCol( m_nMin, m_nMax );
             rTable.DeleteSel( &rDoc, aSelBoxes, nullptr, this, true, true );
@@ -1865,9 +1863,7 @@ void SwUndoTableMerge::UndoImpl(::sw::UndoRedoContext & rContext)
     SwTableNode *const pTableNd = aIdx.GetNode().GetTableNode();
     OSL_ENSURE( pTableNd, "no TableNode" );
 
-    SwTableFormulaUpdate aMsgHint( &pTableNd->GetTable() );
-    aMsgHint.m_eFlags = TBL_BOXPTR;
-    rDoc.getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+    pTableNd->GetTable().SwitchFormulasToInternalRepresentation();
 
     // ? TL_CHART2: notification or locking of controller required ?
 
@@ -2047,7 +2043,7 @@ void SwUndoTableMerge::SaveCollection( const SwTableBox& rBox )
     if( !pCNd )
         pCNd = aIdx.GetNodes().GoNext( &aIdx );
 
-    m_pHistory->Add( pCNd->GetFormatColl(), aIdx.GetIndex(), pCNd->GetNodeType());
+    m_pHistory->AddColl(pCNd->GetFormatColl(), aIdx.GetIndex(), pCNd->GetNodeType());
     if( pCNd->HasSwAttrSet() )
         m_pHistory->CopyFormatAttr( *pCNd->GetpSwAttrSet(), aIdx.GetIndex() );
 }
@@ -2074,7 +2070,7 @@ SwUndoTableNumFormat::SwUndoTableNumFormat( const SwTableBox& rBox,
 
         m_pHistory.reset(new SwHistory);
         SwRegHistory aRHst( *rBox.GetSttNd(), m_pHistory.get() );
-        // always save all text atttibutes because of possibly overlapping
+        // always save all text attributes because of possibly overlapping
         // areas of on/off
         m_pHistory->CopyAttr( pTNd->GetpSwpHints(), m_nNodePos, 0,
                             pTNd->GetText().getLength(), true );
@@ -2300,8 +2296,7 @@ void SwUndoTableNumFormat::RedoImpl(::sw::UndoRedoContext & rContext)
     if( m_bNewFormula )
     {
         // No matter what was set, an update of the table is always a good idea
-        SwTableFormulaUpdate aTableUpdate( &pSttNd->FindTableNode()->GetTable() );
-        rDoc.getIDocumentFieldsAccess().UpdateTableFields( &aTableUpdate );
+        rDoc.getIDocumentFieldsAccess().UpdateTableFields(&pSttNd->FindTableNode()->GetTable());
     }
 
     if( !pNd->IsContentNode() )
@@ -2604,11 +2599,17 @@ void SwUndoTableCpyTable::AddBoxBefore( const SwTableBox& rBox, bool bDelContent
     if( bDelContent )
     {
         SwNodeIndex aInsIdx( *rBox.GetSttNd(), 1 );
-        pDoc->GetNodes().MakeTextNode( aInsIdx.GetNode(), pDoc->GetDfltTextFormatColl() );
+        SwTextNode *const pNewNode(pDoc->GetNodes().MakeTextNode(aInsIdx.GetNode(), pDoc->GetDfltTextFormatColl()));
         SwPaM aPam( aInsIdx.GetNode(), *rBox.GetSttNd()->EndOfSectionNode() );
 
         if( !pDoc->getIDocumentRedlineAccess().IsRedlineOn() )
+        {
+            {   // move cursors to new node which precedes aPam
+                SwPosition const pos(*pNewNode, 0);
+                ::PaMCorrAbs(aPam, pos);
+            }
             pEntry->pUndo = std::make_unique<SwUndoDelete>(aPam, SwDeleteFlags::Default, true);
+        }
     }
 
     pEntry->pBoxNumAttr = std::make_unique<SfxItemSetFixed<
@@ -2632,6 +2633,13 @@ void SwUndoTableCpyTable::AddBoxAfter( const SwTableBox& rBox, const SwNodeIndex
         SwDoc* pDoc = rBox.GetFrameFormat()->GetDoc();
         DEBUG_REDLINE( pDoc )
 
+        {   // move cursors to first node which was inserted
+            SwPaM pam(SwNodeIndex(*rBox.GetSttNd(), 1));
+            assert(pam.GetPoint()->GetNode().IsTextNode());
+            pam.SetMark();
+            pam.Move(fnMoveForward, GoInContent);
+            ::PaMCorrAbs(pam, *pam.GetPoint());
+        }
         if( pDoc->getIDocumentRedlineAccess().IsRedlineOn() )
         {
             SwPosition aTmpPos( rIdx );
@@ -2857,10 +2865,7 @@ void SwUndoSplitTable::UndoImpl(::sw::UndoRedoContext & rContext)
     rPtPos.Assign( m_nTableNode + m_nOffset );
     SwTableNode* pTableNd = rPtPos.GetNode().GetTableNode();
     SwTable& rTable = pTableNd->GetTable();
-
-    SwTableFormulaUpdate aMsgHint( &rTable );
-    aMsgHint.m_eFlags = TBL_BOXPTR;
-    pDoc->getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+    rTable.SwitchFormulasToInternalRepresentation();
 
     switch( m_nMode )
     {
@@ -2974,10 +2979,7 @@ void SwUndoMergeTable::UndoImpl(::sw::UndoRedoContext & rContext)
 
     SwTableNode* pTableNd = rPtPos.GetNode().FindTableNode();
     SwTable* pTable = &pTableNd->GetTable();
-
-    SwTableFormulaUpdate aMsgHint( pTable );
-    aMsgHint.m_eFlags = TBL_BOXPTR;
-    pDoc->getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+    pTable->SwitchFormulasToInternalRepresentation();
 
     // get lines for layout update
     FndBox_ aFndBox( nullptr, nullptr );

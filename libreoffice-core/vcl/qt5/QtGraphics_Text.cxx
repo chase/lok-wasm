@@ -28,7 +28,6 @@
 #include <unx/geninst.h>
 #include <unx/fontmanager.hxx>
 #include <unx/glyphcache.hxx>
-#include <unx/genpspgraphics.h>
 
 #include <sallayout.hxx>
 #include <font/PhysicalFontCollection.hxx>
@@ -56,7 +55,7 @@ void QtGraphics::SetFont(LogicalFontInstance* pReqFont, int nFallbackLevel)
     m_pTextStyle[nFallbackLevel] = static_cast<QtFont*>(pReqFont);
 }
 
-void QtGraphics::GetFontMetric(ImplFontMetricDataRef& rFMD, int nFallbackLevel)
+void QtGraphics::GetFontMetric(FontMetricDataRef& rFMD, int nFallbackLevel)
 {
     QRawFont aRawFont(QRawFont::fromFont(*m_pTextStyle[nFallbackLevel]));
     QtFontFace::fillAttributesFromQFont(*m_pTextStyle[nFallbackLevel], *rFMD);
@@ -94,23 +93,23 @@ void QtGraphics::GetDevFontList(vcl::font::PhysicalFontCollection* pPFC)
     FreetypeManager& rFontManager = FreetypeManager::get();
     psp::PrintFontManager& rMgr = psp::PrintFontManager::get();
     ::std::vector<psp::fontID> aList;
-    psp::FastPrintFontInfo aInfo;
 
     rMgr.getFontList(aList);
-    for (auto const& elem : aList)
+    for (auto const& nFontId : aList)
     {
-        if (!rMgr.getFontFastInfo(elem, aInfo))
+        auto const* pFont = rMgr.getFont(nFontId);
+        if (!pFont)
             continue;
 
         // normalize face number to the FreetypeManager
-        int nFaceNum = rMgr.getFontFaceNumber(aInfo.m_nID);
-        int nVariantNum = rMgr.getFontFaceVariation(aInfo.m_nID);
+        int nFaceNum = rMgr.getFontFaceNumber(nFontId);
+        int nVariantNum = rMgr.getFontFaceVariation(nFontId);
 
         // inform FreetypeManager about this font provided by the PsPrint subsystem
-        FontAttributes aDFA = GenPspGraphics::Info2FontAttributes(aInfo);
-        aDFA.IncreaseQualityBy(4096);
-        const OString& rFileName = rMgr.getFontFileSysPath(aInfo.m_nID);
-        rFontManager.AddFontFile(rFileName, nFaceNum, nVariantNum, aInfo.m_nID, aDFA);
+        FontAttributes aFA = pFont->m_aFontAttributes;
+        aFA.IncreaseQualityBy(4096);
+        const OString& rFileName = rMgr.getFontFileSysPath(nFontId);
+        rFontManager.AddFontFile(rFileName, nFaceNum, nVariantNum, nFontId, aFA);
     }
 
     if (bUseFontconfig)
@@ -161,8 +160,9 @@ std::unique_ptr<GenericSalLayout> QtGraphics::GetTextLayout(int nFallbackLevel)
 static QRawFont GetRawFont(const QFont& rFont, bool bWithoutHintingInTextDirection)
 {
     QFont::HintingPreference eHinting = rFont.hintingPreference();
+    static bool bAllowDefaultHinting = getenv("SAL_ALLOW_DEFAULT_HINTING") != nullptr;
     bool bAllowedHintStyle
-        = !bWithoutHintingInTextDirection
+        = !bWithoutHintingInTextDirection || bAllowDefaultHinting
           || (eHinting == QFont::PreferNoHinting || eHinting == QFont::PreferVerticalHinting);
     if (bWithoutHintingInTextDirection && !bAllowedHintStyle)
     {
@@ -177,8 +177,7 @@ void QtGraphics::DrawTextLayout(const GenericSalLayout& rLayout)
 {
     const QtFont* pFont = static_cast<const QtFont*>(&rLayout.GetFont());
     assert(pFont);
-    QRawFont aRawFont(
-        GetRawFont(*pFont, rLayout.GetTextRenderModeForResolutionIndependentLayout()));
+    QRawFont aRawFont(GetRawFont(*pFont, rLayout.GetSubpixelPositioning()));
 
     QVector<quint32> glyphIndexes;
     QVector<QPointF> positions;
@@ -191,7 +190,7 @@ void QtGraphics::DrawTextLayout(const GenericSalLayout& rLayout)
     if (nOrientation)
         pQtLayout->SetOrientation(0_deg10);
 
-    DevicePoint aPos;
+    basegfx::B2DPoint aPos;
     const GlyphItem* pGlyph;
     int nStart = 0;
     while (rLayout.GetNextGlyph(&pGlyph, aPos, nStart))

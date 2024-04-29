@@ -22,6 +22,15 @@
 gb_CppunitTest_UNITTESTFAILED ?= $(GBUILDDIR)/platform/unittest-failed-default.sh
 gb_CppunitTest_PYTHONDEPS ?= $(call gb_Library_get_target,pyuno_wrapper) $(if $(SYSTEM_PYTHON),,$(call gb_Package_get_target,python3))
 
+ifeq ($(WITH_COREDUMPCTL),)
+gb_CppunitTest_coredumpctl_setup :=
+gb_CppunitTest_coredumpctl_run :=
+else
+gb_CppunitTest_coredumpctl_setup = \
+    export LIBO_TEST_UNIT=$$($(SYSTEMD_ESCAPE) "$1:$$(date -u +%Y%m%d%H%M%S):$$$$$(if $2,:$2)" | cut -b -249) &&
+gb_CppunitTest_coredumpctl_run := $(SYSTEMD_RUN) --scope --user --unit="$$LIBO_TEST_UNIT"
+endif
+
 ifneq ($(strip $(CPPUNITTRACE)),)
 ifneq ($(filter gdb,$(CPPUNITTRACE)),)
 # sneak (a) setting the LD_LIBRARY_PATH, and (b) setting malloc debug flags, into the "gdb --args" command line
@@ -128,7 +137,9 @@ else
 				rm -fr $@.core && mkdir $@.core && cd $@.core &&)) \
 		( \
 		$(if $(gb_CppunitTest_localized),for l in $(WITH_LANG_LIST) ; do \
-			printf 'LO_TEST_LOCALE=%s\n' "$$l" && LO_TEST_LOCALE="$$l" ) \
+			printf 'LO_TEST_LOCALE=%s\n' "$$l" && ) \
+		$(call gb_CppunitTest_coredumpctl_setup,$@,$(if $(gb_CppunitTest_localized),$$l)) \
+		$(if $(gb_CppunitTest_localized),LO_TEST_LOCALE="$$l") \
 		$(if $(gb_CppunitTest__vcl_no_svp), \
 			$(filter-out SAL_USE_VCLPLUGIN=svp,$(gb_TEST_ENV_VARS)),$(gb_TEST_ENV_VARS)) \
 		$(EXTRA_ENV_VARS) \
@@ -142,7 +153,7 @@ else
 			PYTHONDONTWRITEBYTECODE=1) \
 		$(if $(filter gdb,$(CPPUNITTRACE)),\
 			PYTHONWARNINGS=default) \
-		$(ICECREAM_RUN) $(gb_CppunitTest_GDBTRACE) $(gb_CppunitTest_VALGRINDTOOL) $(gb_CppunitTest_RR) \
+		$(ICECREAM_RUN) $(gb_CppunitTest_coredumpctl_run) $(gb_CppunitTest_GDBTRACE) $(gb_CppunitTest_VALGRINDTOOL) $(gb_CppunitTest_RR) \
 			$(gb_CppunitTest_CPPTESTCOMMAND) \
 		$(call gb_CppunitTest_get_linktarget_target,$*) \
 		$(call gb_CppunitTest__make_args) "-env:CPPUNITTESTTARGET=$@" \

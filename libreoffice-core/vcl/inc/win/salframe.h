@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_WIN_SALFRAME_H
-#define INCLUDED_VCL_INC_WIN_SALFRAME_H
+#pragma once
 
 #include <sal/config.h>
 
@@ -107,7 +106,7 @@ public:
     virtual void                SetMaxClientSize( tools::Long nWidth, tools::Long nHeight ) override;
     virtual void                SetPosSize( tools::Long nX, tools::Long nY, tools::Long nWidth, tools::Long nHeight, sal_uInt16 nFlags ) override;
     virtual void                GetClientSize( tools::Long& rWidth, tools::Long& rHeight ) override;
-    virtual void                GetWorkArea( tools::Rectangle& rRect ) override;
+    virtual void                GetWorkArea( AbsoluteScreenPixelRectangle& rRect ) override;
     virtual SalFrame*           GetParent() const override;
     virtual void SetWindowState(const vcl::WindowData*) override;
     virtual bool GetWindowState(vcl::WindowData*) override;
@@ -140,6 +139,8 @@ public:
     virtual void                UnionClipRegion( tools::Long nX, tools::Long nY, tools::Long nWidth, tools::Long nHeight ) override;
     virtual void                EndSetClipRegion() override;
     virtual void                UpdateDarkMode() override;
+    virtual bool                GetUseDarkMode() const override;
+    virtual bool                GetUseReducedAnimation() const override;
 
     constexpr vcl::WindowState state() const { return m_eState; }
     void UpdateFrameState();
@@ -157,7 +158,5 @@ namespace vcl_sal {
         std::u16string_view pLang,
         LONG nSymbol );
 }
-
-#endif // INCLUDED_VCL_INC_WIN_SALFRAME_H
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -376,7 +376,7 @@ void StorageItem::ImplCommit()
 PasswordContainer::PasswordContainer( const Reference<XComponentContext>& rxContext )
 {
     // m_pStorageFile->Notify() can be called
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     mComponent.set( rxContext->getServiceManager(), UNO_QUERY );
     mComponent->addEventListener( this );
@@ -389,7 +389,7 @@ PasswordContainer::PasswordContainer( const Reference<XComponentContext>& rxCont
 
 PasswordContainer::~PasswordContainer()
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     m_xStorageFile.reset();
 
@@ -402,7 +402,7 @@ PasswordContainer::~PasswordContainer()
 
 void SAL_CALL PasswordContainer::disposing( const EventObject& )
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     m_xStorageFile.reset();
 
@@ -637,7 +637,7 @@ Sequence< UserRecord > PasswordContainer::CopyToUserRecordSequence( const std::v
 
 void SAL_CALL PasswordContainer::add( const OUString& Url, const OUString& UserName, const Sequence< OUString >& Passwords, const Reference< XInteractionHandler >& aHandler )
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     PrivateAdd( Url, UserName, Passwords, MEMORY_RECORD, aHandler );
 }
@@ -645,7 +645,7 @@ void SAL_CALL PasswordContainer::add( const OUString& Url, const OUString& UserN
 
 void SAL_CALL PasswordContainer::addPersistent( const OUString& Url, const OUString& UserName, const Sequence< OUString >& Passwords, const Reference< XInteractionHandler >& aHandler  )
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     PrivateAdd( Url, UserName, Passwords, PERSISTENT_RECORD, aHandler );
 }
@@ -654,12 +654,14 @@ OUString PasswordContainer::createIV()
 {
     rtlRandomPool randomPool = mRandomPool.get();
     unsigned char iv[RTL_DIGEST_LENGTH_MD5];
-    rtl_random_getBytes(randomPool, iv, RTL_DIGEST_LENGTH_MD5);
+    if (rtl_random_getBytes(randomPool, iv, RTL_DIGEST_LENGTH_MD5) != rtl_Random_E_None)
+    {
+        throw uno::RuntimeException("rtl_random_getBytes failed");
+    }
     OUStringBuffer aBuffer;
     for (sal_uInt8 i : iv)
     {
-        aBuffer.append(OUString::number(i >> 4, 16));
-        aBuffer.append(OUString::number(i & 15, 16));
+        aBuffer.append(OUString::number(i >> 4, 16) + OUString::number(i & 15, 16));
     }
     return aBuffer.makeStringAndClear();
 }
@@ -766,7 +768,7 @@ UrlRecord PasswordContainer::find(
     bool bName, // only needed to support empty user names
     const Reference< XInteractionHandler >& aHandler  )
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     if( !m_aContainer.empty() && !aURL.isEmpty() )
     {
@@ -851,8 +853,8 @@ static OUString ReencodeAsOldHash(std::u16string_view rPass)
     {
         auto tmp = rPass.substr(ind * 2, 2);
         unsigned char i = static_cast<char>(rtl_ustr_toInt64_WithLength(tmp.data(), 16, tmp.size()));
-        aBuffer.append(static_cast< sal_Unicode >('a' + (i >> 4)));
-        aBuffer.append(static_cast< sal_Unicode >('a' + (i & 15)));
+        aBuffer.append(OUStringChar(static_cast< sal_Unicode >('a' + (i >> 4)))
+                + OUStringChar(static_cast< sal_Unicode >('a' + (i & 15))));
     }
     return aBuffer.makeStringAndClear();
 }
@@ -922,7 +924,7 @@ OUString const & PasswordContainer::GetMasterPassword( const Reference< XInterac
 
 void SAL_CALL PasswordContainer::remove( const OUString& aURL, const OUString& aName )
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     OUString aUrl( aURL );
     if( m_aContainer.empty() )
@@ -962,7 +964,7 @@ void SAL_CALL PasswordContainer::remove( const OUString& aURL, const OUString& a
 
 void SAL_CALL PasswordContainer::removePersistent( const OUString& aURL, const OUString& aName )
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     OUString aUrl( aURL );
     if( m_aContainer.empty() )
@@ -1007,8 +1009,12 @@ void SAL_CALL PasswordContainer::removePersistent( const OUString& aURL, const O
 
 void SAL_CALL PasswordContainer::removeAllPersistent()
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard(mMutex);
+    removeAllPersistent(aGuard);
+}
 
+void PasswordContainer::removeAllPersistent(std::unique_lock<std::mutex>& /*rGuard*/)
+{
     if( m_xStorageFile )
         m_xStorageFile->clear();
 
@@ -1044,9 +1050,14 @@ void SAL_CALL PasswordContainer::removeAllPersistent()
 
 Sequence< UrlRecord > SAL_CALL PasswordContainer::getAllPersistent( const Reference< XInteractionHandler >& xHandler )
 {
+    std::unique_lock aGuard( mMutex );
+    return getAllPersistent(aGuard, xHandler);
+}
+
+Sequence< UrlRecord > PasswordContainer::getAllPersistent( std::unique_lock<std::mutex>& /*rGuard*/, const Reference< XInteractionHandler >& xHandler )
+{
     Sequence< UrlRecord > aResult;
 
-    ::osl::MutexGuard aGuard( mMutex );
     for( const auto& rEntry : m_aContainer )
     {
         Sequence< UserRecord > aUsers;
@@ -1072,10 +1083,15 @@ Sequence< UrlRecord > SAL_CALL PasswordContainer::getAllPersistent( const Refere
 
 sal_Bool SAL_CALL PasswordContainer::authorizateWithMasterPassword( const uno::Reference< task::XInteractionHandler >& xHandler )
 {
+    std::unique_lock aGuard( mMutex );
+    return authorizateWithMasterPassword(aGuard, xHandler);
+}
+
+bool PasswordContainer::authorizateWithMasterPassword( std::unique_lock<std::mutex>& /*rGuard*/, const uno::Reference< task::XInteractionHandler >& xHandler )
+{
     bool bResult = false;
     OUString aEncodedMP, aEncodedMPIV;
     uno::Reference< task::XInteractionHandler > xTmpHandler = xHandler;
-    ::osl::MutexGuard aGuard( mMutex );
 
     // the method should fail if there is no master password
     if( m_xStorageFile && m_xStorageFile->useStorage() && m_xStorageFile->getEncodedMasterPassword( aEncodedMP, aEncodedMPIV ) )
@@ -1133,7 +1149,7 @@ sal_Bool SAL_CALL PasswordContainer::changeMasterPassword( const uno::Reference<
 {
     bool bResult = false;
     uno::Reference< task::XInteractionHandler > xTmpHandler = xHandler;
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     if ( m_xStorageFile && m_xStorageFile->useStorage() )
     {
@@ -1148,7 +1164,7 @@ sal_Bool SAL_CALL PasswordContainer::changeMasterPassword( const uno::Reference<
         // if there is already a stored master password it should be entered by the user before the change happen
         OUString aEncodedMP, aEncodedMPIV;
         if( !m_aMasterPassword.isEmpty() || m_xStorageFile->getEncodedMasterPassword( aEncodedMP, aEncodedMPIV ) )
-            bCanChangePassword = authorizateWithMasterPassword( xTmpHandler );
+            bCanChangePassword = authorizateWithMasterPassword( aGuard, xTmpHandler );
 
         if ( bCanChangePassword )
         {
@@ -1158,10 +1174,10 @@ sal_Bool SAL_CALL PasswordContainer::changeMasterPassword( const uno::Reference<
             if ( !aPass.isEmpty() )
             {
                 // get all the persistent entries if it is possible
-                const Sequence< UrlRecord > aPersistent = getAllPersistent( uno::Reference< task::XInteractionHandler >() );
+                const Sequence< UrlRecord > aPersistent = getAllPersistent( aGuard, uno::Reference< task::XInteractionHandler >() );
 
                 // remove the master password and the entries persistence
-                removeMasterPassword();
+                removeMasterPassword(aGuard);
 
                 // store the new master password
                 m_aMasterPassword = aPass;
@@ -1172,7 +1188,7 @@ sal_Bool SAL_CALL PasswordContainer::changeMasterPassword( const uno::Reference<
                 // store all the entries with the new password
                 for ( const auto& rURL : aPersistent )
                     for ( const auto& rUser : rURL.UserList )
-                        addPersistent( rURL.Url, rUser.UserName, rUser.Passwords,
+                        PrivateAdd( rURL.Url, rUser.UserName, rUser.Passwords, PERSISTENT_RECORD,
                                        uno::Reference< task::XInteractionHandler >() );
 
                 bResult = true;
@@ -1185,10 +1201,15 @@ sal_Bool SAL_CALL PasswordContainer::changeMasterPassword( const uno::Reference<
 
 void SAL_CALL PasswordContainer::removeMasterPassword()
 {
-    // remove all the stored passwords and the master password
-    removeAllPersistent();
+    std::unique_lock aGuard(mMutex);
+    removeMasterPassword(aGuard);
+}
 
-    ::osl::MutexGuard aGuard( mMutex );
+void PasswordContainer::removeMasterPassword(std::unique_lock<std::mutex>& rGuard)
+{
+    // remove all the stored passwords and the master password
+    removeAllPersistent(rGuard);
+
     if ( m_xStorageFile )
     {
         m_aMasterPassword.clear();
@@ -1198,7 +1219,7 @@ void SAL_CALL PasswordContainer::removeMasterPassword()
 
 sal_Bool SAL_CALL PasswordContainer::hasMasterPassword(  )
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     if ( !m_xStorageFile )
         throw uno::RuntimeException();
@@ -1209,13 +1230,13 @@ sal_Bool SAL_CALL PasswordContainer::hasMasterPassword(  )
 
 sal_Bool SAL_CALL PasswordContainer::allowPersistentStoring( sal_Bool bAllow )
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     if ( !m_xStorageFile )
         throw uno::RuntimeException();
 
     if ( !bAllow )
-        removeMasterPassword();
+        removeMasterPassword(aGuard);
 
     if (m_xStorageFile->useStorage() == static_cast<bool>(bAllow))
         return bAllow;
@@ -1226,7 +1247,7 @@ sal_Bool SAL_CALL PasswordContainer::allowPersistentStoring( sal_Bool bAllow )
 
 sal_Bool SAL_CALL PasswordContainer::isPersistentStoringAllowed()
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     if ( !m_xStorageFile )
         throw uno::RuntimeException();
@@ -1238,7 +1259,7 @@ sal_Bool SAL_CALL PasswordContainer::useDefaultMasterPassword( const uno::Refere
 {
     bool bResult = false;
     uno::Reference< task::XInteractionHandler > xTmpHandler = xHandler;
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     if ( m_xStorageFile && m_xStorageFile->useStorage() )
     {
@@ -1253,7 +1274,7 @@ sal_Bool SAL_CALL PasswordContainer::useDefaultMasterPassword( const uno::Refere
         // if there is already a stored nondefault master password it should be entered by the user before the change happen
         OUString aEncodedMP, aEncodedMPIV;
         if( m_xStorageFile->getEncodedMasterPassword( aEncodedMP, aEncodedMPIV ) && !aEncodedMP.isEmpty() )
-            bCanChangePassword = authorizateWithMasterPassword( xTmpHandler );
+            bCanChangePassword = authorizateWithMasterPassword( aGuard, xTmpHandler );
 
         if ( bCanChangePassword )
         {
@@ -1262,10 +1283,10 @@ sal_Bool SAL_CALL PasswordContainer::useDefaultMasterPassword( const uno::Refere
             if ( !aPass.isEmpty() )
             {
                 // get all the persistent entries if it is possible
-                const Sequence< UrlRecord > aPersistent = getAllPersistent( uno::Reference< task::XInteractionHandler >() );
+                const Sequence< UrlRecord > aPersistent = getAllPersistent( aGuard, uno::Reference< task::XInteractionHandler >() );
 
                 // remove the master password and the entries persistence
-                removeMasterPassword();
+                removeMasterPassword(aGuard);
 
                 // store the empty string to flag the default master password
                 m_aMasterPassword = aPass;
@@ -1274,8 +1295,8 @@ sal_Bool SAL_CALL PasswordContainer::useDefaultMasterPassword( const uno::Refere
                 // store all the entries with the new password
                 for ( const auto& rURL : aPersistent )
                     for ( const auto& rUser : rURL.UserList )
-                        addPersistent( rURL.Url, rUser.UserName, rUser.Passwords,
-                                       uno::Reference< task::XInteractionHandler >() );
+                        PrivateAdd( rURL.Url, rUser.UserName, rUser.Passwords, PERSISTENT_RECORD,
+                                   uno::Reference< task::XInteractionHandler >() );
 
                 bResult = true;
             }
@@ -1288,7 +1309,7 @@ sal_Bool SAL_CALL PasswordContainer::useDefaultMasterPassword( const uno::Refere
 
 sal_Bool SAL_CALL PasswordContainer::isDefaultMasterPasswordUsed()
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     if ( !m_xStorageFile )
         throw uno::RuntimeException();
@@ -1321,7 +1342,7 @@ uno::Sequence< OUString > SAL_CALL PasswordContainer::getUrls( sal_Bool OnlyPers
 
 void PasswordContainer::Notify()
 {
-    ::osl::MutexGuard aGuard( mMutex );
+    std::unique_lock aGuard( mMutex );
 
     // remove the cached persistent values in the memory
     for( auto& rEntry : m_aContainer )

@@ -112,10 +112,10 @@ IMPL_LINK(ScTabControl, ShowPageList, const CommandEvent &, rEvent, void)
         OUString sId = OUString::number(nId);
         xPopup->append_radio(sId, aString);
         if (nId == nCurPageId)
-            xPopup->set_active(sId.toUtf8(), true);
+            xPopup->set_active(sId, true);
     }
 
-    OString sIdent(xPopup->popup_at_rect(pPopupParent, aRect));
+    OUString sIdent(xPopup->popup_at_rect(pPopupParent, aRect));
     if (!sIdent.isEmpty())
         SwitchToPageId(sIdent.toUInt32());
 }
@@ -205,7 +205,7 @@ void ScTabControl::MouseButtonUp( const MouseEvent& rMEvt )
 
     if ( rMEvt.GetClicks() == 2 && rMEvt.IsLeft() && nMouseClickPageId != 0 && nMouseClickPageId != TabBar::PAGE_NOT_FOUND )
     {
-        SfxDispatcher* pDispatcher = pViewData->GetViewShell()->GetViewFrame()->GetDispatcher();
+        SfxDispatcher* pDispatcher = pViewData->GetViewShell()->GetViewFrame().GetDispatcher();
         pDispatcher->Execute( FID_TAB_MENU_RENAME, SfxCallMode::SYNCHRON | SfxCallMode::RECORD );
         return;
     }
@@ -213,11 +213,8 @@ void ScTabControl::MouseButtonUp( const MouseEvent& rMEvt )
     if( nMouseClickPageId == 0 )
     {
         // Click in the area next to the existing tabs:
-        // #i70320# if several sheets are selected, deselect all except the current sheet,
-        // otherwise add new sheet
-        sal_uInt16 nSlot = ( GetSelectPageCount() > 1 ) ? FID_TAB_DESELECTALL : FID_INS_TABLE;
-        SfxDispatcher* pDispatcher = pViewData->GetViewShell()->GetViewFrame()->GetDispatcher();
-        pDispatcher->Execute( nSlot, SfxCallMode::SYNCHRON | SfxCallMode::RECORD );
+        SfxDispatcher* pDispatcher = pViewData->GetViewShell()->GetViewFrame().GetDispatcher();
+        pDispatcher->Execute( FID_TAB_DESELECTALL, SfxCallMode::SYNCHRON | SfxCallMode::RECORD );
         // forget page ID, to be really sure that the dialog is not called twice
         nMouseClickPageId = TabBar::PAGE_NOT_FOUND;
     }
@@ -320,7 +317,7 @@ void ScTabControl::Select()
         // for others this is only needed fidgeting
 
     if ( bRefMode && pViewData->GetRefType() == SC_REFTYPE_REF )
-        if ( pViewData->GetViewShell()->GetViewFrame()->HasChildWindow(SID_OPENDLG_CONSOLIDATE) )
+        if ( pViewData->GetViewShell()->GetViewFrame().HasChildWindow(SID_OPENDLG_CONSOLIDATE) )
         {
             ScRange aRange(
                     pViewData->GetRefStartX(), pViewData->GetRefStartY(), pViewData->GetRefStartZ(),
@@ -440,7 +437,7 @@ void ScTabControl::SwitchToPageId(sal_uInt16 nId)
     {
         // notify LibreOfficeKit about changed page
         OString aPayload = OString::number(nId - 1);
-        pViewData->GetViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SET_PART, aPayload.getStr());
+        pViewData->GetViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SET_PART, aPayload);
     }
 }
 

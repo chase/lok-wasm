@@ -364,6 +364,7 @@ NamedRanges
 NegativeError
 NullDate
 NumberFormat
+NumberFormatKey
 NumberingIsNumber
 NumberingLevel
 NumberingRules
@@ -560,6 +561,8 @@ TextColor
 TextColumns
 TextContourFrame
 TextFitToSize
+TextFitToSizeFontScale
+TextFitToSizeSpacingScale
 TextFrames
 TextHorizontalAdjust
 TextLeftDistance

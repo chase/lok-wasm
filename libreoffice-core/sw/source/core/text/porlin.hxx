@@ -160,7 +160,7 @@ public:
     virtual bool Format( SwTextFormatInfo &rInf );
     // Is called for the line's last portion
     virtual void FormatEOL( SwTextFormatInfo &rInf );
-            void Move( SwTextPaintInfo &rInf );
+            void Move(SwTextPaintInfo & rInf) const;
 
     // For SwTextSlot
     virtual bool GetExpText( const SwTextSizeInfo &rInf, OUString &rText ) const;
@@ -169,7 +169,7 @@ public:
     virtual sal_uInt16 GetViewWidth( const SwTextSizeInfo &rInf ) const;
 
     // for text- and multi-portions
-    virtual tools::Long CalcSpacing( tools::Long nSpaceAdd, const SwTextSizeInfo &rInf ) const;
+    virtual SwTwips CalcSpacing( tools::Long nSpaceAdd, const SwTextSizeInfo &rInf ) const;
 
     // Accessibility: pass information about this portion to the PortionHandler
     virtual void HandlePortion( SwPortionHandler& rPH ) const;

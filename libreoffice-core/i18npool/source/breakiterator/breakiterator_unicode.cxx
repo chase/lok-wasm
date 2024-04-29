@@ -67,13 +67,6 @@ namespace {
 class OOoRuleBasedBreakIterator : public icu::RuleBasedBreakIterator
 {
     public:
-#if (U_ICU_VERSION_MAJOR_NUM < 58)
-    // icu::RuleBasedBreakIterator::setBreakType() is private as of ICU 58.
-    void publicSetBreakType(int32_t type)
-        {
-            setBreakType(type);
-        };
-#endif
     OOoRuleBasedBreakIterator(UDataMemory* image,
                               UErrorCode &status)
         : icu::RuleBasedBreakIterator(image, status)
@@ -127,11 +120,12 @@ void BreakIterator_Unicode::loadICUBreakIterator(const css::lang::Locale& rLocal
     assert( 0 <= breakType && breakType <= 9 && 0 <= rBreakType && rBreakType <= 9 && 0 <= nWordType && nWordType <= 9);
     const OString aLangtagStr( LanguageTag::convertToBcp47( rLocale).toUtf8());
     OStringBuffer aKeyBuf(64);
-    aKeyBuf.append( aLangtagStr).append(';');
+    aKeyBuf.append( aLangtagStr + ";" );
     if (rule)
         aKeyBuf.append(rule);
-    aKeyBuf.append(';').append( static_cast<char>('0'+breakType)).append(';').
-        append( static_cast<char>('0'+rBreakType)).append(';').append( static_cast<char>('0'+nWordType));
+    aKeyBuf.append(";" + OStringChar(static_cast<char>('0'+breakType)) + ";"
+        + OStringChar(static_cast<char>('0'+rBreakType)) + ";"
+        + OStringChar( static_cast<char>('0'+nWordType)));
     // langtag;rule;breakType;rBreakType;nWordType
     const OString aBIMapGlobalKey( aKeyBuf.makeStringAndClear());
 
@@ -152,7 +146,8 @@ void BreakIterator_Unicode::loadICUBreakIterator(const css::lang::Locale& rLocal
 
                 status = U_ZERO_ERROR;
                 udata_setAppData("OpenOffice", OpenOffice_dat, &status);
-                if ( !U_SUCCESS(status) ) throw uno::RuntimeException();
+                if ( !U_SUCCESS(status) )
+                    throw uno::RuntimeException("udata_setAppData returned error " + OUString::createFromAscii(u_errorName(status)));
 
                 std::shared_ptr<OOoRuleBasedBreakIterator> rbi;
 
@@ -243,23 +238,6 @@ void BreakIterator_Unicode::loadICUBreakIterator(const css::lang::Locale& rLocal
                         }
                     }
                 }
-                if (rbi) {
-    #if (U_ICU_VERSION_MAJOR_NUM < 58)
-                    // ICU 58 made RuleBasedBreakIterator::setBreakType() private
-                    // instead of protected, so the old workaround of
-                    // https://ssl.icu-project.org/trac/ticket/5498
-                    // doesn't work anymore. However, they also claim to have fixed
-                    // the cause that an initial fBreakType==-1 would lead to an
-                    // endless loop under some circumstances.
-                    // Let's see ...
-                    switch (rBreakType) {
-                        case LOAD_CHARACTER_BREAKITERATOR: rbi->publicSetBreakType(UBRK_CHARACTER); break;
-                        case LOAD_WORD_BREAKITERATOR: rbi->publicSetBreakType(UBRK_WORD); break;
-                        case LOAD_SENTENCE_BREAKITERATOR: rbi->publicSetBreakType(UBRK_SENTENCE); break;
-                        case LOAD_LINE_BREAKITERATOR: rbi->publicSetBreakType(UBRK_LINE); break;
-                    }
-    #endif
-                }
             } while (false);
 
         if (!icuBI->mpValue || !icuBI->mpValue->mpBreakIterator)
@@ -296,14 +274,14 @@ void BreakIterator_Unicode::loadICUBreakIterator(const css::lang::Locale& rLocal
                         break;
                 }
                 if ( !U_SUCCESS(status) || !pBI ) {
-                    throw uno::RuntimeException();
+                    throw uno::RuntimeException("Failed to create ICU BreakIterator: error " + OUString::createFromAscii(u_errorName(status)));
                 }
                 icuBI->mpValue = std::make_shared<BI_ValueData>();
                 icuBI->mpValue->mpBreakIterator = pBI;
                 theBIMap.insert( std::make_pair( aBIMapLocaleTypeKey, icuBI->mpValue));
             } while (false);
         if (!icuBI->mpValue || !icuBI->mpValue->mpBreakIterator) {
-            throw uno::RuntimeException();
+            throw uno::RuntimeException("ICU BreakIterator is not properly initialized");
         }
         icuBI->maBIMapKey = aBIMapGlobalKey;
         if (!bInMap)
@@ -320,12 +298,12 @@ void BreakIterator_Unicode::loadICUBreakIterator(const css::lang::Locale& rLocal
     icuBI->mpValue->mpUt = utext_openUChars(icuBI->mpValue->mpUt, pText, rText.getLength(), &status);
 
     if (!U_SUCCESS(status))
-        throw uno::RuntimeException();
+        throw uno::RuntimeException("utext_openUChars returned error " + OUString::createFromAscii(u_errorName(status)));
 
     icuBI->mpValue->mpBreakIterator->setText(icuBI->mpValue->mpUt, status);
 
     if (!U_SUCCESS(status))
-        throw uno::RuntimeException();
+        throw uno::RuntimeException("Failed to set text for ICU BreakIterator: error " + OUString::createFromAscii(u_errorName(status)));
 
     icuBI->mpValue->maICUText = rText;
 }

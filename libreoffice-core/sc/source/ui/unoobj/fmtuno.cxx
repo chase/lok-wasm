@@ -44,7 +44,7 @@ using namespace ::formula;
 
 //  map only for PropertySetInfo
 
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetValidatePropertyMap()
+static std::span<const SfxItemPropertyMapEntry> lcl_GetValidatePropertyMap()
 {
     static const SfxItemPropertyMapEntry aValidatePropertyMap_Impl[] =
     {
@@ -444,10 +444,6 @@ sal_Bool SAL_CALL ScTableConditionalFormat::hasByName( const OUString& aName )
 
     return false;
 }
-
-// XUnoTunnel
-
-UNO3_GETIMPLEMENTATION_IMPL(ScTableConditionalFormat);
 
 ScTableConditionalEntry::ScTableConditionalEntry(ScCondFormatEntryItem  aItem) :
     aData(std::move( aItem ))
@@ -913,9 +909,5 @@ uno::Any SAL_CALL ScTableValidationObj::getPropertyValue( const OUString& aPrope
 }
 
 SC_IMPL_DUMMY_PROPERTY_LISTENER( ScTableValidationObj )
-
-// XUnoTunnel
-
-UNO3_GETIMPLEMENTATION_IMPL(ScTableValidationObj);
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

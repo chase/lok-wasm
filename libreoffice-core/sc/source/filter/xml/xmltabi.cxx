@@ -49,7 +49,6 @@ using namespace com::sun::star;
 using namespace xmloff::token;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::UNO_QUERY;
-using ::com::sun::star::xml::sax::XAttributeList;
 
 /**
  * Determine whether this table is an external reference cache from its
@@ -400,7 +399,7 @@ void SAL_CALL ScXMLTableContext::endFastElement(sal_Int32 /*nElement*/)
     // store stream positions
     if (!pExternalRefInfo && nStartOffset >= 0 /* && nEndOffset >= 0 */)
     {
-        ScSheetSaveData* pSheetData = comphelper::getFromUnoTunnel<ScModelObj>(rImport.GetModel())->GetSheetSaveData();
+        ScSheetSaveData* pSheetData = rImport.GetScModel()->GetSheetSaveData();
         SCTAB nTab = rTables.GetCurrentSheet();
         // pSheetData->AddStreamPos( nTab, nStartOffset, nEndOffset );
         pSheetData->StartStreamPos( nTab, nStartOffset );

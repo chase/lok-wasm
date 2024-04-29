@@ -52,7 +52,7 @@ FILE * init(int argc, char ** argv) {
     common::HandledArgs aArgs;
     if ( !common::handleArguments(argc, argv, aArgs) )
     {
-        common::writeUsage("cfgex","*.xcu");
+        common::writeUsage("cfgex"_ostr,"*.xcu"_ostr);
         std::exit(EXIT_FAILURE);
     }
     global::inputPathname = aArgs.m_sInputFile;
@@ -201,23 +201,23 @@ void CfgParser::ExecuteAnalyzedToken( int nToken, char *pToken )
                 OString sSearch;
                 switch ( nToken ) {
                     case CFG_TOKEN_PACKAGE:
-                        sSearch = "package-id=";
+                        sSearch = "package-id="_ostr;
                     break;
                     case CFG_TOKEN_COMPONENT:
-                        sSearch = "component-id=";
+                        sSearch = "component-id="_ostr;
                     break;
                     case CFG_TOKEN_TEMPLATE:
-                        sSearch = "template-id=";
+                        sSearch = "template-id="_ostr;
                     break;
                     case CFG_TOKEN_CONFIGNAME:
-                        sSearch = "cfg:name=";
+                        sSearch = "cfg:name="_ostr;
                     break;
                     case CFG_TOKEN_OORNAME:
-                        sSearch = "oor:name=";
+                        sSearch = "oor:name="_ostr;
                         bLocalize = true;
                     break;
                     case CFG_TOKEN_OORVALUE:
-                        sSearch = "oor:value=";
+                        sSearch = "oor:value="_ostr;
                     break;
                     case CFG_TEXT_START: {
                         if ( sCurrentResTyp != sTokenName ) {
@@ -233,7 +233,7 @@ void CfgParser::ExecuteAnalyzedToken( int nToken, char *pToken )
 
                         pStackData->sTextTag = sToken;
 
-                        sCurrentText = "";
+                        sCurrentText = ""_ostr;
                     }
                     break;
                 }
@@ -301,7 +301,7 @@ void CfgParser::ExecuteAnalyzedToken( int nToken, char *pToken )
         Output( sToken );
 
     if ( sToken != " " && sToken != "\t" )
-        sLastWhitespace = "";
+        sLastWhitespace = ""_ostr;
 }
 
 void CfgExport::Output(const OString&)
@@ -365,26 +365,26 @@ void CfgExport::WorkOnResourceEnd()
     if ( !bLocalize )
         return;
 
-    if ( pStackData->sText["en-US"].isEmpty() )
+    if ( pStackData->sText["en-US"_ostr].isEmpty() )
         return;
 
-    OString sXComment = pStackData->sText[OString("x-comment")];
+    OString sXComment = pStackData->sText["x-comment"_ostr];
     OString sLocalId = pStackData->sIdentifier;
     OString sGroupId;
     if ( aStack.size() == 1 ) {
         sGroupId = sLocalId;
-        sLocalId = "";
+        sLocalId = ""_ostr;
     }
     else {
         sGroupId = aStack.GetAccessPath( aStack.size() - 2 );
     }
 
 
-    OString sText = pStackData->sText[ "en-US" ];
+    OString sText = pStackData->sText[ "en-US"_ostr ];
     sText = helper::UnQuotHTML( sText );
 
     common::writePoEntry(
-        "Cfgex", pOutputStream, sPath, pStackData->sResTyp,
+        "Cfgex"_ostr, pOutputStream, sPath, pStackData->sResTyp,
         sGroupId, sLocalId, sXComment, sText);
 }
 

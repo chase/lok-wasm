@@ -106,8 +106,7 @@ namespace accessibility
     uno::Reference< XAccessible > SAL_CALL  AccessibleImageBullet::getAccessibleChild( sal_Int64 )
     {
         throw lang::IndexOutOfBoundsException("No children available",
-                                              uno::Reference< uno::XInterface >
-                                              ( static_cast< ::cppu::OWeakObject* > (this) ) ); // static_cast: disambiguate hierarchy
+                                              getXWeak() );
     }
 
     uno::Reference< XAccessible > SAL_CALL  AccessibleImageBullet::getAccessibleParent()
@@ -408,7 +407,7 @@ namespace accessibility
 
         uno::Reference < XAccessibleContext > xThis( const_cast< AccessibleImageBullet* > (this)->getAccessibleContext() );
 
-        AccessibleEventObject aEvent(xThis, nEventId, rNewValue, rOldValue);
+        AccessibleEventObject aEvent(xThis, nEventId, rNewValue, rOldValue, -1);
 
         // #106234# Delegate to EventNotifier
         ::comphelper::AccessibleEventNotifier::addEvent( getNotifierClientId(),
@@ -469,9 +468,8 @@ namespace accessibility
 
         if( !mpEditSource )
             throw uno::RuntimeException("No edit source, object is defunct",
-                                        uno::Reference< uno::XInterface >
-                                        ( static_cast< ::cppu::OWeakObject* >
-                                          ( const_cast< AccessibleImageBullet* > (this) ) ) );  // disambiguate hierarchy
+                                        cppu::getXWeak
+                                          ( const_cast< AccessibleImageBullet* > (this) ) );  // disambiguate hierarchy
         return *mpEditSource;
     }
 
@@ -483,15 +481,13 @@ namespace accessibility
 
         if( !pTextForwarder )
             throw uno::RuntimeException("Unable to fetch text forwarder, object is defunct",
-                                        uno::Reference< uno::XInterface >
-                                        ( static_cast< ::cppu::OWeakObject* >
-                                          ( const_cast< AccessibleImageBullet* > (this) ) ) );  // disambiguate hierarchy
+                                        cppu::getXWeak
+                                          ( const_cast< AccessibleImageBullet* > (this) ) );  // disambiguate hierarchy
 
         if( !pTextForwarder->IsValid() )
             throw uno::RuntimeException("Text forwarder is invalid, object is defunct",
-                                        uno::Reference< uno::XInterface >
-                                        ( static_cast< ::cppu::OWeakObject* >
-                                          ( const_cast< AccessibleImageBullet* > (this) ) ) );  // disambiguate hierarchy
+                                        cppu::getXWeak
+                                          ( const_cast< AccessibleImageBullet* > (this) ) );  // disambiguate hierarchy
         return *pTextForwarder;
     }
 
@@ -504,16 +500,14 @@ namespace accessibility
         if( !pViewForwarder )
         {
             throw uno::RuntimeException("Unable to fetch view forwarder, object is defunct",
-                                        uno::Reference< uno::XInterface >
-                                        ( static_cast< ::cppu::OWeakObject* >
-                                          ( const_cast< AccessibleImageBullet* > (this) ) ) );  // disambiguate hierarchy
+                                        cppu::getXWeak
+                                          ( const_cast< AccessibleImageBullet* > (this) ) );  // disambiguate hierarchy
         }
 
         if( !pViewForwarder->IsValid() )
             throw uno::RuntimeException("View forwarder is invalid, object is defunct",
-                                        uno::Reference< uno::XInterface >
-                                        ( static_cast< ::cppu::OWeakObject* >
-                                          ( const_cast< AccessibleImageBullet* > (this) )  ) ); // disambiguate hierarchy
+                                        cppu::getXWeak
+                                          ( const_cast< AccessibleImageBullet* > (this) ) ); // disambiguate hierarchy
         return *pViewForwarder;
     }
 

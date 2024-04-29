@@ -53,7 +53,6 @@
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::text;
 using namespace ::com::sun::star::uno;
-using namespace ::std;
 using namespace ::xmloff::token;
 
 using ::com::sun::star::beans::XPropertySet;
@@ -309,6 +308,12 @@ void XMLSectionExport::ExportIndexHeaderStart(
     // export name, dammit!
     Reference<XNamed> xName(rSection, UNO_QUERY);
     GetExport().AddAttribute(XML_NAMESPACE_TEXT, XML_NAME, xName->getName());
+    Reference<XPropertySet> xPropSet(rSection, UNO_QUERY);
+    Any aAny = xPropSet->getPropertyValue("IsProtected");
+    if (*o3tl::doAccess<bool>(aAny))
+    {
+        GetExport().AddAttribute(XML_NAMESPACE_TEXT, XML_PROTECTED, XML_TRUE);
+    }
 
     // format already handled -> export only start element
     GetExport().StartElement( XML_NAMESPACE_TEXT, XML_INDEX_TITLE, true );
@@ -829,6 +834,22 @@ void XMLSectionExport::ExportBaseIndexSource(
         Reference<XIndexReplace> xLevelParagraphStyles;
         aAny >>= xLevelParagraphStyles;
         ExportLevelParagraphStyles(xLevelParagraphStyles);
+    }
+    else if (TEXT_SECTION_TYPE_ILLUSTRATION == eType
+            || TEXT_SECTION_TYPE_OBJECT == eType
+            || TEXT_SECTION_TYPE_TABLE == eType)
+    {
+        Any const any(rPropertySet->getPropertyValue("CreateFromParagraphStyle"));
+        if (any.hasValue() &&
+            (rExport.getSaneDefaultVersion() & SvtSaveOptions::ODFSVER_EXTENDED))
+        {
+            OUString const styleName(any.get<OUString>());
+            GetExport().AddAttribute(XML_NAMESPACE_TEXT, XML_STYLE_NAME,
+                         GetExport().EncodeStyleName(styleName));
+
+            SvXMLElementExport const e(GetExport(),
+                XML_NAMESPACE_LO_EXT, XML_INDEX_SOURCE_STYLE, true, false);
+        }
     }
 }
 
@@ -1573,7 +1594,7 @@ void XMLSectionExport::ExportBibliographyConfiguration(SvXMLExport& rExport)
     if ( !xTextFieldsSupp.is() )
         return;
 
-    static const OUStringLiteral sFieldMaster_Bibliography(u"com.sun.star.text.FieldMaster.Bibliography");
+    static constexpr OUString sFieldMaster_Bibliography(u"com.sun.star.text.FieldMaster.Bibliography"_ustr);
 
     // get bibliography field master
     Reference<XNameAccess> xMasters =

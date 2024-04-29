@@ -26,7 +26,6 @@
 #include <com/sun/star/document/XEmbeddedObjectSupplier.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
-#include <com/sun/star/packages/zip/ZipFileAccess.hpp>
 
 #include <o3tl/string_view.hxx>
 #include <unotools/tempfile.hxx>
@@ -65,8 +64,6 @@
 #include <com/sun/star/embed/XVisualObject.hpp>
 #include <com/sun/star/chart2/RelativeSize.hpp>
 
-#include <unotools/ucbstreamhelper.hxx>
-
 using namespace css;
 using namespace css::uno;
 
@@ -74,40 +71,6 @@ namespace com::sun::star::chart2 { class XDataSeries; }
 namespace com::sun::star::chart2 { class XDiagram; }
 namespace com::sun::star::table { class XTableCharts; }
 namespace com::sun::star::table { class XTablePivotCharts; }
-
-namespace {
-
-struct CheckForChartName
-{
-private:
-    OUString aDir;
-
-public:
-    explicit CheckForChartName( const OUString& rDir ):
-        aDir(rDir) {}
-
-    bool operator()(std::u16string_view rName)
-    {
-        if(!o3tl::starts_with(rName, aDir))
-            return false;
-
-        if(!o3tl::ends_with(rName, u".xml"))
-            return false;
-
-        return true;
-    }
-};
-
-OUString findChartFile(const OUString& rDir, uno::Reference< container::XNameAccess > const & xNames )
-{
-    const uno::Sequence<OUString> aNames = xNames->getElementNames();
-    const OUString* pElement = std::find_if(aNames.begin(), aNames.end(), CheckForChartName(rDir));
-
-    CPPUNIT_ASSERT(pElement != aNames.end());
-    return *pElement;
-}
-
-}
 
 class ChartTest : public UnoApiXmlTest
 {
@@ -117,9 +80,7 @@ public:
     {
     }
 
-    uno::Sequence < OUString > getImpressChartColumnDescriptions( std::u16string_view pDir, const char* pName );
-
-    uno::Reference< chart::XChartDocument > getChartDocFromImpress( std::u16string_view pDir, const char* pName );
+    uno::Sequence < OUString > getImpressChartColumnDescriptions(sal_Int32 nPage, sal_Int32 nShape);
 
     uno::Reference<chart::XChartDocument> getChartDocFromDrawImpress( sal_Int32 nPage, sal_Int32 nShape );
     uno::Reference<chart::XChartDocument> getChartDocFromDrawImpressNamed( sal_Int32 nPage, std::u16string_view rName);
@@ -129,16 +90,6 @@ public:
     Sequence< OUString > getFormattedDateCategories( const Reference<chart2::XChartDocument>& xChartDoc );
     awt::Size getPageSize( const Reference< chart2::XChartDocument > & xChartDoc );
     awt::Size getSize(css::uno::Reference<chart2::XDiagram> xDiagram, const awt::Size& rPageSize);
-
-protected:
-
-    /**
-     * Given that some problem doesn't affect the result in the importer, we
-     * test the resulting file directly, by opening the zip file, parsing an
-     * xml stream, and asserting an XPath expression. This method returns the
-     * xml stream, so that you can do the asserting.
-     */
-    xmlDocUniquePtr parseExport(const OUString& rDir, const OUString& rFilterFormat);
 };
 
 Reference< lang::XComponent > getChartCompFromSheet( sal_Int32 nSheet, sal_Int32 nChart, uno::Reference< lang::XComponent > const & xComponent )
@@ -435,23 +386,6 @@ std::vector<uno::Sequence<uno::Any> > getDataSeriesLabelsFromChartType( const Re
     return aRet;
 }
 
-uno::Reference< chart::XChartDocument > ChartTest::getChartDocFromImpress( std::u16string_view pDir, const char* pName )
-{
-    mxComponent = loadFromDesktop(m_directories.getURLFromSrc(pDir) + OUString::createFromAscii(pName), "com.sun.star.comp.Draw.PresentationDocument");
-    uno::Reference< drawing::XDrawPagesSupplier > xDoc(mxComponent, uno::UNO_QUERY_THROW );
-    uno::Reference< drawing::XDrawPage > xPage(
-        xDoc->getDrawPages()->getByIndex(0), uno::UNO_QUERY_THROW );
-    uno::Reference< beans::XPropertySet > xShapeProps(
-        xPage->getByIndex(0), uno::UNO_QUERY );
-    CPPUNIT_ASSERT(xShapeProps.is());
-    uno::Reference< frame::XModel > xDocModel;
-    xShapeProps->getPropertyValue("Model") >>= xDocModel;
-    CPPUNIT_ASSERT(xDocModel.is());
-    uno::Reference< chart::XChartDocument > xChartDoc( xDocModel, uno::UNO_QUERY_THROW );
-
-    return xChartDoc;
-}
-
 uno::Reference<chart::XChartDocument> ChartTest::getChartDocFromDrawImpress(
     sal_Int32 nPage, sal_Int32 nShape )
 {
@@ -533,9 +467,9 @@ uno::Reference<chart::XChartDocument> ChartTest::getChartDocFromWriter( sal_Int3
     return xChartDoc;
 }
 
-uno::Sequence < OUString > ChartTest::getImpressChartColumnDescriptions( std::u16string_view pDir, const char* pName )
+uno::Sequence < OUString > ChartTest::getImpressChartColumnDescriptions(sal_Int32 nPage, sal_Int32 nShape)
 {
-    uno::Reference< chart::XChartDocument > xChartDoc = getChartDocFromImpress( pDir, pName );
+    uno::Reference< chart::XChartDocument > xChartDoc = getChartDocFromDrawImpress( nPage, nShape );
     uno::Reference< chart::XChartDataArray > xChartData ( xChartDoc->getData(), uno::UNO_QUERY_THROW);
     uno::Sequence < OUString > seriesList = xChartData->getColumnDescriptions();
     return seriesList;
@@ -666,19 +600,6 @@ getShapeByName(const uno::Reference<drawing::XShapes>& rShapes, const OUString& 
         }
     }
     return uno::Reference<drawing::XShape>();
-}
-
-xmlDocUniquePtr ChartTest::parseExport(const OUString& rDir, const OUString& rFilterFormat)
-{
-    save(rFilterFormat);
-
-    // Read the XML stream we're interested in.
-    uno::Reference<packages::zip::XZipFileAccess2> xNameAccess = packages::zip::ZipFileAccess::createWithURL(comphelper::getComponentContext(m_xSFactory), maTempFile.GetURL());
-    uno::Reference<io::XInputStream> xInputStream(xNameAccess->getByName(findChartFile(rDir, xNameAccess)), uno::UNO_QUERY);
-    CPPUNIT_ASSERT(xInputStream.is());
-    std::unique_ptr<SvStream> pStream(utl::UcbStreamHelper::CreateStream(xInputStream, true));
-
-    return parseXmlStream(pStream.get());
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

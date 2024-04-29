@@ -965,7 +965,7 @@ namespace {
             SdPage& rHandoutPage (*rDocument.GetSdPage(0, PageKind::Handout));
 
             Reference< css::beans::XPropertySet > xHandoutPage( rHandoutPage.getUnoPage(), UNO_QUERY );
-            static const OUStringLiteral sPageNumber( u"Number" );
+            static constexpr OUString sPageNumber( u"Number"_ustr );
 
             // Collect the page objects of the handout master.
             std::vector<SdrPageObj*> aHandoutPageObjects;
@@ -1193,7 +1193,7 @@ public:
 
         if (aDev >>= xRenderDevice)
         {
-            VCLXDevice* pDevice = comphelper::getFromUnoTunnel<VCLXDevice>(xRenderDevice);
+            VCLXDevice* pDevice = dynamic_cast<VCLXDevice*>(xRenderDevice.get());
             VclPtr< OutputDevice > pOut = pDevice ? pDevice->GetOutputDevice()
                                                   : VclPtr< OutputDevice >();
             mpPrinter = dynamic_cast<Printer*>(pOut.get());
@@ -1418,12 +1418,12 @@ private:
         // Collect some frequently used data.
         if (mpOptions->IsDate())
         {
-            aInfo.msTimeDate += GetSdrGlobalData().GetLocaleData()->getDate( Date( Date::SYSTEM ) );
+            aInfo.msTimeDate += GetSdrGlobalData().GetLocaleData().getDate( Date( Date::SYSTEM ) );
             aInfo.msTimeDate += " ";
         }
 
         if (mpOptions->IsTime())
-            aInfo.msTimeDate += GetSdrGlobalData().GetLocaleData()->getTime( ::tools::Time( ::tools::Time::SYSTEM ), false );
+            aInfo.msTimeDate += GetSdrGlobalData().GetLocaleData().getTime( ::tools::Time( ::tools::Time::SYSTEM ), false );
 
         // Draw and Notes should usually use specified paper size when printing
         if (!mpOptions->IsPrinterPreferred(mrBase.GetDocShell()->GetDocumentType()))
@@ -1634,15 +1634,15 @@ private:
                     continue;
 
                 SdrTextObj* pTextObj = nullptr;
-                size_t nObj (0);
 
-                while (pTextObj==nullptr && nObj < pPage->GetObjCount())
+                for (const rtl::Reference<SdrObject>& pObj : *pPage)
                 {
-                    SdrObject* pObj = pPage->GetObj(nObj++);
                     if (pObj->GetObjInventor() == SdrInventor::Default
                         && pObj->GetObjIdentifier() == SdrObjKind::TitleText)
                     {
-                        pTextObj = DynCastSdrTextObj(pObj);
+                        pTextObj = DynCastSdrTextObj(pObj.get());
+                        if (pTextObj)
+                            break;
                     }
                 }
 
@@ -1658,15 +1658,15 @@ private:
                     pOutliner->Insert(OUString());
 
                 pTextObj = nullptr;
-                nObj = 0;
 
-                while (pTextObj==nullptr && nObj<pPage->GetObjCount())
+                for (const rtl::Reference<SdrObject>& pObj : *pPage)
                 {
-                    SdrObject* pObj = pPage->GetObj(nObj++);
                     if (pObj->GetObjInventor() == SdrInventor::Default
                         && pObj->GetObjIdentifier() == SdrObjKind::OutlineText)
                     {
-                        pTextObj = DynCastSdrTextObj(pObj);
+                        pTextObj = DynCastSdrTextObj(pObj.get());
+                        if (pTextObj)
+                            break;
                     }
                 }
 

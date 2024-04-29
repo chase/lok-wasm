@@ -55,18 +55,18 @@ enum : sal_uInt16
 };
 
 SfxItemPropertyMapEntry const saTextColumns_Impl[] = {
-    { u"IsAutomatic", WID_TXTCOL_IS_AUTOMATIC, cppu::UnoType<bool>::get(),
+    { u"IsAutomatic"_ustr, WID_TXTCOL_IS_AUTOMATIC, cppu::UnoType<bool>::get(),
       css::beans::PropertyAttribute::READONLY, 0 },
-    { u"AutomaticDistance", WID_TXTCOL_AUTO_DISTANCE, cppu::UnoType<sal_Int32>::get(), 0, 0 },
-    { u"SeparatorLineWidth", WID_TXTCOL_LINE_WIDTH, cppu::UnoType<sal_Int32>::get(), 0, 0 },
-    { u"SeparatorLineColor", WID_TXTCOL_LINE_COLOR,
+    { u"AutomaticDistance"_ustr, WID_TXTCOL_AUTO_DISTANCE, cppu::UnoType<sal_Int32>::get(), 0, 0 },
+    { u"SeparatorLineWidth"_ustr, WID_TXTCOL_LINE_WIDTH, cppu::UnoType<sal_Int32>::get(), 0, 0 },
+    { u"SeparatorLineColor"_ustr, WID_TXTCOL_LINE_COLOR,
       cppu::UnoType<com::sun::star::util::Color>::get(), 0, 0 },
-    { u"SeparatorLineRelativeHeight", WID_TXTCOL_LINE_REL_HGT, cppu::UnoType<sal_Int32>::get(), 0,
-      0 },
-    { u"SeparatorLineVerticalAlignment", WID_TXTCOL_LINE_ALIGN,
+    { u"SeparatorLineRelativeHeight"_ustr, WID_TXTCOL_LINE_REL_HGT, cppu::UnoType<sal_Int32>::get(),
+      0, 0 },
+    { u"SeparatorLineVerticalAlignment"_ustr, WID_TXTCOL_LINE_ALIGN,
       cppu::UnoType<css::style::VerticalAlignment>::get(), 0, 0 },
-    { u"SeparatorLineIsOn", WID_TXTCOL_LINE_IS_ON, cppu::UnoType<bool>::get(), 0, 0 },
-    { u"SeparatorLineStyle", WID_TXTCOL_LINE_STYLE, cppu::UnoType<sal_Int16>::get(), 0, 0 },
+    { u"SeparatorLineIsOn"_ustr, WID_TXTCOL_LINE_IS_ON, cppu::UnoType<bool>::get(), 0, 0 },
+    { u"SeparatorLineStyle"_ustr, WID_TXTCOL_LINE_STYLE, cppu::UnoType<sal_Int16>::get(), 0, 0 },
 };
 
 class SvxXTextColumns final
@@ -197,10 +197,10 @@ void SvxXTextColumns::setPropertyValue(const OUString& rPropertyName, const css:
     const SfxItemPropertyMapEntry* pEntry = m_aPropSet.getPropertyMap().getByName(rPropertyName);
     if (!pEntry)
         throw css::beans::UnknownPropertyException("Unknown property: " + rPropertyName,
-                                                   static_cast<cppu::OWeakObject*>(this));
+                                                   getXWeak());
     if (pEntry->nFlags & css::beans::PropertyAttribute::READONLY)
         throw css::beans::PropertyVetoException("Property is read-only: " + rPropertyName,
-                                                static_cast<cppu::OWeakObject*>(this));
+                                                getXWeak());
 
     switch (pEntry->nWID)
     {
@@ -264,7 +264,7 @@ css::uno::Any SvxXTextColumns::getPropertyValue(const OUString& rPropertyName)
     const SfxItemPropertyMapEntry* pEntry = m_aPropSet.getPropertyMap().getByName(rPropertyName);
     if (!pEntry)
         throw css::beans::UnknownPropertyException("Unknown property: " + rPropertyName,
-                                                   static_cast<cppu::OWeakObject*>(this));
+                                                   getXWeak());
 
     css::uno::Any aRet;
     switch (pEntry->nWID)
@@ -324,7 +324,7 @@ void SvxXTextColumns::removeVetoableChangeListener(
 
 css::uno::Reference<css::uno::XInterface> SvxXTextColumns_createInstance() noexcept
 {
-    return static_cast<cppu::OWeakObject*>(new SvxXTextColumns);
+    return getXWeak(new SvxXTextColumns);
 }
 
 extern "C" SVXCORE_DLLPUBLIC css::uno::XInterface*

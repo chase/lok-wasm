@@ -314,16 +314,17 @@ void ChartTypeDialogController::commitToModel( const ChartTypeParameter& rParame
 
     // locked controllers
     ControllerLockGuardUNO aCtrlLockGuard( xChartModel );
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xChartModel );
-    DiagramHelper::tTemplateWithServiceName aTemplateWithService(
-        DiagramHelper::getTemplateForDiagram( xDiagram, xTemplateManager ));
+    rtl::Reference< Diagram > xDiagram = xChartModel->getFirstChartDiagram();
+    Diagram::tTemplateWithServiceName aTemplateWithService;
+    if (xDiagram)
+        aTemplateWithService = xDiagram->getTemplate( xTemplateManager );
     if( aTemplateWithService.xChartTypeTemplate.is())
         aTemplateWithService.xChartTypeTemplate->resetStyles2( xDiagram );
     xTemplate->changeDiagram( xDiagram );
     if( AllSettings::GetMathLayoutRTL() )
         AxisHelper::setRTLAxisLayout( AxisHelper::getCoordinateSystemByIndex( xDiagram, 0 ) );
     if( rParameter.b3DLook )
-        ThreeDHelper::setScheme( xDiagram, rParameter.eThreeDLookScheme );
+        xDiagram->setScheme( rParameter.eThreeDLookScheme );
 
     if (xDiagram.is())
     {
@@ -1155,7 +1156,7 @@ void CombiColumnLineChartDialogController::fillExtraControls(
     if (!m_xMF_NumberOfLines)
         return;
 
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xChartModel );
+    rtl::Reference< Diagram > xDiagram = xChartModel->getFirstChartDiagram();
     if(!xDiagram.is())
         return;
 

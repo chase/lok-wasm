@@ -21,9 +21,6 @@
 
 #include <sal/config.h>
 
-#include <cstddef>
-#include <cstring>
-
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
 
@@ -1353,8 +1350,9 @@ void Test::testSingleByte() {
                 0x03A6,0x0398,0x03A9,0x03B4,0x221E,0x03C6,0x03B5,0x2229,
                 0x2261,0x00B1,0x2265,0x2264,0x2320,0x2321,0x00F7,0x2248,
                 0x00B0,0x2219,0x00B7,0x221A,0x207F,0x00B2,0x25A0,0x00A0 } } };
-    for (std::size_t i = 0; i < SAL_N_ELEMENTS(data); ++i) {
-        testSingleByteCharSet(data[i]);
+    for (auto const& aDatum : data)
+    {
+        testSingleByteCharSet(aDatum);
     }
 }
 
@@ -2628,8 +2626,9 @@ void Test::testComplex() {
               RTL_UNICODETOTEXT_FLAGS_UNDEFINED_ERROR }
 #endif
         };
-    for (std::size_t i = 0; i < SAL_N_ELEMENTS(data); ++i) {
-        doComplexCharSetTest(data[i]);
+    for (auto const& aDatum : data)
+    {
+        doComplexCharSetTest(aDatum);
     }
 }
 
@@ -2723,8 +2722,9 @@ void Test::testComplexCut() {
               false,
               false,
               RTL_UNICODETOTEXT_FLAGS_UNDEFINED_ERROR } */ };
-    for (std::size_t i = 0; i < SAL_N_ELEMENTS(data); ++i) {
-        doComplexCharSetCutTest(data[i]);
+    for (auto const& aDatum : data)
+    {
+        doComplexCharSetCutTest(aDatum);
     }
 #endif
 }
@@ -2741,7 +2741,7 @@ void Test::testInvalidUtf7() {
          | RTL_TEXTTOUNICODE_FLAGS_INVALID_DEFAULT | RTL_TEXTTOUNICODE_FLAGS_FLUSH),
         &info, &converted);
     CPPUNIT_ASSERT_EQUAL(sal_Size(1), size);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"\uFFFD"), OUString(buf, sal_Int32(size)));
+    CPPUNIT_ASSERT_EQUAL(u"\uFFFD"_ustr, OUString(buf, sal_Int32(size)));
     CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
     CPPUNIT_ASSERT_EQUAL(sal_Size(1), converted);
     rtl_destroyTextToUnicodeConverter(converter);
@@ -2766,7 +2766,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(4), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD\uFFFD\uFFFD\uFFFD"),
+            u"\uFFFD\uFFFD\uFFFD\uFFFD"_ustr,
             OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(4), converted);
@@ -2790,7 +2790,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(1), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD"), OUString(buf, sal_Int32(size)));
+            u"\uFFFD"_ustr, OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(2), converted);
         rtl_destroyTextToUnicodeConverter(converter);
@@ -2833,7 +2833,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(1), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD"), OUString(buf, sal_Int32(size)));
+            u"\uFFFD"_ustr, OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(3), converted);
         rtl_destroyTextToUnicodeConverter(converter);
@@ -2876,7 +2876,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(2), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD."), OUString(buf, sal_Int32(size)));
+            u"\uFFFD."_ustr, OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(3), converted);
         rtl_destroyTextToUnicodeConverter(converter);
@@ -2900,7 +2900,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(2), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD\uFFFD"), OUString(buf, sal_Int32(size)));
+            u"\uFFFD\uFFFD"_ustr, OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(6), converted);
         rtl_destroyTextToUnicodeConverter(converter);
@@ -2923,7 +2923,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(1), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD"), OUString(buf, sal_Int32(size)));
+            u"\uFFFD"_ustr, OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(4), converted);
         rtl_destroyTextToUnicodeConverter(converter);
@@ -2946,7 +2946,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(1), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD"), OUString(buf, sal_Int32(size)));
+            u"\uFFFD"_ustr, OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(4), converted);
         rtl_destroyTextToUnicodeConverter(converter);
@@ -2970,7 +2970,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(1), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD"), OUString(buf, sal_Int32(size)));
+            u"\uFFFD"_ustr, OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(5), converted);
         rtl_destroyTextToUnicodeConverter(converter);
@@ -2994,7 +2994,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(1), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD"), OUString(buf, sal_Int32(size)));
+            u"\uFFFD"_ustr, OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(6), converted);
         rtl_destroyTextToUnicodeConverter(converter);
@@ -3017,7 +3017,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(1), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD"), OUString(buf, sal_Int32(size)));
+            u"\uFFFD"_ustr, OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(1), converted);
         rtl_destroyTextToUnicodeConverter(converter);
@@ -3027,7 +3027,7 @@ void Test::testInvalidUtf8() {
         auto const converter = rtl_createTextToUnicodeConverter(
             RTL_TEXTENCODING_JAVA_UTF8);
         CPPUNIT_ASSERT(converter != nullptr);
-        constexpr OStringLiteral input(u8"\U00010000");
+        constexpr OString input(u8"\U00010000"_ostr);
         sal_Unicode buf[TEST_STRING_SIZE];
         sal_uInt32 info;
         sal_Size converted;
@@ -3041,7 +3041,7 @@ void Test::testInvalidUtf8() {
             &info, &converted);
         CPPUNIT_ASSERT_EQUAL(sal_Size(1), size);
         CPPUNIT_ASSERT_EQUAL(
-            OUString(u"\uFFFD"), OUString(buf, sal_Int32(size)));
+            u"\uFFFD"_ustr, OUString(buf, sal_Int32(size)));
         CPPUNIT_ASSERT_EQUAL(RTL_TEXTTOUNICODE_INFO_INVALID, info);
         CPPUNIT_ASSERT_EQUAL(sal_Size(4), converted);
         rtl_destroyTextToUnicodeConverter(converter);
@@ -3189,21 +3189,21 @@ void Test::testMime() {
         { "CP154", RTL_TEXTENCODING_PT154, false },
         { "Cyrillic-Asian", RTL_TEXTENCODING_PT154, false }
     };
-    for (std::size_t i = 0; i < SAL_N_ELEMENTS(data); ++i) {
-        if (data[i].mime == nullptr) {
-            OSL_ASSERT(data[i].reverse);
-            CPPUNIT_ASSERT_EQUAL(
-                static_cast< char const * >(nullptr),
-                rtl_getMimeCharsetFromTextEncoding(data[i].encoding));
-        } else {
-            CPPUNIT_ASSERT_EQUAL(
-                data[i].encoding,
-                rtl_getTextEncodingFromMimeCharset(data[i].mime));
-            if (data[i].reverse) {
-                CPPUNIT_ASSERT_EQUAL(
-                    OString(data[i].mime),
-                    OString(
-                        rtl_getMimeCharsetFromTextEncoding(data[i].encoding)));
+    for (auto const[pMime,nEncoding,bReverse] : data)
+    {
+        if (pMime == nullptr)
+        {
+            OSL_ASSERT(bReverse);
+            CPPUNIT_ASSERT_EQUAL(static_cast< char const * >(nullptr),
+                                 rtl_getMimeCharsetFromTextEncoding(nEncoding));
+        }
+        else
+        {
+            CPPUNIT_ASSERT_EQUAL(nEncoding, rtl_getTextEncodingFromMimeCharset(pMime));
+            if (bReverse)
+            {
+                CPPUNIT_ASSERT_EQUAL(OString(pMime),
+                                     OString( rtl_getMimeCharsetFromTextEncoding(nEncoding)));
             }
         }
     }
@@ -3290,17 +3290,16 @@ void Test::testWindows() {
         { 0, RTL_TEXTENCODING_UCS2, true },
         { 57002, RTL_TEXTENCODING_ISCII_DEVANAGARI, true }
     };
-    for (std::size_t i = 0; i < SAL_N_ELEMENTS(data); ++i) {
-        OSL_ASSERT(data[i].codePage != 0 || data[i].reverse);
-        if (data[i].codePage != 0) {
-            CPPUNIT_ASSERT_EQUAL(
-                data[i].encoding,
-                rtl_getTextEncodingFromWindowsCodePage(data[i].codePage));
+    for (auto const[nCodePage,nEncoding,bReverse] : data)
+    {
+        OSL_ASSERT(nCodePage != 0 || bReverse);
+        if (nCodePage != 0)
+        {
+            CPPUNIT_ASSERT_EQUAL( nEncoding, rtl_getTextEncodingFromWindowsCodePage(nCodePage));
         }
-        if (data[i].reverse) {
-            CPPUNIT_ASSERT_EQUAL(
-                data[i].codePage,
-                rtl_getWindowsCodePageFromTextEncoding(data[i].encoding));
+        if (bReverse)
+        {
+            CPPUNIT_ASSERT_EQUAL( nCodePage, rtl_getWindowsCodePageFromTextEncoding(nEncoding));
         }
     }
 }
@@ -3364,11 +3363,12 @@ void Test::testInfo() {
         { RTL_TEXTENCODING_PT154, RTL_TEXTENCODING_INFO_ASCII, true },
         { RTL_TEXTENCODING_PT154, RTL_TEXTENCODING_INFO_MIME, true }
     };
-    for (std::size_t i = 0; i < SAL_N_ELEMENTS(data); ++i) {
+    for (auto const[nEncoding, nFlag, bValue] : data)
+    {
         rtl_TextEncodingInfo info;
         info.StructSize = sizeof info;
-        CPPUNIT_ASSERT(rtl_getTextEncodingInfo(data[i].encoding, &info));
-        CPPUNIT_ASSERT_EQUAL(data[i].value, ((info.Flags & data[i].flag) != 0));
+        CPPUNIT_ASSERT(rtl_getTextEncodingInfo(nEncoding, &info));
+        CPPUNIT_ASSERT_EQUAL(bValue, ((info.Flags & nFlag) != 0));
     }
 }
 

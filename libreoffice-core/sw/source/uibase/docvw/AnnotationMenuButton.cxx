@@ -30,7 +30,7 @@
 
 namespace sw::annotation {
 
-IMPL_LINK(SwAnnotationWin, SelectHdl, const OString&, rIdent, void)
+IMPL_LINK(SwAnnotationWin, SelectHdl, const OUString&, rIdent, void)
 {
     if (rIdent.isEmpty())
         return;
@@ -79,13 +79,13 @@ IMPL_LINK_NOARG(SwAnnotationWin, ToggleHdl, weld::Toggleable&, void)
     }
     else
     {
-        mxMenuButton->set_item_visible("reply", !IsProtected());
-        mxMenuButton->set_item_visible("sep1", !IsProtected());
+        mxMenuButton->set_item_visible("reply", !IsReadOnlyOrProtected());
+        mxMenuButton->set_item_visible("sep1", !IsReadOnlyOrProtected());
         mxMenuButton->set_item_visible("resolve", !IsResolved());
         mxMenuButton->set_item_visible("unresolve", IsResolved());
         mxMenuButton->set_item_visible("resolvethread", !IsThreadResolved());
         mxMenuButton->set_item_visible("unresolvethread", IsThreadResolved());
-        mxMenuButton->set_item_visible("delete", !IsProtected());
+        mxMenuButton->set_item_visible("delete", !IsReadOnlyOrProtected());
     }
 
     mxMenuButton->set_item_visible("deletethread", !bReadOnly);

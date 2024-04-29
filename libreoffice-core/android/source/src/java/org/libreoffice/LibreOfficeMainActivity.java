@@ -60,7 +60,7 @@ import java.util.UUID;
 public class LibreOfficeMainActivity extends AppCompatActivity implements SettingsListenerModel.OnSettingsPreferenceChangedListener {
 
     private static final String LOGTAG = "LibreOfficeMainActivity";
-    private static final String ENABLE_EXPERIMENTAL_PREFS_KEY = "ENABLE_EXPERIMENTAL";
+    public static final String ENABLE_EXPERIMENTAL_PREFS_KEY = "ENABLE_EXPERIMENTAL";
     private static final String ASSETS_EXTRACTED_PREFS_KEY = "ASSETS_EXTRACTED";
     private static final String ENABLE_DEVELOPER_PREFS_KEY = "ENABLE_DEVELOPER";
     private static final int REQUEST_CODE_SAVEAS = 12345;
@@ -350,7 +350,11 @@ public class LibreOfficeMainActivity extends AppCompatActivity implements Settin
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType(FileUtilities.MIMETYPE_PDF);
+        // suggest directory and file name based on the doc
         intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, mDocumentUri);
+        final String displayName = toolbarTop.getTitle().toString();
+        final String suggestedFileName = FileUtilities.stripExtensionFromFileName(displayName) + ".pdf";
+        intent.putExtra(Intent.EXTRA_TITLE, suggestedFileName);
 
         startActivityForResult(intent, REQUEST_CODE_EXPORT_TO_PDF);
     }
@@ -416,7 +420,7 @@ public class LibreOfficeMainActivity extends AppCompatActivity implements Settin
     }
 
     public void saveFileToOriginalSource() {
-        if (isReadOnlyMode() || mTempFile == null || mDocumentUri == null || !mDocumentUri.getScheme().equals(ContentResolver.SCHEME_CONTENT))
+        if (mTempFile == null || mDocumentUri == null || !mDocumentUri.getScheme().equals(ContentResolver.SCHEME_CONTENT))
             return;
 
         boolean copyOK = false;
@@ -1085,21 +1089,9 @@ public class LibreOfficeMainActivity extends AppCompatActivity implements Settin
     }
 
     public void startPresentation(String tempPath) {
-        // pre-KitKat android doesn't have chrome-based WebView, which is needed to show svg slideshow
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            Intent intent = new Intent(this, PresentationActivity.class);
-            intent.setData(Uri.parse(tempPath));
-            startActivity(intent);
-        } else {
-            // copy the svg file path to clipboard for the user to paste in a browser
-            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            ClipData clip = ClipData.newPlainText("temp svg file path", tempPath);
-            clipboard.setPrimaryClip(clip);
-
-            AlertDialog.Builder builder = new AlertDialog.Builder(this);
-            builder.setMessage(R.string.alert_copy_svg_slide_show_to_clipboard)
-                    .setPositiveButton(R.string.alert_copy_svg_slide_show_to_clipboard_dismiss, null).show();
-        }
+        Intent intent = new Intent(this, PresentationActivity.class);
+        intent.setData(Uri.parse(tempPath));
+        startActivity(intent);
     }
 
     @Override

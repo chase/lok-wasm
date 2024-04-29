@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_LINGUISTIC_SOURCE_DICIMP_HXX
-#define INCLUDED_LINGUISTIC_SOURCE_DICIMP_HXX
+#pragma once
 
 #include <com/sun/star/linguistic2/XDictionary.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
@@ -30,7 +29,7 @@
 
 #include "defs.hxx"
 
-#define DIC_MAX_ENTRIES     30000
+#define DIC_MAX_ENTRIES SAL_MAX_INT32
 
 sal_Int16 ReadDicVersion( SvStream& rStream, LanguageType &nLng, bool &bNeg, OUString &aDicName );
 
@@ -167,8 +166,5 @@ public:
     virtual OUString SAL_CALL
         getReplacementText() override;
 };
-
-
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

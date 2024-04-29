@@ -23,7 +23,7 @@
 
 #include <rtl/character.hxx>
 
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <graphic/GraphicReader.hxx>
 
 #include "xbmread.hxx"
@@ -330,8 +330,8 @@ ReadState XBMReader::ReadXBM( Graphic& rGraphic )
 
                         if ( bStatus && nWidth && nHeight )
                         {
-                            aBmp1 = Bitmap(Size(nWidth, nHeight), vcl::PixelFormat::N1_BPP);
-                            pAcc1 = BitmapScopedWriteAccess(aBmp1);
+                            aBmp1 = Bitmap(Size(nWidth, nHeight), vcl::PixelFormat::N8_BPP, &Bitmap::GetGreyPalette(256));
+                            pAcc1 = aBmp1;
 
                             if( pAcc1 )
                             {
@@ -349,7 +349,7 @@ ReadState XBMReader::ReadXBM( Graphic& rGraphic )
 
         if (bStatus && pAcc1)
         {
-            Bitmap aBlackBmp(Size(pAcc1->Width(), pAcc1->Height()), vcl::PixelFormat::N1_BPP);
+            Bitmap aBlackBmp(Size(pAcc1->Width(), pAcc1->Height()), vcl::PixelFormat::N8_BPP, &Bitmap::GetGreyPalette(256));
 
             pAcc1.reset();
             aBlackBmp.Erase( COL_BLACK );

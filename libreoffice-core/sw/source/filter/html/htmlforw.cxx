@@ -163,7 +163,7 @@ static void lcl_html_outEvents( SvStream& rStrm,
             }
         }
 
-        OString sOut = " ";
+        OString sOut = " "_ostr;
         if( pOpt && (EXTENDED_STYPE != eScriptType ||
                      rDesc.AddListenerParam.isEmpty()) )
             sOut += pOpt;
@@ -433,16 +433,16 @@ void SwHTMLWriter::OutForm( bool bOn,
     if( !bOn )
     {
         DecIndentLevel(); // indent content of form
-        if( m_bLFPossible )
+        if (IsLFPossible())
             OutNewLine();
         HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_form), false );
-        m_bLFPossible = true;
+        SetLFPossible(true);
 
         return;
     }
 
     // the new form is opened
-    if( m_bLFPossible )
+    if (IsLFPossible())
         OutNewLine();
     OString sOut = "<" + GetNamespace() + OOO_STRING_SVTOOLS_HTML_form;
 
@@ -456,7 +456,7 @@ void SwHTMLWriter::OutForm( bool bOn,
             sOut += " " OOO_STRING_SVTOOLS_HTML_O_name "=\"";
             Strm().WriteOString( sOut );
             HTMLOutFuncs::Out_String( Strm(), *s );
-            sOut = "\"";
+            sOut = "\""_ostr;
         }
     }
 
@@ -470,7 +470,7 @@ void SwHTMLWriter::OutForm( bool bOn,
             OUString aURL
                 = URIHelper::simpleNormalizedMakeRelative( GetBaseURL(), *s);
             HTMLOutFuncs::Out_String( Strm(), aURL );
-            sOut = "\"";
+            sOut = "\""_ostr;
         }
     }
 
@@ -514,7 +514,7 @@ void SwHTMLWriter::OutForm( bool bOn,
             sOut += " " OOO_STRING_SVTOOLS_HTML_O_target "=\"";
             Strm().WriteOString( sOut );
             HTMLOutFuncs::Out_String( Strm(), *s );
-            sOut = "\"";
+            sOut = "\""_ostr;
         }
     }
 
@@ -524,7 +524,7 @@ void SwHTMLWriter::OutForm( bool bOn,
     Strm().WriteChar( '>' );
 
     IncIndentLevel(); // indent content of form
-    m_bLFPossible = true;
+    SetLFPossible(true);
 }
 
 void SwHTMLWriter::OutHiddenControls(
@@ -569,7 +569,7 @@ void SwHTMLWriter::OutHiddenControls(
 
         if( form::FormComponentType::HIDDENCONTROL == *n )
         {
-            if( m_bLFPossible )
+            if (IsLFPossible())
                 OutNewLine( true );
             OString sOut = "<" + GetNamespace() + OOO_STRING_SVTOOLS_HTML_input " "
                 OOO_STRING_SVTOOLS_HTML_O_type "=\""
@@ -583,7 +583,7 @@ void SwHTMLWriter::OutHiddenControls(
                     sOut += " " OOO_STRING_SVTOOLS_HTML_O_name "=\"";
                     Strm().WriteOString( sOut );
                     HTMLOutFuncs::Out_String( Strm(), *s );
-                    sOut = "\"";
+                    sOut = "\""_ostr;
                 }
             }
             aTmp = xPropSet->getPropertyValue( "HiddenValue" );
@@ -594,7 +594,7 @@ void SwHTMLWriter::OutHiddenControls(
                     sOut += " " OOO_STRING_SVTOOLS_HTML_O_value "=\"";
                     Strm().WriteOString( sOut );
                     HTMLOutFuncs::Out_String( Strm(), *s );
-                    sOut = "\"";
+                    sOut = "\""_ostr;
                 }
             }
             sOut += ">";
@@ -670,7 +670,7 @@ static void GetControlSize(const SdrUnoObj& rFormObj, Size& rSz, SwDoc *pDoc)
     rSz.setHeight( nLines );
 }
 
-Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
+SwHTMLWriter& OutHTML_DrawFrameFormatAsControl( SwHTMLWriter& rWrt,
                                      const SwDrawFrameFormat& rFormat,
                                      const SdrUnoObj& rFormObj,
                                      bool bInCntnr )
@@ -686,8 +686,7 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
     uno::Reference< beans::XPropertySetInfo > xPropSetInfo =
             xPropSet->getPropertySetInfo();
 
-    SwHTMLWriter & rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    rHTMLWrt.m_nFormCntrlCnt++;
+    rWrt.m_nFormCntrlCnt++;
 
     enum Tag { TAG_INPUT, TAG_SELECT, TAG_TEXTAREA, TAG_NONE };
     static char const * const TagNames[] = {
@@ -770,8 +769,8 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
         break;
 
     case form::FormComponentType::LISTBOX:
-        if( rHTMLWrt.m_bLFPossible )
-            rHTMLWrt.OutNewLine( true );
+        if (rWrt.IsLFPossible())
+            rWrt.OutNewLine( true );
         eTag = TAG_SELECT;
         aTmp = xPropSet->getPropertyValue( "Dropdown" );
         if( auto b1 = o3tl::tryAccess<bool>(aTmp) )
@@ -810,14 +809,14 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
             if( xPropSetInfo->hasPropertyByName( sMultiLine ) )
             {
                 aTmp = xPropSet->getPropertyValue( sMultiLine );
-                auto b = o3tl::tryAccess<bool>(aTmp);
-                bMultiLine = b && *b;
+                std::optional<const bool> b = o3tl::tryAccess<bool>(aTmp);
+                bMultiLine = b.has_value() && *b;
             }
 
             if( bMultiLine )
             {
-                if( rHTMLWrt.m_bLFPossible )
-                    rHTMLWrt.OutNewLine( true );
+                if (rWrt.IsLFPossible())
+                    rWrt.OutNewLine( true );
                 eTag = TAG_TEXTAREA;
 
                 if( aSz.Height() )
@@ -838,8 +837,8 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
                 {
                     const char *pWrapStr = nullptr;
                     auto aTmp2 = xPropSet->getPropertyValue( "HardLineBreaks" );
-                    auto b = o3tl::tryAccess<bool>(aTmp2);
-                    pWrapStr = (b && *b) ? OOO_STRING_SVTOOLS_HTML_WW_hard
+                    std::optional<const bool> b = o3tl::tryAccess<bool>(aTmp2);
+                    pWrapStr = (b.has_value() && *b) ? OOO_STRING_SVTOOLS_HTML_WW_hard
                                          : OOO_STRING_SVTOOLS_HTML_WW_soft;
                     sOptions += OString::Concat(" " OOO_STRING_SVTOOLS_HTML_O_wrap "=\"") +
                         pWrapStr + "\"";
@@ -934,7 +933,7 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
             sOut += " " OOO_STRING_SVTOOLS_HTML_O_name "=\"";
             rWrt.Strm().WriteOString( sOut );
             HTMLOutFuncs::Out_String( rWrt.Strm(), *s );
-            sOut = "\"";
+            sOut = "\""_ostr;
         }
     }
 
@@ -952,7 +951,7 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
         sOut += " " OOO_STRING_SVTOOLS_HTML_O_value "=\"";
         rWrt.Strm().WriteOString( sOut );
         HTMLOutFuncs::Out_String( rWrt.Strm(), sValue );
-        sOut = "\"";
+        sOut = "\""_ostr;
     }
 
     sOut += " " + sOptions;
@@ -969,23 +968,11 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
 
                 HTMLOutFuncs::Out_String( rWrt.Strm(),
                             URIHelper::simpleNormalizedMakeRelative( rWrt.GetBaseURL(), *s) );
-                sOut = "\"";
+                sOut = "\""_ostr;
             }
         }
 
-        Size aTwipSz( rFormObj.GetLogicRect().GetSize() );
-        Size aPixelSz( 0, 0 );
-        if( (aTwipSz.Width() || aTwipSz.Height()) &&
-            Application::GetDefaultDevice() )
-        {
-            aPixelSz =
-                Application::GetDefaultDevice()->LogicToPixel( aTwipSz,
-                                                    MapMode(MapUnit::MapTwip) );
-            if( !aPixelSz.Width() && aTwipSz.Width() )
-                aPixelSz.setWidth( 1 );
-            if( !aPixelSz.Height() && aTwipSz.Height() )
-                aPixelSz.setHeight( 1 );
-        }
+        Size aPixelSz(SwHTMLWriter::ToPixel(rFormObj.GetLogicRect().GetSize()));
 
         if( aPixelSz.Width() )
         {
@@ -1018,7 +1005,7 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
         rWrt.Strm().WriteOString( sOut );
 
     OSL_ENSURE( !bInCntnr, "Container is not supported for Controls" );
-    if( rHTMLWrt.IsHTMLMode( HTMLMODE_ABS_POS_DRAW ) && !bInCntnr )
+    if( rWrt.IsHTMLMode( HTMLMODE_ABS_POS_DRAW ) && !bInCntnr )
     {
         // If Character-Objects can't be positioned absolutely,
         // then delete the corresponding flag.
@@ -1028,14 +1015,14 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
     }
     OString aEndTags;
     if( nFrameOpts != HtmlFrmOpts::NONE )
-        aEndTags = rHTMLWrt.OutFrameFormatOptions(rFormat, OUString(), nFrameOpts);
+        aEndTags = rWrt.OutFrameFormatOptions(rFormat, OUString(), nFrameOpts);
 
-    if( rHTMLWrt.m_bCfgOutStyles )
+    if( rWrt.m_bCfgOutStyles )
     {
         bool bEdit = TAG_TEXTAREA == eTag || TYPE_FILE == eType ||
                      TYPE_TEXT == eType;
 
-        SfxItemSetFixed<RES_CHRATR_BEGIN, RES_CHRATR_END> aItemSet( rHTMLWrt.m_pDoc->GetAttrPool() );
+        SfxItemSetFixed<RES_CHRATR_BEGIN, RES_CHRATR_END> aItemSet( rWrt.m_pDoc->GetAttrPool() );
         if( xPropSetInfo->hasPropertyByName( "BackgroundColor" ) )
         {
             aTmp = xPropSet->getPropertyValue( "BackgroundColor" );
@@ -1133,12 +1120,12 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
             }
         }
 
-        rHTMLWrt.OutCSS1_FrameFormatOptions( rFormat, nFrameOpts, &rFormObj,
+        rWrt.OutCSS1_FrameFormatOptions( rFormat, nFrameOpts, &rFormObj,
                                         &aItemSet );
     }
 
     uno::Reference< form::XFormComponent >  xFormComp( xControlModel, uno::UNO_QUERY );
-    lcl_html_outEvents( rWrt.Strm(), xFormComp, rHTMLWrt.m_bCfgStarBasic );
+    lcl_html_outEvents( rWrt.Strm(), xFormComp, rWrt.m_bCfgStarBasic );
 
     rWrt.Strm().WriteChar( '>' );
 
@@ -1147,7 +1134,7 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
         aTmp = xPropSet->getPropertyValue( "StringItemList" );
         if( auto aList = o3tl::tryAccess<uno::Sequence<OUString>>(aTmp) )
         {
-            rHTMLWrt.IncIndentLevel(); // the content of Select can be indented
+            rWrt.IncIndentLevel(); // the content of Select can be indented
             sal_Int32 nCnt = aList->getLength();
             const OUString *pStrings = aList->getConstArray();
 
@@ -1191,14 +1178,14 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
                 if( bSelected )
                     nSel++;
 
-                rHTMLWrt.OutNewLine(); // every Option gets its own line
-                sOut = "<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_option;
+                rWrt.OutNewLine(); // every Option gets its own line
+                sOut = "<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_option;
                 if( !sVal.isEmpty() || bEmptyVal )
                 {
                     sOut += " " OOO_STRING_SVTOOLS_HTML_O_value "=\"";
                     rWrt.Strm().WriteOString( sOut );
                     HTMLOutFuncs::Out_String( rWrt.Strm(), sVal );
-                    sOut = "\"";
+                    sOut = "\""_ostr;
                 }
                 if( bSelected )
                     sOut += " " OOO_STRING_SVTOOLS_HTML_O_selected;
@@ -1208,12 +1195,12 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
 
                 HTMLOutFuncs::Out_String( rWrt.Strm(), pStrings[i] );
             }
-            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_option), false );
+            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_option), false );
 
-            rHTMLWrt.DecIndentLevel();
-            rHTMLWrt.OutNewLine();// the </SELECT> gets its own line
+            rWrt.DecIndentLevel();
+            rWrt.OutNewLine();// the </SELECT> gets its own line
         }
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_select), false );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_select), false );
     }
     else if( TAG_TEXTAREA == eTag )
     {
@@ -1234,12 +1221,12 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
             while ( nPos != -1 )
             {
                 if( nPos )
-                    rWrt.Strm().WriteCharPtr( SAL_NEWLINE_STRING );
+                    rWrt.Strm().WriteOString( SAL_NEWLINE_STRING );
                 OUString aLine = sVal.getToken( 0, 0x0A, nPos );
                 HTMLOutFuncs::Out_String( rWrt.Strm(), aLine );
             }
         }
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_textarea), false );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_textarea), false );
     }
     else if( TYPE_CHECKBOX == eType || TYPE_RADIO == eType )
     {
@@ -1257,10 +1244,10 @@ Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt,
         rWrt.Strm().WriteOString( aEndTags );
 
     // Controls aren't bound to a paragraph, therefore don't output LF anymore!
-    rHTMLWrt.m_bLFPossible = false;
+    rWrt.SetLFPossible(false);
 
-    if( rHTMLWrt.mxFormComps.is() )
-        rHTMLWrt.OutHiddenControls( rHTMLWrt.mxFormComps, xPropSet );
+    if( rWrt.mxFormComps.is() )
+        rWrt.OutHiddenControls( rWrt.mxFormComps, xPropSet );
     return rWrt;
 }
 
@@ -1319,20 +1306,18 @@ void SwHTMLWriter::GetControls()
     }
 
     // and now the ones in a character-bound frame
-    const SwFrameFormats* pSpzFrameFormats = m_pDoc->GetSpzFrameFormats();
-    for( size_t i=0; i<pSpzFrameFormats->size(); i++ )
+    for(sw::SpzFrameFormat* pSpz: *m_pDoc->GetSpzFrameFormats())
     {
-        const SwFrameFormat *pFrameFormat = (*pSpzFrameFormats)[i];
-        if( RES_DRAWFRMFMT != pFrameFormat->Which() )
+        if( RES_DRAWFRMFMT != pSpz->Which() )
             continue;
 
-        const SwFormatAnchor& rAnchor = pFrameFormat->GetAnchor();
+        const SwFormatAnchor& rAnchor = pSpz->GetAnchor();
         const SwNode *pAnchorNode = rAnchor.GetAnchorNode();
         if ((RndStdIds::FLY_AS_CHAR != rAnchor.GetAnchorId()) || !pAnchorNode)
             continue;
 
         const SdrObject *pSdrObj =
-            SwHTMLWriter::GetHTMLControl( *static_cast<const SwDrawFrameFormat*>(pFrameFormat) );
+            SwHTMLWriter::GetHTMLControl(*static_cast<SwDrawFrameFormat*>(pSpz) );
         if( !pSdrObj )
             continue;
 

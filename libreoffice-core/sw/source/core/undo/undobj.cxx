@@ -646,8 +646,44 @@ OUString GetUndoComment(SwUndoId eId)
         case SwUndoId::INSERT_PAGE_NUMBER:
             pId = STR_UNDO_INSERT_PAGE_NUMBER;
             break;
+        case SwUndoId::UPDATE_FORM_FIELD:
+            pId = STR_UNDO_UPDATE_FORM_FIELD;
+            break;
+        case SwUndoId::UPDATE_FORM_FIELDS:
+            pId = STR_UNDO_UPDATE_FORM_FIELDS;
+            break;
+        case SwUndoId::DELETE_FORM_FIELDS:
+            pId = STR_UNDO_DELETE_FORM_FIELDS;
+            break;
+        case SwUndoId::UPDATE_BOOKMARK:
+            pId = STR_UPDATE_BOOKMARK;
+            break;
+        case SwUndoId::UPDATE_BOOKMARKS:
+            pId = STR_UPDATE_BOOKMARKS;
+            break;
+        case SwUndoId::DELETE_BOOKMARKS:
+            pId = STR_DELETE_BOOKMARKS;
+            break;
+        case SwUndoId::UPDATE_FIELD:
+            pId = STR_UPDATE_FIELD;
+            break;
+        case SwUndoId::UPDATE_FIELDS:
+            pId = STR_UPDATE_FIELDS;
+            break;
+        case SwUndoId::DELETE_FIELDS:
+            pId = STR_DELETE_FIELDS;
+            break;
+        case SwUndoId::UPDATE_SECTIONS:
+            pId = STR_UPDATE_SECTIONS;
+            break;
         case SwUndoId::CHANGE_THEME:
             pId = STR_UNDO_CHANGE_THEME_COLORS;
+            break;
+        case SwUndoId::DELETE_SECTIONS:
+            pId = STR_DELETE_SECTIONS;
+            break;
+        case SwUndoId::FLYFRMFMT_DECORATIVE:
+            pId = STR_UNDO_FLYFRMFMT_DECORATIVE;
             break;
     }
 
@@ -914,7 +950,7 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
                     pTextNd->GetTextAttrForCharAt( nFootnoteSttIdx );
                 assert(pFootnoteHint);
                 SwContentIndex aIdx( pTextNd, nFootnoteSttIdx );
-                m_pHistory->Add( pFootnoteHint, pTextNd->GetIndex(), false );
+                m_pHistory->AddTextAttr(pFootnoteHint, pTextNd->GetIndex(), false);
                 pTextNd->EraseText( aIdx, 1 );
             }
 
@@ -939,7 +975,7 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
                     pTextNd->GetTextAttrForCharAt( nFootnoteSttIdx );
                 assert(pFootnoteHint);
                 SwContentIndex aIdx( pTextNd, nFootnoteSttIdx );
-                m_pHistory->Add( pFootnoteHint, pTextNd->GetIndex(), false );
+                m_pHistory->AddTextAttr(pFootnoteHint, pTextNd->GetIndex(), false);
                 pTextNd->EraseText( aIdx, 1 );
             }
         }
@@ -949,10 +985,10 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
     if( DelContentType::Fly & nDelContentType )
     {
         sal_uInt16 nChainInsPos = m_pHistory ? m_pHistory->Count() : 0;
-        const SwFrameFormats& rSpzArr = *rDoc.GetSpzFrameFormats();
+        const sw::SpzFrameFormats& rSpzArr = *rDoc.GetSpzFrameFormats();
         if( !rSpzArr.empty() )
         {
-            SwFrameFormat* pFormat;
+            sw::SpzFrameFormat* pFormat;
             const SwFormatAnchor* pAnchor;
             size_t n = rSpzArr.size();
             const SwPosition* pAPos;
@@ -977,7 +1013,7 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
                         SwTextAttr* const pFlyHint = pTextNd->GetTextAttrForCharAt(
                             pAPos->GetContentIndex());
                         assert(pFlyHint);
-                        m_pHistory->Add( pFlyHint, SwNodeOffset(0), false );
+                        m_pHistory->AddTextAttr(pFlyHint, SwNodeOffset(0), false);
                         // reset n so that no Format is skipped
                         n = n >= rSpzArr.size() ? rSpzArr.size() : n+1;
                     }
@@ -1087,6 +1123,7 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
         // #i81002#
         bool bSavePos = false;
         bool bSaveOtherPos = false;
+        bool bDelete = false;
         const ::sw::mark::IMark *const pBkmk = pMarkAccess->getAllMarksBegin()[n];
         auto const type(IDocumentMarkAccess::GetType(*pBkmk));
 
@@ -1103,6 +1140,7 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
             {
                 bSaveOtherPos = true;
             }
+            bDelete = bSavePos && bSaveOtherPos;
         }
         else
         {
@@ -1143,8 +1181,16 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
                 {
                     if( bMaybe )
                         bSavePos = true;
-                    bSaveOtherPos = true;
+                    bDelete = true;
                 }
+                if (bDelete || pBkmk->GetOtherMarkPos() == *pEnd)
+                {
+                    bSaveOtherPos = true; // tdf#148389 always undo if at end
+                }
+            }
+            if (!bSavePos && bMaybe && pBkmk->IsExpanded() && *pStt == pBkmk->GetMarkPos())
+            {
+                bSavePos = true; // tdf#148389 always undo if at start
             }
 
             if ( !bSavePos && !bSaveOtherPos
@@ -1183,6 +1229,7 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
                 {
                     bSavePos = true;
                     bSaveOtherPos = pBkmk->IsExpanded(); //tdf#90138, only save the other pos if there is one
+                    bDelete = true;
                 }
             }
         }
@@ -1193,11 +1240,10 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
             {
                 if( !m_pHistory )
                     m_pHistory.reset( new SwHistory );
-                m_pHistory->Add( *pBkmk, bSavePos, bSaveOtherPos );
+                m_pHistory->AddIMark(*pBkmk, bSavePos, bSaveOtherPos);
             }
             if ( bSavePos
-                 && ( bSaveOtherPos
-                      || !pBkmk->IsExpanded() ) )
+                 && (bDelete || !pBkmk->IsExpanded()))
             {
                 pMarkAccess->deleteMark(pMarkAccess->getAllMarksBegin()+n, false);
                 n--;

@@ -19,6 +19,8 @@ namespace comphelper::LibreOfficeKit
 
 static bool g_bActive(false);
 
+static bool g_bForkedChild(false);
+
 static bool g_bPartInInvalidation(false);
 
 static bool g_bTiledPainting(false);
@@ -96,6 +98,16 @@ void setActive(bool bActive)
 bool isActive()
 {
     return g_bActive;
+}
+
+void setForkedChild(bool bIsChild)
+{
+    g_bForkedChild = bIsChild;
+}
+
+bool isForkedChild()
+{
+    return g_bForkedChild;
 }
 
 void setPartInInvalidation(bool bPartInInvalidation)
@@ -182,6 +194,8 @@ void setCompatFlag(Compat flag) { g_eCompatFlags = static_cast<Compat>(g_eCompat
 
 bool isCompatFlagSet(Compat flag) { return (g_eCompatFlags & flag) == flag; }
 
+void resetCompatFlag() { g_eCompatFlags = Compat::none; }
+
 void setLocale(const LanguageTag& rLanguageTag)
 {
     g_aLanguageAndLocale.setLocale(rLanguageTag);
@@ -230,7 +244,7 @@ bool isAllowlistedLanguage(const OUString& lang)
                     continue;
 
                 std::cerr << s << " ";
-                aList.emplace_back(OStringToOUString(s.c_str(), RTL_TEXTENCODING_UTF8));
+                aList.emplace_back(OStringToOUString(s, RTL_TEXTENCODING_UTF8));
             }
             std::cerr << std::endl;
         }

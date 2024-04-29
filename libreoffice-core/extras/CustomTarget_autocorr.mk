@@ -9,6 +9,8 @@
 
 $(eval $(call gb_CustomTarget_CustomTarget,extras/source/autocorr))
 
+autocorr_PYTHONCOMMAND := $(call gb_ExternalExecutable_get_command,python)
+
 extras_AUTOCORR_LANGS := \
 	af-ZA:af-ZA \
 	bg:bg-BG \
@@ -53,6 +55,7 @@ extras_AUTOCORR_LANGS := \
 	sr-ME:sr-ME \
 	sr-RS:sr-RS \
 	sv:sv-SE \
+	th:th-TH \
 	tr:tr-TR \
 	vi:vi-VN \
 	vro:vro-EE \
@@ -221,6 +224,8 @@ extras_AUTOCORR_XMLFILES := \
 	sv/META-INF/manifest.xml \
 	sv/SentenceExceptList.xml \
 	sv/WordExceptList.xml \
+	th/DocumentList.xml \
+	th/META-INF/manifest.xml \
 	tr/DocumentList.xml \
 	tr/META-INF/manifest.xml \
 	tr/SentenceExceptList.xml \
@@ -268,11 +273,13 @@ $(call gb_CustomTarget_get_workdir,extras/source/autocorr)/acor_%.dat : \
         $$(addprefix \
             $(call gb_CustomTarget_get_workdir,extras/source/autocorr)/$$(call extras_AUTOCORR_SHORTLANG,$$*)/,\
                 mimetype \
-                $$(call extras_AUTOCORR_XMLFILES_LANG,$$(call extras_AUTOCORR_SHORTLANG,$$*)))
+                $$(call extras_AUTOCORR_XMLFILES_LANG,$$(call extras_AUTOCORR_SHORTLANG,$$*))) \
+		| $(call gb_ExternalExecutable_get_dependencies,python)
 	$(call gb_Output_announce,autocorr/acor_$*.dat,$(true),ZIP,2)
 	$(call gb_Trace_StartRange,autocorr/acor_$*.dat,ZIP)
 	$(call gb_Helper_abbreviate_dirs,\
 		cd $(dir $<) && \
+		$(autocorr_PYTHONCOMMAND) $(SRCDIR)/bin/check-autocorr.py DocumentList.xml && \
 		zip -q0X --filesync --must-match $@ mimetype && \
 		zip -qrX --must-match $@ $(call extras_AUTOCORR_XMLFILES_LANG,$(call extras_AUTOCORR_SHORTLANG,$*)) \
 	)

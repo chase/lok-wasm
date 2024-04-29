@@ -241,6 +241,11 @@ void SwDropCapsPict::UpdatePaintSettings()
             aFont.SetPitch(rFormatFont.GetPitch());
             aFont.SetCharSet(rFormatFont.GetCharSet());
         }
+
+        const Color& rFontColor = rWrtShell.GetViewOptions()->GetFontColor();
+        aFont.SetColor( rFontColor );
+        maCJKFont.SetColor( rFontColor );
+        maCTLFont.SetColor( rFontColor );
     }
 
     mnTextH = mnLines * mnTotLineH;
@@ -251,12 +256,6 @@ void SwDropCapsPict::UpdatePaintSettings()
     aFont.SetTransparent(true);
     maCJKFont.SetTransparent(true);
     maCTLFont.SetTransparent(true);
-
-    const Color& rFontColor = rWrtShell.GetViewOptions()->GetFontColor();
-
-    aFont.SetColor( rFontColor );
-    maCJKFont.SetColor( rFontColor );
-    maCTLFont.SetColor( rFontColor );
 
     aFont.SetFillColor(Application::GetSettings().GetStyleSettings().GetWindowColor());
     maCJKFont.SetFillColor(Application::GetSettings().GetStyleSettings().GetWindowColor());

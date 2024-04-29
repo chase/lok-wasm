@@ -17,7 +17,11 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "sallayout.hxx"
+#include <i18nlangtag/languagetag.hxx>
+#include <vcl/outdev.hxx>
+
+#include "impglyphitem.hxx"
+#include "ImplLayoutRuns.hxx"
 
 namespace vcl::text
 {
@@ -35,9 +39,9 @@ public:
     vcl::text::TextLayoutCache const* m_pTextLayoutCache;
 
     // positioning related inputs
-    const double* mpNaturalDXArray; // in floating point pixel units
+    const double* mpDXArray; // in floating point pixel units
     const sal_Bool* mpKashidaArray;
-    DeviceCoordinate mnLayoutWidth; // in pixel units
+    double mnLayoutWidth; // in pixel units
     Degree10 mnOrientation; // in 0-3600 system
 
     // data for bidi and glyph+script fallback
@@ -47,8 +51,8 @@ public:
     ImplLayoutArgs(OUString const& rStr, int nMinCharPos, int nEndCharPos, SalLayoutFlags nFlags,
                    LanguageTag aLanguageTag, vcl::text::TextLayoutCache const* pLayoutCache);
 
-    void SetLayoutWidth(DeviceCoordinate nWidth);
-    void SetNaturalDXArray(const double* pDXArray);
+    void SetLayoutWidth(double nWidth);
+    void SetDXArray(const double* pDXArray);
     void SetKashidaArray(const sal_Bool* pKashidaArray);
     void SetOrientation(Degree10 nOrientation);
 
@@ -56,7 +60,7 @@ public:
     bool GetNextPos(int* nCharPos, bool* bRTL);
     bool GetNextRun(int* nMinRunPos, int* nEndRunPos, bool* bRTL);
     void AddFallbackRun(int nMinRunPos, int nEndRunPos, bool bRTL);
-    bool HasDXArray() const { return mpNaturalDXArray; }
+    bool HasDXArray() const { return mpDXArray; }
 
     // methods used by BiDi and glyph fallback
     bool HasFallbackRun() const;

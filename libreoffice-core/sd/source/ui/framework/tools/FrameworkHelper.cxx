@@ -39,8 +39,6 @@
 
 #include <utility>
 #include <vcl/svapp.hxx>
-#include <osl/doublecheckedlocking.h>
-#include <osl/getglobalmutex.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <memory>
 #include <unordered_map>
@@ -201,8 +199,7 @@ namespace
         ::std::shared_ptr< ViewShell > pViewShell;
         try
         {
-            Reference<lang::XUnoTunnel> xViewTunnel( i_rViewShellWrapper, UNO_QUERY_THROW );
-            if (auto pWrapper = comphelper::getFromUnoTunnel<ViewShellWrapper>(xViewTunnel))
+            if (auto pWrapper = dynamic_cast<ViewShellWrapper*>(i_rViewShellWrapper.get()))
                 pViewShell = pWrapper->GetViewShell();
         }
         catch( const Exception& )
@@ -282,32 +279,21 @@ public:
 FrameworkHelper::ViewURLMap FrameworkHelper::maViewURLMap;
 
 FrameworkHelper::InstanceMap FrameworkHelper::maInstanceMap;
+std::mutex FrameworkHelper::maInstanceMapMutex;
 
 ::std::shared_ptr<FrameworkHelper> FrameworkHelper::Instance (ViewShellBase& rBase)
 {
-
-    ::std::shared_ptr<FrameworkHelper> pHelper;
+    std::unique_lock aGuard(maInstanceMapMutex);
 
     InstanceMap::const_iterator iHelper (maInstanceMap.find(&rBase));
-    if (iHelper == maInstanceMap.end())
-    {
-        ::osl::GetGlobalMutex aMutexFunctor;
-        ::osl::MutexGuard aGuard (aMutexFunctor());
-        if (iHelper == maInstanceMap.end())
-        {
-            pHelper = ::std::shared_ptr<FrameworkHelper>(
-                new FrameworkHelper(rBase),
-                FrameworkHelper::Deleter());
-            pHelper->Initialize();
-            OSL_DOUBLE_CHECKED_LOCKING_MEMORY_BARRIER();
-            maInstanceMap[&rBase] = pHelper;
-        }
-    }
-    else
-    {
-        OSL_DOUBLE_CHECKED_LOCKING_MEMORY_BARRIER();
-        pHelper = iHelper->second;
-    }
+    if (iHelper != maInstanceMap.end())
+        return iHelper->second;
+
+    ::std::shared_ptr<FrameworkHelper> pHelper(
+        new FrameworkHelper(rBase),
+        FrameworkHelper::Deleter());
+    pHelper->Initialize();
+    maInstanceMap[&rBase] = pHelper;
 
     return pHelper;
 }
@@ -725,8 +711,7 @@ OUString FrameworkHelper::ResourceIdToString (const Reference<XResourceId>& rxRe
             const Sequence<OUString> aAnchorURLs (rxResourceId->getAnchorURLs());
             for (const auto& rAnchorURL : aAnchorURLs)
             {
-                sString.append(" | ");
-                sString.append(rAnchorURL);
+                sString.append(" | " + rAnchorURL);
             }
         }
     }

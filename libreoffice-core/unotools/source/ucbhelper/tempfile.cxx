@@ -46,13 +46,23 @@ using namespace osl;
 
 namespace
 {
-    OUString gTempNameBase_Impl;
+OUString gTempNameBase_Impl;
+
+OUString ensureTrailingSlash(const OUString& url)
+{
+    if (!url.isEmpty() && !url.endsWith("/"))
+        return url + "/";
+    return url;
 }
 
-namespace utl
+OUString stripTrailingSlash(const OUString& url)
 {
+    if (url.endsWith("/"))
+        return url.copy(0, url.getLength() - 1);
+    return url;
+}
 
-static OUString getParentName( std::u16string_view aFileName )
+OUString getParentName( std::u16string_view aFileName )
 {
     size_t lastIndex = aFileName.rfind( '/' );
     OUString aParent;
@@ -71,17 +81,14 @@ static OUString getParentName( std::u16string_view aFileName )
     return aParent;
 }
 
-static bool ensuredir( const OUString& rUnqPath )
+bool ensuredir( const OUString& rUnqPath )
 {
     OUString aPath;
     if ( rUnqPath.isEmpty() )
         return false;
 
     // remove trailing slash
-    if ( rUnqPath.endsWith("/") )
-        aPath = rUnqPath.copy( 0, rUnqPath.getLength() - 1 );
-    else
-        aPath = rUnqPath;
+    aPath = stripTrailingSlash(rUnqPath);
 
     // HACK: create directory on a mount point with nobrowse option
     // returns ENOSYS in any case !!
@@ -115,7 +122,24 @@ static bool ensuredir( const OUString& rUnqPath )
     return bSuccess;
 }
 
-static OUString ConstructTempDir_Impl( const OUString* pParent, bool bCreateParentDirs )
+const OUString& getTempNameBase_Impl()
+{
+    if (gTempNameBase_Impl.isEmpty())
+    {
+        OUString ustrTempDirURL;
+        osl::FileBase::RC rc = osl::File::getTempDirURL(ustrTempDirURL);
+        if (rc == osl::FileBase::E_None)
+        {
+            gTempNameBase_Impl = ensureTrailingSlash(ustrTempDirURL);
+            ensuredir(gTempNameBase_Impl);
+        }
+    }
+    assert(gTempNameBase_Impl.isEmpty() || gTempNameBase_Impl.endsWith("/"));
+    DBG_ASSERT(!gTempNameBase_Impl.isEmpty(), "No TempDir!");
+    return gTempNameBase_Impl;
+}
+
+OUString ConstructTempDir_Impl( const OUString* pParent, bool bCreateParentDirs )
 {
     OUString aName;
 
@@ -147,28 +171,14 @@ static OUString ConstructTempDir_Impl( const OUString* pParent, bool bCreatePare
 
     if ( aName.isEmpty() )
     {
-        if (gTempNameBase_Impl.isEmpty())
-        {
-            OUString ustrTempDirURL;
-            ::osl::FileBase::RC rc = ::osl::File::getTempDirURL(
-                ustrTempDirURL );
-            if (rc == ::osl::FileBase::E_None)
-                gTempNameBase_Impl = ustrTempDirURL;
-            ensuredir( aName );
-        }
         // if no parent or invalid parent : use default directory
-        DBG_ASSERT( !gTempNameBase_Impl.isEmpty(), "No TempDir!" );
-        aName = gTempNameBase_Impl;
+        aName = getTempNameBase_Impl();
+        ensuredir(aName); // tdf#159769: always make sure it exists
     }
 
     // Make sure that directory ends with a separator
-    if( !aName.isEmpty() && !aName.endsWith("/") )
-        aName += "/";
-
-    return aName;
+    return ensureTrailingSlash(aName);
 }
-
-namespace {
 
 class Tokens {
 public:
@@ -233,12 +243,8 @@ private:
     sal_uInt32 m_count;
 };
 
-}
-
 sal_uInt32 UniqueTokens::globalValue = SAL_MAX_UINT32;
 
-namespace
-{
     class TempDirCreatedObserver : public DirectoryCreationObserver
     {
     public:
@@ -248,9 +254,8 @@ namespace
                 osl_File_Attribute_OwnWrite | osl_File_Attribute_OwnExe );
         };
     };
-};
 
-static OUString lcl_createName(
+OUString lcl_createName(
     std::u16string_view rLeadingChars, Tokens & tokens, std::u16string_view pExtension,
     const OUString* pParent, bool bDirectory, bool bKeep, bool bLock,
     bool bCreateParentDirs )
@@ -326,7 +331,7 @@ static OUString lcl_createName(
     return OUString();
 }
 
-static OUString CreateTempName_Impl( const OUString* pParent, bool bKeep, bool bDir = true )
+OUString CreateTempName_Impl( const OUString* pParent, bool bKeep, bool bDir = true )
 {
     OUString aEyeCatcher = "lu";
 #ifdef UNX
@@ -351,7 +356,7 @@ static OUString CreateTempName_Impl( const OUString* pParent, bool bKeep, bool b
                            false, false);
 }
 
-static OUString CreateTempNameFast()
+OUString CreateTempNameFast()
 {
     OUString aEyeCatcher = "lu";
 #ifdef UNX
@@ -372,12 +377,16 @@ static OUString CreateTempNameFast()
     aEyeCatcher += aPidString;
 #endif
 
-    OUString aName = ConstructTempDir_Impl( /*pParent*/nullptr, /*bCreateParentDirs*/false ) + aEyeCatcher;
+    OUString aName = getTempNameBase_Impl() + aEyeCatcher;
 
     tools::Guid aGuid(tools::Guid::Generate);
 
     return aName + aGuid.getOUString() + ".tmp" ;
 }
+}
+
+namespace utl
+{
 
 OUString CreateTempName()
 {
@@ -538,11 +547,8 @@ OUString SetTempNameBaseDirectory( const OUString &rBaseName )
     if( rBaseName.isEmpty() )
         return OUString();
 
-    OUString aUnqPath( rBaseName );
-
     // remove trailing slash
-    if ( rBaseName.endsWith("/") )
-        aUnqPath = rBaseName.copy( 0, rBaseName.getLength() - 1 );
+    OUString aUnqPath(stripTrailingSlash(rBaseName));
 
     // try to create the directory
     bool bRet = false;
@@ -558,16 +564,15 @@ OUString SetTempNameBaseDirectory( const OUString &rBaseName )
     if ( bRet )
     {
         // append own internal directory
-        OUString &rTempNameBase_Impl = gTempNameBase_Impl;
-        rTempNameBase_Impl = rBaseName + "/";
+        gTempNameBase_Impl = ensureTrailingSlash(rBaseName);
 
         TempFileNamed aBase( {}, true );
         if ( aBase.IsValid() )
             // use it in case of success
-            rTempNameBase_Impl = aBase.aName;
+            gTempNameBase_Impl = ensureTrailingSlash(aBase.aName);
 
         // return system path of used directory
-        FileBase::getSystemPathFromFileURL( rTempNameBase_Impl, aTmp );
+        FileBase::getSystemPathFromFileURL(gTempNameBase_Impl, aTmp);
     }
 
     return aTmp;
@@ -597,11 +602,11 @@ sal_Int32 SAL_CALL TempFileFastService::readBytes( css::uno::Sequence< sal_Int8 
 {
     std::unique_lock aGuard( maMutex );
     if ( mbInClosed )
-        throw css::io::NotConnectedException ( OUString(), static_cast < css::uno::XWeak * > (this ) );
+        throw css::io::NotConnectedException ( OUString(), getXWeak() );
 
     checkConnected();
     if (nBytesToRead < 0)
-        throw css::io::BufferSizeExceededException( OUString(), static_cast< css::uno::XWeak * >(this));
+        throw css::io::BufferSizeExceededException( OUString(), getXWeak());
 
     if (aData.getLength() < nBytesToRead)
         aData.realloc(nBytesToRead);
@@ -620,13 +625,13 @@ sal_Int32 SAL_CALL TempFileFastService::readSomeBytes( css::uno::Sequence< sal_I
     {
         std::unique_lock aGuard( maMutex );
         if ( mbInClosed )
-            throw css::io::NotConnectedException ( OUString(), static_cast < css::uno::XWeak * > (this ) );
+            throw css::io::NotConnectedException ( OUString(), getXWeak() );
 
         checkConnected();
         checkError();
 
         if (nMaxBytesToRead < 0)
-            throw css::io::BufferSizeExceededException( OUString(), static_cast < css::uno::XWeak * >( this ) );
+            throw css::io::BufferSizeExceededException( OUString(), getXWeak() );
 
         if (mpStream->eof())
         {
@@ -641,7 +646,7 @@ void SAL_CALL TempFileFastService::skipBytes( sal_Int32 nBytesToSkip )
 {
     std::unique_lock aGuard( maMutex );
     if ( mbInClosed )
-        throw css::io::NotConnectedException ( OUString(), static_cast < css::uno::XWeak * > (this ) );
+        throw css::io::NotConnectedException ( OUString(), getXWeak() );
 
     checkConnected();
     checkError();
@@ -653,7 +658,7 @@ sal_Int32 SAL_CALL TempFileFastService::available()
 {
     std::unique_lock aGuard( maMutex );
     if ( mbInClosed )
-        throw css::io::NotConnectedException ( OUString(), static_cast < css::uno::XWeak * > (this ) );
+        throw css::io::NotConnectedException ( OUString(), getXWeak() );
 
     checkConnected();
 
@@ -667,7 +672,7 @@ void SAL_CALL TempFileFastService::closeInput()
 {
     std::unique_lock aGuard( maMutex );
     if ( mbInClosed )
-        throw css::io::NotConnectedException ( OUString(), static_cast < css::uno::XWeak * > (this ) );
+        throw css::io::NotConnectedException ( OUString(), getXWeak() );
 
     mbInClosed = true;
 
@@ -685,20 +690,20 @@ void SAL_CALL TempFileFastService::writeBytes( const css::uno::Sequence< sal_Int
 {
     std::unique_lock aGuard( maMutex );
     if ( mbOutClosed )
-        throw css::io::NotConnectedException ( OUString(), static_cast < css::uno::XWeak * > (this ) );
+        throw css::io::NotConnectedException ( OUString(), getXWeak() );
 
     checkConnected();
     sal_uInt32 nWritten = mpStream->WriteBytes(aData.getConstArray(), aData.getLength());
     checkError();
     if  ( nWritten != static_cast<sal_uInt32>(aData.getLength()))
-        throw css::io::BufferSizeExceededException( OUString(),static_cast < css::uno::XWeak * > ( this ) );
+        throw css::io::BufferSizeExceededException( OUString(), getXWeak() );
 }
 
 void SAL_CALL TempFileFastService::flush()
 {
     std::unique_lock aGuard( maMutex );
     if ( mbOutClosed )
-        throw css::io::NotConnectedException ( OUString(), static_cast < css::uno::XWeak * > (this ) );
+        throw css::io::NotConnectedException ( OUString(), getXWeak() );
 
     checkConnected();
     mpStream->Flush();
@@ -709,7 +714,7 @@ void SAL_CALL TempFileFastService::closeOutput()
 {
     std::unique_lock aGuard( maMutex );
     if ( mbOutClosed )
-        throw css::io::NotConnectedException ( OUString(), static_cast < css::uno::XWeak * > (this ) );
+        throw css::io::NotConnectedException ( OUString(), getXWeak() );
 
     mbOutClosed = true;
     if (mpStream)
@@ -730,13 +735,13 @@ void SAL_CALL TempFileFastService::closeOutput()
 void TempFileFastService::checkError() const
 {
     if (!mpStream || mpStream->SvStream::GetError () != ERRCODE_NONE )
-        throw css::io::NotConnectedException ( OUString(), const_cast < css::uno::XWeak * > ( static_cast < const css::uno::XWeak * > (this ) ) );
+        throw css::io::NotConnectedException ( OUString(), const_cast < TempFileFastService * > (this)->getXWeak() );
 }
 
 void TempFileFastService::checkConnected()
 {
     if (!mpStream)
-        throw css::io::NotConnectedException ( OUString(), static_cast < css::uno::XWeak * > (this ) );
+        throw css::io::NotConnectedException ( OUString(), getXWeak() );
 }
 
 // XSeekable
@@ -760,7 +765,7 @@ sal_Int64 SAL_CALL TempFileFastService::getPosition()
     std::unique_lock aGuard( maMutex );
     checkConnected();
 
-    sal_uInt32 nPos = mpStream->Tell();
+    sal_uInt64 nPos = mpStream->Tell();
     checkError();
     return static_cast<sal_Int64>(nPos);
 }

@@ -23,6 +23,7 @@
 #include <global.hxx>
 #include <dociter.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <table.hxx>
 #include <column.hxx>
 #include <formulacell.hxx>
@@ -1423,7 +1424,7 @@ void ScHorizontalAttrIterator::InitForNextRow(bool bInitialization)
             nMinNextEnd = pNextEnd[nPos];
 
         // store positions of ScHorizontalAttrIterator elements (minimizing expensive ScPatternAttr comparisons)
-        if (i > nStartCol && ppPatterns[nThisHead] != ppPatterns[nPos])
+        if (i > nStartCol && !SfxPoolItem::areSame(ppPatterns[nThisHead], ppPatterns[nPos]))
         {
            pHorizEnd[nThisHead] = i - 1;
            nThisHead = nPos; // start position of the next horizontal group
@@ -1615,12 +1616,12 @@ ScDocRowHeightUpdater::ScDocRowHeightUpdater(ScDocument& rDoc, OutputDevice* pOu
 {
 }
 
-void ScDocRowHeightUpdater::update()
+void ScDocRowHeightUpdater::update(const bool bOnlyUsedRows)
 {
     if (!mpTabRangesArray || mpTabRangesArray->empty())
     {
         // No ranges defined. Update all rows in all tables.
-        updateAll();
+        updateAll(bOnlyUsedRows);
         return;
     }
 
@@ -1668,7 +1669,7 @@ void ScDocRowHeightUpdater::update()
     }
 }
 
-void ScDocRowHeightUpdater::updateAll()
+void ScDocRowHeightUpdater::updateAll(const bool bOnlyUsedRows)
 {
     sal_uInt64 nCellCount = 0;
     for (SCTAB nTab = 0; nTab < mrDoc.GetTableCount(); ++nTab)
@@ -1682,14 +1683,17 @@ void ScDocRowHeightUpdater::updateAll()
     ScProgress aProgress(mrDoc.GetDocumentShell(), ScResId(STR_PROGRESS_HEIGHTING), nCellCount, true);
 
     Fraction aZoom(1, 1);
-    sc::RowHeightContext aCxt(mrDoc.MaxRow(), mfPPTX, mfPPTY, aZoom, aZoom, mpOutDev);
     sal_uInt64 nProgressStart = 0;
     for (SCTAB nTab = 0; nTab < mrDoc.GetTableCount(); ++nTab)
     {
         if (!ValidTab(nTab) || !mrDoc.maTabs[nTab])
             continue;
 
-        mrDoc.maTabs[nTab]->SetOptimalHeight(aCxt, 0, mrDoc.MaxRow(), true, &aProgress, nProgressStart);
+        sc::RowHeightContext aCxt(mrDoc.MaxRow(), mfPPTX, mfPPTY, aZoom, aZoom, mpOutDev);
+        SCCOL nEndCol = 0;
+        SCROW nEndRow = mrDoc.MaxRow();
+        if (!bOnlyUsedRows || mrDoc.GetPrintArea(nTab, nEndCol, nEndRow))
+            mrDoc.maTabs[nTab]->SetOptimalHeight(aCxt, 0, nEndRow, true, &aProgress, nProgressStart);
         nProgressStart += mrDoc.maTabs[nTab]->GetWeightedCount();
     }
 }

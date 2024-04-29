@@ -23,8 +23,8 @@
 
 #include <basegfx/tuple/b2dtuple.hxx>
 #include <basegfx/point/b2ipoint.hxx>
-#include <basegfx/vector/b2dsize.hxx>
 #include <basegfx/basegfxdllapi.h>
+#include <basegfx/tuple/Size2D.hxx>
 
 namespace basegfx
 {
@@ -87,8 +87,8 @@ namespace basegfx
         */
         B2DPoint& operator*=( const B2DPoint& rPnt )
         {
-            mfX *= rPnt.mfX;
-            mfY *= rPnt.mfY;
+            mnX *= rPnt.mnX;
+            mnY *= rPnt.mnY;
             return *this;
         }
 
@@ -96,8 +96,8 @@ namespace basegfx
         */
         B2DPoint& operator*=(double t)
         {
-            mfX *= t;
-            mfY *= t;
+            mnX *= t;
+            mnY *= t;
             return *this;
         }
 
@@ -106,8 +106,8 @@ namespace basegfx
         */
         BASEGFX_DLLPUBLIC B2DPoint& operator=(Tuple2D<double>& rPoint)
         {
-            mfX = rPoint.getX();
-            mfY = rPoint.getY();
+            mnX = rPoint.getX();
+            mnY = rPoint.getY();
             return *this;
         }
 

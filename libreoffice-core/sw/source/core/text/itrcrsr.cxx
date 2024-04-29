@@ -161,12 +161,13 @@ void SwTextMargin::CtorInitTextMargin( SwTextFrame *pNewFrame, SwTextSizeInfo *p
     GetInfo().SetFont( GetFnt() );
     const SwTextNode *const pNode = m_pFrame->GetTextNodeForParaProps();
 
-    const SvxLRSpaceItem &rSpace = pNode->GetSwAttrSet().GetLRSpace();
+    SvxFirstLineIndentItem const& rFirstLine(pNode->GetSwAttrSet().GetFirstLineIndent());
+    SvxTextLeftMarginItem const& rTextLeftMargin(pNode->GetSwAttrSet().GetTextLeftMargin());
     // #i95907#
     // #i111284#
     const SwTextNode *pTextNode = m_pFrame->GetTextNodeForParaProps();
     const bool bLabelAlignmentActive = IsLabelAlignmentActive( *pTextNode );
-    const bool bListLevelIndentsApplicable = pTextNode->AreListLevelIndentsApplicable();
+    const bool bListLevelIndentsApplicable = pTextNode->AreListLevelIndentsApplicable() != ::sw::ListLevelIndents::No;
     const bool bListLevelIndentsApplicableAndLabelAlignmentActive = bListLevelIndentsApplicable && bLabelAlignmentActive;
 
     // Carefully adjust the text formatting ranges.
@@ -191,9 +192,7 @@ void SwTextMargin::CtorInitTextMargin( SwTextFrame *pNewFrame, SwTextSizeInfo *p
                 // #i95907#
                 // #i111284#
                 // rSpace.GetLeft() + rSpace.GetTextLeft();
-                ( bListLevelIndentsApplicableAndLabelAlignmentActive
-                  ? 0
-                  : ( rSpace.GetLeft() - rSpace.GetTextLeft() ) );
+                (rTextLeftMargin.GetLeft(rFirstLine) - rTextLeftMargin.GetTextLeft());
     }
     else
     {
@@ -209,14 +208,12 @@ void SwTextMargin::CtorInitTextMargin( SwTextFrame *pNewFrame, SwTextSizeInfo *p
                     pNode->GetLeftMarginWithNum() -
                     // #i95907#
                     // #i111284#
-                    ( bListLevelIndentsApplicableAndLabelAlignmentActive
-                      ? 0
-                      : ( rSpace.GetLeft() - rSpace.GetTextLeft() ) );
+                    (rTextLeftMargin.GetLeft(rFirstLine) - rTextLeftMargin.GetTextLeft());
         }
         else
         {
             mnLeft = m_pFrame->getFrameArea().Left() +
-                    std::max( tools::Long( rSpace.GetTextLeft() + nLMWithNum ),
+                std::max(tools::Long(rTextLeftMargin.GetTextLeft() + nLMWithNum),
                          m_pFrame->getFramePrintArea().Left() );
         }
     }
@@ -228,7 +225,8 @@ void SwTextMargin::CtorInitTextMargin( SwTextFrame *pNewFrame, SwTextSizeInfo *p
          // paras inside cells inside new documents:
         ( pNode->getIDocumentSettingAccess()->get(DocumentSettingId::IGNORE_FIRST_LINE_INDENT_IN_NUMBERING) ||
           !m_pFrame->IsInTab() ||
-          ( !nLMWithNum && (!bLabelAlignmentActive || bListLevelIndentsApplicable) ) ) )
+          (bListLevelIndentsApplicable && nLMWithNum == rTextLeftMargin.GetTextLeft())
+          || (!bLabelAlignmentActive && nLMWithNum == 0)))
     {
         mnLeft = m_pFrame->getFramePrintArea().Left() + m_pFrame->getFrameArea().Left();
         if( mnLeft >= mnRight )   // e.g. with large paragraph indentations in slim table columns
@@ -242,7 +240,7 @@ void SwTextMargin::CtorInitTextMargin( SwTextFrame *pNewFrame, SwTextSizeInfo *p
         short nFLOfst = 0;
         tools::Long nFirstLineOfs = 0;
         if( !pNode->GetFirstLineOfsWithNum( nFLOfst ) &&
-            rSpace.IsAutoFirst() )
+            rFirstLine.IsAutoFirst())
         {
             nFirstLineOfs = GetFnt()->GetSize( GetFnt()->GetActual() ).Height();
             LanguageType const aLang = m_pFrame->GetLangOfChar(
@@ -325,7 +323,7 @@ void SwTextMargin::CtorInitTextMargin( SwTextFrame *pNewFrame, SwTextSizeInfo *p
         else
         {
               mnFirst = m_pFrame->getFrameArea().Left() +
-                     std::max( rSpace.GetTextLeft() + nLMWithNum+ nFirstLineOfs,
+                 std::max(rTextLeftMargin.GetTextLeft() + nLMWithNum + nFirstLineOfs,
                           m_pFrame->getFramePrintArea().Left() );
         }
 
@@ -401,18 +399,30 @@ void SwTextCursor::CtorInitTextCursor( SwTextFrame *pNewFrame, SwTextSizeInfo *p
     // GetInfo().SetOut( GetInfo().GetWin() );
 }
 
+static bool isTrailingDecoration(SwLinePortion* p)
+{
+    // Optional no-width portion, followed only by no-width portions and/or terminating portions?
+    for (; p; p = p->GetNextPortion())
+    {
+        if (p->IsMarginPortion() || p->IsBreakPortion())
+            return true;
+        if (p->Width())
+            return false;
+    }
+    return true; // no more portions
+}
+
 // tdf#120715 tdf#43100: Make width for some HolePortions, so cursor will be able to move into it.
 // It should not change the layout, so this should be called after the layout is calculated.
 void SwTextCursor::AddExtraBlankWidth()
 {
     SwLinePortion* pPos = m_pCurr->GetNextPortion();
-    SwLinePortion* pNextPos;
     while (pPos)
     {
-        pNextPos = pPos->GetNextPortion();
+        SwLinePortion* pNextPos = pPos->GetNextPortion();
         // Do it only if it is the last portion that able to handle the cursor,
         // else the next portion would miscalculate the cursor position
-        if (pPos->ExtraBlankWidth() && (!pNextPos || pNextPos->IsMarginPortion()))
+        if (pPos->ExtraBlankWidth() && isTrailingDecoration(pNextPos))
         {
             pPos->Width(pPos->Width() + pPos->ExtraBlankWidth());
             pPos->ExtraBlankWidth(0);
@@ -1245,7 +1255,7 @@ void SwTextCursor::GetCharRect( SwRect* pOrig, TextFrameIndex const nOfst,
             ++nFindOfst;
 
         // skip lines for fields which cover more than one line
-        for ( sal_uInt16 i = 0; i < pCMS->m_pSpecialPos->nLineOfst; i++ )
+        for ( sal_Int32 i = 0; i < pCMS->m_pSpecialPos->nLineOfst; i++ )
             Next();
     }
 
@@ -1354,7 +1364,6 @@ TextFrameIndex SwTextCursor::GetModelPositionForViewPoint( SwPosition *pPos, con
     // in which nX is situated.
     SwLinePortion *pPor = m_pCurr->GetFirstPortion();
     TextFrameIndex nCurrStart = m_nStart;
-    bool bHolePortion = false;
     bool bLastHyph = false;
 
     std::deque<sal_uInt16> *pKanaComp = m_pCurr->GetpKanaComp();
@@ -1373,7 +1382,7 @@ TextFrameIndex SwTextCursor::GetModelPositionForViewPoint( SwPosition *pPos, con
         if ( pPor->InSpaceGrp() && nSpaceAdd )
         {
             const_cast<SwTextSizeInfo&>(GetInfo()).SetIdx( nCurrStart );
-            nWidth = nWidth + sal_uInt16( pPor->CalcSpacing( nSpaceAdd, GetInfo() ) );
+            nWidth = nWidth + pPor->CalcSpacing( nSpaceAdd, GetInfo() );
         }
         if( ( pPor->InFixMargGrp() && ! pPor->IsMarginPortion() ) ||
             ( pPor->IsMultiPortion() && static_cast<SwMultiPortion*>(pPor)->HasTabulator() )
@@ -1409,7 +1418,6 @@ TextFrameIndex SwTextCursor::GetModelPositionForViewPoint( SwPosition *pPos, con
     {
         nX = nX - nWidth;
         nCurrStart = nCurrStart + pPor->GetLen();
-        bHolePortion = pPor->IsHolePortion();
         pPor = pPor->GetNextPortion();
         nWidth = pPor->Width();
         if ( m_pCurr->IsSpaceAdd() || pKanaComp )
@@ -1417,7 +1425,7 @@ TextFrameIndex SwTextCursor::GetModelPositionForViewPoint( SwPosition *pPos, con
             if ( pPor->InSpaceGrp() && nSpaceAdd )
             {
                 const_cast<SwTextSizeInfo&>(GetInfo()).SetIdx( nCurrStart );
-                nWidth = nWidth + sal_uInt16( pPor->CalcSpacing( nSpaceAdd, GetInfo() ) );
+                nWidth = nWidth + pPor->CalcSpacing( nSpaceAdd, GetInfo() );
             }
 
             if( ( pPor->InFixMargGrp() && ! pPor->IsMarginPortion() ) ||
@@ -1510,7 +1518,7 @@ TextFrameIndex SwTextCursor::GetModelPositionForViewPoint( SwPosition *pPos, con
             return TextFrameIndex(0);
 
         // 7849, 7816: pPor->GetHyphPortion is mandatory!
-        if( bHolePortion || ( !bRightAllowed && bLastHyph ) ||
+        if( ( !bRightAllowed && bLastHyph ) ||
             ( pPor->IsMarginPortion() && !pPor->GetNextPortion() &&
               // 46598: Consider the situation: We might end up behind the last character,
               // in the last line of a centered paragraph
@@ -1530,7 +1538,11 @@ TextFrameIndex SwTextCursor::GetModelPositionForViewPoint( SwPosition *pPos, con
                     --nCurrStart;
             }
         }
-        return nCurrStart;
+        if (!pPor->InFieldGrp() || !static_cast<SwFieldPortion const*>(pPor)->IsFollow()
+            || !pCMS || !pCMS->m_pSpecialPos)
+        {
+            return nCurrStart;
+        }
     }
     if (TextFrameIndex(1) == nLength || pPor->InFieldGrp())
     {
@@ -1609,8 +1621,11 @@ TextFrameIndex SwTextCursor::GetModelPositionForViewPoint( SwPosition *pPos, con
 
     // Skip space at the end of the line
     if( bLastPortion && (m_pCurr->GetNext() || m_pFrame->GetFollow() )
-        && rText[sal_Int32(nCurrStart + nLength) - 1] == ' ' )
+        && sal_Int32(nLength) != 0
+        && rText[sal_Int32(nCurrStart + nLength) - 1] == ' ')
+    {
         --nLength;
+    }
 
     if( nWidth > nX ||
       ( nWidth == nX && pPor->IsMultiPortion() && static_cast<SwMultiPortion*>(pPor)->IsDouble() ) )
@@ -1760,18 +1775,56 @@ TextFrameIndex SwTextCursor::GetModelPositionForViewPoint( SwPosition *pPos, con
                 if ( pPor->InFieldGrp() && pCMS && pCMS->m_pSpecialPos )
                 {
                     pCMS->m_pSpecialPos->nCharOfst = sal_Int32(nLength);
+                    // follow portions: need to add the length of all previous
+                    // portions for the same field
+                    if (static_cast<SwFieldPortion const*>(pPor)->IsFollow())
+                    {
+                        int nLines(0);
+                        std::vector<SwFieldPortion const*> portions;
+                        for (SwLineLayout const* pLine = GetInfo().GetParaPortion();
+                                true; pLine = pLine->GetNext())
+                        {
+                            for (SwLinePortion const* pLP = pLine; pLP && pLP != pPor; pLP = pLP->GetNextPortion())
+                            {
+                                if (pLP->InFieldGrp())
+                                {
+                                    SwFieldPortion const* pField(static_cast<SwFieldPortion const*>(pLP));
+                                    if (!pField->IsFollow())
+                                    {
+                                        nLines = 0;
+                                        portions.clear();
+                                    }
+                                    if (pLine == m_pCurr)
+                                    {
+                                        portions.emplace_back(pField);
+                                    }
+                                }
+                            }
+                            if (pLine == m_pCurr)
+                            {
+                                break;
+                            }
+                            ++nLines;
+                        }
+                        for (SwFieldPortion const* pField : portions)
+                        {
+                            pCMS->m_pSpecialPos->nCharOfst += pField->GetExp().getLength();
+                        }
+                        pCMS->m_pSpecialPos->nLineOfst = nLines;
+                    }
                     nLength = TextFrameIndex(0);
+                }
+                else if (bFieldInfo && nLength == pPor->GetLen() &&
+                         (! pPor->GetNextPortion() ||
+                          ! pPor->GetNextPortion()->IsPostItsPortion()))
+                {
+                    --nLength;
                 }
 
                 // set cursor bidi level
                 if ( pCMS )
                     pCMS->m_nCursorBidiLevel =
                         aDrawInf.GetCursorBidiLevel();
-
-                if( bFieldInfo && nLength == pPor->GetLen() &&
-                    ( ! pPor->GetNextPortion() ||
-                      ! pPor->GetNextPortion()->IsPostItsPortion() ) )
-                    --nLength;
             }
             if( nOldProp )
                 const_cast<SwFont*>(GetFnt())->SetProportion( nOldProp );

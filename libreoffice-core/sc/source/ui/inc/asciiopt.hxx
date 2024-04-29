@@ -33,10 +33,12 @@ private:
     bool        bRemoveSpace;
     bool        bQuotedFieldAsText;
     bool        bDetectSpecialNumber;
+    bool        bDetectScientificNumber;
     bool        bEvaluateFormulas;
     bool        bSkipEmptyCells;
     bool        bSaveAsShown;
     bool        bSaveFormulas;
+    bool        bIncludeBOM;
     sal_Unicode cTextSep;
     rtl_TextEncoding eCharSet;
     LanguageType eLang;
@@ -59,8 +61,10 @@ public:
     bool                IsRemoveSpace() const   { return bRemoveSpace; }
     bool                IsQuotedAsText() const  { return bQuotedFieldAsText; }
     bool                IsDetectSpecialNumber() const { return bDetectSpecialNumber; }
+    bool                IsDetectScientificNumber() const { return bDetectScientificNumber; }
     bool                IsEvaluateFormulas() const    { return bEvaluateFormulas; }
     bool                IsSkipEmptyCells() const      { return bSkipEmptyCells; }
+    bool                GetIncludeBOM() const   { return bIncludeBOM; }
     sal_Unicode         GetTextSep() const      { return cTextSep; }
     bool                IsFixedLen() const      { return bFixedLen; }
     sal_uInt16          GetInfoCount() const    { return mvColStart.size(); }
@@ -77,8 +81,10 @@ public:
     void    SetRemoveSpace( bool bSet )         { bRemoveSpace = bSet; }
     void    SetQuotedAsText(bool bSet)          { bQuotedFieldAsText = bSet; }
     void    SetDetectSpecialNumber(bool bSet)   { bDetectSpecialNumber = bSet; }
+    void    SetDetectScientificNumber(bool bSet){ bDetectScientificNumber = bSet; }
     void    SetEvaluateFormulas(bool bSet)      { bEvaluateFormulas = bSet; }
     void    SetSkipEmptyCells(bool bSet)        { bSkipEmptyCells = bSet; }
+    void    SetIncludeBOM(bool bVal)            { bIncludeBOM = bVal; }
     void    SetTextSep( sal_Unicode c )         { cTextSep = c; }
     void    SetStartRow( sal_Int32 nRow)        { nStartRow= nRow; }
     void    SetLanguage(LanguageType e)         { eLang = e; }

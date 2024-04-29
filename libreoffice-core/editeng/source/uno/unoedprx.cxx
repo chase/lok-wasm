@@ -530,6 +530,20 @@ void SvxAccessibleTextAdapter::GetPortions( sal_Int32 nPara, std::vector<sal_Int
     mpTextForwarder->GetPortions( nPara, rList );
 }
 
+OUString SvxAccessibleTextAdapter::GetStyleSheet(sal_Int32 nPara) const
+{
+    assert(mpTextForwarder && "SvxAccessibleTextAdapter: no forwarder");
+
+    return mpTextForwarder->GetStyleSheet(nPara);
+}
+
+void SvxAccessibleTextAdapter::SetStyleSheet(sal_Int32 nPara, const OUString& rStyleName)
+{
+    assert(mpTextForwarder && "SvxAccessibleTextAdapter: no forwarder");
+
+    mpTextForwarder->SetStyleSheet(nPara, rStyleName);
+}
+
 SfxItemState SvxAccessibleTextAdapter::GetItemState( const ESelection& rSel, sal_uInt16 nWhich ) const
 {
     assert(mpTextForwarder && "SvxAccessibleTextAdapter: no forwarder");
@@ -613,11 +627,11 @@ SfxItemPool* SvxAccessibleTextAdapter::GetPool() const
     return mpTextForwarder->GetPool();
 }
 
-OUString SvxAccessibleTextAdapter::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor )
+OUString SvxAccessibleTextAdapter::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor, std::optional<FontLineStyle>& rpFldLineStyle )
 {
     assert(mpTextForwarder && "SvxAccessibleTextAdapter: no forwarder");
 
-    return mpTextForwarder->CalcFieldValue( rField, nPara, nPos, rpTxtColor, rpFldColor );
+    return mpTextForwarder->CalcFieldValue( rField, nPara, nPos, rpTxtColor, rpFldColor, rpFldLineStyle );
 }
 
 void SvxAccessibleTextAdapter::FieldClicked( const SvxFieldItem& rField )

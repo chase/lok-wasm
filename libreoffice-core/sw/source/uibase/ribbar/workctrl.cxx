@@ -36,6 +36,7 @@
 #include <wrtsh.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <svl/voiditem.hxx>
 #include <vcl/event.hxx>
 #include <vcl/menu.hxx>
 #include <vcl/settings.hxx>
@@ -86,15 +87,18 @@ void SwTbxAutoTextCtrl::CreatePopupWindow()
         ScopedVclPtrInstance<PopupMenu> pPopup;
         SwGlossaryList* pGlossaryList = ::GetGlossaryList();
         const size_t nGroupCount = pGlossaryList->GetGroupCount();
+        o3tl::sorted_vector<OUString> titles;
         for(size_t i = 1; i <= nGroupCount; ++i)
         {
             OUString sTitle = pGlossaryList->GetGroupTitle(i - 1);
             const sal_uInt16 nBlockCount = pGlossaryList->GetBlockCount(i -1);
+            auto const [it, _] = titles.insert(sTitle);
+            size_t const menuIndex(::std::distance(titles.begin(), it));
             if(nBlockCount)
             {
                 sal_uInt16 nIndex = o3tl::narrowing<sal_uInt16>(100*i);
                 // but insert without extension
-                pPopup->InsertItem( i, sTitle);
+                pPopup->InsertItem(i, sTitle, MenuItemBits::NONE, {}, menuIndex);
                 VclPtrInstance<PopupMenu> pSub;
                 pSub->SetSelectHdl(aLnk);
                 pPopup->SetPopupMenu(i, pSub);
@@ -181,7 +185,7 @@ static sal_uInt16 aNavigationInsertIds[ NAVI_ENTRIES ] =
     NID_FIELD_BYTYPE
 };
 
-rtl::OUStringConstExpr constexpr aNavigationImgIds[ NAVI_ENTRIES ] =
+OUString constexpr aNavigationImgIds[ NAVI_ENTRIES ] =
 {
     RID_BMP_RIBBAR_TBL,
     RID_BMP_RIBBAR_FRM,
@@ -600,7 +604,7 @@ NavElementBox_Base::NavElementBox_Base(std::unique_ptr<weld::ComboBox> xComboBox
     m_xComboBox->freeze();
     for (sal_uInt16 i = 0; i < NID_COUNT; i++)
          m_xComboBox->append(OUString::number(aNavigationInsertIds[i]),
-                             SwResId(aNavigationStrIds[i]), OUString(aNavigationImgIds[i]));
+                             SwResId(aNavigationStrIds[i]), aNavigationImgIds[i]);
     m_xComboBox->thaw();
 
     m_xComboBox->connect_changed(LINK(this, NavElementBox_Base, SelectHdl));
@@ -670,31 +674,11 @@ bool NavElementBox_Impl::DoKeyInput(const KeyEvent& rKEvt)
 }
 
 NavElementToolBoxControl::NavElementToolBoxControl( const uno::Reference< uno::XComponentContext >& rxContext )
- : svt::ToolboxController( rxContext,
+ : NavElementToolBoxControl_Base( rxContext,
                            uno::Reference< frame::XFrame >(),
                            ".uno:NavElement" ),
    m_pBox( nullptr )
 {
-}
-
-// XInterface
-css::uno::Any SAL_CALL NavElementToolBoxControl::queryInterface( const css::uno::Type& aType )
-{
-    uno::Any a = ToolboxController::queryInterface( aType );
-    if ( a.hasValue() )
-        return a;
-
-    return ::cppu::queryInterface( aType, static_cast< lang::XServiceInfo* >( this ) );
-}
-
-void SAL_CALL NavElementToolBoxControl::acquire() noexcept
-{
-    ToolboxController::acquire();
-}
-
-void SAL_CALL NavElementToolBoxControl::release() noexcept
-{
-    ToolboxController::release();
 }
 
 // XServiceInfo
@@ -742,11 +726,10 @@ void SAL_CALL NavElementToolBoxControl::statusChanged( const frame::FeatureState
     else
         m_pBox->set_sensitive(true);
 
-    SwView* pView = GetActiveView();
-    if (pView && pView->GetViewFrame())
+    if (SwView* pView = GetActiveView())
     {
-        pView->GetViewFrame()->GetBindings().Invalidate(FN_SCROLL_NEXT);
-        pView->GetViewFrame()->GetBindings().Invalidate(FN_SCROLL_PREV);
+        pView->GetViewFrame().GetBindings().Invalidate(FN_SCROLL_NEXT);
+        pView->GetViewFrame().GetBindings().Invalidate(FN_SCROLL_PREV);
     }
 }
 
@@ -809,18 +792,13 @@ lo_writer_NavElementToolBoxController_get_implementation(
 
 namespace {
 
-class PrevNextScrollToolboxController : public svt::ToolboxController,
-                                      public css::lang::XServiceInfo
+typedef cppu::ImplInheritanceHelper< ::svt::ToolboxController, css::lang::XServiceInfo> PrevNextScrollToolboxController_Base;
+class PrevNextScrollToolboxController : public PrevNextScrollToolboxController_Base
 {
 public:
     enum Type { PREVIOUS, NEXT };
 
     PrevNextScrollToolboxController( const css::uno::Reference< css::uno::XComponentContext >& rxContext, Type eType );
-
-    // XInterface
-    virtual css::uno::Any SAL_CALL queryInterface( const css::uno::Type& aType ) override;
-    virtual void SAL_CALL acquire() noexcept override;
-    virtual void SAL_CALL release() noexcept override;
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
@@ -840,32 +818,12 @@ private:
 }
 
 PrevNextScrollToolboxController::PrevNextScrollToolboxController( const css::uno::Reference< css::uno::XComponentContext > & rxContext, Type eType )
-    : svt::ToolboxController( rxContext,
+    : PrevNextScrollToolboxController_Base( rxContext,
             css::uno::Reference< css::frame::XFrame >(),
             (eType == PREVIOUS) ? OUString( ".uno:ScrollToPrevious" ): OUString( ".uno:ScrollToNext" ) ),
       meType( eType )
 {
     addStatusListener(".uno:NavElement");
-}
-
-// XInterface
-css::uno::Any SAL_CALL PrevNextScrollToolboxController::queryInterface( const css::uno::Type& aType )
-{
-    css::uno::Any a = ToolboxController::queryInterface( aType );
-    if ( a.hasValue() )
-        return a;
-
-    return ::cppu::queryInterface( aType, static_cast< css::lang::XServiceInfo* >( this ) );
-}
-
-void SAL_CALL PrevNextScrollToolboxController::acquire() noexcept
-{
-    ToolboxController::acquire();
-}
-
-void SAL_CALL PrevNextScrollToolboxController::release() noexcept
-{
-    ToolboxController::release();
 }
 
 // XServiceInfo
@@ -900,7 +858,7 @@ void SAL_CALL PrevNextScrollToolboxController::statusChanged( const css::frame::
     if (rEvent.FeatureURL.Path == "NavElement")
     {
         if (m_pToolbar)
-            m_pToolbar->set_item_tooltip_text(m_aCommandURL.toUtf8(), lcl_GetScrollToolTip(meType != PrevNextScrollToolboxController::PREVIOUS));
+            m_pToolbar->set_item_tooltip_text(m_aCommandURL, lcl_GetScrollToolTip(meType != PrevNextScrollToolboxController::PREVIOUS));
         else
         {
             ToolBox* pToolBox = nullptr;
@@ -912,7 +870,7 @@ void SAL_CALL PrevNextScrollToolboxController::statusChanged( const css::frame::
     else if (rEvent.FeatureURL.Path == "ScrollToPrevious" || rEvent.FeatureURL.Path == "ScrollToNext")
     {
         if (m_pToolbar)
-            m_pToolbar->set_item_sensitive(m_aCommandURL.toUtf8(), rEvent.IsEnabled);
+            m_pToolbar->set_item_sensitive(m_aCommandURL, rEvent.IsEnabled);
         else
         {
             ToolBox* pToolBox = nullptr;

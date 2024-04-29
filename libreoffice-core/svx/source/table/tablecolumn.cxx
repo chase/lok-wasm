@@ -24,6 +24,7 @@
 #include <tablemodel.hxx>
 #include "tablecolumn.hxx"
 #include "tableundo.hxx"
+#include <sdr/properties/cellproperties.hxx>
 #include <svx/svdmodel.hxx>
 #include <svx/svdotable.hxx>
 #include <utility>
@@ -203,7 +204,7 @@ void SAL_CALL TableColumn::setFastPropertyValue( sal_Int32 nHandle, const Any& a
             break;
         }
     default:
-        throw UnknownPropertyException( OUString::number(nHandle), static_cast<cppu::OWeakObject*>(this));
+        throw UnknownPropertyException( OUString::number(nHandle), getXWeak());
     }
     if( !bOk )
     {
@@ -229,7 +230,7 @@ Any SAL_CALL TableColumn::getFastPropertyValue( sal_Int32 nHandle )
     case Property_OptimalWidth:     return Any( mbOptimalWidth );
     case Property_IsVisible:        return Any( mbIsVisible );
     case Property_IsStartOfNewPage: return Any( mbIsStartOfNewPage );
-    default:                        throw UnknownPropertyException( OUString::number(nHandle), static_cast<cppu::OWeakObject*>(this));
+    default:                        throw UnknownPropertyException( OUString::number(nHandle), getXWeak());
     }
 }
 

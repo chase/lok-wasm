@@ -34,7 +34,7 @@
 #include <xmloff/xmltkmap.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <vector>
-#include <txtfld.hxx>
+#include "txtfld.hxx"
 
 namespace com::sun::star {
     namespace xml::sax { class XAttributeList; }

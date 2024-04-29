@@ -231,14 +231,14 @@ void StockChartTypeTemplate::resetStyles2(
     if( getDimension() == 3 )
     {
         std::vector< rtl::Reference< DataSeries > > aSeriesVec =
-            DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+            xDiagram->getDataSeries();
         for (auto const& series : aSeriesVec)
         {
             series->setPropertyValue( "AttachedAxisIndex", uno::Any( sal_Int32(0) ) );
         }
     }
 
-    DiagramHelper::setVertical( xDiagram, false );
+    xDiagram->setVertical( false );
 }
 
 rtl::Reference< ChartType > StockChartTypeTemplate::getChartTypeForIndex( sal_Int32 nChartTypeIndex )

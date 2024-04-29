@@ -68,7 +68,8 @@ RecentDocsView::RecentDocsView(std::unique_ptr<weld::ScrolledWindow> xWindow, st
     , mpLoadRecentFile(nullptr)
     , m_nExecuteHdlId(nullptr)
 {
-    tools::Rectangle aScreen = Application::GetScreenPosSizePixel(Application::GetDisplayBuiltInScreen());
+    mbAllowMultiSelection = false;
+    AbsoluteScreenPixelRectangle aScreen = Application::GetScreenPosSizePixel(Application::GetDisplayBuiltInScreen());
     mnItemMaxSize = std::min(aScreen.GetWidth(),aScreen.GetHeight()) > 800 ? 256 : 192;
 
     setItemMaxTextLength( 30 );
@@ -76,9 +77,12 @@ RecentDocsView::RecentDocsView(std::unique_ptr<weld::ScrolledWindow> xWindow, st
 
     maFillColor = Color(ColorTransparency, officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsBackgroundColor::get());
     maTextColor = Color(ColorTransparency, officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsTextColor::get());
-    maHighlightColor = Color(ColorTransparency, officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsHighlightColor::get());
-    maHighlightTextColor = Color(ColorTransparency, officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsHighlightTextColor::get());
-    mfHighlightTransparence = 0.25;
+
+    const StyleSettings& rSettings = Application::GetSettings().GetStyleSettings();
+    maHighlightColor = rSettings.GetHighlightColor();
+    maHighlightTextColor = rSettings.GetHighlightTextColor();
+
+    mfHighlightTransparence = 0.75;
 
     UpdateColors();
 }
@@ -144,9 +148,12 @@ bool RecentDocsView::isAcceptedFile(const INetURLObject& rURL) const
            (mnFileTypes & ApplicationType::TYPE_OTHER    && typeMatchesExtension(ApplicationType::TYPE_OTHER,   aExt));
 }
 
-void RecentDocsView::insertItem(const OUString &rURL, const OUString &rTitle, const OUString& rThumbnail, bool isReadOnly, sal_uInt16 nId)
+void RecentDocsView::insertItem(const OUString& rURL, const OUString& rTitle,
+                                const OUString& rThumbnail, bool isReadOnly, bool isPinned,
+                                sal_uInt16 nId)
 {
-    AppendItem( std::make_unique<RecentDocsViewItem>(*this, rURL, rTitle, rThumbnail, nId, mnItemMaxSize, isReadOnly) );
+    AppendItem(std::make_unique<RecentDocsViewItem>(*this, rURL, rTitle, rThumbnail, nId,
+                                                    mnItemMaxSize, isReadOnly, isPinned));
 }
 
 void RecentDocsView::Reload()
@@ -168,7 +175,8 @@ void RecentDocsView::Reload()
         //Remove extension from url's last segment and use it as title
         const OUString aTitle = aURLObj.GetBase(); //DecodeMechanism::WithCharset
 
-        insertItem(aURL, aTitle, rRecentEntry.sThumbnail, rRecentEntry.isReadOnly, i+1);
+        insertItem(aURL, aTitle, rRecentEntry.sThumbnail, rRecentEntry.isReadOnly,
+                   rRecentEntry.isPinned, i + 1);
     }
 
     CalculateItemPositions();
@@ -187,7 +195,7 @@ void RecentDocsView::clearUnavailableFiles(){
     {
         const SvtHistoryOptions::HistoryItem& rPickListEntry = aHistoryList[i];
         if ( !comphelper::DirectoryHelper::fileExists(rPickListEntry.sURL) ){
-            SvtHistoryOptions::DeleteItem(EHistoryType::PickList,rPickListEntry.sURL);
+            SvtHistoryOptions::DeleteItem(EHistoryType::PickList,rPickListEntry.sURL, false);
         }
     }
     Reload();

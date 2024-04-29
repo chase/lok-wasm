@@ -23,10 +23,8 @@
 #include <sal/config.h>
 #include <xmloff/dllapi.h>
 #include <salhelper/simplereferenceobject.hxx>
-#include <o3tl/sorted_vector.hxx>
 #include <o3tl/typed_flags_set.hxx>
 #include <rtl/ustring.hxx>
-#include <com/sun/star/uno/Sequence.hxx>
 
 #include <memory>
 #include <vector>
@@ -48,7 +46,7 @@ namespace o3tl
 }
 
 class SvXMLUnitConverter;
-class SvXMLAttributeList;
+namespace comphelper { class AttributeList; }
 class SvXMLNamespaceMap;
 class SvXMLExport;
 
@@ -68,8 +66,7 @@ protected:
     std::vector<XMLPropertyState> Filter_(
             SvXMLExport const& rExport,
             const css::uno::Reference<css::beans::XPropertySet>& rPropSet,
-            bool bDefault, bool bDisableFoFontFamily,
-            const css::uno::Sequence<OUString>* pOnlyTheseProps ) const;
+            bool bDefault, bool bDisableFoFontFamily ) const;
 
     /** Application-specific filter. By default do nothing. */
     virtual void ContextFilter(
@@ -79,14 +76,14 @@ protected:
 
     /** fills the given attribute list with the items in the given set */
     void _exportXML( sal_uInt16 nPropType, sal_uInt16& rPropTypeFlags,
-                     SvXMLAttributeList& rAttrList,
+                     comphelper::AttributeList& rAttrList,
                      const ::std::vector< XMLPropertyState >& rProperties,
                      const SvXMLUnitConverter& rUnitConverter,
                      const SvXMLNamespaceMap& rNamespaceMap,
                      std::vector<sal_uInt16>* pIndexArray,
                        sal_Int32 nPropMapStartIdx, sal_Int32 nPropMapEndIdx ) const;
 
-    void _exportXML( SvXMLAttributeList& rAttrList,
+    void _exportXML( comphelper::AttributeList& rAttrList,
                      const XMLPropertyState& rProperty,
                      const SvXMLUnitConverter& rUnitConverter,
                      const SvXMLNamespaceMap& rNamespaceMap,
@@ -119,9 +116,7 @@ public:
         filter-processes. */
     std::vector<XMLPropertyState> Filter(
         SvXMLExport const& rExport,
-        const css::uno::Reference<css::beans::XPropertySet>& rPropSet,
-        bool bEnableFoFontFamily = false,
-        const css::uno::Sequence<OUString>* pOnlyTheseProps = nullptr ) const;
+        const css::uno::Reference<css::beans::XPropertySet>& rPropSet, bool bEnableFoFontFamily = false ) const;
 
     /** Like Filter(), except that:
       * - only properties that have the map flag MID_FLAG_DEFAULT_ITEM_EXPORT
@@ -169,7 +164,7 @@ public:
     /** this method is called for every item that has the
         MID_FLAG_SPECIAL_ITEM_EXPORT flag set */
     virtual void handleSpecialItem(
-            SvXMLAttributeList& rAttrList,
+            comphelper::AttributeList& rAttrList,
             const XMLPropertyState& rProperty,
             const SvXMLUnitConverter& rUnitConverter,
             const SvXMLNamespaceMap& rNamespaceMap,
@@ -180,8 +175,6 @@ public:
 
     void SetStyleName( const OUString& rStyleName );
     const OUString& GetStyleName() const;
-
-    void GetEntryAPINames(o3tl::sorted_vector<OUString>& rNames) const;
 };
 
 #endif // INCLUDED_XMLOFF_XMLEXPPR_HXX

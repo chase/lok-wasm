@@ -20,6 +20,7 @@
 #define INCLUDED_SVX_OPTGRID_HXX
 
 #include <sfx2/tabdlg.hxx>
+#include <sfx2/htmlmode.hxx>
 #include <svx/svxdllapi.h>
 
 namespace weld { class CheckButton; }
@@ -35,8 +36,6 @@ protected:
     sal_uInt32  nFldDivisionX;
     sal_uInt32  nFldDrawY;
     sal_uInt32  nFldDivisionY;
-    sal_uInt32  nFldSnapX;
-    sal_uInt32  nFldSnapY;
     bool        bUseGridsnap:1;
     bool        bSynchronize:1;
     bool        bGridVisible:1;
@@ -49,8 +48,6 @@ public:
     void    SetFieldDivisionX(sal_uInt32 nSet){nFldDivisionX  = nSet;}
     void    SetFieldDrawY   ( sal_uInt32 nSet){nFldDrawY      = nSet;}
     void    SetFieldDivisionY(sal_uInt32 nSet){nFldDivisionY  = nSet;}
-    void    SetFieldSnapX(    sal_uInt32 nSet){nFldSnapX      = nSet;}
-    void    SetFieldSnapY   ( sal_uInt32 nSet){nFldSnapY      = nSet;}
     void    SetUseGridSnap( bool bSet ) {bUseGridsnap   = bSet;}
     void    SetSynchronize( bool bSet ) {bSynchronize   = bSet;}
     void    SetGridVisible( bool bSet ) {bGridVisible   = bSet;}
@@ -60,8 +57,6 @@ public:
     sal_uInt32  GetFieldDivisionX() const {  return nFldDivisionX;}
     sal_uInt32  GetFieldDrawY   ( ) const {  return nFldDrawY;    }
     sal_uInt32  GetFieldDivisionY() const {  return nFldDivisionY;}
-    sal_uInt32  GetFieldSnapX(    ) const {  return nFldSnapX;    }
-    sal_uInt32  GetFieldSnapY   ( ) const {  return nFldSnapY;    }
     bool        GetUseGridSnap( ) const {  return bUseGridsnap; }
     bool        GetSynchronize( ) const {  return bSynchronize; }
     bool        GetGridVisible( ) const {  return bGridVisible; }
@@ -94,6 +89,8 @@ public:
 
     static std::unique_ptr<SfxTabPage> Create(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rAttrSet);
 
+    virtual OUString GetAllStrings() override;
+
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;
 
@@ -101,28 +98,55 @@ public:
     virtual DeactivateRC   DeactivatePage( SfxItemSet* pSet ) override;
 
 private:
+    enum ModuleMode
+    {
+        WRITER_MODE = 0,
+        CALC_MODE = 1,
+        IMPRESS_MODE = 2,
+        DRAW_MODE = 3,
+        HTML_MODE = 4
+    };
     bool                bAttrModified;
+    ModuleMode          m_Emode;
 
     std::unique_ptr<weld::CheckButton> m_xCbxUseGridsnap;
+    std::unique_ptr<weld::Widget> m_xCbxUseGridsnapImg;
     std::unique_ptr<weld::CheckButton> m_xCbxGridVisible;
+    std::unique_ptr<weld::Widget> m_xCbxGridVisibleImg;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldDrawX;
+    std::unique_ptr<weld::Widget> m_xMtrFldDrawXImg;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldDrawY;
+    std::unique_ptr<weld::Widget> m_xMtrFldDrawYImg;
     std::unique_ptr<weld::SpinButton> m_xNumFldDivisionX;
+    std::unique_ptr<weld::Widget> m_xNumFldDivisionXImg;
     std::unique_ptr<weld::SpinButton> m_xNumFldDivisionY;
+    std::unique_ptr<weld::Widget> m_xNumFldDivisionYImg;
     std::unique_ptr<weld::CheckButton> m_xCbxSynchronize;
+    std::unique_ptr<weld::Widget> m_xCbxSynchronizeImg;
 protected:
     //these controls are used in draw and impress
     std::unique_ptr<weld::Widget> m_xSnapFrames;
     std::unique_ptr<weld::CheckButton> m_xCbxSnapHelplines;
+    std::unique_ptr<weld::Widget> m_xCbxSnapHelplinesImg;
     std::unique_ptr<weld::CheckButton> m_xCbxSnapBorder;
+    std::unique_ptr<weld::Widget> m_xCbxSnapBorderImg;
     std::unique_ptr<weld::CheckButton> m_xCbxSnapFrame;
+    std::unique_ptr<weld::Widget> m_xCbxSnapFrameImg;
     std::unique_ptr<weld::CheckButton> m_xCbxSnapPoints;
+    std::unique_ptr<weld::Widget> m_xCbxSnapPointsImg;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldSnapArea;
+    std::unique_ptr<weld::Widget> m_xMtrFldSnapAreaImg;
     std::unique_ptr<weld::CheckButton> m_xCbxOrtho;
+    std::unique_ptr<weld::Widget> m_xCbxOrthoImg;
     std::unique_ptr<weld::CheckButton> m_xCbxBigOrtho;
+    std::unique_ptr<weld::Widget> m_xCbxBigOrthoImg;
     std::unique_ptr<weld::CheckButton> m_xCbxRotate;
+    std::unique_ptr<weld::Widget> m_xCbxRotateImg;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldAngle;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldBezAngle;
+    std::unique_ptr<weld::Widget> m_xMtrFldBezAngleImg;
+
+    bool IsDrawMode() const { return m_Emode == DRAW_MODE; }
 
     DECL_LINK(ClickRotateHdl_Impl, weld::Toggleable&, void);
 private:

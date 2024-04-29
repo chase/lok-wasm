@@ -157,7 +157,7 @@ css::uno::Reference< css::beans::XPropertySetInfo >  SAL_CALL ODocumentContainer
 
 Sequence< OUString > SAL_CALL ODocumentContainer::getSupportedServiceNames(  )
 {
-    return { m_bFormsContainer ? OUString(SERVICE_NAME_FORM_COLLECTION) : OUString(SERVICE_NAME_REPORT_COLLECTION) };
+    return { m_bFormsContainer ? SERVICE_NAME_FORM_COLLECTION : SERVICE_NAME_REPORT_COLLECTION };
 }
 
 OUString ODocumentContainer::determineContentType() const
@@ -668,7 +668,7 @@ OUString SAL_CALL ODocumentContainer::composeHierarchicalName( const OUString& i
     ::rtl::Reference<OContentHelper> pContent;
     try
     {
-        pContent = comphelper::getFromUnoTunnel<OContentHelper>(const_cast<ODocumentContainer*>(this)->implGetByName( _sName, true ));
+        pContent = dynamic_cast<OContentHelper*>(const_cast<ODocumentContainer*>(this)->implGetByName( _sName, true ).get());
     }
     catch(const Exception&)
     {

@@ -22,6 +22,7 @@
 
 #include <config_wasm_strip.h>
 #include <ChartController.hxx>
+#include <ChartView.hxx>
 #include <servicenames.hxx>
 #include <ResId.hxx>
 #include <dlg_DataSource.hxx>
@@ -58,7 +59,7 @@
 #include <comphelper/servicehelper.hxx>
 #include <BaseCoordinateSystem.hxx>
 
-#include <com/sun/star/awt/XWindowPeer.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/frame/XController2.hpp>
 #include <com/sun/star/util/CloseVetoException.hpp>
 #include <com/sun/star/util/XModeChangeBroadcaster.hpp>
@@ -306,27 +307,6 @@ bool ChartController::impl_isDisposedOrSuspended() const
     return false;
 }
 
-// lang::XServiceInfo
-
-OUString SAL_CALL ChartController::getImplementationName()
-{
-    return CHART_CONTROLLER_SERVICE_IMPLEMENTATION_NAME;
-}
-
-sal_Bool SAL_CALL ChartController::supportsService( const OUString& rServiceName )
-{
-    return cppu::supportsService(this, rServiceName);
-}
-
-css::uno::Sequence< OUString > SAL_CALL ChartController::getSupportedServiceNames()
-{
-    return {
-        CHART_CONTROLLER_SERVICE_NAME,
-        "com.sun.star.frame.Controller"
-        //// @todo : add additional services if you support any further
-    };
-}
-
 namespace {
 
 uno::Reference<ui::XSidebar> getSidebarFromModel(const uno::Reference<frame::XModel>& xModel)
@@ -544,9 +524,8 @@ sal_Bool SAL_CALL ChartController::attachModel( const uno::Reference< frame::XMo
     //--handle relations to the old model if any
     if( aOldModelRef.is() )
     {
-        uno::Reference< util::XModeChangeBroadcaster > xViewBroadcaster( m_xChartView, uno::UNO_QUERY );
-        if( xViewBroadcaster.is() )
-            xViewBroadcaster->removeModeChangeListener(this);
+        if( m_xChartView.is() )
+            m_xChartView->removeModeChangeListener(this);
         m_pDrawModelWrapper.reset();
 
         aOldModelRef->removeListener( this );
@@ -591,11 +570,9 @@ sal_Bool SAL_CALL ChartController::attachModel( const uno::Reference< frame::XMo
     rtl::Reference< ChartModel > xFact = getChartModel();
     if( xFact.is())
     {
-        m_xChartView = xFact->createInstance( CHART_VIEW_SERVICE_NAME );
+        m_xChartView = dynamic_cast<::chart::ChartView*>(xFact->createInstance( CHART_VIEW_SERVICE_NAME ).get());
         GetDrawModelWrapper();
-        uno::Reference< util::XModeChangeBroadcaster > xViewBroadcaster( m_xChartView, uno::UNO_QUERY );
-        if( xViewBroadcaster.is() )
-            xViewBroadcaster->addModeChangeListener(this);
+        m_xChartView->addModeChangeListener(this);
     }
 
     //the frameloader is responsible to call xModel->connectController
@@ -639,7 +616,7 @@ rtl::Reference<::chart::ChartModel> ChartController::getChartModel()
 
 rtl::Reference<::chart::Diagram> ChartController::getFirstDiagram()
 {
-    return ChartModelHelper::findDiagram( getChartModel() );
+    return getChartModel()->getFirstChartDiagram();
 }
 
 uno::Any SAL_CALL ChartController::getViewData()
@@ -800,9 +777,8 @@ void SAL_CALL ChartController::dispose()
 
         //--release all resources and references
         {
-            uno::Reference< util::XModeChangeBroadcaster > xViewBroadcaster( m_xChartView, uno::UNO_QUERY );
-            if( xViewBroadcaster.is() )
-                xViewBroadcaster->removeModeChangeListener(this);
+            if( m_xChartView.is() )
+                m_xChartView->removeModeChangeListener(this);
 
             impl_invalidateAccessible();
             SolarMutexGuard aSolarGuard;
@@ -821,7 +797,7 @@ void SAL_CALL ChartController::dispose()
         if( m_xLayoutManagerEventBroadcaster.is())
         {
             m_xLayoutManagerEventBroadcaster->removeLayoutManagerEventListener( this );
-            m_xLayoutManagerEventBroadcaster.set( nullptr );
+            m_xLayoutManagerEventBroadcaster.clear();
         }
 
         m_xFrame.clear();
@@ -867,12 +843,12 @@ void SAL_CALL ChartController::dispose()
 void SAL_CALL ChartController::addEventListener(
     const uno::Reference<lang::XEventListener>& xListener )
 {
-    SolarMutexGuard aGuard;
     if( impl_isDisposedOrSuspended() )//@todo? allow adding of listeners in suspend mode?
         return; //behave passive if already disposed or suspended
 
     //--add listener
-    m_aLifeTimeManager.m_aListenerContainer.addInterface( cppu::UnoType<lang::XEventListener>::get(), xListener );
+    std::unique_lock aGuard2(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aEventListeners.addInterface( aGuard2, xListener );
 }
 
 void SAL_CALL ChartController::removeEventListener(
@@ -883,7 +859,8 @@ void SAL_CALL ChartController::removeEventListener(
         return; //behave passive if already disposed or suspended
 
     //--remove listener
-    m_aLifeTimeManager.m_aListenerContainer.removeInterface( cppu::UnoType<lang::XEventListener>::get(), xListener );
+    std::unique_lock aGuard2(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aEventListeners.removeInterface( aGuard2, xListener );
 }
 
 // util::XCloseListener
@@ -964,7 +941,7 @@ void SAL_CALL ChartController::disposing(
     if( !impl_releaseThisModel( rSource.Source ))
     {
         if( rSource.Source == m_xLayoutManagerEventBroadcaster )
-            m_xLayoutManagerEventBroadcaster.set( nullptr );
+            m_xLayoutManagerEventBroadcaster.clear();
     }
 }
 
@@ -1444,44 +1421,12 @@ void ChartController::executeDispatch_MoveSeries( bool bForward )
             SchResId(STR_OBJECT_DATASERIES)),
         m_xUndoManager );
 
-    bool bChanged = DiagramHelper::moveSeries( getFirstDiagram(), xGivenDataSeries, bForward );
+    bool bChanged = getFirstDiagram()->moveSeries( xGivenDataSeries, bForward );
     if( bChanged )
     {
         m_aSelection.setSelection( ObjectIdentifier::getMovedSeriesCID( aObjectCID, bForward ) );
         aUndoGuard.commit();
     }
-}
-
-// ____ XMultiServiceFactory ____
-uno::Reference< uno::XInterface > SAL_CALL
-    ChartController::createInstance( const OUString& aServiceSpecifier )
-{
-    uno::Reference< uno::XInterface > xResult;
-
-#if !ENABLE_WASM_STRIP_ACCESSIBILITY
-    if( aServiceSpecifier == CHART_ACCESSIBLE_TEXT_SERVICE_NAME )
-        xResult.set( impl_createAccessibleTextContext());
-#else
-    (void)aServiceSpecifier;
-#endif
-
-    return xResult;
-}
-
-uno::Reference< uno::XInterface > SAL_CALL
-    ChartController::createInstanceWithArguments(
-        const OUString& ServiceSpecifier,
-        const uno::Sequence< uno::Any >& /* Arguments */ )
-{
-    // ignore Arguments
-    return createInstance( ServiceSpecifier );
-}
-
-uno::Sequence< OUString > SAL_CALL
-    ChartController::getAvailableServiceNames()
-{
-    uno::Sequence< OUString > aServiceNames { CHART_ACCESSIBLE_TEXT_SERVICE_NAME };
-    return aServiceNames;
 }
 
 // ____ XModifyListener ____
@@ -1518,9 +1463,8 @@ DrawModelWrapper* ChartController::GetDrawModelWrapper()
 {
     if( !m_pDrawModelWrapper )
     {
-        ExplicitValueProvider* pProvider = comphelper::getFromUnoTunnel<ExplicitValueProvider>( m_xChartView );
-        if( pProvider )
-            m_pDrawModelWrapper = pProvider->getDrawModelWrapper();
+        if( m_xChartView )
+            m_pDrawModelWrapper = m_xChartView->getDrawModelWrapper();
         if ( m_pDrawModelWrapper )
         {
             m_pDrawModelWrapper->getSdrModel().SetNotifyUndoActionHdl(
@@ -1579,8 +1523,8 @@ void ChartController::SetAndApplySelection(const Reference<drawing::XShape>& rxS
 uno::Reference< XAccessible > ChartController::CreateAccessible()
 {
 #if !ENABLE_WASM_STRIP_ACCESSIBILITY
-    uno::Reference< XAccessible > xResult = new AccessibleChartView( GetDrawViewWrapper() );
-    impl_initializeAccessible( uno::Reference< lang::XInitialization >( xResult, uno::UNO_QUERY ) );
+    rtl::Reference< AccessibleChartView > xResult = new AccessibleChartView( GetDrawViewWrapper() );
+    impl_initializeAccessible( *xResult );
     return xResult;
 #else
     return uno::Reference< XAccessible >();
@@ -1589,30 +1533,35 @@ uno::Reference< XAccessible > ChartController::CreateAccessible()
 
 void ChartController::impl_invalidateAccessible()
 {
+#if !ENABLE_WASM_STRIP_ACCESSIBILITY
     SolarMutexGuard aGuard;
     auto pChartWindow(GetChartWindow());
     if( pChartWindow )
     {
-        Reference< lang::XInitialization > xInit( pChartWindow->GetAccessible(false), uno::UNO_QUERY );
+        Reference< XInterface > xInit( pChartWindow->GetAccessible(false) );
         if(xInit.is())
         {
-            uno::Sequence< uno::Any > aArguments(3);//empty arguments -> invalid accessible
-            xInit->initialize(aArguments);
+            //empty arguments -> invalid accessible
+            dynamic_cast<AccessibleChartView&>(*xInit).initialize();
         }
     }
+#endif
 }
 void ChartController::impl_initializeAccessible()
 {
+#if !ENABLE_WASM_STRIP_ACCESSIBILITY
     SolarMutexGuard aGuard;
     auto pChartWindow(GetChartWindow());
-    if( pChartWindow )
-        this->impl_initializeAccessible( Reference< lang::XInitialization >( pChartWindow->GetAccessible(false), uno::UNO_QUERY ) );
-}
-void ChartController::impl_initializeAccessible( const uno::Reference< lang::XInitialization >& xInit )
-{
-    if(!xInit.is())
+    if( !pChartWindow )
         return;
-
+    Reference< XInterface > xInit( pChartWindow->GetAccessible(false) );
+    if(xInit.is())
+        impl_initializeAccessible( dynamic_cast<AccessibleChartView&>(*xInit) );
+#endif
+}
+#if !ENABLE_WASM_STRIP_ACCESSIBILITY
+void ChartController::impl_initializeAccessible( AccessibleChartView& rAccChartView )
+{
     uno::Reference< XAccessible > xParent;
     {
         SolarMutexGuard aGuard;
@@ -1624,14 +1573,12 @@ void ChartController::impl_initializeAccessible( const uno::Reference< lang::XIn
                 xParent.set( pParentWin->GetAccessible());
         }
     }
-    uno::Sequence< uno::Any > aArguments{ uno::Any(uno::Reference<view::XSelectionSupplier>(this)),
-                                          uno::Any(getModel()),
-                                          uno::Any(m_xChartView),
-                                          uno::Any(xParent),
-                                          uno::Any(m_xViewWindow) };
 
-    xInit->initialize(aArguments);
+    rAccChartView.initialize(*this, getChartModel(), m_xChartView, xParent, m_xViewWindow);
 }
+#else
+void ChartController::impl_initializeAccessible( AccessibleChartView& /* rAccChartView */) {}
+#endif
 
 const o3tl::sorted_vector< OUString >& ChartController::impl_getAvailableCommands()
 {
@@ -1709,12 +1656,5 @@ ViewElementListProvider ChartController::getViewElementListProvider()
 }
 
 } //namespace chart
-
-extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface *
-com_sun_star_comp_chart2_ChartController_get_implementation(css::uno::XComponentContext *context,
-                                                            css::uno::Sequence<css::uno::Any> const &)
-{
-    return cppu::acquire(new chart::ChartController(context));
-}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

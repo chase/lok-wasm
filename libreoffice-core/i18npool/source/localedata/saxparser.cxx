@@ -40,7 +40,6 @@
 
 #include "LocaleNode.hxx"
 
-using namespace ::std;
 using namespace ::cppu;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
@@ -183,13 +182,14 @@ public: // Error handler
 public: // ExtendedDocumentHandler
 
 
-    stack<LocaleNode *> currentNode ;
+    std::stack<LocaleNode *> currentNode ;
     LocaleNode * rootNode;
 
     virtual void SAL_CALL startDocument() override
     {
     printf( "parsing document %s started\n", theLocale.c_str());
     of.writeAsciiString("#include <sal/types.h>\n\n\n");
+    of.writeAsciiString("#include <rtl/ustring.hxx>\n\n\n");
     of.writeAsciiString("#include <stdio.h>\n\n");
     of.writeAsciiString("extern \"C\" {\n\n");
     }

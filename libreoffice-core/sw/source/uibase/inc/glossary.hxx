@@ -86,7 +86,7 @@ class SwGlossaryDlg final : public SfxDialogController
     DECL_LINK( NameModify, weld::Entry&, void );
     DECL_LINK( NameDoubleClick, weld::TreeView&, bool );
     DECL_LINK( GrpSelect, weld::TreeView&, void );
-    DECL_LINK( MenuHdl, const OString&, void );
+    DECL_LINK( MenuHdl, const OUString&, void );
     DECL_LINK( EnableHdl, weld::Toggleable&, void );
     DECL_LINK( BibHdl, weld::Button&, void );
     DECL_LINK( InsertHdl, weld::Button&, void );
@@ -109,7 +109,7 @@ class SwGlossaryDlg final : public SfxDialogController
 
     void            DeleteEntry();
 public:
-    SwGlossaryDlg(SfxViewFrame const * pViewFrame, SwGlossaryHdl* pGlosHdl, SwWrtShell *pWrtShell);
+    SwGlossaryDlg(const SfxViewFrame& rViewFrame, SwGlossaryHdl* pGlosHdl, SwWrtShell *pWrtShell);
     virtual short run() override;
     virtual ~SwGlossaryDlg() override;
     OUString GetCurrGrpName() const;

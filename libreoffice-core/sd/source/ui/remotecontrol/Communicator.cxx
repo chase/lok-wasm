@@ -53,10 +53,10 @@ void Communicator::execute()
     pTransmitter.reset( new Transmitter( mpSocket.get() ) );
     pTransmitter->create();
 
-    pTransmitter->addMessage( "LO_SERVER_SERVER_PAIRED\n\n",
+    pTransmitter->addMessage( "LO_SERVER_SERVER_PAIRED\n\n"_ostr,
                               Transmitter::PRIORITY_HIGH );
 
-    pTransmitter->addMessage( "LO_SERVER_INFO\n" LIBO_VERSION_DOTTED "\n\n",
+    pTransmitter->addMessage( "LO_SERVER_INFO\n" LIBO_VERSION_DOTTED "\n\n"_ostr,
                               Transmitter::PRIORITY_HIGH );
 
     Receiver aReceiver( pTransmitter.get() );
@@ -78,11 +78,11 @@ void Communicator::execute()
                 OUStringToOString( ::comphelper::DocumentInfo::getDocumentTitle( xFrame->getController()->getModel() ), RTL_TEXTENCODING_UTF8 ) +
                 "\n\n";
 
-            pTransmitter->addMessage( aBuffer.getStr(), Transmitter::PRIORITY_LOW );
+            pTransmitter->addMessage( aBuffer, Transmitter::PRIORITY_LOW );
         }
         else
         {
-            pTransmitter->addMessage( "slideshow_finished\n\n",
+            pTransmitter->addMessage( "slideshow_finished\n\n"_ostr,
                                       Transmitter::PRIORITY_HIGH );
         }
     }
@@ -131,7 +131,7 @@ void Communicator::informListenerDestroyed()
     // during disposal of this communicator
 
     if ( pTransmitter )
-        pTransmitter->addMessage( "slideshow_finished\n\n",
+        pTransmitter->addMessage( "slideshow_finished\n\n"_ostr,
                                   Transmitter::PRIORITY_HIGH );
 }
 

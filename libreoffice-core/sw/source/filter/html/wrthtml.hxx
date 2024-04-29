@@ -278,6 +278,11 @@ class SW_DLLPUBLIC SwHTMLWriter : public Writer
 
     FieldUnit m_eCSS1Unit;
 
+    bool m_bPrettyPrint = true; // Allows to add new lines to make it more readable
+    bool m_bLFPossible = false; // a line break can be inserted
+    bool m_bSpacePreserve = false; // Using xml::space="preserve", or "white-space: pre-wrap" style
+    bool m_bPreserveSpacesOnWrite = false; // If export should use m_bSpacePreserve
+
     sal_uInt16 OutHeaderAttrs();
     const SwPageDesc *MakeHeader( sal_uInt16& rHeaderAtrs );
     void GetControls();
@@ -321,7 +326,7 @@ public:
     sal_uInt32 m_aFontHeights[7];         // font heights 1-7
 
     ErrCode m_nWarn;                      // warning code
-    sal_uInt32 m_nLastLFPos;              // last position of LF
+    sal_uInt64 m_nLastLFPos;              // last position of LF
 
     HtmlTokenId m_nLastParaToken;         // to hold paragraphs together
     sal_Int32 m_nBkmkTabPos;              // current position in bookmark table
@@ -392,7 +397,6 @@ public:
     bool m_bNoAlign : 1;              // HTML tag doesn't allow ALIGN=...
     bool m_bClearLeft : 1;            // <BR CLEAR=LEFT> write at end of paragraph
     bool m_bClearRight : 1;           // <BR CLEAR=RIGHT> write at end of paragraph
-    bool m_bLFPossible : 1;           // a line break can be inserted
 
     // others
 
@@ -416,7 +420,6 @@ public:
 #define sCSS2_P_CLASS_leaders "leaders"
     bool m_bCfgPrintLayout : 1;       // PrintLayout option for TOC dot leaders
     bool m_bParaDotLeaders : 1;       // for TOC dot leaders
-    bool m_bPrettyPrint : 1;          // Allows to add new lines to make it more readable
     // 26
 
     /// Tracks which text portion attributes are currently open: a which id -> open count map.
@@ -426,6 +429,9 @@ public:
 
     /// ReqIF mode: export images as OLE objects.
     bool m_bExportImagesAsOLE = false;
+
+    /// ReqIF mode: export formulas as PDFs.
+    bool m_bExportFormulasAsPDF = false;
 
     /// DPI used when exporting a vector shape as a bitmap.
     std::optional<sal_Int32> m_nShapeDPI;
@@ -478,16 +484,14 @@ public:
 
     void OutStyleSheet( const SwPageDesc& rPageDesc );
 
-    inline void OutCSS1_PropertyAscii( const char *pProp,
-                                       const char *pVal );
-    inline void OutCSS1_PropertyAscii( const char *pProp,
+    inline void OutCSS1_PropertyAscii( std::string_view pProp,
                                        std::string_view rVal );
-    inline void OutCSS1_Property( const char *pProp, const OUString& rVal );
-    void OutCSS1_Property( const char *pProp, std::string_view pVal,
+    inline void OutCSS1_Property( std::string_view pProp, const OUString& rVal );
+    void OutCSS1_Property( std::string_view pProp, std::string_view pVal,
                            const OUString *pSVal, std::optional<sw::Css1Background> oBackground = std::nullopt );
-    void OutCSS1_UnitProperty( const char *pProp, tools::Long nVal );
-    void OutCSS1_PixelProperty( const char *pProp, tools::Long nVal, bool bVert );
-    void OutCSS1_SfxItemSet( const SfxItemSet& rItemSet, bool bDeep=true );
+    void OutCSS1_UnitProperty( std::string_view pProp, tools::Long nVal );
+    void OutCSS1_PixelProperty( std::string_view pProp, tools::Long nTwips );
+    void OutCSS1_SfxItemSet( const SfxItemSet& rItemSet, bool bDeep=true, std::string_view rAdd = {} );
 
     // events of BODY tag from SFX configuration
     void OutBasicBodyEvents();
@@ -508,7 +512,7 @@ public:
     OString OutFrameFormatOptions( const SwFrameFormat& rFrameFormat, const OUString& rAltText,
                                    HtmlFrmOpts nFrameOpts );
 
-    void writeFrameFormatOptions(HtmlWriter& aHtml, const SwFrameFormat& rFrameFormat, std::u16string_view rAltText, HtmlFrmOpts nFrameOpts);
+    void writeFrameFormatOptions(HtmlWriter& aHtml, const SwFrameFormat& rFrameFormat, const OUString& rAltText, HtmlFrmOpts nFrameOpts);
 
     /// Writes the formatting for tables.
     void OutCSS1_TableFrameFormatOptions( const SwFrameFormat& rFrameFormat );
@@ -544,11 +548,12 @@ public:
     SwPaM* GetEndPaM() { return m_pOrigPam; }
     void SetEndPaM( SwPaM* pPam ) { m_pOrigPam = pPam; }
 
-    static sal_uInt32 ToPixel( sal_uInt32 nVal, const bool bVert );
+    static sal_uInt32 ToPixel(sal_uInt32 nTwips);
+    static Size ToPixel(Size aTwips);
 
-    sal_uInt16 GuessFrameType( const SwFrameFormat& rFrameFormat,
+    SwHTMLFrameType GuessFrameType( const SwFrameFormat& rFrameFormat,
                          const SdrObject*& rpStrObj );
-    static sal_uInt16 GuessOLENodeFrameType( const SwNode& rNd );
+    static SwHTMLFrameType GuessOLENodeFrameType( const SwNode& rNd );
 
     void CollectFlyFrames();
 
@@ -609,7 +614,7 @@ public:
     static void PrepareFontList( const SvxFontItem& rFontItem, OUString& rNames,
                                  sal_Unicode cQuote, bool bGeneric );
     static sal_uInt16 GetCSS1ScriptForScriptType( sal_uInt16 nScriptType );
-    static sal_uInt16 GetLangWhichIdFromScript( sal_uInt16 nScript );
+    static TypedWhichId<SvxLanguageItem> GetLangWhichIdFromScript( sal_uInt16 nScript );
 
     FieldUnit GetCSS1Unit() const { return m_eCSS1Unit; }
 
@@ -617,6 +622,13 @@ public:
 
     /// Determines the prefix string needed to respect the requested namespace alias.
     OString GetNamespace() const;
+
+    bool IsPrettyPrint() const { return !m_bSpacePreserve && m_bPrettyPrint; }
+    bool IsLFPossible() const { return !m_bSpacePreserve && m_bLFPossible; }
+    void SetLFPossible(bool val) { m_bLFPossible = val; }
+    bool IsSpacePreserve() const { return m_bSpacePreserve; }
+    void SetSpacePreserve(bool val) { m_bSpacePreserve = val; }
+    bool IsPreserveSpacesOnWritePrefSet() const { return m_bPreserveSpacesOnWrite; }
 };
 
 inline bool SwHTMLWriter::IsCSS1Source( sal_uInt16 n ) const
@@ -630,19 +642,13 @@ inline bool SwHTMLWriter::IsCSS1Script( sal_uInt16 n ) const
     return CSS1_OUTMODE_ANY_SCRIPT == nScript || n == nScript;
 }
 
-inline void SwHTMLWriter::OutCSS1_PropertyAscii( const char *pProp,
-                                                 const char *pVal )
-{
-    OutCSS1_Property( pProp, pVal, nullptr );
-}
-
-inline void SwHTMLWriter::OutCSS1_PropertyAscii( const char *pProp,
+inline void SwHTMLWriter::OutCSS1_PropertyAscii( std::string_view pProp,
                                                  std::string_view rVal )
 {
     OutCSS1_Property( pProp, rVal, nullptr );
 }
 
-inline void SwHTMLWriter::OutCSS1_Property( const char *pProp,
+inline void SwHTMLWriter::OutCSS1_Property( std::string_view pProp,
                                             const OUString& rVal )
 {
     OutCSS1_Property( pProp, std::string_view(), &rVal );
@@ -655,7 +661,7 @@ inline void SwHTMLWriter::OutCSS1_Property( const char *pProp,
 // positions in the document.
 // In dtor all data is restored and the created PaM is deleted again.
 
-struct HTMLSaveData
+class HTMLSaveData
 {
     SwHTMLWriter& rWrt;
     std::shared_ptr<SwUnoCursor> pOldPam;
@@ -669,6 +675,7 @@ struct HTMLSaveData
     bool bOldOutFooter : 1;
     bool bOldOutFlyFrame : 1;
 
+public:
     HTMLSaveData( SwHTMLWriter&, SwNodeOffset nStt, SwNodeOffset nEnd,
                   bool bSaveNum=true,
                   const SwFrameFormat *pFrameFormat=nullptr  );
@@ -676,59 +683,59 @@ struct HTMLSaveData
 };
 
 // some function prototypes
-Writer& OutHTML_FrameFormatOLENode( Writer& rWrt, const SwFrameFormat& rFormat,
+SwHTMLWriter& OutHTML_FrameFormatOLENode( SwHTMLWriter& rWrt, const SwFrameFormat& rFormat,
                                bool bInCntnr );
-Writer& OutHTML_FrameFormatOLENodeGrf( Writer& rWrt, const SwFrameFormat& rFormat,
-                                  bool bInCntnr );
+SwHTMLWriter& OutHTML_FrameFormatOLENodeGrf( SwHTMLWriter& rWrt, const SwFrameFormat& rFormat,
+                                  bool bInCntnr, bool bWriteReplacementGraphic = true );
 
-Writer& OutHTML_SwTextNode( Writer&, const SwContentNode& );
-Writer& OutHTML_SwTableNode( Writer& , SwTableNode &, const SwFrameFormat *,
+SwHTMLWriter& OutHTML_SwTextNode( SwHTMLWriter&, const SwContentNode& );
+SwHTMLWriter& OutHTML_SwTableNode( SwHTMLWriter& , SwTableNode &, const SwFrameFormat *,
                            const OUString* pCaption=nullptr, bool bTopCaption=false );
 
-Writer& OutHTML_DrawFrameFormatAsControl( Writer& rWrt, const SwDrawFrameFormat& rFormat,
+SwHTMLWriter& OutHTML_DrawFrameFormatAsControl( SwHTMLWriter& rWrt, const SwDrawFrameFormat& rFormat,
                                      const SdrUnoObj& rSdrObj, bool bInCntnr );
-Writer& OutHTML_DrawFrameFormatAsMarquee( Writer& rWrt, const SwDrawFrameFormat& rFormat,
+SwHTMLWriter& OutHTML_DrawFrameFormatAsMarquee( SwHTMLWriter& rWrt, const SwDrawFrameFormat& rFormat,
                                      const SdrObject& rSdrObj );
 
-Writer& OutHTML_HeaderFooter( Writer& rWrt, const SwFrameFormat& rFrameFormat,
+SwHTMLWriter& OutHTML_HeaderFooter( SwHTMLWriter& rWrt, const SwFrameFormat& rFrameFormat,
                               bool bHeader );
 
-Writer& OutHTML_ImageStart( HtmlWriter& rHtml, Writer&, const SwFrameFormat& rFormat,
+SwHTMLWriter& OutHTML_ImageStart( HtmlWriter& rHtml, SwHTMLWriter&, const SwFrameFormat& rFormat,
                        const OUString& rGraphicURL,
                        Graphic const & rGraphic, const OUString& rAlternateText,
                        const Size& rRealSize, HtmlFrmOpts nFrameOpts,
                        const char *pMarkType,
                        const ImageMap *pGenImgMap,
-                       const OUString& rMimeType = OUString() );
-Writer& OutHTML_ImageEnd( HtmlWriter& rHtml, Writer& );
+                       const OUString& rMimeType = {} );
+SwHTMLWriter& OutHTML_ImageEnd( HtmlWriter& rHtml, SwHTMLWriter& );
 
-Writer& OutHTML_BulletImage( Writer& rWrt, const char *pTag,
+SwHTMLWriter& OutHTML_BulletImage( SwHTMLWriter& rWrt, const char *pTag,
                              const SvxBrushItem* pBrush,
                              const OUString& rGraphicURL);
 
-Writer& OutHTML_SwFormatField( Writer& rWrt, const SfxPoolItem& rHt );
-Writer& OutHTML_SwFormatFootnote( Writer& rWrt, const SfxPoolItem& rHt );
-Writer& OutHTML_SwFormatLineBreak(Writer& rWrt, const SfxPoolItem& rHt);
-Writer& OutHTML_INetFormat( Writer&, const SwFormatINetFormat& rINetFormat, bool bOn );
+SwHTMLWriter& OutHTML_SwFormatField( SwHTMLWriter& rWrt, const SfxPoolItem& rHt );
+SwHTMLWriter& OutHTML_SwFormatFootnote( SwHTMLWriter& rWrt, const SfxPoolItem& rHt );
+SwHTMLWriter& OutHTML_SwFormatLineBreak(SwHTMLWriter& rWrt, const SfxPoolItem& rHt);
+SwHTMLWriter& OutHTML_INetFormat( SwHTMLWriter&, const SwFormatINetFormat& rINetFormat, bool bOn );
 
-Writer& OutCSS1_BodyTagStyleOpt( Writer& rWrt, const SfxItemSet& rItemSet );
-Writer& OutCSS1_ParaTagStyleOpt( Writer& rWrt, const SfxItemSet& rItemSet );
+SwHTMLWriter& OutCSS1_BodyTagStyleOpt( SwHTMLWriter& rWrt, const SfxItemSet& rItemSet );
+SwHTMLWriter& OutCSS1_ParaTagStyleOpt( SwHTMLWriter& rWrt, const SfxItemSet& rItemSet, std::string_view rAdd = {} );
 
-Writer& OutCSS1_HintSpanTag( Writer& rWrt, const SfxPoolItem& rHt );
-Writer& OutCSS1_HintStyleOpt( Writer& rWrt, const SfxPoolItem& rHt );
+SwHTMLWriter& OutCSS1_HintSpanTag( SwHTMLWriter& rWrt, const SfxPoolItem& rHt );
+SwHTMLWriter& OutCSS1_HintStyleOpt( SwHTMLWriter& rWrt, const SfxPoolItem& rHt );
 
 /// Writes the background of table rows.
-Writer& OutCSS1_TableBGStyleOpt( Writer& rWrt, const SfxPoolItem& rHt );
+SwHTMLWriter& OutCSS1_TableBGStyleOpt( SwHTMLWriter& rWrt, const SfxPoolItem& rHt );
 
-Writer& OutCSS1_NumberBulletListStyleOpt( Writer& rWrt, const SwNumRule& rNumRule,
+SwHTMLWriter& OutCSS1_NumberBulletListStyleOpt( SwHTMLWriter& rWrt, const SwNumRule& rNumRule,
                                     sal_uInt8 nLevel );
 
-Writer& OutHTML_NumberBulletListStart( SwHTMLWriter& rWrt,
+SwHTMLWriter& OutHTML_NumberBulletListStart( SwHTMLWriter& rWrt,
                                  const SwHTMLNumRuleInfo& rInfo );
-Writer& OutHTML_NumberBulletListEnd( SwHTMLWriter& rWrt,
+SwHTMLWriter& OutHTML_NumberBulletListEnd( SwHTMLWriter& rWrt,
                                const SwHTMLNumRuleInfo& rNextInfo );
 
-Writer& OutCSS1_SvxBox( Writer& rWrt, const SfxPoolItem& rHt );
+SwHTMLWriter& OutCSS1_SvxBox( SwHTMLWriter& rWrt, const SfxPoolItem& rHt );
 
 OString GetCSS1_Color(const Color& rColor);
 

@@ -37,10 +37,17 @@
 #include <bcaslot.hxx>
 #include <compressedarray.hxx>
 #include <userdat.hxx>
+#include <conditio.hxx>
+#include <colorscale.hxx>
+#include <cellform.hxx>
 
 #include <com/sun/star/sheet/TablePageBreakData.hpp>
 
+#include <editeng/brushitem.hxx>
+#include <editeng/colritem.hxx>
 #include <osl/diagnose.h>
+#include <svl/numformat.hxx>
+#include <svl/zformat.hxx>
 
 #include <algorithm>
 #include <limits>
@@ -769,27 +776,6 @@ SCROW ScTable::CountVisibleRows(SCROW nStartRow, SCROW nEndRow) const
     return nCount;
 }
 
-SCROW ScTable::CountHiddenRows(SCROW nStartRow, SCROW nEndRow) const
-{
-    SCROW nCount = 0;
-    SCROW nRow = nStartRow;
-    ScFlatBoolRowSegments::RangeData aData;
-    while (nRow <= nEndRow)
-    {
-        if (!mpHiddenRows->getRangeData(nRow, aData))
-            break;
-
-        if (aData.mnRow2 > nEndRow)
-            aData.mnRow2 = nEndRow;
-
-        if (aData.mbValue)
-            nCount += aData.mnRow2 - nRow + 1;
-
-        nRow = aData.mnRow2 + 1;
-    }
-    return nCount;
-}
-
 tools::Long ScTable::GetTotalRowHeight(SCROW nStartRow, SCROW nEndRow, bool bHiddenAsZero) const
 {
     tools::Long nHeight = 0;
@@ -828,27 +814,6 @@ SCCOL ScTable::CountVisibleCols(SCCOL nStartCol, SCCOL nEndCol) const
             aData.mnCol2 = nEndCol;
 
         if (!aData.mbValue)
-            nCount += aData.mnCol2 - nCol + 1;
-
-        nCol = aData.mnCol2 + 1;
-    }
-    return nCount;
-}
-
-SCCOL ScTable::CountHiddenCols(SCCOL nStartCol, SCCOL nEndCol) const
-{
-    SCCOL nCount = 0;
-    SCCOL nCol = nStartCol;
-    ScFlatBoolColSegments::RangeData aData;
-    while (nCol <= nEndCol)
-    {
-        if (!mpHiddenCols->getRangeData(nCol, aData))
-            break;
-
-        if (aData.mnCol2 > nEndCol)
-            aData.mnCol2 = nEndCol;
-
-        if (aData.mbValue)
             nCount += aData.mnCol2 - nCol + 1;
 
         nCol = aData.mnCol2 + 1;
@@ -1043,6 +1008,78 @@ SCROW ScTable::CountNonFilteredRows(SCROW nStartRow, SCROW nEndRow) const
     return nCount;
 }
 
+Color ScTable::GetCellBackgroundColor(ScAddress aPos) const
+{
+    Color backgroundColor;
+    bool bHasConditionalBackgroundColor = false;
+    // Check background color from cond. formatting
+    const ScPatternAttr* pPattern = GetDoc().GetPattern(aPos.Col(), aPos.Row(), aPos.Tab());
+    if (pPattern)
+    {
+        if (!pPattern->GetItem(ATTR_CONDITIONAL).GetCondFormatData().empty())
+        {
+            const SfxItemSet* pCondSet = GetDoc().GetCondResult(aPos.Col(), aPos.Row(), aPos.Tab());
+            const SvxBrushItem* pBackgroundColor = &pPattern->GetItem(ATTR_BACKGROUND, pCondSet);
+            backgroundColor = pBackgroundColor->GetColor();
+            bHasConditionalBackgroundColor = true;
+        }
+    }
+
+    // Color scale needs a different handling
+    ScConditionalFormat* pCondFormat = GetDoc().GetCondFormat(aPos.Col(), aPos.Row(), aPos.Tab());
+    if (pCondFormat)
+    {
+        for (size_t i = 0; i < pCondFormat->size(); i++)
+        {
+            auto aEntry = pCondFormat->GetEntry(i);
+            if (aEntry->GetType() == ScFormatEntry::Type::Colorscale)
+            {
+                const ScColorScaleFormat* pColFormat
+                    = static_cast<const ScColorScaleFormat*>(aEntry);
+                std::optional<Color> oColor = pColFormat->GetColor(aPos);
+                if (oColor)
+                {
+                    backgroundColor = oColor.value();
+                    bHasConditionalBackgroundColor = true;
+                }
+            }
+        }
+    }
+    return bHasConditionalBackgroundColor ? backgroundColor
+                                          : GetDoc().GetAttr(aPos, ATTR_BACKGROUND)->GetColor();
+}
+
+Color ScTable::GetCellTextColor(ScAddress aPos) const
+{
+    // Check text & background color from cond. formatting
+    const ScPatternAttr* pPattern = GetDoc().GetPattern(aPos.Col(), aPos.Row(), aPos.Tab());
+    if (pPattern)
+    {
+        if (!pPattern->GetItem(ATTR_CONDITIONAL).GetCondFormatData().empty())
+        {
+            const SfxItemSet* pCondSet = GetDoc().GetCondResult(aPos.Col(), aPos.Row(), aPos.Tab());
+            const SvxColorItem* pColor = &pPattern->GetItem(ATTR_FONT_COLOR, pCondSet);
+            return pColor->GetValue();
+        }
+
+        if (pPattern->GetItem(ATTR_VALUE_FORMAT).GetValue())
+        {
+            SvNumberFormatter* pNumberFormatter = GetDoc().GetFormatTable();
+            const SfxUInt32Item pItem = pPattern->GetItem(ATTR_VALUE_FORMAT);
+            auto& rDoc = const_cast<ScDocument&>(GetDoc());
+            const Color* pColor;
+            ScRefCellValue aCell(rDoc, aPos);
+            ScCellFormat::GetString(rDoc, aPos, pItem.GetValue(), &pColor, *pNumberFormatter, false,
+                                    false);
+            if (pColor)
+                return *pColor;
+        }
+    }
+
+    const SvxColorItem* pColor = GetDoc().GetAttr(aPos, ATTR_FONT_COLOR);
+    return pColor->GetValue();
+}
+
 bool ScTable::IsManualRowHeight(SCROW nRow) const
 {
     return bool(pRowFlags->GetValue(nRow) & CRFlags::ManualSize);
@@ -1055,8 +1092,6 @@ void lcl_syncFlags(const ScDocument* pDocument, ScFlatBoolColSegments& rColSegme
                    ScBitMaskCompressedArray<SCCOL, CRFlags>* pColFlags,
                    ScBitMaskCompressedArray<SCROW, CRFlags>* pRowFlags, const CRFlags nFlagMask)
 {
-    using ::sal::static_int_cast;
-
     CRFlags nFlagMaskComplement = ~nFlagMask;
 
     pRowFlags->AndValue(0, pDocument->MaxRow(), nFlagMaskComplement);

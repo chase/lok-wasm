@@ -85,8 +85,7 @@ namespace svt::table
 
             Point const aBitmapPos( 0, 0 );
             Size const aBitmapSize( nSortIndicatorWidth, nSortIndicatorHeight );
-            ScopedVclPtrInstance< VirtualDevice > aDevice(i_device, DeviceFormat::DEFAULT,
-                                                          DeviceFormat::DEFAULT);
+            ScopedVclPtrInstance< VirtualDevice > aDevice(i_device, DeviceFormat::WITH_ALPHA);
             aDevice->SetOutputSizePixel( aBitmapSize );
 
             DecorationView aDecoView(aDevice.get());
@@ -445,7 +444,7 @@ namespace svt::table
 
     void GridTableRenderer::impl_paintCellImage( CellRenderContext const & i_context, Image const & i_image )
     {
-        Point imagePos( Point( i_context.aContentArea.Left(), i_context.aContentArea.Top() ) );
+        Point imagePos( i_context.aContentArea.Left(), i_context.aContentArea.Top() );
         Size imageSize = i_image.GetSizePixel();
         if ( i_context.aContentArea.GetWidth() > imageSize.Width() )
         {

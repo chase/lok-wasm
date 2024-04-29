@@ -177,7 +177,7 @@ bool SwContentFrame::ShouldBwdMoved( SwLayoutFrame *pNewUpper, bool & )
 
             if ( nMoveAnyway < 3 )
             {
-                if ( nSpace )
+                if (nSpace || IsHiddenNow())
                 {
                     // Do not notify footnotes which are stuck to the paragraph:
                     // This would require extremely confusing code, taking into
@@ -209,7 +209,7 @@ bool SwContentFrame::ShouldBwdMoved( SwLayoutFrame *pNewUpper, bool & )
             }
 
             // Check for space left in new upper
-            return nSpace != 0;
+            return nSpace != 0 || IsHiddenNow();
         }
     }
     return false;
@@ -532,7 +532,7 @@ static SwFrame* lcl_NotHiddenPrev( SwFrame* pFrame )
     do
     {
         pRet = lcl_Prev( pRet );
-    } while ( pRet && pRet->IsTextFrame() && static_cast<SwTextFrame*>(pRet)->IsHiddenNow() );
+    } while ( pRet && pRet->IsHiddenNow() );
     return pRet;
 }
 
@@ -1010,7 +1010,7 @@ void SwLayoutFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
                     const tools::Long nDiff = nPrtWidth - (getFrameArea().*fnRect->fnGetWidth)();
                     SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*this);
                     // SwRectFn switched between horizontal and vertical when bVert == IsNeighbourFrame().
-                    // We pick fnSubLeft or fnAddRight that is correspondant to SwRectFn->fnAddBottom
+                    // We pick fnSubLeft or fnAddRight that is correspondent to SwRectFn->fnAddBottom
                     if( ( IsCellFrame() && IsRightToLeft() ) || ( IsColumnFrame() && bVert && !IsVertLR() ) )
                     {
                         (aFrm.*fnRect->fnSubLeft)( nDiff );
@@ -1083,9 +1083,8 @@ void SwContentFrame::MakePrtArea( const SwBorderAttrs &rAttrs )
 
     setFramePrintAreaValid(true);
     SwRectFnSet aRectFnSet(this);
-    const bool bTextFrame = IsTextFrame();
     SwTwips nUpper = 0;
-    if ( bTextFrame && static_cast<SwTextFrame*>(this)->IsHiddenNow() )
+    if (IsTextFrame() && IsHiddenNow())
     {
         if ( static_cast<SwTextFrame*>(this)->HasFollow() )
             static_cast<SwTextFrame*>(this)->JoinFrame();
@@ -1131,18 +1130,18 @@ void SwContentFrame::MakePrtArea( const SwBorderAttrs &rAttrs )
                 // #i28701# - consider changed type of
                 // <SwSortedObjs> entries
                 SwAnchoredObject* pObj = (*GetDrawObjs())[i];
-                const SwFrameFormat& rFormat = pObj->GetFrameFormat();
+                const SwFrameFormat* pFormat = pObj->GetFrameFormat();
                 const bool bFly = pObj->DynCastFlyFrame() !=  nullptr;
                 if ((bFly && (FAR_AWAY == pObj->GetObjRect().Width()))
-                    || rFormat.GetFrameSize().GetWidthPercent())
+                    || pFormat->GetFrameSize().GetWidthPercent())
                 {
                     continue;
                 }
 
-                if ( RndStdIds::FLY_AS_CHAR == rFormat.GetAnchor().GetAnchorId() )
+                if ( RndStdIds::FLY_AS_CHAR == pFormat->GetAnchor().GetAnchorId() )
                 {
                     nMinWidth = std::max( nMinWidth,
-                                     bFly ? rFormat.GetFrameSize().GetWidth()
+                                     bFly ? pFormat->GetFrameSize().GetWidth()
                                           : pObj->GetObjRect().Width() );
                 }
             }
@@ -1715,7 +1714,7 @@ void SwContentFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
                     const bool bMoveFwdInvalid = nullptr != GetIndNext();
                     const bool bNxtNew =
                         ( 0 == aRectFnSet.GetHeight(pNxt->getFramePrintArea()) ) &&
-                        (!pNxt->IsTextFrame() ||!static_cast<SwTextFrame*>(pNxt)->IsHiddenNow());
+                        !pNxt->IsHiddenNow();
 
                     pNxt->Calc(getRootFrame()->GetCurrShell()->GetOut());
 
@@ -2017,6 +2016,12 @@ bool SwContentFrame::WouldFit_( SwTwips nSpace,
         pTmpPrev = static_cast<const SwFootnoteFrame*>(pTmpPrev)->Lower();
     while ( pTmpPrev && pTmpPrev->GetNext() )
         pTmpPrev = pTmpPrev->GetNext();
+
+    // tdf#156727 if the previous one has keep-with-next, ignore it on this one!
+    bool const isIgnoreKeep(pTmpPrev && pTmpPrev->IsFlowFrame()
+            && SwFlowFrame::CastFlowFrame(pTmpPrev)->IsKeep(
+                pTmpPrev->GetAttrSet()->GetKeep(), pTmpPrev->GetBreakItem()));
+
     do
     {
         // #i46181#
@@ -2166,7 +2171,8 @@ bool SwContentFrame::WouldFit_( SwTwips nSpace,
             }
         }
 
-        if (bRet && !bSplit && pFrame->IsKeep(rAttrs.GetAttrSet().GetKeep(), GetBreakItem()))
+        if (bRet && !bSplit && !isIgnoreKeep
+            && pFrame->IsKeep(rAttrs.GetAttrSet().GetKeep(), GetBreakItem()))
         {
             if( bTstMove )
             {
@@ -2210,7 +2216,7 @@ bool SwContentFrame::WouldFit_( SwTwips nSpace,
                     pTmpPrev = nullptr;
                 else
                 {
-                    if( pFrame->IsTextFrame() && static_cast<SwTextFrame*>(pFrame)->IsHiddenNow() )
+                    if (pFrame->IsHiddenNow())
                         pTmpPrev = lcl_NotHiddenPrev( pFrame );
                     else
                         pTmpPrev = pFrame;

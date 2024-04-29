@@ -25,11 +25,12 @@
 #include <vcl/settings.hxx>
 #include <vcl/toolbox.hxx>
 #include <vcl/virdev.hxx>
+#include <svl/itemset.hxx>
 #include <svx/svxids.hrc>
 #include <tools/json_writer.hxx>
 
-constexpr OUStringLiteral TMP_STR_BEGIN = u"[";
-constexpr OUStringLiteral TMP_STR_END = u"]";
+constexpr OUString TMP_STR_BEGIN = u"["_ustr;
+constexpr OUString TMP_STR_END = u"]"_ustr;
 
 #include <svx/drawitem.hxx>
 #include <svx/xfillit0.hxx>

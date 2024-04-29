@@ -101,8 +101,8 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
     SdrView*    pSdrView = pSh->GetDrawView();
     const SfxItemSet *pArgs = rReq.GetArgs();
     sal_uInt16      nSlotId = rReq.GetSlot();
-    bool        bChanged = pSdrView->GetModel()->IsChanged();
-    pSdrView->GetModel()->SetChanged(false);
+    bool        bChanged = pSdrView->GetModel().IsChanged();
+    pSdrView->GetModel().SetChanged(false);
     const SfxPoolItem* pItem = nullptr;
     if(pArgs)
         pArgs->GetItemState(nSlotId, false, &pItem);
@@ -111,7 +111,7 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
 
     bool bTopParam = true, bBottomParam = true;
     bool bDone = false;
-    SfxBindings& rBind = GetView().GetViewFrame()->GetBindings();
+    SfxBindings& rBind = GetView().GetViewFrame().GetBindings();
 
     switch (nSlotId)
     {
@@ -242,7 +242,7 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
                         pDlg->StartExecuteAsync([bCaption, bChanged, pDlg, pFrameFormat, pSdrView,
                                                  pSh, &rMarkList, this](
                                                     sal_Int32 nResult){
-                            pSdrView->GetModel()->SetChanged(false);
+                            pSdrView->GetModel().SetChanged(false);
 
                             if (nResult == RET_OK)
                             {
@@ -328,7 +328,7 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
                                 if(aFrameAttrSet.Count())
                                     pSh->SetDrawingAttr(aFrameAttrSet);
 
-                                GetView().GetViewFrame()->GetBindings().InvalidateAll(false);
+                                GetView().GetViewFrame().GetBindings().InvalidateAll(false);
 
                                 // #i30451#
                                 pSh->EndUndo( SwUndoId::INSFMTATTR );
@@ -336,10 +336,10 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
                                 pSh->EndAllAction();
                             }
 
-                            if (pSdrView->GetModel()->IsChanged())
+                            if (pSdrView->GetModel().IsChanged())
                                 pSh->SetModified();
                             else if (bChanged)
-                                pSdrView->GetModel()->SetChanged();
+                                pSdrView->GetModel().SetChanged();
 
                             pDlg->disposeOnce();
                         });
@@ -595,9 +595,17 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
 
                 if(RET_OK == pDlg->Execute())
                 {
+                    const OUString aOrigName = aName;
                     pDlg->GetName(aName);
                     pSelected->SetName(aName);
                     pSh->SetModified();
+
+                    // update accessibility sidebar object name if we modify the object name on the navigator bar
+                    if (!aName.isEmpty() && aOrigName != aName)
+                    {
+                        if (SwNode* pSwNode = FindFrameFormat(pSelected)->GetAnchor().GetAnchorNode())
+                            pSwNode->resetAndQueueAccessibilityCheck(true);
+                    }
                 }
             }
 
@@ -615,18 +623,21 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
                 OSL_ENSURE(pSelected, "DrawViewShell::FuTemp03: nMarkCount, but no object (!)");
                 OUString aTitle(pSelected->GetTitle());
                 OUString aDescription(pSelected->GetDescription());
+                bool isDecorative(pSelected->IsDecorative());
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(GetView().GetFrameWeld(),
-                            aTitle, aDescription));
+                            aTitle, aDescription, isDecorative));
 
                 if(RET_OK == pDlg->Execute())
                 {
                     pDlg->GetTitle(aTitle);
                     pDlg->GetDescription(aDescription);
+                    pDlg->IsDecorative(isDecorative);
 
                     pSelected->SetTitle(aTitle);
                     pSelected->SetDescription(aDescription);
+                    pSelected->SetDecorative(isDecorative);
 
                     pSh->SetModified();
                 }
@@ -647,7 +658,7 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
         case SID_EDIT_HYPERLINK:
         case SID_HYPERLINK_DIALOG:
         {
-            GetView().GetViewFrame()->SetChildWindow(SID_HYPERLINK_DIALOG, true);
+            GetView().GetViewFrame().SetChildWindow(SID_HYPERLINK_DIALOG, true);
             break;
         }
 
@@ -689,10 +700,10 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
     {
         if(nSlotId >= SID_OBJECT_ALIGN_LEFT && nSlotId <= SID_OBJECT_ALIGN_DOWN)
             rBind.Invalidate(SID_ATTR_LONG_LRSPACE);
-        if (pSdrView->GetModel()->IsChanged())
+        if (pSdrView->GetModel().IsChanged())
             pSh->SetModified();
         else if (bChanged)
-            pSdrView->GetModel()->SetChanged();
+            pSdrView->GetModel().SetChanged();
     }
 }
 
@@ -825,8 +836,12 @@ void SwDrawBaseShell::GetState(SfxItemSet& rSet)
 
                         SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
                         SwFrameFormat* pFrameFormat = FindFrameFormat(pObj);
-                        SwFormatHoriOrient aHOrient(pFrameFormat->GetFormatAttr(RES_HORI_ORIENT));
-                        rSet.Put(SfxBoolItem(nWhich, aHOrient.GetHoriOrient() == nHoriOrient));
+                        if (pFrameFormat)
+                        {
+                            SwFormatHoriOrient aHOrient(
+                                pFrameFormat->GetFormatAttr(RES_HORI_ORIENT));
+                            rSet.Put(SfxBoolItem(nWhich, aHOrient.GetHoriOrient() == nHoriOrient));
+                        }
                     }
 
                     if (bVert && !bDisableThis && rMarkList.GetMarkCount() == 1)
@@ -849,8 +864,12 @@ void SwDrawBaseShell::GetState(SfxItemSet& rSet)
 
                         SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
                         SwFrameFormat* pFrameFormat = FindFrameFormat(pObj);
-                        SwFormatVertOrient aVOrient(pFrameFormat->GetFormatAttr(RES_VERT_ORIENT));
-                        rSet.Put(SfxBoolItem(nWhich, aVOrient.GetVertOrient() == nVertOrient));
+                        if (pFrameFormat)
+                        {
+                            SwFormatVertOrient aVOrient(
+                                pFrameFormat->GetFormatAttr(RES_VERT_ORIENT));
+                            rSet.Put(SfxBoolItem(nWhich, aVOrient.GetVertOrient() == nVertOrient));
+                        }
                     }
                 }
                 break;

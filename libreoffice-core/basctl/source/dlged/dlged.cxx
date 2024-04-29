@@ -32,6 +32,7 @@
 
 #include <com/sun/star/awt/Toolkit.hpp>
 #include <com/sun/star/awt/UnoControlDialog.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/resource/StringResource.hpp>
 #include <com/sun/star/util/XCloneable.hpp>
 #include <com/sun/star/util/NumberFormatsSupplier.hpp>
@@ -57,8 +58,8 @@ using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::io;
 
-constexpr OUStringLiteral aResourceResolverPropName = u"ResourceResolver";
-constexpr OUStringLiteral aDecorationPropName = u"Decoration";
+constexpr OUString aResourceResolverPropName = u"ResourceResolver"_ustr;
+constexpr OUString aDecorationPropName = u"Decoration"_ustr;
 
 
 // DlgEdHint
@@ -217,7 +218,7 @@ DlgEditor::DlgEditor (
     rWindow.SetMapMode( MapMode( MapUnit::Map100thMM ) );
     pDlgEdPage->SetSize( rWindow.PixelToLogic( Size(DLGED_PAGE_WIDTH_MIN, DLGED_PAGE_HEIGHT_MIN) ) );
 
-    pDlgEdView->ShowSdrPage(pDlgEdView->GetModel()->GetPage(0));
+    pDlgEdView->ShowSdrPage(pDlgEdView->GetModel().GetPage(0));
     pDlgEdView->SetLayerVisible( "HiddenLayer", false );
     pDlgEdView->SetMoveSnapOnlyTopLeft(true);
     pDlgEdView->SetWorkArea( tools::Rectangle( Point( 0, 0 ), pDlgEdPage->GetSize() ) );
@@ -515,16 +516,13 @@ void DlgEditor::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle
                 pDlgEdForm->StartListening();
 
                 // set position and size of controls
-                if (const size_t nObjCount = pDlgEdPage->GetObjCount())
+                for (const rtl::Reference<SdrObject>& pObj : *pDlgEdPage)
                 {
-                    for (size_t i = 0 ; i < nObjCount ; ++i)
+                    if (DlgEdObj* pDlgEdObj = dynamic_cast<DlgEdObj*>(pObj.get()))
                     {
-                        if (DlgEdObj* pDlgEdObj = dynamic_cast<DlgEdObj*>(pDlgEdPage->GetObj(i)))
+                        if (!dynamic_cast<DlgEdForm*>(pDlgEdObj))
                         {
-                            if (!dynamic_cast<DlgEdForm*>(pDlgEdObj))
-                            {
-                                pDlgEdObj->SetRectFromProps();
-                            }
+                            pDlgEdObj->SetRectFromProps();
                         }
                     }
                 }
@@ -622,6 +620,8 @@ void DlgEditor::CreateDefaultObject()
 
     // set default property values
     pDlgEdObj->SetDefaults();
+    // set the form to which the new object belongs
+    pDlgEdObj->SetDlgEdForm(pDlgEdForm.get());
 
     // insert object into drawing page
     SdrPageView* pPageView = pDlgEdView->GetSdrPageView();

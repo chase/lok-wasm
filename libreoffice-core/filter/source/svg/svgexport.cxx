@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <strings.hrc>
 #include "svgwriter.hxx"
 #include "svgfontexport.hxx"
 #include "svgfilter.hxx"
@@ -89,25 +90,25 @@ constexpr OUStringLiteral SVG_PROP_OPACITY = u"Opacity";
 constexpr OUStringLiteral SVG_PROP_POSITIONED_CHARACTERS = u"UsePositionedCharacters";
 
 // ooo xml elements
-constexpr OUStringLiteral aOOOElemTextField = NSPREFIX "text_field";
+constexpr OUString aOOOElemTextField = NSPREFIX "text_field"_ustr;
 
 
 // ooo xml attributes for meta_slide
-constexpr OUStringLiteral aOOOAttrSlide = NSPREFIX "slide";
-constexpr OUStringLiteral aOOOAttrMaster = NSPREFIX "master";
+constexpr OUString aOOOAttrSlide = NSPREFIX "slide"_ustr;
+constexpr OUString aOOOAttrMaster = NSPREFIX "master"_ustr;
 constexpr OUStringLiteral aOOOAttrHasCustomBackground = NSPREFIX "has-custom-background";
 constexpr OUStringLiteral aOOOAttrDisplayName = NSPREFIX "display-name";
-constexpr OUStringLiteral aOOOAttrBackgroundVisibility = NSPREFIX "background-visibility";
-constexpr OUStringLiteral aOOOAttrMasterObjectsVisibility = NSPREFIX "master-objects-visibility";
+constexpr OUString aOOOAttrBackgroundVisibility = NSPREFIX "background-visibility"_ustr;
+constexpr OUString aOOOAttrMasterObjectsVisibility = NSPREFIX "master-objects-visibility"_ustr;
 constexpr OUStringLiteral aOOOAttrSlideDuration = NSPREFIX "slide-duration";
-constexpr OUStringLiteral aOOOAttrDateTimeField = NSPREFIX "date-time-field";
-constexpr OUStringLiteral aOOOAttrFooterField = NSPREFIX "footer-field";
-constexpr OUStringLiteral aOOOAttrHasTransition = NSPREFIX "has-transition";
+constexpr OUString aOOOAttrDateTimeField = NSPREFIX "date-time-field"_ustr;
+constexpr OUString aOOOAttrFooterField = NSPREFIX "footer-field"_ustr;
+constexpr OUString aOOOAttrHasTransition = NSPREFIX "has-transition"_ustr;
 
 // ooo xml attributes for pages and shapes
-constexpr OUStringLiteral aOOOAttrName = NSPREFIX "name";
+constexpr OUString aOOOAttrName = NSPREFIX "name"_ustr;
 
-constexpr OUStringLiteral constSvgNamespace = u"http://www.w3.org/2000/svg";
+constexpr OUString constSvgNamespace = u"http://www.w3.org/2000/svg"_ustr;
 
 
 /** Text Field Class Hierarchy
@@ -210,7 +211,7 @@ public:
     }
     virtual void growCharSet( SVGFilter::UCharSetMapMap & aTextFieldCharSets ) const override
     {
-        static constexpr OUStringLiteral sFieldId = aOOOAttrFooterField;
+        static constexpr OUString sFieldId = aOOOAttrFooterField;
         implGrowCharSet( aTextFieldCharSets, text, sFieldId );
     }
 };
@@ -307,7 +308,7 @@ public:
 
         OUString sDateTimeFormat = sDateFormat + " " + sTimeFormat;
 
-        pSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "date-time-format", sDateTimeFormat );
+        pSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "date-time-format"_ustr, sDateTimeFormat );
         SvXMLElementExport aExp( *pSVGExport, XML_NAMESPACE_NONE, "g", true, true );
     }
     virtual void growCharSet( SVGFilter::UCharSetMapMap & aTextFieldCharSets ) const override
@@ -653,6 +654,8 @@ bool SVGFilter::implExport( const Sequence< PropertyValue >& rDescriptor )
         {
             pValue[ i ].Value >>= maFilterData;
         }
+        else if (pValue[i].Name == "StatusIndicator")
+            pValue[i].Value >>= mxStatusIndicator;
     }
 
     if(mbWriterFilter || mbCalcFilter)
@@ -763,7 +766,7 @@ bool SVGFilter::implExportImpressOrDraw( const Reference< XOutputStream >& rxOSt
             aCodec.BeginCompression( ZCODEC_DEFAULT_COMPRESSION, /*gzLib*/true );
             // the inner modify time/filename doesn't really matter in this context because
             // compressed graphic formats are meant to be opened as is - not to be extracted
-            aCodec.SetCompressionMetadata( "inner", 0, nUncompressedCRC32 );
+            aCodec.SetCompressionMetadata( "inner"_ostr, 0, nUncompressedCRC32 );
             aCodec.Compress( aTempStm, aCompressedStm );
             sal_uInt32 nTotalIn = static_cast< sal_uInt32 >( aCodec.EndCompression() );
             if ( aCompressedStm.GetError() || nTotalIn != aDataSize )
@@ -1217,13 +1220,13 @@ void SVGFilter::implGenerateMetaData()
     // we wrap all meta presentation info into a svg:defs element
     SvXMLElementExport aDefsElem( *mpSVGExport, XML_NAMESPACE_NONE, "defs", true, true );
 
-    mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, "id", NSPREFIX "meta_slides" );
-    mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "number-of-slides", OUString::number( nCount ) );
-    mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "start-slide-number", OUString::number( mnVisiblePage ) );
+    mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, "id", NSPREFIX "meta_slides"_ustr );
+    mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "number-of-slides"_ustr, OUString::number( nCount ) );
+    mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "start-slide-number"_ustr, OUString::number( mnVisiblePage ) );
 
     if( mpSVGExport->IsUsePositionedCharacters() )
     {
-        mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "use-positioned-chars", "true" );
+        mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "use-positioned-chars"_ustr, "true" );
     }
 
     // Add a (global) Page Numbering Type attribute for the document
@@ -1264,20 +1267,20 @@ void SVGFilter::implGenerateMetaData()
                 break;
         }
         if( !sNumberingType.isEmpty() )
-            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "page-numbering-type", sNumberingType );
+            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "page-numbering-type"_ustr, sNumberingType );
     }
 
 
     {
         SvXMLElementExport    aExp( *mpSVGExport, XML_NAMESPACE_NONE, "g", true, true );
-        const OUString                aId( NSPREFIX "meta_slide" );
+        const OUString                aId( NSPREFIX "meta_slide"_ustr );
         const OUString                aElemTextFieldId( aOOOElemTextField );
         std::vector< std::unique_ptr<TextField> >     aFieldSet;
 
         // dummy slide - used as leaving slide for transition on the first slide
         if( mbPresentation )
         {
-            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, "id", NSPREFIX "meta_dummy_slide" );
+            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, "id", NSPREFIX "meta_dummy_slide"_ustr );
             mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, aOOOAttrSlide, "dummy-slide" );
             mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, aOOOAttrMaster, "dummy-master-page" );
             mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, aOOOAttrBackgroundVisibility, "hidden" );
@@ -1350,7 +1353,7 @@ void SVGFilter::implGenerateMetaData()
                         bPageNumberVisibility = bPageNumberVisibility && ( nPageNumberingType != css::style::NumberingType::NUMBER_NONE );
                         if( bPageNumberVisibility ) // visibility default value: 'hidden'
                         {
-                            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "page-number-visibility", "visible" );
+                            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "page-number-visibility"_ustr, "visible" );
                         }
 
                         // DateTime Field
@@ -1374,7 +1377,7 @@ void SVGFilter::implGenerateMetaData()
                         xPropSet->getPropertyValue( "IsDateTimeVisible" ) >>= bDateTimeVisibility;
                         if( !bDateTimeVisibility ) // visibility default value: 'visible'
                         {
-                            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "date-time-visibility", "hidden" );
+                            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "date-time-visibility"_ustr, "hidden" );
                         }
 
                         // Footer Field
@@ -1387,7 +1390,7 @@ void SVGFilter::implGenerateMetaData()
                         xPropSet->getPropertyValue( "IsFooterVisible" )  >>= bFooterVisibility;
                         if( !bFooterVisibility ) // visibility default value: 'visible'
                         {
-                            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "footer-visibility", "hidden" );
+                            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "footer-visibility"_ustr, "hidden" );
                         }
                     }
                     else
@@ -1531,7 +1534,7 @@ void SVGFilter::implExportTextShapeIndex()
             if( !rPageId.isEmpty() && !sTextShapeIdList.isEmpty() )
             {
                 mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, aOOOAttrSlide, rPageId  );
-                mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "id-list", sTextShapeIdList );
+                mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "id-list"_ustr, sTextShapeIdList );
                 SvXMLElementExport aGElem( *mpSVGExport, XML_NAMESPACE_NONE, "g", true, true );
             }
         }
@@ -1906,25 +1909,21 @@ void SVGFilter::implExportDrawPages( const std::vector< Reference< css::drawing:
         }
     }
 
-    if(!mbExportShapeSelection)
+    if (!mbExportShapeSelection)
     {
         // We wrap all slide in a group element with class name "SlideGroup".
         mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, "class", "SlideGroup" );
         SvXMLElementExport aExp( *mpSVGExport, XML_NAMESPACE_NONE, "g", true, true );
 
+        if (mxStatusIndicator)
+            mxStatusIndicator->start(FilterResId(STR_FILTER_DOC_SAVING), nLastPage - nFirstPage + 1);
+
         for( sal_Int32 i = nFirstPage; i <= nLastPage; ++i )
         {
-            Reference< css::drawing::XShapes > xShapes;
+            if (mxStatusIndicator.is())
+                mxStatusIndicator->setValue(i - nFirstPage);
 
-            if (mbExportShapeSelection)
-            {
-                // #i124608# export a given object selection
-                xShapes = maShapeSelection;
-            }
-            else
-            {
-                xShapes = rxPages[i];
-            }
+            Reference<css::drawing::XShapes> xShapes = rxPages[i];
 
             if( xShapes.is() )
             {
@@ -1967,6 +1966,9 @@ void SVGFilter::implExportDrawPages( const std::vector< Reference< css::drawing:
                 } // append the </g> closing tag related to inserted elements
             } // append the </g> closing tag related to the svg element handling the slide visibility
         }
+
+        if (mxStatusIndicator)
+            mxStatusIndicator->end();
     }
     else
     {
@@ -2201,7 +2203,7 @@ bool SVGFilter::implExportShape( const Reference< css::drawing::XShape >& rxShap
                                 default:
                                     break;
                             }
-                            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "text-adjust", sTextAdjust );
+                            mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, NSPREFIX "text-adjust"_ustr, sTextAdjust );
                         }
                     }
                     mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, "class", aShapeClass );
@@ -2707,9 +2709,9 @@ IMPL_LINK( SVGFilter, CalcFieldHdl, EditFieldInfo*, pInfo, void )
             }
             bool bHasCharSetMap = mTextFieldCharSets.find( mCreateOjectsCurrentMasterPage ) != mTextFieldCharSets.end();
 
-            static constexpr OUStringLiteral aHeaderId( NSPREFIX "header-field" );
-            static constexpr OUStringLiteral aFooterId( aOOOAttrFooterField );
-            static constexpr OUStringLiteral aDateTimeId( aOOOAttrDateTimeField );
+            static constexpr OUString aHeaderId( NSPREFIX "header-field"_ustr );
+            static constexpr OUString aFooterId( aOOOAttrFooterField );
+            static constexpr OUString aDateTimeId( aOOOAttrDateTimeField );
             static const OUString aVariableDateTimeId( aOOOAttrDateTimeField + "-variable" );
 
             const UCharSet * pCharSet = nullptr;

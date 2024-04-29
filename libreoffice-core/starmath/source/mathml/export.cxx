@@ -76,16 +76,8 @@ bool SmMLExportWrapper::Export(SfxMedium& rMedium)
     if (m_xModel == nullptr || xContext == nullptr)
         return false;
 
-    //Get model
-    uno::Reference<lang::XComponent> xModelComp = m_xModel;
-    SAL_WARN_IF(xModelComp == nullptr, "starmath", "Missing model component");
-    SmModel* pModel = comphelper::getFromUnoTunnel<SmModel>(m_xModel);
-    SAL_WARN_IF(pModel == nullptr, "starmath", "Failed to get threw uno tunnel");
-    if (xModelComp == nullptr || pModel == nullptr)
-        return false;
-
     // Get doc shell
-    SmDocShell* pDocShell = static_cast<SmDocShell*>(pModel->GetObjectShell());
+    SmDocShell* pDocShell = static_cast<SmDocShell*>(m_xModel->GetObjectShell());
     if (pDocShell == nullptr)
     {
         SAL_WARN("starmath", "Failed to fetch sm document");
@@ -96,7 +88,7 @@ bool SmMLExportWrapper::Export(SfxMedium& rMedium)
     bool bEmbedded = SfxObjectCreateMode::EMBEDDED == pDocShell->GetCreateMode();
 
     // Medium item set
-    SfxItemSet* pMediumItemSet = rMedium.GetItemSet();
+    SfxItemSet& rMediumItemSet = rMedium.GetItemSet();
     if (pDocShell == nullptr)
     {
         SAL_WARN("starmath", "Failed to get medium item set");
@@ -116,7 +108,7 @@ bool SmMLExportWrapper::Export(SfxMedium& rMedium)
         }
 
         // Fetch progress bar
-        const SfxUnoAnyItem* pItem = pMediumItemSet->GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
+        const SfxUnoAnyItem* pItem = rMediumItemSet.GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
         if (pItem)
         {
             // set progress range and start status indicator
@@ -144,7 +136,7 @@ bool SmMLExportWrapper::Export(SfxMedium& rMedium)
     xInfoSet->setPropertyValue("UsePrettyPrinting", Any(true));
 
     // Set base URI
-    xInfoSet->setPropertyValue(u"BaseURI", Any(rMedium.GetBaseURL(true)));
+    xInfoSet->setPropertyValue(u"BaseURI"_ustr, Any(rMedium.GetBaseURL(true)));
 
     if (!m_bFlat) //Storage (Package) of Stream
     {
@@ -160,7 +152,7 @@ bool SmMLExportWrapper::Export(SfxMedium& rMedium)
         if (bEmbedded) //&& !pStg->IsRoot() )
         {
             const SfxStringItem* pDocHierarchItem
-                = pMediumItemSet->GetItem(SID_DOC_HIERARCHICALNAME);
+                = rMediumItemSet.GetItem(SID_DOC_HIERARCHICALNAME);
             if (pDocHierarchItem != nullptr)
             {
                 OUString aName = pDocHierarchItem->GetValue();
@@ -175,7 +167,7 @@ bool SmMLExportWrapper::Export(SfxMedium& rMedium)
             if (xStatusIndicator.is())
                 xStatusIndicator->setValue(1);
 
-            bRet = WriteThroughComponentS(xStg, xModelComp, u"meta.xml", xContext, xInfoSet,
+            bRet = WriteThroughComponentS(xStg, m_xModel, u"meta.xml", xContext, xInfoSet,
                                           u"com.sun.star.comp.Math.MLOasisMetaExporter", 6);
         }
 
@@ -187,10 +179,10 @@ bool SmMLExportWrapper::Export(SfxMedium& rMedium)
                 xStatusIndicator->setValue(2);
 
             if (pDocShell->GetSmSyntaxVersion() == 5)
-                bRet = WriteThroughComponentS(xStg, xModelComp, u"content.xml", xContext, xInfoSet,
+                bRet = WriteThroughComponentS(xStg, m_xModel, u"content.xml", xContext, xInfoSet,
                                               u"com.sun.star.comp.Math.XMLContentExporter", 5);
             else
-                bRet = WriteThroughComponentS(xStg, xModelComp, u"content.xml", xContext, xInfoSet,
+                bRet = WriteThroughComponentS(xStg, m_xModel, u"content.xml", xContext, xInfoSet,
                                               u"com.sun.star.comp.Math.MLContentExporter", 6);
         }
 
@@ -201,7 +193,7 @@ bool SmMLExportWrapper::Export(SfxMedium& rMedium)
             if (xStatusIndicator.is())
                 xStatusIndicator->setValue(3);
 
-            bRet = WriteThroughComponentS(xStg, xModelComp, u"settings.xml", xContext, xInfoSet,
+            bRet = WriteThroughComponentS(xStg, m_xModel, u"settings.xml", xContext, xInfoSet,
                                           u"com.sun.star.comp.Math.MLOasisSettingsExporter", 6);
         }
     }
@@ -222,10 +214,10 @@ bool SmMLExportWrapper::Export(SfxMedium& rMedium)
         // Write everything in the same place
         // Note: export through an XML exporter component (output stream version)
         if (pDocShell->GetSmSyntaxVersion() == 5)
-            bRet = WriteThroughComponentOS(xOut, xModelComp, xContext, xInfoSet,
+            bRet = WriteThroughComponentOS(xOut, m_xModel, xContext, xInfoSet,
                                            u"com.sun.star.comp.Math.XMLContentExporter", 5);
         else
-            bRet = WriteThroughComponentOS(xOut, xModelComp, xContext, xInfoSet,
+            bRet = WriteThroughComponentOS(xOut, m_xModel, xContext, xInfoSet,
                                            u"com.sun.star.comp.Math.MLContentExporter", 6);
     }
 
@@ -243,22 +235,22 @@ OUString SmMLExportWrapper::Export(SmMlElement* pElementTree)
     SAL_WARN_IF(m_xModel == nullptr, "starmath", "Missing model");
     SAL_WARN_IF(xContext == nullptr, "starmath", "Missing context");
     if (m_xModel == nullptr || xContext == nullptr)
-        return u"";
+        return u""_ustr;
 
     //Get model
     uno::Reference<lang::XComponent> xModelComp = m_xModel;
     SAL_WARN_IF(xModelComp == nullptr, "starmath", "Missing model component");
-    SmModel* pModel = comphelper::getFromUnoTunnel<SmModel>(m_xModel);
+    SmModel* pModel = m_xModel.get();
     SAL_WARN_IF(pModel == nullptr, "starmath", "Failed to get threw uno tunnel");
     if (xModelComp == nullptr || pModel == nullptr)
-        return u"";
+        return u""_ustr;
 
     // Get doc shell
     SmDocShell* pDocShell = static_cast<SmDocShell*>(pModel->GetObjectShell());
     if (pDocShell == nullptr)
     {
         SAL_WARN("starmath", "Failed to fetch sm document");
-        return u"";
+        return u""_ustr;
     }
 
     // create XPropertySet with three properties for status indicator
@@ -331,7 +323,7 @@ bool SmMLExportWrapper::WriteThroughComponentOS(const Reference<io::XOutputStrea
     // filter
     if (nSyntaxVersion == 5)
     {
-        SmXMLExport* pFilter = comphelper::getFromUnoTunnel<SmXMLExport>(xFilter);
+        SmXMLExport* pFilter = dynamic_cast<SmXMLExport*>(xFilter.get());
         if (pFilter == nullptr)
         {
             SAL_WARN("starmath", "Failed to fetch SmMLExport");
@@ -342,7 +334,7 @@ bool SmMLExportWrapper::WriteThroughComponentOS(const Reference<io::XOutputStrea
     }
 
     // filter
-    SmMLExport* pFilter = comphelper::getFromUnoTunnel<SmMLExport>(xFilter);
+    SmMLExport* pFilter = dynamic_cast<SmMLExport*>(xFilter.get());
 
     // Setup filter
     if (pFilter == nullptr)
@@ -389,7 +381,7 @@ bool SmMLExportWrapper::WriteThroughComponentS(const Reference<embed::XStorage>&
 
     // Set stream as text / xml
     uno::Reference<beans::XPropertySet> xSet(xStream, uno::UNO_QUERY);
-    xSet->setPropertyValue("MediaType", Any(OUString(u"text/xml")));
+    xSet->setPropertyValue("MediaType", Any(u"text/xml"_ustr));
 
     // all streams must be encrypted in encrypted document
     xSet->setPropertyValue("UseCommonStoragePasswordEncryption", Any(true));
@@ -428,7 +420,7 @@ SmMLExportWrapper::WriteThroughComponentMS(const Reference<XComponent>& xCompone
 
     // We don't want to read uninitialized data
     if (!bOk)
-        return u"";
+        return u""_ustr;
 
     // Recover data and generate string
     OString aString(static_cast<const char*>(aMemoryStream.GetData()),
@@ -438,18 +430,6 @@ SmMLExportWrapper::WriteThroughComponentMS(const Reference<XComponent>& xCompone
 
 // SmMLExport technical
 /*************************************************************************************************/
-
-sal_Int64 SAL_CALL SmMLExport::getSomething(const uno::Sequence<sal_Int8>& rId)
-{
-    return comphelper::getSomethingImpl(rId, this,
-                                        comphelper::FallbackToGetSomethingOf<SvXMLExport>{});
-}
-
-const uno::Sequence<sal_Int8>& SmMLExport::getUnoTunnelId() noexcept
-{
-    static const comphelper::UnoIdInit theSmMLExportUnoTunnelId;
-    return theSmMLExportUnoTunnelId.getSeq();
-}
 
 extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*
 Math_MLExporter_get_implementation(css::uno::XComponentContext* context,
@@ -521,7 +501,7 @@ ErrCode SmMLExport::exportDoc(enum XMLTokenEnum eClass)
     // make use of a default namespace
     // Math doesn't need namespaces from xmloff, since it now uses default namespaces
     // Because that is common with current MathML usage in the web -> ResetNamespaceMap();
-    GetNamespaceMap_().Add(OUString(u""), GetXMLToken(XML_N_MATH), XML_NAMESPACE_MATH);
+    GetNamespaceMap_().Add(u""_ustr, GetXMLToken(XML_N_MATH), XML_NAMESPACE_MATH);
 
     // Add xmlns line
     if (m_bUseExportTag)

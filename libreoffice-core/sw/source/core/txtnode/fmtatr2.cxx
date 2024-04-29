@@ -32,6 +32,7 @@
 #include <fmtruby.hxx>
 #include <charfmt.hxx>
 #include <unoevent.hxx>
+#include <unoport.hxx>
 #include <com/sun/star/text/RubyAdjust.hpp>
 #include <com/sun/star/text/RubyPosition.hpp>
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
@@ -46,6 +47,7 @@
 #include <ndtxt.hxx>
 #include <doc.hxx>
 #include <unometa.hxx>
+#include <unotext.hxx>
 #include <docsh.hxx>
 #include <osl/diagnose.h>
 
@@ -87,6 +89,12 @@ SwFormatCharFormat* SwFormatCharFormat::Clone( SfxItemPool* ) const
 // forward to the TextAttribute
 void SwFormatCharFormat::SwClientNotify(const SwModify&, const SfxHint& rHint)
 {
+    if(rHint.GetId() == SfxHintId::SwAutoFormatUsedHint)
+    {
+        if(m_pTextAttribute)
+            m_pTextAttribute->HandleAutoFormatUsedHint(static_cast<const sw::AutoFormatUsedHint&>(rHint));
+        return;
+    }
     if (rHint.GetId() != SfxHintId::SwLegacyModify)
         return;
     auto pLegacy = static_cast<const sw::LegacyModifyHint*>(&rHint);
@@ -94,11 +102,6 @@ void SwFormatCharFormat::SwClientNotify(const SwModify&, const SfxHint& rHint)
         m_pTextAttribute->TriggerNodeUpdate(*pLegacy);
 }
 
-// forward to the TextAttribute
-bool SwFormatCharFormat::GetInfo( SfxPoolItem& rInfo ) const
-{
-    return m_pTextAttribute && m_pTextAttribute->GetInfo( rInfo );
-}
 bool SwFormatCharFormat::QueryValue( uno::Any& rVal, sal_uInt8 ) const
 {
     OUString sCharFormatName;
@@ -111,6 +114,17 @@ bool SwFormatCharFormat::PutValue( const uno::Any& , sal_uInt8   )
 {
     OSL_FAIL("format cannot be set with PutValue!");
     return false;
+}
+
+void SwFormatCharFormat::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SwFormatCharFormat"));
+    (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", this);
+    (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("text-attribute"), "%p", m_pTextAttribute);
+    (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("char-format"), "%p", GetCharFormat());
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("char-format-name"),
+                                      BAD_CAST(GetCharFormat()->GetName().toUtf8().getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
 }
 
 SwFormatAutoFormat::SwFormatAutoFormat( sal_uInt16 nInitWhich )
@@ -414,7 +428,8 @@ SwFormatRuby::~SwFormatRuby()
 
 SwFormatRuby& SwFormatRuby::operator=( const SwFormatRuby& rAttr )
 {
-    if(this == &rAttr)
+    // SwFormatRuby is not shareable, so ptr compare is OK
+    if (areSfxPoolItemPtrsEqual(this, &rAttr))
         return *this;
 
     m_sRubyText = rAttr.m_sRubyText;
@@ -554,7 +569,8 @@ SwFormatMeta::SwFormatMeta( std::shared_ptr< ::sw::Meta > i_pMeta,
 
 SwFormatMeta::~SwFormatMeta()
 {
-    if (m_pMeta && (m_pMeta->GetFormatMeta() == this))
+    // SwFormatMeta is not shareable, so ptr compare is OK
+    if (m_pMeta && areSfxPoolItemPtrsEqual(m_pMeta->GetFormatMeta(), this))
     {
         NotifyChangeTextNode(nullptr);
         m_pMeta->SetFormatMeta(nullptr);
@@ -589,7 +605,8 @@ void SwFormatMeta::SetTextAttr(SwTextMeta * const i_pTextAttr)
         {
             m_pMeta->SetFormatMeta(this);
         }
-        else if (m_pMeta->GetFormatMeta() == this)
+        // SwFormatMeta is not shareable, so ptr compare is OK
+        else if (areSfxPoolItemPtrsEqual(m_pMeta->GetFormatMeta(), this))
         {   // text attribute gone => de-register from text node!
             NotifyChangeTextNode(nullptr);
             m_pMeta->SetFormatMeta(nullptr);
@@ -602,7 +619,8 @@ void SwFormatMeta::NotifyChangeTextNode(SwTextNode *const pTextNode)
     // N.B.: do not reset m_pTextAttr here: see call in nodes.cxx,
     // where the hint is not deleted!
     OSL_ENSURE(m_pMeta, "SwFormatMeta::NotifyChangeTextNode: no Meta?");
-    if (m_pMeta && (m_pMeta->GetFormatMeta() == this))
+    // SwFormatMeta is not shareable, so ptr compare is OK
+    if (m_pMeta && areSfxPoolItemPtrsEqual(m_pMeta->GetFormatMeta(), this))
     {   // do not call Modify, that would call SwXMeta::SwClientNotify
         m_pMeta->NotifyChangeTextNode(pTextNode);
     }
@@ -723,7 +741,7 @@ bool Meta::IsInContent() const
 
 css::uno::Reference< css::rdf::XMetadatable > Meta::MakeUnoObject()
 {
-    return SwXMeta::CreateXMeta(*this);
+    return SwXMeta::CreateXMeta(*this, {}, {});
 }
 
 MetaField::MetaField(SwFormatMeta * const i_pFormat,
@@ -756,7 +774,7 @@ void MetaField::GetPrefixAndSuffix(
     }
 }
 
-sal_uInt32 MetaField::GetNumberFormat(std::u16string_view aContent) const
+sal_uInt32 MetaField::GetNumberFormat(const OUString& aContent) const
 {
     //TODO: this probably lacks treatment for some special cases
     sal_uInt32 nNumberFormat( m_nNumberFormat );
@@ -814,10 +832,7 @@ std::vector< uno::Reference<text::XTextField> >
 MetaFieldManager::getMetaFields()
 {
     // erase deleted fields
-    const MetaFieldList_t::iterator iter(
-        std::remove_if(m_MetaFields.begin(), m_MetaFields.end(),
-            [] (std::weak_ptr<MetaField> const& rField) { return rField.expired(); }));
-    m_MetaFields.erase(iter, m_MetaFields.end());
+    std::erase_if(m_MetaFields, [] (std::weak_ptr<MetaField> const& rField) { return rField.expired(); });
     // filter out fields in UNDO
     MetaFieldList_t filtered(m_MetaFields.size());
     const MetaFieldList_t::iterator iter2(

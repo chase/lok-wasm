@@ -301,9 +301,9 @@ OUString SfxFrameLoader_Impl::impl_askForFilter_nothrow( const Reference< XInter
     return sFilterName;
 }
 
-bool lcl_getDispatchResult( const SfxPoolItem* _pResult )
+bool lcl_getDispatchResult(const SfxPoolItemHolder& rResult)
 {
-    if ( !_pResult )
+    if (nullptr == rResult.getItem())
         return false;
 
     // default must be set to true, because some return values
@@ -312,7 +312,7 @@ bool lcl_getDispatchResult( const SfxPoolItem* _pResult )
 
     // On the other side some special slots return a boolean state,
     // which can be set to FALSE.
-    const SfxBoolItem *pItem = dynamic_cast<const SfxBoolItem*>( _pResult  );
+    const SfxBoolItem* pItem(dynamic_cast<const SfxBoolItem*>(rResult.getItem()));
     if ( pItem )
         bSuccess = pItem->GetValue();
 
@@ -326,7 +326,7 @@ bool SfxFrameLoader_Impl::impl_createNewDocWithSlotParam( const sal_uInt16 _nSlo
     aRequest.AppendItem( SfxUnoFrameItem( SID_FILLFRAME, i_rxFrame ) );
     if ( i_bHidden )
         aRequest.AppendItem( SfxBoolItem( SID_HIDDEN, true ) );
-    return lcl_getDispatchResult( SfxGetpApp()->ExecuteSlot( aRequest ) );
+    return lcl_getDispatchResult(SfxGetpApp()->ExecuteSlot(aRequest));
 }
 
 
@@ -611,8 +611,6 @@ sal_Bool SAL_CALL SfxFrameLoader_Impl::load( const Sequence< PropertyValue >& rA
 {
     ENSURE_OR_THROW( _rTargetFrame.is(), "illegal NULL frame" );
 
-    SolarMutexGuard aGuard;
-
     SAL_INFO( "sfx.view", "SfxFrameLoader::load" );
 
     ::comphelper::NamedValueCollection aDescriptor( rArgs );
@@ -729,6 +727,8 @@ sal_Bool SAL_CALL SfxFrameLoader_Impl::load( const Sequence< PropertyValue >& rA
             xModel->attachResource( xModel->getURL(), aDescriptor.getPropertyValues() );
         }
 
+        SolarMutexGuard aGuard;
+
         // get the SfxObjectShell (still needed at the moment)
         // SfxObjectShellRef is used here ( instead of ...Lock ) since the model is closed below if necessary
         // SfxObjectShellLock would be even dangerous here, since the lifetime control should be done outside in case of success
@@ -739,9 +739,9 @@ sal_Bool SAL_CALL SfxFrameLoader_Impl::load( const Sequence< PropertyValue >& rA
         {
             // Detach the medium from the template, and set proper document name and filter
             auto pMedium = xDoc->GetMedium();
-            auto pItemSet = pMedium->GetItemSet();
-            pItemSet->ClearItem(SID_TEMPLATE);
-            pItemSet->Put(SfxStringItem(SID_FILTER_NAME, pEmptyURLFilter->GetFilterName()));
+            auto& rItemSet = pMedium->GetItemSet();
+            rItemSet.ClearItem(SID_TEMPLATE);
+            rItemSet.Put(SfxStringItem(SID_FILTER_NAME, pEmptyURLFilter->GetFilterName()));
             pMedium->SetName(sURL, true);
             pMedium->SetFilter(pEmptyURLFilter);
             pMedium->GetInitFileDate(true);

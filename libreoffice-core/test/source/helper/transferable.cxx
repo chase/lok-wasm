@@ -28,13 +28,13 @@ OString OOO_DLLPUBLIC_TEST getTextSelection(
     {
         if (o3tl::getToken(mimeType, 0, ';', nIndex) == "charset=utf-8")
         {
-            mimeType = "text/plain;charset=utf-16";
+            mimeType = "text/plain;charset=utf-16"_ostr;
             bConvert = true;
         }
     }
 
     datatransfer::DataFlavor aFlavor;
-    aFlavor.MimeType = OUString::fromUtf8(mimeType.getStr());
+    aFlavor.MimeType = OUString::fromUtf8(mimeType);
     if (mimeType == "text/plain;charset=utf-16")
         aFlavor.DataType = cppu::UnoType<OUString>::get();
     else

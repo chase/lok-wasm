@@ -70,7 +70,7 @@ using namespace css::sheet;
 
 //  everything without Which-ID, map only for PropertySetInfo
 
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetSubTotalPropertyMap()
+static std::span<const SfxItemPropertyMapEntry> lcl_GetSubTotalPropertyMap()
 {
     // some old property names are for 5.2 compatibility
 
@@ -92,7 +92,7 @@ static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetSubTotalPropertyMap()
     return aSubTotalPropertyMap_Impl;
 }
 
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetFilterPropertyMap()
+static std::span<const SfxItemPropertyMapEntry> lcl_GetFilterPropertyMap()
 {
     static const SfxItemPropertyMapEntry aFilterPropertyMap_Impl[] =
     {
@@ -109,7 +109,7 @@ static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetFilterPropertyMap()
     return aFilterPropertyMap_Impl;
 }
 
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetDBRangePropertyMap()
+static std::span<const SfxItemPropertyMapEntry> lcl_GetDBRangePropertyMap()
 {
     static const SfxItemPropertyMapEntry aDBRangePropertyMap_Impl[] =
     {
@@ -730,10 +730,6 @@ uno::Any SAL_CALL ScSubTotalDescriptorBase::getPropertyValue( const OUString& aP
 }
 
 SC_IMPL_DUMMY_PROPERTY_LISTENER( ScSubTotalDescriptorBase )
-
-// XUnoTunnel
-
-UNO3_GETIMPLEMENTATION_IMPL(ScSubTotalDescriptorBase);
 
 ScSubTotalDescriptor::ScSubTotalDescriptor()
 {
@@ -1896,7 +1892,7 @@ void SAL_CALL ScDatabaseRangeObj::removeRefreshListener(
 void ScDatabaseRangeObj::Refreshed_Impl()
 {
     lang::EventObject aEvent;
-    aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+    aEvent.Source = getXWeak();
     for (uno::Reference<util::XRefreshListener> & xRefreshListener : aRefreshListeners)
         xRefreshListener->refreshed( aEvent );
 }

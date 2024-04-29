@@ -31,7 +31,7 @@
 */
 struct XMLPropertyMapEntry
 {
-    rtl::OUStringConstExpr  msApiName;      /// Property-Name
+    OUString  msApiName;      /// Property-Name
     enum ::xmloff::token::XMLTokenEnum meXMLName;       /// XML-Name
     sal_uInt16      mnNameSpace;    /** declares the Namespace in which this
                                         property exists */
@@ -99,11 +99,10 @@ struct XMLPropertyMapEntry
      */
     bool            mbImportOnly;
 
-    static constexpr OUStringLiteral EMPTY{u""};
+    static constexpr OUString EMPTY{u""_ustr};
 
-    template<std::size_t N>
-    XMLPropertyMapEntry(
-            const OUStringLiteral<N>& sApiName,
+    constexpr XMLPropertyMapEntry(
+            const OUString& sApiName,
             sal_uInt16      nNameSpace,
             enum ::xmloff::token::XMLTokenEnum eXMLName,
             sal_uInt32 nType,
@@ -118,7 +117,7 @@ struct XMLPropertyMapEntry
     {}
 
     /// used to mark the end of the array
-    XMLPropertyMapEntry(std::nullptr_t)
+    constexpr XMLPropertyMapEntry(std::nullptr_t)
         :
         msApiName(EMPTY),
         meXMLName(xmloff::token::XML_TOKEN_INVALID), mnNameSpace(0), mnType(0),

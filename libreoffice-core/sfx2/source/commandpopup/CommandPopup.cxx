@@ -51,6 +51,7 @@ MenuContentHandler::MenuContentHandler(uno::Reference<frame::XFrame> const& xFra
 void MenuContentHandler::gatherMenuContent(
     uno::Reference<container::XIndexAccess> const& xIndexAccess, MenuContent& rMenuContent)
 {
+    std::u16string_view aMenuLabelSeparator = AllSettings::GetLayoutRTL() ? u" ◂ " : u" ▸ ";
     for (sal_Int32 n = 0; n < xIndexAccess->getCount(); n++)
     {
         MenuContent aNewContent;
@@ -81,13 +82,13 @@ void MenuContentHandler::gatherMenuContent(
 
         auto aCommandProperties = vcl::CommandInfoProvider::GetCommandProperties(
             aNewContent.m_aCommandURL, m_sModuleLongName);
-        OUString aLabel = vcl::CommandInfoProvider::GetLabelForCommand(aCommandProperties);
-        aNewContent.m_aMenuLabel = aLabel;
-        aNewContent.m_aSearchableMenuLabel = toLower(aLabel);
+        aNewContent.m_aMenuLabel = vcl::CommandInfoProvider::GetLabelForCommand(aCommandProperties);
 
         if (!rMenuContent.m_aFullLabelWithPath.isEmpty())
-            aNewContent.m_aFullLabelWithPath = rMenuContent.m_aFullLabelWithPath + " / ";
+            aNewContent.m_aFullLabelWithPath
+                = rMenuContent.m_aFullLabelWithPath + aMenuLabelSeparator;
         aNewContent.m_aFullLabelWithPath += aNewContent.m_aMenuLabel;
+        aNewContent.m_aSearchableMenuLabel = toLower(aNewContent.m_aFullLabelWithPath);
 
         aNewContent.m_aTooltip = vcl::CommandInfoProvider::GetTooltipForCommand(
             aNewContent.m_aCommandURL, aCommandProperties, m_xFrame);
@@ -107,13 +108,16 @@ void MenuContentHandler::findInMenu(OUString const& rText,
 
     OUString aLowerCaseText = toLower(rText);
 
+    // find submenus and menu items that start with the searched text
     auto aTextStartCriterium = [](MenuContent const& rMenuContent, OUString const& rSearchText) {
-        return rMenuContent.m_aSearchableMenuLabel.startsWith(rSearchText);
+        OUString aSearchText = " / " + rSearchText;
+        return rMenuContent.m_aSearchableMenuLabel.indexOf(aSearchText) > 0;
     };
 
     findInMenuRecursive(m_aMenuContent, aLowerCaseText, rpCommandTreeView, rCommandList,
                         aTextStartCriterium);
 
+    // find submenus and menu items that contain the searched text
     auto aTextAllCriterium = [](MenuContent const& rMenuContent, OUString const& rSearchText) {
         return rMenuContent.m_aSearchableMenuLabel.indexOf(rSearchText) > 0;
     };

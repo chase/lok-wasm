@@ -43,12 +43,12 @@ public:
     virtual void UpdateFields(bool bCloseDB) override;
     virtual void InsDeletedFieldType(SwFieldType &) override;
     virtual void PutValueToField(const SwPosition & rPos, const css::uno::Any& rVal, sal_uInt16 nWhich) override;
-    virtual bool UpdateField(SwTextField * rDstFormatField, SwField & rSrcField, SwMsgPoolItem * pMsgHint, bool bUpdateTableFields) override;
+    virtual bool UpdateField(SwTextField* rDstFormatField, SwField& rSrcField, bool bUpdateTableFields) override;
     virtual void UpdateRefFields() override;
-    virtual void UpdateTableFields(SfxPoolItem* pHt) override;
+    virtual void UpdateTableFields(const SwTable* pTable) override;
     virtual void UpdateExpFields(SwTextField* pField, bool bUpdateRefFields) override;
     virtual void UpdateUsrFields() override;
-    virtual void UpdatePageFields(SfxPoolItem*) override;
+    virtual void UpdatePageFields(const SwTwips) override;
     virtual void LockExpFields() override;
     virtual void UnlockExpFields() override;
     virtual bool IsExpFieldsLocked() const override;
@@ -57,7 +57,7 @@ public:
     virtual void SetFixFields(const DateTime* pNewDateTime) override;
     virtual void FieldsToCalc(SwCalc& rCalc, SwNodeOffset nLastNd, sal_Int32 nLastCnt) override;
     virtual void FieldsToCalc(SwCalc& rCalc, const SetGetExpField& rToThisField, SwRootFrame const* pLayout) override;
-    virtual void FieldsToExpand(SwHashTable<HashStr>& rTable, const SetGetExpField& rToThisField, SwRootFrame const& rLayout) override;
+    virtual void FieldsToExpand(std::unordered_map<OUString, OUString>& rTable, const SetGetExpField& rToThisField, SwRootFrame const& rLayout) override;
     virtual bool IsNewFieldLst() const override;
     virtual void SetNewFieldLst( bool bFlag) override;
     virtual void InsDelFieldInFieldLst(bool bIns, const SwTextField& rField) override;

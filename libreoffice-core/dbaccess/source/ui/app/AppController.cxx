@@ -327,14 +327,20 @@ void SAL_CALL OApplicationController::disposing()
 
         if ( m_xDataSource.is() )
         {
+            // Should correspond to ODatabaseSource::createArrayHelper in dbaccess/source/core/dataaccess/datasource.cxx
             m_xDataSource->removePropertyChangeListener(OUString(), this);
             m_xDataSource->removePropertyChangeListener(PROPERTY_INFO, this);
-            m_xDataSource->removePropertyChangeListener(PROPERTY_URL, this);
             m_xDataSource->removePropertyChangeListener(PROPERTY_ISPASSWORDREQUIRED, this);
+            m_xDataSource->removePropertyChangeListener(PROPERTY_ISREADONLY, this);
             m_xDataSource->removePropertyChangeListener(PROPERTY_LAYOUTINFORMATION, this);
+            m_xDataSource->removePropertyChangeListener(PROPERTY_NAME, this);
+            m_xDataSource->removePropertyChangeListener(PROPERTY_NUMBERFORMATSSUPPLIER, this);
+            m_xDataSource->removePropertyChangeListener(PROPERTY_PASSWORD, this);
+            m_xDataSource->removePropertyChangeListener(PROPERTY_SETTINGS, this);
             m_xDataSource->removePropertyChangeListener(PROPERTY_SUPPRESSVERSIONCL, this);
             m_xDataSource->removePropertyChangeListener(PROPERTY_TABLEFILTER, this);
             m_xDataSource->removePropertyChangeListener(PROPERTY_TABLETYPEFILTER, this);
+            m_xDataSource->removePropertyChangeListener(PROPERTY_URL, this);
             m_xDataSource->removePropertyChangeListener(PROPERTY_USER, this);
             m_xDataSource = nullptr;
         }
@@ -1025,7 +1031,7 @@ void OApplicationController::Execute(sal_uInt16 _nId, const Sequence< PropertyVa
                         {
                             if ( pIter->Name == "FormatStringId" )
                             {
-                                sal_uLong nTmp;
+                                sal_uInt32 nTmp;
                                 if ( pIter->Value >>= nTmp )
                                     pasteFormat(static_cast<SotClipboardFormatId>(nTmp));
                                 break;
@@ -2520,11 +2526,8 @@ void OApplicationController::OnFirstControllerConnected()
         if ( Reference< XStorable >( m_xModel, UNO_QUERY_THROW )->isReadonly() )
             return;
 
-        SQLWarning aWarning;
-        aWarning.Message = DBA_RES(STR_SUB_DOCS_WITH_SCRIPTS);
-        SQLException aDetail;
-        aDetail.Message = DBA_RES(STR_SUB_DOCS_WITH_SCRIPTS_DETAIL);
-        aWarning.NextException <<= aDetail;
+        SQLException aDetail(DBA_RES(STR_SUB_DOCS_WITH_SCRIPTS_DETAIL), {}, {}, 0, {});
+        SQLWarning aWarning(DBA_RES(STR_SUB_DOCS_WITH_SCRIPTS), {}, {}, 0, css::uno::Any(aDetail));
 
         Reference< XExecutableDialog > xDialog = ErrorMessageDialog::create( getORB(), "", nullptr, Any( aWarning ) );
         xDialog->execute();
@@ -2565,7 +2568,7 @@ sal_Bool SAL_CALL OApplicationController::attachModel(const Reference< XModel > 
 
     const OUString aPropertyNames[] =
     {
-        OUString(PROPERTY_URL), OUString(PROPERTY_USER)
+        PROPERTY_URL, PROPERTY_USER
     };
 
     // disconnect from old model

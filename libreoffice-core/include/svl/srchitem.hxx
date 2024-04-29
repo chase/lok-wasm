@@ -138,6 +138,9 @@ public:
     inline  bool            GetWildcard() const;
             void            SetWildcard( bool bVal );
 
+    inline  sal_Int32       GetWildcardEscapeCharacter() const;
+    inline  void            SetWildcardEscapeCharacter(sal_Int32 val);
+
             bool            GetPattern() const { return m_bPattern; }
             void            SetPattern(bool bNewPattern) { m_bPattern = bNewPattern; }
 
@@ -239,21 +242,22 @@ bool SvxSearchItem::GetSelection() const
 
 bool SvxSearchItem::GetRegExp() const
 {
-    // Ensure old and new algorithm types are in sync until all places are
-    // adapted to use only new types.
-    assert( (m_aSearchOpt.algorithmType == css::util::SearchAlgorithms_REGEXP) ==
-            (m_aSearchOpt.AlgorithmType2 == css::util::SearchAlgorithms2::REGEXP));
     return m_aSearchOpt.AlgorithmType2 == css::util::SearchAlgorithms2::REGEXP ;
 }
 
 bool SvxSearchItem::GetWildcard() const
 {
-    // Ensure old and new algorithm types are in sync, in this case old is not
-    // REGEXP or APPROXIMATE.
-    assert( m_aSearchOpt.AlgorithmType2 != css::util::SearchAlgorithms2::WILDCARD ||
-            (m_aSearchOpt.algorithmType != css::util::SearchAlgorithms_REGEXP &&
-             m_aSearchOpt.algorithmType != css::util::SearchAlgorithms_APPROXIMATE) );
     return m_aSearchOpt.AlgorithmType2 == css::util::SearchAlgorithms2::WILDCARD ;
+}
+
+sal_Int32 SvxSearchItem::GetWildcardEscapeCharacter() const
+{
+    return m_aSearchOpt.WildcardEscapeCharacter;
+}
+
+void SvxSearchItem::SetWildcardEscapeCharacter(sal_Int32 val)
+{
+    m_aSearchOpt.WildcardEscapeCharacter = val;
 }
 
 bool SvxSearchItem::IsLEVRelaxed() const
@@ -293,10 +297,6 @@ void SvxSearchItem::SetLEVLonger( sal_uInt16 nVal )
 
 bool SvxSearchItem::IsLevenshtein() const
 {
-    // Ensure old and new algorithm types are in sync until all places are
-    // adapted to use only new types.
-    assert( (m_aSearchOpt.algorithmType == css::util::SearchAlgorithms_APPROXIMATE) ==
-            (m_aSearchOpt.AlgorithmType2 == css::util::SearchAlgorithms2::APPROXIMATE));
     return m_aSearchOpt.AlgorithmType2 == css::util::SearchAlgorithms2::APPROXIMATE;
 }
 

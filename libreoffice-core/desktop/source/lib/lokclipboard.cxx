@@ -8,6 +8,8 @@
  */
 
 #include "lokclipboard.hxx"
+// MACRO:
+#include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <unordered_map>
 #include <vcl/lazydelete.hxx>
 #include <vcl/svapp.hxx>
@@ -34,7 +36,9 @@ rtl::Reference<LOKClipboard> LOKClipboardFactory::getClipboardForCurView()
         SAL_INFO("lok", "Got clip: " << it->second.get() << " from " << nViewId);
         return it->second;
     }
-    rtl::Reference<LOKClipboard> xClip(new LOKClipboard());
+    // MACRO-1919: LOK clipboard listener may not exist, so explicitly bind the view id which is implicitly associated {
+    rtl::Reference<LOKClipboard> xClip(new LOKClipboard(nViewId));
+    // MACRO-1919 }
     (*gClipboards.get())[nViewId] = xClip;
     SAL_INFO("lok", "Created clip: " << xClip.get() << " for viewId " << nViewId);
     return xClip;
@@ -66,9 +70,10 @@ uno::Reference<uno::XInterface>
     return { static_cast<cppu::OWeakObject*>(getClipboardForCurView().get()) };
 }
 
-LOKClipboard::LOKClipboard()
+LOKClipboard::LOKClipboard(int nViewId)
     : cppu::WeakComponentImplHelper<css::datatransfer::clipboard::XSystemClipboard,
                                     css::lang::XServiceInfo>(m_aMutex)
+    , m_nViewId(nViewId)
 {
     // Encourage 'paste' menu items to always show up.
     uno::Reference<datatransfer::XTransferable> xTransferable(new LOKTransferable());
@@ -118,6 +123,15 @@ void LOKClipboard::setContents(
     {
         listener->changedContents(aEv);
     }
+    // MACRO-1919: There is a case during testing where aListeners may not be populated, simply fire the event directly
+    if (aListeners.empty())
+    {
+        SfxViewShell* pView = SfxLokHelper::getViewOfId(m_nViewId);
+        if (!pView) return;
+        pView->GetViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_CLIPBOARD_CHANGED,
+                                                          "{\"sw\":true}");
+    }
+    // MACRO-1919 }
 }
 
 void LOKClipboard::addClipboardListener(
@@ -131,8 +145,7 @@ void LOKClipboard::removeClipboardListener(
     const Reference<datatransfer::clipboard::XClipboardListener>& listener)
 {
     osl::ClearableMutexGuard aGuard(m_aMutex);
-    m_aListeners.erase(std::remove(m_aListeners.begin(), m_aListeners.end(), listener),
-                       m_aListeners.end());
+    std::erase(m_aListeners, listener);
 }
 LOKTransferable::LOKTransferable(const OUString& sMimeType,
                                  const css::uno::Sequence<sal_Int8>& aSequence)

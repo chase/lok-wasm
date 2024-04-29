@@ -45,8 +45,6 @@ class tdf147086(UITestCase):
                         with self.ui_test.execute_dialog_through_action(xOk, "CLICK", close_button="save"):
                             pass
 
-            self.ui_test.wait_until_file_is_available(xFilePath)
-
             with self.ui_test.load_file(systemPathToFileUrl(xFilePath), [PropertyValue(Name="Silent", Value=True)]) as document:
 
                 self.assertTrue(document.isReadonly())

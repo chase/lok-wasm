@@ -203,12 +203,6 @@ void SwEditShell::UpdateOneField(SwField &rField)
     StartAllAction();
     {
         // If there are no selections so take the value of the current cursor position.
-        SwMsgPoolItem* pMsgHint = nullptr;
-        SwRefMarkFieldUpdate aRefMkHt( GetOut() );
-        SwFieldIds nFieldWhich = rField.GetTyp()->Which();
-        if( SwFieldIds::GetRef == nFieldWhich )
-            pMsgHint = &aRefMkHt;
-
         SwPaM* pCursor = GetCursor();
         SwTextField *pTextField;
         SwFormatField *pFormatField;
@@ -221,7 +215,12 @@ void SwEditShell::UpdateOneField(SwField &rField)
                 pTextField = lcl_FindInputField( GetDoc(), rField);
 
             if (pTextField != nullptr)
-                GetDoc()->getIDocumentFieldsAccess().UpdateField(pTextField, rField, pMsgHint, true);
+            {
+                GetDoc()->getIDocumentFieldsAccess().UpdateField(
+                    pTextField,
+                    rField,
+                    true);
+            }
         }
 
         // bOkay (instead of return because of EndAllAction) becomes false,
@@ -271,8 +270,10 @@ void SwEditShell::UpdateOneField(SwField &rField)
                             rField.GetTyp()->Which() )
                             bOkay = false;
 
-                        bTableSelBreak = GetDoc()->getIDocumentFieldsAccess().UpdateField(pTextField, rField,
-                                                           pMsgHint, false);
+                        bTableSelBreak = GetDoc()->getIDocumentFieldsAccess().UpdateField(
+                            pTextField,
+                            rField,
+                            false);
                     }
                     // The search area is reduced by the found area:
                     pCurStt->AdjustContent(+1);

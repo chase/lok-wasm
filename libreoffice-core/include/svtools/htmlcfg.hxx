@@ -19,15 +19,14 @@
 #pragma once
 
 #include <svtools/svtdllapi.h>
-#include <rtl/textenc.h>
 
 #define HTML_FONT_COUNT 7
 
 // !!!be aware!!!: the following defines are _not_ used as values in the configuration file
 //                  this is because of compatibility reasons
-#define HTML_CFG_MSIE 1 // Internet Explorer
-#define HTML_CFG_WRITER 2 // Writer
-#define HTML_CFG_NS40 3 // Netscape 4.0
+#define HTML_CFG_MSIE 0 // Internet Explorer
+#define HTML_CFG_WRITER 1 // Writer
+#define HTML_CFG_NS40 2 // Netscape 4.0
 
 #define HTML_CFG_MAX HTML_CFG_NS40
 
@@ -36,8 +35,6 @@ namespace SvxHtmlOptions
 SVT_DLLPUBLIC sal_uInt16 GetFontSize(sal_uInt16 nPos);
 
 SVT_DLLPUBLIC sal_uInt16 GetExportMode();
-
-SVT_DLLPUBLIC bool IsPrintLayoutExtension();
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

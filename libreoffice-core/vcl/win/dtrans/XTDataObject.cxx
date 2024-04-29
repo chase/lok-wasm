@@ -93,7 +93,7 @@ public:
 
     virtual void SAL_CALL notify(css::uno::Any const &) override
     {
-        maTransferable.set(nullptr);
+        maTransferable.clear();
     }
 };
 
@@ -348,12 +348,6 @@ void CXTDataObject::renderAnyDataAndSetupStgMedium(
         OSL_FAIL( "XTransferable should throw an exception if ask for an unsupported flavor" );
         throw UnsupportedFlavorException( );
     }
-
-    // unfortunately not all transferables fulfill the
-    // spec. and do throw an UnsupportedFlavorException
-    // so we must check the any
-    if ( !aAny.hasValue( ) )
-        throw UnsupportedFlavorException( );
 
     Sequence< sal_Int8 > clipDataStream;
     aAny >>= clipDataStream;

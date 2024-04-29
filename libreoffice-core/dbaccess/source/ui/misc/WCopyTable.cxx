@@ -134,7 +134,7 @@ bool ObjectCopySource::isView() const
 void ObjectCopySource::copyUISettingsTo( const Reference< XPropertySet >& _rxObject ) const
 {
     const OUString aCopyProperties[] = {
-        OUString(PROPERTY_FONT), OUString(PROPERTY_ROW_HEIGHT), OUString(PROPERTY_TEXTCOLOR),OUString(PROPERTY_TEXTLINECOLOR),OUString(PROPERTY_TEXTEMPHASIS),OUString(PROPERTY_TEXTRELIEF)
+        PROPERTY_FONT, PROPERTY_ROW_HEIGHT, PROPERTY_TEXTCOLOR,PROPERTY_TEXTLINECOLOR,PROPERTY_TEXTEMPHASIS,PROPERTY_TEXTRELIEF
     };
     for (const auto & aCopyProperty : aCopyProperties)
     {
@@ -213,8 +213,7 @@ OUString ObjectCopySource::getSelectStatement() const
     }
     else
     {   // table
-        OUStringBuffer aSQL;
-        aSQL.append( "SELECT " );
+        OUStringBuffer aSQL( "SELECT " );
 
         // we need to create the sql stmt with column names
         // otherwise it is possible that names don't match
@@ -579,7 +578,7 @@ OCopyTableWizard::OCopyTableWizard(weld::Window* pParent, const OUString& _rDefa
 
 weld::Container* OCopyTableWizard::CreatePageContainer()
 {
-    OString sIdent(OString::number(m_nPageCount));
+    OUString sIdent(OUString::number(m_nPageCount));
     weld::Container* pPageContainer = m_xAssistant->append_page(sIdent);
     return pPageContainer;
 }
@@ -738,6 +737,7 @@ bool OCopyTableWizard::CheckColumns(sal_Int32& _rnBreakPos)
                     OFieldDescription* pField = new OFieldDescription();
                     pField->SetName(m_aKeyName);
                     pField->FillFromTypeInfo(pTypeInfo,true,true);
+                    pField->SetAutoIncrement(pTypeInfo->bAutoIncrement);
                     pField->SetPrimaryKey(true);
                     m_bAddPKFirstTime = false;
                     insertColumn(0,pField);
@@ -843,8 +843,7 @@ IMPL_LINK_NOARG(OCopyTableWizard, ImplOKHdl, weld::Button&, void)
                     {
 
                         OUString sMsg(DBA_RES(STR_TABLEDESIGN_NO_PRIM_KEY));
-                        SQLContext aError;
-                        aError.Message = sMsg;
+                        SQLContext aError(sMsg, {}, {}, 0, {}, {});
                         ::rtl::Reference xRequest( new ::comphelper::OInteractionRequest( Any( aError ) ) );
                         ::rtl::Reference xYes = new ::comphelper::OInteractionApprove;
                         xRequest->addContinuation( xYes );
@@ -993,7 +992,7 @@ void OCopyTableWizard::loadData(  const ICopyTableSourceObject& _rSourceObject, 
     _rColumns.clear();
 
     OFieldDescription* pActFieldDescr = nullptr;
-    OUString const sCreateParam("x");
+    static constexpr OUStringLiteral sCreateParam(u"x");
     // ReadOnly-Flag
     // On drop no line must be editable.
     // On add only empty lines must be editable.

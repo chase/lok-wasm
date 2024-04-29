@@ -41,6 +41,7 @@
 #include <validat.hxx>
 #include <patattr.hxx>
 #include <docpool.hxx>
+#include <docsh.hxx>
 #include <rangenam.hxx>
 #include <arealink.hxx>
 #include <stlsheet.hxx>
@@ -379,7 +380,7 @@ void XclImpHyperlink::ConvertToValidTabName(OUString& rUrl)
                 // quite.  When this occurs, the whole table name needs to be
                 // quoted.
                 bQuoteTabName = true;
-                aTabName.append(c).append(c);
+                aTabName.append(OUStringChar(c) + OUStringChar(c));
                 ++i;
                 continue;
             }
@@ -1013,7 +1014,7 @@ void XclImpWebQuery::ReadWqtables( XclImpStream& rStrm )
     OUString aTables( rStrm.ReadUniString() );
 
     const sal_Unicode cSep = ';';
-    static const OUStringLiteral aQuotedPairs( u"\"\"" );
+    static constexpr OUStringLiteral aQuotedPairs( u"\"\"" );
     maTables.clear();
     for ( sal_Int32 nStringIx {aTables.isEmpty() ? -1 : 0}; nStringIx>=0; )
     {

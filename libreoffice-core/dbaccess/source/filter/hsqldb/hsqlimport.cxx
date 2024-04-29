@@ -180,9 +180,7 @@ OUString lcl_createInsertStatement(std::u16string_view sTableName,
                                    const std::vector<dbahsql::ColumnDefinition>& rColTypes)
 {
     assert(rColTypes.size() > 0);
-    OUStringBuffer sql("INSERT INTO ");
-    sql.append(sTableName);
-    sql.append(" (");
+    OUStringBuffer sql(OUString::Concat("INSERT INTO ") + sTableName + " (");
 
     // column names
     for (size_t i = 0; i < rColTypes.size(); ++i)
@@ -191,9 +189,7 @@ OUString lcl_createInsertStatement(std::u16string_view sTableName,
         if (i < rColTypes.size() - 1)
             sql.append(", ");
     }
-    sql.append(")");
-
-    sql.append(" VALUES (");
+    sql.append(") VALUES (");
     for (size_t i = 0; i < rColTypes.size(); ++i)
     {
         sql.append("?");
@@ -267,7 +263,7 @@ void HsqlImporter::parseTableRows(const std::vector<sal_Int32>& rIndexes,
                                   const std::vector<ColumnDefinition>& rColTypes,
                                   const OUString& sTableName)
 {
-    static constexpr OUStringLiteral BINARY_FILENAME = u"data";
+    static constexpr OUString BINARY_FILENAME = u"data"_ustr;
 
     if (!m_xStorage->hasByName(BINARY_FILENAME))
     {

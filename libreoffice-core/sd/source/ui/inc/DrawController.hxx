@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <sddllapi.h>
 #include <cppuhelper/propshlp.hxx>
 #include <sfx2/sfxbasecontroller.hxx>
 #include <com/sun/star/view/XSelectionSupplier.hpp>
@@ -26,10 +27,10 @@
 #include <com/sun/star/drawing/XDrawView.hpp>
 #include <com/sun/star/drawing/framework/XControllerManager.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <comphelper/uno3.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <unotools/weakref.hxx>
+#include <rtl/ref.hxx>
 #include <tools/gen.hxx>
 #include <memory>
 #include <vector>
@@ -39,7 +40,8 @@ namespace com::sun::star::drawing::framework { class XConfigurationController; }
 namespace com::sun::star::drawing::framework { class XModuleController; }
 namespace com::sun::star::drawing { class XLayer; }
 namespace osl { class Mutex; }
-
+namespace sd::framework { class ConfigurationController; }
+namespace sd::framework { class ModuleController; }
 class SdPage;
 
 namespace sd {
@@ -51,8 +53,7 @@ typedef ::cppu::ImplInheritanceHelper <
     css::drawing::XDrawView,
     css::view::XSelectionChangeListener,
     css::view::XFormLayerAccess,
-    css::drawing::framework::XControllerManager,
-    css::lang::XUnoTunnel
+    css::drawing::framework::XControllerManager
     > DrawControllerInterfaceBase;
 
 class BroadcastHelperOwner
@@ -73,7 +74,7 @@ class ViewShellBase;
     The implementation of the XControllerManager interface is not yet in its
     final form.
 */
-class DrawController final
+class SD_DLLPUBLIC DrawController final
     : public DrawControllerInterfaceBase,
       private BroadcastHelperOwner,
       public ::cppu::OPropertySetHelper
@@ -159,8 +160,6 @@ public:
     */
     void ReleaseViewShellBase();
 
-    static const css::uno::Sequence<sal_Int8>& getUnoTunnelId();
-
     DECLARE_XINTERFACE()
     DECLARE_XTYPEPROVIDER()
 
@@ -219,10 +218,6 @@ public:
 
     virtual css::uno::Reference<css::drawing::framework::XModuleController> SAL_CALL
         getModuleController() override;
-
-    // XUnoTunnel
-
-    virtual sal_Int64 SAL_CALL getSomething (const css::uno::Sequence<sal_Int8>& rId) override;
 
 private:
     /** This method must return the name to index table. This table
@@ -303,10 +298,8 @@ private:
     */
     css::uno::Reference<css::drawing::XDrawSubController> mxSubController;
 
-    css::uno::Reference<
-        css::drawing::framework::XConfigurationController> mxConfigurationController;
-    css::uno::Reference<
-        css::drawing::framework::XModuleController> mxModuleController;
+    rtl::Reference<sd::framework::ConfigurationController> mxConfigurationController;
+    rtl::Reference<sd::framework::ModuleController> mxModuleController;
 
     /** Send an event to all relevant property listeners that a
         property has changed its value.  The fire() method of the

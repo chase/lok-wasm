@@ -198,6 +198,7 @@ public:
     virtual                 ~SfxUndoManager();
 
     void                    SetMaxUndoActionCount( size_t nMaxUndoActionCount );
+    size_t                  GetMaxUndoActionCount() const;
     virtual void            AddUndoAction( std::unique_ptr<SfxUndoAction> pAction, bool bTryMerg=false );
     virtual size_t          GetUndoActionCount( bool const i_currentLevel = CurrentLevel ) const;
     OUString                GetUndoActionComment( size_t nNo=0, bool const i_currentLevel = CurrentLevel ) const;
@@ -288,8 +289,11 @@ public:
 
     /** removes a mark given by its ID.
         After the call, the mark ID is invalid.
+
+        @return the index at which the mark was removed, or std::numeric_limits<size_t>::max()
+                if failed
     */
-    void            RemoveMark( UndoStackMark const i_mark );
+    size_t RemoveMark(UndoStackMark const i_mark);
 
     /** determines whether the top action on the Undo stack has a given mark
     */
@@ -304,6 +308,11 @@ public:
 protected:
     bool    UndoWithContext( SfxUndoContext& i_context );
     bool    RedoWithContext( SfxUndoContext& i_context );
+
+    // Undoes a specific mark on the undo stack, and removes it from the undo/redo stack,
+    // but only in case when the redo stack is empty. This is a dangerous operation, because
+    // it undoes out of order.
+    void UndoMark(UndoStackMark i_mark);
 
     void    ImplClearRedo_NoLock( bool const i_currentLevel );
 

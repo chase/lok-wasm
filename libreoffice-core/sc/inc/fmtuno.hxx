@@ -30,7 +30,6 @@
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 
 #include <com/sun/star/sheet/XMultiFormulaTokens.hpp>
@@ -68,7 +67,6 @@ class ScTableConditionalFormat final : public cppu::WeakImplHelper<
                             css::sheet::XSheetConditionalEntries,
                             css::container::XNameAccess,
                             css::container::XEnumerationAccess,
-                            css::lang::XUnoTunnel,
                             css::lang::XServiceInfo >
 {
 private:
@@ -106,9 +104,6 @@ public:
                             // XElementAccess
     virtual css::uno::Type SAL_CALL getElementType() override;
     virtual sal_Bool SAL_CALL hasElements() override;
-
-                            // XUnoTunnel
-    UNO3_GETIMPLEMENTATION_DECL(ScTableConditionalFormat)
 
                             // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
@@ -157,7 +152,6 @@ class ScTableValidationObj final : public cppu::WeakImplHelper<
                             css::sheet::XSheetCondition2,
                             css::sheet::XMultiFormulaTokens,
                             css::beans::XPropertySet,
-                            css::lang::XUnoTunnel,
                             css::lang::XServiceInfo >
 {
 private:
@@ -230,9 +224,6 @@ public:
                                     const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
     virtual void SAL_CALL   removeVetoableChangeListener( const OUString& PropertyName,
                                     const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
-
-                            // XUnoTunnel
-    UNO3_GETIMPLEMENTATION_DECL(ScTableValidationObj)
 
                             // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;

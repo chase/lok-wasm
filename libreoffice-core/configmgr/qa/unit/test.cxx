@@ -39,6 +39,7 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/uno/XInterface.hpp>
 #include <com/sun/star/util/XChangesBatch.hpp>
+#include <cppu/unotype.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <osl/time.h>
 #include <rtl/ref.hxx>
@@ -205,12 +206,18 @@ void Test::setUp()
 
 void Test::testKeyFetch()
 {
-    OUString s;
-    CPPUNIT_ASSERT(
-        getKey(
-            "/org.openoffice.System",
-            "L10N/Locale") >>=
-        s);
+    {
+        OUString s;
+        CPPUNIT_ASSERT(
+            getKey(
+                "/org.openoffice.System",
+                "L10N/Locale") >>=
+            s);
+    }
+    {
+        auto const v = getKey("/org.openoffice.System", "L10N/['Locale']");
+        CPPUNIT_ASSERT_EQUAL(cppu::UnoType<OUString>::get(), v.getValueType());
+    }
 }
 
 void Test::testKeySet()
@@ -325,11 +332,35 @@ void Test::testLocalizedProperty() {
         CPPUNIT_ASSERT_EQUAL(OUString("pt-PT"), v);
     }
     {
+        // See <https://gerrit.libreoffice.org/c/core/+/147089> "configmgr: fix no longer found
+        // es-419 -> es fallback", which wants to retrieve the xml:lang="es" value for the passed-in
+        // "es-419" locale:
+        OUString v;
+        CPPUNIT_ASSERT(
+            access->getByHierarchicalName("/org.libreoffice.unittest/localized/*es-419") >>= v);
+        CPPUNIT_ASSERT_EQUAL(OUString("es"), v);
+    }
+    {
+        // See <https://git.libreoffice.org/core/+/dfc28be2487c13be36a90efd778b8d8f179c589d%5E%21>
+        // "configmgr: Use a proper LanguageTag-based locale fallback mechanism":
+        OUString v;
+        CPPUNIT_ASSERT(
+            access->getByHierarchicalName("/org.libreoffice.unittest/localized/*zh-Hant-TW") >>= v);
+        CPPUNIT_ASSERT_EQUAL(OUString("zh-TW"), v);
+    }
+    {
         // Make sure a degenerate passed-in "-" locale is handled gracefully:
         OUString v;
         CPPUNIT_ASSERT(
             access->getByHierarchicalName("/org.libreoffice.unittest/localized/*-") >>= v);
-        CPPUNIT_ASSERT_EQUAL(OUString("default"), v);
+        CPPUNIT_ASSERT_EQUAL(OUString("en-US"), v);
+    }
+    {
+        // Make sure a degenerate passed-in "-" locale is handled gracefully:
+        OUString v;
+        CPPUNIT_ASSERT(
+            access->getByHierarchicalName("/org.libreoffice.unittest/noDefaultLang/*-") >>= v);
+        CPPUNIT_ASSERT_EQUAL(OUString("en-US"), v);
     }
 }
 

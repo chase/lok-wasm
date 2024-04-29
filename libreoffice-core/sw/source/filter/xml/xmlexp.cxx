@@ -107,7 +107,7 @@ ErrCode SwXMLExport::exportDoc( enum XMLTokenEnum eClass )
         Reference<XPropertySet> rInfoSet = getExportInfo();
         if( rInfoSet.is() )
         {
-            static const OUStringLiteral sAutoTextMode(u"AutoTextMode");
+            static constexpr OUString sAutoTextMode(u"AutoTextMode"_ustr);
             if( rInfoSet->getPropertySetInfo()->hasPropertyByName(
                         sAutoTextMode ) )
             {
@@ -369,7 +369,7 @@ void SwXMLExport::GetViewSettings(Sequence<PropertyValue>& aProps)
     Reference<XPropertySet> xInfoSet( getExportInfo() );
     if ( xInfoSet.is() )
     {
-        static const OUStringLiteral sShowChanges( u"ShowChanges" );
+        static constexpr OUString sShowChanges( u"ShowChanges"_ustr );
         if( xInfoSet->getPropertySetInfo()->hasPropertyByName( sShowChanges ) )
         {
             bShowRedlineChanges = *o3tl::doAccess<bool>(xInfoSet->
@@ -408,10 +408,10 @@ void SwXMLExport::GetConfigurationSettings( Sequence < PropertyValue >& rProps)
     // the document this is a copy of
     Reference<XPropertySet> rInfoSet = getExportInfo();
 
-    if (!rInfoSet.is() || !rInfoSet->getPropertySetInfo()->hasPropertyByName(u"NoEmbDataSet"))
+    if (!rInfoSet.is() || !rInfoSet->getPropertySetInfo()->hasPropertyByName(u"NoEmbDataSet"_ustr))
         return;
 
-    Any aAny = rInfoSet->getPropertyValue(u"NoEmbDataSet");
+    Any aAny = rInfoSet->getPropertyValue(u"NoEmbDataSet"_ustr);
     bool bNoEmbDataSet = *o3tl::doAccess<bool>(aAny);
     if (!bNoEmbDataSet)
         return;
@@ -512,18 +512,6 @@ void SwXMLExport::ExportContent_()
     GetTextParagraphExport()->exportText( xText, m_bShowProgress );
 }
 
-const Sequence< sal_Int8 > & SwXMLExport::getUnoTunnelId() noexcept
-{
-    static const comphelper::UnoIdInit theSwXMLExportUnoTunnelId;
-    return theSwXMLExportUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL SwXMLExport::getSomething( const Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this,
-                                        comphelper::FallbackToGetSomethingOf<SvXMLExport>{});
-}
-
 SwDoc* SwXMLExport::getDoc()
 {
     if( m_pDoc != nullptr )
@@ -536,9 +524,7 @@ SwDoc* SwXMLExport::getDoc()
     }
 
     Reference < XText > xText = xTextDoc->getText();
-    Reference<XUnoTunnel> xTextTunnel( xText, UNO_QUERY);
-    assert( xTextTunnel.is());
-    SwXText* pText = comphelper::getFromUnoTunnel<SwXText>(xTextTunnel);
+    SwXText* pText = dynamic_cast<SwXText*>(xText.get());
     assert( pText != nullptr );
     m_pDoc = pText->GetDoc();
     assert( m_pDoc != nullptr );

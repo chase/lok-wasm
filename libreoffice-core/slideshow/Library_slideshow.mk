@@ -25,7 +25,6 @@ $(eval $(call gb_Library_set_precompiled_header,slideshow,slideshow/inc/pch/prec
 $(eval $(call gb_Library_use_externals,slideshow,\
 	boost_headers \
 	box2d \
-    epoxy \
 ))
 
 $(eval $(call gb_Library_add_defs,slideshow,\
@@ -151,6 +150,7 @@ $(eval $(call gb_Library_add_exception_objects,slideshow,\
     slideshow/source/engine/unoviewcontainer \
     slideshow/source/engine/usereventqueue \
     slideshow/source/engine/waitsymbol \
+    slideshow/source/engine/slideoverlaybutton \
     slideshow/source/engine/pointersymbol \
     slideshow/source/engine/wakeupevent \
 ))

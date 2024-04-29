@@ -29,7 +29,6 @@
 #include <com/sun/star/office/XAnnotationAccess.hpp>
 
 #include <svx/unopage.hxx>
-#include <svx/fmdpage.hxx>
 
 #include <comphelper/servicehelper.hxx>
 #include <cppuhelper/implbase.hxx>
@@ -40,7 +39,7 @@
 class SdrObject;
 class SdXImpressDocument;
 
-class SdGenericDrawPage : public SvxFmDrawPage,
+class SdGenericDrawPage : public SvxDrawPage,
                           public SdUnoSearchReplaceShape,
                           public css::drawing::XShapeCombiner,
                           public css::drawing::XShapeBinder,
@@ -94,7 +93,7 @@ public:
     SdGenericDrawPage(SdXImpressDocument* pModel, SdPage* pInPage, const SvxItemPropertySet* pSet);
     virtual ~SdGenericDrawPage() noexcept override;
 
-    // intern
+    // internal
     bool isValid() const { return (SvxDrawPage::mpPage != nullptr) && (mpModel != nullptr); }
 
     SdPage* GetPage() const { return static_cast<SdPage*>(SvxDrawPage::mpPage); }
@@ -106,12 +105,11 @@ public:
     // this is called whenever a SdrObject must be created for an empty api shape wrapper
     virtual rtl::Reference<SdrObject> CreateSdrObject_( const css::uno::Reference< css::drawing::XShape >& xShape ) override;
 
-    // SvxFmDrawPage
+    // SvxDrawPage
     virtual css::uno::Reference<css::drawing::XShape>  CreateShape(SdrObject *pObj) const override;
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface( const css::uno::Type & rType ) override;
-    virtual void SAL_CALL release() noexcept override;
 
     // XShapeCombiner
     virtual css::uno::Reference< css::drawing::XShape > SAL_CALL combine( const css::uno::Reference< css::drawing::XShapes >& xShapes ) override;
@@ -281,7 +279,7 @@ public:
     SdPageLinkTargets( SdGenericDrawPage* pUnoPage ) noexcept;
     virtual ~SdPageLinkTargets() noexcept override;
 
-    // intern
+    // internal
     SdrObject* FindObject( std::u16string_view rName ) const noexcept;
 
     // XServiceInfo

@@ -37,6 +37,7 @@
 #include <strings.hrc>
 #include <dialmgr.hxx>
 #include <bitmaps.hlst>
+#include <com/sun/star/datatransfer/UnsupportedFlavorException.hpp>
 
 using namespace ::ucbhelper;
 
@@ -105,7 +106,7 @@ sal_Int8 SvxHyperURLBox::ExecuteDrop( const ExecuteDropEvent& rEvt )
 SvxHyperlinkTabPageBase::SvxHyperlinkTabPageBase(weld::Container* pParent,
                                                  SvxHpLinkDlg* pDlg,
                                                  const OUString& rUIXMLDescription,
-                                                 const OString& rID,
+                                                 const OUString& rID,
                                                  const SfxItemSet* pItemSet)
   : IconChoicePage(pParent, rUIXMLDescription, rID, pItemSet)
   , mxCbbFrame(xBuilder->weld_combo_box("frame"))
@@ -450,14 +451,47 @@ void SvxHyperlinkTabPageBase::Reset( const SfxItemSet& rItemSet)
 
     if ( pHyperlinkItem )
     {
+        // tdf#146576 - propose clipboard content when inserting a hyperlink
+        OUString aStrURL(pHyperlinkItem->GetURL());
+        // Store initial URL
+        maStrInitURL = aStrURL;
+        if (aStrURL.isEmpty())
+        {
+            if (auto xClipboard = GetSystemClipboard())
+            {
+                if (auto xTransferable = xClipboard->getContents())
+                {
+                    css::datatransfer::DataFlavor aFlavor;
+                    SotExchange::GetFormatDataFlavor(SotClipboardFormatId::STRING, aFlavor);
+                    if (xTransferable->isDataFlavorSupported(aFlavor))
+                    {
+                        OUString aClipBoardConentent;
+                        try
+                        {
+                            if (xTransferable->getTransferData(aFlavor) >>= aClipBoardConentent)
+                            {
+                                INetURLObject aURL;
+                                aURL.SetSmartURL(aClipBoardConentent);
+                                if (!aURL.HasError())
+                                    aStrURL
+                                        = aURL.GetMainURL(INetURLObject::DecodeMechanism::Unambiguous);
+                            }
+                        }
+                        // tdf#158345: Opening Hyperlink dialog leads to crash
+                        // MimeType = "text/plain;charset=utf-16"
+                        catch(const css::datatransfer::UnsupportedFlavorException&)
+                        {
+                        }
+                    }
+                }
+            }
+        }
+
         // set dialog-fields
         FillStandardDlgFields (pHyperlinkItem);
 
         // set all other fields
-        FillDlgFields ( pHyperlinkItem->GetURL() );
-
-        // Store initial URL
-        maStrInitURL = pHyperlinkItem->GetURL();
+        FillDlgFields(aStrURL);
     }
 }
 
@@ -467,7 +501,7 @@ bool SvxHyperlinkTabPageBase::FillItemSet( SfxItemSet* rOut)
     OUString aStrURL, aStrName, aStrIntName, aStrFrame;
     SvxLinkInsertMode eMode;
 
-    GetCurentItemData ( aStrURL, aStrName, aStrIntName, aStrFrame, eMode);
+    GetCurrentItemData ( aStrURL, aStrName, aStrIntName, aStrFrame, eMode);
     if ( aStrName.isEmpty() ) //automatically create a visible name if the link is created without name
         aStrName = CreateUiNameFromURL(aStrURL);
 
@@ -510,7 +544,7 @@ DeactivateRC SvxHyperlinkTabPageBase::DeactivatePage( SfxItemSet* _pSet)
     OUString aStrURL, aStrName, aStrIntName, aStrFrame;
     SvxLinkInsertMode eMode;
 
-    GetCurentItemData ( aStrURL, aStrName, aStrIntName, aStrFrame, eMode);
+    GetCurrentItemData ( aStrURL, aStrName, aStrIntName, aStrFrame, eMode);
 
     HyperDialogEvent nEvents = GetMacroEvents();
     SvxMacroTableDtor* pTable = GetMacroTable();

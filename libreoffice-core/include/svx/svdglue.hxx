@@ -68,62 +68,62 @@ class SVXCORE_DLLPUBLIC SdrGluePoint {
     // Reference Point is SdrObject::GetSnapRect().Center()
     // bNoPercent=false: position is -5000..5000 (1/100)% or 0..10000 (depending on align)
     // bNoPercent=true : position is in log unit, relative to the reference point
-    Point    aPos;
-    SdrEscapeDirection nEscDir;
-    sal_uInt16   nId;
-    SdrAlign     nAlign;
-    bool bNoPercent:1;
-    bool bReallyAbsolute:1; // temp for transformations on the reference object
-    bool bUserDefined:1; // #i38892#
+    Point    m_aPos;
+    SdrEscapeDirection m_nEscDir;
+    sal_uInt16   m_nId;
+    SdrAlign     m_nAlign;
+    bool m_bNoPercent:1;
+    bool m_bReallyAbsolute:1; // temp for transformations on the reference object
+    bool m_bUserDefined:1; // #i38892#
 public:
     SdrGluePoint()
-        : nEscDir(SdrEscapeDirection::SMART)
-        , nId(0)
-        , nAlign(SdrAlign::NONE)
-        , bNoPercent(false)
-        , bReallyAbsolute(false)
-        , bUserDefined(true)
+        : m_nEscDir(SdrEscapeDirection::SMART)
+        , m_nId(0)
+        , m_nAlign(SdrAlign::NONE)
+        , m_bNoPercent(false)
+        , m_bReallyAbsolute(false)
+        , m_bUserDefined(true)
     {}
     SdrGluePoint(const Point& rNewPos)
-        : aPos(rNewPos)
-        , nEscDir(SdrEscapeDirection::SMART)
-        , nId(0)
-        , nAlign(SdrAlign::NONE)
-        , bNoPercent(false)
-        , bReallyAbsolute(false)
-        , bUserDefined(true)
+        : m_aPos(rNewPos)
+        , m_nEscDir(SdrEscapeDirection::SMART)
+        , m_nId(0)
+        , m_nAlign(SdrAlign::NONE)
+        , m_bNoPercent(false)
+        , m_bReallyAbsolute(false)
+        , m_bUserDefined(true)
     {}
     const Point& GetPos() const
     {
-        return aPos;
+        return m_aPos;
     }
     void SetPos(const Point& rNewPos)
     {
-        aPos = rNewPos;
+        m_aPos = rNewPos;
     }
     SdrEscapeDirection GetEscDir() const
     {
-        return nEscDir;
+        return m_nEscDir;
     }
     void SetEscDir(SdrEscapeDirection nNewEsc)
     {
-        nEscDir = nNewEsc;
+        m_nEscDir = nNewEsc;
     }
     sal_uInt16   GetId() const
     {
-        return nId;
+        return m_nId;
     }
     void SetId(sal_uInt16 nNewId)
     {
-        nId = nNewId;
+        m_nId = nNewId;
     }
     bool IsPercent() const
     {
-        return !bNoPercent;
+        return !m_bNoPercent;
     }
     void SetPercent(bool bOn)
     {
-        bNoPercent  = !bOn;
+        m_bNoPercent  = !bOn;
     }
     // temp for transformations on the reference object
     void SetReallyAbsolute(bool bOn, const SdrObject& rObj);
@@ -131,38 +131,38 @@ public:
     // #i38892#
     bool IsUserDefined() const
     {
-        return bUserDefined;
+        return m_bUserDefined;
     }
     void SetUserDefined(bool bNew)
     {
-        bUserDefined = bNew;
+        m_bUserDefined = bNew;
     }
 
     SdrAlign GetAlign() const
     {
-        return nAlign;
+        return m_nAlign;
     }
     void SetAlign(SdrAlign nAlg)
     {
-        nAlign = nAlg;
+        m_nAlign = nAlg;
     }
     SdrAlign GetHorzAlign() const
     {
-        return nAlign & static_cast<SdrAlign>(0x00FF);
+        return m_nAlign & static_cast<SdrAlign>(0x00FF);
     }
     void SetHorzAlign(SdrAlign nAlg)
     {
         assert((nAlg & static_cast<SdrAlign>(0xFF00)) == SdrAlign::NONE);
-        nAlign = SdrAlign(nAlign & static_cast<SdrAlign>(0xFF00)) | (nAlg & static_cast<SdrAlign>(0x00FF));
+        m_nAlign = SdrAlign(m_nAlign & static_cast<SdrAlign>(0xFF00)) | (nAlg & static_cast<SdrAlign>(0x00FF));
     }
     SdrAlign GetVertAlign() const
     {
-        return nAlign & static_cast<SdrAlign>(0xFF00);
+        return m_nAlign & static_cast<SdrAlign>(0xFF00);
     }
     void SetVertAlign(SdrAlign nAlg)
     {
         assert((nAlg & static_cast<SdrAlign>(0x00FF)) == SdrAlign::NONE);
-        nAlign = SdrAlign(nAlign & static_cast<SdrAlign>(0x00FF)) | (nAlg & static_cast<SdrAlign>(0xFF00));
+        m_nAlign = SdrAlign(m_nAlign & static_cast<SdrAlign>(0x00FF)) | (nAlg & static_cast<SdrAlign>(0xFF00));
     }
 
     bool IsHit(const Point& rPnt, const OutputDevice& rOut, const SdrObject* pObj) const;
@@ -182,7 +182,7 @@ public:
 
 class SVXCORE_DLLPUBLIC SdrGluePointList
 {
-    std::vector<SdrGluePoint> aList;
+    std::vector<SdrGluePoint> m_aList;
 public:
     SdrGluePointList() {};
     SdrGluePointList(const SdrGluePointList& rSrcList)
@@ -193,22 +193,22 @@ public:
     SdrGluePointList& operator=(const SdrGluePointList& rSrcList);
     sal_uInt16 GetCount() const
     {
-        return sal_uInt16(aList.size());
+        return sal_uInt16(m_aList.size());
     }
     // At insert, the object (GluePoint) automatically gets an ID assigned.
     // Return value is the index of the new GluePoint in the list.
     sal_uInt16 Insert(const SdrGluePoint& rGP);
     void Delete(sal_uInt16 nPos)
     {
-        aList.erase(aList.begin() + nPos);
+        m_aList.erase(m_aList.begin() + nPos);
     }
     SdrGluePoint& operator[](sal_uInt16 nPos)
     {
-        return aList[nPos];
+        return m_aList[nPos];
     }
     const SdrGluePoint& operator[](sal_uInt16 nPos) const
     {
-        return aList[nPos];
+        return m_aList[nPos];
     }
     sal_uInt16 FindGluePoint(sal_uInt16 nId) const;
     sal_uInt16 HitTest(const Point& rPnt, const OutputDevice& rOut, const SdrObject* pObj) const;

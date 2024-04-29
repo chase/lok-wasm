@@ -29,7 +29,7 @@
 
 constexpr OUStringLiteral AVMEDIA_GTK_PLAYER_IMPLEMENTATIONNAME
     = u"com.sun.star.comp.avmedia.Player_Gtk";
-constexpr OUStringLiteral AVMEDIA_GTK_PLAYER_SERVICENAME = u"com.sun.star.media.Player_Gtk";
+constexpr OUString AVMEDIA_GTK_PLAYER_SERVICENAME = u"com.sun.star.media.Player_Gtk"_ustr;
 
 using namespace ::com::sun::star;
 
@@ -163,7 +163,7 @@ void GtkPlayer::notifyListeners()
         return;
 
     css::lang::EventObject aEvent;
-    aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+    aEvent.Source = getXWeak();
 
     comphelper::OInterfaceIteratorHelper2 pIterator(*pContainer);
     while (pIterator.hasMoreElements())
@@ -355,8 +355,12 @@ uno::Reference<::media::XPlayerWindow>
     GtkWidget* pParent = static_cast<GtkWidget*>(pEnvData->pWidget);
     gtk_widget_set_can_target(pParent, false);
     gtk_grid_attach(GTK_GRID(pParent), m_pVideo, 0, 0, 1, 1);
+    // "‘void gtk_widget_show(GtkWidget*)’ is deprecated: Use 'gtk_widget_set_visible or
+    // gtk_window_present' instead":
+    SAL_WNODEPRECATED_DECLARATIONS_PUSH
     gtk_widget_show(m_pVideo);
     gtk_widget_show(pParent);
+    SAL_WNODEPRECATED_DECLARATIONS_POP
 
     xRet = new ::avmedia::gstreamer::Window;
 
@@ -370,7 +374,7 @@ GtkPlayer::addPlayerListener(const css::uno::Reference<css::media::XPlayerListen
     if (gtk_media_stream_is_prepared(m_pStream))
     {
         css::lang::EventObject aEvent;
-        aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+        aEvent.Source = getXWeak();
         rListener->preferredPlayerWindowSizeAvailable(aEvent);
     }
     else

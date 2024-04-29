@@ -112,11 +112,11 @@ void SAL_CALL DataProviderHandler::inspect(const uno::Reference< uno::XInterface
     try
     {
         uno::Reference< container::XNameContainer > xNameCont(Component,uno::UNO_QUERY);
-        static const OUStringLiteral sFormComponent(u"FormComponent");
+        static constexpr OUString sFormComponent(u"FormComponent"_ustr);
         if ( xNameCont->hasByName(sFormComponent) )
         {
             uno::Reference<beans::XPropertySet> xProp(xNameCont->getByName(sFormComponent),uno::UNO_QUERY);
-            static const OUStringLiteral sModel(u"Model");
+            static constexpr OUString sModel(u"Model"_ustr);
             if ( xProp.is() && xProp->getPropertySetInfo()->hasPropertyByName(sModel) )
             {
                 m_xChartModel.set(xProp->getPropertyValue(sModel),uno::UNO_QUERY);
@@ -348,7 +348,7 @@ uno::Sequence< beans::Property > SAL_CALL DataProviderHandler::getSupportedPrope
     {
         rptui::OPropertyInfoService::getExcludeProperties( aNewProps, m_xFormComponentHandler );
         beans::Property aValue;
-        static const rtl::OUStringConstExpr s_pProperties[] =
+        static constexpr OUString s_pProperties[] =
         {
              PROPERTY_CHARTTYPE
             ,PROPERTY_MASTERFIELDS

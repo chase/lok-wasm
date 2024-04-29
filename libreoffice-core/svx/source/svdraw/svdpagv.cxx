@@ -96,8 +96,8 @@ SdrPageView::SdrPageView(SdrPage* pPage1, SdrView& rNewView)
 
     if(mpPage)
     {
-        aPgOrg.setX(mpPage->GetLeftBorder() );
-        aPgOrg.setY(mpPage->GetUpperBorder() );
+        maPageOrigin.setX(mpPage->GetLeftBorder() );
+        maPageOrigin.setY(mpPage->GetUpperBorder() );
     }
     // For example, in the case of charts, there is a LayerAdmin, but it has no valid values. Therefore
     // a solution like pLayerAdmin->getVisibleLayersODF(aLayerVisi) is not possible. So use the
@@ -157,7 +157,7 @@ void SdrPageView::ModelHasChanged()
 
 bool SdrPageView::IsReadOnly() const
 {
-    return (nullptr == GetPage() || GetView().GetModel()->IsReadOnly() || GetPage()->IsReadOnly() || GetObjList()->IsReadOnly());
+    return (nullptr == GetPage() || GetView().GetModel().IsReadOnly() || GetPage()->IsReadOnly() || GetObjList()->IsReadOnly());
 }
 
 void SdrPageView::Show()
@@ -439,7 +439,7 @@ void SdrPageView::DrawPageViewGrid(OutputDevice& rOut, const tools::Rectangle& r
 
     tools::Long nWrX=0;
     tools::Long nWrY=0;
-    Point aOrg(aPgOrg);
+    Point aOrg(maPageOrigin);
     tools::Long x1 = 0;
     tools::Long x2 = 0;
     if (GetPage()->GetWidth() < 0) // ScDrawPage of RTL sheet
@@ -613,11 +613,10 @@ bool SdrPageView::IsObjMarkable(SdrObject const * pObj) const
 
         if (pObjList && pObjList->GetObjCount())
         {
-            for (size_t a = 0; a < pObjList->GetObjCount(); ++a)
+            for (const rtl::Reference<SdrObject>& pCandidate : *pObjList)
             {
-                SdrObject* pCandidate = pObjList->GetObj(a);
                 // call recursively
-                if (IsObjMarkable(pCandidate))
+                if (IsObjMarkable(pCandidate.get()))
                     return true;
             }
             return false;
@@ -646,9 +645,11 @@ bool SdrPageView::IsObjMarkable(SdrObject const * pObj) const
 
 void SdrPageView::SetPageOrigin(const Point& rOrg)
 {
-    if (rOrg!=aPgOrg) {
-        aPgOrg=rOrg;
-        if (GetView().IsGridVisible()) {
+    if (rOrg != maPageOrigin)
+    {
+        maPageOrigin = rOrg;
+        if (GetView().IsGridVisible())
+        {
             InvalidateAllWin();
         }
     }

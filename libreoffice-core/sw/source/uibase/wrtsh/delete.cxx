@@ -63,33 +63,35 @@ bool SwWrtShell::TryRemoveIndent()
 {
     bool bResult = false;
 
-    SfxItemSetFixed<RES_LR_SPACE, RES_LR_SPACE> aAttrSet(GetAttrPool());
+    SfxItemSetFixed<RES_MARGIN_FIRSTLINE, RES_MARGIN_FIRSTLINE> aAttrSet(GetAttrPool());
     GetCurAttr(aAttrSet);
 
-    SvxLRSpaceItem aItem = aAttrSet.Get(RES_LR_SPACE);
-    short aOldFirstLineOfst = aItem.GetTextFirstLineOffset();
+    SvxFirstLineIndentItem firstLine(aAttrSet.Get(RES_MARGIN_FIRSTLINE));
+    SvxTextLeftMarginItem leftMargin(aAttrSet.Get(RES_MARGIN_TEXTLEFT));
+    short aOldFirstLineOfst = firstLine.GetTextFirstLineOffset();
 
     if (aOldFirstLineOfst > 0)
     {
-        aItem.SetTextFirstLineOffset(0);
+        firstLine.SetTextFirstLineOffset(0);
         bResult = true;
     }
     else if (aOldFirstLineOfst < 0)
     {
-        aItem.SetTextFirstLineOffset(0);
-        aItem.SetLeft(aItem.GetLeft() + aOldFirstLineOfst);
-
+        // this used to call SetLeft() but this should be the same result
+        firstLine.SetTextFirstLineOffset(0);
+        leftMargin.SetTextLeft(leftMargin.GetTextLeft() + aOldFirstLineOfst);
         bResult = true;
     }
-    else if (aItem.GetLeft() != 0)
+    else if (leftMargin.GetTextLeft() != 0)
     {
-        aItem.SetLeft(0);
+        leftMargin.SetTextLeft(0);
         bResult = true;
     }
 
     if (bResult)
     {
-        aAttrSet.Put(aItem);
+        aAttrSet.Put(firstLine);
+        aAttrSet.Put(leftMargin);
         SetAttrSet(aAttrSet);
     }
 
@@ -169,7 +171,7 @@ bool SwWrtShell::DelLeft()
             {
                 SwActContext aActContext(this);
                 ResetCursorStack();
-                Delete(false);
+                Delete(false, true);
                 UpdateAttr();
             }
             if( IsBlockMode() )
@@ -255,36 +257,28 @@ bool SwWrtShell::DelLeft()
 
         OpenMark();
         SwCursorShell::Left(1, SwCursorSkipMode::Chars);
-        if (SvtScriptType::ASIAN == GetScriptType())
-        {
-            sal_uInt32 nCode = GetChar(false);
-            if ( rtl::isSurrogate( nCode ) )
-            {
-                OUString sStr = GetSelText();
-                nCode = sStr.iterateCodePoints( &o3tl::temporary(sal_Int32(0)) );
-            }
 
-            if ( unicode::isIVSSelector( nCode ) )
-            {
-                SwCursorShell::Push();
-                SwCursorShell::Left(1, SwCursorSkipMode::Chars);
-                OUString sStr = GetSelText();
-                nCode = sStr.iterateCodePoints( &o3tl::temporary(sal_Int32(0)) );
-                if ( unicode::isCJKIVSCharacter( nCode ) )
-                    SwCursorShell::Pop( SwCursorShell::PopMode::DeleteStack );
-                else
-                    SwCursorShell::Pop( SwCursorShell::PopMode::DeleteCurrent ); // For the weak script.
-            }
+        // If we are deleting a variation selector, we want to delete the
+        // whole sequence.
+        sal_uInt32 nCode = GetChar(false);
+        if ( rtl::isSurrogate( nCode ) )
+        {
+            OUString sStr = GetSelText();
+            nCode = sStr.iterateCodePoints( &o3tl::temporary(sal_Int32(0)) );
+        }
+
+        if ( unicode::isVariationSelector( nCode ) )
+        {
+            SwCursorShell::Push();
+            SwCursorShell::Left(1, SwCursorSkipMode::Chars);
+            SwCursorShell::Pop( SwCursorShell::PopMode::DeleteStack );
         }
     }
-    bool bRet = Delete(true);
+    bool bRet = Delete(true, true);
     if( !bRet && bSwap )
         SwCursorShell::SwapPam();
     CloseMark( bRet );
-    if (!bRet)
-    {   // false indicates HasReadonlySel failed
-        InfoReadOnlyDialog();
-    }
+
     return bRet;
 }
 
@@ -400,10 +394,6 @@ bool SwWrtShell::DelRight(bool const isReplaceHeuristic)
         SwCursorShell::Right(1, SwCursorSkipMode::Cells);
         bRet = Delete(true);
         CloseMark( bRet );
-        if (!bRet)
-        {   // false indicates HasReadonlySel failed
-            InfoReadOnlyDialog();
-        }
         break;
 
     case SelectionType::Frame:

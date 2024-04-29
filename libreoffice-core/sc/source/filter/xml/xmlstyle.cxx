@@ -523,7 +523,7 @@ void ScXMLCellExportPropertyMapper::ContextFilter(
 
 /** this method is called for every item that has the MID_FLAG_SPECIAL_ITEM_EXPORT flag set */
 void ScXMLCellExportPropertyMapper::handleSpecialItem(
-            SvXMLAttributeList& /* rAttrList */,
+            comphelper::AttributeList& /* rAttrList */,
             const XMLPropertyState& /* rProperty */,
             const SvXMLUnitConverter& /* rUnitConverter */,
             const SvXMLNamespaceMap& /* rNamespaceMap */,
@@ -603,7 +603,7 @@ ScXMLColumnExportPropertyMapper::~ScXMLColumnExportPropertyMapper()
 
 /** this method is called for every item that has the MID_FLAG_SPECIAL_ITEM_EXPORT flag set */
 void ScXMLColumnExportPropertyMapper::handleSpecialItem(
-            SvXMLAttributeList& /* rAttrList */,
+            comphelper::AttributeList& /* rAttrList */,
             const XMLPropertyState& /* rProperty */,
             const SvXMLUnitConverter& /* rUnitConverter */,
             const SvXMLNamespaceMap& /* rNamespaceMap */,
@@ -625,7 +625,7 @@ ScXMLTableExportPropertyMapper::~ScXMLTableExportPropertyMapper()
 
 /** this method is called for every item that has the MID_FLAG_SPECIAL_ITEM_EXPORT flag set */
 void ScXMLTableExportPropertyMapper::handleSpecialItem(
-            SvXMLAttributeList& /* rAttrList */,
+            comphelper::AttributeList& /* rAttrList */,
             const XMLPropertyState& /* rProperty */,
             const SvXMLUnitConverter& /* rUnitConverter */,
             const SvXMLNamespaceMap& /* rNamespaceMap */,
@@ -636,7 +636,7 @@ void ScXMLTableExportPropertyMapper::handleSpecialItem(
 }
 
 void ScXMLAutoStylePoolP::exportStyleAttributes(
-            SvXMLAttributeList& rAttrList,
+            comphelper::AttributeList& rAttrList,
             XmlStyleFamily nFamily,
             const ::std::vector< XMLPropertyState >& rProperties,
             const SvXMLExportPropertyMapper& rPropExp

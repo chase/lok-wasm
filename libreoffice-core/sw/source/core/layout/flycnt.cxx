@@ -162,13 +162,13 @@ void SwFlyAtContentFrame::SwClientNotify(const SwModify& rMod, const SfxHint& rH
         // of the given fly frame format is registered.
         if(bFound && pContent && pContent->GetDrawObjs())
         {
-            SwFrameFormat* pMyFlyFrameFormat(&GetFrameFormat());
+            SwFrameFormat* pMyFlyFrameFormat(GetFrameFormat());
             SwSortedObjs &rObjs = *pContent->GetDrawObjs();
             for(SwAnchoredObject* rObj : rObjs)
             {
                 SwFlyFrame* pFlyFrame = rObj->DynCastFlyFrame();
                 if (pFlyFrame &&
-                     &(pFlyFrame->GetFrameFormat()) == pMyFlyFrameFormat)
+                     pFlyFrame->GetFrameFormat() == pMyFlyFrameFormat)
                 {
                     bFound = false;
                     break;
@@ -330,7 +330,8 @@ bool SwOszControl::ChkOsz()
 |*/
 void SwFlyAtContentFrame::MakeAll(vcl::RenderContext* pRenderContext)
 {
-    if ( !GetFormat()->GetDoc()->getIDocumentDrawModelAccess().IsVisibleLayerId( GetVirtDrawObj()->GetLayer() ) )
+    const SwDoc& rDoc = *(GetFormat()->GetDoc());
+    if (!rDoc.getIDocumentDrawModelAccess().IsVisibleLayerId(GetVirtDrawObj()->GetLayer()))
     {
         return;
     }
@@ -450,7 +451,6 @@ void SwFlyAtContentFrame::MakeAll(vcl::RenderContext* pRenderContext)
                 SwTextFrame* pAnchorTextFrame( static_cast<SwTextFrame*>(AnchorFrame()) );
                 bool bInsert( true );
                 sal_uInt32 nAnchorFrameToPageNum( 0 );
-                const SwDoc& rDoc = *(GetFrameFormat().GetDoc());
                 if ( SwLayouter::FrameMovedFwdByObjPos(
                                         rDoc, *pAnchorTextFrame, nAnchorFrameToPageNum ) )
                 {
@@ -518,7 +518,7 @@ void SwFlyAtContentFrame::MakeAll(vcl::RenderContext* pRenderContext)
               !bConsiderWrapInfluenceDueToOverlapPrevCol &&
               // #i40444#
               !bConsiderWrapInfluenceDueToMovedFwdAnchor &&
-              GetFormat()->GetDoc()->getIDocumentDrawModelAccess().IsVisibleLayerId( GetVirtDrawObj()->GetLayer() ) );
+              rDoc.getIDocumentDrawModelAccess().IsVisibleLayerId( GetVirtDrawObj()->GetLayer() ) );
 
     // #i3317# - instead of attribute change apply
     // temporarily the 'straightforward positioning process'.
@@ -1623,7 +1623,7 @@ SwLayoutFrame *SwFrame::GetNextFlyLeaf( MakePageType eMakePage )
         {
             // If we're anchored in a body frame, the candidate has to be in a body frame as well.
             bool bLeftBody = bBody && !pLayLeaf->IsInDocBody();
-            // If the candiate is in a fly, make sure that the candidate is a child of our follow.
+            // If the candidate is in a fly, make sure that the candidate is a child of our follow.
             bool bLeftFly = pLayLeaf->IsInFly() && pLayLeaf->FindFlyFrame() != pFly->GetFollow();
             bool bSameBody = false;
             if (bBody && pLayLeaf->IsInDocBody())
@@ -1671,7 +1671,7 @@ SwLayoutFrame *SwFrame::GetNextFlyLeaf( MakePageType eMakePage )
             if (eMakePage == MAKEPAGE_INSERT)
             {
                 InsertPage(FindPageFrame(), false);
-                // If we already had a cancidate, continue trying with that instead of starting from
+                // If we already had a candidate, continue trying with that instead of starting from
                 // scratch.
                 pLayLeaf = pOldLayLeaf ? pOldLayLeaf : GetNextLayoutLeaf();
                 continue;
@@ -1807,6 +1807,24 @@ bool SwFlyAtContentFrame::IsWrapOnAllPages() const
 
     const IDocumentSettingAccess& rIDSA = pFormat->getIDocumentSettingAccess();
     return rIDSA.get(DocumentSettingId::ALLOW_TEXT_AFTER_FLOATING_TABLE_BREAK);
+}
+
+void SwFlyAtContentFrame::dumpAsXmlAttributes(xmlTextWriterPtr pWriter) const
+{
+    SwFlyFreeFrame::dumpAsXmlAttributes(pWriter);
+
+    if (m_pFollow != nullptr)
+    {
+        (void)xmlTextWriterWriteAttribute(
+            pWriter, BAD_CAST("follow"),
+            BAD_CAST(OString::number(m_pFollow->GetFrame().GetFrameId()).getStr()));
+    }
+    if (m_pPrecede != nullptr)
+    {
+        (void)xmlTextWriterWriteAttribute(
+            pWriter, BAD_CAST("precede"),
+            BAD_CAST(OString::number(m_pPrecede->GetFrame().GetFrameId()).getStr()));
+    }
 }
 
 void SwRootFrame::InsertEmptyFly(SwFlyFrame* pDel)

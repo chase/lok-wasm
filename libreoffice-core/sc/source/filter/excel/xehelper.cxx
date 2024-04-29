@@ -48,6 +48,7 @@
 
 #include <document.hxx>
 #include <docpool.hxx>
+#include <docsh.hxx>
 #include <editutil.hxx>
 #include <patattr.hxx>
 #include <scmatrix.hxx>
@@ -390,7 +391,7 @@ XclExpStringRef lclCreateFormattedString(
         // construct font from current text portion
         SvxFont aFont(XclExpFontHelper::GetFontFromItemSet(rRoot, rItemSet, nScript));
         model::ComplexColor aComplexColor;
-        ScPatternAttr::fillColor(aComplexColor, rItemSet, SC_AUTOCOL_RAW);
+        ScPatternAttr::fillColor(aComplexColor, rItemSet, ScAutoFontColorMode::Raw);
 
         // Excel start position of this portion
         sal_Int32 nXclPortionStart = xString->Len();
@@ -504,7 +505,7 @@ XclExpStringRef lclCreateFormattedString(
                     nScript = nLastScript;
                 SvxFont aFont( XclExpFontHelper::GetFontFromItemSet(rRoot, aItemSet, nScript));
                 model::ComplexColor aComplexColor;
-                ScPatternAttr::fillColor(aComplexColor, aItemSet, SC_AUTOCOL_RAW);
+                ScPatternAttr::fillColor(aComplexColor, aItemSet, ScAutoFontColorMode::Raw);
 
                 nLastScript = nScript;
 
@@ -736,7 +737,7 @@ void XclExpHFConverter::AppendPortion( const EditTextObject* pTextObj, sal_Unico
                 SfxItemSet aEditSet( mrEE.GetAttribs( aSel ) );
                 ScPatternAttr::GetFromEditItemSet( aItemSet, aEditSet );
                 ScPatternAttr::fillFontOnly(aFont, aItemSet);
-                ScPatternAttr::fillColor(aComplexColor, aItemSet, SC_AUTOCOL_RAW);
+                ScPatternAttr::fillColor(aComplexColor, aItemSet, ScAutoFontColorMode::Raw);
 
                 // font name and style
                 aNewData.maName = XclTools::GetXclFontName( aFont.GetFamilyName() );
@@ -912,12 +913,12 @@ OUString lclEncodeDosPath(
         if ( path.length() > 2 && o3tl::starts_with(path, u"\\\\") )
         {
             // UNC
-            aBuf.append(EXC_URL_DOSDRIVE).append('@');
+            aBuf.append(OUStringChar(EXC_URL_DOSDRIVE) + "@");
             path = path.substr(2);
         }
         else if ( path.length() > 2 && o3tl::starts_with(path.substr(1), u":\\") )
         {
-            aBuf.append(EXC_URL_DOSDRIVE).append(path[0]);
+            aBuf.append(OUStringChar(EXC_URL_DOSDRIVE) + OUStringChar(path[0]));
             path = path.substr(3);
         }
         else if ( !bIsRel )
@@ -935,14 +936,14 @@ OUString lclEncodeDosPath(
                 // Excel seems confused by this token).
                 aBuf.append(EXC_URL_PARENTDIR);
             else
-                aBuf.append(path.substr(0,nPos)).append(EXC_URL_SUBDIR);
+                aBuf.append(path.substr(0,nPos) + OUStringChar(EXC_URL_SUBDIR));
 
             path = path.substr(nPos + 1);
         }
 
         // file name
         if (pTableName)    // enclose file name in brackets if table name follows
-            aBuf.append('[').append(path).append(']');
+            aBuf.append(OUString::Concat("[") + path + "]");
         else
             aBuf.append(path);
     }

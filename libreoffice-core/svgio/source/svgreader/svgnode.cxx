@@ -39,53 +39,30 @@ namespace svgio::svgreader
             return nullptr;
         }
 
-        void SvgNode::fillCssStyleVectorUsingHierarchyAndSelectors(
-            const OUString& rClassStr,
-            const SvgNode& rCurrent,
-            const OUString& aConcatenated)
+        void SvgNode::addCssStyle(const SvgDocument& rDocument, const OUString& aConcatenated)
         {
-            const SvgDocument& rDocument = getDocument();
+            const SvgStyleAttributes* pNew = rDocument.findGlobalCssStyleAttributes(aConcatenated);
 
-            if(!rDocument.hasGlobalCssStyleAttributes())
-                return;
-
-            const SvgNode* pParent = rCurrent.getParent();
-
-            // check for ID (highest priority)
-            if(rCurrent.getId())
+            if(pNew)
             {
-                const OUString& rId = *rCurrent.getId();
-
-                if(rId.getLength())
-                {
-                    const OUString aNewConcatenated(
-                        "#" + rId + aConcatenated);
-
-                    if(pParent)
-                    {
-                        // check for combined selectors at parent firstso that higher specificity will be in front
-                        fillCssStyleVectorUsingHierarchyAndSelectors(rClassStr, *pParent, aNewConcatenated);
-                    }
-
-                    const SvgStyleAttributes* pNew = rDocument.findGlobalCssStyleAttributes(aNewConcatenated);
-
-                    if(pNew)
-                    {
-                        // add CssStyle if found
-                        maCssStyleVector.push_back(pNew);
-                    }
-                }
+                // add CssStyle if found
+                maCssStyleVector.push_back(pNew);
             }
+        }
+
+namespace {
+        std::vector< OUString > parseClass(const SvgNode& rNode)
+        {
+            std::vector< OUString > aParts;
 
             // check for 'class' references (a list of entries is allowed)
-            if(rCurrent.getClass())
+            if(rNode.getClass())
             {
-                const OUString& rClassList = *rCurrent.getClass();
+                const OUString& rClassList = *rNode.getClass();
                 const sal_Int32 nLen(rClassList.getLength());
 
                 if(nLen)
                 {
-                    std::vector< OUString > aParts;
                     sal_Int32 nPos(0);
                     OUStringBuffer aToken;
 
@@ -108,61 +85,176 @@ namespace svgio::svgreader
                             nPos++;
                         }
                     }
+                }
+            }
 
-                    for(const auto &a : aParts)
+            return aParts;
+        }
+} //namespace
+
+        void SvgNode::fillCssStyleVectorUsingHierarchyAndSelectors(
+            const SvgNode& rCurrent,
+            std::u16string_view aConcatenated)
+        {
+            const SvgDocument& rDocument = getDocument();
+
+            if(!rDocument.hasGlobalCssStyleAttributes())
+                return;
+
+            const SvgNode* pParent = rCurrent.getParent();
+            OUString sCurrentType(SVGTokenToStr(rCurrent.getType()));
+
+            // check for ID (highest priority)
+            if(rCurrent.getId())
+            {
+                const OUString& rId = *rCurrent.getId();
+
+                if(rId.getLength())
+                {
+                    const OUString aNewConcatenated("#" + rId + aConcatenated);
+                    addCssStyle(rDocument, aNewConcatenated);
+
+                    if(!sCurrentType.isEmpty())
+                        addCssStyle(rDocument, sCurrentType + aNewConcatenated);
+
+                    if(pParent)
                     {
-                        const OUString aNewConcatenated(
-                            "." + a + aConcatenated);
-
-                        if(pParent)
-                        {
-                            // check for combined selectors at parent firstso that higher specificity will be in front
-                            fillCssStyleVectorUsingHierarchyAndSelectors(rClassStr, *pParent, aNewConcatenated);
-                        }
-
-                        const SvgStyleAttributes* pNew = rDocument.findGlobalCssStyleAttributes(aNewConcatenated);
-
-                        if(pNew)
-                        {
-                            // add CssStyle if found
-                            maCssStyleVector.push_back(pNew);
-                        }
+                        // check for combined selectors at parent first so that higher specificity will be in front
+                        fillCssStyleVectorUsingHierarchyAndSelectors(*pParent, aNewConcatenated);
                     }
                 }
             }
 
+            std::vector <OUString> aClasses = parseClass(rCurrent);
+            for(const auto &aClass : aClasses)
+            {
+                const OUString aNewConcatenated("." + aClass + aConcatenated);
+                addCssStyle(rDocument, aNewConcatenated);
+
+                if(!sCurrentType.isEmpty())
+                    addCssStyle(rDocument, sCurrentType + aNewConcatenated);
+
+                if(pParent)
+                {
+                    // check for combined selectors at parent first so that higher specificity will be in front
+                    fillCssStyleVectorUsingHierarchyAndSelectors(*pParent, aNewConcatenated);
+                }
+            }
+
+            if(!sCurrentType.isEmpty())
+            {
+                const OUString aNewConcatenated(sCurrentType + aConcatenated);
+                addCssStyle(rDocument, aNewConcatenated);
+            }
+
+            OUString sType(SVGTokenToStr(getType()));
+
             // check for class-dependent references to CssStyles
-            if(rClassStr.isEmpty())
+            if(sType.isEmpty())
                 return;
-
-            OUString aNewConcatenated(aConcatenated);
-
-            if(!rCurrent.getId() && !rCurrent.getClass() && 0 == aConcatenated.indexOf(rClassStr))
-            {
-                // no new CssStyle Selector and already starts with rClassStr, do not concatenate;
-                // we pass an 'empty' node (in the sense of CssStyle Selector)
-            }
-            else
-            {
-                aNewConcatenated = rClassStr + aConcatenated;
-            }
 
             if(pParent)
             {
-                // check for combined selectors at parent firstso that higher specificity will be in front
-                fillCssStyleVectorUsingHierarchyAndSelectors(rClassStr, *pParent, aNewConcatenated);
-            }
-
-            const SvgStyleAttributes* pNew = rDocument.findGlobalCssStyleAttributes(aNewConcatenated);
-
-            if(pNew)
-            {
-                // add CssStyle if found
-                maCssStyleVector.push_back(pNew);
+                // check for combined selectors at parent first so that higher specificity will be in front
+                fillCssStyleVectorUsingHierarchyAndSelectors(*pParent, sType);
             }
         }
 
-        void SvgNode::fillCssStyleVector(const OUString& rClassStr, const SvgStyleAttributes& rOriginal)
+        void SvgNode::fillCssStyleVectorUsingParent(const SvgNode& rCurrent)
+        {
+            const SvgDocument& rDocument = getDocument();
+
+            if(!rDocument.hasGlobalCssStyleAttributes())
+                return;
+
+            const SvgNode* pParent = rCurrent.getParent();
+
+            if (!pParent)
+                return;
+
+            OUString sParentId;
+            if (pParent->getId().has_value())
+            {
+                sParentId = pParent->getId().value();
+            }
+            std::vector <OUString> aParentClasses = parseClass(*pParent);
+            OUString sParentType(SVGTokenToStr(pParent->getType()));
+
+            if(rCurrent.getId())
+            {
+                const OUString& rId = *rCurrent.getId();
+
+                if(!rId.isEmpty())
+                {
+                    if (!sParentId.isEmpty())
+                    {
+                        const OUString aConcatenated("#" + sParentId + ">#" + rId);
+                        addCssStyle(rDocument, aConcatenated);
+                    }
+
+                    for(const auto &aParentClass : aParentClasses)
+                    {
+                        const OUString aConcatenated("." + aParentClass + ">#" + rId);
+                        addCssStyle(rDocument, aConcatenated);
+                    }
+
+                    if (!sParentType.isEmpty())
+                    {
+                        const OUString aConcatenated(sParentType + ">#" + rId);
+                        addCssStyle(rDocument, aConcatenated);
+                    }
+                }
+
+            }
+
+            std::vector <OUString> aClasses = parseClass(rCurrent);
+            for(const auto &aClass : aClasses)
+            {
+
+                if (!sParentId.isEmpty())
+                {
+                    const OUString aConcatenated("#" + sParentId + ">." + aClass);
+                    addCssStyle(rDocument, aConcatenated);
+                }
+
+                for(const auto &aParentClass : aParentClasses)
+                {
+                    const OUString aConcatenated("." + aParentClass + ">." + aClass);
+                    addCssStyle(rDocument, aConcatenated);
+                }
+
+                if (!sParentType.isEmpty())
+                {
+                    const OUString aConcatenated(sParentType + ">." + aClass);
+                    addCssStyle(rDocument, aConcatenated);
+                }
+            }
+
+            OUString sCurrentType(SVGTokenToStr(getType()));
+
+            if(!sCurrentType.isEmpty())
+            {
+                if (!sParentId.isEmpty())
+                {
+                    const OUString aConcatenated("#" + sParentId + ">" + sCurrentType);
+                    addCssStyle(rDocument, aConcatenated);
+                }
+
+                for(const auto &aParentClass : aParentClasses)
+                {
+                    const OUString aConcatenated("." + aParentClass + ">" + sCurrentType);
+                    addCssStyle(rDocument, aConcatenated);
+                }
+
+                if (!sParentType.isEmpty())
+                {
+                    const OUString aConcatenated(sParentType + ">" + sCurrentType);
+                    addCssStyle(rDocument, aConcatenated);
+                }
+            }
+        }
+
+        void SvgNode::fillCssStyleVector(const SvgStyleAttributes& rOriginal)
         {
             OSL_ENSURE(!mbCssStyleVectorBuilt, "OOps, fillCssStyleVector called double ?!?");
             mbCssStyleVectorBuilt = true;
@@ -189,8 +281,12 @@ namespace svgio::svgreader
                 maCssStyleVector.push_back(mpLocalCssStyle.get());
             }
 
+            // tdf#156038 check for child combinator
+            fillCssStyleVectorUsingParent(*this);
+
             // check the hierarchy for concatenated patterns of Selectors
-            fillCssStyleVectorUsingHierarchyAndSelectors(rClassStr, *this, OUString());
+            fillCssStyleVectorUsingHierarchyAndSelectors(*this, std::u16string_view());
+
 
             // tdf#99115, Add css selector '*' style only if the element is on top of the hierarchy
             // meaning its parent is <svg>
@@ -212,12 +308,12 @@ namespace svgio::svgreader
             maCssStyleVector.push_back(&rOriginal);
         }
 
-        const SvgStyleAttributes* SvgNode::checkForCssStyle(const OUString& rClassStr, const SvgStyleAttributes& rOriginal) const
+        const SvgStyleAttributes* SvgNode::checkForCssStyle(const SvgStyleAttributes& rOriginal) const
         {
             if(!mbCssStyleVectorBuilt)
             {
                 // build needed CssStyleVector for local node
-                const_cast< SvgNode* >(this)->fillCssStyleVector(rClassStr, rOriginal);
+                const_cast< SvgNode* >(this)->fillCssStyleVector(rOriginal);
             }
 
             if(maCssStyleVector.empty())
@@ -271,24 +367,13 @@ namespace svgio::svgreader
             mpParent(pParent),
             mpAlternativeParent(nullptr),
             maXmlSpace(XmlSpace::NotSet),
-            maDisplay(Display::Inline),
+            maDisplay(maType == SVGToken::Unknown ? Display::None : Display::Inline), // tdf#150124: do not display unknown nodes
             mbDecomposing(false),
             mbCssStyleVectorBuilt(false)
         {
-            OSL_ENSURE(SVGToken::Unknown != maType, "SvgNode with unknown type created (!)");
-
-            if(pParent)
+            if (pParent)
             {
                 pParent->maChildren.emplace_back(this);
-            }
-            else
-            {
-#ifdef DBG_UTIL
-                if(SVGToken::Svg != getType())
-                {
-                    OSL_ENSURE(false, "No parent for this node (!)");
-                }
-#endif
             }
         }
 
@@ -332,7 +417,7 @@ namespace svgio::svgreader
                 const OUString aTokenName(xAttribs->getNameByIndex(a));
                 const SVGToken aSVGToken(StrToSVGToken(aTokenName, false));
 
-                parseAttribute(aTokenName, aSVGToken, xAttribs->getValueByIndex(a));
+                parseAttribute(aSVGToken, xAttribs->getValueByIndex(a));
             }
         }
 
@@ -418,7 +503,7 @@ namespace svgio::svgreader
             return Display::Inline;
         }
 
-        void SvgNode::parseAttribute(const OUString& /*rTokenName*/, SVGToken aSVGToken, const OUString& aContent)
+        void SvgNode::parseAttribute(SVGToken aSVGToken, const OUString& aContent)
         {
             switch(aSVGToken)
             {
@@ -435,6 +520,14 @@ namespace svgio::svgreader
                     if(!aContent.isEmpty())
                     {
                         setClass(aContent);
+                    }
+                    break;
+                }
+                case SVGToken::SystemLanguage:
+                {
+                    if(!aContent.isEmpty())
+                    {
+                        setSystemLanguage(aContent);
                     }
                     break;
                 }
@@ -598,24 +691,15 @@ namespace svgio::svgreader
             }
         }
 
-        double SvgNode::getCurrentFontSizeInherited() const
-        {
-            if(getParent())
-            {
-                return getParent()->getCurrentFontSize();
-            }
-            else
-            {
-                return 0.0;
-            }
-        }
-
         double SvgNode::getCurrentFontSize() const
         {
             if(getSvgStyleAttributes())
                 return getSvgStyleAttributes()->getFontSizeNumber().solve(*this, NumberType::xcoordinate);
 
-            return getCurrentFontSizeInherited();
+            if(getParent())
+                return getParent()->getCurrentFontSize();
+
+            return 0.0;
         }
 
         double SvgNode::getCurrentXHeightInherited() const
@@ -661,6 +745,34 @@ namespace svgio::svgreader
 
             mpClass = rClass;
             mrDocument.addSvgNodeToMapper(*mpClass, *this);
+        }
+
+        void SvgNode::setSystemLanguage(OUString const & rSystemClass)
+        {
+            const sal_Int32 nLen(rSystemClass.getLength());
+            sal_Int32 nPos(0);
+            OUStringBuffer aToken;
+
+            // split into single tokens (currently only comma separator)
+            while(nPos < nLen)
+            {
+                const sal_Int32 nInitPos(nPos);
+                copyToLimiter(rSystemClass, u',', nPos, aToken, nLen);
+                skip_char(rSystemClass, u',', nPos, nLen);
+                const OUString aLang(o3tl::trim(aToken));
+                aToken.setLength(0);
+
+                if(!aLang.isEmpty())
+                {
+                    maSystemLanguage.push_back(aLang);
+                }
+
+                if(nInitPos == nPos)
+                {
+                    OSL_ENSURE(false, "Could not interpret on current position (!)");
+                    nPos++;
+                }
+            }
         }
 
         XmlSpace SvgNode::getXmlSpace() const

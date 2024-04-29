@@ -21,14 +21,15 @@
 
 #include <sal/config.h>
 
-#include <vcl/vclenum.hxx>
 #include <config_cairo_canvas.h>
 
-#include <unx/fontmanager.hxx>
 #include <salgdi.hxx>
 #include <sallayout.hxx>
 
-#include <unx/GenPspGfxBackend.hxx>
+#include <unx/cairotextrender.hxx>
+
+#include <headless/SvpGraphicsBackend.hxx>
+#include <headless/CairoCommon.hxx>
 
 namespace vcl::font
 {
@@ -36,37 +37,27 @@ class PhysicalFontFace;
 class PhysicalFontCollection;
 }
 
-namespace psp { struct JobData; class PrinterGfx; }
+namespace psp { struct JobData; }
 
 class FreetypeFontInstance;
 class FontAttributes;
 class SalInfoPrinter;
-class ImplFontMetricData;
+class FontMetricData;
 
 class VCL_DLLPUBLIC GenPspGraphics final : public SalGraphicsAutoDelegateToImpl
 {
-    std::unique_ptr<GenPspGfxBackend> m_pBackend;
 
     psp::JobData*           m_pJobData;
-    psp::PrinterGfx*        m_pPrinterGfx;
 
-    rtl::Reference<FreetypeFontInstance>
-                            m_pFreetypeFont[ MAX_FALLBACK ];
+    CairoCommon             m_aCairoCommon;
+    CairoTextRender         m_aTextRenderImpl;
+    std::unique_ptr<SvpGraphicsBackend> m_pBackend;
 
 public:
                             GenPspGraphics();
     virtual                ~GenPspGraphics() override;
 
-    void                    Init( psp::JobData* pJob, psp::PrinterGfx* pGfx );
-
-    // helper methods
-    static FontAttributes   Info2FontAttributes(const psp::FastPrintFontInfo&);
-
-    // helper methods for sharing with FreeTypeTextRenderImpl
-    static void             GetDevFontListHelper(vcl::font::PhysicalFontCollection*);
-    static bool             AddTempDevFontHelper(vcl::font::PhysicalFontCollection* pFontCollection,
-                                                 std::u16string_view rFileURL,
-                                                 const OUString& rFontName);
+    void                    Init(psp::JobData* pJob);
 
     // override all pure virtual methods
     virtual SalGraphicsImpl* GetImpl() const override
@@ -78,7 +69,7 @@ public:
 
     virtual void            SetTextColor( Color nColor ) override;
     virtual void            SetFont(LogicalFontInstance*, int nFallbackLevel) override;
-    virtual void            GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) override;
+    virtual void            GetFontMetric( FontMetricDataRef&, int nFallbackLevel ) override;
     virtual FontCharMapRef  GetFontCharMap() const override;
     virtual bool            GetFontCapabilities(vcl::FontCapabilities &rFontCapabilities) const override;
     virtual void            GetDevFontList( vcl::font::PhysicalFontCollection* ) override;

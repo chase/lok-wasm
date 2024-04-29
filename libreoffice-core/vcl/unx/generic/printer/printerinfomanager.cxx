@@ -31,15 +31,15 @@
 
 #include <osl/file.hxx>
 #include <osl/thread.hxx>
-#include <osl/mutex.hxx>
 #include <o3tl/string_view.hxx>
 
 // filename of configuration files
-constexpr OUStringLiteral PRINT_FILENAME = u"psprint.conf";
+constexpr OUString PRINT_FILENAME = u"psprint.conf"_ustr;
 // the group of the global defaults
-constexpr OStringLiteral GLOBAL_DEFAULTS_GROUP = "__Global_Printer_Defaults__";
+constexpr OString GLOBAL_DEFAULTS_GROUP = "__Global_Printer_Defaults__"_ostr;
 
 #include <cstddef>
+#include <mutex>
 #include <unordered_set>
 
 using namespace psp;
@@ -49,7 +49,7 @@ namespace psp
 {
     class SystemQueueInfo final : public Thread
     {
-        mutable Mutex               m_aMutex;
+        mutable std::mutex          m_aMutex;
         bool                        m_bChanged;
         std::vector< PrinterInfoManager::SystemPrintQueue >
                                     m_aQueues;
@@ -96,8 +96,6 @@ PrinterInfoManager& PrinterInfoManager::get()
 
 PrinterInfoManager::PrinterInfoManager( Type eType ) :
     m_eType( eType ),
-    m_bUseIncludeFeature( false ),
-    m_bUseJobPatch( true ),
     m_aSystemDefaultPaper( "A4" )
 {
     if( eType == Type::Default )
@@ -175,7 +173,6 @@ bool PrinterInfoManager::checkPrintersChanged( bool bWait )
 
 void PrinterInfoManager::initialize()
 {
-    m_bUseIncludeFeature = false;
     m_aPrinters.clear();
     m_aWatchFiles.clear();
     OUString aDefaultPrinter;
@@ -214,15 +211,15 @@ void PrinterInfoManager::initialize()
 #endif
             aConfig.SetGroup( GLOBAL_DEFAULTS_GROUP );
 
-            OString aValue( aConfig.ReadKey( "Copies" ) );
+            OString aValue( aConfig.ReadKey( "Copies"_ostr ) );
             if (!aValue.isEmpty())
                 m_aGlobalDefaults.m_nCopies = aValue.toInt32();
 
-            aValue = aConfig.ReadKey( "Orientation" );
+            aValue = aConfig.ReadKey( "Orientation"_ostr );
             if (!aValue.isEmpty())
                 m_aGlobalDefaults.m_eOrientation = aValue.equalsIgnoreAsciiCase("Landscape") ? orientation::Landscape : orientation::Portrait;
 
-            aValue = aConfig.ReadKey( "MarginAdjust" );
+            aValue = aConfig.ReadKey( "MarginAdjust"_ostr );
             if (!aValue.isEmpty())
             {
                 sal_Int32 nIdx {0};
@@ -232,21 +229,13 @@ void PrinterInfoManager::initialize()
                 m_aGlobalDefaults.m_nBottomMarginAdjust = o3tl::toInt32(o3tl::getToken(aValue, 0, ',', nIdx));
             }
 
-            aValue = aConfig.ReadKey( "ColorDepth", "24" );
+            aValue = aConfig.ReadKey( "ColorDepth"_ostr, "24"_ostr );
             if (!aValue.isEmpty())
                 m_aGlobalDefaults.m_nColorDepth = aValue.toInt32();
 
-            aValue = aConfig.ReadKey( "ColorDevice" );
+            aValue = aConfig.ReadKey( "ColorDevice"_ostr );
             if (!aValue.isEmpty())
                 m_aGlobalDefaults.m_nColorDevice = aValue.toInt32();
-
-            aValue = aConfig.ReadKey( "PSLevel" );
-            if (!aValue.isEmpty())
-                m_aGlobalDefaults.m_nPSLevel = aValue.toInt32();
-
-            aValue = aConfig.ReadKey( "PDFDevice" );
-            if (!aValue.isEmpty())
-                m_aGlobalDefaults.m_nPDFDevice = aValue.toInt32();
 
             // get the PPDContext of global JobData
             for( int nKey = 0; nKey < aConfig.GetKeyCount(); ++nKey )
@@ -307,7 +296,7 @@ void PrinterInfoManager::initialize()
         for( int nGroup = 0; nGroup < aConfig.GetGroupCount(); nGroup++ )
         {
             aConfig.SetGroup( aConfig.GetGroupName( nGroup ) );
-            OString aValue = aConfig.ReadKey( "Printer" );
+            OString aValue = aConfig.ReadKey( "Printer"_ostr );
             if (!aValue.isEmpty())
             {
                 OUString aPrinterName;
@@ -364,7 +353,7 @@ void PrinterInfoManager::initialize()
                         }
                     }
 
-                    aValue = aConfig.ReadKey( "Command" );
+                    aValue = aConfig.ReadKey( "Command"_ostr );
                     // no printer without a command
                     if (aValue.isEmpty())
                     {
@@ -375,38 +364,38 @@ void PrinterInfoManager::initialize()
                         #if defined __sun
                         aValue = "lp";
                         #else
-                        aValue = "lpr";
+                        aValue = "lpr"_ostr;
                         #endif
                     }
                     aPrinter.m_aInfo.m_aCommand = OStringToOUString(aValue, RTL_TEXTENCODING_UTF8);
                 }
 
-                aValue = aConfig.ReadKey( "QuickCommand" );
+                aValue = aConfig.ReadKey( "QuickCommand"_ostr );
                 aPrinter.m_aInfo.m_aQuickCommand = OStringToOUString(aValue, RTL_TEXTENCODING_UTF8);
 
-                aValue = aConfig.ReadKey( "Features" );
+                aValue = aConfig.ReadKey( "Features"_ostr );
                 aPrinter.m_aInfo.m_aFeatures = OStringToOUString(aValue, RTL_TEXTENCODING_UTF8);
 
                 // override the settings in m_aGlobalDefaults if keys exist
-                aValue = aConfig.ReadKey( "DefaultPrinter" );
+                aValue = aConfig.ReadKey( "DefaultPrinter"_ostr );
                 if (aValue != "0" && !aValue.equalsIgnoreAsciiCase("false"))
                     aDefaultPrinter = aPrinterName;
 
-                aValue = aConfig.ReadKey( "Location" );
+                aValue = aConfig.ReadKey( "Location"_ostr );
                 aPrinter.m_aInfo.m_aLocation = OStringToOUString(aValue, RTL_TEXTENCODING_UTF8);
 
-                aValue = aConfig.ReadKey( "Comment" );
+                aValue = aConfig.ReadKey( "Comment"_ostr );
                 aPrinter.m_aInfo.m_aComment = OStringToOUString(aValue, RTL_TEXTENCODING_UTF8);
 
-                aValue = aConfig.ReadKey( "Copies" );
+                aValue = aConfig.ReadKey( "Copies"_ostr );
                 if (!aValue.isEmpty())
                     aPrinter.m_aInfo.m_nCopies = aValue.toInt32();
 
-                aValue = aConfig.ReadKey( "Orientation" );
+                aValue = aConfig.ReadKey( "Orientation"_ostr );
                 if (!aValue.isEmpty())
                     aPrinter.m_aInfo.m_eOrientation = aValue.equalsIgnoreAsciiCase("Landscape") ? orientation::Landscape : orientation::Portrait;
 
-                aValue = aConfig.ReadKey( "MarginAdjust" );
+                aValue = aConfig.ReadKey( "MarginAdjust"_ostr );
                 if (!aValue.isEmpty())
                 {
                     sal_Int32 nIdx {0};
@@ -416,21 +405,13 @@ void PrinterInfoManager::initialize()
                     aPrinter.m_aInfo.m_nBottomMarginAdjust = o3tl::toInt32(o3tl::getToken(aValue, 0, ',', nIdx));
                 }
 
-                aValue = aConfig.ReadKey( "ColorDepth" );
+                aValue = aConfig.ReadKey( "ColorDepth"_ostr );
                 if (!aValue.isEmpty())
                     aPrinter.m_aInfo.m_nColorDepth = aValue.toInt32();
 
-                aValue = aConfig.ReadKey( "ColorDevice" );
+                aValue = aConfig.ReadKey( "ColorDevice"_ostr );
                 if (!aValue.isEmpty())
                     aPrinter.m_aInfo.m_nColorDevice = aValue.toInt32();
-
-                aValue = aConfig.ReadKey( "PSLevel" );
-                if (!aValue.isEmpty())
-                    aPrinter.m_aInfo.m_nPSLevel = aValue.toInt32();
-
-                aValue = aConfig.ReadKey( "PDFDevice" );
-                if (!aValue.isEmpty())
-                    aPrinter.m_aInfo.m_nPDFDevice = aValue.toInt32();
 
                 // now iterate over all keys to extract multi key information:
                 // 1. PPDContext information
@@ -452,9 +433,6 @@ void PrinterInfoManager::initialize()
                 }
 
                 setDefaultPaper( aPrinter.m_aInfo.m_aContext );
-
-                // if it's a "Generic Printer", apply defaults from config...
-                aPrinter.m_aInfo.resolveDefaultBackend();
 
                 // finally insert printer
                 FileBase::getFileURLFromSystemPath( aFile.PathToFileName(), aPrinter.m_aFile );
@@ -548,7 +526,7 @@ const PrinterInfo& PrinterInfoManager::getPrinterInfo( const OUString& rPrinter 
     return it != m_aPrinters.end() ? it->second.m_aInfo : aEmptyInfo;
 }
 
-bool PrinterInfoManager::checkFeatureToken( const OUString& rPrinterName, const char* pToken ) const
+bool PrinterInfoManager::checkFeatureToken( const OUString& rPrinterName, std::string_view pToken ) const
 {
     const PrinterInfo& rPrinterInfo( getPrinterInfo( rPrinterName ) );
     sal_Int32 nIndex = 0;
@@ -655,23 +633,21 @@ SystemQueueInfo::~SystemQueueInfo()
 
 bool SystemQueueInfo::hasChanged() const
 {
-    MutexGuard aGuard( m_aMutex );
-    bool bChanged = m_bChanged;
-    return bChanged;
+    std::unique_lock aGuard( m_aMutex );
+    return m_bChanged;
 }
 
 void SystemQueueInfo::getSystemQueues( std::vector< PrinterInfoManager::SystemPrintQueue >& rQueues )
 {
-    MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
     rQueues = m_aQueues;
     m_bChanged = false;
 }
 
 OUString SystemQueueInfo::getCommand() const
 {
-    MutexGuard aGuard( m_aMutex );
-    OUString aRet = m_aCommand;
-    return aRet;
+    std::unique_lock aGuard( m_aMutex );
+    return m_aCommand;
 }
 
 namespace {
@@ -777,7 +753,7 @@ static void lpgetSysQueueTokenHandler(
                     o_rQueues.back().m_aComment = OStringToOUString(aComment, aEncoding);
                 continue;
             }
-            // look for "location" attribute, inser as location
+            // look for "location" attribute, insert as location
             nPos = line.indexOf( aLocStr, 0 );
             if( nPos != -1 )
             {
@@ -873,7 +849,7 @@ void SystemQueueInfo::run()
             {
                 std::vector< PrinterInfoManager::SystemPrintQueue > aSysPrintQueues;
                 rParm.pHandler( aLines, aSysPrintQueues, &rParm );
-                MutexGuard aGuard( m_aMutex );
+                std::unique_lock aGuard( m_aMutex );
                 m_bChanged  = true;
                 m_aQueues   = aSysPrintQueues;
                 m_aCommand  = OUString::createFromAscii( rParm.pPrintCommand );

@@ -34,11 +34,11 @@ using namespace com::sun::star::lang;
 using namespace com::sun::star::beans;
 using namespace com::sun::star::container;
 
-constexpr OUStringLiteral WRONG_TYPE_EXCEPTION
-    = u"Type must be css::uno::Sequence< css::beans::PropertyValue >";
+constexpr OUString WRONG_TYPE_EXCEPTION
+    = u"Type must be css::uno::Sequence< css::beans::PropertyValue >"_ustr;
 
 const int PROPHANDLE_UINAME     = 1;
-constexpr OUStringLiteral PROPNAME_UINAME = u"UIName";
+constexpr OUString PROPNAME_UINAME = u"UIName"_ustr;
 
 namespace framework
 {
@@ -126,7 +126,7 @@ Reference< XIndexAccess > RootItemContainer::deepCopyContainer( const Reference<
     Reference< XIndexAccess > xReturn;
     if ( rSubContainer.is() )
     {
-        ConstItemContainer* pSource = comphelper::getFromUnoTunnel<ConstItemContainer>( rSubContainer );
+        ConstItemContainer* pSource = dynamic_cast<ConstItemContainer*>( rSubContainer.get() );
         rtl::Reference<ItemContainer> pSubContainer;
         if ( pSource )
             pSubContainer = new ItemContainer( *pSource, m_aShareMutex );
@@ -136,18 +136,6 @@ Reference< XIndexAccess > RootItemContainer::deepCopyContainer( const Reference<
     }
 
     return xReturn;
-}
-
-// XUnoTunnel
-sal_Int64 RootItemContainer::getSomething( const css::uno::Sequence< sal_Int8 >& rIdentifier )
-{
-    return comphelper::getSomethingImpl(rIdentifier, this);
-}
-
-const Sequence< sal_Int8 >& RootItemContainer::getUnoTunnelId() noexcept
-{
-    static const comphelper::UnoIdInit theRootItemContainerUnoTunnelId;
-    return theRootItemContainerUnoTunnelId.getSeq();
 }
 
 // XElementAccess

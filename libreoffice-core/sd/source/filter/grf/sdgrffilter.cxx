@@ -251,9 +251,9 @@ bool SdGRFFilter::Export()
         if ( pPage )
         {
             uno::Reference< lang::XComponent > xSource( pPage->getUnoPage(), uno::UNO_QUERY );
-            SfxItemSet* pSet = mrMedium.GetItemSet();
-            if ( pSet && xSource.is() )
+            if (xSource.is())
             {
+                SfxItemSet& rSet = mrMedium.GetItemSet();
                 const OUString aTypeName( mrMedium.GetFilter()->GetTypeName() );
                 GraphicFilter &rGraphicFilter = GraphicFilter::GetGraphicFilter();
                 const sal_uInt16 nFilter = rGraphicFilter.GetExportFormatNumberForTypeName( aTypeName );
@@ -262,9 +262,9 @@ bool SdGRFFilter::Export()
                     uno::Reference< task::XInteractionHandler > xInteractionHandler;
 
                     beans::PropertyValues aArgs;
-                    TransformItems( SID_SAVEASDOC, *pSet, aArgs );
+                    TransformItems( SID_SAVEASDOC, rSet, aArgs );
 
-                    static const OUStringLiteral sFilterName( u"FilterName" );
+                    static constexpr OUString sFilterName( u"FilterName"_ustr );
                     OUString sShortName( rGraphicFilter.GetExportFormatShortName( nFilter ) );
 
                     bool    bFilterNameFound = false;
@@ -296,8 +296,8 @@ bool SdGRFFilter::Export()
                     }
 
                     // take selection if needed
-                    if( ( SfxItemState::SET == pSet->GetItemState( SID_SELECTION ) )
-                        && pSet->Get( SID_SELECTION ).GetValue()
+                    if( ( SfxItemState::SET == rSet.GetItemState( SID_SELECTION ) )
+                        && rSet.Get( SID_SELECTION ).GetValue()
                         && pDrawViewShell )
                     {
                         uno::Reference< view::XSelectionSupplier > xSelectionSupplier(

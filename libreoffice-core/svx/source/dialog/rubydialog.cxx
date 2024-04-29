@@ -43,6 +43,7 @@
 #include <vcl/event.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
+#include <svl/itemset.hxx>
 
 using namespace css::uno;
 using namespace css::frame;
@@ -57,11 +58,11 @@ SFX_IMPL_CHILDWINDOW(SvxRubyChildWindow, SID_RUBY_DIALOG);
 
 namespace
 {
-constexpr OUStringLiteral cRubyBaseText = u"RubyBaseText";
-constexpr OUStringLiteral cRubyText = u"RubyText";
-constexpr OUStringLiteral cRubyAdjust = u"RubyAdjust";
-constexpr OUStringLiteral cRubyPosition = u"RubyPosition";
-constexpr OUStringLiteral cRubyCharStyleName = u"RubyCharStyleName";
+constexpr OUString cRubyBaseText = u"RubyBaseText"_ustr;
+constexpr OUString cRubyText = u"RubyText"_ustr;
+constexpr OUString cRubyAdjust = u"RubyAdjust"_ustr;
+constexpr OUString cRubyPosition = u"RubyPosition"_ustr;
+constexpr OUString cRubyCharStyleName = u"RubyCharStyleName"_ustr;
 
 } // end anonymous namespace
 

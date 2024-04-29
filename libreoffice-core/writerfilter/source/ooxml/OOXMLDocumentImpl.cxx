@@ -336,13 +336,13 @@ void OOXMLDocumentImpl::resolveComment(Stream & rStream,
 OOXMLPropertySet * OOXMLDocumentImpl::getPicturePropSet
 (const OUString & rId)
 {
-    OOXMLStream::Pointer_t pStream
+    OOXMLStream::Pointer_t xStream
         (OOXMLDocumentFactory::createStream(mpStream, rId));
 
-    writerfilter::Reference<BinaryObj>::Pointer_t pPicture
-        (new OOXMLBinaryObjectReference(pStream));
+    writerfilter::Reference<BinaryObj>::Pointer_t xPicture
+        (new OOXMLBinaryObjectReference(std::move(xStream)));
 
-    OOXMLValue::Pointer_t pPayloadValue(new OOXMLBinaryValue(pPicture));
+    OOXMLValue::Pointer_t pPayloadValue(new OOXMLBinaryValue(std::move(xPicture)));
 
     OOXMLPropertySet::Pointer_t pBlipSet(new OOXMLPropertySet);
 
@@ -514,15 +514,13 @@ void OOXMLDocumentImpl::resolve(Stream & rStream)
     {
         xParser->parseStream(aParserInput);
     }
-    catch (xml::sax::SAXException const& rErr)
+    catch (xml::sax::SAXException const&)
     {
         // don't silently swallow these - handlers may not have been executed,
         // and the domain mapper is likely in an inconsistent state
         // In case user chooses to try to continue loading, don't ask again for this file
         SfxObjectShell* rShell = SfxObjectShell::GetShellFromComponent(mxModel);
-        if (!rShell
-            || !rShell->IsContinueImportOnFilterExceptions(
-                Concat2View("SAXException: " + rErr.Message)))
+        if (!rShell || !rShell->IsContinueImportOnFilterExceptions())
             throw;
     }
     catch (uno::RuntimeException const&)
@@ -619,11 +617,11 @@ const char sStylesTypeStrict[] = "http://purl.oclc.org/ooxml/officeDocument/rela
 const char sFonttableTypeStrict[] = "http://purl.oclc.org/ooxml/officeDocument/relationships/fontTable";
 const char sWebSettingsStrict[] = "http://purl.oclc.org/ooxml/officeDocument/relationships/webSettings";
 
-constexpr OUStringLiteral sId = u"Id";
+constexpr OUString sId = u"Id"_ustr;
 constexpr OUStringLiteral sType = u"Type";
-constexpr OUStringLiteral sTarget = u"Target";
+constexpr OUString sTarget = u"Target"_ustr;
 constexpr OUStringLiteral sTargetMode = u"TargetMode";
-constexpr OUStringLiteral sContentType = u"_contentType";
+constexpr OUString sContentType = u"_contentType"_ustr;
 constexpr OUStringLiteral sRelDom = u"_relDom";
 constexpr OUStringLiteral sSettingsContentType = u"application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml";
 constexpr OUStringLiteral sStylesContentType = u"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml";
@@ -719,12 +717,12 @@ void OOXMLDocumentImpl::resolveEmbeddingsStream(const OOXMLStream::Pointer_t& pS
     xRelationshipAccess.set(dynamic_cast<OOXMLStreamImpl&>(*pStream).accessDocumentStream(), uno::UNO_QUERY);
     if (xRelationshipAccess.is())
     {
-        OUString const sChartType("http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart");
-        OUString const sChartTypeStrict("http://purl.oclc.org/ooxml/officeDocument/relationships/chart");
-        OUString const sFootersType("http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer");
-        OUString const sFootersTypeStrict("http://purl.oclc.org/ooxml/officeDocument/relationships/footer");
-        OUString const sHeaderType("http://schemas.openxmlformats.org/officeDocument/2006/relationships/header");
-        OUString const sHeaderTypeStrict("http://purl.oclc.org/ooxml/officeDocument/relationships/header");
+        static constexpr OUStringLiteral sChartType(u"http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart");
+        static constexpr OUStringLiteral sChartTypeStrict(u"http://purl.oclc.org/ooxml/officeDocument/relationships/chart");
+        static constexpr OUStringLiteral sFootersType(u"http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer");
+        static constexpr OUStringLiteral sFootersTypeStrict(u"http://purl.oclc.org/ooxml/officeDocument/relationships/footer");
+        static constexpr OUStringLiteral sHeaderType(u"http://schemas.openxmlformats.org/officeDocument/2006/relationships/header");
+        static constexpr OUStringLiteral sHeaderTypeStrict(u"http://purl.oclc.org/ooxml/officeDocument/relationships/header");
 
         bool bFound = false;
         bool bHeaderFooterFound = false;
@@ -786,7 +784,7 @@ void OOXMLDocumentImpl::resolveEmbeddingsStream(const OOXMLStream::Pointer_t& pS
                 {
                     embeddingsTemp.Name = embeddingsTarget;
                     embeddingsTemp.Value <<= mxEmbeddings;
-                    aEmbeddings.push_back(embeddingsTemp);
+                    m_aEmbeddings.push_back(embeddingsTemp);
                     mxEmbeddings.clear();
                 }
                 bFound = false;
@@ -794,8 +792,8 @@ void OOXMLDocumentImpl::resolveEmbeddingsStream(const OOXMLStream::Pointer_t& pS
             }
         }
     }
-    if (!aEmbeddings.empty())
-        mxEmbeddingsList = comphelper::containerToSequence(aEmbeddings);
+    if (!m_aEmbeddings.empty())
+        mxEmbeddingsList = comphelper::containerToSequence(m_aEmbeddings);
 }
 
 uno::Reference<xml::dom::XDocument> OOXMLDocumentImpl::getGlossaryDocDom( )

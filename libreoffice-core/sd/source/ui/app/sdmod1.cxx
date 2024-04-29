@@ -78,7 +78,7 @@ private:
 void SdModule::Execute(SfxRequest& rReq)
 {
     const SfxItemSet* pSet = rReq.GetArgs();
-    sal_uLong nSlotId = rReq.GetSlot();
+    sal_uInt16 nSlotId = rReq.GetSlot();
 
     switch ( nSlotId )
     {
@@ -161,9 +161,9 @@ void SdModule::Execute(SfxRequest& rReq)
                     LanguageType eLanguage = static_cast<const SvxLanguageItem*>(pItem)->GetValue();
                     SdDrawDocument* pDoc = pDocSh->GetDoc();
 
-                    if( nSlotId == sal_uInt16(SID_ATTR_CHAR_CJK_LANGUAGE) )
+                    if( nSlotId == SID_ATTR_CHAR_CJK_LANGUAGE )
                         pDoc->SetLanguage( eLanguage, EE_CHAR_LANGUAGE_CJK );
-                    else if( nSlotId == sal_uInt16(SID_ATTR_CHAR_CTL_LANGUAGE) )
+                    else if( nSlotId == SID_ATTR_CHAR_CTL_LANGUAGE )
                         pDoc->SetLanguage( eLanguage, EE_CHAR_LANGUAGE_CTL );
                     else
                         pDoc->SetLanguage( eLanguage, EE_CHAR_LANGUAGE );
@@ -223,7 +223,7 @@ void SdModule::Execute(SfxRequest& rReq)
             }
             else
             {
-                std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(nullptr,
+                std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(rReq.GetFrameWeld(),
                                                                VclMessageType::Warning, VclButtonsType::Ok, SdResId(STR_CANT_PERFORM_IN_LIVEMODE)));
 
                 xErrorBox->run();
@@ -322,17 +322,17 @@ void SdModule::GetState(SfxItemSet& rItemSet)
     // state of SID_OPENDOC is determined by the base class
     if (rItemSet.GetItemState(SID_OPENDOC) != SfxItemState::UNKNOWN)
     {
-        const SfxPoolItem* pItem = SfxGetpApp()->GetSlotState(SID_OPENDOC, SfxGetpApp()->GetInterface());
-        if (pItem)
-            rItemSet.Put(*pItem);
+        const SfxPoolItemHolder aItem(SfxGetpApp()->GetSlotState(SID_OPENDOC, SfxGetpApp()->GetInterface()));
+        if (nullptr != aItem.getItem())
+            rItemSet.Put(*aItem.getItem());
     }
 
     // state of SID_OPENHYPERLINK is determined by the base class
     if (rItemSet.GetItemState(SID_OPENHYPERLINK) != SfxItemState::UNKNOWN)
     {
-        const SfxPoolItem* pItem = SfxGetpApp()->GetSlotState(SID_OPENHYPERLINK, SfxGetpApp()->GetInterface());
-        if (pItem)
-            rItemSet.Put(*pItem);
+        const SfxPoolItemHolder aItem(SfxGetpApp()->GetSlotState(SID_OPENHYPERLINK, SfxGetpApp()->GetInterface()));
+        if (nullptr != aItem.getItem())
+            rItemSet.Put(*aItem.getItem());
     }
 
     if( SfxItemState::DEFAULT == rItemSet.GetItemState( SID_AUTOSPELL_CHECK ) )
@@ -428,7 +428,7 @@ SfxFrame* SdModule::CreateFromTemplate(const OUString& rTemplatePath, const Refe
     std::unique_ptr<SfxItemSet> pSet(new SfxAllItemSet( SfxGetpApp()->GetPool() ));
     pSet->Put( SfxBoolItem( SID_TEMPLATE, true ) );
 
-    ErrCode lErr = SfxGetpApp()->LoadTemplate( xDocShell, rTemplatePath, std::move(pSet) );
+    ErrCodeMsg lErr = SfxGetpApp()->LoadTemplate( xDocShell, rTemplatePath, std::move(pSet) );
 
     SfxObjectShell* pDocShell = xDocShell;
 
@@ -438,8 +438,8 @@ SfxFrame* SdModule::CreateFromTemplate(const OUString& rTemplatePath, const Refe
     }
     else if( pDocShell )
     {
-        if (pDocShell->GetMedium() && pDocShell->GetMedium()->GetItemSet())
-            pDocShell->GetMedium()->GetItemSet()->Put(SfxBoolItem(SID_REPLACEABLE, bReplaceable));
+        if (pDocShell->GetMedium())
+            pDocShell->GetMedium()->GetItemSet().Put(SfxBoolItem(SID_REPLACEABLE, bReplaceable));
         SfxViewFrame* pViewFrame = SfxViewFrame::LoadDocumentIntoFrame( *pDocShell, i_rFrame );
         OSL_ENSURE( pViewFrame, "SdModule::CreateFromTemplate: no view frame - was the document really loaded?" );
         pFrame = pViewFrame ? &pViewFrame->GetFrame() : nullptr;
@@ -527,8 +527,8 @@ SfxFrame* SdModule::CreateEmptyDocument( const Reference< XFrame >& i_rFrame )
         pDoc->CreateFirstPages();
         pDoc->StopWorkStartupDelay();
     }
-    if (pNewDocSh->GetMedium() && pNewDocSh->GetMedium()->GetItemSet())
-        pNewDocSh->GetMedium()->GetItemSet()->Put(SfxBoolItem(SID_REPLACEABLE, true));
+    if (pNewDocSh->GetMedium())
+        pNewDocSh->GetMedium()->GetItemSet().Put(SfxBoolItem(SID_REPLACEABLE, true));
 
     SfxViewFrame* pViewFrame = SfxViewFrame::LoadDocumentIntoFrame( *pNewDocSh, i_rFrame );
     OSL_ENSURE( pViewFrame, "SdModule::CreateEmptyDocument: no view frame - was the document really loaded?" );

@@ -22,6 +22,9 @@ Sub verify_testLeft()
     TestUtil.AssertEqual(Left("sometext", 48), "sometext", "Left(""sometext"", 48)")
     TestUtil.AssertEqual(Left("", 4),          "",         "Left("""", 4)")
 
+    ' tdf#141474 keyword names need to match that of VBA
+    TestUtil.AssertEqual(Left(Length:=4, String:="sometext"), "some", "Left(Length:=4, String:=""sometext"")")
+
     Exit Sub
 errorHandler:
     TestUtil.ReportErrorHandler("verify_testLeft", Err, Error$, Erl)

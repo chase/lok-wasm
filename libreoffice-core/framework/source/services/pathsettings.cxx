@@ -54,8 +54,8 @@
 
 using namespace framework;
 
-constexpr OUStringLiteral CFGPROP_USERPATHS = u"UserPaths";
-constexpr OUStringLiteral CFGPROP_WRITEPATH = u"WritePath";
+constexpr OUString CFGPROP_USERPATHS = u"UserPaths"_ustr;
+constexpr OUString CFGPROP_WRITEPATH = u"WritePath"_ustr;
 
 /*
     0 : old style              "Template"              string using ";" as separator
@@ -64,9 +64,9 @@ constexpr OUStringLiteral CFGPROP_WRITEPATH = u"WritePath";
     3 : write path             "Template_write"        string
  */
 
-constexpr OUStringLiteral POSTFIX_INTERNAL_PATHS = u"_internal";
-constexpr OUStringLiteral POSTFIX_USER_PATHS = u"_user";
-constexpr OUStringLiteral POSTFIX_WRITE_PATH = u"_writable";
+constexpr OUString POSTFIX_INTERNAL_PATHS = u"_internal"_ustr;
+constexpr OUString POSTFIX_USER_PATHS = u"_user"_ustr;
+constexpr OUString POSTFIX_WRITE_PATH = u"_writable"_ustr;
 
 namespace {
 
@@ -997,11 +997,10 @@ void PathSettings::impl_purgeKnownPaths(PathSettings::PathInfo& rPath,
     }
 
     // Erase items not in lList from the user path list.
-    rPath.lUserPaths.erase(std::remove_if(rPath.lUserPaths.begin(), rPath.lUserPaths.end(),
+    std::erase_if(rPath.lUserPaths,
         [&lList](const OUString& rItem) {
             return std::find(lList.begin(), lList.end(), rItem) == lList.end();
-        }),
-        rPath.lUserPaths.end());
+        });
 
     // Erase items in the user path list from lList.
     for (auto const& userPath : rPath.lUserPaths)

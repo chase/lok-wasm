@@ -55,7 +55,6 @@
 #include <cfgitem.hxx>
 
 using namespace ::cppu;
-using namespace ::std;
 using namespace ::comphelper;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -158,6 +157,7 @@ namespace {
 enum SmModelPropertyHandles
 {
     HANDLE_FORMULA,
+    HANDLE_FONT_NAME_MATH,
     HANDLE_FONT_NAME_VARIABLES,
     HANDLE_FONT_NAME_FUNCTIONS,
     HANDLE_FONT_NAME_NUMBERS,
@@ -171,6 +171,8 @@ enum SmModelPropertyHandles
     HANDLE_CUSTOM_FONT_SANS_WEIGHT,
     HANDLE_CUSTOM_FONT_SERIF_POSTURE,
     HANDLE_CUSTOM_FONT_SERIF_WEIGHT,
+    HANDLE_FONT_MATH_POSTURE,
+    HANDLE_FONT_MATH_WEIGHT,
     HANDLE_FONT_VARIABLES_POSTURE,
     HANDLE_FONT_VARIABLES_WEIGHT,
     HANDLE_FONT_FUNCTIONS_POSTURE,
@@ -186,6 +188,7 @@ enum SmModelPropertyHandles
     HANDLE_RELATIVE_FONT_HEIGHT_OPERATORS,
     HANDLE_RELATIVE_FONT_HEIGHT_LIMITS,
     HANDLE_IS_TEXT_MODE,
+    HANDLE_IS_RIGHT_TO_LEFT,
     HANDLE_GREEK_CHAR_STYLE,
     HANDLE_ALIGNMENT,
     HANDLE_RELATIVE_SPACING,
@@ -245,7 +248,10 @@ static const rtl::Reference<PropertySetInfo> & lcl_createModelPropertyInfo ()
         { OUString("FontFixedIsItalic")                , HANDLE_CUSTOM_FONT_FIXED_POSTURE          ,  cppu::UnoType<bool>::get(),                                                 PROPERTY_NONE,  FNT_FIXED             },
         { OUString("FontFunctionsIsBold")              , HANDLE_FONT_FUNCTIONS_WEIGHT              ,  cppu::UnoType<bool>::get(),                                                 PROPERTY_NONE,  FNT_FUNCTION          },
         { OUString("FontFunctionsIsItalic")            , HANDLE_FONT_FUNCTIONS_POSTURE             ,  cppu::UnoType<bool>::get(),                                                 PROPERTY_NONE,  FNT_FUNCTION          },
+        { OUString("FontMathIsBold")                   , HANDLE_FONT_MATH_WEIGHT                   ,  cppu::UnoType<bool>::get(),                                                 PROPERTY_NONE,  FNT_MATH              },
+        { OUString("FontMathIsItalic")                 , HANDLE_FONT_MATH_POSTURE                  ,  cppu::UnoType<bool>::get(),                                                 PROPERTY_NONE,  FNT_MATH              },
         { OUString("FontNameFunctions")                , HANDLE_FONT_NAME_FUNCTIONS                ,  ::cppu::UnoType<OUString>::get(),                                      PROPERTY_NONE,  FNT_FUNCTION          },
+        { OUString("FontNameMath")                     , HANDLE_FONT_NAME_MATH                     ,  ::cppu::UnoType<OUString>::get(),                                      PROPERTY_NONE,  FNT_MATH              },
         { OUString("FontNameNumbers")                  , HANDLE_FONT_NAME_NUMBERS                  ,  ::cppu::UnoType<OUString>::get(),                                      PROPERTY_NONE,  FNT_NUMBER            },
         { OUString("FontNameText")                     , HANDLE_FONT_NAME_TEXT                     ,  ::cppu::UnoType<OUString>::get(),                                      PROPERTY_NONE,  FNT_TEXT              },
         { OUString("FontNameVariables")                , HANDLE_FONT_NAME_VARIABLES                ,  ::cppu::UnoType<OUString>::get(),                                      PROPERTY_NONE,  FNT_VARIABLE          },
@@ -262,6 +268,7 @@ static const rtl::Reference<PropertySetInfo> & lcl_createModelPropertyInfo ()
         { OUString("Formula")                          , HANDLE_FORMULA                            ,  ::cppu::UnoType<OUString>::get(),                                      PROPERTY_NONE,  0                     },
         { OUString("IsScaleAllBrackets")               , HANDLE_IS_SCALE_ALL_BRACKETS              ,  cppu::UnoType<bool>::get(),                                                 PROPERTY_NONE,  0                     },
         { OUString("IsTextMode")                       , HANDLE_IS_TEXT_MODE                       ,  cppu::UnoType<bool>::get(),                                                 PROPERTY_NONE,  0                     },
+        { OUString("IsRightToLeft")                    , HANDLE_IS_RIGHT_TO_LEFT                   ,  cppu::UnoType<bool>::get(),                                                 PROPERTY_NONE,  0                     },
         { OUString("GreekCharStyle")                   , HANDLE_GREEK_CHAR_STYLE                   ,  ::cppu::UnoType<sal_Int16>::get(),                                     PROPERTY_NONE,  0                     },
         { OUString("LeftMargin")                       , HANDLE_LEFT_MARGIN                        ,  ::cppu::UnoType<sal_Int16>::get(),                                     PROPERTY_NONE,  DIS_LEFTSPACE         },
         { OUString("PrinterName")                      , HANDLE_PRINTER_NAME                       ,  ::cppu::UnoType<OUString>::get(),                                      PROPERTY_NONE,  0                     },
@@ -386,8 +393,8 @@ sal_Bool SmModel::supportsService(const OUString& rServiceName)
 
 uno::Sequence< OUString > SmModel::getSupportedServiceNames()
 {
-    static constexpr OUStringLiteral service1 = u"com.sun.star.document.OfficeDocument";
-    static constexpr OUStringLiteral service2 = u"com.sun.star.formula.FormulaProperties";
+    static constexpr OUString service1 = u"com.sun.star.document.OfficeDocument"_ustr;
+    static constexpr OUString service2 = u"com.sun.star.formula.FormulaProperties"_ustr;
     return uno::Sequence<OUString>{ service1, service2 };
 }
 
@@ -416,6 +423,7 @@ void SmModel::_setPropertyValues(const PropertyMapEntry** ppEntries, const Any* 
                 pDocSh->SetText(aText);
             }
             break;
+            case HANDLE_FONT_NAME_MATH                     :
             case HANDLE_FONT_NAME_VARIABLES                :
             case HANDLE_FONT_NAME_FUNCTIONS                :
             case HANDLE_FONT_NAME_NUMBERS                  :
@@ -428,48 +436,37 @@ void SmModel::_setPropertyValues(const PropertyMapEntry** ppEntries, const Any* 
                 *pValues >>= sFontName;
                 if(sFontName.isEmpty())
                     throw IllegalArgumentException();
-
-                if(aFormat.GetFont((*ppEntries)->mnMemberId).GetFamilyName() != sFontName)
-                {
-                    const SmFace rOld = aFormat.GetFont((*ppEntries)->mnMemberId);
-
-                    SmFace aSet( sFontName, rOld.GetFontSize() );
-                    aSet.SetBorderWidth( rOld.GetBorderWidth() );
-                    aSet.SetAlignment( ALIGN_BASELINE );
-                    aFormat.SetFont( (*ppEntries)->mnMemberId, aSet );
-                }
+                maFonts[(*ppEntries)->mnMemberId].SetFamilyName(sFontName);
             }
             break;
             case HANDLE_CUSTOM_FONT_FIXED_POSTURE:
             case HANDLE_CUSTOM_FONT_SANS_POSTURE :
             case HANDLE_CUSTOM_FONT_SERIF_POSTURE:
+            case HANDLE_FONT_MATH_POSTURE        :
             case HANDLE_FONT_VARIABLES_POSTURE   :
             case HANDLE_FONT_FUNCTIONS_POSTURE   :
             case HANDLE_FONT_NUMBERS_POSTURE     :
             case HANDLE_FONT_TEXT_POSTURE        :
             {
-                auto bVal = o3tl::tryAccess<bool>(*pValues);
-                if(!bVal)
+                std::optional<const bool> bVal = o3tl::tryAccess<bool>(*pValues);
+                if(!bVal.has_value())
                     throw IllegalArgumentException();
-                vcl::Font aNewFont(aFormat.GetFont((*ppEntries)->mnMemberId));
-                aNewFont.SetItalic(*bVal ? ITALIC_NORMAL : ITALIC_NONE);
-                aFormat.SetFont((*ppEntries)->mnMemberId, aNewFont);
+                maFonts[(*ppEntries)->mnMemberId].SetItalic(*bVal ? ITALIC_NORMAL : ITALIC_NONE);
             }
             break;
             case HANDLE_CUSTOM_FONT_FIXED_WEIGHT :
             case HANDLE_CUSTOM_FONT_SANS_WEIGHT  :
             case HANDLE_CUSTOM_FONT_SERIF_WEIGHT :
+            case HANDLE_FONT_MATH_WEIGHT         :
             case HANDLE_FONT_VARIABLES_WEIGHT    :
             case HANDLE_FONT_FUNCTIONS_WEIGHT    :
             case HANDLE_FONT_NUMBERS_WEIGHT      :
             case HANDLE_FONT_TEXT_WEIGHT         :
             {
-                auto bVal = o3tl::tryAccess<bool>(*pValues);
-                if(!bVal)
+                std::optional<const bool> bVal = o3tl::tryAccess<bool>(*pValues);
+                if(!bVal.has_value())
                     throw IllegalArgumentException();
-                vcl::Font aNewFont(aFormat.GetFont((*ppEntries)->mnMemberId));
-                aNewFont.SetWeight(*bVal ? WEIGHT_BOLD : WEIGHT_NORMAL);
-                aFormat.SetFont((*ppEntries)->mnMemberId, aNewFont);
+                maFonts[(*ppEntries)->mnMemberId].SetWeight(*bVal ? WEIGHT_BOLD : WEIGHT_NORMAL);
             }
             break;
             case HANDLE_BASE_FONT_HEIGHT                   :
@@ -485,7 +482,7 @@ void SmModel::_setPropertyValues(const PropertyMapEntry** ppEntries, const Any* 
                 // apply base size to fonts
                 const Size aTmp( aFormat.GetBaseSize() );
                 for (sal_uInt16  i = FNT_BEGIN;  i <= FNT_END;  i++)
-                    aFormat.SetFontSize(i, aTmp);
+                    maFonts[i].SetSize(aTmp);
             }
             break;
             case HANDLE_RELATIVE_FONT_HEIGHT_TEXT          :
@@ -506,6 +503,10 @@ void SmModel::_setPropertyValues(const PropertyMapEntry** ppEntries, const Any* 
             {
                 aFormat.SetTextmode(*o3tl::doAccess<bool>(*pValues));
             }
+            break;
+
+            case HANDLE_IS_RIGHT_TO_LEFT                   :
+                aFormat.SetRightToLeft(*o3tl::doAccess<bool>(*pValues));
             break;
 
             case HANDLE_GREEK_CHAR_STYLE                    :
@@ -605,7 +606,8 @@ void SmModel::_setPropertyValues(const PropertyMapEntry** ppEntries, const Any* 
                     SID_PRINTZOOM,       SID_PRINTZOOM,
                     SID_NO_RIGHT_SPACES, SID_NO_RIGHT_SPACES,
                     SID_SAVE_ONLY_USED_SYMBOLS, SID_SAVE_ONLY_USED_SYMBOLS,
-                    SID_AUTO_CLOSE_BRACKETS,    SID_SMEDITWINDOWZOOM>> ( SmDocShell::GetPool() );
+                    SID_AUTO_CLOSE_BRACKETS,    SID_SMEDITWINDOWZOOM,
+                    SID_INLINE_EDIT_ENABLE, SID_INLINE_EDIT_ENABLE>> ( SmDocShell::GetPool() );
                 SmModule *pp = SM_MOD();
                 pp->GetConfig()->ConfigToItemSet(*pItemSet);
                 VclPtr<SfxPrinter> pPrinter = SfxPrinter::Create ( aStream, std::move(pItemSet) );
@@ -661,8 +663,47 @@ void SmModel::_setPropertyValues(const PropertyMapEntry** ppEntries, const Any* 
             }
             break;
             case HANDLE_STARMATH_VERSION:
-                pDocSh->SetSmSyntaxVersion(pValues->get<sal_uInt16>());
+                pDocSh->SetSmSyntaxVersion(pValues->get<sal_Int16>());
                 break;
+        }
+    }
+
+    // tdf#143213
+    // Collect all font settings and apply them at the end, since the font name change can be seen
+    // after italic or bold settings and would then override them.
+    for (sal_uInt16 nFontDesc = FNT_BEGIN; nFontDesc <= FNT_END; ++nFontDesc)
+    {
+        const SmFace& rFont = maFonts[nFontDesc];
+        if (rFont.GetFamilyName().isEmpty())
+            continue;
+
+        if (aFormat.GetFont(nFontDesc).GetFamilyName() != rFont.GetFamilyName())
+        {
+            const SmFace rOld = aFormat.GetFont(nFontDesc);
+
+            SmFace aSet(rFont.GetFamilyName(), rOld.GetFontSize());
+            aSet.SetBorderWidth(rOld.GetBorderWidth());
+            aSet.SetAlignment(ALIGN_BASELINE);
+            aFormat.SetFont(nFontDesc, aSet);
+        }
+
+        if (aFormat.GetFont(nFontDesc).GetItalic() != rFont.GetItalic())
+        {
+            vcl::Font aNewFont(aFormat.GetFont(nFontDesc));
+            aNewFont.SetItalic(rFont.GetItalic());
+            aFormat.SetFont(nFontDesc, aNewFont);
+        }
+
+        if (aFormat.GetFont(nFontDesc).GetWeight() != rFont.GetWeight())
+        {
+            vcl::Font aNewFont(aFormat.GetFont(nFontDesc));
+            aNewFont.SetWeight(rFont.GetWeight());
+            aFormat.SetFont(nFontDesc, aNewFont);
+        }
+
+        if (aFormat.GetFont(nFontDesc).GetFontSize() != rFont.GetFontSize())
+        {
+            aFormat.SetFontSize(nFontDesc, rFont.GetFontSize());
         }
     }
 
@@ -689,6 +730,7 @@ void SmModel::_getPropertyValues( const PropertyMapEntry **ppEntries, Any *pValu
             case HANDLE_FORMULA:
                 *pValue <<= pDocSh->GetText();
             break;
+            case HANDLE_FONT_NAME_MATH                     :
             case HANDLE_FONT_NAME_VARIABLES                :
             case HANDLE_FONT_NAME_FUNCTIONS                :
             case HANDLE_FONT_NAME_NUMBERS                  :
@@ -704,6 +746,7 @@ void SmModel::_getPropertyValues( const PropertyMapEntry **ppEntries, Any *pValu
             case HANDLE_CUSTOM_FONT_FIXED_POSTURE:
             case HANDLE_CUSTOM_FONT_SANS_POSTURE :
             case HANDLE_CUSTOM_FONT_SERIF_POSTURE:
+            case HANDLE_FONT_MATH_POSTURE        :
             case HANDLE_FONT_VARIABLES_POSTURE   :
             case HANDLE_FONT_FUNCTIONS_POSTURE   :
             case HANDLE_FONT_NUMBERS_POSTURE     :
@@ -716,6 +759,7 @@ void SmModel::_getPropertyValues( const PropertyMapEntry **ppEntries, Any *pValu
             case HANDLE_CUSTOM_FONT_FIXED_WEIGHT :
             case HANDLE_CUSTOM_FONT_SANS_WEIGHT  :
             case HANDLE_CUSTOM_FONT_SERIF_WEIGHT :
+            case HANDLE_FONT_MATH_WEIGHT         :
             case HANDLE_FONT_VARIABLES_WEIGHT    :
             case HANDLE_FONT_FUNCTIONS_WEIGHT    :
             case HANDLE_FONT_NUMBERS_WEIGHT      :
@@ -742,6 +786,10 @@ void SmModel::_getPropertyValues( const PropertyMapEntry **ppEntries, Any *pValu
 
             case HANDLE_IS_TEXT_MODE                       :
                 *pValue <<= aFormat.IsTextmode();
+            break;
+
+            case HANDLE_IS_RIGHT_TO_LEFT                   :
+                *pValue <<= aFormat.IsRightToLeft();
             break;
 
             case HANDLE_GREEK_CHAR_STYLE                    :
@@ -812,14 +860,14 @@ void SmModel::_getPropertyValues( const PropertyMapEntry **ppEntries, Any *pValu
                 // this is get
                 SmModule *pp = SM_MOD();
                 const SmSymbolManager &rManager = pp->GetSymbolManager();
-                vector < const SmSym * > aVector;
+                std::vector < const SmSym * > aVector;
 
                 const SymbolPtrVec_t aSymbols( rManager.GetSymbols() );
                 for (const SmSym* pSymbol : aSymbols)
                 {
                     if (pSymbol && !pSymbol->IsPredefined() &&
                         (!bUsedSymbolsOnly ||
-                         rUsedSymbols.find( pSymbol->GetName() ) != rUsedSymbols.end()))
+                         rUsedSymbols.find( pSymbol->GetUiName() ) != rUsedSymbols.end()))
                         aVector.push_back ( pSymbol );
                 }
                 Sequence < SymbolDescriptor > aSequence ( aVector.size() );
@@ -827,7 +875,7 @@ void SmModel::_getPropertyValues( const PropertyMapEntry **ppEntries, Any *pValu
 
                 for (const SmSym* pSymbol : aVector)
                 {
-                    pDescriptor->sName = pSymbol->GetName();
+                    pDescriptor->sName = pSymbol->GetUiName();
                     pDescriptor->sExportName = pSymbol->GetExportName();
                     pDescriptor->sSymbolSet = pSymbol->GetSymbolSetName();
                     pDescriptor->nCharacter = static_cast < sal_Int32 > (pSymbol->GetCharacter());
@@ -868,7 +916,9 @@ void SmModel::_getPropertyValues( const PropertyMapEntry **ppEntries, Any *pValu
                 {
                     pDocSh->ArrangeFormula();
 
-                    *pValue <<= static_cast<sal_Int32>( pDocSh->GetFormulaTree()->GetFormulaBaseline() );
+                    *pValue <<= static_cast<sal_Int32>(
+                        o3tl::convert(pDocSh->GetFormulaTree()->GetFormulaBaseline(),
+                                      SmO3tlLengthUnit(), o3tl::Length::mm100));
                 }
                 break;
             }
@@ -910,13 +960,18 @@ uno::Sequence< beans::PropertyValue > SAL_CALL SmModel::getRenderer(
         throw RuntimeException();
 
     SmPrinterAccess aPrinterAccess( *pDocSh );
-    Printer *pPrinter = aPrinterAccess.GetPrinter();
-    Size    aPrtPaperSize ( pPrinter->GetPaperSize() );
+    Size aPrtPaperSize;
+    if (Printer *pPrinter = aPrinterAccess.GetPrinter())
+    {
+        // tdf#157965: UNO methods are expected to return sizes in mm/100
+        pPrinter->SetMapMode(MapMode(MapUnit::Map100thMM)); // reset in SmPrinterAccess dtor
+        aPrtPaperSize = pPrinter->GetPaperSize();
+    }
 
     // if paper size is 0 (usually if no 'real' printer is found),
     // guess the paper size
     if (aPrtPaperSize.IsEmpty())
-        aPrtPaperSize = SvxPaperInfo::GetDefaultPaperSize(SmMapUnit());
+        aPrtPaperSize = SvxPaperInfo::GetDefaultPaperSize(MapUnit::Map100thMM);
     awt::Size   aPageSize( aPrtPaperSize.Width(), aPrtPaperSize.Height() );
 
     uno::Sequence< beans::PropertyValue > aRenderer(1);
@@ -956,7 +1011,7 @@ void SAL_CALL SmModel::render(
     if (!xRenderDevice.is())
         return;
 
-    VCLXDevice*   pDevice = comphelper::getFromUnoTunnel<VCLXDevice>( xRenderDevice );
+    VCLXDevice*   pDevice = dynamic_cast<VCLXDevice*>( xRenderDevice.get() );
     VclPtr< OutputDevice> pOut = pDevice ? pDevice->GetOutputDevice()
                                          : VclPtr< OutputDevice >();
     if (!pOut)
@@ -969,23 +1024,17 @@ void SAL_CALL SmModel::render(
     if (xModel != pDocSh->GetModel())
         return;
 
-    //!! when called via API we may not have an active view
-    //!! thus we go and look for a view that can be used.
-    SfxViewShell* pViewSh = SfxViewShell::GetFirst( false /* search non-visible views as well*/, checkSfxViewShell<SmViewShell> );
-    while (pViewSh && pViewSh->GetObjectShell() != pDocSh)
-        pViewSh = SfxViewShell::GetNext( *pViewSh, false /* search non-visible views as well*/, checkSfxViewShell<SmViewShell> );
-    SmViewShell *pView = dynamic_cast< SmViewShell *>( pViewSh );
-    SAL_WARN_IF( !pView, "starmath", "SmModel::render : no SmViewShell found" );
-
-    if (!pView)
-        return;
-
     SmPrinterAccess aPrinterAccess( *pDocSh );
-    Printer *pPrinter = aPrinterAccess.GetPrinter();
 
-    Size    aPrtPaperSize ( pPrinter->GetPaperSize() );
-    Size    aOutputSize   ( pPrinter->GetOutputSize() );
-    Point   aPrtPageOffset( pPrinter->GetPageOffset() );
+    Size aPrtPaperSize;
+    Size aOutputSize;
+    Point aPrtPageOffset;
+    if (Printer *pPrinter = aPrinterAccess.GetPrinter())
+    {
+        aPrtPaperSize = pPrinter->GetPaperSize();
+        aOutputSize = pPrinter->GetOutputSize();
+        aPrtPageOffset = pPrinter->GetPageOffset();
+    }
 
     // no real printer ??
     if (aPrtPaperSize.IsEmpty())
@@ -1018,7 +1067,7 @@ void SAL_CALL SmModel::render(
         m_pPrintUIOptions.reset(new SmPrintUIOptions);
     m_pPrintUIOptions->processProperties( rxOptions );
 
-    pView->Impl_Print( *pOut, *m_pPrintUIOptions, OutputRect );
+    pDocSh->Impl_Print(*pOut, *m_pPrintUIOptions, OutputRect);
 
     // release SmPrintUIOptions when everything is done.
     // That way, when SmPrintUIOptions is needed again it will read the latest configuration settings in its c-tor.
@@ -1056,7 +1105,7 @@ void SmModel::readFormulaOoxml( oox::formulaimport::XmlStream& stream )
 
 Size SmModel::getFormulaSize() const
 {
-    return static_cast< SmDocShell* >( GetObjectShell())->GetSize();
+    return o3tl::convert(static_cast< SmDocShell* >( GetObjectShell())->GetSize(), SmO3tlLengthUnit(), o3tl::Length::mm100);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

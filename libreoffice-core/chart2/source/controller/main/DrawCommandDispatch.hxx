@@ -45,7 +45,7 @@ public:
 
 protected:
     // WeakComponentImplHelperBase
-    virtual void SAL_CALL disposing() override;
+    virtual void disposing( std::unique_lock<std::mutex>& rGuard ) override;
 
     // XEventListener
     virtual void SAL_CALL disposing( const css::lang::EventObject& Source ) override;
@@ -61,9 +61,9 @@ protected:
 
 private:
     void setInsertObj(SdrObjKind eObj);
-    rtl::Reference<SdrObject> createDefaultObject( const sal_uInt16 nID );
+    rtl::Reference<SdrObject> createDefaultObject( const ChartCommandID nID );
 
-    bool parseCommandURL( const OUString& rCommandURL, sal_uInt16* pnFeatureId, OUString* pBaseCommand, OUString* pCustomShapeType );
+    bool parseCommandURL( const OUString& rCommandURL, ChartCommandID* pnFeatureId, OUString* pBaseCommand, OUString* pCustomShapeType );
 
     ChartController* m_pChartController;
     OUString m_aCustomShapeType;

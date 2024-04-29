@@ -26,11 +26,11 @@
 #include <com/sun/star/chart/XComplexDescriptionAccess.hpp>
 #include <com/sun/star/chart/ChartDataRowSource.hpp>
 #include <com/sun/star/reflection/ProxyFactory.hpp>
+#include <comphelper/attributelist.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <utility>
-#include <xmloff/attrlist.hxx>
 #include <xmloff/xmltoken.hxx>
 #include <xmloff/xmlement.hxx>
 #include <xmloff/xmluconv.hxx>
@@ -271,7 +271,7 @@ void SAL_CALL ImportDocumentHandler::startElement(const OUString & _sName, const
             }
         }
 
-        rtl::Reference<SvXMLAttributeList> pList = new SvXMLAttributeList();
+        rtl::Reference<comphelper::AttributeList> pList = new comphelper::AttributeList();
         xNewAttribs = pList;
         pList->AppendAttributeList(_xAttrList);
         pList->AddAttribute("table:cell-range-address","local-table.$A$1:.$Z$65536");
@@ -330,7 +330,7 @@ void SAL_CALL ImportDocumentHandler::setDocumentLocator(const uno::Reference< xm
 }
 void SAL_CALL ImportDocumentHandler::initialize( const uno::Sequence< uno::Any >& _aArguments )
 {
-    ::osl::MutexGuard aGuard(m_aMutex);
+    std::unique_lock aGuard(m_aMutex);
     comphelper::SequenceAsHashMap aArgs(_aArguments);
     m_xDocumentHandler = aArgs.getUnpackedValueOrDefault("DocumentHandler",m_xDocumentHandler);
     m_xModel = aArgs.getUnpackedValueOrDefault("Model",m_xModel);

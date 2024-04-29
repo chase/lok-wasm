@@ -26,6 +26,7 @@
 
 #include <rtl/ustrbuf.hxx>
 #include <sal/log.hxx>
+#include <vcl/accessibility/AccessibleTextAttributeHelper.hxx>
 #include <vcl/svapp.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 
@@ -94,7 +95,6 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_addSelection(long startOffse
 
     try {
 
-    // #CHECK XInterface#
     if(pUNOInterface == nullptr)
         return E_FAIL;
 
@@ -109,7 +109,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_addSelection(long startOffse
     }
     else
     {
-        GetXInterface()->setSelection(startOffset, endOffset);
+        pRXText->setSelection(startOffset, endOffset);
         return S_OK;
     }
 
@@ -132,107 +132,23 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_attributes(long offset, long
 
     if (startOffset == nullptr || endOffset == nullptr || textAttributes == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(!pRXText.is())
     {
         return E_FAIL;
     }
 
-    if( offset < 0 || offset > GetXInterface()->getCharacterCount() )
+    if (offset < 0 || offset > pRXText->getCharacterCount() )
         return E_FAIL;
 
-    OUStringBuffer strAttrs("Version:1;");
 
-    Sequence< css::beans::PropertyValue > pValues = GetXInterface()->getCharacterAttributes(offset, Sequence< OUString >());
-    int nCount = pValues.getLength();
+    const OUString sAttrs = AccessibleTextAttributeHelper::GetIAccessible2TextAttributes(pRXText,
+                                                                                         IA2AttributeType::TextAttributes,
+                                                                                         offset, *startOffset, *endOffset);
 
-    sal_Int16 numberingLevel = 0;
-    OUString numberingPrefix;
-    Any anyNumRule;
-    bool bHaveNumberingPrefixAttr = false;
-    bool bHaveNumberingLevel = false;
-    bool bHaveNumberingRules = false;
-    for(int i =0; i<nCount; i++)
-    {
-
-        const css::beans::PropertyValue &pValue = pValues[i];
-        if(pValue.Name == "NumberingLevel")
-        {
-            if (pValue.Value != Any())
-                pValue.Value >>= numberingLevel;
-            else
-                numberingLevel = -1;
-            bHaveNumberingLevel = true;
-            continue;
-        }
-        if(pValue.Name == "NumberingPrefix")
-        {
-            pValue.Value >>=numberingPrefix;
-            bHaveNumberingPrefixAttr = true;
-            continue;
-        }
-        if(pValue.Name == "NumberingRules")
-        {
-            bHaveNumberingRules = true;
-            anyNumRule = pValue.Value;
-            continue;
-        }
-        if (bHaveNumberingLevel && bHaveNumberingRules && bHaveNumberingPrefixAttr)
-        {
-            strAttrs.append(';');
-            numberingPrefix = numberingPrefix.replaceAll(u"\\", u"\\\\")
-                                  .replaceAll(u";", u"\\;")
-                                  .replaceAll(u"=", u"\\=")
-                                  .replaceAll(u",", u"\\,")
-                                  .replaceAll(u":", u"\\:");
-
-            strAttrs.append(CMAccessible::get_String4Numbering(anyNumRule,numberingLevel,numberingPrefix));
-            bHaveNumberingLevel = false;
-            bHaveNumberingRules = false;
-        }
-        if( (bHaveNumberingPrefixAttr && i > 1 ) ||
-            (!bHaveNumberingPrefixAttr && i > 0 ) ) //element 0 is NumberingPrefix, not write alone
-        {
-            strAttrs.append(';');
-        }
-        strAttrs.append(pValue.Name);
-        strAttrs.append(':');
-
-        if (pValue.Name == "CharBackColor" ||
-                pValue.Name == "CharColor" ||
-                pValue.Name == "CharUnderlineColor" )
-        {
-            unsigned long nColor;
-            pValue.Value >>= nColor;
-            strAttrs.append('#');
-            OUString const hex = OUString::number(nColor, 16).toAsciiUpperCase();
-            for (sal_Int32 j = hex.getLength(); j < 8; ++j) {
-                strAttrs.append('0');
-            }
-            strAttrs.append(hex);
-        }
-        else
-        {
-            strAttrs.append(CMAccessible::get_StringFromAny(pValue.Value));
-        }
-    }
-    strAttrs.append(';');
-    // #CHECK#
     if(*textAttributes)
         SysFreeString(*textAttributes);
-    *textAttributes = SysAllocString(o3tl::toW(strAttrs.makeStringAndClear().getStr()));
-
-    if( offset < GetXInterface()->getCharacterCount() )
-    {
-        TextSegment textSeg = GetXInterface()->getTextAtIndex(offset, AccessibleTextType::ATTRIBUTE_RUN);
-        *startOffset = textSeg.SegmentStart;
-        *endOffset = textSeg.SegmentEnd;
-    }
-    else
-    {
-        *startOffset = offset;
-        *endOffset = offset;
-    }
+    *textAttributes = SysAllocString(o3tl::toW(sAttrs.getStr()));
 
     return S_OK;
 
@@ -252,14 +168,14 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_caretOffset(long * offset)
 
     if (offset == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(!pRXText.is())
     {
         *offset = 0;
         return S_OK;
     }
 
-    *offset = GetXInterface()->getCaretPosition();
+    *offset = pRXText->getCaretPosition();
     return S_OK;
 
     } catch(...) { return E_FAIL; }
@@ -278,14 +194,14 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_characterCount(long * nChara
 
     if (nCharacters == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(!pRXText.is())
     {
         *nCharacters = 0;
         return S_OK;
     }
 
-    *nCharacters = GetXInterface()->getCharacterCount();
+    *nCharacters = pRXText->getCharacterCount();
     return S_OK;
 
     } catch(...) { return E_FAIL; }
@@ -308,15 +224,15 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_characterExtents(long offset
 
     if (x == nullptr || height == nullptr || y == nullptr || width == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(!pRXText.is())
         return E_FAIL;
 
-    if(offset < 0 || offset > GetXInterface()->getCharacterCount() )
+    if (offset < 0 || offset > pRXText->getCharacterCount())
         return E_FAIL;
 
     css::awt::Rectangle rectangle;
-    rectangle = GetXInterface()->getCharacterBounds(offset);
+    rectangle = pRXText->getCharacterBounds(offset);
 
     //IA2Point aPoint;
     css::awt::Point aPoint;
@@ -348,10 +264,10 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_characterExtents(long offset
     *x = rectangle.X;
     *y = rectangle.Y;
 
-    // GetXInterface()->getCharacterBounds() have different implement in different acc component
+    // pRXText->getCharacterBounds() have different implement in different acc component
     // But we need return the width/height == 1 for every component when offset == text length.
-    // So we ignore the return result of GetXInterface()->getCharacterBounds() when offset == text length.
-    if( offset == GetXInterface()->getCharacterCount() )
+    // So we ignore the return result of pRXText->getCharacterBounds() when offset == text length.
+    if (offset == pRXText->getCharacterCount())
     {
         *width = 1;
         *height = 1;
@@ -380,7 +296,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_nSelections(long * nSelectio
 
     if (nSelections == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(pUNOInterface == nullptr)
     {
         *nSelections = 0;
@@ -397,7 +313,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_nSelections(long * nSelectio
         return S_OK;
     }
 
-    long iLength = GetXInterface()->getSelectedText().getLength();
+    long iLength = pRXText->getSelectedText().getLength();
     if( iLength> 0)
     {
         *nSelections = 1;
@@ -418,7 +334,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_nSelections(long * nSelectio
    * @param offset Variant to accept offset.
    * @return Result.
 */
-COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_offsetAtPoint(long x, long y, IA2CoordinateType, long * offset)
+COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_offsetAtPoint(long x, long y, IA2CoordinateType coordType, long * offset)
 {
     SolarMutexGuard g;
 
@@ -426,14 +342,28 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_offsetAtPoint(long x, long y
 
     if (offset == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(!pRXText.is())
         return E_FAIL;
 
     css::awt::Point point;
     point.X = x;
     point.Y = y;
-    *offset = GetXInterface()->getIndexAtPoint(point);
+
+    if (coordType == IA2_COORDTYPE_SCREEN_RELATIVE)
+    {
+        // convert from screen to local coordinates
+        Reference<XAccessibleContext> xContext = pUNOInterface->getAccessibleContext();
+        Reference<XAccessibleComponent> xComponent(xContext, UNO_QUERY);
+        if (!xComponent.is())
+            return S_FALSE;
+
+        css::awt::Point aObjectPos = xComponent->getLocationOnScreen();
+        point.X -= aObjectPos.X;
+        point.Y -= aObjectPos.Y;
+    }
+
+    *offset = pRXText->getIndexAtPoint(point);
     return S_OK;
 
     } catch(...) { return E_FAIL; }
@@ -455,7 +385,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_selection(long selectionInde
 
     if (startOffset == nullptr || endOffset == nullptr )
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(pUNOInterface == nullptr )
         return E_FAIL;
 
@@ -475,10 +405,10 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_selection(long selectionInde
         *endOffset = pRExtension->getSeletedPositionEnd(selectionIndex);
         return S_OK;
     }
-    else if(GetXInterface()->getSelectionEnd() > -1)
+    else if (pRXText->getSelectionEnd() > -1)
     {
-        *startOffset = GetXInterface()->getSelectionStart();
-        *endOffset = GetXInterface()->getSelectionEnd();
+        *startOffset = pRXText->getSelectionStart();
+        *endOffset = pRXText->getSelectionEnd();
         return S_OK;
     }
 
@@ -504,7 +434,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_text(long startOffset, long 
 
     if (text == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(!pRXText.is())
         return E_FAIL;
 
@@ -519,12 +449,12 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_text(long startOffset, long 
         long nLen=0;
         if(SUCCEEDED(get_characterCount(&nLen)))
         {
-            ouStr = GetXInterface()->getTextRange( 0, nLen );
+            ouStr = pRXText->getTextRange(0, nLen);
         }
     }
     else
     {
-        ouStr = GetXInterface()->getTextRange( startOffset, endOffset );
+        ouStr = pRXText->getTextRange(startOffset, endOffset);
     }
 
     SysFreeString(*text);
@@ -549,10 +479,9 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_textBeforeOffset(long offset
 
     try {
 
-    // #CHECK#
     if (startOffset == nullptr || endOffset == nullptr || text == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(!pRXText.is())
         return E_FAIL;
 
@@ -569,7 +498,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_textBeforeOffset(long offset
     if (nUnoBoundaryType < 0)
         return E_FAIL;
 
-    TextSegment segment = GetXInterface()->getTextBeforeIndex(offset, nUnoBoundaryType);
+    TextSegment segment = pRXText->getTextBeforeIndex(offset, nUnoBoundaryType);
     OUString ouStr = segment.SegmentText;
     SysFreeString(*text);
     *text = SysAllocString(o3tl::toW(ouStr.getStr()));
@@ -598,7 +527,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_textAfterOffset(long offset,
 
     if (startOffset == nullptr || endOffset == nullptr || text == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(!pRXText.is())
         return E_FAIL;
 
@@ -615,7 +544,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_textAfterOffset(long offset,
     if (nUnoBoundaryType < 0)
         return E_FAIL;
 
-    TextSegment segment = GetXInterface()->getTextBehindIndex(offset, nUnoBoundaryType);
+    TextSegment segment = pRXText->getTextBehindIndex(offset, nUnoBoundaryType);
     OUString ouStr = segment.SegmentText;
     SysFreeString(*text);
     *text = SysAllocString(o3tl::toW(ouStr.getStr()));
@@ -644,7 +573,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_textAtOffset(long offset, IA
 
     if (startOffset == nullptr || text == nullptr ||endOffset == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(!pRXText.is())
         return E_FAIL;
 
@@ -661,7 +590,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_textAtOffset(long offset, IA
     if (nUnoBoundaryType < 0)
         return E_FAIL;
 
-    TextSegment segment = GetXInterface()->getTextAtIndex(offset, nUnoBoundaryType);
+    TextSegment segment = pRXText->getTextAtIndex(offset, nUnoBoundaryType);
     OUString ouStr = segment.SegmentText;
     SysFreeString(*text);
     *text = SysAllocString(o3tl::toW(ouStr.getStr()));
@@ -685,7 +614,6 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::removeSelection(long selectionIn
 
     try {
 
-    // #CHECK XInterface#
     if(pUNOInterface == nullptr)
     {
         return E_FAIL;
@@ -702,7 +630,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::removeSelection(long selectionIn
     }
     else
     {
-        GetXInterface()->setSelection(0, 0);
+        pRXText->setSelection(0, 0);
         return S_OK;
     }
 
@@ -721,11 +649,10 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::setCaretOffset(long offset)
 
     try {
 
-    // #CHECK XInterface#
     if(!pRXText.is())
         return E_FAIL;
 
-    GetXInterface()->setCaretPosition( offset);
+    pRXText->setCaretPosition(offset);
 
     return S_OK;
 
@@ -746,13 +673,12 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::setSelection(long, long startOff
 
     try {
 
-    // #CHECK XInterface#
     if(!pRXText.is())
     {
         return E_FAIL;
     }
 
-    GetXInterface()->setSelection( startOffset, endOffset );
+    pRXText->setSelection(startOffset, endOffset);
 
     return S_OK;
 
@@ -772,14 +698,14 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::get_nCharacters(long * nCharacte
 
     if (nCharacters == nullptr)
         return E_INVALIDARG;
-    // #CHECK XInterface#
+
     if(!pRXText.is())
     {
         *nCharacters = 0;
         return S_OK;
     }
 
-    *nCharacters = GetXInterface()->getCharacterCount();
+    *nCharacters = pRXText->getCharacterCount();
 
     return S_OK;
 
@@ -814,7 +740,6 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::scrollSubstringTo(long startInde
 
     try {
 
-    // #CHECK XInterface#
     if(!pRXText.is())
         return E_FAIL;
 
@@ -847,7 +772,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::scrollSubstringTo(long startInde
         return E_NOTIMPL;
     }
 
-    if( GetXInterface()->scrollSubstringTo(startIndex, endIndex, lUnoType) )
+    if (pRXText->scrollSubstringTo(startIndex, endIndex, lUnoType))
         return S_OK;
 
     return E_NOTIMPL;
@@ -876,10 +801,7 @@ COM_DECLSPEC_NOTHROW STDMETHODIMP CAccTextBase::put_XInterface(hyper pXInterface
         return E_FAIL;
     }
     Reference<XAccessibleText> pRXI(pRContext,UNO_QUERY);
-    if( !pRXI.is() )
-        pRXText = nullptr;
-    else
-        pRXText = pRXI;
+    pRXText = pRXI;
     return S_OK;
 
     } catch(...) { return E_FAIL; }

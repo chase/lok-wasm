@@ -16,26 +16,15 @@
 #include <tools/stream.hxx>
 #include <tools/urlobj.hxx>
 
-#define OUSTR_TO_STDSTR( oustr ) std::string( OUStringToOString( oustr, RTL_TEXTENCODING_ASCII_US ).getStr() )
+#define OUSTR_TO_STDSTR( oustr ) std::string( OUStringToOString( oustr, RTL_TEXTENCODING_ASCII_US ) )
 
-CPPUNIT_NS_BEGIN
-
-template<> struct assertion_traits<INetProtocol>
+template<> inline std::string CPPUNIT_NS::assertion_traits<INetProtocol>::toString(
+    const INetProtocol& x )
 {
-    static bool equal( const INetProtocol& x, const INetProtocol& y )
-    {
-        return x == y;
-    }
-
-    static std::string toString( const INetProtocol& x )
-    {
-        OStringStream ost;
-        ost << static_cast<unsigned int>(x);
-        return ost.str();
-    }
-};
-
-CPPUNIT_NS_END
+    OStringStream ost;
+    ost << static_cast<unsigned int>(x);
+    return ost.str();
+}
 
 namespace tools_urlobj
 {
@@ -107,9 +96,9 @@ namespace tools_urlobj
                 CPPUNIT_ASSERT_EQUAL(OUString("/"), url.GetURLPath());
             }
             {
-                // This is an invalid http URL per RFC 2616:
+                // This is a valid http URL per RFC 7230:
                 INetURLObject url(u"http://example.com?query");
-                CPPUNIT_ASSERT(url.HasError());
+                CPPUNIT_ASSERT(!url.HasError());
             }
             {
                 INetURLObject url(u"http://example.com#fragment");
@@ -342,6 +331,26 @@ namespace tools_urlobj
                 CPPUNIT_ASSERT(obj.isSchemeEqualTo(u"example.com"));
                 CPPUNIT_ASSERT_EQUAL(OUString(""), obj.GetHost());
                 CPPUNIT_ASSERT_EQUAL(OUString("80a0/foo"), obj.GetURLPath());
+            }
+            {
+                // Test Windows \\?\C:... long path scheme
+                INetURLObject base(u"file:///C:/foo"); // set up base path
+                bool bWasAbsolute = false;
+                INetURLObject obj
+                    = base.smartRel2Abs(u"\\\\?\\D:\\bar\\baz.ext"_ustr, bWasAbsolute);
+                CPPUNIT_ASSERT(bWasAbsolute);
+                CPPUNIT_ASSERT_EQUAL(u"file:///D:/bar/baz.ext"_ustr,
+                                     obj.GetMainURL(INetURLObject::DecodeMechanism::NONE));
+            }
+            {
+                // Test Windows \\?\UNC\Server... long path scheme
+                INetURLObject base(u"file://ServerFoo/fooShare"); // set up base path
+                bool bWasAbsolute = false;
+                INetURLObject obj = base.smartRel2Abs(
+                    u"\\\\?\\UNC\\ServerBar\\barShare\\baz.ext"_ustr, bWasAbsolute);
+                CPPUNIT_ASSERT(bWasAbsolute);
+                CPPUNIT_ASSERT_EQUAL(u"file://ServerBar/barShare/baz.ext"_ustr,
+                                     obj.GetMainURL(INetURLObject::DecodeMechanism::NONE));
             }
         }
 

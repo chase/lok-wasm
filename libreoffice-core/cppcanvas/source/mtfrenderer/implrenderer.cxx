@@ -208,9 +208,9 @@ namespace
             aWhite, rMaskColor
         };
 
-        Bitmap aMask( rBitmap.CreateMask( aWhite ));
+        AlphaMask aMask( rBitmap.CreateAlphaMask( aWhite ));
         Bitmap aSolid( rBitmap.GetSizePixel(),
-                       vcl::PixelFormat::N1_BPP,
+                       vcl::PixelFormat::N8_BPP,
                        &aBiLevelPalette );
         aSolid.Erase( rMaskColor );
 
@@ -847,6 +847,7 @@ namespace cppcanvas::internal
                                              int                            nIndex,
                                              int                            nLength,
                                              KernArraySpan                pCharWidths,
+                                             std::span<const sal_Bool>     pKashidaArray,
                                              const ActionFactoryParameters& rParms,
                                              bool                           bSubsettableActions )
         {
@@ -943,6 +944,7 @@ namespace cppcanvas::internal
                     nIndex,
                     nLength,
                     pCharWidths,
+                    pKashidaArray,
                     rParms.mrVDev,
                     rParms.mrCanvas,
                     rState,
@@ -1008,6 +1010,7 @@ namespace cppcanvas::internal
                             0/*nStartPos*/,
                             nLen,
                             aStrikeoutCharWidths,
+                            pKashidaArray,
                             rParms.mrVDev,
                             rParms.mrCanvas,
                             rState,
@@ -1492,7 +1495,7 @@ namespace cppcanvas::internal
                         // TODO(Q2): define and use appropriate enumeration types
                         rState.textReliefStyle          = rFont.GetRelief();
                         rState.textOverlineStyle        = static_cast<sal_Int8>(rFont.GetOverline());
-                        rState.textUnderlineStyle       = rParms.maFontUnderline ?
+                        rState.textUnderlineStyle       = rParms.maFontUnderline.has_value() ?
                             (*rParms.maFontUnderline ? sal_Int8(LINESTYLE_SINGLE) : sal_Int8(LINESTYLE_NONE)) :
                             static_cast<sal_Int8>(rFont.GetUnderline());
                         rState.textStrikeoutStyle       = static_cast<sal_Int8>(rFont.GetStrikeout());
@@ -1542,7 +1545,7 @@ namespace cppcanvas::internal
                     case MetaActionType::GRADIENT:
                     {
                         MetaGradientAction* pGradAct = static_cast<MetaGradientAction*>(pCurrAct);
-                        createGradientAction( ::tools::Polygon( pGradAct->GetRect() ),
+                        createGradientAction( ::tools::PolyPolygon( pGradAct->GetRect() ),
                                               pGradAct->GetGradient(),
                                               rFactoryParms,
                                               true,
@@ -2404,12 +2407,11 @@ namespace cppcanvas::internal
                     {
                         MetaFloatTransparentAction* pAct = static_cast<MetaFloatTransparentAction*>(pCurrAct);
 
-                        internal::MtfAutoPtr pMtf(
+                        std::unique_ptr< GDIMetaFile > pMtf(
                             new ::GDIMetaFile( pAct->GetGDIMetaFile() ) );
 
                         // TODO(P2): Use native canvas gradients here (saves a lot of UNO calls)
-                        internal::GradientAutoPtr pGradient(
-                            new Gradient( pAct->GetGradient() ) );
+                        std::optional< Gradient > pGradient( pAct->GetGradient() );
 
                         DBG_TESTSOLARMUTEX();
 
@@ -2451,6 +2453,7 @@ namespace cppcanvas::internal
                             pAct->GetIndex(),
                             nLen,
                             {},
+                            {},
                             rFactoryParms,
                             bSubsettableActions );
                     }
@@ -2472,6 +2475,7 @@ namespace cppcanvas::internal
                             pAct->GetIndex(),
                             nLen,
                             pAct->GetDXArray(),
+                            pAct->GetKashidaArray(),
                             rFactoryParms,
                             bSubsettableActions );
                     }
@@ -2579,6 +2583,7 @@ namespace cppcanvas::internal
                             pAct->GetIndex(),
                             nLen,
                             aDXArray,
+                            {},
                             rFactoryParms,
                             bSubsettableActions );
                     }
@@ -2927,7 +2932,7 @@ namespace cppcanvas::internal
             if( rParams.maFontName ||
                 rParams.maFontWeight ||
                 rParams.maFontLetterForm ||
-                rParams.maFontUnderline )
+                rParams.maFontUnderline.has_value() )
             {
                 ::cppcanvas::internal::OutDevState& rState = aStateStack.getState();
 

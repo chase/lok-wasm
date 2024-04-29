@@ -366,14 +366,14 @@ CPPUNIT_TEST_FIXTURE(Test, testN766477)
 CPPUNIT_TEST_FIXTURE(Test, testTdf130804)
 {
     createSwDoc("tdf130804.docx");
-    OUString flyHeight = parseDump("/root/page/body/txt[1]/infos/bounds", "height");
-    OUString txtHeight = parseDump("/root/page/body/txt[1]/anchored/fly/infos/bounds", "height");
+    OUString flyHeight = parseDump("/root/page/body/txt[1]/infos/bounds"_ostr, "height"_ostr);
+    OUString txtHeight = parseDump("/root/page/body/txt[1]/anchored/fly/infos/bounds"_ostr, "height"_ostr);
 
     //Without the fix in place, txtHeight would have been flyHeight + 55
     CPPUNIT_ASSERT_EQUAL(flyHeight, txtHeight);
 
     // Also check the bookmark portion is ignored in the next paragraph
-    OUString aTop = parseDump("/root/page/body/txt[2]/infos/prtBounds", "top");
+    OUString aTop = parseDump("/root/page/body/txt[2]/infos/prtBounds"_ostr, "top"_ostr);
     CPPUNIT_ASSERT_EQUAL(OUString("240"), aTop);
 }
 
@@ -385,11 +385,11 @@ CPPUNIT_TEST_FIXTURE(Test, testN758883)
      * to the numbering. This is easier to test using a layout dump.
      */
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwFieldPortion[1]", "font-height", "220");
+    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwFieldPortion[1]/SwFont"_ostr, "height"_ostr, "220");
 
     // hidden _Toc and _Ref bookmarks are not visible in Visible bookmarks mode
     // This was PortionType::Bookmark
-    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwLinePortion[1]", "type", "PortionType::Text");
+    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwLinePortion[1]"_ostr, "type"_ostr, "PortionType::Text");
 
     // insert a not hidden bookmark
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -411,14 +411,14 @@ CPPUNIT_TEST_FIXTURE(Test, testN758883)
     pXmlDoc = parseLayoutDump();
 
     // check the bookmark portions are of the expected height
-    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[1]", "type", "PortionType::Bookmark");
-    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[1]", "height", "253");
-    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[2]", "type", "PortionType::Bookmark");
-    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[2]", "height", "253");
+    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[1]"_ostr, "type"_ostr, "PortionType::Bookmark");
+    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[1]"_ostr, "height"_ostr, "253");
+    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[2]"_ostr, "type"_ostr, "PortionType::Bookmark");
+    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[2]"_ostr, "height"_ostr, "253");
 
     // tdf#150947 check a11y of the newly inserted bookmark portions
-    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[1]", "colors", "#BookmarkTest Bookmark Start");
-    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[2]", "colors", "#BookmarkTest Bookmark End");
+    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[1]"_ostr, "colors"_ostr, "#BookmarkTest Bookmark Start");
+    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout/SwBookmarkPortion[2]"_ostr, "colors"_ostr, "#BookmarkTest Bookmark End");
 
     /*
      * Next problem was that the page margin contained the width of the page border as well.
@@ -796,7 +796,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf105127)
 CPPUNIT_TEST_FIXTURE(Test, testTdf105143)
 {
     createSwDoc("tdf105143.docx");
-    OUString aTop = parseDump("/root/page/body/txt/anchored/SwAnchoredDrawObject/bounds", "top");
+    OUString aTop = parseDump("/root/page/body/txt/anchored/SwAnchoredDrawObject/bounds"_ostr, "top"_ostr);
     // This was 6272, i.e. the shape was moved up (incorrect position) to be
     // inside the page rectangle.
     CPPUNIT_ASSERT_EQUAL(OUString("6731"), aTop);
@@ -964,13 +964,13 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf133647_unicode)
     xFields->nextElement();
 
     uno::Reference<text::XTextField> xEnumerationAccess1(xFields->nextElement(), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"defined(預期結果)"), xEnumerationAccess1->getPresentation(true).trim());
+    CPPUNIT_ASSERT_EQUAL(u"defined(預期結果)"_ustr, xEnumerationAccess1->getPresentation(true).trim());
 
     uno::Reference<text::XTextField> xEnumerationAccess2(xFields->nextElement(), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"defined(نتيجةمتوقعة)"), xEnumerationAccess2->getPresentation(true).trim());
+    CPPUNIT_ASSERT_EQUAL(u"defined(نتيجةمتوقعة)"_ustr, xEnumerationAccess2->getPresentation(true).trim());
 
     uno::Reference<text::XTextField> xEnumerationAccess3(xFields->nextElement(), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"defined(ExpectedResult)"), xEnumerationAccess3->getPresentation(true).trim());
+    CPPUNIT_ASSERT_EQUAL(u"defined(ExpectedResult)"_ustr, xEnumerationAccess3->getPresentation(true).trim());
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf123389)
@@ -1030,7 +1030,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf75573)
     lcl_countTextFrames( mxComponent, 1 );
 
     // the frame should be on page 1
-    CPPUNIT_ASSERT_EQUAL( OUString("lorem ipsum"), parseDump("/root/page[1]/body/section/txt/anchored/fly/txt[1]/text()") );
+    CPPUNIT_ASSERT_EQUAL( OUString("lorem ipsum"), parseDump("/root/page[1]/body/section/txt/anchored/fly/txt[1]/text()"_ostr) );
 
     // the "Proprietary" style should set the vertical and horizontal anchors to the page
     uno::Reference<beans::XPropertySet> xPropertySet(getShape(1), uno::UNO_QUERY);
@@ -1233,7 +1233,7 @@ CPPUNIT_TEST_FIXTURE(Test, testUnbalancedColumnsCompat)
 CPPUNIT_TEST_FIXTURE(Test, testFloatingTableSectionColumns)
 {
     createSwDoc("floating-table-section-columns.docx");
-    OUString tableWidth = parseDump("/root/page[1]/body/section/column[2]/body/txt/anchored/fly/tab/infos/bounds", "width");
+    OUString tableWidth = parseDump("/root/page[1]/body/section/column[2]/body/txt/anchored/fly/tab/infos/bounds"_ostr, "width"_ostr);
     // table width was restricted by a column
     CPPUNIT_ASSERT( tableWidth.toInt32() > 10000 );
 }
@@ -1253,7 +1253,7 @@ CPPUNIT_TEST_FIXTURE(Test, testBnc821804)
     CPPUNIT_ASSERT_EQUAL(OUString("Insert"),getProperty<OUString>(getRun(getParagraph(1), 2), "RedlineType"));
     CPPUNIT_ASSERT_EQUAL(true,getProperty<bool>(getRun(getParagraph(1), 2), "IsStart"));
     CPPUNIT_ASSERT_EQUAL(OUString("unknown1"),getProperty<OUString>(getRun(getParagraph(1), 2), "RedlineAuthor"));
-    CPPUNIT_ASSERT_EQUAL(OString("2006-08-29T09:46:00Z"),dateTimeToString(getProperty<util::DateTime>(getRun(getParagraph(1), 2), "RedlineDateTime")));
+    CPPUNIT_ASSERT_EQUAL("2006-08-29T09:46:00Z"_ostr,dateTimeToString(getProperty<util::DateTime>(getRun(getParagraph(1), 2), "RedlineDateTime")));
     // So only the 3rd run is actual text (and the two runs have been merged into one, not sure why, but that shouldn't be a problem).
     CPPUNIT_ASSERT_EQUAL(OUString(" (1st run of an insert) (2nd run of an insert)"), getRun(getParagraph(1),3)->getString());
     CPPUNIT_ASSERT(!hasProperty(getRun(getParagraph(1), 3), "RedlineType"));
@@ -1261,7 +1261,7 @@ CPPUNIT_TEST_FIXTURE(Test, testBnc821804)
     CPPUNIT_ASSERT(hasProperty(getRun(getParagraph(1), 4), "RedlineType"));
     CPPUNIT_ASSERT_EQUAL(OUString("Insert"),getProperty<OUString>(getRun(getParagraph(1), 4), "RedlineType"));
     CPPUNIT_ASSERT_EQUAL(OUString("unknown1"),getProperty<OUString>(getRun(getParagraph(1), 4), "RedlineAuthor"));
-    CPPUNIT_ASSERT_EQUAL(OString("2006-08-29T09:46:00Z"),dateTimeToString(getProperty<util::DateTime>(getRun(getParagraph(1), 4), "RedlineDateTime")));
+    CPPUNIT_ASSERT_EQUAL("2006-08-29T09:46:00Z"_ostr,dateTimeToString(getProperty<util::DateTime>(getRun(getParagraph(1), 4), "RedlineDateTime")));
     CPPUNIT_ASSERT_EQUAL(false,getProperty<bool>(getRun(getParagraph(1), 4), "IsStart"));
 
     CPPUNIT_ASSERT_EQUAL(OUString("Normal text"), getRun(getParagraph(2),1)->getString());
@@ -1270,7 +1270,7 @@ CPPUNIT_TEST_FIXTURE(Test, testBnc821804)
     CPPUNIT_ASSERT(hasProperty(getRun(getParagraph(3), 1), "RedlineType"));
     CPPUNIT_ASSERT_EQUAL(OUString("Delete"),getProperty<OUString>(getRun(getParagraph(3), 1), "RedlineType"));
     CPPUNIT_ASSERT_EQUAL(OUString("unknown2"),getProperty<OUString>(getRun(getParagraph(3), 1), "RedlineAuthor"));
-    CPPUNIT_ASSERT_EQUAL(OString("2006-08-29T09:47:00Z"),dateTimeToString(getProperty<util::DateTime>(getRun(getParagraph(3), 1), "RedlineDateTime")));
+    CPPUNIT_ASSERT_EQUAL("2006-08-29T09:47:00Z"_ostr,dateTimeToString(getProperty<util::DateTime>(getRun(getParagraph(3), 1), "RedlineDateTime")));
     CPPUNIT_ASSERT_EQUAL(OUString("Deleted"), getRun(getParagraph(3),2)->getString());
 
     // This is both inserted and formatted, so there are two SwXRedlinePortion "runs". Given that the redlines overlap and Writer core
@@ -1297,7 +1297,7 @@ CPPUNIT_TEST_FIXTURE(Test, testBnc821804)
     CPPUNIT_ASSERT_EQUAL(OUString("Format"),getProperty<OUString>(getRun(getParagraph(6), 1), "RedlineType"));
     CPPUNIT_ASSERT_EQUAL(true,getProperty<bool>(getRun(getParagraph(6), 1), "IsStart"));
     CPPUNIT_ASSERT_EQUAL(OUString("unknown5"),getProperty<OUString>(getRun(getParagraph(6), 1), "RedlineAuthor"));
-    CPPUNIT_ASSERT_EQUAL(OString("2006-08-29T10:02:00Z"),dateTimeToString(getProperty<util::DateTime>(getRun(getParagraph(6), 1), "RedlineDateTime")));
+    CPPUNIT_ASSERT_EQUAL("2006-08-29T10:02:00Z"_ostr,dateTimeToString(getProperty<util::DateTime>(getRun(getParagraph(6), 1), "RedlineDateTime")));
     CPPUNIT_ASSERT_EQUAL(OUString("Formatted run"), getRun(getParagraph(6),2)->getString());
     CPPUNIT_ASSERT(hasProperty(getRun(getParagraph(6), 3), "RedlineType"));
     CPPUNIT_ASSERT_EQUAL(OUString("Format"),getProperty<OUString>(getRun(getParagraph(6), 3), "RedlineType"));
@@ -1308,7 +1308,7 @@ CPPUNIT_TEST_FIXTURE(Test, testBnc821804)
     CPPUNIT_ASSERT_EQUAL(OUString("Insert"),getProperty<OUString>(getRun(getParagraph(6), 5), "RedlineType"));
     CPPUNIT_ASSERT_EQUAL(true,getProperty<bool>(getRun(getParagraph(6), 5), "IsStart"));
     CPPUNIT_ASSERT_EQUAL(OUString("unknown6"),getProperty<OUString>(getRun(getParagraph(6), 5), "RedlineAuthor"));
-    CPPUNIT_ASSERT_EQUAL(OString("2006-08-29T09:48:00Z"),dateTimeToString(getProperty<util::DateTime>(getRun(getParagraph(6), 5), "RedlineDateTime")));
+    CPPUNIT_ASSERT_EQUAL("2006-08-29T09:48:00Z"_ostr,dateTimeToString(getProperty<util::DateTime>(getRun(getParagraph(6), 5), "RedlineDateTime")));
     CPPUNIT_ASSERT_EQUAL(OUString("and inserted again"), getRun(getParagraph(6),6)->getString());
     CPPUNIT_ASSERT(hasProperty(getRun(getParagraph(6), 7), "RedlineType"));
     CPPUNIT_ASSERT_EQUAL(OUString("Insert"),getProperty<OUString>(getRun(getParagraph(6), 7), "RedlineType"));
@@ -1371,9 +1371,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFdo87488)
 {
     // The shape on the right (index 0, CustomShape within a
     // GroupShape) is rotated 90 degrees clockwise and contains text
-    // rotated 90 degrees anticlockwise.  Must be read with SmartArt
-    // enabled in preTest above, otherwise it gets converted to a
-    // StarView MetaFile.
+    // rotated 90 degrees anticlockwise.
     SvtFilterOptions::Get().SetSmartArt2Shape(true);
     comphelper::ScopeGuard g([] { SvtFilterOptions::Get().SetSmartArt2Shape(false); });
     createSwDoc("fdo87488.docx");
@@ -1504,8 +1502,8 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf122717)
 CPPUNIT_TEST_FIXTURE(Test, testTdf98882)
 {
     createSwDoc("tdf98882.docx");
-    sal_Int32 nFlyHeight = parseDump("//anchored/fly/infos/bounds", "height").toInt32();
-    sal_Int32 nContentHeight = parseDump("//notxt/infos/bounds", "height").toInt32();
+    sal_Int32 nFlyHeight = parseDump("//anchored/fly/infos/bounds"_ostr, "height"_ostr).toInt32();
+    sal_Int32 nContentHeight = parseDump("//notxt/infos/bounds"_ostr, "height"_ostr).toInt32();
     // The content height was 600, not 360, so the frame and the content height did not match.
     CPPUNIT_ASSERT_EQUAL(nFlyHeight, nContentHeight);
 }
@@ -1651,10 +1649,10 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf100072)
     xmlDocUniquePtr pXmlDoc = dumpAndParse(dumper, rMetaFile);
 
     // Get first polyline rightside x coordinate
-    sal_Int32 nFirstEnd = getXPath(pXmlDoc, "(//polyline)[1]/point[2]", "x").toInt32();
+    sal_Int32 nFirstEnd = getXPath(pXmlDoc, "(//polyline)[1]/point[2]"_ostr, "x"_ostr).toInt32();
 
     // Get last stroke x coordinate
-    sal_Int32 nSecondEnd = getXPath(pXmlDoc, "(//polyline)[last()]/point[2]", "x").toInt32();
+    sal_Int32 nSecondEnd = getXPath(pXmlDoc, "(//polyline)[last()]/point[2]"_ostr, "x"_ostr).toInt32();
 
     // Assert that the difference is less than half point.
     CPPUNIT_ASSERT_MESSAGE("Shape line width does not match", abs(nFirstEnd - nSecondEnd) < 10);
@@ -1703,7 +1701,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf87533_bidi)
 {
     createSwDoc("tdf87533_bidi.docx");
     // "w:bidi" (specified inside Default paragraph properties) should not be ignored
-    static const OUStringLiteral writingMode = u"WritingMode"; //getPropertyName(PROP_WRITING_MODE);
+    static constexpr OUString writingMode = u"WritingMode"_ustr; //getPropertyName(PROP_WRITING_MODE);
 
     // check: "Default Style" master-style has RTL
     {
@@ -1815,7 +1813,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf136952_pgBreak3)
     //Do not lose the page::breakAfter. This SHOULD be on page 4, but sadly it is not.
     //The key part of this test is that the page starts with "Lorem ipsum"
     //Prior to this, there was no page break, and so it was in the middle of a page.
-    CPPUNIT_ASSERT(getXPath(pDump, "//page[6]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion[1]", "portion").startsWith("Lorem ipsum"));
+    CPPUNIT_ASSERT(getXPath(pDump, "//page[6]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion[1]"_ostr, "portion"_ostr).startsWith("Lorem ipsum"));
 }
 
 

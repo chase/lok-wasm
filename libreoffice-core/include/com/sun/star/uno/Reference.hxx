@@ -385,6 +385,32 @@ inline Reference< interface_type > Reference< interface_type >::query(
         castFromXInterface(iquery( pInterface )), SAL_NO_ACQUIRE );
 }
 
+#if defined LIBO_INTERNAL_ONLY
+template< class interface_type > template< class other_type >
+inline Reference< other_type > Reference< interface_type >::query() const
+{
+    return Reference< other_type >(*this, UNO_QUERY);
+}
+
+template< class interface_type > template< class other_type >
+inline Reference< other_type > Reference< interface_type >::queryThrow() const
+{
+    return Reference< other_type >(*this, UNO_QUERY_THROW);
+}
+
+template< class interface_type >
+inline Reference< interface_type > Any::query() const
+{
+    return Reference< interface_type >(*this, UNO_QUERY);
+}
+
+template< class interface_type >
+inline Reference< interface_type > Any::queryThrow() const
+{
+    return Reference< interface_type >(*this, UNO_QUERY_THROW);
+}
+#endif
+
 
 inline bool BaseReference::operator == ( XInterface * pInterface ) const
 {

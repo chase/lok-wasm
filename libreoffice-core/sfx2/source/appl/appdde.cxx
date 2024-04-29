@@ -144,12 +144,11 @@ bool ImplDdeService::MakeTopic( const OUString& rNm )
             SfxBoolItem aNewView(SID_OPEN_NEW_VIEW, true);
 
             SfxBoolItem aSilent(SID_SILENT, true);
-            SfxDispatcher* pDispatcher = SfxGetpApp()->GetDispatcher_Impl();
-            const SfxPoolItem* pRet = pDispatcher->ExecuteList(SID_OPENDOC,
-                    SfxCallMode::SYNCHRON,
-                    { &aName, &aNewView, &aSilent });
+            const SfxPoolItemHolder aResult(SfxGetpApp()->GetDispatcher_Impl()->ExecuteList(SID_OPENDOC,
+                SfxCallMode::SYNCHRON,
+                { &aName, &aNewView, &aSilent }));
 
-            if( auto const item = dynamic_cast< const SfxViewFrameItem *>( pRet );
+            if( auto const item = dynamic_cast< const SfxViewFrameItem *>(aResult.getItem());
                 item &&
                 item->GetFrame() &&
                 nullptr != ( pShell = item->GetFrame()->GetObjectShell() ) )
@@ -414,8 +413,6 @@ bool SfxApplication::InitializeDde()
     nError = pImpl->pDdeService->GetError();
     if( !nError )
     {
-        pImpl->pDocTopics.reset(new SfxDdeDocTopics_Impl);
-
         // we certainly want to support RTF!
         pImpl->pDdeService->AddFormat( SotClipboardFormatId::RTF );
         pImpl->pDdeService->AddFormat( SotClipboardFormatId::RICHTEXT );
@@ -438,7 +435,7 @@ void SfxAppData_Impl::DeInitDDE()
 {
     pTriggerTopic.reset();
     pDdeService2.reset();
-    pDocTopics.reset();
+    maDocTopics.clear();
     pDdeService.reset();
 }
 
@@ -446,15 +443,15 @@ void SfxAppData_Impl::DeInitDDE()
 void SfxApplication::AddDdeTopic( SfxObjectShell* pSh )
 {
     //OV: DDE is disconnected in server mode!
-    if( !pImpl->pDocTopics )
+    if( pImpl->maDocTopics.empty() )
         return;
 
     // prevent double submit
     OUString sShellNm;
     bool bFnd = false;
-    for (size_t n = pImpl->pDocTopics->size(); n;)
+    for (size_t n = pImpl->maDocTopics.size(); n;)
     {
-        if( (*pImpl->pDocTopics)[ --n ]->pSh == pSh )
+        if( pImpl->maDocTopics[ --n ]->pSh == pSh )
         {
             // If the document is untitled, is still a new Topic is created!
             if( !bFnd )
@@ -462,14 +459,14 @@ void SfxApplication::AddDdeTopic( SfxObjectShell* pSh )
                 bFnd = true;
                 sShellNm = pSh->GetTitle(SFX_TITLE_FULLNAME).toAsciiLowerCase();
             }
-            OUString sNm( (*pImpl->pDocTopics)[ n ]->GetName() );
+            OUString sNm( pImpl->maDocTopics[ n ]->GetName() );
             if( sShellNm == sNm.toAsciiLowerCase() )
                 return ;
         }
     }
 
     SfxDdeDocTopic_Impl *const pTopic = new SfxDdeDocTopic_Impl(pSh);
-    pImpl->pDocTopics->push_back(pTopic);
+    pImpl->maDocTopics.push_back(pTopic);
     pImpl->pDdeService->AddTopic( *pTopic );
 }
 #endif
@@ -478,17 +475,17 @@ void SfxApplication::RemoveDdeTopic( SfxObjectShell const * pSh )
 {
 #if defined(_WIN32)
     //OV: DDE is disconnected in server mode!
-    if( !pImpl->pDocTopics )
+    if( pImpl->maDocTopics.empty() )
         return;
 
-    for (size_t n = pImpl->pDocTopics->size(); n; )
+    for (size_t n = pImpl->maDocTopics.size(); n; )
     {
-        SfxDdeDocTopic_Impl *const pTopic = (*pImpl->pDocTopics)[ --n ];
+        SfxDdeDocTopic_Impl *const pTopic = pImpl->maDocTopics[ --n ];
         if (pTopic->pSh == pSh)
         {
             pImpl->pDdeService->RemoveTopic( *pTopic );
             delete pTopic;
-            pImpl->pDocTopics->erase( pImpl->pDocTopics->begin() + n );
+            pImpl->maDocTopics.erase( pImpl->maDocTopics.begin() + n );
         }
     }
 #else

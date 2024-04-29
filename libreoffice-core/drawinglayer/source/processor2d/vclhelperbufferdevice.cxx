@@ -234,7 +234,7 @@ VclPtr<VirtualDevice> VDevBuffer::alloc(OutputDevice& rOutDev, const Size& rSize
     // no success yet, create new buffer
     if (!pRetval)
     {
-        pRetval = VclPtr<VirtualDevice>::Create(rOutDev, DeviceFormat::DEFAULT);
+        pRetval = VclPtr<VirtualDevice>::Create(rOutDev, DeviceFormat::WITHOUT_ALPHA);
         maDeviceTemplates[pRetval] = &rOutDev;
         pRetval->SetOutputSizePixel(rSizePixel, true);
     }
@@ -396,7 +396,7 @@ impBufferDevice::impBufferDevice(OutputDevice& rOutDev, const basegfx::B2DRange&
     aRangePixel.transform(mrOutDev.GetViewTransformation());
     maDestPixel = tools::Rectangle(floor(aRangePixel.getMinX()), floor(aRangePixel.getMinY()),
                                    ceil(aRangePixel.getMaxX()), ceil(aRangePixel.getMaxY()));
-    maDestPixel.Intersection({ {}, mrOutDev.GetOutputSizePixel() });
+    maDestPixel.Intersection(tools::Rectangle{ Point{}, mrOutDev.GetOutputSizePixel() });
 
     if (!isVisible())
         return;
@@ -476,6 +476,7 @@ void impBufferDevice::paint(double fTrans)
     {
         mpAlpha->EnableMapMode(false);
         AlphaMask aAlphaMask(mpAlpha->GetBitmap(aEmptyPoint, aSizePixel));
+        aAlphaMask.Invert(); // convert transparency to alpha
 
 #ifdef DBG_UTIL
         if (!sDumpPath.isEmpty() && bDoSaveForVisualControl)
@@ -535,7 +536,7 @@ void impBufferDevice::paint(double fTrans)
             // use Former for now.
             //
             // To easily allow to change this (maybe system-dependent) I add a static switch here,
-            // also for evetually experimenting (hint: can be changed in the debugger).
+            // also for eventually experimenting (hint: can be changed in the debugger).
             static bool bUseNew(false);
 
             if (bUseNew)

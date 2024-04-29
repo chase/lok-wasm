@@ -26,7 +26,7 @@
 #include <memory>
 
 
-#define WID_CHAOS_START 500
+#define WID_CHAOS_START TypedWhichId<SfxStringItem>(500)
 
 
 namespace {
@@ -165,7 +165,7 @@ inline void CntStaticPoolDefaults_Impl::Insert(
 
     mvDefaults[ nPos ]         = pItem;
     m_pItemInfos[ nPos ]._nSID   = 0;
-    m_pItemInfos[ nPos ]._bPoolable = true;
+    m_pItemInfos[ nPos ]._bNeedsPoolRegistration = false;
 }
 
 

@@ -20,6 +20,7 @@
 #include "DiagramWrapper.hxx"
 #include <servicenames_charttypes.hxx>
 #include "DataSeriesPointWrapper.hxx"
+#include <DataSeriesProperties.hxx>
 #include "AxisWrapper.hxx"
 #include "Chart2ModelContact.hxx"
 #include "WallFloorWrapper.hxx"
@@ -71,13 +72,13 @@
 
 using namespace ::com::sun::star;
 using namespace ::chart::wrapper;
+using namespace ::chart::DataSeriesProperties;
 
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Any;
 using ::com::sun::star::uno::Sequence;
 using ::com::sun::star::beans::Property;
 using ::com::sun::star::chart::XAxis;
-using ::osl::MutexGuard;
 
 namespace
 {
@@ -386,45 +387,35 @@ void lcl_AddPropertiesToVector(
                   | beans::PropertyAttribute::MAYBEVOID );
 }
 
-struct StaticDiagramWrapperPropertyArray_Initializer
+const Sequence< Property >& StaticDiagramWrapperPropertyArray()
 {
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence() );
-        return &aPropSeq;
-    }
+    static Sequence< Property > aPropSeq = []()
+        {
+            std::vector< css::beans::Property > aProperties;
+            lcl_AddPropertiesToVector( aProperties );
+            ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
+            ::chart::FillProperties::AddPropertiesToVector( aProperties );
+            ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
+            ::chart::SceneProperties::AddPropertiesToVector( aProperties );
+            WrappedStatisticProperties::addProperties( aProperties );
+            WrappedSymbolProperties::addProperties( aProperties );
+            WrappedDataCaptionProperties::addProperties( aProperties );
+            WrappedSplineProperties::addProperties( aProperties );
+            WrappedStockProperties::addProperties( aProperties );
+            WrappedAutomaticPositionProperties::addProperties( aProperties );
 
-private:
-    static uno::Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< css::beans::Property > aProperties;
-        lcl_AddPropertiesToVector( aProperties );
-        ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
-        ::chart::FillProperties::AddPropertiesToVector( aProperties );
-        ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
-        ::chart::SceneProperties::AddPropertiesToVector( aProperties );
-        WrappedStatisticProperties::addProperties( aProperties );
-        WrappedSymbolProperties::addProperties( aProperties );
-        WrappedDataCaptionProperties::addProperties( aProperties );
-        WrappedSplineProperties::addProperties( aProperties );
-        WrappedStockProperties::addProperties( aProperties );
-        WrappedAutomaticPositionProperties::addProperties( aProperties );
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
 
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropSeq;
 };
 
-struct StaticDiagramWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticDiagramWrapperPropertyArray_Initializer >
-{
-};
-
-bool lcl_isXYChart( const rtl::Reference< ::chart::Diagram >& rDiagram )
+bool lcl_isXYChart( const rtl::Reference< ::chart::Diagram >& xDiagram )
 {
     bool bRet = false;
-    rtl::Reference< ::chart::ChartType > xChartType( ::chart::DiagramHelper::getChartTypeByIndex( rDiagram, 0 ) );
+    rtl::Reference< ::chart::ChartType > xChartType( xDiagram->getChartTypeByIndex( 0 ) );
     if( xChartType.is() )
     {
         OUString aChartType( xChartType->getChartType() );
@@ -447,7 +438,7 @@ sal_Int32 lcl_getNewAPIIndexForOldAPIIndex(
     }
 
     std::vector< rtl::Reference< ::chart::DataSeries > > aSeriesList =
-        ::chart::DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+        xDiagram->getDataSeries();
     if( nNewAPIIndex >= static_cast<sal_Int32>(aSeriesList.size()) )
         nNewAPIIndex = -1;
 
@@ -456,7 +447,7 @@ sal_Int32 lcl_getNewAPIIndexForOldAPIIndex(
 
 OUString lcl_getDiagramType( std::u16string_view rTemplateServiceName )
 {
-    static const OUStringLiteral aPrefix(u"com.sun.star.chart2.template.");
+    static constexpr OUString aPrefix(u"com.sun.star.chart2.template."_ustr);
 
     if( o3tl::starts_with(rTemplateServiceName, aPrefix) )
     {
@@ -560,7 +551,6 @@ namespace chart::wrapper
 
 DiagramWrapper::DiagramWrapper(std::shared_ptr<Chart2ModelContact> spChart2ModelContact)
     : m_spChart2ModelContact(std::move(spChart2ModelContact))
-    , m_aEventListenerContainer(m_aMutex)
 {
 }
 
@@ -589,26 +579,29 @@ OUString SAL_CALL DiagramWrapper::getDiagramType()
         }
 
         rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager = xChartDoc->getTypeManager();
-        DiagramHelper::tTemplateWithServiceName aTemplateAndService =
-            DiagramHelper::getTemplateForDiagram( xDiagram, xChartTypeManager );
+        Diagram::tTemplateWithServiceName aTemplateAndService =
+            xDiagram->getTemplate( xChartTypeManager );
 
         aRet = lcl_getDiagramType( aTemplateAndService.sServiceName );
     }
 
-    if( aRet.isEmpty())
+    if( !aRet.isEmpty())
+        return aRet;
+
+    // none of the standard templates matched
+    // use first chart type
+    if (xDiagram)
     {
-        // none of the standard templates matched
-        // use first chart type
-        rtl::Reference< ChartType > xChartType( DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) );
+        rtl::Reference< ChartType > xChartType( xDiagram->getChartTypeByIndex( 0 ) );
         if( xChartType.is() )
         {
             aRet = xChartType->getChartType();
             if( !aRet.isEmpty() )
                 aRet = lcl_getOldChartTypeName( aRet );
         }
-        if( aRet.isEmpty())
-            aRet = "com.sun.star.chart.BarDiagram";
     }
+    if( aRet.isEmpty())
+        aRet = "com.sun.star.chart.BarDiagram";
 
     return aRet;
 }
@@ -1052,9 +1045,8 @@ void SAL_CALL DiagramWrapper::setDefaultIllumination()
 // ____ XComponent ____
 void SAL_CALL DiagramWrapper::dispose()
 {
-    m_aEventListenerContainer.disposeAndClear( lang::EventObject( static_cast< ::cppu::OWeakObject* >( this )));
-
-    MutexGuard aGuard( m_aMutex);
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.disposeAndClear( g, lang::EventObject( static_cast< ::cppu::OWeakObject* >( this )));
 
     DisposeHelper::DisposeAndClear( m_xXAxis );
     DisposeHelper::DisposeAndClear( m_xYAxis );
@@ -1073,13 +1065,15 @@ void SAL_CALL DiagramWrapper::dispose()
 void SAL_CALL DiagramWrapper::addEventListener(
     const Reference< lang::XEventListener >& xListener )
 {
-    m_aEventListenerContainer.addInterface( xListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.addInterface( g, xListener );
 }
 
 void SAL_CALL DiagramWrapper::removeEventListener(
     const Reference< lang::XEventListener >& aListener )
 {
-    m_aEventListenerContainer.removeInterface( aListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.removeInterface( g, aListener );
 }
 
 namespace {
@@ -1226,8 +1220,8 @@ bool WrappedStackingProperty::detectInnerValue( StackMode& eStackMode ) const
 {
     bool bHasDetectableInnerValue = false;
     bool bIsAmbiguous = false;
-    eStackMode = DiagramHelper::getStackMode( m_spChart2ModelContact->getDiagram()
-        , bHasDetectableInnerValue, bIsAmbiguous );
+    rtl::Reference<Diagram> xDiagram = m_spChart2ModelContact->getDiagram();
+    eStackMode = xDiagram ? xDiagram->getStackMode( bHasDetectableInnerValue, bIsAmbiguous ) : StackMode::NONE;
     return bHasDetectableInnerValue;
 }
 
@@ -1255,7 +1249,7 @@ void WrappedStackingProperty::setPropertyValue( const Any& rOuterValue, const Re
     if( xDiagram.is() )
     {
         StackMode eNewStackMode = bNewValue ? m_eStackMode : StackMode::NONE;
-        DiagramHelper::setStackMode( xDiagram, eNewStackMode );
+        xDiagram->setStackMode( eNewStackMode );
     }
 }
 
@@ -1317,9 +1311,9 @@ void WrappedDim3DProperty::setPropertyValue( const Any& rOuterValue, const Refer
     if( !xDiagram.is() )
         return;
 
-    bool bOld3D = DiagramHelper::getDimension( xDiagram ) == 3;
+    bool bOld3D = xDiagram->getDimension() == 3;
     if( bOld3D != bNew3D )
-        DiagramHelper::setDimension( xDiagram, bNew3D ? 3 : 2 );
+        xDiagram->setDimension( bNew3D ? 3 : 2 );
 }
 
 Any WrappedDim3DProperty::getPropertyValue( const Reference< beans::XPropertySet >& /*xInnerPropertySet*/ ) const
@@ -1327,7 +1321,7 @@ Any WrappedDim3DProperty::getPropertyValue( const Reference< beans::XPropertySet
     rtl::Reference< ::chart::Diagram > xDiagram( m_spChart2ModelContact->getDiagram() );
     if( xDiagram.is() )
     {
-        bool b3D = DiagramHelper::getDimension( xDiagram ) == 3;
+        bool b3D = xDiagram->getDimension() == 3;
         m_aOuterValue <<= b3D;
     }
     return m_aOuterValue;
@@ -1382,9 +1376,9 @@ void WrappedVerticalProperty::setPropertyValue( const Any& rOuterValue, const Re
 
     bool bFound = false;
     bool bAmbiguous = false;
-    bool bOldVertical = DiagramHelper::getVertical( xDiagram, bFound, bAmbiguous );
+    bool bOldVertical = xDiagram->getVertical( bFound, bAmbiguous );
     if( bFound && ( bOldVertical != bNewVertical || bAmbiguous ) )
-        DiagramHelper::setVertical( xDiagram, bNewVertical );
+        xDiagram->setVertical( bNewVertical );
 }
 
 Any WrappedVerticalProperty::getPropertyValue( const Reference< beans::XPropertySet >& /*xInnerPropertySet*/ ) const
@@ -1394,7 +1388,7 @@ Any WrappedVerticalProperty::getPropertyValue( const Reference< beans::XProperty
     {
         bool bFound = false;
         bool bAmbiguous = false;
-        bool bVertical = DiagramHelper::getVertical( xDiagram, bFound, bAmbiguous );
+        bool bVertical = xDiagram->getVertical( bFound, bAmbiguous );
         if( bFound )
             m_aOuterValue <<= bVertical;
     }
@@ -1448,12 +1442,12 @@ bool WrappedNumberOfLinesProperty::detectInnerValue( uno::Any& rInnerValue ) con
     if( xDiagram.is() && xChartDoc.is() )
     {
         std::vector< rtl::Reference< DataSeries > > aSeriesVector =
-            DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+            xDiagram->getDataSeries();
         if( !aSeriesVector.empty() )
         {
             rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager = xChartDoc->getTypeManager();
-            DiagramHelper::tTemplateWithServiceName aTemplateAndService =
-                    DiagramHelper::getTemplateForDiagram( xDiagram, xChartTypeManager );
+            Diagram::tTemplateWithServiceName aTemplateAndService =
+                    xDiagram->getTemplate( xChartTypeManager );
             if( aTemplateAndService.sServiceName == "com.sun.star.chart2.template.ColumnWithLine" )
             {
                 try
@@ -1484,13 +1478,15 @@ void WrappedNumberOfLinesProperty::setPropertyValue( const Any& rOuterValue, con
 
     rtl::Reference< ChartModel > xChartDoc( m_spChart2ModelContact->getDocumentModel() );
     rtl::Reference< ::chart::Diagram > xDiagram( m_spChart2ModelContact->getDiagram() );
-    sal_Int32 nDimension = ::chart::DiagramHelper::getDimension( xDiagram );
-    if( !(xChartDoc.is() && xDiagram.is() && nDimension == 2) )
+    if( !xChartDoc || !xDiagram )
+        return;
+    sal_Int32 nDimension = xDiagram->getDimension();
+    if( nDimension != 2 )
         return;
 
     rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager = xChartDoc->getTypeManager();
-    DiagramHelper::tTemplateWithServiceName aTemplateAndService =
-            DiagramHelper::getTemplateForDiagram( xDiagram, xChartTypeManager );
+    Diagram::tTemplateWithServiceName aTemplateAndService =
+            xDiagram->getTemplate( xChartTypeManager );
 
     rtl::Reference< ChartTypeTemplate > xTemplate;
     if( aTemplateAndService.sServiceName == "com.sun.star.chart2.template.ColumnWithLine" )
@@ -1597,7 +1593,7 @@ void WrappedAttributedDataPointsProperty::setPropertyValue( const Any& rOuterVal
         return;
 
     std::vector< rtl::Reference< DataSeries > > aSeriesVector =
-        ::chart::DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+        xDiagram->getDataSeries();
     sal_Int32 i = 0;
     for (auto const& series : aSeriesVector)
     {
@@ -1610,7 +1606,7 @@ void WrappedAttributedDataPointsProperty::setPropertyValue( const Any& rOuterVal
             uno::Sequence< sal_Int32 > aSeq;
             aVal <<= aSeq;
         }
-        series->setPropertyValue( "AttributedDataPoints", aVal );
+        series->setFastPropertyValue( PROP_DATASERIES_ATTRIBUTED_DATA_POINTS, aVal ); // "AttributedDataPoints"
         ++i;
     }
 }
@@ -1622,7 +1618,7 @@ Any WrappedAttributedDataPointsProperty::getPropertyValue( const Reference< bean
     if( xDiagram )
     {
         std::vector< rtl::Reference< DataSeries > > aSeriesVector =
-            ::chart::DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+            xDiagram->getDataSeries();
 
         uno::Sequence< uno::Sequence< sal_Int32 > > aResult( aSeriesVector.size() );
         auto aResultRange = asNonConstRange(aResult);
@@ -1630,7 +1626,7 @@ Any WrappedAttributedDataPointsProperty::getPropertyValue( const Reference< bean
         for (auto const& series : aSeriesVector)
         {
             uno::Any aVal(
-                series->getPropertyValue("AttributedDataPoints"));
+                series->getFastPropertyValue(PROP_DATASERIES_ATTRIBUTED_DATA_POINTS)); // "AttributedDataPoints"
             uno::Sequence< sal_Int32 > aSeq;
             if( aVal >>= aSeq )
                 aResultRange[ i ] = aSeq;
@@ -1691,9 +1687,9 @@ void WrappedSolidTypeProperty::setPropertyValue( const Any& rOuterValue, const R
 
     bool bFound = false;
     bool bAmbiguous = false;
-    sal_Int32 nOldSolidType = DiagramHelper::getGeometry3D( xDiagram, bFound, bAmbiguous );
+    sal_Int32 nOldSolidType = xDiagram->getGeometry3D( bFound, bAmbiguous );
     if( bFound && ( nOldSolidType != nNewSolidType || bAmbiguous ) )
-        DiagramHelper::setGeometry3D( xDiagram, nNewSolidType );
+        xDiagram->setGeometry3D( nNewSolidType );
 }
 
 Any WrappedSolidTypeProperty::getPropertyValue( const Reference< beans::XPropertySet >& /*xInnerPropertySet*/ ) const
@@ -1703,7 +1699,7 @@ Any WrappedSolidTypeProperty::getPropertyValue( const Reference< beans::XPropert
     {
         bool bFound = false;
         bool bAmbiguous = false;
-        sal_Int32 nGeometry = DiagramHelper::getGeometry3D( xDiagram, bFound, bAmbiguous );
+        sal_Int32 nGeometry = xDiagram->getGeometry3D( bFound, bAmbiguous );
         if( bFound )
             m_aOuterValue <<= nGeometry;
     }
@@ -1837,7 +1833,7 @@ Reference< beans::XPropertySet > DiagramWrapper::getInnerPropertySet()
 
 const Sequence< beans::Property >& DiagramWrapper::getPropertySequence()
 {
-    return *StaticDiagramWrapperPropertyArray::get();
+    return StaticDiagramWrapperPropertyArray();
 }
 
 std::vector< std::unique_ptr<WrappedProperty> > DiagramWrapper::createWrappedProperties()

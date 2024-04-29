@@ -80,7 +80,7 @@ void SAL_CALL SvxVertCTLTextTbxCtrl::initialize(const css::uno::Sequence<css::un
 
     if (m_pToolbar)
     {
-        m_bVisible = m_pToolbar->get_item_visible(m_aCommandURL.toUtf8());
+        m_bVisible = m_pToolbar->get_item_visible(m_aCommandURL);
         return;
     }
 
@@ -103,8 +103,7 @@ void SAL_CALL SvxVertCTLTextTbxCtrl::statusChanged(const css::frame::FeatureStat
     }
     else if (rEvent.FeatureURL.Complete == ".uno:CTLFontState")
     {
-        SvtCTLOptions aLangOptions;
-        bEnabled = m_bVisible && aLangOptions.IsCTLFontEnabled();
+        bEnabled = m_bVisible && SvtCTLOptions::IsCTLFontEnabled();
     }
     else
     {
@@ -114,9 +113,8 @@ void SAL_CALL SvxVertCTLTextTbxCtrl::statusChanged(const css::frame::FeatureStat
 
         if (m_pToolbar)
         {
-            OString sId = m_aCommandURL.toUtf8();
-            m_pToolbar->set_item_active(sId, bValue);
-            m_pToolbar->set_item_sensitive(sId, rEvent.IsEnabled);
+            m_pToolbar->set_item_active(m_aCommandURL, bValue);
+            m_pToolbar->set_item_sensitive(m_aCommandURL, rEvent.IsEnabled);
         }
 
         if (bVclToolBox)
@@ -130,7 +128,7 @@ void SAL_CALL SvxVertCTLTextTbxCtrl::statusChanged(const css::frame::FeatureStat
 
     if (m_pToolbar)
     {
-        m_pToolbar->set_item_visible(m_aCommandURL.toUtf8(), bEnabled);
+        m_pToolbar->set_item_visible(m_aCommandURL, bEnabled);
         return;
     }
 

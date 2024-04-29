@@ -36,7 +36,7 @@
 #include <sfx2/docfile.hxx>
 #include <comphelper/diagnose_ex.hxx>
 
-constexpr OUStringLiteral AUTOTEXT_GALLERY = u"autoTxt";
+constexpr OUString AUTOTEXT_GALLERY = u"autoTxt"_ustr;
 
 using namespace css;
 
@@ -45,7 +45,7 @@ extern "C" SAL_DLLPUBLIC_EXPORT Reader* ImportDOCX()
     return new SwDOCXReader;
 }
 
-ErrCode SwDOCXReader::Read(SwDoc& rDoc, const OUString& /* rBaseURL */, SwPaM& rPam, const OUString& /* FileName */ )
+ErrCodeMsg SwDOCXReader::Read(SwDoc& rDoc, const OUString& /* rBaseURL */, SwPaM& rPam, const OUString& /* FileName */ )
 {
     if (!m_pMedium->GetInStream())
         return ERR_SWG_READ_ERROR;
@@ -176,7 +176,7 @@ bool SwDOCXReader::MakeEntries( SwDoc *pD, SwTextBlocks &rBlocks )
             }
 
             // Do not copy name
-            aStart++;
+            ++aStart;
 
             // Get content
             SwPaM aPam( aStart );

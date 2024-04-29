@@ -56,7 +56,7 @@ using ::com::sun::star::uno::Sequence;
 
 namespace
 {
-constexpr OUStringLiteral lcl_aLabelRole( u"label" );
+constexpr OUString lcl_aLabelRole( u"label"_ustr );
 
 
 OUString lcl_ConvertRole( const OUString & rRoleString )
@@ -245,8 +245,8 @@ rtl::Reference< ::chart::DataSeries > lcl_CreateNewSeries(
         std::size_t nGroupIndex=0;
         if( xChartType.is())
         {
-            std::vector< rtl::Reference< ::chart::ChartType > > aCTs(
-                ::chart::DiagramHelper::getChartTypesFromDiagram( xDiagram ));
+            std::vector< rtl::Reference< ::chart::ChartType > > aCTs =
+                xDiagram->getChartTypes();
             for( ; nGroupIndex < aCTs.size(); ++nGroupIndex)
                 if( aCTs[nGroupIndex] == xChartType )
                     break;
@@ -434,7 +434,7 @@ std::vector< DialogModel::tSeriesWithChartTypeByName >
             {
                 aResult.push_back(
                     ::chart::DialogModel::tSeriesWithChartTypeByName(
-                        ::chart::DataSeriesHelper::getDataSeriesLabel( dataSeries, aRole ),
+                        dataSeries->getLabelForRole( aRole ),
                         std::make_pair( dataSeries, rxChartType )));
             }
         }
@@ -524,14 +524,14 @@ DialogModel::tRolesWithRanges DialogModel::getRolesWithRanges(
 }
 
 void DialogModel::moveSeries(
-    const Reference< XDataSeries > & xSeries,
+    const rtl::Reference< DataSeries > & xSeries,
     MoveDirection eDirection )
 {
     m_aTimerTriggeredControllerLock.startTimer();
     ControllerLockGuardUNO aLockedControllers( m_xChartDocument );
 
     rtl::Reference< Diagram > xDiagram( m_xChartDocument->getFirstChartDiagram());
-    DiagramHelper::moveSeries( xDiagram, xSeries, eDirection==MoveDirection::Down );
+    xDiagram->moveSeries( xSeries, eDirection==MoveDirection::Down );
 }
 
 rtl::Reference< ::chart::DataSeries > DialogModel::insertSeriesAfter(
@@ -548,7 +548,7 @@ rtl::Reference< ::chart::DataSeries > DialogModel::insertSeriesAfter(
     try
     {
         rtl::Reference< Diagram > xDiagram( m_xChartDocument->getFirstChartDiagram() );
-        ThreeDLookScheme e3DScheme = ThreeDHelper::detectScheme( xDiagram );
+        ThreeDLookScheme e3DScheme = xDiagram->detectScheme();
 
         sal_Int32 nSeriesInChartType = 0;
         const sal_Int32 nTotalSeries = countSeries();
@@ -571,7 +571,7 @@ rtl::Reference< ::chart::DataSeries > DialogModel::insertSeriesAfter(
         if( xNewSeries.is())
             addNewSeriesToContainer(xChartType, xSeries, xNewSeries);
 
-        ThreeDHelper::setScheme( xDiagram, e3DScheme );
+        xDiagram->setScheme( e3DScheme );
     }
     catch( const uno::Exception & )
     {
@@ -581,7 +581,7 @@ rtl::Reference< ::chart::DataSeries > DialogModel::insertSeriesAfter(
 }
 
 void DialogModel::deleteSeries(
-    const Reference< XDataSeries > & xSeries,
+    const rtl::Reference< DataSeries > & xSeries,
     const rtl::Reference< ChartType > & xChartType )
 {
     m_aTimerTriggeredControllerLock.startTimer();
@@ -598,7 +598,8 @@ uno::Reference< chart2::data::XLabeledDataSequence > DialogModel::getCategories(
         if( m_xChartDocument.is())
         {
             rtl::Reference< Diagram > xDiagram( m_xChartDocument->getFirstChartDiagram());
-            xResult = DiagramHelper::getCategoriesFromDiagram( xDiagram );
+            if (xDiagram.is())
+                xResult = xDiagram->getCategories();
         }
     }
     catch( const uno::Exception & )
@@ -620,13 +621,13 @@ void DialogModel::setCategories( const Reference< chart2::data::XLabeledDataSequ
     // categories
     bool bSupportsCategories = true;
 
-    rtl::Reference< ChartType > xFirstChartType( DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) );
+    rtl::Reference< ChartType > xFirstChartType( xDiagram->getChartTypeByIndex( 0 ) );
     if( xFirstChartType.is() )
     {
         sal_Int32 nAxisType = ChartTypeHelper::getAxisType( xFirstChartType, 0 ); // x-axis
         bSupportsCategories = (nAxisType == AxisType::CATEGORY);
     }
-    DiagramHelper::setCategoriesToDiagram( xCategories, xDiagram, true, bSupportsCategories );
+    xDiagram->setCategories( xCategories, true, bSupportsCategories );
 }
 
 OUString DialogModel::getCategoriesRange() const
@@ -652,8 +653,8 @@ OUString DialogModel::getCategoriesRange() const
 bool DialogModel::isCategoryDiagram() const
 {
     bool bRet = false;
-    if( m_xChartDocument.is())
-        bRet = DiagramHelper::isCategoryDiagram( m_xChartDocument->getFirstChartDiagram() );
+    if( m_xChartDocument.is() && m_xChartDocument->getFirstChartDiagram())
+        bRet = m_xChartDocument->getFirstChartDiagram()->isCategory();
     return bRet;
 }
 
@@ -715,17 +716,17 @@ void DialogModel::setData(
         if( xInterpreter.is())
         {
             rtl::Reference< Diagram > xDiagram( m_xChartDocument->getFirstChartDiagram() );
-            ThreeDLookScheme e3DScheme = ThreeDHelper::detectScheme( xDiagram );
+            ThreeDLookScheme e3DScheme = xDiagram->detectScheme();
 
             std::vector< rtl::Reference< DataSeries > > aSeriesToReUse =
-                DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+                xDiagram->getDataSeries();
             applyInterpretedData(
                 xInterpreter->interpretDataSource(
                     xDataSource, rArguments,
                     aSeriesToReUse ),
                 aSeriesToReUse);
 
-            ThreeDHelper::setScheme( xDiagram, e3DScheme );
+            xDiagram->setScheme( e3DScheme );
         }
     }
     catch( const uno::Exception & )

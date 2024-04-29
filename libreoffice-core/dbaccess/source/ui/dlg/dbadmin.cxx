@@ -71,7 +71,7 @@ short ODbAdminDialog::Ok()
         // TODO : AR_ERROR is not handled correctly, we always close the dialog here
 }
 
-void ODbAdminDialog::PageCreated(const OString& rId, SfxTabPage& _rPage)
+void ODbAdminDialog::PageCreated(const OUString& rId, SfxTabPage& _rPage)
 {
     // register ourself as modified listener
     static_cast<OGenericAdministrationPage&>(_rPage).SetServiceFactory( getORB() );
@@ -80,7 +80,7 @@ void ODbAdminDialog::PageCreated(const OString& rId, SfxTabPage& _rPage)
     SfxTabDialogController::PageCreated(rId, _rPage);
 }
 
-void ODbAdminDialog::addDetailPage(const OString& rPageId, TranslateId pTextId, CreateTabPage pCreateFunc)
+void ODbAdminDialog::addDetailPage(const OUString& rPageId, TranslateId pTextId, CreateTabPage pCreateFunc)
 {
     AddTabPage(rPageId, DBA_RES(pTextId), pCreateFunc);
 }
@@ -142,7 +142,7 @@ void ODbAdminDialog::impl_selectDataSource(const css::uno::Any& _aDataSourceName
         case  ::dbaccess::DST_USERDEFINE10:
             {
                 OUString aTitle(DBA_RES(STR_PAGETITLE_ADVANCED));
-                AddTabPage("user" + OString::number(eType - dbaccess::DST_USERDEFINE1 + 1), aTitle, ODriversSettings::CreateUser);
+                AddTabPage("user" + OUString::number(eType - dbaccess::DST_USERDEFINE1 + 1), aTitle, ODriversSettings::CreateUser);
             }
             break;
         default:
@@ -183,7 +183,7 @@ void ODbAdminDialog::impl_resetPages(const Reference< XPropertySet >& _rxDatasou
     ::dbaccess::ODsnTypeCollection* pCollection = pCollectionItem->getCollection();
     if ( pCollection->determineType(getDatasourceType( *m_xExampleSet )) == ::dbaccess::DST_MYSQL_NATIVE )
     {
-        OString sMySqlNative("mysqlnative");
+        OUString sMySqlNative("mysqlnative");
         AddTabPage(sMySqlNative, DBA_RES(STR_PAGETITLE_CONNECTION), ODriversSettings::CreateMySQLNATIVE);
         RemoveTabPage("advanced");
         m_sMainPageID = sMySqlNative;
@@ -271,14 +271,14 @@ void ODbAdminDialog::createItemSet(std::unique_ptr<SfxItemSet>& _rpSet, rtl::Ref
     _rpPool = nullptr;
     _rpDefaults = nullptr;
 
-    const OUString sFilterAll( "%" );
+    static constexpr OUString sFilterAll( u"%"_ustr );
     // create and initialize the defaults
     _rpDefaults = new std::vector<SfxPoolItem*>(DSID_LAST_ITEM_ID - DSID_FIRST_ITEM_ID + 1);
     SfxPoolItem** pCounter = _rpDefaults->data();  // want to modify this without affecting the out param _rppDefaults
     *pCounter++ = new SfxStringItem(DSID_NAME, OUString());
     *pCounter++ = new SfxStringItem(DSID_ORIGINALNAME, OUString());
     *pCounter++ = new SfxStringItem(DSID_CONNECTURL, OUString());
-    *pCounter++ = new OStringListItem(DSID_TABLEFILTER, Sequence< OUString >(&sFilterAll, 1));
+    *pCounter++ = new OStringListItem(DSID_TABLEFILTER, Sequence< OUString >{sFilterAll});
     *pCounter++ = new DbuTypeCollectionItem(DSID_TYPECOLLECTION, _pTypeCollection);
     *pCounter++ = new SfxBoolItem(DSID_INVALID_SELECTION, false);
     *pCounter++ = new SfxBoolItem(DSID_READONLY, false);
@@ -335,73 +335,76 @@ void ODbAdminDialog::createItemSet(std::unique_ptr<SfxItemSet>& _rpSet, rtl::Ref
     *pCounter++ = new OptionalBoolItem( DSID_PRIMARY_KEY_SUPPORT );
     *pCounter++ = new SfxInt32Item(DSID_MAX_ROW_SCAN, 100);
     *pCounter++ = new SfxBoolItem( DSID_RESPECTRESULTSETTYPE,false );
+    *pCounter++ = new SfxInt32Item(DSID_POSTGRES_PORTNUMBER, 5432);
 
     // create the pool
     static SfxItemInfo const aItemInfos[DSID_LAST_ITEM_ID - DSID_FIRST_ITEM_ID + 1] =
     {
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
-        {0,false},
+        // _nSID, _bNeedsPoolRegistration, _bShareable
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
+        {0,false,false},
     };
 
-    OSL_ENSURE(std::size(aItemInfos) == DSID_LAST_ITEM_ID,"Invalid Ids!");
+    OSL_ENSURE(std::size(aItemInfos) == sal_uInt16(DSID_LAST_ITEM_ID),"Invalid Ids!");
     _rpPool = new SfxItemPool("DSAItemPool", DSID_FIRST_ITEM_ID, DSID_LAST_ITEM_ID,
         aItemInfos, _rpDefaults);
     _rpPool->FreezeIdRanges();

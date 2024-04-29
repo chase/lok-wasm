@@ -24,17 +24,15 @@
 #endif
 
 #include <sal/config.h>
-#include <config_features.h>
 
 #include <osl/endian.h>
 #include <vcl/sysdata.hxx>
 #include <config_cairo_canvas.h>
 
-#include <font/PhysicalFontFace.hxx>
 #include <salgdi.hxx>
 #include <sallayout.hxx>
-#include "svpcairotextrender.hxx"
-#include <impfontmetricdata.hxx>
+#include <unx/cairotextrender.hxx>
+#include <font/FontMetricData.hxx>
 
 #include <headless/SvpGraphicsBackend.hxx>
 #include <headless/CairoCommon.hxx>
@@ -45,7 +43,7 @@ class FreetypeFont;
 class VCL_DLLPUBLIC SvpSalGraphics : public SalGraphicsAutoDelegateToImpl
 {
     CairoCommon m_aCairoCommon;
-    SvpCairoTextRender                  m_aTextRenderImpl;
+    CairoTextRender m_aTextRenderImpl;
     std::unique_ptr<SvpGraphicsBackend> m_pBackend;
 
 public:
@@ -71,7 +69,7 @@ public:
 
     virtual void            SetTextColor( Color nColor ) override;
     virtual void            SetFont(LogicalFontInstance*, int nFallbackLevel) override;
-    virtual void            GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) override;
+    virtual void            GetFontMetric( FontMetricDataRef&, int nFallbackLevel ) override;
     virtual FontCharMapRef  GetFontCharMap() const override;
     virtual bool GetFontCapabilities(vcl::FontCapabilities &rFontCapabilities) const override;
     virtual void            GetDevFontList( vcl::font::PhysicalFontCollection* ) override;
@@ -98,15 +96,11 @@ public:
         return m_aCairoCommon.getCairoContext(/*bXorModeAllowed*/false, getAntiAlias());
     }
 
-    void releaseCairoContext(cairo_t* cr, const basegfx::B2DRange& rExtents) const
-    {
-        return m_aCairoCommon.releaseCairoContext(cr, /*bXorModeAllowed*/false, rExtents);
-    }
-
     void clipRegion(cairo_t* cr)
     {
         m_aCairoCommon.clipRegion(cr);
     }
+
     void copySource(const SalTwoRect& rTR, cairo_surface_t* source)
     {
         m_aCairoCommon.copySource(rTR, source, getAntiAlias());

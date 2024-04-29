@@ -391,7 +391,7 @@ void SwGlossaries::UpdateGlosPath(bool bFull)
             m_aInvalidPaths = aInvalidPaths;
             // wrong path, that means AutoText directory doesn't exist
 
-            ErrorHandler::HandleError( *new StringErrorInfo(
+            ErrorHandler::HandleError( ErrCodeMsg(
                                     ERR_AUTOPATH_ERROR, lcl_makePath(m_aInvalidPaths),
                                     DialogMask::ButtonsOk | DialogMask::MessageError ) );
             m_bError = true;
@@ -411,8 +411,7 @@ void SwGlossaries::UpdateGlosPath(bool bFull)
 
 void SwGlossaries::ShowError()
 {
-    ErrCode nPathError = *new StringErrorInfo(ERR_AUTOPATH_ERROR,
-                                            lcl_makePath(m_aInvalidPaths), DialogMask::ButtonsOk );
+    ErrCodeMsg nPathError(ERR_AUTOPATH_ERROR, lcl_makePath(m_aInvalidPaths), DialogMask::ButtonsOk );
     ErrorHandler::HandleError( nPathError );
 }
 
@@ -436,14 +435,14 @@ void SwGlossaries::RemoveFileFromList( const OUString& rGroup )
                 aLoop != m_aGlossaryGroups.end();
             )
         {
-            Reference< container::XNamed > xNamed( aLoop->get(), UNO_QUERY );
+            rtl::Reference< SwXAutoTextGroup > xNamed( aLoop->get() );
             if ( !xNamed.is() )
             {
                 aLoop = m_aGlossaryGroups.erase(aLoop);
             }
             else if ( xNamed->getName() == rGroup )
             {
-                static_cast< SwXAutoTextGroup* >( xNamed.get() )->Invalidate();
+                xNamed->Invalidate();
                     // note that this static_cast works because we know that the array only
                     // contains SwXAutoTextGroup implementation
                 m_aGlossaryGroups.erase( aLoop );
@@ -459,7 +458,7 @@ void SwGlossaries::RemoveFileFromList( const OUString& rGroup )
                 aLoop != m_aGlossaryEntries.end();
             )
         {
-            auto pEntry = comphelper::getFromUnoTunnel<SwXAutoTextEntry>(aLoop->get());
+            rtl::Reference<SwXAutoTextEntry> pEntry = aLoop->get();
             if ( pEntry && ( pEntry->GetGroupName() == rGroup ) )
             {
                 pEntry->Invalidate();
@@ -502,16 +501,16 @@ void SwGlossaries::InvalidateUNOOjects()
     // invalidate all the AutoTextGroup-objects
     for (const auto& rGroup : m_aGlossaryGroups)
     {
-        Reference< text::XAutoTextGroup > xGroup( rGroup.get(), UNO_QUERY );
+        rtl::Reference< SwXAutoTextGroup > xGroup( rGroup.get() );
         if ( xGroup.is() )
-            static_cast< SwXAutoTextGroup* >( xGroup.get() )->Invalidate();
+            xGroup->Invalidate();
     }
     UnoAutoTextGroups().swap(m_aGlossaryGroups);
 
     // invalidate all the AutoTextEntry-objects
     for (const auto& rEntry : m_aGlossaryEntries)
     {
-        auto pEntry = comphelper::getFromUnoTunnel<SwXAutoTextEntry>(rEntry.get());
+        rtl::Reference<SwXAutoTextEntry> pEntry = rEntry.get();
         if ( pEntry )
             pEntry->Invalidate();
     }
@@ -524,13 +523,13 @@ Reference< text::XAutoTextGroup > SwGlossaries::GetAutoTextGroup( std::u16string
     // first, find the name with path-extension
     const OUString sCompleteGroupName = GetCompleteGroupName( _rGroupName );
 
-    Reference< text::XAutoTextGroup >  xGroup;
+    rtl::Reference< SwXAutoTextGroup >  xGroup;
 
     // look up the group in the cache
     UnoAutoTextGroups::iterator aSearch = m_aGlossaryGroups.begin();
     for ( ; aSearch != m_aGlossaryGroups.end(); )
     {
-        auto pSwGroup = comphelper::getFromUnoTunnel<SwXAutoTextGroup>(aSearch->get());
+        rtl::Reference<SwXAutoTextGroup> pSwGroup = aSearch->get();
         if ( !pSwGroup )
         {
             // the object is dead in the meantime -> remove from cache
@@ -584,17 +583,14 @@ Reference< text::XAutoTextEntry > SwGlossaries::GetAutoTextEntry(
     if ( USHRT_MAX == nIdx )
         throw container::NoSuchElementException();
 
-    Reference< text::XAutoTextEntry > xReturn;
+    rtl::Reference< SwXAutoTextEntry > xReturn;
 
     UnoAutoTextEntries::iterator aSearch( m_aGlossaryEntries.begin() );
     for ( ; aSearch != m_aGlossaryEntries.end(); )
     {
-        Reference< lang::XUnoTunnel > xEntryTunnel( aSearch->get(), UNO_QUERY );
+        rtl::Reference< SwXAutoTextEntry > pEntry( aSearch->get() );
 
-        SwXAutoTextEntry* pEntry = nullptr;
-        if ( xEntryTunnel.is() )
-            pEntry = comphelper::getFromUnoTunnel<SwXAutoTextEntry>(xEntryTunnel);
-        else
+        if ( !pEntry )
         {
             // the object is dead in the meantime -> remove from cache
             aSearch = m_aGlossaryEntries.erase( aSearch );

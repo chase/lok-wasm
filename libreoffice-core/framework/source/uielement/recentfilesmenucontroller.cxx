@@ -20,18 +20,23 @@
 #include <strings.hrc>
 #include <classes/fwkresid.hxx>
 
+#include <comphelper/mimeconfighelper.hxx>
+#include <comphelper/processfactory.hxx>
 #include <comphelper/propertyvalue.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <osl/mutex.hxx>
 #include <svtools/imagemgr.hxx>
 #include <svtools/popupmenucontrollerbase.hxx>
 #include <tools/urlobj.hxx>
+#include <toolkit/awt/vclxmenu.hxx>
 #include <unotools/historyoptions.hxx>
 #include <vcl/commandinfoprovider.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 #include <o3tl/string_view.hxx>
+
+#include <officecfg/Office/Common.hxx>
 
 using namespace css;
 using namespace com::sun::star::uno;
@@ -41,12 +46,13 @@ using namespace com::sun::star::beans;
 using namespace com::sun::star::util;
 
 #define MAX_MENU_ITEMS  99
+#define MAX_MENU_ITEMS_PER_MODULE  5
 
 namespace {
 
-constexpr OUStringLiteral CMD_CLEAR_LIST = u".uno:ClearRecentFileList";
-constexpr OUStringLiteral CMD_OPEN_AS_TEMPLATE = u".uno:OpenTemplate";
-constexpr OUStringLiteral CMD_OPEN_REMOTE = u".uno:OpenRemote";
+constexpr OUString CMD_CLEAR_LIST = u".uno:ClearRecentFileList"_ustr;
+constexpr OUString CMD_OPEN_AS_TEMPLATE = u".uno:OpenTemplate"_ustr;
+constexpr OUString CMD_OPEN_REMOTE = u".uno:OpenRemote"_ustr;
 
 class RecentFilesMenuController :  public svt::PopupMenuControllerBase
 {
@@ -153,12 +159,67 @@ void RecentFilesMenuController::fillPopupMenu( Reference< css::awt::XPopupMenu >
     int nPickListMenuItems = std::min<sal_Int32>( aHistoryList.size(), MAX_MENU_ITEMS );
     m_aRecentFilesItems.clear();
 
+    // tdf#56696 - retrieve expert configuration option if the recent document
+    // list should show only files that can be handled by the current module
+    const bool bShowCurrentModuleOnly
+        = officecfg::Office::Common::History::ShowCurrentModuleOnly::get();
+
+    size_t nItemPosModule = 0;
+    size_t nItemPosPinned = 0;
     if (( nPickListMenuItems > 0 ) && !m_bDisabled )
     {
-        for ( int i = 0; i < nPickListMenuItems; i++ )
+        size_t nItemPos = 0;
+
+        // tdf#155699 - create a lambda to insert a recent document item at a specified position
+        auto insertHistoryItemAtPos =
+            [&](const SvtHistoryOptions::HistoryItem& rPickListEntry, const size_t aInsertPosition)
         {
-            const SvtHistoryOptions::HistoryItem& rPickListEntry = aHistoryList[i];
-            m_aRecentFilesItems.emplace_back(rPickListEntry.sURL, rPickListEntry.isReadOnly);
+            m_aRecentFilesItems.insert(m_aRecentFilesItems.begin() + aInsertPosition,
+                                       { rPickListEntry.sURL, rPickListEntry.isReadOnly });
+            nItemPos++;
+        };
+
+        if (m_aModuleName != "com.sun.star.frame.StartModule")
+        {
+            ::comphelper::MimeConfigurationHelper aConfigHelper(
+                comphelper::getProcessComponentContext());
+
+            // Show the first MAX_MENU_ITEMS_PER_MODULE items of the current module
+            // on top of the recent document list.
+            for (int i = 0; i < nPickListMenuItems; i++)
+            {
+                const SvtHistoryOptions::HistoryItem& rPickListEntry = aHistoryList[i];
+
+                // tdf#155699 - insert pinned document at the beginning of the list
+                if (rPickListEntry.isPinned)
+                {
+                    insertHistoryItemAtPos(rPickListEntry, nItemPosPinned);
+                    nItemPosPinned++;
+                    nItemPosModule++;
+                }
+                // tdf#56696 - insert documents of the current module
+                else if ((bShowCurrentModuleOnly
+                          || (nItemPosModule - nItemPosPinned) < MAX_MENU_ITEMS_PER_MODULE)
+                         && aConfigHelper.GetDocServiceNameFromFilter(rPickListEntry.sFilter)
+                                == m_aModuleName)
+                {
+                    insertHistoryItemAtPos(rPickListEntry, nItemPosModule);
+                    nItemPosModule++;
+                }
+                // Insert all other documents at the end of the list if the expert option is not set
+                else if (!bShowCurrentModuleOnly)
+                    insertHistoryItemAtPos(rPickListEntry, nItemPos);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < nPickListMenuItems; i++)
+            {
+                const SvtHistoryOptions::HistoryItem& rPickListEntry = aHistoryList[i];
+                // tdf#155699 - insert pinned document at the beginning of the list
+                insertHistoryItemAtPos(rPickListEntry,
+                                       rPickListEntry.isPinned ? nItemPosModule++ : nItemPos);
+            }
         }
     }
 
@@ -184,8 +245,7 @@ void RecentFilesMenuController::fillPopupMenu( Reference< css::awt::XPopupMenu >
             }
             else
             {
-                aMenuShortCut.append( sal_Int32( i + 1 ) );
-                aMenuShortCut.append( ". " );
+                aMenuShortCut.append( OUString::number(sal_Int32( i + 1 ) ) + ". " );
             }
 
             OUString aURLString = "vnd.sun.star.popup:RecentFileList?entry=" + OUString::number(i);
@@ -219,6 +279,14 @@ void RecentFilesMenuController::fillPopupMenu( Reference< css::awt::XPopupMenu >
 
             rPopupMenu->setTipHelpText(sal_uInt16(i + 1), aTipHelpText);
             rPopupMenu->setCommand(sal_uInt16(i + 1), aURLString);
+
+            // tdf#155699 - show a separator after the pinned recent document items
+            if (nItemPosPinned > 0 && i == nItemPosPinned - 1)
+                rPopupMenu->insertSeparator(-1);
+
+            // Show a separator after the MAX_MENU_ITEMS_PER_MODULE recent document items
+            if (nItemPosModule > 0 && i == nItemPosModule - 1)
+                rPopupMenu->insertSeparator(-1);
         }
 
         rPopupMenu->insertSeparator(-1);
@@ -283,7 +351,7 @@ void SAL_CALL RecentFilesMenuController::disposing( const EventObject& )
 {
     Reference< css::awt::XMenuListener > xHolder(this);
 
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     m_xFrame.clear();
     m_xDispatch.clear();
 
@@ -295,7 +363,7 @@ void SAL_CALL RecentFilesMenuController::disposing( const EventObject& )
 // XStatusListener
 void SAL_CALL RecentFilesMenuController::statusChanged( const FeatureStateEvent& Event )
 {
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     m_bDisabled = !Event.IsEnabled;
 }
 
@@ -304,7 +372,7 @@ void SAL_CALL RecentFilesMenuController::itemSelected( const css::awt::MenuEvent
     Reference< css::awt::XPopupMenu > xPopupMenu;
 
     {
-        osl::MutexGuard aLock(m_aMutex);
+        std::unique_lock aLock(m_aMutex);
         xPopupMenu = m_xPopupMenu;
     }
 
@@ -315,7 +383,7 @@ void SAL_CALL RecentFilesMenuController::itemSelected( const css::awt::MenuEvent
 
     if ( aCommand == CMD_CLEAR_LIST )
     {
-        SvtHistoryOptions::Clear( EHistoryType::PickList );
+        SvtHistoryOptions::Clear( EHistoryType::PickList, false );
         dispatchCommand(
             "vnd.org.libreoffice.recentdocs:ClearRecentFileList",
             css::uno::Sequence< css::beans::PropertyValue >() );
@@ -336,7 +404,7 @@ void SAL_CALL RecentFilesMenuController::itemSelected( const css::awt::MenuEvent
 
 void SAL_CALL RecentFilesMenuController::itemActivated( const css::awt::MenuEvent& )
 {
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     impl_setPopupMenu();
 }
 
@@ -353,9 +421,9 @@ Reference< XDispatch > SAL_CALL RecentFilesMenuController::queryDispatch(
     const OUString& /*sTarget*/,
     sal_Int32 /*nFlags*/ )
 {
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
 
-    throwIfDisposed();
+    throwIfDisposed(aLock);
 
     if ( aURL.Complete.startsWith( m_aBaseURL ) )
         return Reference< XDispatch >( this );
@@ -368,9 +436,9 @@ void SAL_CALL RecentFilesMenuController::dispatch(
     const URL& aURL,
     const Sequence< PropertyValue >& /*seqProperties*/ )
 {
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
 
-    throwIfDisposed();
+    throwIfDisposed(aLock);
 
     if ( !aURL.Complete.startsWith( m_aBaseURL ) )
         return;
@@ -380,7 +448,7 @@ void SAL_CALL RecentFilesMenuController::dispatch(
     if ( nQueryPart <= 0 )
         return;
 
-    static const OUStringLiteral aEntryArgStr( u"entry=" );
+    static constexpr OUString aEntryArgStr( u"entry="_ustr );
     sal_Int32 nEntryArg = aURL.Complete.indexOf( aEntryArgStr, nQueryPart );
     sal_Int32 nEntryPos = nEntryArg + aEntryArgStr.getLength();
     if (( nEntryArg <= 0 ) || ( nEntryPos >= aURL.Complete.getLength() ))

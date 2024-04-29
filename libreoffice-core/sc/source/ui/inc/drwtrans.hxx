@@ -23,11 +23,11 @@
 #include <vcl/transfer.hxx>
 
 #include <sfx2/objsh.hxx>
+#include <svl/urlbmk.hxx>
 #include <charthelper.hxx>
 
 class SdrModel;
 class ScDocShell;
-class INetBookmark;
 class SdrObject;
 class SdrView;
 class ScDrawView;
@@ -45,7 +45,7 @@ private:
 
                                     // extracted from model in ctor:
     Size                            m_aSrcSize;
-    std::unique_ptr<INetBookmark>   m_pBookmark;
+    std::optional<INetBookmark>     m_oBookmark;
     bool                            m_bGraphic;
     bool                            m_bGrIsBit;
     bool                            m_bOleObj;
@@ -89,9 +89,6 @@ public:
     ScDragSrc           GetDragSourceFlags() const      { return m_nDragSourceFlags; }
 
     static ScDrawTransferObj* GetOwnClipboard(const css::uno::Reference<css::datatransfer::XTransferable2>&);
-
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& rId ) override;
-    static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
 
     const ScRangeListVector& GetProtectedChartRangesVector() const { return m_aProtectedChartRangesVector; }
 };

@@ -63,6 +63,8 @@ enum DATASOURCE_TYPE
     DST_EMBEDDED_FIREBIRD   = 27,
     DST_POSTGRES            = 28,
     DST_WRITER              = 29,
+    DST_EMBEDDED_UNKNOWN    = 30,    /// for all embedded addons driver
+
 
     DST_USERDEFINE1,    /// first user defined driver
     DST_USERDEFINE2,
@@ -96,6 +98,7 @@ enum DATASOURCE_TYPE
 #define PAGE_DBSETUPWIZARD_FINAL                     16
 #define PAGE_DBSETUPWIZARD_USERDEFINED               17
 #define PAGE_DBSETUPWIZARD_MYSQL_NATIVE              18
+#define PAGE_DBSETUPWIZARD_POSTGRES                  19
 
 // ODsnTypeCollection
 class OOO_DLLPUBLIC_DBA ODsnTypeCollection final

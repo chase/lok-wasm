@@ -58,9 +58,9 @@ using ::osl::MutexGuard;
 
 namespace
 {
-constexpr OUStringLiteral sXML_metaStreamName = u"meta.xml";
-constexpr OUStringLiteral sXML_styleStreamName = u"styles.xml";
-constexpr OUStringLiteral sXML_contentStreamName = u"content.xml";
+constexpr OUString sXML_metaStreamName = u"meta.xml"_ustr;
+constexpr OUString sXML_styleStreamName = u"styles.xml"_ustr;
+constexpr OUString sXML_contentStreamName = u"content.xml"_ustr;
 
 
 uno::Reference< embed::XStorage > lcl_getWriteStorage(
@@ -186,8 +186,7 @@ namespace chart
 {
 
 XMLFilter::XMLFilter( Reference< uno::XComponentContext > const & xContext ) :
-        m_xContext( xContext ),
-        m_bCancelOperation( false )
+        m_xContext( xContext )
 {}
 
 XMLFilter::~XMLFilter()
@@ -200,11 +199,6 @@ sal_Bool SAL_CALL XMLFilter::filter(
     bool bResult = false;
 
     MutexGuard aGuard( m_aMutex );
-
-    // ignore cancel flag at start of function
-    // note: is currently ignored during import/export
-    if( m_bCancelOperation )
-        m_bCancelOperation = false;
 
     if( m_xSourceDoc.is())
     {
@@ -235,12 +229,6 @@ sal_Bool SAL_CALL XMLFilter::filter(
 
 void SAL_CALL XMLFilter::cancel()
 {
-    // if mutex is locked set "cancel state"
-    // note: is currently ignored in filter-method
-    if( ! m_aMutex.tryToAcquire())
-    {
-        m_bCancelOperation = true;
-    }
 }
 
 // ____ XImporter ____
@@ -720,7 +708,7 @@ void XMLFilter::isOasisFormat(const Sequence< beans::PropertyValue >& _rMediaDes
 }
 OUString XMLFilter::getMediaType(bool _bOasis)
 {
-    return _bOasis ? OUString(MIMETYPE_OASIS_OPENDOCUMENT_CHART_ASCII) : OUString(MIMETYPE_VND_SUN_XML_CHART_ASCII);
+    return _bOasis ? MIMETYPE_OASIS_OPENDOCUMENT_CHART_ASCII : MIMETYPE_VND_SUN_XML_CHART_ASCII;
 }
 
 OUString SAL_CALL XMLFilter::getImplementationName()

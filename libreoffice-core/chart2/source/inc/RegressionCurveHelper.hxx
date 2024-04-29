@@ -34,8 +34,8 @@ namespace com::sun::star::chart2::data { class XDataSource; }
 namespace com::sun::star::frame { class XModel; }
 namespace chart { class ChartModel; }
 namespace chart { class DataSeries; }
-namespace chart { class Diagram; }
 namespace chart { class RegressionCurveModel; }
+namespace chart { class RegressionCurveCalculator; }
 
 namespace chart::RegressionCurveHelper
 {
@@ -141,7 +141,7 @@ namespace chart::RegressionCurveHelper
             css::uno::Reference<css::chart2::XRegressionCurve> const & xRegressionCurve );
 
     /// returns a calculator object for regression curves (used by the view)
-    OOO_DLLPUBLIC_CHARTTOOLS css::uno::Reference<css::chart2::XRegressionCurveCalculator>
+    OOO_DLLPUBLIC_CHARTTOOLS rtl::Reference<::chart::RegressionCurveCalculator>
         createRegressionCurveCalculatorByServiceName( std::u16string_view aServiceName );
 
     /** recalculates the regression parameters according to the data given in
@@ -171,7 +171,7 @@ namespace chart::RegressionCurveHelper
      */
     OOO_DLLPUBLIC_CHARTTOOLS void initializeCurveCalculator(
         const css::uno::Reference<css::chart2::XRegressionCurveCalculator>& xOutCurveCalculator,
-        const css::uno::Reference<css::chart2::XDataSeries>& xSeries,
+        const rtl::Reference<::chart::DataSeries>& xSeries,
         const rtl::Reference<::chart::ChartModel>& xModel );
 
     OOO_DLLPUBLIC_CHARTTOOLS OUString getUINameForRegressionCurve(
@@ -185,10 +185,6 @@ namespace chart::RegressionCurveHelper
 
     OOO_DLLPUBLIC_CHARTTOOLS OUString getRegressionCurveSpecificName(
         const css::uno::Reference<css::chart2::XRegressionCurve>& xCurve );
-
-    OOO_DLLPUBLIC_CHARTTOOLS std::vector<rtl::Reference<::chart::RegressionCurveModel> >
-        getAllRegressionCurvesNotMeanValueLine(
-                const rtl::Reference<::chart::Diagram>& xDiagram );
 
     OOO_DLLPUBLIC_CHARTTOOLS void resetEquationPosition(
         const css::uno::Reference<css::chart2::XRegressionCurve>& xCurve );

@@ -43,79 +43,28 @@ using ::com::sun::star::uno::Any;
 namespace
 {
 
-struct StaticUpDownBarWrapperPropertyArray_Initializer
+const Sequence< Property > & StaticUpDownBarWrapperPropertyArray()
 {
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence() );
-        return &aPropSeq;
-    }
+    static Sequence< Property > aPropSeq = []()
+        {
+            std::vector< css::beans::Property > aProperties;
 
-private:
-    static Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< css::beans::Property > aProperties;
+            ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
+            ::chart::FillProperties::AddPropertiesToVector( aProperties );
+            ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
 
-        ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
-        ::chart::FillProperties::AddPropertiesToVector( aProperties );
-        ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
 
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropSeq;
 };
 
-struct StaticUpDownBarWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticUpDownBarWrapperPropertyArray_Initializer >
+::cppu::OPropertyArrayHelper& StaticUpDownBarWrapperInfoHelper()
 {
-};
-
-struct StaticUpDownBarWrapperInfoHelper_Initializer
-{
-    ::cppu::OPropertyArrayHelper* operator()()
-    {
-        static ::cppu::OPropertyArrayHelper aPropHelper( *StaticUpDownBarWrapperPropertyArray::get() );
-        return &aPropHelper;
-    }
-};
-
-struct StaticUpDownBarWrapperInfoHelper : public rtl::StaticAggregate< ::cppu::OPropertyArrayHelper, StaticUpDownBarWrapperInfoHelper_Initializer >
-{
-};
-
-struct StaticUpDownBarWrapperInfo_Initializer
-{
-    uno::Reference< beans::XPropertySetInfo >* operator()()
-    {
-        static uno::Reference< beans::XPropertySetInfo > xPropertySetInfo(
-            ::cppu::OPropertySetHelper::createPropertySetInfo(*StaticUpDownBarWrapperInfoHelper::get() ) );
-        return &xPropertySetInfo;
-    }
-};
-
-struct StaticUpDownBarWrapperInfo : public rtl::StaticAggregate< uno::Reference< beans::XPropertySetInfo >, StaticUpDownBarWrapperInfo_Initializer >
-{
-};
-
-struct StaticUpDownBarWrapperDefaults_Initializer
-{
-    ::chart::tPropertyValueMap* operator()()
-    {
-        static ::chart::tPropertyValueMap aStaticDefaults;
-        lcl_AddDefaultsToMap( aStaticDefaults );
-        return &aStaticDefaults;
-    }
-private:
-    static void lcl_AddDefaultsToMap( ::chart::tPropertyValueMap & rOutMap )
-    {
-        ::chart::LinePropertiesHelper::AddDefaultsToMap( rOutMap );
-        ::chart::FillProperties::AddDefaultsToMap( rOutMap );
-    }
-};
-
-struct StaticUpDownBarWrapperDefaults : public rtl::StaticAggregate< ::chart::tPropertyValueMap, StaticUpDownBarWrapperDefaults_Initializer >
-{
+    static ::cppu::OPropertyArrayHelper aPropHelper( StaticUpDownBarWrapperPropertyArray() );
+    return aPropHelper;
 };
 
 } // anonymous namespace
@@ -126,7 +75,6 @@ namespace chart::wrapper
 UpDownBarWrapper::UpDownBarWrapper(
     bool bUp, std::shared_ptr<Chart2ModelContact> spChart2ModelContact)
         : m_spChart2ModelContact(std::move( spChart2ModelContact ))
-        , m_aEventListenerContainer( m_aMutex )
         , m_aPropertySetName( bUp ? OUString( "WhiteDay" ) : OUString( "BlackDay" ))
 {
 }
@@ -138,33 +86,39 @@ UpDownBarWrapper::~UpDownBarWrapper()
 // ____ XComponent ____
 void SAL_CALL UpDownBarWrapper::dispose()
 {
+    std::unique_lock g(m_aMutex);
     Reference< uno::XInterface > xSource( static_cast< ::cppu::OWeakObject* >( this ) );
-    m_aEventListenerContainer.disposeAndClear( lang::EventObject( xSource ) );
+    m_aEventListenerContainer.disposeAndClear( g, lang::EventObject( xSource ) );
 }
 
 void SAL_CALL UpDownBarWrapper::addEventListener(
     const Reference< lang::XEventListener >& xListener )
 {
-    m_aEventListenerContainer.addInterface( xListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.addInterface( g, xListener );
 }
 
 void SAL_CALL UpDownBarWrapper::removeEventListener(
     const Reference< lang::XEventListener >& aListener )
 {
-    m_aEventListenerContainer.removeInterface( aListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.removeInterface( g, aListener );
 }
 
 //XPropertySet
 uno::Reference< beans::XPropertySetInfo > SAL_CALL UpDownBarWrapper::getPropertySetInfo()
 {
-    return *StaticUpDownBarWrapperInfo::get();
+    static uno::Reference< beans::XPropertySetInfo > xPropertySetInfo(
+        ::cppu::OPropertySetHelper::createPropertySetInfo(StaticUpDownBarWrapperInfoHelper() ) );
+    return xPropertySetInfo;
 }
+
 void SAL_CALL UpDownBarWrapper::setPropertyValue( const OUString& rPropertyName, const uno::Any& rValue )
 {
     Reference< beans::XPropertySet > xPropSet;
 
-    const std::vector< rtl::Reference< ChartType > > aTypes(
-            ::chart::DiagramHelper::getChartTypesFromDiagram( m_spChart2ModelContact->getDiagram() ) );
+    const std::vector< rtl::Reference< ChartType > > aTypes =
+            m_spChart2ModelContact->getDiagram()->getChartTypes();
     for( rtl::Reference< ChartType > const & xType : aTypes )
     {
         if( xType->getChartType() == CHART2_SERVICE_NAME_CHARTTYPE_CANDLESTICK )
@@ -181,8 +135,8 @@ uno::Any SAL_CALL UpDownBarWrapper::getPropertyValue( const OUString& rPropertyN
 
     Reference< beans::XPropertySet > xPropSet;
 
-    const std::vector< rtl::Reference< ChartType > > aTypes(
-            ::chart::DiagramHelper::getChartTypesFromDiagram( m_spChart2ModelContact->getDiagram() ) );
+    const std::vector< rtl::Reference< ChartType > > aTypes =
+            m_spChart2ModelContact->getDiagram()->getChartTypes();
     for( rtl::Reference<ChartType > const & xType : aTypes )
     {
         if( xType->getChartType() == CHART2_SERVICE_NAME_CHARTTYPE_CANDLESTICK )
@@ -292,9 +246,15 @@ void SAL_CALL UpDownBarWrapper::setPropertyToDefault( const OUString& rPropertyN
 
 uno::Any SAL_CALL UpDownBarWrapper::getPropertyDefault( const OUString& rPropertyName )
 {
-    const tPropertyValueMap& rStaticDefaults = *StaticUpDownBarWrapperDefaults::get();
-    tPropertyValueMap::const_iterator aFound( rStaticDefaults.find( StaticUpDownBarWrapperInfoHelper::get()->getHandleByName( rPropertyName ) ) );
-    if( aFound == rStaticDefaults.end() )
+    static const ::chart::tPropertyValueMap aStaticDefaults = []()
+        {
+            ::chart::tPropertyValueMap aTmp;
+            ::chart::LinePropertiesHelper::AddDefaultsToMap( aTmp );
+            ::chart::FillProperties::AddDefaultsToMap( aTmp );
+            return aTmp;
+        }();
+    tPropertyValueMap::const_iterator aFound( aStaticDefaults.find( StaticUpDownBarWrapperInfoHelper().getHandleByName( rPropertyName ) ) );
+    if( aFound == aStaticDefaults.end() )
         return uno::Any();
     return (*aFound).second;
 }
@@ -303,7 +263,7 @@ uno::Any SAL_CALL UpDownBarWrapper::getPropertyDefault( const OUString& rPropert
 //getPropertyStates() already declared in XPropertyState
 void SAL_CALL UpDownBarWrapper::setAllPropertiesToDefault(  )
 {
-    const Sequence< beans::Property >& rPropSeq = *StaticUpDownBarWrapperPropertyArray::get();
+    const Sequence< beans::Property >& rPropSeq = StaticUpDownBarWrapperPropertyArray();
     for(beans::Property const & prop : rPropSeq)
     {
         setPropertyToDefault( prop.Name );

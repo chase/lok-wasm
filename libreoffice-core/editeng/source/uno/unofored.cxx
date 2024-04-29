@@ -124,6 +124,20 @@ void SvxEditEngineForwarder::GetPortions( sal_Int32 nPara, std::vector<sal_Int32
     rEditEngine.GetPortions( nPara, rList );
 }
 
+OUString SvxEditEngineForwarder::GetStyleSheet(sal_Int32 nPara) const
+{
+    if (auto pStyle = rEditEngine.GetStyleSheet(nPara))
+        return pStyle->GetName();
+    return OUString();
+}
+
+void SvxEditEngineForwarder::SetStyleSheet(sal_Int32 nPara, const OUString& rStyleName)
+{
+    auto pStyleSheetPool = rEditEngine.GetStyleSheetPool();
+    if (auto pStyle = pStyleSheetPool ? pStyleSheetPool->Find(rStyleName, SfxStyleFamily::Para) : nullptr)
+        rEditEngine.SetStyleSheet(nPara, static_cast<SfxStyleSheet*>(pStyle));
+}
+
 void SvxEditEngineForwarder::QuickInsertText( const OUString& rText, const ESelection& rSel )
 {
     rEditEngine.QuickInsertText( rText, rSel );
@@ -151,9 +165,9 @@ bool SvxEditEngineForwarder::IsValid() const
     return rEditEngine.IsUpdateLayout();
 }
 
-OUString SvxEditEngineForwarder::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor )
+OUString SvxEditEngineForwarder::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor, std::optional<FontLineStyle>& rpFldLineStyle )
 {
-    return rEditEngine.CalcFieldValue( rField, nPara, nPos, rpTxtColor, rpFldColor );
+    return rEditEngine.CalcFieldValue( rField, nPara, nPos, rpTxtColor, rpFldColor, rpFldLineStyle );
 }
 
 void SvxEditEngineForwarder::FieldClicked( const SvxFieldItem& rField )

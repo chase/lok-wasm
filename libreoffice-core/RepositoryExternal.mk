@@ -312,6 +312,7 @@ $(call gb_LinkTarget_use_system_win32_libs,$(1),\
 	kernel32 \
 	shlwapi \
 	crypt32 \
+	bcrypt \
 )
 
 endef
@@ -1293,7 +1294,11 @@ $(eval $(call gb_Helper_register_packages_for_install,ooo,\
 endif
 
 define gb_LinkTarget__use_fontconfig
+ifeq ($(OS),LINUX)
+$(call gb_LinkTarget_use_package,$(1),fontconfig)
+else
 $(call gb_LinkTarget_use_external_project,$(1),fontconfig)
+endif
 $(call gb_LinkTarget_set_include,$(1),\
 	-I$(call gb_UnpackedTarball_get_dir,fontconfig) \
 	$$(INCLUDE) \
@@ -1546,6 +1551,35 @@ endef
 
 endif # SYSTEM_OPENSSL
 endif # ENABLE_OPENSSL
+
+
+ifneq ($(SYSTEM_ARGON2),)
+
+define gb_LinkTarget__use_argon2
+$(call gb_LinkTarget_set_include,$(1),\
+	$(ARGON2_CFLAGS) \
+	$$(INCLUDE) \
+)
+$(call gb_LinkTarget_add_libs,$(1),$(ARGON2_LIBS))
+
+endef
+
+else # !SYSTEM_ARGON2
+
+$(eval $(call gb_Helper_register_packages_for_install,ooo, \
+	argon2 \
+))
+
+define gb_LinkTarget__use_argon2
+$(call gb_LinkTarget_set_include,$(1),\
+	$(ARGON2_CFLAGS) \
+	$$(INCLUDE) \
+)
+$(call gb_LinkTarget_add_libs,$(1),$(ARGON2_LIBS))
+$(call gb_LinkTarget_use_package,$(1),argon2)
+endef
+
+endif # SYSTEM_ARGON2
 
 
 ifneq ($(SYSTEM_CDR),)
@@ -2732,9 +2766,10 @@ endef
 
 else # !SYSTEM_CURL
 
+$(if $(ENABLE_CURL),\
 $(eval $(call gb_Helper_register_packages_for_install,ooo,\
 	curl \
-))
+)))
 
 define gb_LinkTarget__use_curl
 $(call gb_LinkTarget_use_package,$(1),curl)
@@ -2841,6 +2876,7 @@ ifneq ($(SYSTEM_CLUCENE),)
 define gb_LinkTarget__use_clucene
 $(call gb_LinkTarget_add_defs,$(1),\
 	$(filter-out -I% -isystem%,$(subst -isystem /,-isystem/,$(CLUCENE_CFLAGS))) \
+	-DSYSTEM_CLUCENE \
 )
 
 $(call gb_LinkTarget_set_include,$(1),\
@@ -3051,9 +3087,10 @@ endef
 else # !SYSTEM_POSTGRESQL
 
 ifeq ($(OS),WNT)
+$(if $(MPL_SUBSET),,\
 $(eval $(call gb_Helper_register_packages_for_install,postgresqlsdbc,\
 	postgresql \
-))
+)))
 endif # WNT
 
 define gb_LinkTarget__use_postgresql
@@ -3113,7 +3150,31 @@ endef
 
 endif # ENABLE_KF5
 
+ifneq (,$(filter TRUE,$(ENABLE_KF6)))
 
+define gb_LinkTarget__use_kf6
+$(call gb_LinkTarget_set_include,$(1),\
+	$(subst -isystem/,-isystem /,$(filter -I% -isystem%,$(subst -isystem /,-isystem/,$(KF6_CFLAGS)))) \
+	$$(INCLUDE) \
+)
+
+$(call gb_LinkTarget_add_cxxflags,$(1),\
+	$(filter-out -I% -isystem%,$(subst -isystem /,-isystem/,$(KF6_CFLAGS))) \
+)
+
+$(call gb_LinkTarget_add_libs,$(1),\
+	$(KF6_LIBS) \
+)
+
+endef
+
+else # !ENABLE_KF6
+
+define gb_LinkTarget__use_kf6
+
+endef
+
+endif # ENABLE_KF6
 
 ifneq (,$(filter TRUE,$(ENABLE_QT5) $(ENABLE_GTK3_KDE5)))
 
@@ -3314,7 +3375,7 @@ $(call gb_LinkTarget_set_include,$(1),\
 )
 
 $(call gb_LinkTarget_add_libs,$(1),\
-       -L$(call gb_UnpackedTarball_get_dir,liborcus)/src/liborcus/.libs -lorcus-0.17 \
+       -L$(call gb_UnpackedTarball_get_dir,liborcus)/src/liborcus/.libs -lorcus-0.18 \
 )
 
 $(if $(SYSTEM_BOOST), \
@@ -3333,7 +3394,7 @@ $(call gb_LinkTarget_set_include,$(1),\
 )
 
 $(call gb_LinkTarget_add_libs,$(1),\
-	-L$(call gb_UnpackedTarball_get_dir,liborcus)/src/parser/.libs -lorcus-parser-0.17 \
+	-L$(call gb_UnpackedTarball_get_dir,liborcus)/src/parser/.libs -lorcus-parser-0.18 \
 )
 
 endef
@@ -3728,6 +3789,7 @@ endef
 
 endif # SYSTEM_HSQLDB
 
+
 ifeq ($(ENABLE_SCRIPTING_BEANSHELL),TRUE)
 
 ifneq ($(SYSTEM_BSH),)
@@ -3886,7 +3948,7 @@ endef
 
 endif # SYSTEM_JFREEREPORT
 
-# no known distro packaged java-websocket
+# no known distro packaged Java-Websocket at present
 
 ifeq ($(ENABLE_JAVA),TRUE)
 $(eval $(call gb_Helper_register_jars_for_install,URE,ure, \
@@ -4118,7 +4180,6 @@ endef
 
 endif
 
-ifneq ($(ENABLE_ONLINE_UPDATE_MAR),)
 ifneq ($(SYSTEM_BZIP2),)
 
 define gb_LinkTarget__use_bzip2
@@ -4157,8 +4218,7 @@ define gb_ExternalProject__use_bzip2
 $(call gb_ExternalProject_use_external_project,$(1),bzip2)
 endef
 
-endif
-endif
+endif # SYSTEM_BZIP2
 
 define gb_LinkTarget__use_clew
 $(call gb_LinkTarget_set_include,$(1), \
@@ -4259,6 +4319,30 @@ endef
 
 endif # SYSTEM_BOX2D
 
+ifneq ($(SYSTEM_ZXCVBN),)
+define gb_LinkTarget__use_zxcvbn-c
+$(call gb_LinkTarget_set_include,$(1),\
+	-DSYSTEM_ZXCVBN \
+	$$(INCLUDE) \
+)
+$(call gb_LinkTarget_add_libs,$(1),-lzxcvbn)
+endef
+
+else
+
+define gb_LinkTarget__use_zxcvbn-c
+$(call gb_LinkTarget_use_unpacked,$(1),zxcvbn-c)
+$(call gb_LinkTarget_set_include,$(1),\
+	-I$(call gb_UnpackedTarball_get_dir,zxcvbn-c)\
+	$$(INCLUDE) \
+)
+$(call gb_LinkTarget_use_static_libraries,$(1),\
+	zxcvbn-c \
+)
+endef
+endif
+
+
 ifneq ($(SYSTEM_ZXING),)
 
 define gb_LinkTarget__use_zxing
@@ -4302,5 +4386,23 @@ endef
 endif # ENABLE_ZXING
 
 endif # SYSTEM_ZXING
+
+
+ifneq ($(SYSTEM_FROZEN),)
+define gb_LinkTarget__use_frozen
+$(call gb_LinkTarget_set_include,$(1),\
+	$$(INCLUDE) \
+	$(FROZEN_CFLAGS)
+)
+endef
+else
+define gb_LinkTarget__use_frozen
+$(call gb_LinkTarget_use_unpacked,$(1),frozen)
+$(call gb_LinkTarget_set_include,$(1),\
+	-I$(call gb_UnpackedTarball_get_dir,frozen/include/)\
+	$$(INCLUDE) \
+)
+endef
+endif
 
 # vim: set noet sw=4 ts=4:

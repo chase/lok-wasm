@@ -61,7 +61,6 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::i18n;
 using namespace ::com::sun::star::lang;
-using namespace ::std;
 
 // Constants for type offsets per Country/Language (CL)
 #define ZF_STANDARD              0
@@ -276,9 +275,33 @@ const sal_uInt16 SvNumberFormatter::INPUTSTRING_PRECISION = ::std::numeric_limit
 SvNumberFormatter::SvNumberFormatter( const Reference< XComponentContext >& rxContext,
                                       LanguageType eLang )
     : m_xContext( rxContext )
-    , maLanguageTag( eLang)
+    , IniLnge(eLang != LANGUAGE_DONTKNOW ? eLang : UNKNOWN_SUBSTITUTE)
+    , ActLnge(IniLnge)
+    , maLanguageTag(IniLnge)
+    , MaxCLOffset(0)
+    , nDefaultSystemCurrencyFormat(NUMBERFORMAT_ENTRY_NOT_FOUND)
+    , eEvalDateFormat(NF_EVALDATEFORMAT_INTL)
+    , bNoZero(false)
 {
-    ImpConstruct( eLang );
+    xCharClass.changeLocale( m_xContext, maLanguageTag );
+    xLocaleData.init( m_xContext, maLanguageTag );
+    xCalendar.init( m_xContext, maLanguageTag.getLocale() );
+    xTransliteration.init( m_xContext, IniLnge );
+    xNatNum.init( m_xContext );
+
+    // cached locale data items
+    const LocaleDataWrapper* pLoc = GetLocaleData();
+    aDecimalSep = pLoc->getNumDecimalSep();
+    aDecimalSepAlt = pLoc->getNumDecimalSepAlt();
+    aThousandSep = pLoc->getNumThousandSep();
+    aDateSep = pLoc->getDateSep();
+
+    pStringScanner.reset( new ImpSvNumberInputScan( this ) );
+    pFormatScanner.reset( new ImpSvNumberformatScan( this ) );
+    ImpGenerateFormats( 0, false );     // 0 .. 999 for initialized language formats
+
+    ::osl::MutexGuard aGuard( GetGlobalMutex() );
+    GetFormatterRegistry().Insert( this );
 }
 
 SvNumberFormatter::~SvNumberFormatter()
@@ -295,44 +318,6 @@ SvNumberFormatter::~SvNumberFormatter()
 
     aFTable.clear();
     ClearMergeTable();
-}
-
-
-void SvNumberFormatter::ImpConstruct( LanguageType eLang )
-{
-    if ( eLang == LANGUAGE_DONTKNOW )
-    {
-        eLang = UNKNOWN_SUBSTITUTE;
-    }
-    IniLnge = eLang;
-    ActLnge = eLang;
-    eEvalDateFormat = NF_EVALDATEFORMAT_INTL;
-    nDefaultSystemCurrencyFormat = NUMBERFORMAT_ENTRY_NOT_FOUND;
-
-    maLanguageTag.reset( eLang );
-    xCharClass.changeLocale( m_xContext, maLanguageTag );
-    xLocaleData.init( m_xContext, maLanguageTag );
-    xCalendar.init( m_xContext, maLanguageTag.getLocale() );
-    xTransliteration.init( m_xContext, eLang );
-    xNatNum.init( m_xContext );
-
-    // cached locale data items
-    const LocaleDataWrapper* pLoc = GetLocaleData();
-    aDecimalSep = pLoc->getNumDecimalSep();
-    aDecimalSepAlt = pLoc->getNumDecimalSepAlt();
-    aThousandSep = pLoc->getNumThousandSep();
-    aDateSep = pLoc->getDateSep();
-
-    pStringScanner.reset( new ImpSvNumberInputScan( this ) );
-    pFormatScanner.reset( new ImpSvNumberformatScan( this ) );
-    pFormatTable = nullptr;
-    MaxCLOffset = 0;
-    ImpGenerateFormats( 0, false );     // 0 .. 999 for initialized language formats
-    pMergeTable = nullptr;
-    bNoZero = false;
-
-    ::osl::MutexGuard aGuard( GetGlobalMutex() );
-    GetFormatterRegistry().Insert( this );
 }
 
 
@@ -1106,10 +1091,7 @@ sal_uInt32 SvNumberFormatter::ImpGenerateCL( LanguageType eLnge )
                     {
                         if ( i != j && xSeq[i].formatIndex == nIdx )
                         {
-                            aDupes.append( i );
-                            aDupes.append("(");
-                            aDupes.append(xSeq[i].formatKey);
-                            aDupes.append( ") ");
+                            aDupes.append( OUString::number(i) + "(" + xSeq[i].formatKey + ") ");
                         }
                     }
                     if ( !aDupes.isEmpty() )
@@ -1306,8 +1288,7 @@ bool SvNumberFormatter::IsNumberFormat(const OUString& sString,
 
 LanguageType SvNumberFormatter::GetLanguage() const
 {
-    ::osl::MutexGuard aGuard( GetInstanceMutex() );
-    return IniLnge;
+    return IniLnge; // immutable
 }
 
 // static
@@ -2257,6 +2238,13 @@ OUString SvNumberFormatter::GetLangDecimalSep( LanguageType nLang ) const
     return aRet;
 }
 
+bool SvNumberFormatter::IsNatNum12( sal_uInt32 nFIndex ) const
+{
+    ::osl::MutexGuard aGuard( GetInstanceMutex() );
+    const SvNumberformat* pFormat = GetFormatEntry( nFIndex );
+
+    return pFormat && pFormat->GetNatNumModifierString().startsWith( "[NatNum12" );
+}
 
 sal_uInt32 SvNumberFormatter::GetFormatSpecialInfo( const OUString& rFormatString,
                                                     bool& bThousand, bool& IsRed, sal_uInt16& nPrecision,
@@ -2420,7 +2408,7 @@ void SvNumberFormatter::ImpAdjustFormatCodeDefault(
     if (LocaleDataWrapper::areChecksEnabled())
     {
         // check the locale data for correctness
-        OStringBuffer aMsg;
+        OUStringBuffer aMsg;
         sal_Int32 nElem, nShort, nMedium, nLong, nShortDef, nMediumDef, nLongDef;
         nShort = nMedium = nLong = nShortDef = nMediumDef = nLongDef = -1;
         for ( nElem = 0; nElem < nCnt; nElem++ )
@@ -2463,12 +2451,10 @@ void SvNumberFormatter::ImpAdjustFormatCodeDefault(
             if (!aMsg.isEmpty())
             {
                 aMsg.insert(0, "SvNumberFormatter::ImpAdjustFormatCodeDefault: ");
-                aMsg.append("\nXML locale data FormatElement formatindex: ");
-                aMsg.append(static_cast<sal_Int32>(pFormatArr[nElem].Index));
-                OUString aUMsg(OStringToOUString(aMsg,
-                    RTL_TEXTENCODING_ASCII_US));
+                aMsg.append("\nXML locale data FormatElement formatindex: "
+                    + OUString::number(static_cast<sal_Int32>(pFormatArr[nElem].Index)));
+                LocaleDataWrapper::outputCheckMessage(xLocaleData->appendLocaleInfo(aMsg));
                 aMsg.setLength(0);
-                LocaleDataWrapper::outputCheckMessage(xLocaleData->appendLocaleInfo(aUMsg));
             }
         }
         if ( nShort != -1 && nShortDef == -1 )
@@ -2481,10 +2467,9 @@ void SvNumberFormatter::ImpAdjustFormatCodeDefault(
         {
             aMsg.insert(0, "SvNumberFormatter::ImpAdjustFormatCodeDefault: ");
             aMsg.append("\nXML locale data FormatElement group of: ");
-            OUString aUMsg(OStringToOUString(aMsg, RTL_TEXTENCODING_ASCII_US));
-            aMsg.setLength(0);
             LocaleDataWrapper::outputCheckMessage(
-                xLocaleData->appendLocaleInfo(Concat2View(aUMsg + pFormatArr[0].NameID)));
+                xLocaleData->appendLocaleInfo(Concat2View(aMsg + pFormatArr[0].NameID)));
+            aMsg.setLength(0);
         }
     }
     // find the default (medium preferred, then long) and reset all other defaults
@@ -3121,8 +3106,10 @@ void SvNumberFormatter::ImpGenerateAdditionalFormats( sal_uInt32 CLOffset,
     pStdFormat->SetLastInsertKey( static_cast<sal_uInt16>(nPos - CLOffset), SvNumberformat::FormatterPrivateAccess() );
 }
 
+namespace {
 
-sal_Int32 SvNumberFormatter::ImpPosToken ( const OUStringBuffer & sFormat, sal_Unicode token, sal_Int32 nStartPos /* = 0*/ ) const
+// return position of a special character
+sal_Int32 ImpPosToken(const OUStringBuffer & sFormat, sal_Unicode token, sal_Int32 nStartPos = 0)
 {
     sal_Int32 nLength = sFormat.getLength();
     for ( sal_Int32 i=nStartPos; i<nLength && i>=0 ; i++ )
@@ -3153,6 +3140,8 @@ sal_Int32 SvNumberFormatter::ImpPosToken ( const OUStringBuffer & sFormat, sal_U
             i--;
     }
     return -2;
+}
+
 }
 
 OUString SvNumberFormatter::GenerateFormat(sal_uInt32 nIndex,
@@ -3198,8 +3187,7 @@ OUString SvNumberFormatter::GenerateFormat(sal_uInt32 nIndex,
             }
             else
             {
-                sString.append('#');
-                sString.append(rThSep);
+                sString.append("#" + rThSep);
                 padToLength(sString, sString.getLength() + nDigitsInFirstGroup, '#');
             }
         }
@@ -3311,9 +3299,7 @@ OUString SvNumberFormatter::GenerateFormat(sal_uInt32 nIndex,
         sString.append( ';' );
         if (IsRed)
         {
-            sString.append('[');
-            sString.append(pFormatScanner->GetRedString());
-            sString.append(']');
+            sString.append("[" +pFormatScanner->GetRedString() + "]");
         }
         sString.append( sNegNatNumModifier );
         if ( isNegNatNum12 )
@@ -3329,12 +3315,10 @@ OUString SvNumberFormatter::GenerateFormat(sal_uInt32 nIndex,
             sString.append( aIntegerFractionDelimiterString );
         else
         {
-            sString.append( '"' );
-            sString.append( aIntegerFractionDelimiterString );
-            sString.append( '"' );
+            sString.append( "\"" + aIntegerFractionDelimiterString + "\"" );
         }
-        sString.append( pFormat->GetNumeratorString( 0 ) );
-        sString.append( '/' );
+        sString.append( pFormat->GetNumeratorString( 0 )
+            + "/" );
         if ( nPrecision > 0 )
             padToLength(sString, sString.getLength() + nPrecision, '?');
         else
@@ -3353,29 +3337,23 @@ OUString SvNumberFormatter::GenerateFormat(sal_uInt32 nIndex,
 
             if (pFormat && pFormat->HasPositiveBracketPlaceholder())
             {
-                 sTmpStr.append('_');
-                 sTmpStr.append(')');
+                 sTmpStr.append("_)");
             }
             sTmpStr.append(';');
 
             if (IsRed)
             {
-                sTmpStr.append('[');
-                sTmpStr.append(pFormatScanner->GetRedString());
-                sTmpStr.append(']');
+                sTmpStr.append("[" + pFormatScanner->GetRedString() + "]");
             }
             sTmpStr.append( sNegNatNumModifier );
 
             if (insertBrackets)
             {
-                sTmpStr.append('(');
-                sTmpStr.append(sString);
-                sTmpStr.append(')');
+                sTmpStr.append("(" + sString + ")");
             }
             else
             {
-                sTmpStr.append('-');
-                sTmpStr.append(sString);
+                sTmpStr.append("-" + sString);
             }
             sString = sTmpStr;
         }
@@ -3555,33 +3533,25 @@ SvNumberFormatterMergeMap SvNumberFormatter::ConvertMergeTableToMap()
     return aMap;
 }
 
-
 sal_uInt32 SvNumberFormatter::GetFormatForLanguageIfBuiltIn( sal_uInt32 nFormat,
                                                              LanguageType eLnge )
 {
-    ::osl::MutexGuard aGuard( GetInstanceMutex() );
     if ( eLnge == LANGUAGE_DONTKNOW )
-    {
-        eLnge = IniLnge;
-    }
+        eLnge = IniLnge;    // IniLnge never changes
     if ( nFormat < SV_COUNTRY_LANGUAGE_OFFSET && eLnge == IniLnge )
-    {
         return nFormat;     // it stays as it is
-    }
     sal_uInt32 nOffset = nFormat % SV_COUNTRY_LANGUAGE_OFFSET;  // relative index
     if ( nOffset > SV_MAX_COUNT_STANDARD_FORMATS )
-    {
-        return nFormat;    // not a built-in format
-    }
+        return nFormat;     // not a built-in format
+
+    ::osl::MutexGuard aGuard( GetInstanceMutex() );
     sal_uInt32 nCLOffset = ImpGenerateCL(eLnge);    // create new standard formats if necessary
     return nCLOffset + nOffset;
 }
 
-
 sal_uInt32 SvNumberFormatter::GetFormatIndex( NfIndexTableOffset nTabOff,
                                               LanguageType eLnge )
 {
-    ::osl::MutexGuard aGuard( GetInstanceMutex() );
     if (nTabOff >= NF_INDEX_TABLE_ENTRIES)
         return NUMBERFORMAT_ENTRY_NOT_FOUND;
 
@@ -3591,15 +3561,14 @@ sal_uInt32 SvNumberFormatter::GetFormatIndex( NfIndexTableOffset nTabOff,
     if (indexTable[nTabOff] == NUMBERFORMAT_ENTRY_NOT_FOUND)
         return NUMBERFORMAT_ENTRY_NOT_FOUND;
 
+    ::osl::MutexGuard aGuard( GetInstanceMutex() );
     sal_uInt32 nCLOffset = ImpGenerateCL(eLnge);    // create new standard formats if necessary
-
     return nCLOffset + indexTable[nTabOff];
 }
 
-
-NfIndexTableOffset SvNumberFormatter::GetIndexTableOffset( sal_uInt32 nFormat ) const
+//static
+NfIndexTableOffset SvNumberFormatter::GetIndexTableOffset(sal_uInt32 nFormat)
 {
-    ::osl::MutexGuard aGuard( GetInstanceMutex() );
     sal_uInt32 nOffset = nFormat % SV_COUNTRY_LANGUAGE_OFFSET;      // relative index
     if ( nOffset > SV_MAX_COUNT_STANDARD_FORMATS )
     {
@@ -3970,9 +3939,7 @@ bool SvNumberFormatter::GetNewCurrencySymbolString( sal_uInt32 nFormat, OUString
                 if ( aSymbol.indexOf( '-' ) != -1 ||
                         aSymbol.indexOf( ']' ) != -1 )
                 {
-                    sBuff.append('"');
-                    sBuff.append( aSymbol);
-                    sBuff.append('"');
+                    sBuff.append("\"" + aSymbol + "\"");
                 }
                 else
                 {
@@ -4514,7 +4481,7 @@ OUString NfCurrencyEntry::BuildSymbolString(bool bBank,
         if ( !bWithoutExtension && eLanguage != LANGUAGE_DONTKNOW && eLanguage != LANGUAGE_SYSTEM )
         {
             sal_Int32 nLang = static_cast<sal_uInt16>(eLanguage);
-            aBuf.append('-').append(OUString::number(nLang, 16).toAsciiUpperCase());
+            aBuf.append("-" + OUString::number(nLang, 16).toAsciiUpperCase());
         }
     }
     aBuf.append(']');
@@ -4524,8 +4491,7 @@ OUString NfCurrencyEntry::BuildSymbolString(bool bBank,
 OUString NfCurrencyEntry::Impl_BuildFormatStringNumChars( const LocaleDataWrapper& rLoc,
                                                           sal_uInt16 nDecimalFormat) const
 {
-    OUStringBuffer aBuf;
-    aBuf.append("#" + rLoc.getNumThousandSep() + "##0");
+    OUStringBuffer aBuf("#" + rLoc.getNumThousandSep() + "##0");
     if (nDecimalFormat && nDigits)
     {
         aBuf.append(rLoc.getNumDecimalSep());
@@ -4591,8 +4557,7 @@ void NfCurrencyEntry::CompletePositiveFormatString(OUStringBuffer& rStr, std::u1
         break;
         case 2:                                         // $ 1
         {
-            rStr.insert(0, ' ');
-            rStr.insert(0, rSymStr);
+            rStr.insert(0, OUString::Concat(rSymStr) + " ");
         }
         break;
         case 3:                                         // 1 $
@@ -4617,21 +4582,18 @@ void NfCurrencyEntry::CompleteNegativeFormatString(OUStringBuffer& rStr,
     {
         case 0:                                         // ($1)
         {
-            rStr.insert(0, rSymStr);
-            rStr.insert(0, '(');
+            rStr.insert(0, OUString::Concat("(") + rSymStr);
             rStr.append(')');
         }
         break;
         case 1:                                         // -$1
         {
-            rStr.insert(0, rSymStr);
-            rStr.insert(0, '-');
+            rStr.insert(0, OUString::Concat("-") + rSymStr);
         }
         break;
         case 2:                                         // $-1
         {
-            rStr.insert(0, '-');
-            rStr.insert(0, rSymStr);
+            rStr.insert(0, OUString::Concat(rSymStr) + "-");
         }
         break;
         case 3:                                         // $1-
@@ -4674,9 +4636,7 @@ void NfCurrencyEntry::CompleteNegativeFormatString(OUStringBuffer& rStr,
         break;
         case 9:                                         // -$ 1
         {
-            rStr.insert(0, ' ');
-            rStr.insert(0, rSymStr);
-            rStr.insert(0, '-');
+            rStr.insert(0, OUString::Concat("-") + rSymStr + " ");
         }
         break;
         case 10:                                        // 1 $-
@@ -4688,14 +4648,12 @@ void NfCurrencyEntry::CompleteNegativeFormatString(OUStringBuffer& rStr,
         break;
         case 11:                                        // $ -1
         {
-            rStr.insert(0, " -");
-            rStr.insert(0, rSymStr);
+            rStr.insert(0, OUString::Concat(rSymStr) + " -");
         }
         break;
         case 12 :                                       // $ 1-
         {
-            rStr.insert(0, ' ');
-            rStr.insert(0, rSymStr);
+            rStr.insert(0, OUString::Concat(rSymStr) + " ");
             rStr.append('-');
         }
         break;
@@ -4708,9 +4666,7 @@ void NfCurrencyEntry::CompleteNegativeFormatString(OUStringBuffer& rStr,
         break;
         case 14 :                                       // ($ 1)
         {
-            rStr.insert(0, ' ');
-            rStr.insert(0, rSymStr);
-            rStr.insert(0, '(');
+            rStr.insert(0, OUString::Concat("(") + rSymStr + " ");
             rStr.append(')');
         }
         break;

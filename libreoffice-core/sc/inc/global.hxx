@@ -55,12 +55,12 @@ enum class SvNumFormatType : sal_Int16;
 //  Clipboard names are in so3/soapp.hxx now
 //  STRING_SCAPP was "scalc3", "scalc4", now just "scalc"
 
-inline constexpr OUStringLiteral STRING_SCAPP = u"scalc";
+inline constexpr OUString STRING_SCAPP = u"scalc"_ustr;
 
-inline constexpr OUStringLiteral STRING_STANDARD = u"Standard";
+inline constexpr OUString STRING_STANDARD = u"Standard"_ustr;
 
 // Have the dreaded programmatic filter name defined in one place.
-inline constexpr OUStringLiteral SC_TEXT_CSV_FILTER_NAME = u"Text - txt - csv (StarCalc)";
+inline constexpr OUString SC_TEXT_CSV_FILTER_NAME = u"Text - txt - csv (StarCalc)"_ustr;
 
 // characters
 
@@ -165,7 +165,8 @@ enum class InsertDeleteFlags : sal_uInt16
     FORGETCAPTIONS   = 0x2000,   /// Internal use only (d&d undo): do not delete caption objects of cell notes.
     ATTRIB           = HARDATTR | STYLES,
     CONTENTS         = VALUE | DATETIME | STRING | NOTE | FORMULA | OUTLINE | SPARKLINES,
-    ALL              = CONTENTS | ATTRIB | OBJECTS | SPARKLINES,
+    // tdf#116127 - add EDITATTR to ALL flags in order to check for valid function inputs
+    ALL              = CONTENTS | ATTRIB | OBJECTS | SPARKLINES | EDITATTR,
     /// Copy flags for auto/series fill functions: do not touch notes and drawing objects.
     AUTOFILL         = ALL & ~(NOTE | OBJECTS)
 };

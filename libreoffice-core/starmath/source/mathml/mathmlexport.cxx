@@ -47,7 +47,6 @@
 #include <xmloff/xmlnamespace.hxx>
 #include <xmloff/xmltoken.hxx>
 #include <xmloff/namespacemap.hxx>
-#include <xmloff/attrlist.hxx>
 #include <comphelper/genericpropertyset.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <comphelper/propertysetinfo.hxx>
@@ -75,12 +74,12 @@ using namespace ::xmloff::token;
 
 namespace
 {
-bool IsInPrivateUseArea(sal_Unicode cChar) { return 0xE000 <= cChar && cChar <= 0xF8FF; }
+bool IsInPrivateUseArea(sal_uInt32 cChar) { return 0xE000 <= cChar && cChar <= 0xF8FF; }
 
-sal_Unicode ConvertMathToMathML(sal_Unicode cChar)
+sal_uInt32 ConvertMathToMathML(std::u16string_view rText, sal_Int32 nIndex = 0)
 {
-    sal_Unicode cRes = cChar;
-    if (IsInPrivateUseArea(cChar))
+    auto cRes = o3tl::iterateCodePoints(rText, &nIndex);
+    if (IsInPrivateUseArea(cRes))
     {
         SAL_WARN("starmath", "Error: private use area characters should no longer be in use!");
         cRes = u'@'; // just some character that should easily be notice as odd in the context
@@ -111,13 +110,10 @@ bool SmXMLExportWrapper::Export(SfxMedium& rMedium)
         {
             OSL_ENSURE(pDocShell->GetMedium() == &rMedium, "different SfxMedium found");
 
-            SfxItemSet* pSet = rMedium.GetItemSet();
-            if (pSet)
-            {
-                const SfxUnoAnyItem* pItem = pSet->GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
-                if (pItem)
-                    pItem->GetValue() >>= xStatusIndicator;
-            }
+            const SfxUnoAnyItem* pItem
+                = rMedium.GetItemSet().GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
+            if (pItem)
+                pItem->GetValue() >>= xStatusIndicator;
         }
 
         // set progress range and start status indicator
@@ -128,10 +124,10 @@ bool SmXMLExportWrapper::Export(SfxMedium& rMedium)
         }
     }
 
-    static constexpr OUStringLiteral sUsePrettyPrinting(u"UsePrettyPrinting");
-    static constexpr OUStringLiteral sBaseURI(u"BaseURI");
-    static constexpr OUStringLiteral sStreamRelPath(u"StreamRelPath");
-    static constexpr OUStringLiteral sStreamName(u"StreamName");
+    static constexpr OUString sUsePrettyPrinting(u"UsePrettyPrinting"_ustr);
+    static constexpr OUString sBaseURI(u"BaseURI"_ustr);
+    static constexpr OUString sStreamRelPath(u"StreamRelPath"_ustr);
+    static constexpr OUString sStreamName(u"StreamName"_ustr);
 
     // create XPropertySet with three properties for status indicator
     static const comphelper::PropertyMapEntry aInfoMap[] = {
@@ -164,13 +160,10 @@ bool SmXMLExportWrapper::Export(SfxMedium& rMedium)
         if (bEmbedded) //&& !pStg->IsRoot() )
         {
             OUString aName;
-            if (rMedium.GetItemSet())
-            {
-                const SfxStringItem* pDocHierarchItem
-                    = rMedium.GetItemSet()->GetItem(SID_DOC_HIERARCHICALNAME);
-                if (pDocHierarchItem)
-                    aName = pDocHierarchItem->GetValue();
-            }
+            const SfxStringItem* pDocHierarchItem
+                = rMedium.GetItemSet().GetItem(SID_DOC_HIERARCHICALNAME);
+            if (pDocHierarchItem)
+                aName = pDocHierarchItem->GetValue();
 
             if (!aName.isEmpty())
             {
@@ -263,7 +256,7 @@ bool SmXMLExportWrapper::WriteThroughComponent(const Reference<io::XOutputStream
     uno::Sequence<PropertyValue> aProps(0);
     xFilter->filter(aProps);
 
-    auto pFilter = comphelper::getFromUnoTunnel<SmXMLExport>(xFilter);
+    auto pFilter = dynamic_cast<SmXMLExport*>(xFilter.get());
     return pFilter == nullptr || pFilter->GetSuccess();
 }
 
@@ -293,12 +286,12 @@ bool SmXMLExportWrapper::WriteThroughComponent(const Reference<embed::XStorage>&
     }
 
     uno::Reference<beans::XPropertySet> xSet(xStream, uno::UNO_QUERY);
-    static const OUStringLiteral sMediaType = u"MediaType";
-    static const OUStringLiteral sTextXml = u"text/xml";
+    static constexpr OUStringLiteral sMediaType = u"MediaType";
+    static constexpr OUStringLiteral sTextXml = u"text/xml";
     xSet->setPropertyValue(sMediaType, Any(OUString(sTextXml)));
 
     // all streams must be encrypted in encrypted document
-    static const OUStringLiteral sUseCommonStoragePasswordEncryption
+    static constexpr OUStringLiteral sUseCommonStoragePasswordEncryption
         = u"UseCommonStoragePasswordEncryption";
     xSet->setPropertyValue(sUseCommonStoragePasswordEncryption, Any(true));
 
@@ -321,18 +314,6 @@ SmXMLExport::SmXMLExport(const css::uno::Reference<css::uno::XComponentContext>&
     , pTree(nullptr)
     , bSuccess(false)
 {
-}
-
-sal_Int64 SAL_CALL SmXMLExport::getSomething(const uno::Sequence<sal_Int8>& rId)
-{
-    return comphelper::getSomethingImpl(rId, this,
-                                        comphelper::FallbackToGetSomethingOf<SvXMLExport>{});
-}
-
-const uno::Sequence<sal_Int8>& SmXMLExport::getUnoTunnelId() noexcept
-{
-    static const comphelper::UnoIdInit theSmXMLExportUnoTunnelId;
-    return theSmXMLExportUnoTunnelId.getSeq();
 }
 
 extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*
@@ -406,7 +387,7 @@ ErrCode SmXMLExport::exportDoc(enum XMLTokenEnum eClass)
         addChaffWhenEncryptedStorage();
 
         /*Add xmlns line*/
-        SvXMLAttributeList& rList = GetAttrList();
+        comphelper::AttributeList& rList = GetAttrList();
 
         // make use of a default namespace
         ResetNamespaceMap(); // Math doesn't need namespaces from xmloff, since it now uses default namespaces (because that is common with current MathML usage in the web)
@@ -431,13 +412,24 @@ void SmXMLExport::ExportContent_()
     SmDocShell* pDocShell = pModel ? static_cast<SmDocShell*>(pModel->GetObjectShell()) : nullptr;
     OSL_ENSURE(pDocShell, "doc shell missing");
 
-    if (pDocShell && !pDocShell->GetFormat().IsTextmode())
+    if (pDocShell)
     {
-        // If the Math equation is not in text mode, we attach a display="block"
-        // attribute on the <math> root. We don't do anything if it is in
-        // text mode, the default display="inline" value will be used.
-        AddAttribute(XML_NAMESPACE_MATH, XML_DISPLAY, XML_BLOCK);
+        if (!pDocShell->GetFormat().IsTextmode())
+        {
+            // If the Math equation is not in text mode, we attach a display="block"
+            // attribute on the <math> root. We don't do anything if it is in
+            // text mode, the default display="inline" value will be used.
+            AddAttribute(XML_NAMESPACE_MATH, XML_DISPLAY, XML_BLOCK);
+        }
+        if (pDocShell->GetFormat().IsRightToLeft())
+        {
+            // If the Math equation is set right-to-left, we attach a dir="rtl"
+            // attribute on the <math> root. We don't do anything if it is set
+            // left-to-right, the default dir="ltr" value will be used.
+            AddAttribute(XML_NAMESPACE_MATH, XML_DIR, XML_RTL);
+        }
     }
+
     SvXMLElementExport aEquation(*this, XML_NAMESPACE_MATH, XML_MATH, true, true);
     std::unique_ptr<SvXMLElementExport> pSemantics;
 
@@ -453,7 +445,7 @@ void SmXMLExport::ExportContent_()
         return;
 
     SmModule* pMod = SM_MOD();
-    sal_uInt16 nSmSyntaxVersion = pMod->GetConfig()->GetDefaultSmSyntaxVersion();
+    sal_Int16 nSmSyntaxVersion = pMod->GetConfig()->GetDefaultSmSyntaxVersion();
 
     // Convert symbol names
     if (pDocShell)
@@ -757,12 +749,9 @@ void SmXMLExport::ExportMath(const SmNode* pNode)
         AddAttribute(XML_NAMESPACE_MATH, XML_MATHVARIANT, XML_NORMAL);
         pMath.reset(new SvXMLElementExport(*this, XML_NAMESPACE_MATH, XML_MI, true, false));
     }
-    sal_Unicode nArse = pTemp->GetText()[0];
-    sal_Unicode cTmp = ConvertMathToMathML(nArse);
-    if (cTmp != 0)
-        nArse = cTmp;
+    auto nArse = ConvertMathToMathML(pTemp->GetText());
     OSL_ENSURE(nArse != 0xffff, "Non existent symbol");
-    GetDocHandler()->characters(OUString(nArse));
+    GetDocHandler()->characters(OUString(&nArse, 1));
 }
 
 void SmXMLExport::ExportText(const SmNode* pNode)
@@ -1358,11 +1347,8 @@ void SmXMLExport::ExportNodes(const SmNode* pNode, int nLevel)
         case SmNodeType::GlyphSpecial:
         case SmNodeType::Math:
         {
-            sal_Unicode cTmp = 0;
             const SmTextNode* pTemp = static_cast<const SmTextNode*>(pNode);
-            if (!pTemp->GetText().isEmpty())
-                cTmp = ConvertMathToMathML(pTemp->GetText()[0]);
-            if (cTmp == 0)
+            if (pTemp->GetText().isEmpty())
             {
                 // no conversion to MathML implemented -> export it as text
                 // thus at least it will not vanish into nothing

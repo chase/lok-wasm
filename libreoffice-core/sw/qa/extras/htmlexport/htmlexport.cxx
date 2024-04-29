@@ -13,17 +13,20 @@
 #include <string_view>
 
 #include <com/sun/star/document/XEmbeddedObjectSupplier2.hpp>
+#include <com/sun/star/document/XTypeDetection.hpp>
 #include <com/sun/star/embed/ElementModes.hpp>
 #include <com/sun/star/io/XActiveDataStreamer.hpp>
 #include <com/sun/star/io/XSeekable.hpp>
 #include <com/sun/star/style/ParagraphAdjust.hpp>
 #include <com/sun/star/awt/FontUnderline.hpp>
+#include <com/sun/star/table/TableBorder2.hpp>
 #include <com/sun/star/text/XTextTablesSupplier.hpp>
 #include <com/sun/star/text/XTextTable.hpp>
 #include <com/sun/star/text/XTextEmbeddedObjectsSupplier.hpp>
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
 #include <com/sun/star/packages/zip/ZipFileAccess.hpp>
+#include <com/sun/star/view/XSelectionSupplier.hpp>
 
 #include <test/htmltesttools.hxx>
 #include <tools/urlobj.hxx>
@@ -44,6 +47,7 @@
 #include <vcl/dibtools.hxx>
 #include <o3tl/string_view.hxx>
 #include <editeng/brushitem.hxx>
+#include <comphelper/scopeguard.hxx>
 
 #include <swmodule.hxx>
 #include <swdll.hxx>
@@ -186,13 +190,9 @@ OLE1Reader::OLE1Reader(SvStream& rStream)
 /// Covers sw/source/filter/html/wrthtml.cxx and related fixes.
 class HtmlExportTest : public SwModelTestBase, public HtmlTestTools
 {
-private:
-    FieldUnit m_eUnit;
-
 public:
     HtmlExportTest()
         : SwModelTestBase("/sw/qa/extras/htmlexport/data/", "HTML (StarWriter)")
-        , m_eUnit(FieldUnit::NONE)
     {
     }
 
@@ -205,54 +205,7 @@ public:
         rStream.WriteOString("}");
         rStream.Seek(0);
     }
-
-private:
-    bool mustCalcLayoutOf(const char* filename) override
-    {
-        return filename != std::string_view("fdo62336.docx");
-    }
-
-    virtual std::unique_ptr<Resetter> preTest(const char* filename) override
-    {
-        if (getTestName().indexOf("SkipImages") != -1)
-            setFilterOptions("SkipImages");
-        else if (getTestName().indexOf("EmbedImages") != -1)
-            setFilterOptions("EmbedImages");
-        else if (getTestName().indexOf("XHTML") != -1)
-            setFilterOptions("XHTML");
-        else if (getTestName().indexOf("ReqIf") != -1)
-        {
-            if (o3tl::ends_with(filename, ".xhtml"))
-            {
-                setImportFilterOptions("xhtmlns=reqif-xhtml");
-                // Bypass filter detect.
-                setImportFilterName("HTML (StarWriter)");
-            }
-            // Export options (implies XHTML).
-            setFilterOptions("xhtmlns=reqif-xhtml");
-        }
-        else
-            setFilterOptions("");
-
-        if (filename == std::string_view("charborder.odt"))
-        {
-            // FIXME if padding-top gets exported as inches, not cms, we get rounding errors.
-            SwGlobals::ensure(); // make sure that SW_MOD() is not 0
-            std::unique_ptr<Resetter> pResetter(new Resetter([this]() {
-                SwMasterUsrPref* pPref = const_cast<SwMasterUsrPref*>(SW_MOD()->GetUsrPref(false));
-                pPref->SetMetric(this->m_eUnit);
-            }));
-            SwMasterUsrPref* pPref = const_cast<SwMasterUsrPref*>(SW_MOD()->GetUsrPref(false));
-            m_eUnit = pPref->GetMetric();
-            pPref->SetMetric(FieldUnit::CM);
-            return pResetter;
-        }
-        return nullptr;
-    }
 };
-
-#define DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(TestName, filename)                                      \
-    DECLARE_SW_ROUNDTRIP_TEST(TestName, filename, nullptr, HtmlExportTest)
 
 /// HTML export of the sw doc model tests.
 class SwHtmlDomExportTest : public SwModelTestBase, public HtmlTestTools
@@ -263,9 +216,10 @@ public:
     {
     }
 
+    OUString GetObjectPath(const OUString& ext);
     /// Get the .ole path, assuming maTempFile is an XHTML export result.
-    OUString GetOlePath();
-    OUString GetPngPath();
+    OUString GetOlePath() { return GetObjectPath(u".ole"_ustr); }
+    OUString GetPngPath() { return GetObjectPath(u".png"_ustr); }
     /// Parse the ole1 data out of an RTF fragment URL.
     void ParseOle1FromRtfUrl(const OUString& rRtfUrl, SvMemoryStream& rOle1);
     /// Export using the C++ HTML export filter, with xhtmlns=reqif-xhtml.
@@ -276,35 +230,17 @@ public:
     void ExportToHTML();
 };
 
-OUString SwHtmlDomExportTest::GetOlePath()
+OUString SwHtmlDomExportTest::GetObjectPath(const OUString& ext)
 {
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
-    OUString aOlePath = getXPath(
-        pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object", "data");
-    OUString aOleSuffix(".ole");
-    CPPUNIT_ASSERT(aOlePath.endsWith(aOleSuffix));
+    assert(ext.startsWith("."));
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
+    OUString aOlePath
+        = getXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object"_ostr,
+                   "data"_ostr);
+    CPPUNIT_ASSERT(aOlePath.endsWith(ext));
     INetURLObject aUrl(maTempFile.GetURL());
-    aUrl.setBase(aOlePath.subView(0, aOlePath.getLength() - aOleSuffix.getLength()));
-    aUrl.setExtension(u"ole");
-    return aUrl.GetMainURL(INetURLObject::DecodeMechanism::NONE);
-}
-
-OUString SwHtmlDomExportTest::GetPngPath()
-{
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
-    OUString aPngPath = getXPath(
-        pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object", "data");
-    OUString aPngSuffix(".png");
-    CPPUNIT_ASSERT(aPngPath.endsWith(aPngSuffix));
-    INetURLObject aUrl(maTempFile.GetURL());
-    aUrl.setBase(aPngPath.subView(0, aPngPath.getLength() - aPngSuffix.getLength()));
-    aUrl.setExtension(u"png");
+    aUrl.setBase(aOlePath.subView(0, aOlePath.getLength() - ext.getLength()));
+    aUrl.setExtension(ext.subView(1));
     return aUrl.GetMainURL(INetURLObject::DecodeMechanism::NONE);
 }
 
@@ -342,71 +278,101 @@ void SwHtmlDomExportTest::ImportFromReqif(const OUString& rUrl)
     mxComponent = loadFromDesktop(rUrl, "com.sun.star.text.TextDocument", aLoadProperties);
 }
 
-DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testFdo81276, "fdo81276.html")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testFdo81276)
 {
-    uno::Reference<container::XNameAccess> xPageStyles(getStyles("PageStyles"));
-    uno::Reference<beans::XPropertySet> xStyle(xPageStyles->getByName("HTML"), uno::UNO_QUERY);
-    // some rounding going on here?
-    CPPUNIT_ASSERT(abs(sal_Int32(29700) - getProperty<sal_Int32>(xStyle, "Width")) < 10);
-    CPPUNIT_ASSERT(abs(sal_Int32(21006) - getProperty<sal_Int32>(xStyle, "Height")) < 10);
-    CPPUNIT_ASSERT(abs(sal_Int32(500) - getProperty<sal_Int32>(xStyle, "LeftMargin")) < 10);
-    CPPUNIT_ASSERT(abs(sal_Int32(500) - getProperty<sal_Int32>(xStyle, "RightMargin")) < 10);
-    CPPUNIT_ASSERT(abs(sal_Int32(2000) - getProperty<sal_Int32>(xStyle, "TopMargin")) < 10);
-    CPPUNIT_ASSERT(abs(sal_Int32(500) - getProperty<sal_Int32>(xStyle, "BottomMargin")) < 10);
+    auto verify = [this]() {
+        uno::Reference<container::XNameAccess> xPageStyles(getStyles("PageStyles"));
+        uno::Reference<beans::XPropertySet> xStyle(xPageStyles->getByName("HTML"), uno::UNO_QUERY);
+        // some rounding going on here?
+        CPPUNIT_ASSERT(abs(sal_Int32(29700) - getProperty<sal_Int32>(xStyle, "Width")) < 10);
+        CPPUNIT_ASSERT(abs(sal_Int32(21006) - getProperty<sal_Int32>(xStyle, "Height")) < 10);
+        CPPUNIT_ASSERT(abs(sal_Int32(500) - getProperty<sal_Int32>(xStyle, "LeftMargin")) < 10);
+        CPPUNIT_ASSERT(abs(sal_Int32(500) - getProperty<sal_Int32>(xStyle, "RightMargin")) < 10);
+        CPPUNIT_ASSERT(abs(sal_Int32(2000) - getProperty<sal_Int32>(xStyle, "TopMargin")) < 10);
+        CPPUNIT_ASSERT(abs(sal_Int32(500) - getProperty<sal_Int32>(xStyle, "BottomMargin")) < 10);
+    };
+    setImportFilterName(mpFilter);
+    createSwDoc("fdo81276.html");
+    verify();
+    saveAndReload(mpFilter);
+    verify();
 }
 
 CPPUNIT_TEST_FIXTURE(HtmlExportTest, testFdo62336)
 {
     // The problem was essentially a crash during table export as docx/rtf/html
-    // If calc-layout is enabled, the crash does not occur
-    loadAndReload("fdo62336.docx");
+    // If calc-layout is enabled, the crash does not occur, that's why loadFromFile/save is used
+    loadFromFile(u"fdo62336.docx");
+    save("HTML (StarWriter)");
 }
 
-DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testFdo86857, "fdo86857.html")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testFdo86857)
 {
-    // problem was that background color on page style was not exported
-    uno::Reference<container::XNameAccess> xPageStyles(getStyles("PageStyles"));
-    uno::Reference<beans::XPropertySet> xStyle(xPageStyles->getByName("HTML"), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(COL_LIGHTRED, getProperty<Color>(xStyle, "BackColor"));
-    // check that table background color works, which still uses RES_BACKGROUND
-    uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
-    uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables(),
-                                                    uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
-    uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
-    uno::Reference<text::XTextRange> xCell(xTable->getCellByName("A1"), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(Color(0x66ffff), getProperty<Color>(xCell, "BackColor"));
+    auto verify = [this]() {
+        // problem was that background color on page style was not exported
+        uno::Reference<container::XNameAccess> xPageStyles(getStyles("PageStyles"));
+        uno::Reference<beans::XPropertySet> xStyle(xPageStyles->getByName("HTML"), uno::UNO_QUERY);
+        CPPUNIT_ASSERT_EQUAL(COL_LIGHTRED, getProperty<Color>(xStyle, "BackColor"));
+        // check that table background color works, which still uses RES_BACKGROUND
+        uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
+        uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables(),
+                                                        uno::UNO_QUERY);
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
+        uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
+        uno::Reference<text::XTextRange> xCell(xTable->getCellByName("A1"), uno::UNO_QUERY);
+        CPPUNIT_ASSERT_EQUAL(Color(0x66ffff), getProperty<Color>(xCell, "BackColor"));
+    };
+
+    setImportFilterName(mpFilter);
+    createSwDoc("fdo86857.html");
+    verify();
+    saveAndReload(mpFilter);
+    verify();
 }
 
-DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testCharacterBorder, "charborder.odt")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testCharacterBorder)
 {
-    CPPUNIT_ASSERT_EQUAL(1, getPages());
+    // FIXME if padding-top gets exported as inches, not cms, we get rounding errors.
+    SwGlobals::ensure(); // make sure that SW_MOD() is not 0
+    SwMasterUsrPref* pPref = const_cast<SwMasterUsrPref*>(SW_MOD()->GetUsrPref(false));
+    FieldUnit eUnit = pPref->GetMetric();
+    pPref->SetMetric(FieldUnit::CM);
+    comphelper::ScopeGuard g([pPref, eUnit]() { pPref->SetMetric(eUnit); });
 
-    uno::Reference<beans::XPropertySet> xRun(getRun(getParagraph(1), 1), uno::UNO_QUERY);
-    // Different Border
-    {
-        CPPUNIT_ASSERT_BORDER_EQUAL(table::BorderLine2(0x6666FF, 12, 12, 12, 3, 37),
-                                    getProperty<table::BorderLine2>(xRun, "CharTopBorder"));
-        CPPUNIT_ASSERT_BORDER_EQUAL(table::BorderLine2(0xFF9900, 0, 99, 0, 2, 99),
-                                    getProperty<table::BorderLine2>(xRun, "CharLeftBorder"));
-        CPPUNIT_ASSERT_BORDER_EQUAL(table::BorderLine2(0xFF0000, 0, 169, 0, 1, 169),
-                                    getProperty<table::BorderLine2>(xRun, "CharBottomBorder"));
-        CPPUNIT_ASSERT_BORDER_EQUAL(table::BorderLine2(0x0000FF, 0, 169, 0, 0, 169),
-                                    getProperty<table::BorderLine2>(xRun, "CharRightBorder"));
-    }
+    auto verify = [this]() {
+        CPPUNIT_ASSERT_EQUAL(1, getPages());
 
-    // Different Padding
-    {
-        CPPUNIT_ASSERT_EQUAL(sal_Int32(450), getProperty<sal_Int32>(xRun, "CharTopBorderDistance"));
-        CPPUNIT_ASSERT_EQUAL(sal_Int32(550),
-                             getProperty<sal_Int32>(xRun, "CharLeftBorderDistance"));
-        CPPUNIT_ASSERT_EQUAL(sal_Int32(150),
-                             getProperty<sal_Int32>(xRun, "CharBottomBorderDistance"));
-        CPPUNIT_ASSERT_EQUAL(sal_Int32(250),
-                             getProperty<sal_Int32>(xRun, "CharRightBorderDistance"));
-    }
+        uno::Reference<beans::XPropertySet> xRun(getRun(getParagraph(1), 1), uno::UNO_QUERY);
+        // Different Border
+        {
+            CPPUNIT_ASSERT_BORDER_EQUAL(table::BorderLine2(0x6666FF, 12, 12, 12, 3, 37),
+                                        getProperty<table::BorderLine2>(xRun, "CharTopBorder"));
+            CPPUNIT_ASSERT_BORDER_EQUAL(table::BorderLine2(0xFF9900, 0, 99, 0, 2, 99),
+                                        getProperty<table::BorderLine2>(xRun, "CharLeftBorder"));
+            CPPUNIT_ASSERT_BORDER_EQUAL(table::BorderLine2(0xFF0000, 0, 169, 0, 1, 169),
+                                        getProperty<table::BorderLine2>(xRun, "CharBottomBorder"));
+            CPPUNIT_ASSERT_BORDER_EQUAL(table::BorderLine2(0x0000FF, 0, 169, 0, 0, 169),
+                                        getProperty<table::BorderLine2>(xRun, "CharRightBorder"));
+        }
 
-    // No shadow
+        // Different Padding
+        {
+            CPPUNIT_ASSERT_EQUAL(sal_Int32(450),
+                                 getProperty<sal_Int32>(xRun, "CharTopBorderDistance"));
+            CPPUNIT_ASSERT_EQUAL(sal_Int32(550),
+                                 getProperty<sal_Int32>(xRun, "CharLeftBorderDistance"));
+            CPPUNIT_ASSERT_EQUAL(sal_Int32(150),
+                                 getProperty<sal_Int32>(xRun, "CharBottomBorderDistance"));
+            CPPUNIT_ASSERT_EQUAL(sal_Int32(250),
+                                 getProperty<sal_Int32>(xRun, "CharRightBorderDistance"));
+        }
+
+        // No shadow
+    };
+    createSwDoc("charborder.odt");
+    verify();
+    saveAndReload(mpFilter);
+    verify();
 }
 
 #define DECLARE_HTMLEXPORT_TEST(TestName, filename)                                                \
@@ -417,45 +383,57 @@ DECLARE_HTMLEXPORT_TEST(testExportOfImages, "textAndImage.docx")
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
-    assertXPath(pDoc, "/html/body", 1);
-    assertXPath(pDoc, "/html/body/p/img", 1);
+    assertXPath(pDoc, "/html/body"_ostr, 1);
+    assertXPath(pDoc, "/html/body/p/img"_ostr, 1);
 }
 
-DECLARE_HTMLEXPORT_TEST(testExportOfImagesWithSkipImagesEnabled, "textAndImage.docx")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testExportOfImagesWithSkipImagesEnabled)
 {
+    createSwDoc("textAndImage.docx");
+    setFilterOptions("SkipImages");
+    save(mpFilter);
+
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
-    assertXPath(pDoc, "/html/body", 1);
-    assertXPath(pDoc, "/html/body/p/img", 0);
+    assertXPath(pDoc, "/html/body"_ostr, 1);
+    assertXPath(pDoc, "/html/body/p/img"_ostr, 0);
 }
 
-DECLARE_HTMLEXPORT_TEST(testSkipImagesEmbedded, "skipimage-embedded.doc")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testSkipImagesEmbedded)
 {
+    createSwDoc("skipimage-embedded.doc");
+    setFilterOptions("SkipImages");
+    save(mpFilter);
+
     // Embedded spreadsheet was exported as image, so content was lost. Make
     // sure it's exported as HTML instead.
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
     // This was 0.
-    assertXPath(pDoc, "//table", 1);
+    assertXPath(pDoc, "//table"_ostr, 1);
     // This was 2, the HTML header was in the document two times.
-    assertXPath(pDoc, "//meta[@name='generator']", 1);
+    assertXPath(pDoc, "//meta[@name='generator']"_ostr, 1);
     // This was 0, <table> was directly under <p>, which caused errors in the parser.
-    assertXPath(pDoc, "//span/table", 1);
+    assertXPath(pDoc, "//span/table"_ostr, 1);
 }
 
-DECLARE_HTMLEXPORT_TEST(testSkipImagesEmbeddedDocument, "skipimage-embedded-document.docx")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testSkipImagesEmbeddedDocument)
 {
+    createSwDoc("skipimage-embedded-document.docx");
+    setFilterOptions("SkipImages");
+    save(mpFilter);
+
     // Similar to testSkipImagesEmbedded, but with an embedded Writer object,
     // not a Calc one, and this time OOXML, not WW8.
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
     // This was 2, the HTML header was in the document two times.
-    assertXPath(pDoc, "//meta[@name='generator']", 1);
+    assertXPath(pDoc, "//meta[@name='generator']"_ostr, 1);
     // Text of embedded document was missing.
-    assertXPathContent(pDoc, "/html/body/p/span/p/span", "Inner.");
+    assertXPathContent(pDoc, "/html/body/p/span/p/span"_ostr, "Inner.");
 }
 
 DECLARE_HTMLEXPORT_TEST(testExportImageProperties, "HTMLImage.odt")
@@ -463,23 +441,23 @@ DECLARE_HTMLEXPORT_TEST(testExportImageProperties, "HTMLImage.odt")
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
-    assertXPath(pDoc, "/html/body", 1);
+    assertXPath(pDoc, "/html/body"_ostr, 1);
 
-    assertXPath(pDoc, "/html/body/p/map/area", "shape", "poly");
-    assertXPath(pDoc, "/html/body/p/map/area", "href", "http://www.microsoft.com/");
-    assertXPath(pDoc, "/html/body/p/map/area", "target", "_self");
-    assertXPath(pDoc, "/html/body/p/map/area", "alt", "microsoft");
+    assertXPath(pDoc, "/html/body/p/map/area"_ostr, "shape"_ostr, "poly");
+    assertXPath(pDoc, "/html/body/p/map/area"_ostr, "href"_ostr, "http://www.microsoft.com/");
+    assertXPath(pDoc, "/html/body/p/map/area"_ostr, "target"_ostr, "_self");
+    assertXPath(pDoc, "/html/body/p/map/area"_ostr, "alt"_ostr, "microsoft");
 
-    assertXPath(pDoc, "/html/body/p/a", 1);
-    assertXPath(pDoc, "/html/body/p/a", "href", "http://www.google.com/");
+    assertXPath(pDoc, "/html/body/p/a"_ostr, 1);
+    assertXPath(pDoc, "/html/body/p/a"_ostr, "href"_ostr, "http://www.google.com/");
 
-    assertXPath(pDoc, "/html/body/p/a/font", 1);
-    assertXPath(pDoc, "/html/body/p/a/font", "color", "#ff0000");
+    assertXPath(pDoc, "/html/body/p/a/font"_ostr, 1);
+    assertXPath(pDoc, "/html/body/p/a/font"_ostr, "color"_ostr, "#ff0000");
 
-    assertXPath(pDoc, "/html/body/p/a/font/img", 1);
-    assertXPath(pDoc, "/html/body/p/a/font/img", "name", "Text");
-    assertXPath(pDoc, "/html/body/p/a/font/img", "alt", "Four colors");
-    assertXPath(pDoc, "/html/body/p/a/font/img", "align", "middle");
+    assertXPath(pDoc, "/html/body/p/a/font/img"_ostr, 1);
+    assertXPath(pDoc, "/html/body/p/a/font/img"_ostr, "name"_ostr, "Text");
+    assertXPath(pDoc, "/html/body/p/a/font/img"_ostr, "alt"_ostr, "Four colors");
+    assertXPath(pDoc, "/html/body/p/a/font/img"_ostr, "align"_ostr, "middle");
 
     // Probably the DPI in OSX is different and Twip -> Pixel conversion produces
     // different results - so disable OSX for now.
@@ -495,7 +473,7 @@ DECLARE_HTMLEXPORT_TEST(testExportImageProperties, "HTMLImage.odt")
     assertXPath(pDoc, "/html/body/p/a/font/img", "border", "3");
 #endif
 
-    assertXPath(pDoc, "/html/body/p/a/font/img", "usemap", "#map1");
+    assertXPath(pDoc, "/html/body/p/a/font/img"_ostr, "usemap"_ostr, "#map1");
 }
 
 DECLARE_HTMLEXPORT_TEST(testExportCheckboxRadioButtonState, "checkbox-radiobutton.doc")
@@ -503,19 +481,19 @@ DECLARE_HTMLEXPORT_TEST(testExportCheckboxRadioButtonState, "checkbox-radiobutto
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
-    assertXPath(pDoc, "/html/body", 1);
-    assertXPath(pDoc, "/html/body/p[1]/input", "type", "checkbox");
-    assertXPath(pDoc, "/html/body/p[1]/input", "checked", "checked");
-    assertXPath(pDoc, "/html/body/p[2]/input", "type", "checkbox");
-    assertXPathNoAttribute(pDoc, "/html/body/p[2]/input", "checked");
-    assertXPath(pDoc, "/html/body/form/p[1]/input", "type", "checkbox");
-    assertXPath(pDoc, "/html/body/form/p[1]/input", "checked", "checked");
-    assertXPath(pDoc, "/html/body/form/p[2]/input", "type", "checkbox");
-    assertXPathNoAttribute(pDoc, "/html/body/form/p[2]/input", "checked");
-    assertXPath(pDoc, "/html/body/form/p[3]/input", "type", "radio");
-    assertXPath(pDoc, "/html/body/form/p[3]/input", "checked", "checked");
-    assertXPath(pDoc, "/html/body/form/p[4]/input", "type", "radio");
-    assertXPathNoAttribute(pDoc, "/html/body/form/p[4]/input", "checked");
+    assertXPath(pDoc, "/html/body"_ostr, 1);
+    assertXPath(pDoc, "/html/body/p[1]/input"_ostr, "type"_ostr, "checkbox");
+    assertXPath(pDoc, "/html/body/p[1]/input"_ostr, "checked"_ostr, "checked");
+    assertXPath(pDoc, "/html/body/p[2]/input"_ostr, "type"_ostr, "checkbox");
+    assertXPathNoAttribute(pDoc, "/html/body/p[2]/input"_ostr, "checked"_ostr);
+    assertXPath(pDoc, "/html/body/form/p[1]/input"_ostr, "type"_ostr, "checkbox");
+    assertXPath(pDoc, "/html/body/form/p[1]/input"_ostr, "checked"_ostr, "checked");
+    assertXPath(pDoc, "/html/body/form/p[2]/input"_ostr, "type"_ostr, "checkbox");
+    assertXPathNoAttribute(pDoc, "/html/body/form/p[2]/input"_ostr, "checked"_ostr);
+    assertXPath(pDoc, "/html/body/form/p[3]/input"_ostr, "type"_ostr, "radio");
+    assertXPath(pDoc, "/html/body/form/p[3]/input"_ostr, "checked"_ostr, "checked");
+    assertXPath(pDoc, "/html/body/form/p[4]/input"_ostr, "type"_ostr, "radio");
+    assertXPathNoAttribute(pDoc, "/html/body/form/p[4]/input"_ostr, "checked"_ostr);
 }
 
 DECLARE_HTMLEXPORT_TEST(testExportUrlEncoding, "tdf76291.odt")
@@ -524,7 +502,7 @@ DECLARE_HTMLEXPORT_TEST(testExportUrlEncoding, "tdf76291.odt")
     CPPUNIT_ASSERT(pDoc);
 
     // Test URI encoded hyperlink with Chinese characters
-    assertXPath(pDoc, "/html/body/p/a", "href",
+    assertXPath(pDoc, "/html/body/p/a"_ostr, "href"_ostr,
                 "http://www.youtube.com/results?search_query=%E7%B2%B5%E8%AA%9Emv&sm=12");
 }
 
@@ -534,8 +512,8 @@ DECLARE_HTMLEXPORT_TEST(testExportInternalUrl, "tdf90905.odt")
     CPPUNIT_ASSERT(pDoc);
 
     // Internal url should be valid
-    assertXPath(pDoc, "/html/body/p[1]/a", "href", "#0.0.1.Text|outline");
-    assertXPath(pDoc, "/html/body/p[2]/a", "href", "#bookmark");
+    assertXPath(pDoc, "/html/body/p[1]/a"_ostr, "href"_ostr, "#0.0.1.Text|outline");
+    assertXPath(pDoc, "/html/body/p[2]/a"_ostr, "href"_ostr, "#bookmark");
 }
 
 DECLARE_HTMLEXPORT_TEST(testExportImageBulletList, "tdf66822.odt")
@@ -544,9 +522,9 @@ DECLARE_HTMLEXPORT_TEST(testExportImageBulletList, "tdf66822.odt")
     CPPUNIT_ASSERT(pDoc);
 
     // Encoded base64 SVG bullet should match and render on browser
-    assertXPath(pDoc, "/html/body/ul", 1);
+    assertXPath(pDoc, "/html/body/ul"_ostr, 1);
     assertXPath(
-        pDoc, "/html/body/ul", "style",
+        pDoc, "/html/body/ul"_ostr, "style"_ostr,
         "list-style-image: url(data:image/svg+xml;base64,"
         "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4NCjwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3"
         "RyYXRvciAxMi4wLjEsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiA2LjAwIEJ1aWxkIDUxNDQ4KSAg"
@@ -581,12 +559,12 @@ DECLARE_HTMLEXPORT_TEST(testTdf83890, "tdf83890.odt")
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
-    assertXPath(pDoc, "/html/body/ol[2]/ol", "start", "2");
+    assertXPath(pDoc, "/html/body/ol[2]/ol"_ostr, "start"_ostr, "2");
 }
 
 DECLARE_HTMLEXPORT_TEST(testExtbChars, "extb.html")
 {
-    OUString aExpected(u"\U00024b62");
+    OUString aExpected(u"\U00024b62"_ustr);
     // Assert that UTF8 encoded non-BMP Unicode character is correct
     uno::Reference<text::XTextRange> xTextRange1 = getRun(getParagraph(1), 1);
     CPPUNIT_ASSERT_EQUAL(aExpected, xTextRange1->getString());
@@ -601,31 +579,39 @@ DECLARE_HTMLEXPORT_TEST(testNormalImageExport, "textAndImage.docx")
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
-    assertXPath(pDoc, "/html/body", 1);
+    assertXPath(pDoc, "/html/body"_ostr, 1);
 
     // the HTML export normally does not embed the images
-    OUString imgSrc = getXPath(pDoc, "/html/body/p/img", "src");
+    OUString imgSrc = getXPath(pDoc, "/html/body/p/img"_ostr, "src"_ostr);
     CPPUNIT_ASSERT(imgSrc.endsWith(".png"));
 }
 
-DECLARE_HTMLEXPORT_TEST(testEmbedImagesEnabled, "textAndImage.docx")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testEmbedImagesEnabled)
 {
+    createSwDoc("textAndImage.docx");
+    setFilterOptions("EmbedImages");
+    save(mpFilter);
+
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
-    assertXPath(pDoc, "/html/body", 1);
+    assertXPath(pDoc, "/html/body"_ostr, 1);
 
     // the HTML export normally does not embed the images, but here the test
     // name triggers setting of the "EmbedImages" filter option, meaning the
     // image will not be a separate PNG, but an embedded base64 encoded
     // version of that
-    OUString imgSrc = getXPath(pDoc, "/html/body/p/img", "src");
+    OUString imgSrc = getXPath(pDoc, "/html/body/p/img"_ostr, "src"_ostr);
     CPPUNIT_ASSERT(imgSrc.startsWith("data:image/png;base64,"));
 }
 
-DECLARE_HTMLEXPORT_TEST(testXHTML, "hello.html")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testXHTML)
 {
-    OString aExpected("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML");
+    createSwWebDoc("hello.html");
+    setFilterOptions("XHTML");
+    save(mpFilter);
+
+    OString aExpected("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML"_ostr);
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
     OString aActual(read_uInt8s_ToOString(*pStream, aExpected.getLength()));
@@ -635,11 +621,17 @@ DECLARE_HTMLEXPORT_TEST(testXHTML, "hello.html")
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
     // This was lang, not xml:lang.
-    assertXPath(pDoc, "/html/body", "xml:lang", "en-US");
+    assertXPath(pDoc, "/html/body"_ostr, "xml:lang"_ostr, "en-US");
 }
 
-DECLARE_HTMLEXPORT_TEST(testReqIfParagraph, "reqif-p.xhtml")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testReqIfParagraph)
 {
+    setImportFilterOptions("xhtmlns=reqif-xhtml");
+    setImportFilterName("HTML (StarWriter)");
+    createSwDoc("reqif-p.xhtml");
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    save(mpFilter);
+
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
     sal_uInt64 nLength = pStream->TellEnd();
@@ -647,7 +639,7 @@ DECLARE_HTMLEXPORT_TEST(testReqIfParagraph, "reqif-p.xhtml")
     OString aExpected = "<reqif-xhtml:div><reqif-xhtml:p>aaa<reqif-xhtml:br/>\nbbb"
                         "</reqif-xhtml:p>" SAL_NEWLINE_STRING
                         // This was '<table' instead.
-                        "<reqif-xhtml:table";
+                        "<reqif-xhtml:table"_ostr;
 
     OString aStream(read_uInt8s_ToOString(*pStream, nLength));
     pStream->Seek(0);
@@ -675,60 +667,79 @@ DECLARE_HTMLEXPORT_TEST(testReqIfParagraph, "reqif-p.xhtml")
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(-1), aStream.indexOf("<reqif-xhtml:a id="));
 }
 
-DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testReqIfOleData, "reqif-ole-data.xhtml")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testReqIfOleData)
 {
-    uno::Reference<text::XTextEmbeddedObjectsSupplier> xSupplier(mxComponent, uno::UNO_QUERY);
-    uno::Reference<container::XIndexAccess> xObjects(xSupplier->getEmbeddedObjects(),
-                                                     uno::UNO_QUERY);
-    // This was 0, <object> without URL was ignored.
-    // Then this was 0 on export, as data of OLE nodes was ignored.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1), xObjects->getCount());
+    auto verify = [this]() {
+        uno::Reference<text::XTextEmbeddedObjectsSupplier> xSupplier(mxComponent, uno::UNO_QUERY);
+        uno::Reference<container::XIndexAccess> xObjects(xSupplier->getEmbeddedObjects(),
+                                                         uno::UNO_QUERY);
+        // This was 0, <object> without URL was ignored.
+        // Then this was 0 on export, as data of OLE nodes was ignored.
+        CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1), xObjects->getCount());
+    };
+    setImportFilterOptions("xhtmlns=reqif-xhtml");
+    setImportFilterName("HTML (StarWriter)");
+    createSwDoc("reqif-ole-data.xhtml");
+    verify();
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    saveAndReload("HTML (StarWriter)");
+    verify();
 }
 
-DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testReqIfOleImg, "reqif-ole-img.xhtml")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testReqIfOleImg)
 {
-    uno::Reference<text::XTextEmbeddedObjectsSupplier> xSupplier(mxComponent, uno::UNO_QUERY);
-    uno::Reference<container::XIndexAccess> xObjects(xSupplier->getEmbeddedObjects(),
-                                                     uno::UNO_QUERY);
-    uno::Reference<document::XEmbeddedObjectSupplier2> xObject(xObjects->getByIndex(0),
-                                                               uno::UNO_QUERY);
-    // This failed, OLE object had no replacement image.
-    // And then it also failed when the export lost the replacement image.
-    uno::Reference<graphic::XGraphic> xGraphic = xObject->getReplacementGraphic();
-    // This failed when query and fragment of file:// URLs were not ignored.
-    CPPUNIT_ASSERT(xGraphic.is());
+    auto verify = [this]() {
+        uno::Reference<text::XTextEmbeddedObjectsSupplier> xSupplier(mxComponent, uno::UNO_QUERY);
+        uno::Reference<container::XIndexAccess> xObjects(xSupplier->getEmbeddedObjects(),
+                                                         uno::UNO_QUERY);
+        uno::Reference<document::XEmbeddedObjectSupplier2> xObject(xObjects->getByIndex(0),
+                                                                   uno::UNO_QUERY);
+        // This failed, OLE object had no replacement image.
+        // And then it also failed when the export lost the replacement image.
+        uno::Reference<graphic::XGraphic> xGraphic = xObject->getReplacementGraphic();
+        // This failed when query and fragment of file:// URLs were not ignored.
+        CPPUNIT_ASSERT(xGraphic.is());
 
-    uno::Reference<drawing::XShape> xShape(xObject, uno::UNO_QUERY);
-    OutputDevice* pDevice = Application::GetDefaultDevice();
-    Size aPixel(64, 64);
-    // Expected to be 1693.
-    Size aLogic(pDevice->PixelToLogic(aPixel, MapMode(MapUnit::Map100thMM)));
-    awt::Size aSize = xShape->getSize();
-    // This was only 1247, size was not set explicitly.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(aLogic.getWidth()), aSize.Width);
+        uno::Reference<drawing::XShape> xShape(xObject, uno::UNO_QUERY);
+        OutputDevice* pDevice = Application::GetDefaultDevice();
+        Size aPixel(64, 64);
+        // Expected to be 1693.
+        Size aLogic(pDevice->PixelToLogic(aPixel, MapMode(MapUnit::Map100thMM)));
+        awt::Size aSize = xShape->getSize();
+        // This was only 1247, size was not set explicitly.
+        CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(aLogic.getWidth()), aSize.Width);
 
-    // Check mime/media types.
-    CPPUNIT_ASSERT_EQUAL(OUString("image/png"), getProperty<OUString>(xGraphic, "MimeType"));
+        // Check mime/media types.
+        CPPUNIT_ASSERT_EQUAL(OUString("image/png"), getProperty<OUString>(xGraphic, "MimeType"));
 
-    uno::Reference<beans::XPropertySet> xObjectProps(xObject, uno::UNO_QUERY);
-    uno::Reference<io::XActiveDataStreamer> xStreamProvider(
-        xObjectProps->getPropertyValue("EmbeddedObject"), uno::UNO_QUERY);
-    uno::Reference<io::XSeekable> xStream(xStreamProvider->getStream(), uno::UNO_QUERY);
-    // This was empty when either import or export handling was missing.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int64>(37888), xStream->getLength());
+        uno::Reference<beans::XPropertySet> xObjectProps(xObject, uno::UNO_QUERY);
+        uno::Reference<io::XActiveDataStreamer> xStreamProvider(
+            xObjectProps->getPropertyValue("EmbeddedObject"), uno::UNO_QUERY);
+        uno::Reference<io::XSeekable> xStream(xStreamProvider->getStream(), uno::UNO_QUERY);
+        // This was empty when either import or export handling was missing.
+        CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int64>(37888), xStream->getLength());
 
-    // Check alternate text (it was empty, for export the 'alt' attribute was used).
-    CPPUNIT_ASSERT_EQUAL(OUString("OLE Object"), getProperty<OUString>(xObject, "Title").trim());
+        // Check alternate text (it was empty, for export the 'alt' attribute was used).
+        CPPUNIT_ASSERT_EQUAL(OUString("OLE Object"),
+                             getProperty<OUString>(xObject, "Title").trim());
 
-    if (!isExported())
-        return;
+        if (!isExported())
+            return;
 
-    // "type" attribute was missing for the inner <object> element.
-    SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
-    CPPUNIT_ASSERT(pStream);
-    sal_uInt64 nLength = pStream->TellEnd();
-    OString aStream(read_uInt8s_ToOString(*pStream, nLength));
-    CPPUNIT_ASSERT(aStream.indexOf("type=\"image/png\"") != -1);
+        // "type" attribute was missing for the inner <object> element.
+        SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
+        CPPUNIT_ASSERT(pStream);
+        sal_uInt64 nLength = pStream->TellEnd();
+        OString aStream(read_uInt8s_ToOString(*pStream, nLength));
+        CPPUNIT_ASSERT(aStream.indexOf("type=\"image/png\"") != -1);
+    };
+    setImportFilterOptions("xhtmlns=reqif-xhtml");
+    setImportFilterName("HTML (StarWriter)");
+    createSwDoc("reqif-ole-img.xhtml");
+    verify();
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    saveAndReload("HTML (StarWriter)");
+    verify();
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIfPngImg)
@@ -776,8 +787,14 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIfPngImg)
     verify(/*bExported=*/true);
 }
 
-DECLARE_HTMLEXPORT_TEST(testReqIfJpgImg, "reqif-jpg-img.xhtml")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testReqIfJpgImg)
 {
+    setImportFilterOptions("xhtmlns=reqif-xhtml");
+    setImportFilterName("HTML (StarWriter)");
+    createSwDoc("reqif-jpg-img.xhtml");
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    save(mpFilter);
+
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
     sal_uInt64 nLength = pStream->TellEnd();
@@ -786,30 +803,40 @@ DECLARE_HTMLEXPORT_TEST(testReqIfJpgImg, "reqif-jpg-img.xhtml")
     CPPUNIT_ASSERT(aStream.indexOf("type=\"image/png\"") != -1);
 }
 
-DECLARE_HTMLEXPORT_TEST(testReqIfTable, "reqif-table.xhtml")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testReqIfTable)
 {
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    setImportFilterOptions("xhtmlns=reqif-xhtml");
+    setImportFilterName("HTML (StarWriter)");
+    createSwDoc("reqif-table.xhtml");
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    save(mpFilter);
+
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
     // <div> was missing, so the XHTML fragment wasn't a valid
     // xhtml.BlkStruct.class type anymore.
-    assertXPath(pDoc,
-                "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr/reqif-xhtml:th",
-                1);
+    assertXPath(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr/reqif-xhtml:th"_ostr,
+        1);
     // Make sure that the cell background is not written using CSS.
     assertXPathNoAttribute(
-        pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr/reqif-xhtml:th",
-        "style");
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr/reqif-xhtml:th"_ostr,
+        "style"_ostr);
     // The attribute was present, which is not valid in reqif-xhtml.
     assertXPathNoAttribute(
-        pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr/reqif-xhtml:th",
-        "bgcolor");
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr/reqif-xhtml:th"_ostr,
+        "bgcolor"_ostr);
 }
 
-DECLARE_HTMLEXPORT_TEST(testReqIfTable2, "reqif-table2.odt")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testReqIfTable2)
 {
+    createSwDoc("reqif-table2.odt");
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    save(mpFilter);
+
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
     sal_uInt64 nLength = pStream->TellEnd();
@@ -838,16 +865,18 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIfTableHeight)
     ExportToReqif();
 
     // Then make sure that the explicit cell height is omitted from the output:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed, explicit height was
     // written, which is not valid reqif-xhtml.
-    assertXPathNoAttribute(pDoc, "//reqif-xhtml:td", "height");
+    assertXPathNoAttribute(pDoc, "//reqif-xhtml:td"_ostr, "height"_ostr);
 }
 
-DECLARE_HTMLEXPORT_TEST(testXHTMLUseCSS, "xhtml-css.odt")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testXHTMLUseCSS)
 {
+    createSwDoc("xhtml-css.odt");
+    setFilterOptions("XHTML");
+    save(mpFilter);
+
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
     sal_uInt64 nLength = pStream->TellEnd();
@@ -858,8 +887,14 @@ DECLARE_HTMLEXPORT_TEST(testXHTMLUseCSS, "xhtml-css.odt")
     CPPUNIT_ASSERT(aStream.indexOf("<span style=\"font-size:") != -1);
 }
 
-DECLARE_HTMLEXPORT_TEST(testReqIfList, "reqif-list.xhtml")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testReqIfList)
 {
+    setImportFilterOptions("xhtmlns=reqif-xhtml");
+    setImportFilterName("HTML (StarWriter)");
+    createSwDoc("reqif-list.xhtml");
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    save(mpFilter);
+
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
     sal_uInt64 nLength = pStream->TellEnd();
@@ -875,67 +910,83 @@ DECLARE_HTMLEXPORT_TEST(testReqIfList, "reqif-list.xhtml")
     CPPUNIT_ASSERT(aStream.indexOf("</reqif-xhtml:li>") != -1);
 }
 
-DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testReqIfOle2, "reqif-ole2.xhtml")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testReqIfOle2)
 {
-    uno::Reference<text::XTextEmbeddedObjectsSupplier> xSupplier(mxComponent, uno::UNO_QUERY);
-    uno::Reference<container::XIndexAccess> xObjects(xSupplier->getEmbeddedObjects(),
-                                                     uno::UNO_QUERY);
-    uno::Reference<document::XEmbeddedObjectSupplier2> xObject(xObjects->getByIndex(0),
-                                                               uno::UNO_QUERY);
-    uno::Reference<io::XActiveDataStreamer> xEmbeddedObject(
-        xObject->getExtendedControlOverEmbeddedObject(), uno::UNO_QUERY);
-    // This failed, the "RTF fragment" native data was loaded as-is, we had no
-    // filter to handle it, so nothing happened on double-click.
-    CPPUNIT_ASSERT(xEmbeddedObject.is());
-    uno::Reference<io::XSeekable> xStream(xEmbeddedObject->getStream(), uno::UNO_QUERY);
-    // This was 38375, msfilter::rtfutil::ExtractOLE2FromObjdata() wrote
-    // everything after the OLE1 header into the OLE2 stream, while the
-    // Presentation field after the OLE2 data doesn't belong there.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int64>(37888), xStream->getLength());
-    // Finally the export also failed as it tried to open the stream from the
-    // document storage, but the embedded object already opened it, so an
-    // exception of type com.sun.star.io.IOException was thrown.
+    auto verify = [this]() {
+        uno::Reference<text::XTextEmbeddedObjectsSupplier> xSupplier(mxComponent, uno::UNO_QUERY);
+        uno::Reference<container::XIndexAccess> xObjects(xSupplier->getEmbeddedObjects(),
+                                                         uno::UNO_QUERY);
+        uno::Reference<document::XEmbeddedObjectSupplier2> xObject(xObjects->getByIndex(0),
+                                                                   uno::UNO_QUERY);
+        uno::Reference<io::XActiveDataStreamer> xEmbeddedObject(
+            xObject->getExtendedControlOverEmbeddedObject(), uno::UNO_QUERY);
+        // This failed, the "RTF fragment" native data was loaded as-is, we had no
+        // filter to handle it, so nothing happened on double-click.
+        CPPUNIT_ASSERT(xEmbeddedObject.is());
+        uno::Reference<io::XSeekable> xStream(xEmbeddedObject->getStream(), uno::UNO_QUERY);
+        // This was 38375, msfilter::rtfutil::ExtractOLE2FromObjdata() wrote
+        // everything after the OLE1 header into the OLE2 stream, while the
+        // Presentation field after the OLE2 data doesn't belong there.
+        CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int64>(37888), xStream->getLength());
+        // Finally the export also failed as it tried to open the stream from the
+        // document storage, but the embedded object already opened it, so an
+        // exception of type com.sun.star.io.IOException was thrown.
 
-    if (isExported())
-    {
-        // Check that the replacement graphic is exported at RTF level.
-        SvMemoryStream aStream;
-        WrapReqifFromTempFile(aStream);
-        xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-        CPPUNIT_ASSERT(pDoc);
-        // Get the path of the RTF data.
-        OUString aOlePath = getXPath(
-            pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object", "data");
-        OUString aOleSuffix(".ole");
-        CPPUNIT_ASSERT(aOlePath.endsWith(aOleSuffix));
-        INetURLObject aUrl(maTempFile.GetURL());
-        aUrl.setBase(aOlePath.subView(0, aOlePath.getLength() - aOleSuffix.getLength()));
-        aUrl.setExtension(u"ole");
-        OUString aOleUrl = aUrl.GetMainURL(INetURLObject::DecodeMechanism::NONE);
+        if (isExported())
+        {
+            // Check that the replacement graphic is exported at RTF level.
+            xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
+            // Get the path of the RTF data.
+            OUString aOlePath = getXPath(
+                pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object"_ostr,
+                "data"_ostr);
+            OUString aOleSuffix(".ole");
+            CPPUNIT_ASSERT(aOlePath.endsWith(aOleSuffix));
+            INetURLObject aUrl(maTempFile.GetURL());
+            aUrl.setBase(aOlePath.subView(0, aOlePath.getLength() - aOleSuffix.getLength()));
+            aUrl.setExtension(u"ole");
+            OUString aOleUrl = aUrl.GetMainURL(INetURLObject::DecodeMechanism::NONE);
 
-        // Search for \result in the RTF data.
-        SvFileStream aOleStream(aOleUrl, StreamMode::READ);
-        CPPUNIT_ASSERT(aOleStream.IsOpen());
-        OString aOleString(read_uInt8s_ToOString(aOleStream, aOleStream.TellEnd()));
-        // Without the accompanying fix in place, this test would have failed,
-        // replacement graphic was missing at RTF level.
-        CPPUNIT_ASSERT(aOleString.indexOf(OOO_STRING_SVTOOLS_RTF_RESULT) != -1);
-    }
+            // Search for \result in the RTF data.
+            SvFileStream aOleStream(aOleUrl, StreamMode::READ);
+            CPPUNIT_ASSERT(aOleStream.IsOpen());
+            OString aOleString(read_uInt8s_ToOString(aOleStream, aOleStream.TellEnd()));
+            // Without the accompanying fix in place, this test would have failed,
+            // replacement graphic was missing at RTF level.
+            CPPUNIT_ASSERT(aOleString.indexOf(OOO_STRING_SVTOOLS_RTF_RESULT) != -1);
+        }
+    };
+    setImportFilterOptions("xhtmlns=reqif-xhtml");
+    setImportFilterName("HTML (StarWriter)");
+    createSwDoc("reqif-ole2.xhtml");
+    verify();
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    saveAndReload(mpFilter);
+    verify();
 }
 
-DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testReqIfOle2Odg, "reqif-ole-odg.xhtml")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testReqIfOle2Odg)
 {
-    uno::Reference<text::XTextEmbeddedObjectsSupplier> xSupplier(mxComponent, uno::UNO_QUERY);
-    uno::Reference<container::XIndexAccess> xObjects(xSupplier->getEmbeddedObjects(),
-                                                     uno::UNO_QUERY);
-    uno::Reference<document::XEmbeddedObjectSupplier> xTextEmbeddedObject(xObjects->getByIndex(0),
-                                                                          uno::UNO_QUERY);
-    uno::Reference<lang::XServiceInfo> xObject(xTextEmbeddedObject->getEmbeddedObject(),
-                                               uno::UNO_QUERY);
-    // This failed, both import and export failed to handle OLE2 that contains
-    // just ODF.
-    CPPUNIT_ASSERT(xObject.is());
-    CPPUNIT_ASSERT(xObject->supportsService("com.sun.star.drawing.DrawingDocument"));
+    auto verify = [this]() {
+        uno::Reference<text::XTextEmbeddedObjectsSupplier> xSupplier(mxComponent, uno::UNO_QUERY);
+        uno::Reference<container::XIndexAccess> xObjects(xSupplier->getEmbeddedObjects(),
+                                                         uno::UNO_QUERY);
+        uno::Reference<document::XEmbeddedObjectSupplier> xTextEmbeddedObject(
+            xObjects->getByIndex(0), uno::UNO_QUERY);
+        uno::Reference<lang::XServiceInfo> xObject(xTextEmbeddedObject->getEmbeddedObject(),
+                                                   uno::UNO_QUERY);
+        // This failed, both import and export failed to handle OLE2 that contains
+        // just ODF.
+        CPPUNIT_ASSERT(xObject.is());
+        CPPUNIT_ASSERT(xObject->supportsService("com.sun.star.drawing.DrawingDocument"));
+    };
+    setImportFilterOptions("xhtmlns=reqif-xhtml");
+    setImportFilterName("HTML (StarWriter)");
+    createSwDoc("reqif-ole-odg.xhtml");
+    verify();
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    saveAndReload(mpFilter);
+    verify();
 }
 
 DECLARE_HTMLEXPORT_TEST(testList, "list.html")
@@ -954,7 +1005,7 @@ DECLARE_HTMLEXPORT_TEST(testTransparentImage, "transparent-image.odt")
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
-    OUString aSource = getXPath(pDoc, "/html/body/p/img", "src");
+    OUString aSource = getXPath(pDoc, "/html/body/p/img"_ostr, "src"_ostr);
     OUString aMessage = "src attribute is: " + aSource;
     // This was a jpeg, transparency was lost.
     CPPUNIT_ASSERT_MESSAGE(aMessage.toUtf8().getStr(), aSource.endsWith(".gif"));
@@ -970,45 +1021,45 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testTransparentImageReqIf)
         comphelper::makePropertyValue("ExportImagesAsOLE", true),
     };
     xStorable->storeToURL(maTempFile.GetURL(), aStoreProperties);
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
     OUString aSource = getXPath(
         pDoc,
-        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:object",
-        "data");
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:object"_ostr,
+        "data"_ostr);
     OUString aMessage = "src attribute is: " + aSource;
     // This was GIF, when the intention was to force PNG.
     CPPUNIT_ASSERT_MESSAGE(aMessage.toUtf8().getStr(), aSource.endsWith(".png"));
 }
 
-DECLARE_HTMLEXPORT_TEST(testOleNodataReqIf, "reqif-ole-nodata.odt")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testOleNodataReqIf)
 {
+    createSwDoc("reqif-ole-nodata.odt");
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    save(mpFilter);
+
     // This failed, io::IOException was thrown during the filter() call.
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
     // Make sure the native <object> element has the required data attribute.
     OUString aSource = getXPath(
         pDoc,
-        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:object",
-        "data");
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:object"_ostr,
+        "data"_ostr);
     CPPUNIT_ASSERT(!aSource.isEmpty());
 }
 
-DECLARE_HTMLEXPORT_TEST(testNoLangReqIf, "reqif-no-lang.odt")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testNoLangReqIf)
 {
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    createSwDoc("reqif-no-lang.odt");
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    save(mpFilter);
+
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
     // Make sure that xml:lang is not written in ReqIF mode.
-    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:h1", "lang");
+    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:h1"_ostr,
+                           "lang"_ostr);
 }
 
 DECLARE_HTMLEXPORT_TEST(testFieldShade, "field-shade.odt")
@@ -1018,13 +1069,13 @@ DECLARE_HTMLEXPORT_TEST(testFieldShade, "field-shade.odt")
 
     // Without the accompanying fix in place, this test would have failed with 'Expected: 1; Actual:
     // 0', i.e. shading for the field was lost.
-    assertXPath(pDoc, "/html/body/p[1]/span", "style", "background: #c0c0c0");
+    assertXPath(pDoc, "/html/body/p[1]/span"_ostr, "style"_ostr, "background: #c0c0c0");
 
     // Check that field shading is written only in case there is no user-defined span background.
-    assertXPath(pDoc, "/html/body/p[2]/span", "style", "background: #ff0000");
+    assertXPath(pDoc, "/html/body/p[2]/span"_ostr, "style"_ostr, "background: #ff0000");
     // Without the accompanying fix in place, this test would have failed with 'Expected: 0; Actual:
     // 1', i.e there was an inner span hiding the wanted background color.
-    assertXPath(pDoc, "/html/body/p[2]/span/span", 0);
+    assertXPath(pDoc, "/html/body/p[2]/span/span"_ostr, 0);
 }
 
 DECLARE_HTMLEXPORT_TEST(testTdf132739, "tdf132739.odt")
@@ -1035,12 +1086,16 @@ DECLARE_HTMLEXPORT_TEST(testTdf132739, "tdf132739.odt")
     // Without the fix in place, this test would have failed with
     // - Expected: background: #5983b0; border: 1px solid #333333; padding: 0.04in
     // - Actual  : background: #5983b0
-    assertXPath(pDoc, "/html/body/table/tr[1]/td", "style",
+    assertXPath(pDoc, "/html/body/table/tr[1]/td"_ostr, "style"_ostr,
                 "background: #5983b0; border: 1px solid #333333; padding: 0.04in");
 }
 
-DECLARE_HTMLEXPORT_TEST(testFieldShadeReqIf, "field-shade-reqif.odt")
+CPPUNIT_TEST_FIXTURE(HtmlExportTest, testFieldShadeReqIf)
 {
+    createSwDoc("field-shade-reqif.odt");
+    setFilterOptions("xhtmlns=reqif-xhtml");
+    save(mpFilter);
+
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
     CPPUNIT_ASSERT(pDoc);
 
@@ -1049,13 +1104,13 @@ DECLARE_HTMLEXPORT_TEST(testFieldShadeReqIf, "field-shade-reqif.odt")
     // - Actual  : 2
     // i.e. the ReqIF subset of xhtml had a background color and a page number field, resulting in
     // an invalid ReqIF-XHTML.
-    assertXPath(pDoc, "/html/body/div/p[1]/span", 0);
-    assertXPath(pDoc, "/html/body/div/p[1]/sdfield", 0);
+    assertXPath(pDoc, "/html/body/div/p[1]/span"_ostr, 0);
+    assertXPath(pDoc, "/html/body/div/p[1]/sdfield"_ostr, 0);
 }
 
 DECLARE_HTMLEXPORT_TEST(testTdf126879, "tdf126879.odt")
 {
-    const OString aExpected("<!DOCTYPE html>");
+    constexpr OString aExpected("<!DOCTYPE html>"_ostr);
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
     const OString aActual(read_uInt8s_ToOString(*pStream, aExpected.getLength()));
@@ -1075,16 +1130,14 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testBlockQuoteReqIf)
     // Export it.
     setFilterOptions("xhtmlns=reqif-xhtml");
     save("HTML (StarWriter)");
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 1
     // - Actual  : 0
     // i.e. <blackquote> had character (direct) children, which is invalid xhtml.
-    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:blockquote/reqif-xhtml:p", 1);
+    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:blockquote/reqif-xhtml:p"_ostr,
+                1);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testRTFOLEMimeType)
@@ -1101,17 +1154,14 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testRTFOLEMimeType)
         comphelper::makePropertyValue("RTFOLEMimeType", aType),
     };
     xStorable->storeToURL(maTempFile.GetURL(), aStoreProperties);
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: test/rtf
     // - Actual  : text/rtf
     // i.e. the MIME type was always text/rtf, not taking the store parameter into account.
-    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object", "type",
-                aType);
+    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object"_ostr,
+                "type"_ostr, aType);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testChinese)
@@ -1121,13 +1171,9 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testChinese)
 
     // Export it.
     ExportToReqif();
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-
-    // Without the accompanying fix in place, this test would have failed as the output was not
+    // Without the accompanying fix in place, this would have failed as the output was not
     // well-formed.
-    CPPUNIT_ASSERT(pDoc);
+    WrapReqifFromTempFile();
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifComment)
@@ -1142,13 +1188,9 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifComment)
 
     // Export it.
     ExportToReqif();
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-
-    // Without the accompanying fix in place, this test would have failed as the output was not
+    // Without the accompanying fix in place, this would have failed as the output was not
     // well-formed.
-    CPPUNIT_ASSERT(pDoc);
+    WrapReqifFromTempFile();
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifFontNameSize)
@@ -1166,17 +1208,13 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifFontNameSize)
 
     // Export it.
     ExportToReqif();
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
-    // Make sure the output is well-formed.
-    CPPUNIT_ASSERT(pDoc);
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 1
     // - Actual  : 3
     // i.e. font name and size was written, even if that's not relevant for ReqIF.
-    assertXPath(pDoc, "//reqif-xhtml:span", 1);
+    assertXPath(pDoc, "//reqif-xhtml:span"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifParagraphAlignment)
@@ -1189,17 +1227,13 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifParagraphAlignment)
 
     // Export it.
     ExportToReqif();
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
-    // Make sure the output is well-formed.
-    CPPUNIT_ASSERT(pDoc);
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected:
     // - Actual  : right
     // i.e. the <reqif-xhtml:p align="..."> markup was used, which is invalid.
-    assertXPathNoAttribute(pDoc, "//reqif-xhtml:p", "align");
+    assertXPathNoAttribute(pDoc, "//reqif-xhtml:p"_ostr, "align"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifOle1PDF)
@@ -1286,7 +1320,7 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifOle1Paint)
     // - Expected: PBrush
     // - Actual  : Package
     // i.e. a hardcoded class name was written.
-    CPPUNIT_ASSERT_EQUAL(OString("PBrush"), aClassName);
+    CPPUNIT_ASSERT_EQUAL("PBrush"_ostr, aClassName);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifOle1PaintBitmapFormat)
@@ -1351,17 +1385,14 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testMultiParaListItem)
 
     ExportToReqif();
 
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
-    assertXPathContent(pXmlDoc, "//reqif-xhtml:ol/reqif-xhtml:li[1]/reqif-xhtml:p", "A");
-    assertXPathContent(pXmlDoc, "//reqif-xhtml:ol/reqif-xhtml:li[2]/reqif-xhtml:p[1]", "B");
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+    assertXPathContent(pXmlDoc, "//reqif-xhtml:ol/reqif-xhtml:li[1]/reqif-xhtml:p"_ostr, "A");
+    assertXPathContent(pXmlDoc, "//reqif-xhtml:ol/reqif-xhtml:li[2]/reqif-xhtml:p[1]"_ostr, "B");
     // Without the accompanying fix in place, this test would have failed with:
     // XPath '//reqif-xhtml:ol/reqif-xhtml:li[2]/reqif-xhtml:p[2]' not found
     // i.e. </li> was written before "C", not after "C", so "C" was not in the 2nd list item.
-    assertXPathContent(pXmlDoc, "//reqif-xhtml:ol/reqif-xhtml:li[2]/reqif-xhtml:p[2]", "C");
-    assertXPathContent(pXmlDoc, "//reqif-xhtml:ol/reqif-xhtml:li[3]/reqif-xhtml:p", "D");
+    assertXPathContent(pXmlDoc, "//reqif-xhtml:ol/reqif-xhtml:li[2]/reqif-xhtml:p[2]"_ostr, "C");
+    assertXPathContent(pXmlDoc, "//reqif-xhtml:ol/reqif-xhtml:li[3]/reqif-xhtml:p"_ostr, "D");
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testUnderlineNone)
@@ -1379,11 +1410,8 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testUnderlineNone)
 
     // Make sure that the paragraph has no explicit style, because "text-decoration: none" is
     // filtered out.
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pXmlDoc);
-    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:div/reqif-xhtml:p", "style");
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:div/reqif-xhtml:p"_ostr, "style"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifOle1PresDataNoOle2)
@@ -1481,10 +1509,7 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testListHeading)
     ExportToReqif();
 
     // Then make sure the output is valid xhtml:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
 
     // Without the accompanying fix in place, this test would have failed:
     // - expected: <div><ol><li style="display: block"><p>...</p></li></ol></div>
@@ -1492,7 +1517,7 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testListHeading)
     // because a </li> but no <li> is not well-formed and <ol> with a non-li children is invalid.
     OUString aContent
         = getXPathContent(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol/"
-                                   "reqif-xhtml:li[@style='display: block']/reqif-xhtml:p");
+                                   "reqif-xhtml:li[@style='display: block']/reqif-xhtml:p"_ostr);
     CPPUNIT_ASSERT_EQUAL(OUString("list header"), aContent.trim());
 }
 
@@ -1525,17 +1550,15 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testPartiallyNumberedList)
     ExportToReqif();
 
     // Then make sure the output is well-formed xhtml:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pXmlDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed:
     // - expected: <li><p>...</p><p>...</p></li>
     // - actual  : <li><p>...</p><p>...</p>
     // because a <li> without a matching </li> is not well-formed, and the </li> was omitted because
     // the second para was not numbered.
-    assertXPath(pXmlDoc,
-                "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol/reqif-xhtml:li/reqif-xhtml:p", 2);
+    assertXPath(
+        pXmlDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol/reqif-xhtml:li/reqif-xhtml:p"_ostr, 2);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testPartiallyNumberedListHTML)
@@ -1577,7 +1600,7 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testPartiallyNumberedListHTML)
     // because a <li> without a matching </li> is not well-formed, and the </li> was omitted because
     // the second para was not numbered.
 
-    assertXPath(pXmlDoc, "/html/body/ol/li/p", 2);
+    assertXPath(pXmlDoc, "/html/body/ol/li/p"_ostr, 2);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testListHeaderAndItem)
@@ -1608,17 +1631,15 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testListHeaderAndItem)
     ExportToReqif();
 
     // Then make sure the output is well-formed xhtml:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    // Without the accompanying fix in place, this test would have failed:
+    // Without the accompanying fix in place, this would have failed:
     // Entity: line 3: parser error : Opening and ending tag mismatch: ol line 3 and li
     // <reqif-xhtml:ol><reqif-xhtml:p>not numbered</reqif-xhtml:p></reqif-xhtml:li>
-    CPPUNIT_ASSERT(pXmlDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Make sure that in case the list has a header and an item, then both are wrapped in an <li>
     // element.
-    assertXPath(pXmlDoc,
-                "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol/reqif-xhtml:li/reqif-xhtml:p", 2);
+    assertXPath(
+        pXmlDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol/reqif-xhtml:li/reqif-xhtml:p"_ostr, 2);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testBlockQuoteNoMargin)
@@ -1638,17 +1659,14 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testBlockQuoteNoMargin)
     ExportToReqif();
 
     // Then make sure the output is valid xhtml:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pXmlDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed:
     // - expected: <blockquote><p>...</p></blockquote>
     // - actual  : <blockquote>...</blockquote>
     // i.e. <blockquote> is can't have character children, but it had.
-    assertXPathContent(pXmlDoc,
-                       "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:blockquote/reqif-xhtml:p",
-                       "string");
+    assertXPathContent(
+        pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:blockquote/reqif-xhtml:p"_ostr,
+        "string");
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifImageToOle)
@@ -1707,15 +1725,12 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedPNGDirectly)
     ExportToReqif();
 
     // Then make sure the PNG is embedded directly, without an RTF wrapper:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pXmlDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: image/png
     // - Actual  : text/rtf
     // i.e. even PNG was wrapped in an RTF.
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object", "type", "image/png");
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object"_ostr, "type"_ostr, "image/png");
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedJPGDirectly)
@@ -1731,16 +1746,13 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedJPGDirectly)
     ExportToReqif();
 
     // Then make sure the JPG is embedded directly, without an RTF wrapper:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pXmlDoc);
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object", "type", "image/jpeg");
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object"_ostr, "type"_ostr, "image/jpeg");
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: image/jpeg
     // - Actual  : image/png
     // i.e. first the original JPG data was lost, then the inner PNG fallback was missing.
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:object", "type",
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:object"_ostr, "type"_ostr,
                 "image/png");
 }
 
@@ -1761,14 +1773,11 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedPNGShapeDirectly)
     ExportToReqif();
 
     // Then make sure the PNG is embedded directly, without an RTF wrapper:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pXmlDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - no attribute 'type' exist
     // i.e. the PNG was exported as GIF, without an explicit type.
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object", "type", "image/png");
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object"_ostr, "type"_ostr, "image/png");
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedJPGShapeDirectly)
@@ -1788,16 +1797,13 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedJPGShapeDirectly)
     ExportToReqif();
 
     // Then make sure the JPG is embedded directly, without an RTF wrapper:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pXmlDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: image/jpeg
     // - Actual  : image/png
     // i.e. first the original JPG data was lost, then the inner PNG fallback was missing.
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object", "type", "image/jpeg");
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:object", "type",
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object"_ostr, "type"_ostr, "image/jpeg");
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:object"_ostr, "type"_ostr,
                 "image/png");
 }
 
@@ -1824,15 +1830,12 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedPNGShapeAsOLE)
     xStorable->storeToURL(maTempFile.GetURL(), aStoreProperties);
 
     // Then make sure the PNG is embedded with an RTF wrapper:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pXmlDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: text/rtf
     // - Actual  : image/png
     // i.e. the OLE wrapper around the PNG was missing.
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object", "type", "text/rtf");
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object"_ostr, "type"_ostr, "text/rtf");
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedShapeAsPNG)
@@ -1850,15 +1853,12 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedShapeAsPNG)
     ExportToReqif();
 
     // Then make sure the shape is embedded as a PNG:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pXmlDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: image/png
     // - Actual  : image/x-vclgraphic
     // i.e. the result was invalid ReqIF.
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object", "type", "image/png");
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object"_ostr, "type"_ostr, "image/png");
 
     // Then check the pixel size of the shape:
     Size aPixelSize(Application::GetDefaultDevice()->LogicToPixel(Size(10000, 10000),
@@ -1866,7 +1866,7 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedShapeAsPNG)
     // Without the accompanying fix in place, this test would have failed with:
     // - no attribute 'width' exist
     // i.e. shapes had no width.
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object", "width",
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object"_ostr, "width"_ostr,
                 OUString::number(aPixelSize.getWidth()));
 }
 
@@ -1882,7 +1882,7 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testShapeAsImageHtml)
     xDrawPageSupplier->getDrawPage()->add(xShape);
 
     // When exporting to plain HTML:
-    reload("HTML (StarWriter)", "");
+    saveAndReload("HTML (StarWriter)");
 
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected:
@@ -1941,11 +1941,8 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedShapeAsPNGCustomDPI)
     xStorable->storeToURL(maTempFile.GetURL(), aStoreProperties);
 
     // Then make sure the shape is embedded as a PNG:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pXmlDoc);
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object", "type", "image/png");
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object"_ostr, "type"_ostr, "image/png");
 
     // Then check the pixel size of the shape:
     Size aPixelSize(Application::GetDefaultDevice()->LogicToPixel(Size(5080, 2540),
@@ -1963,7 +1960,7 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifEmbedShapeAsPNGCustomDPI)
     CPPUNIT_ASSERT_EQUAL(nPNGWidth, aDescriptor.GetSizePixel().getWidth());
 
     // Then make sure the shape's logic size (in CSS pixels) don't change:
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object", "width",
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object"_ostr, "width"_ostr,
                 OUString::number(aPixelSize.getWidth()));
 }
 
@@ -1986,13 +1983,8 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqifOleBmpTransparent)
     xStorable->storeToURL(maTempFile.GetURL(), aStoreProperties);
 
     // Then make sure the transparent pixel turns into white:
-    OUString aRtfUrl = GetOlePath();
-    SvMemoryStream aRtf;
-    HtmlExportTest::wrapRtfFragment(aRtfUrl, aRtf);
-    tools::SvRef<TestReqIfRtfReader> xReader(new TestReqIfRtfReader(aRtf));
-    CPPUNIT_ASSERT(xReader->CallParser() != SvParserState::Error);
     SvMemoryStream aOle1;
-    CPPUNIT_ASSERT(xReader->WriteObjectData(aOle1));
+    ParseOle1FromRtfUrl(GetOlePath(), aOle1);
     OLE1Reader aOle1Reader(aOle1);
     SvMemoryStream aBitmapStream(aOle1Reader.m_aNativeData.data(), aOle1Reader.m_aNativeData.size(),
                                  StreamMode::READ);
@@ -2084,14 +2076,11 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testListsHeading)
     ExportToReqif();
 
     // Then make sure the output is valid xhtml:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
 
     OUString aContent
         = getXPathContent(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol/"
-                                   "reqif-xhtml:li[@style='display: block']/reqif-xhtml:p");
+                                   "reqif-xhtml:li[@style='display: block']/reqif-xhtml:p"_ostr);
     CPPUNIT_ASSERT_EQUAL(OUString("list 1, header 1"), aContent.trim());
 }
 
@@ -2109,7 +2098,7 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testOleEmfPreviewToHtml)
 
     // Then make sure the <img> tag has matching file extension and data:
     htmlDocUniquePtr pDoc = parseHtml(maTempFile);
-    OUString aPath = getXPath(pDoc, "/html/body/p/img", "src");
+    OUString aPath = getXPath(pDoc, "/html/body/p/img"_ostr, "src"_ostr);
     // Without the accompanying fix in place, this test would have failed, as aPath was
     // ole_html_3978e5f373402b43.JPG, with EMF data.
     CPPUNIT_ASSERT(aPath.endsWith("gif"));
@@ -2143,15 +2132,12 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testNestedBullets)
     ExportToReqif();
 
     // Then make sure that there is a <li> between the outer and the inner <ol>:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//reqif-xhtml:ol/reqif-xhtml:li/reqif-xhtml:ol/reqif-xhtml:li/reqif-xhtml:p' not found
     // i.e. the <li> inside the outer <ol> was missing.
     assertXPathContent(
-        pXmlDoc, "//reqif-xhtml:ol/reqif-xhtml:li/reqif-xhtml:ol/reqif-xhtml:li/reqif-xhtml:p",
+        pXmlDoc, "//reqif-xhtml:ol/reqif-xhtml:li/reqif-xhtml:ol/reqif-xhtml:li/reqif-xhtml:p"_ostr,
         "second");
 }
 
@@ -2167,15 +2153,12 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testTrailingLineBreak)
     ExportToReqif();
 
     // Then make sure that we still have a single line-break:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 1
     // - Actual  : 2
     // - XPath '//reqif-xhtml:br' number of nodes is incorrect
-    assertXPath(pXmlDoc, "//reqif-xhtml:br", 1);
+    assertXPath(pXmlDoc, "//reqif-xhtml:br"_ostr, 1);
 
     // Then test the import side:
 
@@ -2218,19 +2201,16 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testLeadingTab)
     xStorable->storeToURL(maTempFile.GetURL(), aStoreProperties);
 
     // Then make sure that leading tabs are replaced with 2 nbsps:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: <nbsp><nbsp><space>first
     // - Actual  : <tab><space>first
     // i.e. the leading tab was not replaced by 2 nbsps.
-    assertXPathContent(pXmlDoc, "//reqif-xhtml:p[1]", u"\xa0\xa0 first");
+    assertXPathContent(pXmlDoc, "//reqif-xhtml:p[1]"_ostr, u"\xa0\xa0 first"_ustr);
     // Test a leading tab that is not at the start of the paragraph:
-    assertXPathContent(pXmlDoc, "//reqif-xhtml:p[2]", u"\xa0\xa0\xa0\xa0 second");
+    assertXPathContent(pXmlDoc, "//reqif-xhtml:p[2]"_ostr, u"\xa0\xa0\xa0\xa0 second"_ustr);
     // Test a tab which is not leading:
-    assertXPathContent(pXmlDoc, "//reqif-xhtml:p[3]", u"thi \t rd");
+    assertXPathContent(pXmlDoc, "//reqif-xhtml:p[3]"_ostr, u"thi \t rd"_ustr);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testLeadingTabHTML)
@@ -2256,7 +2236,7 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testLeadingTabHTML)
     // - Expected: <newline><nbsp><nbsp><space>test
     // - Actual  : <newline><tab><space>test
     // i.e. the leading tab was not replaced by 2 nbsps.
-    assertXPathContent(pHtmlDoc, "/html/body/p", SAL_NEWLINE_STRING u"\xa0\xa0 test");
+    assertXPathContent(pHtmlDoc, "/html/body/p"_ostr, SAL_NEWLINE_STRING u"\xa0\xa0 test"_ustr);
 }
 
 CPPUNIT_TEST_FIXTURE(HtmlExportTest, testClearingBreak)
@@ -2296,7 +2276,7 @@ CPPUNIT_TEST_FIXTURE(HtmlExportTest, testClearingBreak)
     createSwWebDoc("clearing-break.html");
     // Then make sure that the clear property of the break is not ignored:
     verify();
-    reload(mpFilter, "clearing-break.html");
+    saveAndReload("HTML (StarWriter)");
     // Make sure that the clear property of the break is not ignored during export:
     verify();
 }
@@ -2329,19 +2309,18 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testTableBackground)
     ExportToReqif();
 
     // Then make sure that CSS markup is used, not HTML one:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//reqif-xhtml:table[1]' no attribute 'style' exist
     // i.e. HTML markup was used for the table background color.
-    assertXPath(pXmlDoc, "//reqif-xhtml:table[1]", "style", "background: #ff0000");
-    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:table[1]", "bgcolor");
-    assertXPath(pXmlDoc, "//reqif-xhtml:table[2]/reqif-xhtml:tr[1]", "style",
+    assertXPath(pXmlDoc, "//reqif-xhtml:table[1]"_ostr, "style"_ostr, "background: #ff0000");
+    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:table[1]"_ostr, "bgcolor"_ostr);
+    assertXPath(pXmlDoc, "//reqif-xhtml:table[2]/reqif-xhtml:tr[1]"_ostr, "style"_ostr,
                 "background: #00ff00");
-    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:table[2]/reqif-xhtml:tr[1]", "bgcolor");
+    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:table[2]/reqif-xhtml:tr[1]"_ostr,
+                           "bgcolor"_ostr);
     // Second row has no explicit style, the default is not written.
-    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:table[2]/reqif-xhtml:tr[2]", "style");
+    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:table[2]/reqif-xhtml:tr[2]"_ostr, "style"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(HtmlExportTest, testImageKeepRatio)
@@ -2375,7 +2354,7 @@ CPPUNIT_TEST_FIXTURE(HtmlExportTest, testImageKeepRatio)
     // - Expected: auto
     // - Actual  : 2
     // i.e. a static (CSS pixel) height was written.
-    assertXPath(pDoc, "/html/body/p/img", "height", "auto");
+    assertXPath(pDoc, "/html/body/p/img"_ostr, "height"_ostr, "auto");
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testSectionDir)
@@ -2393,13 +2372,11 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testSectionDir)
     ExportToReqif();
 
     // Then make sure CSS is used to export the text direction of the section:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//reqif-xhtml:div[@id='mysect']' no attribute 'style' exist
     // i.e. the dir="ltr" HTML attribute was used instead.
-    assertXPath(pXmlDoc, "//reqif-xhtml:div[@id='mysect']", "style", "dir: ltr");
+    assertXPath(pXmlDoc, "//reqif-xhtml:div[@id='mysect']"_ostr, "style"_ostr, "dir: ltr");
 }
 
 CPPUNIT_TEST_FIXTURE(HtmlExportTest, testTdf114769)
@@ -2450,14 +2427,15 @@ CPPUNIT_TEST_FIXTURE(HtmlExportTest, testTdf114769)
     CPPUNIT_ASSERT(pHtmlDoc);
 
     CPPUNIT_ASSERT_EQUAL(OUString("http://libreoffice.org/"),
-                         getXPath(pHtmlDoc, "/html/body/p[1]/a", "href"));
+                         getXPath(pHtmlDoc, "/html/body/p[1]/a"_ostr, "href"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("#some_bookmark"),
-                         getXPath(pHtmlDoc, "/html/body/p[2]/a", "href"));
-    CPPUNIT_ASSERT_EQUAL(OUString("C:\\test.txt"), getXPath(pHtmlDoc, "/html/body/p[3]/a", "href"));
+                         getXPath(pHtmlDoc, "/html/body/p[2]/a"_ostr, "href"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("C:\\test.txt"),
+                         getXPath(pHtmlDoc, "/html/body/p[3]/a"_ostr, "href"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("..\\..\\test.odt"),
-                         getXPath(pHtmlDoc, "/html/body/p[4]/a", "href"));
+                         getXPath(pHtmlDoc, "/html/body/p[4]/a"_ostr, "href"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString(".\\another.odt"),
-                         getXPath(pHtmlDoc, "/html/body/p[5]/a", "href"));
+                         getXPath(pHtmlDoc, "/html/body/p[5]/a"_ostr, "href"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(HtmlExportTest, testTdf153923)
@@ -2470,9 +2448,9 @@ CPPUNIT_TEST_FIXTURE(HtmlExportTest, testTdf153923)
     // Without the fix in place, this would fail
     CPPUNIT_ASSERT(pDoc);
 
-    assertXPath(pDoc, "/html/body//dl", 3);
+    assertXPath(pDoc, "/html/body//dl"_ostr, 3);
     // The 'dd' tag was not closed
-    assertXPath(pDoc, "/html/body//dd", 3);
+    assertXPath(pDoc, "/html/body//dd"_ostr, 3);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testTdf153923_ReqIF)
@@ -2480,15 +2458,12 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testTdf153923_ReqIF)
     createSwDoc("TableWithIndent.fodt");
     ExportToReqif();
 
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
-    assertXPath(pDoc, "//reqif-xhtml:table");
+    assertXPath(pDoc, "//reqif-xhtml:table"_ostr);
     // There should be no 'dd' or 'dl' tags, used as a hack for table indentation
-    assertXPath(pDoc, "//reqif-xhtml:dl", 0);
-    assertXPath(pDoc, "//reqif-xhtml:dd", 0);
+    assertXPath(pDoc, "//reqif-xhtml:dl"_ostr, 0);
+    assertXPath(pDoc, "//reqif-xhtml:dd"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIfTransparentTifImg)
@@ -2497,11 +2472,10 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIfTransparentTifImg)
     createSwDoc("reqif-transparent-tif-img.odt");
     ExportToReqif();
 
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object[1]", "type", "image/tiff");
-    OUString imageName = getXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object[1]", "data");
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+    assertXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object[1]"_ostr, "type"_ostr, "image/tiff");
+    OUString imageName
+        = getXPath(pXmlDoc, "//reqif-xhtml:p/reqif-xhtml:object[1]"_ostr, "data"_ostr);
     // Without the accompanying fix in place, this test would have failed,
     // ending with .gif, because XOutFlags::UseGifIfSensible flag combined
     // with the transparent image would result in GIF export
@@ -2519,32 +2493,31 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testTdf155387)
     createSwDoc("sub_li_and_ctd.fodt");
     ExportToReqif();
 
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
     // Without the fix in place, this would fail
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
     // Single top-level list
-    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul");
+    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul"_ostr);
     // Single top-level item
-    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul/reqif-xhtml:li");
+    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul/reqif-xhtml:li"_ostr);
     // 4 top-level paragraphs in the item
-    assertXPath(pDoc,
-                "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul/reqif-xhtml:li/reqif-xhtml:p", 4);
+    assertXPath(
+        pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul/reqif-xhtml:li/reqif-xhtml:p"_ostr,
+        4);
     // 2 sublists in the item
     assertXPath(
-        pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul/reqif-xhtml:li/reqif-xhtml:ul", 2);
+        pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul/reqif-xhtml:li/reqif-xhtml:ul"_ostr,
+        2);
     // 2 items in the first sublist
     assertXPath(pDoc,
                 "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul/reqif-xhtml:li/reqif-xhtml:ul[1]/"
-                "reqif-xhtml:li",
+                "reqif-xhtml:li"_ostr,
                 2);
     // Check the last (most nested) subitem's text
     assertXPathContent(
         pDoc,
         "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul/reqif-xhtml:li/reqif-xhtml:ul[2]/"
-        "reqif-xhtml:li/reqif-xhtml:ul/reqif-xhtml:li/reqif-xhtml:p",
+        "reqif-xhtml:li/reqif-xhtml:ul/reqif-xhtml:li/reqif-xhtml:p"_ostr,
         "l3");
 }
 
@@ -2553,30 +2526,29 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testTdf155496)
     createSwDoc("listItemSubheader.fodt");
     ExportToReqif();
 
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
     // Without the fix in place, this would fail
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
     // Two top-level lists
-    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul", 2);
+    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul"_ostr, 2);
     // Single top-level item
-    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul[1]/reqif-xhtml:li");
+    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul[1]/reqif-xhtml:li"_ostr);
     // One top-level paragraph in the item
-    assertXPath(pDoc,
-                "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul[1]/reqif-xhtml:li/reqif-xhtml:p");
+    assertXPath(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul[1]/reqif-xhtml:li/reqif-xhtml:p"_ostr);
     // One sublist in the item
     assertXPath(
-        pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul[1]/reqif-xhtml:li/reqif-xhtml:ul");
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul[1]/reqif-xhtml:li/reqif-xhtml:ul"_ostr);
     // One item in the sublist
     assertXPath(pDoc,
                 "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul[1]/reqif-xhtml:li/reqif-xhtml:ul/"
-                "reqif-xhtml:li");
+                "reqif-xhtml:li"_ostr);
     // Check its text
     OUString aContent = getXPathContent(
         pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ul[1]/reqif-xhtml:li/reqif-xhtml:ul/"
-              "reqif-xhtml:li/reqif-xhtml:p");
+              "reqif-xhtml:li/reqif-xhtml:p"_ostr);
     CPPUNIT_ASSERT_EQUAL(OUString("list 1 item 1\n\t\tsub-header"), aContent.trim());
 }
 
@@ -2585,13 +2557,11 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_RightAlignedTable)
     createSwDoc("tableRight.fodt");
     ExportToReqif();
 
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
     // No 'align' attribute must be present in 'div'
-    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:div", "align");
+    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:div"_ostr,
+                           "align"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_ListsWithNumFormat)
@@ -2599,16 +2569,495 @@ CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_ListsWithNumFormat)
     createSwDoc("listsWithNumFormat.fodt");
     ExportToReqif();
 
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pDoc = parseXmlStream(&aStream);
-    CPPUNIT_ASSERT(pDoc);
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
 
     // No 'type' attribute must be present in 'ol'
-    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol[1]", "type");
-    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol[2]", "type");
-    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol[3]", "type");
-    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol[4]", "type");
+    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol[1]"_ostr,
+                           "type"_ostr);
+    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol[2]"_ostr,
+                           "type"_ostr);
+    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol[3]"_ostr,
+                           "type"_ostr);
+    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:ol[4]"_ostr,
+                           "type"_ostr);
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testTdf155871)
+{
+    createSwDoc("tdf155871.fodt");
+    ExportToReqif();
+
+    // Without the fix in place, this would fail
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_ListsNoStartAttribute)
+{
+    createSwDoc("twoListsWithSameStyle.fodt");
+    ExportToReqif();
+
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
+
+    // No 'start' attribute must be present in 'ol'
+    assertXPath(pDoc, "//reqif-xhtml:ol[@start]"_ostr, 0);
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_FrameTextAsObjectAltText)
+{
+    createSwDoc("frameWithText.fodt");
+    ExportToReqif();
+
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
+
+    // Without the fix, this would fail with
+    // - Expected: Some text in frame & <foo>
+    // - Actual  : Frame1
+    // i.e., frame name was used as the object element content, not frame text
+    assertXPathContent(pDoc,
+                       "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[2]/reqif-xhtml:object"_ostr,
+                       "Some text in frame & <foo>");
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testSingleOleExport)
+{
+    // Given a document containing an embedded OLE object:
+    createSwDoc("ole2.odt");
+
+    // Create a selection for that object:
+    auto xDrawPageSupplier(mxComponent.queryThrow<css::drawing::XDrawPageSupplier>());
+    auto xDrawPage(xDrawPageSupplier->getDrawPage());
+    auto xModel(mxComponent.queryThrow<css::frame::XModel>());
+    auto xController(xModel->getCurrentController().queryThrow<css::view::XSelectionSupplier>());
+    xController->select(xDrawPage->getByIndex(0));
+
+    // Store only the selection
+    auto xStorable(mxComponent.queryThrow<css::frame::XStorable>());
+    css::uno::Sequence<css::beans::PropertyValue> aStoreProperties = {
+        comphelper::makePropertyValue("FilterName", OUString("HTML (StarWriter)")),
+        comphelper::makePropertyValue("FilterOptions", OUString("xhtmlns=reqif-xhtml")),
+        comphelper::makePropertyValue("RTFOLEMimeType", OUString("text/rtf")),
+        comphelper::makePropertyValue("SelectionOnly", true),
+    };
+    xStorable->storeToURL(maTempFile.GetURL(), aStoreProperties);
+
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+
+    // The root element must be reqif-xhtml:object
+    assertXPath(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:object"_ostr, "type"_ostr, "text/rtf");
+    // It has no children
+    assertXPathChildren(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:object"_ostr, 0);
+    // And the content is empty
+    assertXPathContent(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:object"_ostr, "");
+
+    OUString aRtfData = getXPath(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:object"_ostr, "data"_ostr);
+    INetURLObject aUrl(maTempFile.GetURL());
+    aUrl.setName(aRtfData);
+    SvMemoryStream aRtf;
+    HtmlExportTest::wrapRtfFragment(aUrl.GetMainURL(INetURLObject::DecodeMechanism::NONE), aRtf);
+    tools::SvRef<TestReqIfRtfReader> xReader(new TestReqIfRtfReader(aRtf));
+    // The RTF OLE exports correctly
+    CPPUNIT_ASSERT(xReader->CallParser() != SvParserState::Error);
+    CPPUNIT_ASSERT_EQUAL(tools::Long(9358), xReader->GetObjw());
+    CPPUNIT_ASSERT_EQUAL(tools::Long(450), xReader->GetObjh());
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_Tdf156602)
+{
+    createSwDoc("NestingInA1.fodt");
+    ExportToReqif();
+
+    xmlDocUniquePtr pDoc = WrapReqifFromTempFile();
+
+    // The outer table must be kept in the document where the outer table is the first element,
+    // and its A1 starts with a nested table
+
+    // Only two sub-elements must be inside the div: an outer table and a trailing paragraph
+    assertXPathChildren(pDoc, "/reqif-xhtml:html/reqif-xhtml:div"_ostr, 2);
+    // The outer table must have exactly two rows
+    assertXPath(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr"_ostr, 2);
+    // First outer table cell must have two sub-elements: an inner table and a trailing paragraph
+    assertXPathChildren(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr[1]/reqif-xhtml:td[1]"_ostr,
+        2);
+    // The inner table must have exactly two rows
+    assertXPath(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr[1]/reqif-xhtml:td[1]/"
+        "reqif-xhtml:table/reqif-xhtml:tr"_ostr,
+        2);
+    // Check all the elements' content
+    assertXPathContent(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr[1]/reqif-xhtml:td[1]/"
+        "reqif-xhtml:table/reqif-xhtml:tr[1]/reqif-xhtml:td[1]/reqif-xhtml:p"_ostr,
+        "Inner.A1");
+    assertXPathContent(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr[1]/reqif-xhtml:td[1]/"
+        "reqif-xhtml:table/reqif-xhtml:tr[1]/reqif-xhtml:td[2]/reqif-xhtml:p"_ostr,
+        "Inner.B1");
+    assertXPathContent(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr[1]/reqif-xhtml:td[1]/"
+        "reqif-xhtml:table/reqif-xhtml:tr[2]/reqif-xhtml:td[1]/reqif-xhtml:p"_ostr,
+        "Inner.A2");
+    assertXPathContent(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr[1]/reqif-xhtml:td[1]/"
+        "reqif-xhtml:table/reqif-xhtml:tr[2]/reqif-xhtml:td[2]/reqif-xhtml:p"_ostr,
+        "Inner.B2");
+    assertXPathContent(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr[1]/reqif-xhtml:td[1]/"
+        "reqif-xhtml:p"_ostr,
+        "Outer.A1");
+    assertXPathContent(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr[1]/reqif-xhtml:td[2]/"
+        "reqif-xhtml:p"_ostr,
+        "Outer.B1");
+    assertXPathContent(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr[2]/reqif-xhtml:td[1]/"
+        "reqif-xhtml:p"_ostr,
+        "Outer.A2");
+    assertXPathContent(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr[2]/reqif-xhtml:td[2]/"
+        "reqif-xhtml:p"_ostr,
+        "Outer.B2");
+    assertXPathContent(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p"_ostr,
+                       "Following text");
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testTdf156647_CellPaddingRoundtrip)
+{
+    // Given a document with a table with cell padding:
+    createSwDoc("table_cell_padding.fodt");
+    {
+        auto xTable = getParagraphOrTable(1);
+        auto aTableBorder = getProperty<css::table::TableBorder2>(xTable, "TableBorder2");
+        CPPUNIT_ASSERT_EQUAL(sal_Int16(1270), aTableBorder.Distance);
+        CPPUNIT_ASSERT(aTableBorder.IsDistanceValid);
+    }
+    // When exporting to reqif-xhtml:
+    ExportToReqif();
+    // Make sure that we export it:
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+    assertXPath(pXmlDoc, "//reqif-xhtml:table"_ostr, "cellpadding"_ostr, "48"); // px
+    // Now import it
+    mxComponent->dispose();
+    ImportFromReqif(maTempFile.GetURL());
+    // Then make sure that padding is not lost:
+    {
+        auto xTable = getParagraphOrTable(1);
+        auto aTableBorder = getProperty<css::table::TableBorder2>(xTable, "TableBorder2");
+        // Without the accompanying fix in place, this test would have failed:
+        // - Expected: 1270
+        // - Actual  : 97
+        // as the padding was lost, and the default 55 twip padding was used.
+        CPPUNIT_ASSERT_EQUAL(sal_Int16(1270), aTableBorder.Distance);
+        CPPUNIT_ASSERT(aTableBorder.IsDistanceValid);
+    }
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testTdf157643_WideHBorder)
+{
+    // Given a document with a table with a wide border between its two rows:
+    createSwDoc("table_with_wide_horizontal_border.fodt");
+    // When exporting to reqif-xhtml:
+    ExportToReqif();
+    // Make sure that there's no extra tr's:
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+    assertXPath(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:table/reqif-xhtml:tr"_ostr,
+                2);
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testHTML_PreserveSpaces)
+{
+    // Given a document with leading, trailing, and repeating intermediate spaces:
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    constexpr OUString paraText = u"\t test  \t more  text \t"_ustr;
+    pWrtShell->Insert(paraText);
+
+    // When exporting to plain HTML, using PreserveSpaces:
+    saveWithParams({
+        comphelper::makePropertyValue("FilterName", u"HTML (StarWriter)"_ustr),
+        comphelper::makePropertyValue("PreserveSpaces", true),
+    });
+
+    // Then make sure that "white-space: pre-wrap" is written into the paragraph's style:
+    htmlDocUniquePtr pHtmlDoc = parseHtml(maTempFile);
+    CPPUNIT_ASSERT(pHtmlDoc);
+    const OUString style = getXPath(pHtmlDoc, "/html/body/p"_ostr, "style"_ostr);
+    CPPUNIT_ASSERT(style.indexOf("white-space: pre-wrap") >= 0);
+    // Also check that the paragraph text is correct, without modifications in whitespace
+    assertXPathContent(pHtmlDoc, "/html/body/p"_ostr, paraText);
+
+    // Test import
+
+    setImportFilterName("HTML (StarWriter)");
+    load(maTempFile.GetURL());
+    CPPUNIT_ASSERT_EQUAL(paraText, getParagraph(1)->getString());
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_PreserveSpaces)
+{
+    // Given a document with leading, trailing, and repeating intermediate spaces:
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    constexpr OUString paraText = u"\t test  \t more  text \t"_ustr;
+    pWrtShell->Insert(paraText);
+
+    // When exporting to ReqIF, using PreserveSpaces:
+    saveWithParams({
+        comphelper::makePropertyValue("FilterName", u"HTML (StarWriter)"_ustr),
+        comphelper::makePropertyValue("FilterOptions", u"xhtmlns=reqif-xhtml"_ustr),
+        comphelper::makePropertyValue("PreserveSpaces", true),
+    });
+
+    // Then make sure that xml:space="preserve" attribute exists in the paragraph element:
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+    assertXPath(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p"_ostr, "space"_ostr,
+                u"preserve"_ustr);
+    // Also check that the paragraph text is correct, without modifications in whitespace
+    assertXPathContent(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p"_ostr, paraText);
+
+    // Test import
+
+    setImportFilterOptions("xhtmlns=reqif-xhtml");
+    setImportFilterName("HTML (StarWriter)");
+    load(maTempFile.GetURL());
+    CPPUNIT_ASSERT_EQUAL(paraText, getParagraph(1)->getString());
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testHTML_NoPreserveSpaces)
+{
+    // Test cases where "PreserveSpaces" should not introduce respective markup
+
+    const auto assertXPath_NoWhiteSpaceInStyle
+        = [this](const xmlDocUniquePtr& pDoc, const OString& rXPath) {
+              xmlXPathObjectPtr pXmlObj = getXPathNode(pDoc, rXPath);
+              xmlNodeSetPtr pXmlNodes = pXmlObj->nodesetval;
+              CPPUNIT_ASSERT_EQUAL_MESSAGE(rXPath.getStr(), 1, xmlXPathNodeSetGetLength(pXmlNodes));
+              xmlNodePtr pXmlNode = pXmlNodes->nodeTab[0];
+              if (xmlChar* prop = xmlGetProp(pXmlNode, BAD_CAST("style")))
+              {
+                  OUString style = OUString::fromUtf8(reinterpret_cast<const char*>(prop));
+                  CPPUNIT_ASSERT_MESSAGE(rXPath.getStr(), style.indexOf("white-space:") < 0);
+              }
+              xmlXPathFreeObject(pXmlObj);
+          };
+    const auto assertXPath_HasWhiteSpaceInStyle
+        = [this](const xmlDocUniquePtr& pDoc, const OString& rXPath) {
+              const OUString style = getXPath(pDoc, rXPath, "style"_ostr);
+              CPPUNIT_ASSERT_MESSAGE(rXPath.getStr(), style.indexOf("white-space: pre-wrap") >= 0);
+          };
+
+    createSwDoc("test_no_space_preserve.fodt");
+
+    // Export to plain HTML, using PreserveSpaces:
+    saveWithParams({
+        comphelper::makePropertyValue("FilterName", u"HTML (StarWriter)"_ustr),
+        comphelper::makePropertyValue("PreserveSpaces", true),
+    });
+
+    htmlDocUniquePtr pHtmlDoc = parseHtml(maTempFile);
+    CPPUNIT_ASSERT(pHtmlDoc);
+
+    // No whitespace preservation, where no leading / trailing / double whitespace
+    assertXPath_NoWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[1]"_ostr);
+    // Whitespace preserved for a leading space
+    assertXPath_HasWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[2]"_ostr);
+    // Whitespace preserved for a trailing space
+    assertXPath_HasWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[3]"_ostr);
+    // Whitespace preserved for a double space
+    assertXPath_HasWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[4]"_ostr);
+    // No whitespace preservation for leading / trailing breaks
+    assertXPath_NoWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[5]"_ostr);
+    // Whitespace preserved for a leading break + space
+    assertXPath_HasWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[6]"_ostr);
+    // Whitespace preserved for a trailing space + break
+    assertXPath_HasWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[7]"_ostr);
+    // No whitespace preservation for a middle break
+    assertXPath_NoWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[8]"_ostr);
+    // Whitespace preserved for a middle space + break
+    assertXPath_HasWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[9]"_ostr);
+    // Whitespace preserved for a middle break + space
+    assertXPath_HasWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[10]"_ostr);
+    // No whitespace preservation for a trailing space and SVG
+    assertXPath_NoWhiteSpaceInStyle(pHtmlDoc, "/html/body/p[11]"_ostr);
+
+    // Test import
+
+    setImportFilterName("HTML (StarWriter)");
+    load(maTempFile.GetURL());
+
+    CPPUNIT_ASSERT_EQUAL(u"No special spaces"_ustr, getParagraph(1)->getString());
+    CPPUNIT_ASSERT_EQUAL(u" Leading space"_ustr, getParagraph(2)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Trailing space "_ustr, getParagraph(3)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Double  space"_ustr, getParagraph(4)->getString());
+    // Trailing break is removed in SwHTMLParser::AppendTextNode, and replaced with para spacing
+    CPPUNIT_ASSERT_EQUAL(u"\nLeading/trailing breaks"_ustr, getParagraph(5)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"\n Leading break + space"_ustr, getParagraph(6)->getString());
+    // Trailing break is removed in SwHTMLParser::AppendTextNode, and replaced with para spacing
+    CPPUNIT_ASSERT_EQUAL(u"Trailing space + break "_ustr, getParagraph(7)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Middle\nbreak"_ustr, getParagraph(8)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Middle space \n+ break"_ustr, getParagraph(9)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Middle break\n + space"_ustr, getParagraph(10)->getString());
+    // The SVG is replaced by a space in SwXParagraph::getString()
+    CPPUNIT_ASSERT_EQUAL(u"Trailing space and SVG  "_ustr, getParagraph(11)->getString());
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_NoPreserveSpaces)
+{
+    // Test cases where "PreserveSpaces" should not introduce respective markup
+
+    createSwDoc("test_no_space_preserve.fodt");
+
+    // Export to ReqIF, using PreserveSpaces:
+    saveWithParams({
+        comphelper::makePropertyValue("FilterName", u"HTML (StarWriter)"_ustr),
+        comphelper::makePropertyValue("FilterOptions", u"xhtmlns=reqif-xhtml"_ustr),
+        comphelper::makePropertyValue("PreserveSpaces", true),
+    });
+
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+
+    // No whitespace preservation, where no leading / trailing / double whitespace
+    assertXPathNoAttribute(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[1]"_ostr,
+                           "space"_ostr);
+    // Whitespace preserved for a leading space
+    assertXPath(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[2]"_ostr, "space"_ostr,
+                u"preserve"_ustr);
+    // Whitespace preserved for a trailing space
+    assertXPath(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[3]"_ostr, "space"_ostr,
+                u"preserve"_ustr);
+    // Whitespace preserved for a double space
+    assertXPath(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[4]"_ostr, "space"_ostr,
+                u"preserve"_ustr);
+    // No whitespace preservation for leading / trailing breaks
+    assertXPathNoAttribute(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[5]"_ostr,
+                           "space"_ostr);
+    // Whitespace preserved for a leading break + space
+    assertXPath(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[6]"_ostr, "space"_ostr,
+                u"preserve"_ustr);
+    // No whitespace preservation for a trailing space + break
+    assertXPathNoAttribute(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[7]"_ostr,
+                           "space"_ostr);
+    // No whitespace preservation for a middle break
+    assertXPathNoAttribute(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[8]"_ostr,
+                           "space"_ostr);
+    // No whitespace preservation for a middle space + break
+    assertXPathNoAttribute(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[9]"_ostr,
+                           "space"_ostr);
+    // Whitespace preserved for a middle break + space
+    assertXPath(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[10]"_ostr, "space"_ostr,
+                u"preserve"_ustr);
+    // No whitespace preservation for a trailing space and SVG
+    assertXPathNoAttribute(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[11]"_ostr,
+                           "space"_ostr);
+
+    // Test import
+
+    setImportFilterOptions("xhtmlns=reqif-xhtml");
+    setImportFilterName("HTML (StarWriter)");
+    load(maTempFile.GetURL());
+
+    CPPUNIT_ASSERT_EQUAL(u"No special spaces"_ustr, getParagraph(1)->getString());
+    CPPUNIT_ASSERT_EQUAL(u" Leading space"_ustr, getParagraph(2)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Trailing space "_ustr, getParagraph(3)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Double  space"_ustr, getParagraph(4)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"\nLeading/trailing breaks\n"_ustr, getParagraph(5)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"\n Leading break + space"_ustr, getParagraph(6)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Trailing space + break \n"_ustr, getParagraph(7)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Middle\nbreak"_ustr, getParagraph(8)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Middle space \n+ break"_ustr, getParagraph(9)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Middle break\n + space"_ustr, getParagraph(10)->getString());
+    // The SVG is replaced by a space in SwXParagraph::getString()
+    CPPUNIT_ASSERT_EQUAL(u"Trailing space and SVG  "_ustr, getParagraph(11)->getString());
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_ExportFormulasAsPDF)
+{
+    // Given a document with a formula:
+    createSwDoc("embedded_formula.fodt");
+
+    // When exporting to reqif with ExportFormulasAsPDF=true:
+    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
+    uno::Sequence<beans::PropertyValue> aStoreProperties = {
+        comphelper::makePropertyValue(u"FilterName"_ustr, u"HTML (StarWriter)"_ustr),
+        comphelper::makePropertyValue(u"FilterOptions"_ustr, u"xhtmlns=reqif-xhtml"_ustr),
+        comphelper::makePropertyValue(u"ExportFormulasAsPDF"_ustr, true),
+    };
+    xStorable->storeToURL(maTempFile.GetURL(), aStoreProperties);
+
+    // Make sure that the formula is exported as PDF:
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+    assertXPath(pXmlDoc,
+                "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p[2]/reqif-xhtml:object"_ostr,
+                "type"_ostr, u"application/pdf"_ustr);
+
+    css::uno::Sequence<css::beans::PropertyValue> descr{
+        comphelper::makePropertyValue(u"URL"_ustr, GetObjectPath(u".pdf"_ustr)),
+    };
+
+    uno::Reference<lang::XMultiServiceFactory> xFactory(
+        comphelper::getProcessComponentContext()->getServiceManager(), uno::UNO_QUERY_THROW);
+    uno::Reference<document::XTypeDetection> xTypeDetection(
+        xFactory->createInstance(u"com.sun.star.document.TypeDetection"_ustr),
+        uno::UNO_QUERY_THROW);
+
+    CPPUNIT_ASSERT_EQUAL(u"pdf_Portable_Document_Format"_ustr,
+                         xTypeDetection->queryTypeByDescriptor(descr, true));
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_NoBrClearForImageWrap)
+{
+    // Given a document with a paragraph-anchored image with "none" wrap:
+    createSwDoc("image_anchored_to_paragraph_no_wrap.fodt");
+    // When exporting to reqif:
+    ExportToReqif();
+    // Make sure that there's no 'br' elements in the 'object' (used to represent the wrapping
+    // in HTML export, using 'clear' attribute):
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
+    assertXPath(pXmlDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object"_ostr);
+    assertXPath(
+        pXmlDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:br"_ostr,
+        0);
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testReqIF_Tdf160017_spanClosingOrder)
+{
+    // Given a document with a paragraph having explicit font color and character border properties:
+    createSwDoc("char_border_and_font_color.fodt");
+    // When exporting to reqif:
+    ExportToReqif();
+    // Without the fix, this would fail, because there was an extra closing </reqif-xhtml:span>
+    WrapReqifFromTempFile();
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testHTML_Tdf160017_spanClosingOrder)
+{
+    // Given a document with a paragraph having explicit font color and character border properties:
+    createSwDoc("char_border_and_font_color.fodt");
+    // When exporting to HTML:
+    ExportToHTML();
+    // Parse it as XML (strict!)
+    // Without the fix, this would fail, because span and font elements closed in wrong order
+    CPPUNIT_ASSERT(parseXml(maTempFile));
+}
+
+CPPUNIT_TEST_FIXTURE(SwHtmlDomExportTest, testHTML_Tdf160390)
+{
+    // This document must not hang infinitely on HTML export
+    createSwDoc("tdf160390.fodt");
+    ExportToHTML();
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

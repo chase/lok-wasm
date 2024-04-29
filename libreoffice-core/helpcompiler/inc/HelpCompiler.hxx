@@ -16,9 +16,7 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
-
-#ifndef INCLUDED_HELPCOMPILER_INC_HELPCOMPILER_HXX
-#define INCLUDED_HELPCOMPILER_INC_HELPCOMPILER_HXX
+#pragma once
 
 #include <sal/config.h>
 
@@ -74,7 +72,7 @@ namespace fs
             osl::File::getSystemPathFromFileURL(data, ustrSystemPath);
             OString tmp(OUStringToOString(ustrSystemPath, FileNameEnc()));
             HCDBG(std::cerr << "native_file_string is " << tmp.getStr() << std::endl);
-            return std::string(tmp.getStr());
+            return std::string(tmp);
         }
 #ifdef _WIN32
         std::wstring native_file_string_w() const
@@ -87,7 +85,7 @@ namespace fs
         std::string toUTF8() const
         {
             OString tmp(OUStringToOString(data, RTL_TEXTENCODING_UTF8));
-            return std::string(tmp.getStr());
+            return std::string(tmp);
         }
         bool empty() const { return data.isEmpty(); }
         path operator/(const std::string &in) const
@@ -212,5 +210,4 @@ inline char tocharlower(char c)
         rtl::toAsciiLowerCase(static_cast<unsigned char>(c)));
 }
 
-#endif
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

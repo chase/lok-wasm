@@ -26,9 +26,11 @@
 #include <font/LogicalFontInstance.hxx>
 #include <impfontcache.hxx>
 
+#include <basegfx/matrix/b2dhommatrixtools.hxx>
+
 LogicalFontInstance::LogicalFontInstance(const vcl::font::PhysicalFontFace& rFontFace,
                                          const vcl::font::FontSelectPattern& rFontSelData)
-    : mxFontMetric(new ImplFontMetricData(rFontSelData))
+    : mxFontMetric(new FontMetricData(rFontSelData))
     , mpConversion(nullptr)
     , mnLineHeight(0)
     , mnOwnOrientation(0)
@@ -102,11 +104,11 @@ hb_font_t* LogicalFontInstance::GetHbFontUntransformed() const
     return pHbFont;
 }
 
-int LogicalFontInstance::GetKashidaWidth() const
+double LogicalFontInstance::GetKashidaWidth() const
 {
     sal_GlyphId nGlyph = GetGlyphIndex(0x0640);
     if (nGlyph)
-        return std::ceil(GetGlyphWidth(nGlyph));
+        return GetGlyphWidth(nGlyph);
     return 0;
 }
 
@@ -166,16 +168,42 @@ void LogicalFontInstance::IgnoreFallbackForUnicode(sal_UCS4 cChar, FontWeight eW
         maUnicodeFallbackList.erase(it);
 }
 
-bool LogicalFontInstance::GetGlyphBoundRect(sal_GlyphId nID, tools::Rectangle& rRect,
+bool LogicalFontInstance::GetGlyphBoundRect(sal_GlyphId nID, basegfx::B2DRectangle& rRect,
                                             bool bVertical) const
 {
+    // TODO: find out if it's possible for the same glyph in the same font to be used both
+    // normally and vertically; if yes, then these two variants must be cached separately
+
     if (mpFontCache && mpFontCache->GetCachedGlyphBoundRect(this, nID, rRect))
         return true;
 
-    bool res = ImplGetGlyphBoundRect(nID, rRect, bVertical);
-    if (mpFontCache && res)
+    auto* pHbFont = const_cast<LogicalFontInstance*>(this)->GetHbFont();
+    hb_glyph_extents_t aExtents;
+    if (!hb_font_get_glyph_extents(pHbFont, nID, &aExtents))
+        return false;
+
+    double nXScale = 0, nYScale = 0;
+    GetScale(&nXScale, &nYScale);
+
+    double fMinX = aExtents.x_bearing * nXScale;
+    double fMinY = -aExtents.y_bearing * nYScale;
+    double fMaxX = (aExtents.x_bearing + aExtents.width) * nXScale;
+    double fMaxY = -(aExtents.y_bearing + aExtents.height) * nYScale;
+    rRect = basegfx::B2DRectangle(fMinX, fMinY, fMaxX, fMaxY);
+
+    auto orientation = mnOrientation;
+    if (bVertical)
+        orientation += 900_deg10;
+    if (orientation)
+    {
+        // Apply font rotation.
+        rRect.transform(basegfx::utils::createRotateB2DHomMatrix(-toRadians(orientation)));
+    }
+
+    if (mpFontCache)
         mpFontCache->CacheGlyphBoundRect(this, nID, rRect);
-    return res;
+
+    return true;
 }
 
 sal_GlyphId LogicalFontInstance::GetGlyphIndex(uint32_t nUnicode, uint32_t nVariationSelector) const
@@ -206,7 +234,7 @@ double LogicalFontInstance::GetGlyphWidth(sal_GlyphId nGlyph, bool bVertical, bo
 
 bool LogicalFontInstance::IsGraphiteFont()
 {
-    if (!m_xbIsGraphiteFont)
+    if (!m_xbIsGraphiteFont.has_value())
     {
         m_xbIsGraphiteFont
             = hb_graphite2_face_get_gr_face(hb_font_get_face(GetHbFont())) != nullptr;
@@ -289,8 +317,7 @@ void close_path_func(hb_draw_funcs_t*, void* pDrawData, hb_draw_state_t*, void* 
 }
 }
 
-bool LogicalFontInstance::GetGlyphOutlineUntransformed(sal_GlyphId nGlyph,
-                                                       basegfx::B2DPolyPolygon& rPolyPoly) const
+basegfx::B2DPolyPolygon LogicalFontInstance::GetGlyphOutlineUntransformed(sal_GlyphId nGlyph) const
 {
     if (!m_pHbDrawFuncs)
     {
@@ -306,12 +333,13 @@ bool LogicalFontInstance::GetGlyphOutlineUntransformed(sal_GlyphId nGlyph,
         hb_draw_funcs_set_close_path_func(m_pHbDrawFuncs, close_path_func, pUserData, nullptr);
     }
 
+    basegfx::B2DPolyPolygon aPolyPoly;
 #if HB_VERSION_ATLEAST(7, 0, 0)
-    hb_font_draw_glyph(GetHbFontUntransformed(), nGlyph, m_pHbDrawFuncs, &rPolyPoly);
+    hb_font_draw_glyph(GetHbFontUntransformed(), nGlyph, m_pHbDrawFuncs, &aPolyPoly);
 #else
-    hb_font_get_glyph_shape(GetHbFontUntransformed(), nGlyph, m_pHbDrawFuncs, &rPolyPoly);
+    hb_font_get_glyph_shape(GetHbFontUntransformed(), nGlyph, m_pHbDrawFuncs, &aPolyPoly);
 #endif
-    return true;
+    return aPolyPoly;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

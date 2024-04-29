@@ -90,23 +90,6 @@ SecurityEnvironmentGpg::~SecurityEnvironmentGpg()
 {
 }
 
-/* XUnoTunnel */
-sal_Int64 SAL_CALL SecurityEnvironmentGpg::getSomething( const Sequence< sal_Int8 >& aIdentifier )
-{
-    return comphelper::getSomethingImpl(aIdentifier, this);
-}
-
-/* XUnoTunnel extension */
-
-namespace
-{
-}
-
-const Sequence< sal_Int8>& SecurityEnvironmentGpg::getUnoTunnelId() {
-    static const comphelper::UnoIdInit theSecurityEnvironmentUnoTunnelId;
-    return theSecurityEnvironmentUnoTunnelId.getSeq();
-}
-
 OUString SecurityEnvironmentGpg::getSecurityEnvironmentInformation()
 {
     return OUString();
@@ -223,7 +206,7 @@ sal_Int32 SecurityEnvironmentGpg::verifyCertificate( const Reference< XCertifica
 sal_Int32 SecurityEnvironmentGpg::getCertificateCharacters(
     const Reference< XCertificate >& aCert)
 {
-    if (comphelper::getFromUnoTunnel<CertificateImpl>(aCert) == nullptr)
+    if (dynamic_cast<CertificateImpl*>(aCert.get()) == nullptr)
         throw RuntimeException();
 
     // we only listed private keys anyway, up in

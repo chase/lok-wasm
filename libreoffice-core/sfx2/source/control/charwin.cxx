@@ -19,6 +19,7 @@
 
 #include <vcl/settings.hxx>
 #include <vcl/virdev.hxx>
+#include <vcl/commandevent.hxx>
 #include <vcl/event.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weldutils.hxx>
@@ -28,12 +29,15 @@
 
 #include <com/sun/star/beans/PropertyValue.hpp>
 
+#include <o3tl/temporary.hxx>
+#include <unicode/uchar.h>
+#include <unicode/utypes.h>
+
 using namespace com::sun::star;
 
 SvxCharView::SvxCharView(const VclPtr<VirtualDevice>& rVirDev)
     : mxVirDev(rVirDev)
     , mnY(0)
-    , maPosition(0, 0)
     , maHasInsert(true)
 {
 }
@@ -52,9 +56,56 @@ void SvxCharView::SetDrawingArea(weld::DrawingArea* pDrawingArea)
     mxVirDev->Pop();
 }
 
-void SvxCharView::GetFocus() { Invalidate(); }
+void SvxCharView::GetFocus()
+{
+    Invalidate();
+    if (maFocusInHdl.IsSet())
+        maFocusInHdl.Call(this);
+}
 
 void SvxCharView::LoseFocus() { Invalidate(); }
+
+bool SvxCharView::GetDecimalValueAndCharName(sal_UCS4& rDecimalValue, OUString& rCharName)
+{
+    OUString charValue = GetText();
+    if (charValue.isEmpty())
+        return false;
+
+    sal_UCS4 nDecimalValue = charValue.iterateCodePoints(&o3tl::temporary(sal_Int32(1)), -1);
+    /* get the character name */
+    UErrorCode errorCode = U_ZERO_ERROR;
+    // icu has a private uprv_getMaxCharNameLength function which returns the max possible
+    // length of this property. Unicode 3.2 max char name length was 83
+    char buffer[100];
+    u_charName(nDecimalValue, U_UNICODE_CHAR_NAME, buffer, sizeof(buffer), &errorCode);
+    if (U_SUCCESS(errorCode))
+    {
+        rDecimalValue = nDecimalValue;
+        rCharName = OUString::createFromAscii(buffer);
+        return true;
+    }
+    return false;
+}
+
+OUString SvxCharView::GetCharInfoText()
+{
+    sal_UCS4 nDecimalValue = 0;
+    OUString sCharName;
+    const bool bSuccess = GetDecimalValueAndCharName(nDecimalValue, sCharName);
+    if (bSuccess)
+    {
+        OUString aHexText = OUString::number(nDecimalValue, 16).toAsciiUpperCase();
+        return GetText() + u" " + sCharName + u" U+" + aHexText;
+    }
+    return OUString();
+}
+
+OUString SvxCharView::RequestHelp(tools::Rectangle& rHelpRect)
+{
+    // Gtk3 requires a rectangle be specified for the tooltip to display, X11 does not.
+    rHelpRect = tools::Rectangle(Point(), GetOutputSizePixel());
+    return GetCharInfoText();
+}
 
 bool SvxCharView::MouseButtonDown(const MouseEvent& rMEvt)
 {
@@ -66,18 +117,10 @@ bool SvxCharView::MouseButtonDown(const MouseEvent& rMEvt)
         }
 
         maMouseClickHdl.Call(this);
+        return true;
     }
 
-    if (rMEvt.IsRight())
-    {
-        Point aPosition(rMEvt.GetPosPixel());
-        maPosition = aPosition;
-        GrabFocus();
-        Invalidate();
-        createContextMenu();
-    }
-
-    return true;
+    return CustomWidgetController::MouseButtonDown(rMEvt);
 }
 
 bool SvxCharView::KeyInput(const KeyEvent& rKEvt)
@@ -95,6 +138,19 @@ bool SvxCharView::KeyInput(const KeyEvent& rKEvt)
     return bRet;
 }
 
+bool SvxCharView::Command(const CommandEvent& rCommandEvent)
+{
+    if (rCommandEvent.GetCommand() == CommandEventId::ContextMenu)
+    {
+        GrabFocus();
+        Invalidate();
+        createContextMenu(rCommandEvent.GetMousePosPixel());
+        return true;
+    }
+
+    return weld::CustomWidgetController::Command(rCommandEvent);
+}
+
 void SvxCharView::InsertCharToDoc()
 {
     if (GetText().isEmpty())
@@ -107,22 +163,22 @@ void SvxCharView::InsertCharToDoc()
     comphelper::dispatchCommand(".uno:InsertSymbol", aArgs);
 }
 
-void SvxCharView::createContextMenu()
+void SvxCharView::createContextMenu(const Point& rPosition)
 {
     weld::DrawingArea* pDrawingArea = GetDrawingArea();
     std::unique_ptr<weld::Builder> xBuilder(
         Application::CreateBuilder(pDrawingArea, "sfx/ui/charviewmenu.ui"));
     std::unique_ptr<weld::Menu> xItemMenu(xBuilder->weld_menu("charviewmenu"));
     ContextMenuSelect(
-        xItemMenu->popup_at_rect(pDrawingArea, tools::Rectangle(maPosition, Size(1, 1))));
+        xItemMenu->popup_at_rect(pDrawingArea, tools::Rectangle(rPosition, Size(1, 1))));
     Invalidate();
 }
 
-void SvxCharView::ContextMenuSelect(std::string_view rMenuId)
+void SvxCharView::ContextMenuSelect(std::u16string_view rMenuId)
 {
-    if (rMenuId == "clearchar")
+    if (rMenuId == u"clearchar")
         maClearClickHdl.Call(this);
-    else if (rMenuId == "clearallchar")
+    else if (rMenuId == u"clearallchar")
         maClearAllClickHdl.Call(this);
 }
 
@@ -216,6 +272,8 @@ void SvxCharView::Paint(vcl::RenderContext& rRenderContext, const tools::Rectang
         rRenderContext.SetFont(aOrigFont);
 }
 
+void SvxCharView::setFocusInHdl(const Link<SvxCharView*, void>& rLink) { maFocusInHdl = rLink; }
+
 void SvxCharView::setMouseClickHdl(const Link<SvxCharView*, void>& rLink)
 {
     maMouseClickHdl = rLink;
@@ -257,6 +315,12 @@ void SvxCharView::SetText(const OUString& rText)
 {
     m_sText = rText;
     Invalidate();
+
+    OUString sName;
+    if (GetDecimalValueAndCharName(o3tl::temporary(sal_UCS4()), sName))
+        SetAccessibleName(sName);
+    else
+        SetAccessibleName(OUString());
 }
 
 void SvxCharView::SetHasInsert(bool bInsert) { maHasInsert = bInsert; }

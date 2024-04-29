@@ -22,8 +22,8 @@
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
-#include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/document/BrokenPackageRequest.hpp>
+#include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/task/XInteractionAbort.hpp>
 #include <com/sun/star/task/XInteractionApprove.hpp>
 #include <com/sun/star/task/XInteractionPassword2.hpp>
@@ -122,9 +122,9 @@ void LOKInteractionHandler::postError(css::task::InteractionClassification class
 
     std::size_t nView = SfxViewShell::Current() ? SfxLokHelper::getView() : 0;
     if (m_pLOKDocument && m_pLOKDocument->mpCallbackFlushHandlers.count(nView))
-        m_pLOKDocument->mpCallbackFlushHandlers[nView]->queue(LOK_CALLBACK_ERROR, aJson.extractAsOString().getStr());
+        m_pLOKDocument->mpCallbackFlushHandlers[nView]->queue(LOK_CALLBACK_ERROR, aJson.finishAndGetAsOString());
     else if (m_pLOKit->mpCallback)
-        m_pLOKit->mpCallback(LOK_CALLBACK_ERROR, aJson.extractAsOString().getStr(), m_pLOKit->mpCallbackData);
+        m_pLOKit->mpCallback(LOK_CALLBACK_ERROR, aJson.finishAndGetAsOString().getStr(), m_pLOKit->mpCallbackData);
 }
 
 namespace {
@@ -352,15 +352,12 @@ bool LOKInteractionHandler::handleMacroConfirmationRequest(const uno::Reference<
     return false;
 }
 
-bool LOKInteractionHandler::handleLoadReadOnlyRequest(const uno::Reference<task::XInteractionRequest>& xRequest)
+bool LOKInteractionHandler::handlePackageReparationRequest(const uno::Reference<task::XInteractionRequest>& xRequest)
 {
     uno::Any const request(xRequest->getRequest());
 
-    OUString aFileName;
-    beans::NamedValue aLoadReadOnlyRequest;
-    if ((request >>= aLoadReadOnlyRequest) &&
-        aLoadReadOnlyRequest.Name == "LoadReadOnlyRequest" &&
-        (aLoadReadOnlyRequest.Value >>= aFileName))
+    document::BrokenPackageRequest aBrokenPackageRequest;
+    if (request >>= aBrokenPackageRequest)
     {
         auto xInteraction(task::InteractionHandler::createWithParent(comphelper::getProcessComponentContext(), nullptr));
 
@@ -372,12 +369,15 @@ bool LOKInteractionHandler::handleLoadReadOnlyRequest(const uno::Reference<task:
     return false;
 }
 
-bool LOKInteractionHandler::handlePackageReparationRequest(const uno::Reference<task::XInteractionRequest>& xRequest)
+bool LOKInteractionHandler::handleLoadReadOnlyRequest(const uno::Reference<task::XInteractionRequest>& xRequest)
 {
     uno::Any const request(xRequest->getRequest());
 
-    document::BrokenPackageRequest aBrokenPackageRequest;
-    if (request >>= aBrokenPackageRequest)
+    OUString aFileName;
+    beans::NamedValue aLoadReadOnlyRequest;
+    if ((request >>= aLoadReadOnlyRequest) &&
+        aLoadReadOnlyRequest.Name == "LoadReadOnlyRequest" &&
+        (aLoadReadOnlyRequest.Value >>= aFileName))
     {
         auto xInteraction(task::InteractionHandler::createWithParent(comphelper::getProcessComponentContext(), nullptr));
 
@@ -428,10 +428,10 @@ sal_Bool SAL_CALL LOKInteractionHandler::handleInteractionRequest(
     if (handleMacroConfirmationRequest(xRequest))
         return true;
 
-    if (handleLoadReadOnlyRequest(xRequest))
+    if (handlePackageReparationRequest(xRequest))
         return true;
 
-    if (handlePackageReparationRequest(xRequest))
+    if (handleLoadReadOnlyRequest(xRequest))
         return true;
 
     // TODO: perform more interactions 'for real' like the above

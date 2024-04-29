@@ -36,121 +36,14 @@
 
 using namespace css;
 
-namespace sc_apitest
-{
 class ScShapeTest : public ScModelTestBase
 {
 public:
-    ScShapeTest();
-    void testTdf143619_validation_circle_pos();
-    void testTdf140252_DragCreateFormControl();
-    void testTdf134355_DragCreateCustomShape();
-    void testTdf140252_LayerOfControl();
-    void testTdf137082_LTR_to_RTL();
-    void testTdf137082_RTL_cell_anchored();
-    void testTdf137081_RTL_page_anchored();
-    void testTdf139583_Rotate180deg();
-    void testTdf137033_FlipHori_Resize();
-    void testTdf137033_RotShear_ResizeHide();
-    void testTdf137033_RotShear_Hide();
-    void testTdf137576_LogicRectInDefaultMeasureline();
-    void testTdf137576_LogicRectInNewMeasureline();
-    void testMeasurelineHideColSave();
-    void testHideColsShow();
-    void testFormSizeWithHiddenCol();
-    void testTdf138138_MoveCellWithRotatedShape();
-    void testLoadVerticalFlip();
-    void testTdf117948_CollapseBeforeShape();
-    void testTdf137355_UndoHideRows();
-    void testTdf152081_UndoHideColsWithNotes();
-    void testTdf115655_HideDetail();
-    void testFitToCellSize();
-    void testCustomShapeCellAnchoredRotatedShape();
-    void testTdf144242_Line_noSwapWH();
-    void testTdf144242_OpenBezier_noSwapWH();
-    void testLargeAnchorOffset();
-
-    CPPUNIT_TEST_SUITE(ScShapeTest);
-    CPPUNIT_TEST(testTdf143619_validation_circle_pos);
-    CPPUNIT_TEST(testTdf140252_DragCreateFormControl);
-    CPPUNIT_TEST(testTdf134355_DragCreateCustomShape);
-    CPPUNIT_TEST(testTdf140252_LayerOfControl);
-    CPPUNIT_TEST(testTdf137082_LTR_to_RTL);
-    CPPUNIT_TEST(testTdf137082_RTL_cell_anchored);
-    CPPUNIT_TEST(testTdf137081_RTL_page_anchored);
-    CPPUNIT_TEST(testTdf139583_Rotate180deg);
-    CPPUNIT_TEST(testTdf137033_FlipHori_Resize);
-    CPPUNIT_TEST(testTdf137033_RotShear_ResizeHide);
-    CPPUNIT_TEST(testTdf137033_RotShear_Hide);
-    CPPUNIT_TEST(testTdf137576_LogicRectInDefaultMeasureline);
-    CPPUNIT_TEST(testTdf137576_LogicRectInNewMeasureline);
-    CPPUNIT_TEST(testMeasurelineHideColSave);
-    CPPUNIT_TEST(testHideColsShow);
-    CPPUNIT_TEST(testFormSizeWithHiddenCol);
-    CPPUNIT_TEST(testTdf138138_MoveCellWithRotatedShape);
-    CPPUNIT_TEST(testLoadVerticalFlip);
-    CPPUNIT_TEST(testTdf117948_CollapseBeforeShape);
-    CPPUNIT_TEST(testTdf137355_UndoHideRows);
-    CPPUNIT_TEST(testTdf152081_UndoHideColsWithNotes);
-    CPPUNIT_TEST(testTdf115655_HideDetail);
-    CPPUNIT_TEST(testFitToCellSize);
-    CPPUNIT_TEST(testCustomShapeCellAnchoredRotatedShape);
-    CPPUNIT_TEST(testTdf144242_Line_noSwapWH);
-    CPPUNIT_TEST(testTdf144242_OpenBezier_noSwapWH);
-    CPPUNIT_TEST(testLargeAnchorOffset);
-    CPPUNIT_TEST_SUITE_END();
+    ScShapeTest()
+        : ScModelTestBase("sc/qa/unit/data")
+    {
+    }
 };
-
-ScShapeTest::ScShapeTest()
-    : ScModelTestBase("sc/qa/unit/data/ods")
-{
-}
-
-static void lcl_AssertRectEqualWithTolerance(std::string_view sInfo,
-                                             const tools::Rectangle& rExpected,
-                                             const tools::Rectangle& rActual,
-                                             const sal_Int32 nTolerance)
-{
-    // Left
-    OString sMsg = OString::Concat(sInfo) + " Left expected " + OString::number(rExpected.Left())
-                   + " actual " + OString::number(rActual.Left()) + " Tolerance "
-                   + OString::number(nTolerance);
-    CPPUNIT_ASSERT_MESSAGE(sMsg.getStr(),
-                           std::abs(rExpected.Left() - rActual.Left()) <= nTolerance);
-
-    // Top
-    sMsg = OString::Concat(sInfo) + " Top expected " + OString::number(rExpected.Top()) + " actual "
-           + OString::number(rActual.Top()) + " Tolerance " + OString::number(nTolerance);
-    CPPUNIT_ASSERT_MESSAGE(sMsg.getStr(), std::abs(rExpected.Top() - rActual.Top()) <= nTolerance);
-
-    // Width
-    sMsg = OString::Concat(sInfo) + " Width expected " + OString::number(rExpected.GetWidth())
-           + " actual " + OString::number(rActual.GetWidth()) + " Tolerance "
-           + OString::number(nTolerance);
-    CPPUNIT_ASSERT_MESSAGE(sMsg.getStr(),
-                           std::abs(rExpected.GetWidth() - rActual.GetWidth()) <= nTolerance);
-
-    // Height
-    sMsg = OString::Concat(sInfo) + " Height expected " + OString::number(rExpected.GetHeight())
-           + " actual " + OString::number(rActual.GetHeight()) + " Tolerance "
-           + OString::number(nTolerance);
-    CPPUNIT_ASSERT_MESSAGE(sMsg.getStr(),
-                           std::abs(rExpected.GetHeight() - rActual.GetHeight()) <= nTolerance);
-}
-
-static void lcl_AssertPointEqualWithTolerance(std::string_view sInfo, const Point rExpected,
-                                              const Point rActual, const sal_Int32 nTolerance)
-{
-    // X
-    OString sMsg = OString::Concat(sInfo) + " X expected " + OString::number(rExpected.X())
-                   + " actual " + OString::number(rActual.X()) + " Tolerance "
-                   + OString::number(nTolerance);
-    CPPUNIT_ASSERT_MESSAGE(sMsg.getStr(), std::abs(rExpected.X() - rActual.X()) <= nTolerance);
-    // Y
-    sMsg = OString::Concat(sInfo) + " Y expected " + OString::number(rExpected.Y()) + " actual "
-           + OString::number(rActual.Y()) + " Tolerance " + OString::number(nTolerance);
-    CPPUNIT_ASSERT_MESSAGE(sMsg.getStr(), std::abs(rExpected.Y() - rActual.Y()) <= nTolerance);
-}
 
 static SdrPage* lcl_getSdrPageWithAssert(ScDocument& rDoc)
 {
@@ -173,7 +66,7 @@ static SdrObject* lcl_getSdrObjectWithAssert(ScDocument& rDoc, sal_uInt16 nObjNu
     return pObj;
 }
 
-void ScShapeTest::testTdf144242_OpenBezier_noSwapWH()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf144242_OpenBezier_noSwapWH)
 {
     // Shapes, which have rotation incorporated in their points, got erroneously width-height
     // swapped, because they report a rotation. (Rotation was introduced to align text with curve.)
@@ -203,10 +96,10 @@ void ScShapeTest::testTdf144242_OpenBezier_noSwapWH()
     pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
     tools::Rectangle aSnapRect(pObj->GetSnapRect());
     // Without fix in place width and height were swapped
-    lcl_AssertRectEqualWithTolerance("Reload: wrong pos and size", aExpectRect, aSnapRect, 40);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectRect, aSnapRect, 40);
 }
 
-void ScShapeTest::testTdf144242_Line_noSwapWH()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf144242_Line_noSwapWH)
 {
     // Shapes, which have rotation incorporated in their points, got erroneously width-height
     // swapped, because they report a rotation. (Rotation was introduced to align text with line.)
@@ -236,13 +129,13 @@ void ScShapeTest::testTdf144242_Line_noSwapWH()
     pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
     tools::Rectangle aSnapRect(pObj->GetSnapRect());
     // Without fix in place width and height were swapped
-    lcl_AssertRectEqualWithTolerance("Reload: wrong pos and size", aExpectRect, aSnapRect, 40);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectRect, aSnapRect, 40);
 }
 
-void ScShapeTest::testTdf143619_validation_circle_pos()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf143619_validation_circle_pos)
 {
     // Load a document, which has validation circle around cell E6.
-    createScDoc("tdf143619_validationCirclePos.ods");
+    createScDoc("ods/tdf143619_validationCirclePos.ods");
 
     // Get document
     ScDocument* pDoc = getScDoc();
@@ -252,25 +145,22 @@ void ScShapeTest::testTdf143619_validation_circle_pos()
 
     // Error was, that deleting row and col before E6 does not move circle to D5, but to B3.
     // Delete first row and first column.
-    uno::Sequence<beans::PropertyValue> aPropertyValues = {
-        comphelper::makePropertyValue("ToPoint", OUString("$A$1")),
-    };
-    dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
+    goToCell("$A$1");
     dispatchCommand(mxComponent, ".uno:DeleteRows", {});
-    dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
+    goToCell("$A$1");
     dispatchCommand(mxComponent, ".uno:DeleteColumns", {});
 
     // Without fix in place the position was (2007, 833)
     Point aPos = pObj->GetSnapRect().TopLeft();
-    lcl_AssertPointEqualWithTolerance("after row and col delete", Point(6523, 1736), aPos, 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(Point(6523, 1736), aPos, 1);
 }
 
-void ScShapeTest::testTdf140252_DragCreateFormControl()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf140252_DragCreateFormControl)
 {
     // Error was, that drag-created form controls were initially not on layer 'controls' and thus
     // other shapes could be placed in front of form controls.
     // Load an empty document.
-    createScDoc("ManualColWidthRowHeight.ods");
+    createScDoc("ods/ManualColWidthRowHeight.ods");
 
     // Get ScTabViewShell
     ScTabViewShell* pTabViewShell = getViewShell();
@@ -310,13 +200,13 @@ void ScShapeTest::testTdf140252_DragCreateFormControl()
     CPPUNIT_ASSERT_EQUAL(nExpectedID, nActualID);
 }
 
-void ScShapeTest::testTdf134355_DragCreateCustomShape()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf134355_DragCreateCustomShape)
 {
     // Error was, that drag-created custom shapes were initially on layer "controls", although that
     // layer is exclusively for form controls. Effect was, that other shapes could not be brought in
     // front of custom shapes.
     // Load an empty document.
-    createScDoc("ManualColWidthRowHeight.ods");
+    createScDoc("ods/ManualColWidthRowHeight.ods");
 
     // Get ScTabView
     ScTabViewShell* pTabViewShell = getViewShell();
@@ -350,12 +240,12 @@ void ScShapeTest::testTdf134355_DragCreateCustomShape()
     CPPUNIT_ASSERT_EQUAL(nExpectedID, nActualID);
 }
 
-void ScShapeTest::testTdf140252_LayerOfControl()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf140252_LayerOfControl)
 {
     // Error was, that a newly inserted control shape was put on layer
     // "vorne" instead of layer "control".
     // Load an empty document.
-    createScDoc("ManualColWidthRowHeight.ods");
+    createScDoc("ods/ManualColWidthRowHeight.ods");
 
     // Create default push button
     SfxUInt16Item aIdentifierItem(SID_FM_CONTROL_IDENTIFIER,
@@ -377,14 +267,14 @@ void ScShapeTest::testTdf140252_LayerOfControl()
     CPPUNIT_ASSERT_EQUAL(nExpectedID, nActualID);
 }
 
-void ScShapeTest::testTdf137082_LTR_to_RTL()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf137082_LTR_to_RTL)
 {
     // Before the fix for tdf137081 and tdf137082, when flipping sheet from LTR to RTL, page anchored
     // shapes were mirrored, but cell anchored shapes not. This was changed so, that shapes are always
     // mirrored. Graphics are still not mirrored but shifted. This test makes sure a shape is mirrored
     // and an image is not mirrored.
 
-    createScDoc("tdf137082_LTR_arrow_image.ods");
+    createScDoc("ods/tdf137082_LTR_arrow_image.ods");
 
     // Get document
     ScDocument* pDoc = getScDoc();
@@ -409,11 +299,11 @@ void ScShapeTest::testTdf137082_LTR_to_RTL()
                                  nRotateRTLActual.get());
 }
 
-void ScShapeTest::testTdf137082_RTL_cell_anchored()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf137082_RTL_cell_anchored)
 {
     // Error was, that cell anchored custom shapes wrote wrong offsets to file and thus were wrong on
     // reloading. The file contains one custom shape with "resize" and another one without.
-    createScDoc("tdf137082_RTL_cell_anchored.ods");
+    createScDoc("ods/tdf137082_RTL_cell_anchored.ods");
 
     // Get document
     ScDocument* pDoc = getScDoc();
@@ -427,9 +317,9 @@ void ScShapeTest::testTdf137082_RTL_cell_anchored()
 
     // Test reading was correct
     SdrObject* pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
-    lcl_AssertRectEqualWithTolerance("load shape A: ", aSnapRectA, pObj->GetSnapRect(), 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aSnapRectA, pObj->GetSnapRect(), 1);
     pObj = lcl_getSdrObjectWithAssert(*pDoc, 1);
-    lcl_AssertRectEqualWithTolerance("load shape B: ", aSnapRectB, pObj->GetSnapRect(), 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aSnapRectB, pObj->GetSnapRect(), 1);
 
     // Save and reload.
     saveAndReload("calc8");
@@ -439,16 +329,16 @@ void ScShapeTest::testTdf137082_RTL_cell_anchored()
 
     // And test again
     pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
-    lcl_AssertRectEqualWithTolerance("reload shape A: ", aSnapRectA, pObj->GetSnapRect(), 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aSnapRectA, pObj->GetSnapRect(), 1);
     pObj = lcl_getSdrObjectWithAssert(*pDoc, 1);
-    lcl_AssertRectEqualWithTolerance("reload shape B: ", aSnapRectB, pObj->GetSnapRect(), 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aSnapRectB, pObj->GetSnapRect(), 1);
 }
 
-void ScShapeTest::testTdf137081_RTL_page_anchored()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf137081_RTL_page_anchored)
 {
     // Error was, that page anchored lines and custom shapes were mirrored on opening. The document
     // contains measure line, polyline and transformed custom shape.
-    createScDoc("tdf137081_RTL_page_anchored.ods");
+    createScDoc("ods/tdf137081_RTL_page_anchored.ods");
 
     // Get document
     ScDocument* pDoc = getScDoc();
@@ -467,19 +357,18 @@ void ScShapeTest::testTdf137081_RTL_page_anchored()
     // Test reading was correct
     SdrObject* pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
     // Measure line
-    lcl_AssertPointEqualWithTolerance("measure line start", aStart, pObj->GetPoint(0), 1);
-    lcl_AssertPointEqualWithTolerance("measure line end", aEnd, pObj->GetPoint(1), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aStart, pObj->GetPoint(0), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aEnd, pObj->GetPoint(1), 1);
     // Polyline
     pObj = lcl_getSdrObjectWithAssert(*pDoc, 1);
-    lcl_AssertPointEqualWithTolerance("polyline 1: ", aFirst, pObj->GetPoint(0), 1);
-    lcl_AssertPointEqualWithTolerance("polyline 2: ", aSecond, pObj->GetPoint(1), 1);
-    lcl_AssertPointEqualWithTolerance("polyline 3: ", aThird, pObj->GetPoint(2), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aFirst, pObj->GetPoint(0), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aSecond, pObj->GetPoint(1), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aThird, pObj->GetPoint(2), 1);
     //Custom shape
     SdrObjCustomShape* pObjCS
         = static_cast<SdrObjCustomShape*>(lcl_getSdrObjectWithAssert(*pDoc, 2));
     CPPUNIT_ASSERT(!pObjCS->IsMirroredX());
-    lcl_AssertPointEqualWithTolerance("custom shape top left: ", aTopLeft,
-                                      pObjCS->GetLogicRect().TopLeft(), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aTopLeft, pObjCS->GetLogicRect().TopLeft(), 1);
 
     // Save and reload.
     saveAndReload("calc8");
@@ -490,24 +379,23 @@ void ScShapeTest::testTdf137081_RTL_page_anchored()
     // And test again
     pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
     // Measure line
-    lcl_AssertPointEqualWithTolerance("measure line start", aStart, pObj->GetPoint(0), 1);
-    lcl_AssertPointEqualWithTolerance("measure line end", aEnd, pObj->GetPoint(1), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aStart, pObj->GetPoint(0), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aEnd, pObj->GetPoint(1), 1);
     // Polyline
     pObj = lcl_getSdrObjectWithAssert(*pDoc, 1);
-    lcl_AssertPointEqualWithTolerance("polyline 1: ", aFirst, pObj->GetPoint(0), 1);
-    lcl_AssertPointEqualWithTolerance("polyline 2: ", aSecond, pObj->GetPoint(1), 1);
-    lcl_AssertPointEqualWithTolerance("polyline 3: ", aThird, pObj->GetPoint(2), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aFirst, pObj->GetPoint(0), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aSecond, pObj->GetPoint(1), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aThird, pObj->GetPoint(2), 1);
     //Custom shape
     pObjCS = static_cast<SdrObjCustomShape*>(lcl_getSdrObjectWithAssert(*pDoc, 2));
     CPPUNIT_ASSERT(!pObjCS->IsMirroredX());
-    lcl_AssertPointEqualWithTolerance("custom shape top left: ", aTopLeft,
-                                      pObjCS->GetLogicRect().TopLeft(), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aTopLeft, pObjCS->GetLogicRect().TopLeft(), 1);
 }
 
-void ScShapeTest::testTdf139583_Rotate180deg()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf139583_Rotate180deg)
 {
     // Load an empty document.
-    createScDoc("ManualColWidthRowHeight.ods");
+    createScDoc("ods/ManualColWidthRowHeight.ods");
 
     // Get document and draw page
     ScDocument* pDoc = getScDoc();
@@ -535,15 +423,14 @@ void ScShapeTest::testTdf139583_Rotate180deg()
     pObj = static_cast<SdrRectObj*>(lcl_getSdrObjectWithAssert(*pDoc, 0));
 
     //  Without the fix in place, the shape would have nearly zero size.
-    lcl_AssertRectEqualWithTolerance("Show: Object geometry should not change", aRect,
-                                     pObj->GetSnapRect(), 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aRect, pObj->GetSnapRect(), 1);
 }
 
-void ScShapeTest::testTdf137033_FlipHori_Resize()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf137033_FlipHori_Resize)
 {
     // Load a document, which has a rotated custom shape, which is horizontal flipped. Error was, that
     // if such shape was anchored "resize with cell", then after save and reload it was distorted.
-    createScDoc("tdf137033_FlipHoriRotCustomShape.ods");
+    createScDoc("ods/tdf137033_FlipHoriRotCustomShape.ods");
 
     // Get document and shape
     ScDocument* pDoc = getScDoc();
@@ -552,7 +439,7 @@ void ScShapeTest::testTdf137033_FlipHori_Resize()
     // Verify shape is correctly loaded. Then set shape to "resize with cell".
     tools::Rectangle aSnapRect(pObj->GetSnapRect());
     const tools::Rectangle aExpectRect(Point(4998, 7000), Size(9644, 6723));
-    lcl_AssertRectEqualWithTolerance("Load, wrong pos or size: ", aExpectRect, aSnapRect, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectRect, aSnapRect, 1);
     ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *pDoc, 0 /*SCTAB*/, true /*bResizeWithCell*/);
 
     // Save and reload.
@@ -564,17 +451,17 @@ void ScShapeTest::testTdf137033_FlipHori_Resize()
 
     // Check shape has the original geometry, besides rounding and unit conversion errors
     aSnapRect = pObj->GetSnapRect();
-    lcl_AssertRectEqualWithTolerance("Reload, wrong pos or size: ", aExpectRect, aSnapRect, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectRect, aSnapRect, 1);
 }
 
-void ScShapeTest::testTdf137033_RotShear_ResizeHide()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf137033_RotShear_ResizeHide)
 {
     // For rotated or sheared shapes anchored "To Cell (resize with cell) hiding rows or columns will
     // not only change size but rotation and shear angle too. Error was, that not the original angles
     // of the full sized shape were written to file but the changed one.
 
     // Load a document, which has a rotated and sheared shape, anchored to cell with resize.
-    createScDoc("tdf137033_RotShearResizeAnchor.ods");
+    createScDoc("ods/tdf137033_RotShearResizeAnchor.ods");
 
     // Get document
     ScDocument* pDoc = getScDoc();
@@ -599,7 +486,7 @@ void ScShapeTest::testTdf137033_RotShear_ResizeHide()
                            abs(aShearAngle - aExpectShearAngle) <= 1_deg100);
     CPPUNIT_ASSERT_MESSAGE("Hide rows, rotate angle: ",
                            abs(aRotateAngle - aExpectRotateAngle) <= 1_deg100);
-    lcl_AssertRectEqualWithTolerance("Load: wrong pos or size", aExpectRect, aSnapRect, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectRect, aSnapRect, 1);
 
     // Save and reload.
     saveAndReload("calc8");
@@ -616,17 +503,17 @@ void ScShapeTest::testTdf137033_RotShear_ResizeHide()
                            abs(aShearAngle - aExpectShearAngle) <= 3_deg100);
     CPPUNIT_ASSERT_MESSAGE("Reload, rotate angle: ",
                            abs(aRotateAngle - aExpectRotateAngle) <= 3_deg100);
-    lcl_AssertRectEqualWithTolerance("Reload: wrong pos or size", aExpectRect, aSnapRect, 7);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectRect, aSnapRect, 7);
 }
 
-void ScShapeTest::testTdf137033_RotShear_Hide()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf137033_RotShear_Hide)
 {
     // Hiding row or columns affect cell anchored shape based on their snap rectangle. The first
     // attempt to fix lost position has used the logic rect instead. For rotated or sheared shape it
     // makes a difference.
 
     // Load a document, which has a rotated and sheared shape, anchored to cell, without resize.
-    createScDoc("tdf137033_RotShearCellAnchor.ods");
+    createScDoc("ods/tdf137033_RotShearCellAnchor.ods");
 
     // Get document
     ScDocument* pDoc = getScDoc();
@@ -649,16 +536,16 @@ void ScShapeTest::testTdf137033_RotShear_Hide()
     // Values are manually taken from shape before hiding column C.
     const tools::Rectangle aExpectRect(Point(4500, 3500), Size(15143, 5187));
     const tools::Rectangle aSnapRect = pObj->GetSnapRect();
-    lcl_AssertRectEqualWithTolerance("Reload: wrong pos and size", aExpectRect, aSnapRect, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectRect, aSnapRect, 1);
 }
 
-void ScShapeTest::testTdf137576_LogicRectInDefaultMeasureline()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf137576_LogicRectInDefaultMeasureline)
 {
     // Error was, that the empty logical rectangle of a default measure line (Ctrl+Click)
     // resulted in zeros in NonRotatedAnchor and a wrong position when reloading.
 
     // Load an empty document.
-    createScDoc("ManualColWidthRowHeight.ods");
+    createScDoc("ods/ManualColWidthRowHeight.ods");
 
     // Create default measureline by SfxRequest that corresponds to Ctrl+Click
     ScTabViewShell* pTabViewShell = getViewShell();
@@ -676,10 +563,7 @@ void ScShapeTest::testTdf137576_LogicRectInDefaultMeasureline()
     pTabViewShell->SetDrawShell(false);
 
     // Hide column A.
-    uno::Sequence<beans::PropertyValue> aPropertyValues = {
-        comphelper::makePropertyValue("ToPoint", OUString("$A$1")),
-    };
-    dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
+    goToCell("$A$1");
     dispatchCommand(mxComponent, ".uno:HideColumn", {});
 
     // Get current position. I will not use absolute values for comparison, because document is loaded
@@ -695,16 +579,16 @@ void ScShapeTest::testTdf137576_LogicRectInDefaultMeasureline()
 
     // Assert object position is unchanged, besides Twips<->Hmm inaccuracy.
     Point aNewPos = pObj->GetRelativePos();
-    lcl_AssertPointEqualWithTolerance("after reload", aOldPos, aNewPos, 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aOldPos, aNewPos, 1);
 }
 
-void ScShapeTest::testTdf137576_LogicRectInNewMeasureline()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf137576_LogicRectInNewMeasureline)
 {
     // Error was, that a new measure line had no logical rectangle. This resulted in zeros in
     // NonRotatedAnchor. As a result the position was wrong when reloading.
 
     // Load an empty document
-    createScDoc("ManualColWidthRowHeight.ods");
+    createScDoc("ods/ManualColWidthRowHeight.ods");
 
     // Get document and draw page
     ScDocument* pDoc = getScDoc();
@@ -732,12 +616,12 @@ void ScShapeTest::testTdf137576_LogicRectInNewMeasureline()
     pObj.clear();
 }
 
-void ScShapeTest::testMeasurelineHideColSave()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testMeasurelineHideColSave)
 {
     // The document contains a SdrMeasureObj anchored "To Cell (resize with cell)" with start in cell
     // D11 and end in cell I5. Error was, that after hiding col A and saving, start and end point
     // position were lost.
-    createScDoc("measurelineHideColSave.ods");
+    createScDoc("ods/measurelineHideColSave.ods");
 
     // Get document and shape
     ScDocument* pDoc = getScDoc();
@@ -746,8 +630,8 @@ void ScShapeTest::testMeasurelineHideColSave()
     // Make sure loading is correct
     Point aStartPoint(7500, 15000); // according UI
     Point aEndPoint(17500, 8000);
-    lcl_AssertPointEqualWithTolerance("Load start: ", aStartPoint, pObj->GetPoint(0), 1);
-    lcl_AssertPointEqualWithTolerance("Load end: ", aEndPoint, pObj->GetPoint(1), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aStartPoint, pObj->GetPoint(0), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aEndPoint, pObj->GetPoint(1), 1);
 
     // Hide column A
     pDoc->SetColHidden(0, 0, 0, true);
@@ -755,8 +639,8 @@ void ScShapeTest::testMeasurelineHideColSave()
     // Shape should move by column width, here 3000
     aStartPoint.Move(-3000, 0);
     aEndPoint.Move(-3000, 0);
-    lcl_AssertPointEqualWithTolerance("Hide col A: ", aStartPoint, pObj->GetPoint(0), 1);
-    lcl_AssertPointEqualWithTolerance("Hide col A: ", aEndPoint, pObj->GetPoint(1), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aStartPoint, pObj->GetPoint(0), 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aEndPoint, pObj->GetPoint(1), 1);
 
     // save and reload
     saveAndReload("calc8");
@@ -766,17 +650,17 @@ void ScShapeTest::testMeasurelineHideColSave()
     pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
 
     // Check that start and end point are unchanged besides rounding and unit conversion errors
-    lcl_AssertPointEqualWithTolerance("Reload start: ", aStartPoint, pObj->GetPoint(0), 2);
-    lcl_AssertPointEqualWithTolerance("Reload end: ", aEndPoint, pObj->GetPoint(1), 2);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aStartPoint, pObj->GetPoint(0), 2);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aEndPoint, pObj->GetPoint(1), 2);
 }
 
-void ScShapeTest::testHideColsShow()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testHideColsShow)
 {
     // The document contains a shape anchored "To Cell (resize with cell)" with starts in cell C3 and
     //ends in cell D5. Error was, that hiding cols C and D and then show them again extends the shape
     // to column E
 
-    createScDoc("hideColsShow.ods");
+    createScDoc("ods/hideColsShow.ods");
 
     // Get document and shape
     ScDocument* pDoc = getScDoc();
@@ -786,10 +670,7 @@ void ScShapeTest::testHideColsShow()
     tools::Rectangle aSnapRectOrig(pObj->GetSnapRect());
 
     // Hide cols C and D.
-    uno::Sequence<beans::PropertyValue> aPropertyValues = {
-        comphelper::makePropertyValue("ToPoint", OUString("$C$1:$D$1")),
-    };
-    dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
+    goToCell("$C$1:$D$1");
 
     ScTabViewShell* pViewShell = getViewShell();
     pViewShell->GetViewData().GetDispatcher().Execute(FID_COL_HIDE);
@@ -798,25 +679,21 @@ void ScShapeTest::testHideColsShow()
     CPPUNIT_ASSERT_MESSAGE("Hide: Object should be invisible", !pObj->IsVisible());
 
     // Show cols C and D
-    aPropertyValues = {
-        comphelper::makePropertyValue("ToPoint", OUString("$C$1:$D$1")),
-    };
-    dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
+    goToCell("$C$1:$D$1");
     pViewShell->GetViewData().GetDispatcher().Execute(FID_COL_SHOW);
 
     // Check object is visible and has old size
     CPPUNIT_ASSERT_MESSAGE("Show: Object should be visible", pObj->IsVisible());
     tools::Rectangle aSnapRectShow(pObj->GetSnapRect());
-    lcl_AssertRectEqualWithTolerance("Show: Object geometry should not change", aSnapRectOrig,
-                                     aSnapRectShow, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aSnapRectOrig, aSnapRectShow, 1);
 }
 
-void ScShapeTest::testFormSizeWithHiddenCol()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testFormSizeWithHiddenCol)
 {
     // The document contains a form (Listbox) shape anchored "To Cell (resize with cell)" with starts in cell B5 and
     // ends in cell D5. The error was the form shape was resized if there was hidden col/row.
 
-    createScDoc("tdf154005.ods");
+    createScDoc("ods/tdf154005.ods");
 
     // Get document and shape
     ScDocument* pDoc = getScDoc();
@@ -826,7 +703,7 @@ void ScShapeTest::testFormSizeWithHiddenCol()
     pDoc->SetDrawPageSize(0); // trigger recalcpos
     tools::Rectangle aRect(2432, 3981, 4932, 4631); // expected snap rect from values in file
     const tools::Rectangle& rShapeRect(pObj->GetSnapRect());
-    lcl_AssertRectEqualWithTolerance("Wrong pos and size", aRect, rShapeRect, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aRect, rShapeRect, 1);
 
     // Check anchor
     ScDrawObjData* pData = ScDrawLayer::GetObjData(pObj);
@@ -839,11 +716,11 @@ void ScShapeTest::testFormSizeWithHiddenCol()
     CPPUNIT_ASSERT_EQUAL(OUString("start col 1 row 4 end col 3 row 4"), sActual);
 }
 
-void ScShapeTest::testTdf138138_MoveCellWithRotatedShape()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf138138_MoveCellWithRotatedShape)
 {
     // The document contains a 90deg rotated, cell-anchored rectangle in column D. Insert 2 columns
     // after column B, save and reload. The shape was not correctly moved to column F.
-    createScDoc("tdf138138_MoveCellWithRotatedShape.ods");
+    createScDoc("ods/tdf138138_MoveCellWithRotatedShape.ods");
 
     // Get document and shape
     ScDocument* pDoc = getScDoc();
@@ -852,20 +729,16 @@ void ScShapeTest::testTdf138138_MoveCellWithRotatedShape()
     // Check anchor and position of shape. The expected values are taken from UI.
     tools::Rectangle aSnapRect = pObj->GetSnapRect();
     tools::Rectangle aExpectedRect(Point(10000, 3000), Size(1000, 7500));
-    lcl_AssertRectEqualWithTolerance("Load original: ", aExpectedRect, aSnapRect, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectedRect, aSnapRect, 1);
 
     // Insert two columns after column B
-    uno::Sequence<beans::PropertyValue> aPropertyValues = {
-        comphelper::makePropertyValue("ToPoint", OUString("$A$1:$B$1")),
-    };
-    dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
+    goToCell("$A$1:$B$1");
 
     ScTabViewShell* pViewShell = getViewShell();
     pViewShell->GetViewData().GetDispatcher().Execute(FID_INS_COLUMNS_AFTER);
     aExpectedRect = tools::Rectangle(Point(16000, 3000), Size(1000, 7500)); // col width 3000
     aSnapRect = pObj->GetSnapRect();
-    lcl_AssertRectEqualWithTolerance("Shift: Wrong after insert of columns ", aExpectedRect,
-                                     aSnapRect, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectedRect, aSnapRect, 1);
 
     // Save and reload
     saveAndReload("calc8");
@@ -876,15 +749,14 @@ void ScShapeTest::testTdf138138_MoveCellWithRotatedShape()
 
     // Assert objects size is unchanged, position is shifted.
     aSnapRect = pObj->GetSnapRect();
-    lcl_AssertRectEqualWithTolerance("Reload: Shape geometry has changed.", aExpectedRect,
-                                     aSnapRect, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectedRect, aSnapRect, 1);
 }
 
-void ScShapeTest::testLoadVerticalFlip()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testLoadVerticalFlip)
 {
     // The document has a cell anchored custom shape with vertical flip. Error was, that the
     // flip was lost on loading.
-    createScDoc("loadVerticalFlip.ods");
+    createScDoc("ods/loadVerticalFlip.ods");
 
     // Get document and shape
     ScDocument* pDoc = getScDoc();
@@ -894,12 +766,12 @@ void ScShapeTest::testLoadVerticalFlip()
     CPPUNIT_ASSERT_MESSAGE("Load: Object should be vertically flipped", pObj->IsMirroredY());
 }
 
-void ScShapeTest::testTdf117948_CollapseBeforeShape()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf117948_CollapseBeforeShape)
 {
     // The document contains a column group left from the image. The group is expanded. Collapse the
     // group, save and reload. The original error was, that the line was on wrong position after reload.
     // After the fix for 'resize with cell', the custom shape had wrong position and size too.
-    createScDoc("tdf117948_CollapseBeforeShape.ods");
+    createScDoc("ods/tdf117948_CollapseBeforeShape.ods");
 
     // Get document and objects
     ScDocument* pDoc = getScDoc();
@@ -915,11 +787,10 @@ void ScShapeTest::testTdf117948_CollapseBeforeShape()
     // Check anchor and position of shape. The expected values are taken from UI before saving.
     tools::Rectangle aSnapRect0Collapse = pObj0->GetSnapRect();
     tools::Rectangle aExpectedRect0(Point(4672, 1334), Size(1787, 1723));
-    lcl_AssertRectEqualWithTolerance("Collapse: Custom shape", aExpectedRect0, aSnapRect0Collapse,
-                                     1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectedRect0, aSnapRect0Collapse, 1);
     tools::Rectangle aSnapRect1Collapse = pObj1->GetSnapRect();
     tools::Rectangle aExpectedRect1(Point(5647, 4172), Size(21, 3441));
-    lcl_AssertRectEqualWithTolerance("Collapse: Line", aExpectedRect1, aSnapRect1Collapse, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectedRect1, aSnapRect1Collapse, 1);
 
     // Save and reload
     saveAndReload("calc8");
@@ -932,20 +803,18 @@ void ScShapeTest::testTdf117948_CollapseBeforeShape()
     // Assert objects size and position are not changed. Actual values differ a little bit
     // because of cumulated Twips-Hmm conversion errors.
     tools::Rectangle aSnapRect0Reload = pObj0->GetSnapRect();
-    lcl_AssertRectEqualWithTolerance("Reload: Custom shape geometry has changed.", aExpectedRect0,
-                                     aSnapRect0Reload, 2);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectedRect0, aSnapRect0Reload, 2);
 
     tools::Rectangle aSnapRect1Reload = pObj1->GetSnapRect();
-    lcl_AssertRectEqualWithTolerance("Reload: Line geometry has changed.", aExpectedRect1,
-                                     aSnapRect1Reload, 2);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectedRect1, aSnapRect1Reload, 2);
 }
 
-void ScShapeTest::testTdf137355_UndoHideRows()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf137355_UndoHideRows)
 {
     // The document contains a shape anchored "To Cell" with start in cell C3 and end in cell D6.
     // Error was, that hiding rows 3 to 6 and undo that action "lost" the shape.
     // Actually it was not lost but hidden.
-    createScDoc("tdf137355_UndoHideRows.ods");
+    createScDoc("ods/tdf137355_UndoHideRows.ods");
 
     // Get document and shape
     ScDocument* pDoc = getScDoc();
@@ -956,10 +825,7 @@ void ScShapeTest::testTdf137355_UndoHideRows()
 
     // Hide rows 3 to 6 in UI. [Note: Simple pDoc->SetRowHidden(2,5,0,true) does not work, because it
     // does not produce the needed undo items.]
-    uno::Sequence<beans::PropertyValue> aPropertyValues = {
-        comphelper::makePropertyValue("ToPoint", OUString("$A$3:$A$6")),
-    };
-    dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
+    goToCell("$A$3:$A$6");
     ScTabViewShell* pViewShell = getViewShell();
     pViewShell->GetViewData().GetDispatcher().Execute(FID_ROW_HIDE);
 
@@ -973,13 +839,12 @@ void ScShapeTest::testTdf137355_UndoHideRows()
     CPPUNIT_ASSERT_MESSAGE("Undo: Object should exist", pObj);
     CPPUNIT_ASSERT_MESSAGE("Undo: Object should be visible", pObj->IsVisible());
     tools::Rectangle aSnapRectUndo(pObj->GetSnapRect());
-    lcl_AssertRectEqualWithTolerance("Undo: Object geometry should not change", aSnapRectOrig,
-                                     aSnapRectUndo, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aSnapRectOrig, aSnapRectUndo, 1);
 }
 
-void ScShapeTest::testTdf152081_UndoHideColsWithNotes()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf152081_UndoHideColsWithNotes)
 {
-    createScDoc("tdf152081_UndoHideColsWithNotes.ods");
+    createScDoc("ods/tdf152081_UndoHideColsWithNotes.ods");
 
     // Get document and shape
     ScDocument* pDoc = getScDoc();
@@ -988,10 +853,7 @@ void ScShapeTest::testTdf152081_UndoHideColsWithNotes()
     CPPUNIT_ASSERT_MESSAGE("Load: Note object should be visible", pObj->IsVisible());
 
     // Hide B column
-    uno::Sequence<beans::PropertyValue> aPropertyValues = {
-        comphelper::makePropertyValue("ToPoint", OUString("$B$2:$B$2")),
-    };
-    dispatchCommand(mxComponent, ".uno:GoToCell", aPropertyValues);
+    goToCell("$B$2:$B$2");
     ScTabViewShell* pViewShell = getViewShell();
     pViewShell->GetViewData().GetDispatcher().Execute(FID_COL_HIDE);
 
@@ -1006,13 +868,13 @@ void ScShapeTest::testTdf152081_UndoHideColsWithNotes()
     CPPUNIT_ASSERT_MESSAGE("Undo: Note object should be visible", pObj->IsVisible());
 }
 
-void ScShapeTest::testTdf115655_HideDetail()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf115655_HideDetail)
 {
     // The document contains an image inside a cell anchored "To Cell (resize with cell)". The cell
     // belongs to a group. On loading the group is expanded.
     // Error was, that after collapsing the group, save and reload, and expanding the group, the image
     // was "lost". Actually is was resized to zero height.
-    createScDoc("tdf115655_HideDetail.ods");
+    createScDoc("ods/tdf115655_HideDetail.ods");
 
     // Get document and image
     ScDocument* pDoc = getScDoc();
@@ -1027,10 +889,6 @@ void ScShapeTest::testTdf115655_HideDetail()
     pViewShell->GetViewData().SetCurY(1);
     pViewShell->GetViewData().GetDispatcher().Execute(SID_OUTLINE_HIDE);
     CPPUNIT_ASSERT_MESSAGE("Collapse: Image should not be visible", !pObj->IsVisible());
-
-    // FIXME: validation fails with
-    // Error: unexpected attribute "drawooo:display"
-    skipValidation();
 
     // Save and reload
     saveAndReload("calc8");
@@ -1048,16 +906,15 @@ void ScShapeTest::testTdf115655_HideDetail()
 
     // Assert image size is not changed
     tools::Rectangle aSnapRectReload = pObj->GetSnapRect();
-    lcl_AssertRectEqualWithTolerance("Reload: Object geometry has changed.", aSnapRectOrig,
-                                     aSnapRectReload, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aSnapRectOrig, aSnapRectReload, 1);
 }
 
-void ScShapeTest::testFitToCellSize()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testFitToCellSize)
 {
     // The document has a cell anchored custom shape. Applying
     // FitToCellSize should resize and position the shape so,
     // that it fits into its anchor cell. That did not happened.
-    createScDoc("tdf119191_FitToCellSize.ods");
+    createScDoc("ods/tdf119191_FitToCellSize.ods");
 
     // Get document and shape
     ScDocument* pDoc = getScDoc();
@@ -1078,15 +935,15 @@ void ScShapeTest::testFitToCellSize()
 
     const tools::Rectangle& rShapeRect(pObj->GetSnapRect());
     const tools::Rectangle aCellRect = pDoc->GetMMRect(1, 1, 1, 1, 0);
-    lcl_AssertRectEqualWithTolerance("Cell and SnapRect should be equal", aCellRect, rShapeRect, 2);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aCellRect, rShapeRect, 2);
 }
 
-void ScShapeTest::testCustomShapeCellAnchoredRotatedShape()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testCustomShapeCellAnchoredRotatedShape)
 {
     // The example doc contains a cell anchored custom shape that is rotated
     // and sheared. Error was, that the shape lost position and size on
     // loading.
-    createScDoc("tdf119191_transformedShape.ods");
+    createScDoc("ods/tdf119191_transformedShape.ods");
 
     // Get document and shape
     ScDocument* pDoc = getScDoc();
@@ -1097,7 +954,7 @@ void ScShapeTest::testCustomShapeCellAnchoredRotatedShape()
     pDoc->SetDrawPageSize(0); // trigger recalcpos
     tools::Rectangle aRect(2400, 751, 5772, 3694); // expected snap rect from values in file
     const tools::Rectangle& rShapeRect(pObj->GetSnapRect());
-    lcl_AssertRectEqualWithTolerance("Load: wrong pos and size", aRect, rShapeRect, 1);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aRect, rShapeRect, 1);
 
     // Check anchor
     ScDrawObjData* pData = ScDrawLayer::GetObjData(pObj);
@@ -1110,19 +967,19 @@ void ScShapeTest::testCustomShapeCellAnchoredRotatedShape()
     CPPUNIT_ASSERT_EQUAL(OUString("start col 1 row 1 end col 2 row 8"), sActual);
 }
 
-void ScShapeTest::testLargeAnchorOffset()
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testLargeAnchorOffset)
 {
     // The example doc contains a resize-with-cell-anchored measure line
     // with a large vertical offset that shifts the start point onto the
     // next cell below.
-    createScDoc("LargeAnchorOffset.ods");
+    createScDoc("ods/LargeAnchorOffset.ods");
 
     ScDocument* pDoc = getScDoc();
     SdrObject* pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
 
     const Point aOldPos = pObj->GetRelativePos();
     // Just to check that it imports correctly
-    lcl_AssertPointEqualWithTolerance("before reload", { 9504, 9089 }, aOldPos, 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(Point(9504, 9089), aOldPos, 1);
 
     saveAndReload("calc8");
 
@@ -1135,10 +992,311 @@ void ScShapeTest::testLargeAnchorOffset()
     //   - Expression: std::abs(rExpected.Y() - rActual.Y()) <= nTolerance
     //   - after reload Y expected 9089 actual 9643 Tolerance 1
     const Point aNewPos = pObj->GetRelativePos();
-    lcl_AssertPointEqualWithTolerance("after reload", aOldPos, aNewPos, 1);
+    CPPUNIT_ASSERT_POINT_EQUAL_WITH_TOLERANCE(aOldPos, aNewPos, 1);
 }
 
-CPPUNIT_TEST_SUITE_REGISTRATION(ScShapeTest);
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf139083_copy_without_resize)
+{
+    // Load a document, which has a shape anchored to cell B2, but without 'resize with cell'.
+    // When the range B2:B3 is copied and pasted to D5, then the copied shape should keep its size.
+    createScDoc("ods/tdf139083_copy_without_resize.ods");
+
+    // Get document
+    ScDocument* pDoc = getScDoc();
+
+    // Copy cells B2:B3. They have row height 2cm and column width 3cm.
+    goToCell("$B$2:$B$3");
+    dispatchCommand(mxComponent, ".uno:Copy", {});
+
+    // Paste to D5. There are row height 0.5cm and column width 1cm.
+    goToCell("$D$5");
+    dispatchCommand(mxComponent, ".uno:Paste", {});
+
+    // Make sure original and pasted shape have the same size.
+    // Size of original shape is 2001x3002, without fix size of pasted shape was 668x750.
+    SdrObject* pObjOrig = lcl_getSdrObjectWithAssert(*pDoc, 0); // original shape
+    SdrObject* pObjPasted = lcl_getSdrObjectWithAssert(*pDoc, 1); // pasted shape
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(2001, pObjOrig->GetSnapRect().GetWidth(), 1);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(3002, pObjOrig->GetSnapRect().GetHeight(), 1);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(2001, pObjPasted->GetSnapRect().GetWidth(), 1);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(3002, pObjPasted->GetSnapRect().GetHeight(), 1);
+}
+
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf155093_double_names)
+{
+    // Load a document, which has a shape in range B6:C14 with name "myArrow". When the range was
+    // copied and pasted, then the copied shape got the same name and thus was not accessible with
+    // Navigator.
+    createScDoc("ods/tdf155093_double_names.ods");
+    ScDocument* pDoc = getScDoc();
+
+    // Copy and paste
+    goToCell("$B$6:$C$14");
+    dispatchCommand(mxComponent, ".uno:Copy", {});
+    goToCell("$D$16");
+    dispatchCommand(mxComponent, ".uno:Paste", {});
+
+    // Make sure original and pasted shape have different names.
+    SdrObject* pObjOrig = lcl_getSdrObjectWithAssert(*pDoc, 0); // original shape
+    SdrObject* pObjPasted = lcl_getSdrObjectWithAssert(*pDoc, 1); // pasted shape
+    CPPUNIT_ASSERT(pObjOrig->GetName() != pObjPasted->GetName());
+}
+
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf155095_shape_collapsed_group)
+{
+    // Load a document, which has a shape in range C9:C16, anchored 'To cell (resize with cell)'.
+    // The rows 11 to 14 are in a collapsed group. So the shape effectively spans 4 rows. When
+    // copying the range B5:C19 and pasting it to B22, the group is expanded and the shape should
+    // increase its height so that it spans 8 rows.
+    createScDoc("ods/tdf155095_shape_over_collapsed_group.ods");
+    ScDocument* pDoc = getScDoc();
+
+    // Copy and paste
+    goToCell("$B$5:$C$19");
+    dispatchCommand(mxComponent, ".uno:Copy", {});
+    goToCell("$B$22");
+    dispatchCommand(mxComponent, ".uno:Paste", {});
+
+    // Make sure the shape has the correct size and spans C26:C33
+    SdrObject* pObj = lcl_getSdrObjectWithAssert(*pDoc, 1); // pasted shape
+    // Without fix the shape had position(6708,11564) and size(407,2013).
+    tools::Rectangle aExpectedRect(tools::Rectangle(Point(6708, 10743), Size(407, 3473)));
+    tools::Rectangle aSnapRect(pObj->GetSnapRect());
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectedRect, aSnapRect, 1);
+
+    // Without fix the shape spans C28:C32
+    ScDrawObjData* pObjData = ScDrawLayer::GetObjData(pObj);
+    ScAddress aExpectedStart(SCCOL(2), SCROW(25), SCTAB(0)); // zero based
+    ScAddress aExpectedEnd(SCCOL(2), SCROW(32), SCTAB(0));
+    CPPUNIT_ASSERT_EQUAL(aExpectedStart, (*pObjData).maStart);
+    CPPUNIT_ASSERT_EQUAL(aExpectedEnd, (*pObjData).maEnd);
+}
+
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf155094_paste_transposed)
+{
+    // Load a document, which has a page anchored shape "Red" in C4, a cell anchored shape "Green" in
+    // D4 and a cell anchored shape "Blue" with 'resize with cell' in E4. The range C3:E5 is copied
+    // and pasted with 'Transpose all' to cell K6. The pasted content had these errors:
+    // Pasted shape "Red" was missing.
+    // Pasted shape "Green" was resized although 'resize with cell' was not set.
+    // Pasted shape "Blue" was in cell K5 instead of L8.
+    // The behavior of paste transposed is changed since LO 7.6 so that no shape is resized.
+    createScDoc("ods/tdf155094_paste_transposed.ods");
+    ScDocument* pDoc = getScDoc();
+
+    // Copy and paste
+    goToCell("$C$3:$E$5");
+    dispatchCommand(mxComponent, ".uno:Copy", {});
+    goToCell("$K$6");
+    uno::Sequence<beans::PropertyValue> aPropertyValues
+        = { comphelper::makePropertyValue("Flags", OUString("A")),
+            comphelper::makePropertyValue("FormulaCommand", sal_uInt16(0)),
+            comphelper::makePropertyValue("SkipEmptyCells", false),
+            comphelper::makePropertyValue("Transpose", true),
+            comphelper::makePropertyValue("AsLink", false),
+            comphelper::makePropertyValue("MoveMode", sal_uInt16(4)) };
+    dispatchCommand(mxComponent, ".uno:InsertContents", aPropertyValues);
+
+    // Without fix there had been only 5 object.
+    ScDrawLayer* pDrawLayer = pDoc->GetDrawLayer();
+    CPPUNIT_ASSERT_MESSAGE("No ScDrawLayer", pDrawLayer);
+    const SdrPage* pPage = pDrawLayer->GetPage(0);
+    CPPUNIT_ASSERT_MESSAGE("No draw page", pPage);
+    CPPUNIT_ASSERT_EQUAL(size_t(6), pPage->GetObjCount());
+
+    // Without fix pasted object had position(7972, 8616) and size(1805×801).
+    SdrObject* pObjGreen = lcl_getSdrObjectWithAssert(*pDoc, 4); // pasted shape "Green"
+    tools::Rectangle aExpectedRect(tools::Rectangle(Point(12489, 12609), Size(800, 800)));
+    tools::Rectangle aSnapRect(pObjGreen->GetSnapRect());
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectedRect, aSnapRect, 1);
+
+    // Without fix the pasted object was at wrong position(10230,8616).
+    // Since LO 7.6 the pasted object has the same size as the original shape "Blue".
+    SdrObject* pObjBlue = lcl_getSdrObjectWithAssert(*pDoc, 5);
+    aExpectedRect = tools::Rectangle(Point(12489, 14612), Size(800, 800));
+    aSnapRect = pObjBlue->GetSnapRect();
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aExpectedRect, aSnapRect, 1);
+}
+
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf155091_paste_duplicates)
+{
+    // Load a document, which has a shape in range C6:C16, anchored 'To cell (resize with cell)'.
+    // The rows 6 to 9 are filtered. When copying the range B5:C19 and paste it to B23, the
+    // shape was pasted twice.
+    createScDoc("ods/tdf155091_paste_duplicates.ods");
+    ScDocument* pDoc = getScDoc();
+
+    // Copy and paste
+    goToCell("$B$5:$C$19");
+    dispatchCommand(mxComponent, ".uno:Copy", {});
+    goToCell("$B$23");
+    dispatchCommand(mxComponent, ".uno:Paste", {});
+
+    // Make sure there is no third object but only original and pasted one.
+    ScDrawLayer* pDrawLayer = pDoc->GetDrawLayer();
+    CPPUNIT_ASSERT_MESSAGE("No ScDrawLayer", pDrawLayer);
+    const SdrPage* pPage = pDrawLayer->GetPage(0);
+    CPPUNIT_ASSERT_MESSAGE("No draw page", pPage);
+    CPPUNIT_ASSERT_EQUAL(size_t(2), pPage->GetObjCount());
+}
+
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf125938_anchor_after_copy_paste)
+{
+    // Load a document, which has an image in cell $sheet1.$B$3, anchored to cell. When the range
+    // A3:C3 was copied and pasted to D9:D11 in sheet2, the image was displayed in cell D10, but
+    // its anchor was in B3.
+    createScDoc("ods/tdf125938_anchor_after_copy_paste.ods");
+    ScDocument* pDoc = getScDoc();
+
+    // Copy and paste
+    goToCell("$Sheet1.$A$3:$C$3");
+    dispatchCommand(mxComponent, ".uno:Copy", {});
+    goToCell("$Sheet2.$D$9");
+    dispatchCommand(mxComponent, ".uno:Paste", {});
+
+    // Get pasted shape
+    ScDrawLayer* pDrawLayer = pDoc->GetDrawLayer();
+    const SdrPage* pPage = pDrawLayer->GetPage(1);
+    SdrObject* pObj = pPage->GetObj(0);
+
+    // Make sure object is anchored to E9
+    ScDrawObjData* pObjData = ScDrawLayer::GetObjData(pObj);
+    ScAddress aExpectedAddress(SCCOL(4), SCROW(8), SCTAB(1)); // zero based
+    CPPUNIT_ASSERT_EQUAL(aExpectedAddress, (*pObjData).maStart);
+}
+
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf154821_shape_in_group)
+{
+    // The document contains a shape in A7, a group spanning rows 2 to 4 and a second group spanning
+    // rows 6 to 10. Error was, that when the document was saved with collapsed groups, the shape
+    // lost its position.
+    createScDoc("ods/tdf154821_shape_in_group.ods");
+
+    // Get snap rectangle before collapse and save
+    ScDocument* pDoc = getScDoc();
+    SdrObject* pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
+    tools::Rectangle aRectOrig = pObj->GetSnapRect();
+
+    // Collapse the lower group
+    ScTabViewShell* pViewShell = getViewShell();
+    pViewShell->GetViewData().SetCurX(0);
+    pViewShell->GetViewData().SetCurY(5);
+    pViewShell->GetViewData().GetDispatcher().Execute(SID_OUTLINE_HIDE);
+    // Collapse the upper group
+    pViewShell->GetViewData().SetCurX(0);
+    pViewShell->GetViewData().SetCurY(1);
+    pViewShell->GetViewData().GetDispatcher().Execute(SID_OUTLINE_HIDE);
+
+    saveAndReload("calc8");
+
+    // Expand the lower group
+    pViewShell = getViewShell();
+    pViewShell->GetViewData().SetCurX(0);
+    pViewShell->GetViewData().SetCurY(5);
+    pViewShell->GetViewData().GetDispatcher().Execute(SID_OUTLINE_SHOW);
+    // Expand the upper group
+    pViewShell = getViewShell();
+    pViewShell->GetViewData().SetCurX(0);
+    pViewShell->GetViewData().SetCurY(1);
+    pViewShell->GetViewData().GetDispatcher().Execute(SID_OUTLINE_SHOW);
+
+    // Verify shape position is not changed besides rounding errors from twips<->mm
+    pDoc = getScDoc();
+    pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
+    tools::Rectangle aRectReload = pObj->GetSnapRect();
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aRectOrig, aRectReload, 1);
+}
+
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf160003_copy_page_anchored)
+{
+    // Load a document, which has a chart anchored to page on sheet2. Copy&paste to other document
+    // had lost the chart object.
+    createScDoc("ods/tdf160003_page_anchored_object.ods");
+
+    // copy range with chart
+    goToCell("$Sheet2.$A$1:$L$24");
+    dispatchCommand(mxComponent, ".uno:Copy", {});
+
+    // close document and create new one
+    createScDoc();
+
+    // paste clipboard
+    goToCell("$Sheet1.$A$1");
+    dispatchCommand(mxComponent, ".uno:Paste", {});
+
+    // Make sure the chart object exists.
+    ScDocument* pDoc = getScDoc();
+    ScDrawLayer* pDrawLayer = pDoc->GetDrawLayer();
+    const SdrPage* pPage = pDrawLayer->GetPage(0);
+    CPPUNIT_ASSERT_EQUAL(size_t(1), pPage->GetObjCount());
+}
+
+CPPUNIT_TEST_FIXTURE(ScShapeTest, testTdf160369_groupshape)
+{
+    // The document contains a group spanning range C5:F12. It is currently anchored to page to
+    // make sure its position does not change. When the group was anchored 'To Cell' and rows or
+    // columns were hidden before the group, saving changed the anchor position and anchor
+    // offset. This happened both with using 'resize with cell' and not.
+    createScDoc("ods/tdf160369_groupshape.ods");
+
+    // Get document and group object
+    ScDocument* pDoc = getScDoc();
+    SdrObject* pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
+
+    // Anchor group 'To Cell (resize with cell)' to prepare the test.
+    ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *pDoc, 0 /*SCTAB*/, true /*bResizeWithCell*/);
+
+    // Hide rows 3 and 4 (UI number), which are before the group
+    // Hide column D, which is inside the group
+    pDoc->SetRowHidden(2, 3, 0, true);
+    pDoc->SetDrawPageSize(0); // trigger recalcpos, otherwise shapes are not changed
+    pDoc->SetColHidden(3, 3, 0, true);
+    pDoc->SetDrawPageSize(0);
+
+    // Get geometry of the group
+    ScDrawObjData* pObjData = ScDrawLayer::GetObjData(pObj);
+    ScAddress aOrigStart = (*pObjData).maStart;
+    ScAddress aOrigEnd = (*pObjData).maEnd;
+    tools::Rectangle aOrigRect = pObj->GetSnapRect();
+
+    // Save document but do not reload. Saving alone had already caused the error.
+    save("calc8");
+
+    // Get geometry of the group again
+    ScDrawObjData* pAfterObjData = ScDrawLayer::GetObjData(pObj);
+    ScAddress aAfterStart = (*pAfterObjData).maStart;
+    ScAddress aAfterEnd = (*pAfterObjData).maEnd;
+    tools::Rectangle aAfterRect = pObj->GetSnapRect();
+
+    // verify Orig equals After
+    CPPUNIT_ASSERT_EQUAL(aOrigStart, aAfterStart);
+    CPPUNIT_ASSERT_EQUAL(aOrigEnd, aAfterEnd);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aOrigRect, aAfterRect, 1);
+
+    // The same but with saveAndReload.
+    createScDoc("ods/tdf160369_groupshape.ods");
+    pDoc = getScDoc();
+    pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
+    ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *pDoc, 0 /*SCTAB*/, true /*bResizeWithCell*/);
+    pDoc->SetRowHidden(2, 3, 0, true);
+    pDoc->SetDrawPageSize(0); // trigger recalcpos, otherwise shapes are not changed
+    pDoc->SetColHidden(3, 3, 0, true);
+    pDoc->SetDrawPageSize(0);
+
+    saveAndReload("calc8");
+
+    // Verify geometry is same as before save
+    pDoc = getScDoc();
+    pObj = lcl_getSdrObjectWithAssert(*pDoc, 0);
+    pAfterObjData = ScDrawLayer::GetObjData(pObj);
+    aAfterStart = (*pAfterObjData).maStart;
+    aAfterEnd = (*pAfterObjData).maEnd;
+    aAfterRect = pObj->GetSnapRect();
+
+    // verify Orig equals After
+    CPPUNIT_ASSERT_EQUAL(aOrigStart, aAfterStart);
+    CPPUNIT_ASSERT_EQUAL(aOrigEnd, aAfterEnd);
+    CPPUNIT_ASSERT_RECTANGLE_EQUAL_WITH_TOLERANCE(aOrigRect, aAfterRect, 1);
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

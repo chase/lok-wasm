@@ -49,7 +49,8 @@ public:
     // Test that drawing only a part of a gradient draws the proper part of it.
     void testTdf139000()
     {
-        ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+        ScopedVclPtr<VirtualDevice> device
+            = VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
         device->SetOutputSizePixel(Size(100, 200));
         device->SetBackground(Wallpaper(COL_RED));
         device->Erase();
@@ -67,11 +68,11 @@ public:
         // the case --- it is in fact the *contrary*, it is there to *extend* the
         // usual definition/paintRange of a gradient:
         // It was originally needed to correctly display TextFrames (TF) in Writer: If you
-        // have a TF in SW filled with a gradient and that TF has sub-frames, it inhertits
+        // have a TF in SW filled with a gradient and that TF has sub-frames, it inherits
         // the gradient fill. Since you can freely move those sub-TFs even outside the
-        // parent TF there has to be a way to not only paint gradients in ther definition
+        // parent TF there has to be a way to not only paint gradients in their definition
         // range (classical, all DrawObjects do that), but extended from that. This is
-        // needed e.g. for linerar gradients, but - dependent of e.g. the center settings -
+        // needed e.g. for linear gradients, but - dependent of e.g. the center settings -
         // also for all other ones, all can have geometry 'outside' the DefinitionRange.
         // This is now also used in various other locations which is proof that this is
         // useful and needed. It is possible to see that basic history/reason for this
@@ -79,10 +80,10 @@ public:
         // that parameter was originally added. Other hints are: It is *not* named
         // 'ClipRange'. Using a B2DRange to define a ClipRange topology would be bad due
         // to not being transformable, a PolyPolygon would be used in that case. Using as
-        // clipping mechanism would offer a 2nd pinciple to add clipping for primitives
+        // clipping mechanism would offer a 2nd principle to add clipping for primitives
         // besides MaskPrimitive2D - always bad style in a sub-system. A quick look
         // on it's usages gives hints, too.
-        // This means that when defining a outputRange tat resides completely *inside*
+        // This means that when defining an outputRange that resides completely *inside*
         // the definitionRange *no change* at all is done by definition since this does
         // not *extend* the target area of the gradient paint region at all. If an
         // implementation does clip and limit output to 'outputRange' that should do no
@@ -92,7 +93,7 @@ public:
         // PolyPolygon) in a MaskPrimitive2D defined by the outline PolyPolygon of the
         // shape. Nothing speaks against renderers detecting that combination and do
         // something optimized if they want to, especially SDPRs, but this is not
-        // required. The standard embedded clipping of the mplementations of the
+        // required. The standard embedded clipping of the implementations of the
         // MaskPrimitive2D do the right thing.
         // This test intends to paint the lower part of a gradient, so define the
         // gradient for the full target range and embed it to a MaskPrimitive2D
@@ -116,7 +117,7 @@ public:
 
         exportDevice("test-tdf139000.png", device);
         Bitmap bitmap = device->GetBitmap(Point(), device->GetOutputSizePixel());
-        Bitmap::ScopedReadAccess access(bitmap);
+        BitmapScopedReadAccess access(bitmap);
         // The upper half should keep its red background color.
         CPPUNIT_ASSERT_EQUAL(BitmapColor(COL_RED), access->GetColor(Point(0, 99)));
         // First line of the gradient should not be the start color, but something halfway.

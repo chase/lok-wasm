@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <officecfg/Office/Impress.hxx>
+#include <officecfg/Office/Security.hxx>
 
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
@@ -63,19 +64,19 @@ namespace sd {
     };
 }
 
-RemoteServer::RemoteServer() :
-    Thread( "RemoteServerThread" )
+IPRemoteServer::IPRemoteServer()
+    : Thread("IPRemoteServerThread")
 {
-    SAL_INFO( "sdremote", "Instantiated RemoteServer" );
+    SAL_INFO("sdremote", "Instantiated IPRemoteServer");
 }
 
-RemoteServer::~RemoteServer()
+IPRemoteServer::~IPRemoteServer()
 {
 }
 
-void RemoteServer::execute()
+void IPRemoteServer::execute()
 {
-    SAL_INFO( "sdremote", "RemoteServer::execute called" );
+    SAL_INFO("sdremote", "IPRemoteServer::execute called");
     osl::SocketAddr aAddr( "0.0.0.0", PORT );
     if ( !mSocket.bind( aAddr ) )
     {
@@ -103,11 +104,11 @@ void RemoteServer::execute()
         BufferedStreamSocket *pSocket = new BufferedStreamSocket( aSocket);
         handleAcceptedConnection( pSocket );
     }
-    SAL_INFO( "sdremote", "shutting down RemoteServer" );
+    SAL_INFO("sdremote", "shutting down IPRemoteServer");
     spServer = nullptr; // Object is destroyed when Thread::execute() ends.
 }
 
-void RemoteServer::handleAcceptedConnection( BufferedStreamSocket *pSocket )
+void IPRemoteServer::handleAcceptedConnection( BufferedStreamSocket *pSocket )
 {
     OString aLine;
     if ( ! ( pSocket->readLine( aLine)
@@ -142,7 +143,7 @@ void RemoteServer::handleAcceptedConnection( BufferedStreamSocket *pSocket )
     }
     while ( aLine.getLength() > 0 );
 
-    MutexGuard aGuard( sDataMutex );
+    MutexGuard aGuard(RemoteServer::sDataMutex);
     std::shared_ptr< ClientInfoInternal > pClient =
         std::make_shared<ClientInfoInternal>(
             OStringToOUString( aName, RTL_TEXTENCODING_UTF8 ),
@@ -175,28 +176,24 @@ void RemoteServer::handleAcceptedConnection( BufferedStreamSocket *pSocket )
                     strlen( "LO_SERVER_VALIDATING_PIN\n\n" ) );
 }
 
-RemoteServer *sd::RemoteServer::spServer = nullptr;
+IPRemoteServer *sd::IPRemoteServer::spServer = nullptr;
 ::osl::Mutex sd::RemoteServer::sDataMutex;
 ::std::vector<Communicator*> sd::RemoteServer::sCommunicators;
 
-void RemoteServer::setup()
+void IPRemoteServer::setup()
 {
     if (spServer)
         return;
 
-    spServer = new RemoteServer();
+    spServer = new IPRemoteServer();
     spServer->launch();
-
-#ifdef ENABLE_SDREMOTE_BLUETOOTH
-    sd::BluetoothServer::setup( &sCommunicators );
-#endif
 }
 
 void RemoteServer::presentationStarted( const css::uno::Reference<
                 css::presentation::XSlideShowController > &rController )
 {
-    if ( !spServer )
-        return;
+    // note this can be invoked even when there is no IPRemoteServer instance
+    // but there are communicators belonging to a BluetoothServer
     MutexGuard aGuard( sDataMutex );
     for ( const auto& rpCommunicator : sCommunicators )
     {
@@ -205,8 +202,6 @@ void RemoteServer::presentationStarted( const css::uno::Reference<
 }
 void RemoteServer::presentationStopped()
 {
-    if ( !spServer )
-        return;
     MutexGuard aGuard( sDataMutex );
     for ( const auto& rpCommunicator : sCommunicators )
     {
@@ -216,21 +211,19 @@ void RemoteServer::presentationStopped()
 
 void RemoteServer::removeCommunicator( Communicator const * mCommunicator )
 {
-    if ( !spServer )
-        return;
     MutexGuard aGuard( sDataMutex );
     auto aIt = std::find(sCommunicators.begin(), sCommunicators.end(), mCommunicator);
     if (aIt != sCommunicators.end())
         sCommunicators.erase( aIt );
 }
 
-std::vector< std::shared_ptr< ClientInfo > > RemoteServer::getClients()
+std::vector<std::shared_ptr<ClientInfo>> IPRemoteServer::getClients()
 {
-    SAL_INFO( "sdremote", "RemoteServer::getClients() called" );
+    SAL_INFO( "sdremote", "IPRemoteServer::getClients() called" );
     std::vector< std::shared_ptr< ClientInfo > > aClients;
     if ( spServer )
     {
-        MutexGuard aGuard( sDataMutex );
+        MutexGuard aGuard(RemoteServer::sDataMutex);
         aClients.assign( spServer->mAvailableClients.begin(),
                          spServer->mAvailableClients.end() );
     }
@@ -256,9 +249,9 @@ std::vector< std::shared_ptr< ClientInfo > > RemoteServer::getClients()
     return aClients;
 }
 
-bool RemoteServer::connectClient( const std::shared_ptr< ClientInfo >& pClient, std::u16string_view aPin )
+bool IPRemoteServer::connectClient(const std::shared_ptr<ClientInfo>& pClient, std::u16string_view aPin)
 {
-    SAL_INFO( "sdremote", "RemoteServer::connectClient called" );
+    SAL_INFO("sdremote", "IPRemoteServer::connectClient called");
     if ( !spServer )
         return false;
 
@@ -293,9 +286,9 @@ bool RemoteServer::connectClient( const std::shared_ptr< ClientInfo >& pClient, 
         }
 
         Communicator* pCommunicator = new Communicator( std::unique_ptr<IBluetoothSocket>(apClient->mpStreamSocket) );
-        MutexGuard aGuard( sDataMutex );
+        MutexGuard aGuard(RemoteServer::sDataMutex);
 
-        sCommunicators.push_back( pCommunicator );
+        RemoteServer::sCommunicators.push_back( pCommunicator );
 
         auto aIt = std::find(spServer->mAvailableClients.begin(), spServer->mAvailableClients.end(), pClient);
         if (aIt != spServer->mAvailableClients.end())
@@ -309,13 +302,13 @@ bool RemoteServer::connectClient( const std::shared_ptr< ClientInfo >& pClient, 
     }
 }
 
-void RemoteServer::deauthoriseClient( const std::shared_ptr< ClientInfo >& pClient )
+void IPRemoteServer::deauthoriseClient(const std::shared_ptr<ClientInfo>& pClient)
 {
     // TODO: we probably want to forcefully disconnect at this point too?
     // But possibly via a separate function to allow just disconnecting from
     // the UI.
 
-    SAL_INFO( "sdremote", "RemoteServer::deauthoriseClient called" );
+    SAL_INFO("sdremote", "IPRemoteServer::deauthoriseClient called");
 
     if ( !pClient->mbIsAlreadyAuthorised )
     // We can't remove unauthorised clients from the authorised list...
@@ -352,7 +345,19 @@ void SdDLL::RegisterRemotes()
     if ( !officecfg::Office::Impress::Misc::Start::EnableSdremote::get() )
         return;
 
-    sd::RemoteServer::setup();
+#ifdef ENABLE_SDREMOTE_BLUETOOTH
+    sd::BluetoothServer::setup( &RemoteServer::sCommunicators );
+#endif
+
+    if (!officecfg::Office::Security::Net::AllowInsecureImpressRemoteWiFi::get())
+    {
+        SAL_WARN("desktop", "Impress remote WiFi is disabled by configuration");
+        return;
+    }
+
+    // this is the IP/WiFi server
+    sd::IPRemoteServer::setup();
+    // assumption is that BluetoothServer doesn't need DiscoveryService
     sd::DiscoveryService::setup();
 }
 

@@ -24,7 +24,7 @@
 #include <rtl/ustring.hxx>
 #include <rtl/ref.hxx>
 #include <tools/gen.hxx>
-#include <cppuhelper/compbase4.hxx>
+#include <cppuhelper/compbase.hxx>
 #include <cppuhelper/implbase1.hxx>
 #include <cppuhelper/basemutex.hxx>
 #include <com/sun/star/lang/XServiceInfo.hpp>
@@ -41,7 +41,7 @@ namespace vcl { class Window; }
 
 namespace accessibility {
 
-typedef ::cppu::WeakAggComponentImplHelper4<
+typedef ::cppu::WeakComponentImplHelper<
             css::accessibility::XAccessibleContext,
             css::accessibility::XAccessibleComponent,
             css::accessibility::XAccessibleEventBroadcaster,
@@ -204,7 +204,7 @@ protected:
     ///** Derived classes return the bounding box in screen coordinates.
     //    @attention  This method requires locked mutex's and a living object.
     //    @return  The bounding box (VCL rect.) in screen coordinates. */
-    virtual tools::Rectangle implGetBoundingBoxOnScreen() = 0;
+    virtual AbsoluteScreenPixelRectangle implGetBoundingBoxOnScreen() = 0;
 
     /** Creates a bitset of states of the
         current object. This method calls FillStateSet at the GridControl which
@@ -229,7 +229,7 @@ protected:
     //    coordinates.
     //    @return  The bounding box (VCL rect.) in screen coordinates. */
     /// @throws css::lang::DisposedException
-    tools::Rectangle getBoundingBoxOnScreen();
+    AbsoluteScreenPixelRectangle getBoundingBoxOnScreen();
 
     ::comphelper::AccessibleEventNotifier::TClientId getClientId() const { return m_aClientId; }
     void setClientId(::comphelper::AccessibleEventNotifier::TClientId _aNewClientId) { m_aClientId = _aNewClientId; }

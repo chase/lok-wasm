@@ -23,6 +23,7 @@
 #include <DocumentContentOperationsManager.hxx>
 #include <hintids.hxx>
 #include <editeng/rsiditem.hxx>
+#include <editeng/nhypitem.hxx>
 #include <osl/diagnose.h>
 #include <svl/whiter.hxx>
 #include <svl/itemiter.hxx>
@@ -899,7 +900,7 @@ void SwpHints::BuildPortions( SwTextNode& rNode, SwTextAttr& rNewHint,
                     {
                         const SfxPoolItem* pTmpItem = nullptr;
                         if ( SfxItemState::SET == rWholeParaAttrSet.GetItemState( pItem->Which(), false, &pTmpItem ) &&
-                             pTmpItem == pItem )
+                             SfxPoolItem::areSame(pTmpItem, pItem) )
                         {
                             // Do not clear item if the attribute is set in a character format:
                             if ( !pCurrentCharFormat || nullptr == CharFormat::GetItem( *pCurrentCharFormat, pItem->Which() ) )
@@ -936,8 +937,9 @@ void SwpHints::BuildPortions( SwTextNode& rNode, SwTextAttr& rNewHint,
                     do
                     {
                         const SfxPoolItem* pTmpItem = nullptr;
+                        // here direct SfxPoolItem ptr comp was wrong, found using SfxPoolItem::areSame
                         if ( SfxItemState::SET == rWholeParaAttrSet.GetItemState( pItem->Which(), false, &pTmpItem ) &&
-                             pTmpItem == pItem )
+                             SfxPoolItem::areSame(pTmpItem, pItem) )
                         {
                             // Do not clear item if the attribute is set in a character format:
                             if ( !pCurrentCharFormat || nullptr == CharFormat::GetItem( *pCurrentCharFormat, pItem->Which() ) )
@@ -1023,7 +1025,7 @@ SwTextAttr* MakeRedlineTextAttr( SwDoc & rDoc, SfxPoolItem const & rAttr )
     // Put new attribute into pool
     // FIXME: this const_cast is evil!
     SfxPoolItem& rNew =
-        const_cast<SfxPoolItem&>( rDoc.GetAttrPool().Put( rAttr ) );
+        const_cast<SfxPoolItem&>( rDoc.GetAttrPool().DirectPutItemInPool( rAttr ) );
     return new SwTextAttrEnd( rNew, 0, 0 );
 }
 
@@ -1061,7 +1063,7 @@ SwTextAttr* MakeTextAttr(
     // Put new attribute into pool
     // FIXME: this const_cast is evil!
     SfxPoolItem& rNew =
-        const_cast<SfxPoolItem&>( rDoc.GetAttrPool().Put( rAttr ) );
+        const_cast<SfxPoolItem&>( rDoc.GetAttrPool().DirectPutItemInPool( rAttr ) );
 
     SwTextAttr* pNew = nullptr;
     switch( rNew.Which() )
@@ -2122,7 +2124,8 @@ public:
 static void lcl_MergeListLevelIndentAsLRSpaceItem( const SwTextNode& rTextNode,
                                             SfxItemSet& rSet )
 {
-    if ( !rTextNode.AreListLevelIndentsApplicable() )
+    ::sw::ListLevelIndents const indents(rTextNode.AreListLevelIndentsApplicable());
+    if (indents == ::sw::ListLevelIndents::No)
         return;
 
     const SwNumRule* pRule = rTextNode.GetNumRule();
@@ -2131,10 +2134,16 @@ static void lcl_MergeListLevelIndentAsLRSpaceItem( const SwTextNode& rTextNode,
         const SwNumFormat& rFormat = pRule->Get(o3tl::narrowing<sal_uInt16>(rTextNode.GetActualListLevel()));
         if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )
         {
-            SvxLRSpaceItem aLR( RES_LR_SPACE );
-            aLR.SetTextLeft( rFormat.GetIndentAt() );
-            aLR.SetTextFirstLineOffset( static_cast<short>(rFormat.GetFirstLineIndent()) );
-            rSet.Put( aLR );
+            if (indents & ::sw::ListLevelIndents::FirstLine)
+            {
+                SvxFirstLineIndentItem const firstLine(static_cast<short>(rFormat.GetFirstLineIndent()), RES_MARGIN_FIRSTLINE);
+                rSet.Put(firstLine);
+            }
+            if (indents & ::sw::ListLevelIndents::LeftMargin)
+            {
+                SvxTextLeftMarginItem const leftMargin(rFormat.GetIndentAt(), RES_MARGIN_TEXTLEFT);
+                rSet.Put(leftMargin);
+            }
         }
     }
 }
@@ -2702,7 +2711,7 @@ void SwpHints::NoteInHistory( SwTextAttr *pAttr, const bool bNew )
 namespace {
 struct Portion {
     SwTextAttr* pTextAttr;
-    int nKey;
+    sal_Int32 nKey;
     bool isRsidOnlyAutoFormat;
 };
 typedef std::vector< Portion > PortionMap;
@@ -2785,15 +2794,16 @@ bool SwpHints::MergePortions( SwTextNode& rNode )
         RsidOnlyAutoFormatFlagMap[nKey] = isRsidOnlyAutoFormat;
     }
 
-    // we add data strictly in-order, so we can binary-search the vector
-    auto equal_range = [&aPortionMap](int i)
+    // we add data strictly in-order, so we can forward-search the vector
+    auto equal_range = [](PortionMap::const_iterator startIt, PortionMap::const_iterator endIt, int i)
     {
-        Portion key { nullptr, i, false  };
-        return std::equal_range(aPortionMap.begin(), aPortionMap.end(), key,
-            [] (const Portion& lhs, const Portion& rhs) -> bool
-            {
-                return lhs.nKey < rhs.nKey;
-            });
+        auto it1 = startIt;
+        while (it1 != endIt && it1->nKey < i)
+            ++it1;
+        auto it2 = it1;
+        while (it2 != endIt && it2->nKey == i)
+            ++it2;
+        return std::pair<PortionMap::const_iterator, PortionMap::const_iterator>{ it1, it2 };
     };
 
     // check if portion i can be merged with portion i+1:
@@ -2801,10 +2811,14 @@ bool SwpHints::MergePortions( SwTextNode& rNode )
     // IgnoreEnd at first / last portion
     int i = 0;
     int j = i + 1;
+    // Store this outside the loop, because we limit the search area on subsequent searches.
+    std::pair< PortionMap::const_iterator, PortionMap::const_iterator > aRange1 { aPortionMap.begin(), aPortionMap.begin() + aPortionMap.size() };
     while ( i <= nKey )
     {
-        std::pair< PortionMap::const_iterator, PortionMap::const_iterator > aRange1 = equal_range( i );
-        std::pair< PortionMap::const_iterator, PortionMap::const_iterator > aRange2 = equal_range( j );
+        aRange1 = equal_range( aRange1.first, aPortionMap.begin() + aPortionMap.size(), i );
+        // start the search for this one from where the first search ended.
+        std::pair< PortionMap::const_iterator, PortionMap::const_iterator > aRange2
+            = equal_range( aRange1.second, aPortionMap.begin() + aPortionMap.size(), j );
 
         MergeResult eMerge = lcl_Compare_Attributes(i, j, aRange1, aRange2, RsidOnlyAutoFormatFlagMap);
 
@@ -2830,7 +2844,7 @@ bool SwpHints::MergePortions( SwTextNode& rNode )
             ++j;
 
             // change all attributes with key i
-            aRange1 = equal_range( i );
+            aRange1 = equal_range( aRange1.first, aPortionMap.begin() + aPortionMap.size(), i );
             for ( auto aIter1 = aRange1.first; aIter1 != aRange1.second; ++aIter1 )
             {
                 SwTextAttr *const p1 = aIter1->pTextAttr;
@@ -2969,18 +2983,22 @@ static MergeResult lcl_Compare_Attributes(
                     pItem1 = iter1.NextItem();
                 if (pItem2 && pItem2->Which() == RES_CHRATR_RSID)
                     pItem2 = iter2.NextItem();
-                if (!pItem1 && !pItem2)
+
+                if (nullptr == pItem1 && nullptr == pItem2)
                 {
                     eMerge = DIFFER_ONLY_RSID;
                     break;
                 }
-                if (!pItem1 || !pItem2)
+
+                if (nullptr == pItem1 || nullptr == pItem2)
                 {
+                    // one ptr is nullptr, not both, that would
+                    // have triggered above
                     return DIFFER;
                 }
-                if (pItem1 != pItem2) // all are poolable
+
+                if (!SfxPoolItem::areSame(*pItem1, *pItem2))
                 {
-                    assert(IsInvalidItem(pItem1) || IsInvalidItem(pItem2) || pItem1->Which() != pItem2->Which() || *pItem1 != *pItem2);
                     return DIFFER;
                 }
                 pItem1 = iter1.NextItem();
@@ -3470,7 +3488,7 @@ void SwTextNode::ClearSwpHintsArr( bool bDelFields )
 }
 
 LanguageType SwTextNode::GetLang( const sal_Int32 nBegin, const sal_Int32 nLen,
-                           sal_uInt16 nScript ) const
+                           sal_uInt16 nScript, bool const bNoneIfNoHyphenation ) const
 {
     LanguageType nRet = LANGUAGE_DONTKNOW;
 
@@ -3480,7 +3498,9 @@ LanguageType SwTextNode::GetLang( const sal_Int32 nBegin, const sal_Int32 nLen,
     }
 
     // #i91465# Consider nScript if pSwpHints == 0
-    const sal_uInt16 nWhichId = GetWhichOfScript( RES_CHRATR_LANGUAGE, nScript );
+    const sal_uInt16 nWhichId = bNoneIfNoHyphenation
+            ? RES_CHRATR_NOHYPHEN
+            : GetWhichOfScript( RES_CHRATR_LANGUAGE, nScript );
 
     if ( HasHints() )
     {
@@ -3515,6 +3535,16 @@ LanguageType SwTextNode::GetLang( const sal_Int32 nBegin, const sal_Int32 nLen,
                         continue;
                 }
                 const SfxPoolItem* pItem = CharFormat::GetItem( *pHt, nWhichId );
+
+                if ( RES_CHRATR_NOHYPHEN == nWhichId )
+                {
+                   // bNoneIfNoHyphenation = true: return with LANGUAGE_NONE,
+                   // if the hyphenation is disabled by character formatting
+                   if  ( static_cast<const SvxNoHyphenItem*>(pItem)->GetValue() )
+                       return LANGUAGE_NONE;
+                   continue;
+                }
+
                 const LanguageType nLng = static_cast<const SvxLanguageItem*>(pItem)->GetLanguage();
 
                 // does the attribute completely cover the range?
@@ -3525,7 +3555,7 @@ LanguageType SwTextNode::GetLang( const sal_Int32 nBegin, const sal_Int32 nLen,
             }
         }
     }
-    if( LANGUAGE_DONTKNOW == nRet )
+    if( LANGUAGE_DONTKNOW == nRet && !bNoneIfNoHyphenation )
     {
         nRet = static_cast<const SvxLanguageItem&>(GetSwAttrSet().Get( nWhichId )).GetLanguage();
         if( LANGUAGE_DONTKNOW == nRet )

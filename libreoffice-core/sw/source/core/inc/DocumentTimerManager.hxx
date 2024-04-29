@@ -20,6 +20,8 @@
 #ifndef INCLUDED_SW_SOURCE_CORE_INC_DOCUMENTTIMERMANAGER_HXX
 #define INCLUDED_SW_SOURCE_CORE_INC_DOCUMENTTIMERMANAGER_HXX
 
+// MACRO:
+#include "osl/interlck.h"
 #include <IDocumentTimerAccess.hxx>
 #include <SwDocIdle.hxx>
 
@@ -55,13 +57,13 @@ public:
 
     bool IsDocIdle() const override;
 
+    // MACRO:
+    void MarkLOKInitialized() override;
+
 private:
     DocumentTimerManager(DocumentTimerManager const&) = delete;
     DocumentTimerManager& operator=(DocumentTimerManager const&) = delete;
 
-    /// Delay starting idle jobs to allow for post-load activity.
-    /// Used by LOK only.
-    DECL_LINK(FireIdleJobsTimeout, Timer*, void);
 
     DECL_LINK(DoIdleJobs, Timer*, void);
 
@@ -69,7 +71,8 @@ private:
 
     SwDoc& m_rDoc;
 
-    sal_uInt32 m_nIdleBlockCount; ///< Don't run the Idle, if > 0
+    // MACRO:
+    oslInterlockedCount m_nIdleBlockCount; ///< Don't run the Idle, if > 0
     bool m_bStartOnUnblock; ///< true, if the last unblock should start the timer
     SwDocIdle m_aDocIdle;
     Timer m_aFireIdleJobsTimer;

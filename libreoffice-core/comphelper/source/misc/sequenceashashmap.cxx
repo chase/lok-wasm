@@ -49,7 +49,7 @@ uno::Any jsonToUnoAny(const boost::property_tree::ptree& aTree)
     uno::Sequence<uno::Reference<reflection::XIdlField>> aFields;
     uno::Reference<reflection::XIdlClass> xIdlClass
         = css::reflection::theCoreReflection::get(comphelper::getProcessComponentContext())
-              ->forName(OUString::fromUtf8(rType.c_str()));
+              ->forName(OUString::fromUtf8(rType));
     if (xIdlClass.is())
     {
         uno::TypeClass aTypeClass = xIdlClass->getTypeClass();
@@ -77,7 +77,7 @@ uno::Any jsonToUnoAny(const boost::property_tree::ptree& aTree)
             else if (aTypeClass == uno::TypeClass_BYTE)
                 aAny <<= static_cast<sal_Int8>(o3tl::toInt32(rValue));
             else if (aTypeClass == uno::TypeClass_BOOLEAN)
-                aAny <<= OString(rValue.c_str()).toBoolean();
+                aAny <<= OString(rValue).toBoolean();
             else if (aTypeClass == uno::TypeClass_SHORT)
                 aAny <<= static_cast<sal_Int16>(o3tl::toInt32(rValue));
             else if (aTypeClass == uno::TypeClass_UNSIGNED_SHORT)
@@ -87,11 +87,11 @@ uno::Any jsonToUnoAny(const boost::property_tree::ptree& aTree)
             else if (aTypeClass == uno::TypeClass_UNSIGNED_LONG)
                 aAny <<= static_cast<sal_uInt32>(o3tl::toInt32(rValue));
             else if (aTypeClass == uno::TypeClass_FLOAT)
-                aAny <<= OString(rValue.c_str()).toFloat();
+                aAny <<= OString(rValue).toFloat();
             else if (aTypeClass == uno::TypeClass_DOUBLE)
                 aAny <<= o3tl::toDouble(rValue);
             else if (aTypeClass == uno::TypeClass_STRING)
-                aAny <<= OUString::fromUtf8(rValue.c_str());
+                aAny <<= OUString::fromUtf8(rValue);
         }
     }
     return aAny;
@@ -312,7 +312,7 @@ std::vector<css::beans::PropertyValue> JsonToPropertyValues(const OString& rJson
 {
     std::vector<beans::PropertyValue> aArguments;
     boost::property_tree::ptree aTree, aNodeNull, aNodeValue;
-    std::stringstream aStream(rJson.getStr());
+    std::stringstream aStream((std::string(rJson)));
     boost::property_tree::read_json(aStream, aTree);
 
     for (const auto& rPair : aTree)
@@ -321,13 +321,13 @@ std::vector<css::beans::PropertyValue> JsonToPropertyValues(const OString& rJson
         const std::string& rValue = rPair.second.get<std::string>("value", "");
 
         beans::PropertyValue aValue;
-        aValue.Name = OUString::fromUtf8(rPair.first.c_str());
+        aValue.Name = OUString::fromUtf8(rPair.first);
         if (rType == "string")
-            aValue.Value <<= OUString::fromUtf8(rValue.c_str());
+            aValue.Value <<= OUString::fromUtf8(rValue);
         else if (rType == "boolean")
-            aValue.Value <<= OString(rValue.c_str()).toBoolean();
+            aValue.Value <<= OString(rValue).toBoolean();
         else if (rType == "float")
-            aValue.Value <<= OString(rValue.c_str()).toFloat();
+            aValue.Value <<= OString(rValue).toFloat();
         else if (rType == "long")
             aValue.Value <<= o3tl::toInt32(rValue);
         else if (rType == "short")
@@ -341,7 +341,7 @@ std::vector<css::beans::PropertyValue> JsonToPropertyValues(const OString& rJson
         else if (rType == "int16")
             aValue.Value <<= sal_Int16(o3tl::toInt32(rValue));
         else if (rType == "uint64")
-            aValue.Value <<= OString(rValue.c_str()).toUInt64();
+            aValue.Value <<= OString(rValue).toUInt64();
         else if (rType == "uint32")
             aValue.Value <<= o3tl::toUInt32(rValue);
         else if (rType == "uint16")
@@ -356,6 +356,21 @@ std::vector<css::beans::PropertyValue> JsonToPropertyValues(const OString& rJson
                 aValue.Value <<= aSeqByte;
             }
         }
+        // MACRO: uno batch track changes {
+        else if (rType == "[]uint32")
+        {
+            aNodeValue = rPair.second.get_child("value", aNodeNull);
+            if (aNodeValue != aNodeNull && !aNodeValue.empty())
+            {
+                std::vector<sal_uInt32> aSeqUint32;
+                for (const auto& item : aNodeValue)
+                {
+                    aSeqUint32.push_back(item.second.get_value<sal_uInt32>());
+                }
+                aValue.Value <<= comphelper::containerToSequence(aSeqUint32);
+            }
+        }
+        // MACRO: }
         else if (rType == "[]any")
         {
             aNodeValue = rPair.second.get_child("value", aNodeNull);
@@ -372,7 +387,7 @@ std::vector<css::beans::PropertyValue> JsonToPropertyValues(const OString& rJson
             aNodeValue = rPair.second.get_child("value", aNodeNull);
             std::stringstream s;
             boost::property_tree::write_json(s, aNodeValue);
-            std::vector<beans::PropertyValue> aPropertyValues = JsonToPropertyValues(s.str().c_str());
+            std::vector<beans::PropertyValue> aPropertyValues = JsonToPropertyValues(OString(s.str()));
             aValue.Value <<= comphelper::containerToSequence(aPropertyValues);
         }
         else if (rType == "[][]com.sun.star.beans.PropertyValue")
@@ -383,7 +398,7 @@ std::vector<css::beans::PropertyValue> JsonToPropertyValues(const OString& rJson
             {
                 std::stringstream s;
                 boost::property_tree::write_json(s, rItem.second);
-                std::vector<beans::PropertyValue> aPropertyValues = JsonToPropertyValues(s.str().c_str());
+                std::vector<beans::PropertyValue> aPropertyValues = JsonToPropertyValues(OString(s.str()));
                 aSeqs.push_back(comphelper::containerToSequence(aPropertyValues));
             }
             aValue.Value <<= comphelper::containerToSequence(aSeqs);

@@ -34,20 +34,21 @@ namespace beans
 class XPropertySet;
 }
 }
+class SmModel;
 
 typedef std::deque<std::unique_ptr<SmNode>> SmNodeStack;
 
 class SmXMLImportWrapper
 {
-    css::uno::Reference<css::frame::XModel> xModel;
+    rtl::Reference<SmModel> m_xModel;
 
 private:
     // Use customized entities
     bool m_bUseHTMLMLEntities;
 
 public:
-    explicit SmXMLImportWrapper(css::uno::Reference<css::frame::XModel> xRef)
-        : xModel(std::move(xRef))
+    explicit SmXMLImportWrapper(rtl::Reference<SmModel> xRef)
+        : m_xModel(std::move(xRef))
         , m_bUseHTMLMLEntities(false)
     {
     }
@@ -77,16 +78,12 @@ class SmXMLImport final : public SvXMLImport
     bool bSuccess;
     int nParseDepth;
     OUString aText;
-    sal_uInt16 mnSmSyntaxVersion;
+    sal_Int16 mnSmSyntaxVersion;
 
 public:
     SmXMLImport(const css::uno::Reference<css::uno::XComponentContext>& rContext,
                 OUString const& implementationName, SvXMLImportFlags nImportFlags);
     virtual ~SmXMLImport() noexcept override;
-
-    // XUnoTunnel
-    sal_Int64 SAL_CALL getSomething(const css::uno::Sequence<sal_Int8>& rId) override;
-    static const css::uno::Sequence<sal_Int8>& getUnoTunnelId() noexcept;
 
     void SAL_CALL endDocument() override;
 
@@ -108,8 +105,8 @@ public:
     void IncParseDepth() { ++nParseDepth; }
     bool TooDeep() const { return nParseDepth >= 2048; }
     void DecParseDepth() { --nParseDepth; }
-    void SetSmSyntaxVersion(sal_uInt16 nSmSyntaxVersion) { mnSmSyntaxVersion = nSmSyntaxVersion; }
-    sal_uInt16 GetSmSyntaxVersion() const { return mnSmSyntaxVersion; }
+    void SetSmSyntaxVersion(sal_Int16 nSmSyntaxVersion) { mnSmSyntaxVersion = nSmSyntaxVersion; }
+    sal_Int16 GetSmSyntaxVersion() const { return mnSmSyntaxVersion; }
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

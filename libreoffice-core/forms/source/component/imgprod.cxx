@@ -27,6 +27,7 @@
 #include <vcl/svapp.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <cppuhelper/queryinterface.hxx>
+#include <cppuhelper/supportsservice.hxx>
 #include <com/sun/star/awt/ImageStatus.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
 
@@ -176,6 +177,7 @@ css::uno::Any ImageProducer::queryInterface( const css::uno::Type & rType )
 {
     css::uno::Any aRet = ::cppu::queryInterface( rType,
                                         static_cast< css::lang::XInitialization* >(this),
+                                        static_cast< css::lang::XServiceInfo* >(this),
                                         static_cast< css::awt::XImageProducer* >(this) );
     return (aRet.hasValue() ? aRet : OWeakObject::queryInterface( rType ));
 }
@@ -359,13 +361,15 @@ void ImageProducer::ImplUpdateConsumer( const Graphic& rGraphic )
 {
     BitmapEx            aBmpEx( rGraphic.GetBitmapEx() );
     Bitmap              aBmp( aBmpEx.GetBitmap() );
-    BitmapReadAccess*   pBmpAcc = aBmp.AcquireReadAccess();
+    BitmapScopedReadAccess pBmpAcc(aBmp);
 
     if( !pBmpAcc )
         return;
 
-    Bitmap              aMask( aBmpEx.GetAlpha() );
-    BitmapReadAccess*   pMskAcc = !aMask.IsEmpty() ? aMask.AcquireReadAccess() : nullptr;
+    AlphaMask              aMask( aBmpEx.GetAlphaMask() );
+    BitmapScopedReadAccess pMskAcc;
+    if (!aMask.IsEmpty())
+        pMskAcc = aMask;
     const tools::Long          nWidth = pBmpAcc->Width();
     const tools::Long          nHeight = pBmpAcc->Height();
     const tools::Long          nStartX = 0;
@@ -377,9 +381,9 @@ void ImageProducer::ImplUpdateConsumer( const Graphic& rGraphic )
 
     if( !pMskAcc )
     {
-        aMask = Bitmap(aBmp.GetSizePixel(), vcl::PixelFormat::N1_BPP);
-        aMask.Erase( COL_BLACK );
-        pMskAcc = aMask.AcquireReadAccess();
+        aMask = AlphaMask(aBmp.GetSizePixel());
+        aMask.Erase( 0 );
+        pMskAcc = aMask;
     }
 
     // create temporary list to hold interfaces
@@ -387,7 +391,7 @@ void ImageProducer::ImplUpdateConsumer( const Graphic& rGraphic )
 
     if( pBmpAcc->HasPalette() )
     {
-        const BitmapColor aWhite( pMskAcc->GetBestMatchingColor( COL_WHITE ) );
+        const BitmapColor aWhite( pMskAcc->GetBestMatchingColor( COL_ALPHA_TRANSPARENT ) );
 
         if( mnTransIndex < 256 )
         {
@@ -462,9 +466,6 @@ void ImageProducer::ImplUpdateConsumer( const Graphic& rGraphic )
         for (auto const& elem : aTmp)
             elem->setPixelsByLongs( nStartX, nStartY, nPartWidth, nPartHeight, aData, 0UL, nPartWidth );
     }
-
-    Bitmap::ReleaseAccess( pBmpAcc );
-    Bitmap::ReleaseAccess( pMskAcc );
 }
 
 
@@ -479,6 +480,18 @@ void ImageProducer::initialize( const css::uno::Sequence< css::uno::Any >& aArgu
             SetImage( aURL );
         }
     }
+}
+
+OUString ImageProducer::getImplementationName() {
+    return "com.sun.star.form.ImageProducer";
+}
+
+sal_Bool ImageProducer::supportsService(OUString const & ServiceName) {
+    return cppu::supportsService(this, ServiceName);
+}
+
+css::uno::Sequence<OUString> ImageProducer::getSupportedServiceNames() {
+    return {"com.sun.star.awt.ImageProducer"};
 }
 
 

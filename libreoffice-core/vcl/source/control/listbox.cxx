@@ -661,8 +661,8 @@ tools::Long ListBox::GetIndexForPoint( const Point& rPoint, sal_Int32& rPos ) co
 
         // Convert coordinates to ImplListBoxWindow pixel coordinate space
         Point aConvPoint = LogicToPixel( rPoint );
-        aConvPoint = OutputToAbsoluteScreenPixel( aConvPoint );
-        aConvPoint = rMain->AbsoluteScreenToOutputPixel( aConvPoint );
+        AbsoluteScreenPixelPoint aConvPointAbs = OutputToAbsoluteScreenPixel( aConvPoint );
+        aConvPoint = rMain->AbsoluteScreenToOutputPixel( aConvPointAbs );
         aConvPoint = rMain->PixelToLogic( aConvPoint );
 
         // Try to find entry
@@ -674,8 +674,8 @@ tools::Long ListBox::GetIndexForPoint( const Point& rPoint, sal_Int32& rPos ) co
             {
                 // Convert to impl window pixel coordinates
                 aConvPoint = LogicToPixel( rPoint );
-                aConvPoint = OutputToAbsoluteScreenPixel( aConvPoint );
-                aConvPoint = mpImplWin->AbsoluteScreenToOutputPixel( aConvPoint );
+                aConvPointAbs = OutputToAbsoluteScreenPixel( aConvPoint );
+                aConvPoint = mpImplWin->AbsoluteScreenToOutputPixel( aConvPointAbs );
 
                 // Check whether converted point is inside impl window
                 Size aImplWinSize = mpImplWin->GetOutputSizePixel();
@@ -771,17 +771,9 @@ void ListBox::StateChanged( StateChangedType nType )
         mpImplLB->SetControlBackground( GetControlBackground() );
         if ( mpImplWin )
         {
-            if ( mpImplWin->IsNativeControlSupported(ControlType::Listbox, ControlPart::Entire) )
-            {
-                // Transparent background
-                mpImplWin->SetBackground();
-                mpImplWin->SetControlBackground();
-            }
-            else
-            {
-                mpImplWin->SetBackground( mpImplLB->GetMainWindow()->GetControlBackground() );
-                mpImplWin->SetControlBackground( mpImplLB->GetMainWindow()->GetControlBackground() );
-            }
+
+            mpImplWin->SetBackground( GetControlBackground() );
+            mpImplWin->SetControlBackground( GetControlBackground() );
             mpImplWin->SetFont( mpImplLB->GetMainWindow()->GetFont() );
             mpImplWin->Invalidate();
         }
@@ -875,12 +867,14 @@ bool ListBox::PreNotify( NotifyEvent& rNEvt )
                   (rNEvt.GetCommandEvent()->GetCommand() == CommandEventId::Wheel) &&
                   (rNEvt.GetWindow() == mpImplWin) )
         {
+            const Point& rMousePos = rNEvt.GetCommandEvent()->GetMousePosPixel();
+            const tools::Rectangle aWinRect(mpImplWin->GetPosPixel(), mpImplWin->GetSizePixel());
+            const bool bMousePositionedOverWin = aWinRect.Contains(rMousePos);
+
             MouseWheelBehaviour nWheelBehavior( GetSettings().GetMouseSettings().GetWheelBehavior() );
-            if  (   ( nWheelBehavior == MouseWheelBehaviour::ALWAYS )
-                ||  (   ( nWheelBehavior == MouseWheelBehaviour::FocusOnly )
-                    &&  HasChildPathFocus()
-                    )
-                )
+            if (bMousePositionedOverWin
+                && ((nWheelBehavior == MouseWheelBehaviour::ALWAYS)
+                    || ((nWheelBehavior == MouseWheelBehaviour::FocusOnly) && HasChildPathFocus())))
             {
                 bDone = mpImplLB->HandleWheelAsCursorTravel(*rNEvt.GetCommandEvent(), *this);
             }
@@ -1129,7 +1123,7 @@ bool ListBox::IsInDropDown() const
 tools::Rectangle ListBox::GetBoundingRectangle( sal_Int32 nItem ) const
 {
     tools::Rectangle aRect = mpImplLB->GetMainWindow()->GetBoundingRectangle( nItem );
-    tools::Rectangle aOffset = mpImplLB->GetMainWindow()->GetWindowExtentsRelative( static_cast<vcl::Window*>(const_cast<ListBox *>(this)) );
+    tools::Rectangle aOffset = mpImplLB->GetMainWindow()->GetWindowExtentsRelative( *static_cast<vcl::Window*>(const_cast<ListBox *>(this)) );
     aRect.Move( aOffset.Left(), aOffset.Top() );
     return aRect;
 }
@@ -1383,7 +1377,7 @@ sal_uInt16 ListBox::GetDisplayLineCount() const
 
 tools::Rectangle ListBox::GetDropDownPosSizePixel() const
 {
-    return mpFloatWin ? mpFloatWin->GetWindowExtentsRelative(this) : tools::Rectangle();
+    return mpFloatWin ? mpFloatWin->GetWindowExtentsRelative(*this) : tools::Rectangle();
 }
 
 const Wallpaper& ListBox::GetDisplayBackground() const
@@ -1402,7 +1396,7 @@ void ListBox::setMaxWidthChars(sal_Int32 nWidth)
     }
 }
 
-bool ListBox::set_property(const OString &rKey, const OUString &rValue)
+bool ListBox::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "active")
         SelectEntryPos(rValue.toInt32());

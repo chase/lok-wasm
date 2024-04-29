@@ -18,25 +18,30 @@
  */
 
 #include <standard/svtaccessiblenumericfield.hxx>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <toolkit/awt/vclxwindows.hxx>
 
+#include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 
 using namespace ::com::sun::star::accessibility;
 using namespace ::comphelper;
 
 SVTXAccessibleNumericField::SVTXAccessibleNumericField(VCLXWindow* pVCLWindow)
-    : VCLXAccessibleEdit(pVCLWindow)
+    : ImplInheritanceHelper(pVCLWindow)
 {
 }
 
-// XInterface
-IMPLEMENT_FORWARD_XINTERFACE2(SVTXAccessibleNumericField, VCLXAccessibleTextComponent,
-                              SVTXAccessibleNumericField_BASE)
+void SVTXAccessibleNumericField::ProcessWindowEvent(const VclWindowEvent& rVclWindowEvent)
+{
+    VCLXAccessibleEdit::ProcessWindowEvent(rVclWindowEvent);
 
-// XTypeProvider
-IMPLEMENT_FORWARD_XTYPEPROVIDER2(SVTXAccessibleNumericField, VCLXAccessibleTextComponent,
-                                 SVTXAccessibleNumericField_BASE)
+    if (rVclWindowEvent.GetId() == VclEventId::EditModify)
+    {
+        css::uno::Any aNewValue = getCurrentValue();
+        NotifyAccessibleEvent(AccessibleEventId::VALUE_CHANGED, css::uno::Any(), aNewValue);
+    }
+}
 
 sal_Int16 SVTXAccessibleNumericField::getAccessibleRole() { return AccessibleRole::SPIN_BOX; }
 

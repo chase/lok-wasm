@@ -54,6 +54,8 @@ export type DocumentMethods = {
   close(): void;
   /** returns a copy of the document in the provided `format` */
   save(format: 'docx' | 'pdf'): ArrayBuffer;
+  /** returns the id of the new view created */
+  newView(): number;
   /** returns the number of pages */
   parts(): number;
   /** returns the rectangles of each page in twips (1/12 pt) */
@@ -146,7 +148,7 @@ export type DocumentClientBase = {
   readonly viewId: ViewId;
   on(type: CallbackType, handler: CallbackHandler): void;
   off(type: CallbackType, handler: CallbackHandler): void;
-  newView(): DocumentClient;
+  newView(): Promise<DocumentClient | null>;
 };
 export type DocumentClient<
   E extends { [k: string]: (...args: any) => any } = {},

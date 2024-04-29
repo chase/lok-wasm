@@ -19,9 +19,10 @@
 
 #include <DrawViewWrapper.hxx>
 #include <chartview/DrawModelWrapper.hxx>
-#include <ConfigurationAccess.hxx>
 
 #include <unotools/lingucfg.hxx>
+#include <unotools/syslocale.hxx>
+#include <unotools/localedatawrapper.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/langitem.hxx>
 #include <svl/intitem.hxx>
@@ -41,6 +42,7 @@
 #include <sfx2/objsh.hxx>
 #include <sfx2/viewsh.hxx>
 #include <svx/helperhittest3d.hxx>
+#include <officecfg/Office/Calc.hxx>
 
 using namespace ::com::sun::star;
 
@@ -80,7 +82,6 @@ DrawViewWrapper::DrawViewWrapper(
 {
     SetBufferedOutputAllowed(true);
     SetBufferedOverlayAllowed(true);
-    SetPagePaintingAllowed(true);
 
     // #i12587# support for shapes in chart
     SdrOutliner* pOutliner = getOutliner();
@@ -123,7 +124,7 @@ void DrawViewWrapper::ReInit()
     tools::Rectangle aRect(Point(0,0), aOutputSize);
     SetWorkArea(aRect);
 
-    ShowSdrPage(GetModel()->GetPage(0));
+    ShowSdrPage(GetModel().GetPage(0));
 }
 
 DrawViewWrapper::~DrawViewWrapper()
@@ -222,7 +223,7 @@ void DrawViewWrapper::CompleteRedraw(OutputDevice* pOut, const vcl::Region& rReg
     }
     SetApplicationBackgroundColor(aFillColor);
 
-    SdrOutliner& rOutliner = GetModel()->GetDrawOutliner();
+    SdrOutliner& rOutliner = GetModel().GetDrawOutliner();
     Color aOldBackColor = rOutliner.GetBackgroundColor();
     rOutliner.SetBackgroundColor(aFillColor);
 
@@ -269,8 +270,16 @@ SdrOutliner* DrawViewWrapper::getOutliner() const
 
 SfxItemSet DrawViewWrapper::getPositionAndSizeItemSetFromMarkedObject() const
 {
+    SvtSysLocale aSysLocale;
+    MeasurementSystem eSys = aSysLocale.GetLocaleData().getMeasurementSystemEnum();
+    sal_uInt16 nAttrMetric;
+    if( eSys == MeasurementSystem::Metric )
+        nAttrMetric = officecfg::Office::Calc::Layout::Other::MeasureUnit::Metric::get();
+    else
+        nAttrMetric = officecfg::Office::Calc::Layout::Other::MeasureUnit::NonMetric::get();
+
     SfxItemSet aFullSet(
-        GetModel()->GetItemPool(),
+        GetModel().GetItemPool(),
         svl::Items<
             SDRATTR_CORNER_RADIUS, SDRATTR_CORNER_RADIUS,
             SID_ATTR_TRANSFORM_POS_X, SID_ATTR_TRANSFORM_ANGLE,
@@ -278,7 +287,7 @@ SfxItemSet DrawViewWrapper::getPositionAndSizeItemSetFromMarkedObject() const
             SID_ATTR_METRIC, SID_ATTR_METRIC>);
     SfxItemSet aGeoSet( E3dView::GetGeoAttrFromMarked() );
     aFullSet.Put( aGeoSet );
-    aFullSet.Put( SfxUInt16Item(SID_ATTR_METRIC,static_cast< sal_uInt16 >( ConfigurationAccess::getFieldUnit())));
+    aFullSet.Put( SfxUInt16Item(SID_ATTR_METRIC, nAttrMetric) );
     return aFullSet;
 }
 
@@ -307,8 +316,8 @@ bool DrawViewWrapper::IsObjectHit( SdrObject const * pObj, const Point& rPnt )
 void DrawViewWrapper::Notify(SfxBroadcaster& rBC, const SfxHint& rHint)
 {
     //prevent wrong reselection of objects
-    SdrModel* pSdrModel( GetModel() );
-    if( pSdrModel && pSdrModel->isLocked() )
+    SdrModel& rSdrModel = GetModel();
+    if (rSdrModel.isLocked())
         return;
 
     const SdrHint* pSdrHint = ( rHint.GetId() == SfxHintId::ThisIsAnSdrHint ? static_cast<const SdrHint*>(&rHint) : nullptr );

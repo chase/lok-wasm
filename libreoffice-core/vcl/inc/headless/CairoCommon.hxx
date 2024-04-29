@@ -20,63 +20,33 @@
 #pragma once
 
 #include <sal/config.h>
-#include <config_features.h>
-#include <config_cairo_rgba.h>
 
 #include <cairo.h>
 
 #include <vcl/dllapi.h>
 #include <vcl/region.hxx>
 #include <vcl/salgtype.hxx>
+#include <vcl/vclenum.hxx>
 #include <vcl/BitmapBuffer.hxx>
 
 #include <com/sun/star/drawing/LineCap.hpp>
 
 #include <basegfx/utils/systemdependentdata.hxx>
 #include <basegfx/range/b2drange.hxx>
-#include <basegfx/range/b2irange.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
 
+#include <optional>
 #include <unordered_map>
-
-// Using formats that match cairo's formats.
-// SVP_24BIT_FORMAT is used to store 24-bit images in 3-byte pixels to conserve memory.
-
-/*
- For internal cairo we have the option --enable-cairo-rgba which is potentially
- useful for Andoid or Online to switch the rgb components. For Android cairo then
- matches the OpenGL GL_RGBA format so we can use it there where we don't have
- GL_BGRA support. Similarly for Online we can then use cairo's pixel data
- without needing to swizzle it for use as a canvas ImageData.
-*/
-#if ENABLE_CAIRO_RGBA
-#define SVP_24BIT_FORMAT (ScanlineFormat::N24BitTcRgb | ScanlineFormat::TopDown)
-#define SVP_CAIRO_FORMAT (ScanlineFormat::N32BitTcRgba | ScanlineFormat::TopDown)
-#define SVP_CAIRO_BLUE 1
-#define SVP_CAIRO_GREEN 2
-#define SVP_CAIRO_RED 0
-#define SVP_CAIRO_ALPHA 3
-#elif defined OSL_BIGENDIAN
-#define SVP_24BIT_FORMAT (ScanlineFormat::N24BitTcRgb | ScanlineFormat::TopDown)
-#define SVP_CAIRO_FORMAT (ScanlineFormat::N32BitTcArgb | ScanlineFormat::TopDown)
-#define SVP_CAIRO_BLUE 3
-#define SVP_CAIRO_GREEN 2
-#define SVP_CAIRO_RED 1
-#define SVP_CAIRO_ALPHA 0
-#else
-#define SVP_24BIT_FORMAT (ScanlineFormat::N24BitTcBgr | ScanlineFormat::TopDown)
-#define SVP_CAIRO_FORMAT (ScanlineFormat::N32BitTcBgra | ScanlineFormat::TopDown)
-#define SVP_CAIRO_BLUE 0
-#define SVP_CAIRO_GREEN 1
-#define SVP_CAIRO_RED 2
-#define SVP_CAIRO_ALPHA 3
-#endif
 
 typedef struct _cairo cairo_t;
 typedef struct _cairo_surface cairo_surface_t;
 typedef struct _cairo_user_data_key cairo_user_data_key_t;
+
+class Gradient;
+class SalBitmap;
+struct SalGradient;
 
 VCL_DLLPUBLIC void dl_cairo_surface_set_device_scale(cairo_surface_t* surface, double x_scale,
                                                      double y_scale);
@@ -89,7 +59,7 @@ VCL_DLLPUBLIC basegfx::B2DRange getClippedFillDamage(cairo_t* cr);
 VCL_DLLPUBLIC basegfx::B2DRange getClippedStrokeDamage(cairo_t* cr);
 VCL_DLLPUBLIC basegfx::B2DRange getStrokeDamage(cairo_t* cr);
 
-class SystemDependentData_CairoPath : public basegfx::SystemDependentData
+class SystemDependentData_CairoPath final : public basegfx::SystemDependentData
 {
 private:
     // the path data itself
@@ -119,20 +89,24 @@ VCL_DLLPUBLIC size_t AddPolygonToPath(cairo_t* cr, const basegfx::B2DPolygon& rP
                                       const basegfx::B2DHomMatrix& rObjectToDevice, bool bPixelSnap,
                                       bool bPixelSnapHairline);
 
-VCL_DLLPUBLIC basegfx::B2DPoint impPixelSnap(const basegfx::B2DPolygon& rPolygon,
-                                             const basegfx::B2DHomMatrix& rObjectToDevice,
-                                             basegfx::B2DHomMatrix& rObjectToDeviceInv,
-                                             sal_uInt32 nIndex);
+class VCL_DLLPUBLIC PixelSnapper
+{
+public:
+    basegfx::B2DPoint snap(const basegfx::B2DPolygon& rPolygon,
+                           const basegfx::B2DHomMatrix& rObjectToDevice,
+                           basegfx::B2DHomMatrix& rObjectToDeviceInv, sal_uInt32 nIndex);
+
+private:
+    basegfx::B2DPoint maPrevPoint, maCurrPoint, maNextPoint;
+    basegfx::B2ITuple maPrevTuple, maCurrTuple, maNextTuple;
+};
 
 VCL_DLLPUBLIC void add_polygon_path(cairo_t* cr, const basegfx::B2DPolyPolygon& rPolyPolygon,
                                     const basegfx::B2DHomMatrix& rObjectToDevice, bool bPixelSnap);
 
 VCL_DLLPUBLIC cairo_format_t getCairoFormat(const BitmapBuffer& rBuffer);
 
-VCL_DLLPUBLIC std::unique_ptr<BitmapBuffer>
-FastConvert24BitRgbTo32BitCairo(const BitmapBuffer* pSrc);
-
-VCL_DLLPUBLIC void Toggle1BitTransparency(const BitmapBuffer& rBuf);
+VCL_DLLPUBLIC std::optional<BitmapBuffer> FastConvert24BitRgbTo32BitCairo(const BitmapBuffer* pSrc);
 
 enum class PaintMode
 {
@@ -154,15 +128,15 @@ struct VCL_DLLPUBLIC CairoCommon
     cairo_surface_t* m_pSurface;
     basegfx::B2IVector m_aFrameSize;
     vcl::Region m_aClipRegion;
-    Color m_aLineColor;
-    Color m_aFillColor;
+    std::optional<Color> m_oLineColor;
+    std::optional<Color> m_oFillColor;
     PaintMode m_ePaintMode;
     double m_fScale;
 
     CairoCommon()
         : m_pSurface(nullptr)
-        , m_aLineColor(Color(0x00, 0x00, 0x00))
-        , m_aFillColor(Color(0xFF, 0xFF, 0XFF))
+        , m_oLineColor(Color(0x00, 0x00, 0x00))
+        , m_oFillColor(Color(0xFF, 0xFF, 0XFF))
         , m_ePaintMode(PaintMode::Over)
         , m_fScale(1.0)
     {
@@ -172,25 +146,56 @@ struct VCL_DLLPUBLIC CairoCommon
 
     cairo_surface_t* getSurface() const { return m_pSurface; }
 
+    sal_uInt16 GetBitCount() const;
+
     cairo_t* getCairoContext(bool bXorModeAllowed, bool bAntiAlias) const;
     void releaseCairoContext(cairo_t* cr, bool bXorModeAllowed,
                              const basegfx::B2DRange& rExtents) const;
 
     cairo_t* createTmpCompatibleCairoContext() const;
 
-    void applyColor(cairo_t* cr, Color rColor, double fTransparency = 0.0);
+    static void applyColor(cairo_t* cr, Color rColor, double fTransparency = 0.0);
     void clipRegion(cairo_t* cr);
     static void clipRegion(cairo_t* cr, const vcl::Region& rClipRegion);
 
-    // need this static version of ::drawPolyLine for usage from
-    // vcl/unx/generic/gdi/salgdi.cxx. It gets wrapped by
-    // ::drawPolyLine with some added parameters (see there)
-    static bool drawPolyLine(cairo_t* cr, basegfx::B2DRange* pExtents, const Color& rLineColor,
-                             bool bAntiAlias, const basegfx::B2DHomMatrix& rObjectToDevice,
-                             const basegfx::B2DPolygon& rPolyLine, double fTransparency,
-                             double fLineWidth, const std::vector<double>* pStroke,
-                             basegfx::B2DLineJoin eLineJoin, css::drawing::LineCap eLineCap,
-                             double fMiterMinimumAngle, bool bPixelSnapHairline);
+    void SetXORMode(bool bSet, bool bInvertOnly);
+    void SetROPLineColor(SalROPColor nROPColor);
+    void SetROPFillColor(SalROPColor nROPColor);
+
+    void drawPixel(const std::optional<Color>& rLineColor, tools::Long nX, tools::Long nY,
+                   bool bAntiAlias);
+
+    static Color getPixel(cairo_surface_t* pSurface, tools::Long nX, tools::Long nY);
+
+    void drawLine(tools::Long nX1, tools::Long nY1, tools::Long nX2, tools::Long nY2,
+                  bool bAntiAlias);
+
+    void drawRect(double nX, double nY, double nWidth, double nHeight, bool bAntiAlias);
+
+    void drawPolygon(sal_uInt32 nPoints, const Point* pPtAry, bool bAntiAlias);
+
+    void drawPolyPolygon(sal_uInt32 nPoly, const sal_uInt32* pPoints, const Point** pPtAry,
+                         bool bAntiAlias);
+
+    void drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
+                         const basegfx::B2DPolyPolygon&, double fTransparency, bool bAntiAlias);
+
+    void drawPolyLine(sal_uInt32 nPoints, const Point* pPtAry, bool bAntiAlias);
+
+    bool drawPolyLine(const basegfx::B2DHomMatrix& rObjectToDevice,
+                      const basegfx::B2DPolygon& rPolyLine, double fTransparency, double fLineWidth,
+                      const std::vector<double>* pStroke, basegfx::B2DLineJoin eLineJoin,
+                      css::drawing::LineCap eLineCap, double fMiterMinimumAngle,
+                      bool bPixelSnapHairline, bool bAntiAlias);
+
+    bool drawAlphaRect(tools::Long nX, tools::Long nY, tools::Long nWidth, tools::Long nHeight,
+                       sal_uInt8 nTransparency, bool bAntiAlias);
+
+    bool drawGradient(const tools::PolyPolygon& rPolyPolygon, const Gradient& rGradient,
+                      bool bAntiAlias);
+
+    bool implDrawGradient(basegfx::B2DPolyPolygon const& rPolyPolygon, SalGradient const& rGradient,
+                          bool bAntiAlias);
 
     void copyWithOperator(const SalTwoRect& rTR, cairo_surface_t* source, cairo_operator_t eOp,
                           bool bAntiAlias);
@@ -204,7 +209,30 @@ struct VCL_DLLPUBLIC CairoCommon
 
     void invert(const basegfx::B2DPolygon& rPoly, SalInvert nFlags, bool bAntiAlias);
 
+    void invert(tools::Long nX, tools::Long nY, tools::Long nWidth, tools::Long nHeight,
+                SalInvert nFlags, bool bAntiAlias);
+
+    void invert(sal_uInt32 nPoints, const Point* pPtAry, SalInvert nFlags, bool bAntiAlias);
+
+    void drawBitmap(const SalTwoRect& rPosAry, const SalBitmap& rSalBitmap, bool bAntiAlias);
+
+    bool drawAlphaBitmap(const SalTwoRect& rTR, const SalBitmap& rSourceBitmap,
+                         const SalBitmap& rAlphaBitmap, bool bAntiAlias);
+
+    bool drawTransformedBitmap(const basegfx::B2DPoint& rNull, const basegfx::B2DPoint& rX,
+                               const basegfx::B2DPoint& rY, const SalBitmap& rSourceBitmap,
+                               const SalBitmap* pAlphaBitmap, double fAlpha, bool bAntiAlias);
+
+    void drawMask(const SalTwoRect& rTR, const SalBitmap& rSalBitmap, Color nMaskColor,
+                  bool bAntiAlias);
+
+    std::shared_ptr<SalBitmap> getBitmap(tools::Long nX, tools::Long nY, tools::Long nWidth,
+                                         tools::Long nHeight);
+
     static cairo_surface_t* createCairoSurface(const BitmapBuffer* pBuffer);
+
+    static bool supportsOperation(OutDevSupportType eType);
+    static bool hasFastDrawTransformedBitmap();
 
 private:
     void doXorOnRelease(sal_Int32 nExtentsLeft, sal_Int32 nExtentsTop, sal_Int32 nExtentsRight,
@@ -212,7 +240,7 @@ private:
                         sal_Int32 nWidth) const;
 };
 
-class SurfaceHelper
+class VCL_DLLPUBLIC SurfaceHelper
 {
 private:
     cairo_surface_t* pSurface;

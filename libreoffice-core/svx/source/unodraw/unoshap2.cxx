@@ -260,15 +260,14 @@ void SAL_CALL SvxShapeGroup::remove( const uno::Reference< drawing::XShape >& xS
         // #i29181#
         // If the SdrObject which is about to be deleted is in any selection,
         // deselect it first.
-        SdrViewIter aIter( pSdrShape );
-
-        for ( SdrView* pView = aIter.FirstView(); pView; pView = aIter.NextView() )
-        {
-            if(SAL_MAX_SIZE != pView->TryToFindMarkedObject(pSdrShape))
+        SdrViewIter::ForAllViews( pSdrShape,
+            [&pSdrShape] (SdrView* pView)
             {
-                pView->MarkObj(pSdrShape, pView->GetSdrPageView(), true);
-            }
-        }
+                if(SAL_MAX_SIZE != pView->TryToFindMarkedObject(pSdrShape))
+                {
+                    pView->MarkObj(pSdrShape, pView->GetSdrPageView(), true);
+                }
+            });
 
         rList.NbcRemoveObject( nObjNum );
     }
@@ -613,11 +612,11 @@ const SvxShapeControlPropertyMapping[] =
 
 namespace
 {
-    bool lcl_convertPropertyName( const OUString& rApiName, OUString& rInternalName )
+    bool lcl_convertPropertyName( std::u16string_view rApiName, OUString& rInternalName )
     {
         for( const auto & rEntry : SvxShapeControlPropertyMapping )
         {
-            if( rApiName.reverseCompareTo( rEntry.msAPIName ) == 0 )
+            if( rApiName == rEntry.msAPIName )
             {
                 rInternalName = rEntry.msFormName;
             }
@@ -867,7 +866,7 @@ uno::Any SAL_CALL SvxShapeControl::getPropertyDefault( const OUString& aProperty
             return aDefault;
         }
 
-        throw beans::UnknownPropertyException( aPropertyName, static_cast<cppu::OWeakObject*>(this));
+        throw beans::UnknownPropertyException( aPropertyName, getXWeak());
     }
     else
     {
@@ -1644,7 +1643,7 @@ awt::Point SAL_CALL SvxCustomShape::getPosition()
                 aPol[2]=aPol0[3];
                 aPol[3]=aPol0[2];
                 aPol[4]=aPol0[1];
-                Poly2Rect(aPol,aRectangle,aNewGeo);
+                aRectangle = svx::polygonToRectangle(aPol, aNewGeo);
             }
             if ( bMirroredY )
             {
@@ -1666,7 +1665,7 @@ awt::Point SAL_CALL SvxCustomShape::getPosition()
                 aPol[2]=aPol0[3];
                 aPol[3]=aPol0[2];
                 aPol[4]=aPol0[1];
-                Poly2Rect( aPol, aRectangle, aNewGeo );
+                aRectangle = svx::polygonToRectangle(aPol, aNewGeo);
             }
         }
         Point aPt( aRectangle.TopLeft() );
@@ -1700,7 +1699,7 @@ void SAL_CALL SvxCustomShape::setPropertyValue( const OUString& aPropertyName, c
             // UNO API object, but the XCustomShapeEngine involved. This
             // object is on-demand replaceable and can be reset here. This
             // will free the involved EditEngine and VirtualDevice.
-            pTarget->mxCustomShapeEngine.set(nullptr);
+            pTarget->mxCustomShapeEngine.clear();
         }
         // since this case is only for the application cores
         // we should return from this function now
@@ -1792,7 +1791,7 @@ void SvxCustomShape::createCustomShapeDefaults( const OUString& rValueType )
     static_cast<SdrObjCustomShape*>(GetSdrObject())->MergeDefaultAttributes( &rValueType );
 }
 
-SvxShapeGroupAnyD::SvxShapeGroupAnyD( SdrObject* pObject, o3tl::span<const SfxItemPropertyMapEntry> pEntries, const SvxItemPropertySet* pPropertySet )
+SvxShapeGroupAnyD::SvxShapeGroupAnyD( SdrObject* pObject, std::span<const SfxItemPropertyMapEntry> pEntries, const SvxItemPropertySet* pPropertySet )
     : SvxShape(pObject, pEntries, pPropertySet)
 {}
 

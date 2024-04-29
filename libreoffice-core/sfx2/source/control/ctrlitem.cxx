@@ -293,7 +293,7 @@ SfxItemState SfxControllerItem::GetItemState
                 ? SfxItemState::DISABLED
                 : IsInvalidItem(pState)
                     ? SfxItemState::DONTCARE
-                    : pState->IsVoidItem() && !pState->Which()
+                    : pState->isVoidItem() && !pState->Which()
                         ? SfxItemState::UNKNOWN
                         : SfxItemState::DEFAULT;
 }
@@ -314,8 +314,6 @@ MapUnit SfxControllerItem::GetCoreMetric() const
     if ( !pDispat )
     {
         SfxViewFrame* pViewFrame = SfxViewFrame::Current();
-        if ( !pViewFrame )
-            SfxViewFrame::GetFirst();
         if ( pViewFrame )
             pDispat = pViewFrame->GetDispatcher();
     }

@@ -54,6 +54,7 @@
 
 #include <com/sun/star/drawing/BitmapMode.hpp>
 #include <comphelper/propertyvalue.hxx>
+#include <comphelper/sequence.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <editeng/unoipset.hxx>
 #include <svl/listener.hxx>
@@ -125,11 +126,11 @@ public:
     sal_Int32 m_nSelectionStartPos;
     sal_Int32 m_nSelectionEndPos;
     OUString m_sText;
-    uno::Reference<text::XText> m_xParentText;
+    css::uno::Reference<SwXText> m_xParentText;
     SwTextNode* m_pTextNode;
 
     Impl(SwXParagraph& rThis,
-            SwTextNode* const pTextNode = nullptr, uno::Reference<text::XText> xParent = nullptr,
+            SwTextNode* const pTextNode = nullptr, css::uno::Reference<SwXText> xParent = nullptr,
             const sal_Int32 nSelStart = -1, const sal_Int32 nSelEnd = -1)
         : m_rThis(rThis)
         , m_rPropSet(*aSwMapProvider.GetPropertySet(PROPERTY_MAP_PARAGRAPH))
@@ -219,7 +220,7 @@ SwXParagraph::SwXParagraph()
 }
 
 SwXParagraph::SwXParagraph(
-        uno::Reference< text::XText > const & xParent,
+        css::uno::Reference< SwXText > const & xParent,
         SwTextNode & rTextNode,
         const sal_Int32 nSelStart, const sal_Int32 nSelEnd)
     : m_pImpl(
@@ -243,7 +244,7 @@ bool SwXParagraph::IsDescriptor() const
 
 rtl::Reference<SwXParagraph>
 SwXParagraph::CreateXParagraph(SwDoc & rDoc, SwTextNode *const pTextNode,
-        uno::Reference< text::XText> const& i_xParent,
+        css::uno::Reference< SwXText> const& i_xParent,
         const sal_Int32 nSelStart, const sal_Int32 nSelEnd)
 {
     // re-use existing SwXParagraph
@@ -259,11 +260,11 @@ SwXParagraph::CreateXParagraph(SwDoc & rDoc, SwTextNode *const pTextNode,
     }
 
     // create new SwXParagraph
-    uno::Reference<text::XText> xParentText(i_xParent);
+    css::uno::Reference<SwXText> xParentText(i_xParent);
     if (!xParentText.is() && pTextNode)
     {
         SwPosition Pos(*pTextNode);
-        xParentText.set(::sw::CreateParentXText( rDoc, Pos ));
+        xParentText = ::sw::CreateParentXText( rDoc, Pos );
     }
     SwXParagraph *const pXPara( pTextNode
             ? new SwXParagraph(xParentText, *pTextNode, nSelStart, nSelEnd)
@@ -294,18 +295,6 @@ bool SwXParagraph::SelectPaM(SwPaM & rPaM)
     rPaM.SetMark();
     rPaM.GetMark()->SetContent( pTextNode->GetText().getLength() );
     return true;
-}
-
-const uno::Sequence< sal_Int8 > & SwXParagraph::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXParagraphUnoTunnelId;
-    return theSwXParagraphUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL
-SwXParagraph::getSomething(const uno::Sequence< sal_Int8 >& rId)
-{
-    return comphelper::getSomethingImpl<SwXParagraph>(rId, this);
 }
 
 OUString SAL_CALL
@@ -401,12 +390,12 @@ void SwXParagraph::Impl::SetPropertyValues_Impl(
             if (SfxItemPropertyMapEntry const* const pEntry = rMap.getByName(name); !pEntry)
             {
                 throw beans::UnknownPropertyException("Unknown property: " + name,
-                                                      static_cast<cppu::OWeakObject*>(&m_rThis));
+                                                      m_rThis.getXWeak());
             }
             else if (pEntry->nFlags & beans::PropertyAttribute::READONLY)
             {
                 throw beans::PropertyVetoException("Property is read-only: " + name,
-                                                   static_cast<cppu::OWeakObject*>(&m_rThis));
+                                                   m_rThis.getXWeak());
             }
             return comphelper::makePropertyValue(name, value);
         });
@@ -419,7 +408,7 @@ void SAL_CALL SwXParagraph::setPropertyValues(
 {
     if (rPropertyNames.getLength() != rValues.getLength())
         throw lang::IllegalArgumentException("lengths do not match",
-                                             static_cast<cppu::OWeakObject*>(this), -1);
+                                             getXWeak(), -1);
 
     SolarMutexGuard aGuard;
 
@@ -562,13 +551,30 @@ uno::Sequence< uno::Any > SwXParagraph::Impl::GetPropertyValues_Impl(
             continue;
         }
 
+        if (pPropertyNames[nProp] == "OOXMLImport_AnchoredShapes")
+        {
+            // A hack to provide list of anchored objects fast
+            // See reanchorObjects in writerfilter/source/dmapper/DomainMapper_Impl.cxx
+            FrameClientSortList_t aFrames;
+            CollectFrameAtNode(rTextNode, aFrames, false); // Frames anchored to paragraph
+            CollectFrameAtNode(rTextNode, aFrames, true); // Frames anchored to character
+            std::vector<uno::Reference<text::XTextContent>> aRet;
+            aRet.reserve(aFrames.size());
+            for (const auto& rFrame : aFrames)
+                if (auto xContent = FrameClientToXTextContent(rFrame.pFrameClient.get()))
+                    aRet.push_back(xContent);
+
+            pValues[nProp] <<= comphelper::containerToSequence(aRet);
+            continue;
+        }
+
         SfxItemPropertyMapEntry const*const pEntry =
             rMap.getByName( pPropertyNames[nProp] );
         if (!pEntry)
         {
             throw beans::UnknownPropertyException(
                 "Unknown property: " + pPropertyNames[nProp],
-                static_cast< cppu::OWeakObject * >(&m_rThis));
+                m_rThis.getXWeak());
         }
         if (! ::sw::GetDefaultTextContentValue(
                 pValues[nProp], pPropertyNames[nProp], pEntry->nWID))
@@ -600,13 +606,13 @@ SwXParagraph::getPropertyValues(const uno::Sequence< OUString >& rPropertyNames)
     {
         css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetRuntimeException("Unknown property exception caught",
-                static_cast < cppu::OWeakObject * > ( this ), anyEx );
+                getXWeak(), anyEx );
     }
     catch (lang::WrappedTargetException &)
     {
         css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetRuntimeException("WrappedTargetException caught",
-                static_cast < cppu::OWeakObject * > ( this ), anyEx );
+                getXWeak(), anyEx );
     }
 
     return aValues;
@@ -1043,7 +1049,7 @@ SwXParagraph::getPropertyState(const OUString& rPropertyName)
     {
         throw beans::UnknownPropertyException(
             "Unknown property: " + rPropertyName,
-            static_cast<cppu::OWeakObject *>(this));
+            getXWeak());
     }
     bool bDummy = false;
     const beans::PropertyState eRet =
@@ -1075,7 +1081,7 @@ SwXParagraph::getPropertyStates(
         {
             throw beans::UnknownPropertyException(
                 "Unknown property: " + *pNames,
-                static_cast<cppu::OWeakObject *>(this));
+                getXWeak());
         }
 
         if (bAttrSetFetched && !pSet && isATR(pEntry->nWID))
@@ -1116,14 +1122,14 @@ SwXParagraph::setPropertyToDefault(const OUString& rPropertyName)
     {
         throw beans::UnknownPropertyException(
             "Unknown property: " + rPropertyName,
-            static_cast<cppu::OWeakObject *>(this));
+            getXWeak());
     }
 
     if (pEntry->nFlags & beans::PropertyAttribute::READONLY)
     {
         throw uno::RuntimeException(
             "Property is read-only: " + rPropertyName,
-            static_cast<cppu::OWeakObject *>(this));
+            getXWeak());
     }
 
     const bool bBelowFrameAtrEnd(pEntry->nWID < RES_FRMATR_END);
@@ -1199,7 +1205,7 @@ SwXParagraph::getPropertyDefault(const OUString& rPropertyName)
     {
         throw beans::UnknownPropertyException(
             "Unknown property: " + rPropertyName,
-            static_cast<cppu::OWeakObject *>(this));
+            getXWeak());
     }
 
     const bool bBelowFrameAtrEnd(pEntry->nWID < RES_FRMATR_END);
@@ -1249,7 +1255,7 @@ void SAL_CALL SwXParagraph::dispose()
     {
         SwCursor aCursor( SwPosition( *pTextNode ), nullptr );
         pTextNode->GetDoc().getIDocumentContentOperations().DelFullPara(aCursor);
-        lang::EventObject const ev(static_cast< ::cppu::OWeakObject&>(*this));
+        lang::EventObject const ev(getXWeak());
         std::unique_lock aGuard2(m_pImpl->m_Mutex);
         m_pImpl->m_EventListeners.disposeAndClear(aGuard2, ev);
     }

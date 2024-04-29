@@ -36,10 +36,12 @@
 #include <string.h>
 
 #if defined LIBO_INTERNAL_ONLY
+#include <algorithm>
 #include <string_view>
 #include <type_traits>
 #endif
 
+#include "rtl/math.h"
 #include "rtl/textenc.h"
 #include "rtl/string.h"
 #include "rtl/stringutils.hxx"
@@ -87,8 +89,6 @@ This class is not part of public API and is meant to be used only in LibreOffice
 template<std::size_t N> class SAL_WARN_UNUSED OStringLiteral {
     static_assert(N != 0);
     static_assert(N - 1 <= std::numeric_limits<sal_Int32>::max(), "literal too long");
-    friend class OString;
-    friend class OStringConstExpr;
 
 public:
 #if HAVE_CPP_CONSTEVAL
@@ -99,25 +99,19 @@ public:
     OStringLiteral(char const (&literal)[N]) {
         assertLayout();
         assert(literal[N - 1] == '\0');
-        //TODO: Use C++20 constexpr std::copy_n (P0202R3):
-        for (std::size_t i = 0; i != N; ++i) {
-            more.buffer[i] = literal[i];
-        }
+        std::copy_n(literal, N, more.buffer);
     }
 
-#if defined __cpp_char8_t
+#if !(defined _MSC_VER && _MSC_VER >= 1930 && _MSC_VER <= 1939 && defined _MANAGED)
 #if HAVE_CPP_CONSTEVAL
     consteval
 #else
     constexpr
 #endif
-    explicit OStringLiteral(char8_t const (&literal)[N]) {
+    OStringLiteral(char8_t const (&literal)[N]) {
         assertLayout();
         assert(literal[N - 1] == '\0');
-        //TODO: Use C++20 constexpr std::copy_n (P0202R3):
-        for (std::size_t i = 0; i != N; ++i) {
-            more.buffer[i] = literal[i];
-        }
+        std::copy_n(literal, N, more.buffer);
     }
 #endif
 
@@ -142,47 +136,29 @@ private:
 
         oslInterlockedCount refCount = 0x40000000; // SAL_STRING_STATIC_FLAG (sal/rtl/strimp.hxx)
         sal_Int32 length = N - 1;
-        char buffer[N] = {}; //TODO: drop initialization for C++20 (P1331R2)
+        char buffer[N];
     };
 
+public:
+    // (Data members must be public so that OStringLiteral is a structural type that can be used as
+    // a non-type template parameter type for operator ""_ostr and rtl::detail::OStringHolder:)
     union {
         rtl_String str;
         Data more = {};
     };
 };
 
-/**
-  This is intended to be used when declaring compile-time-constant structs or arrays
-  that can be initialised from named OStringLiteral e.g.
+#if !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
 
-    constexpr OStringLiteral AAA = u"aaa";
-    constexpr OStringLiteral BBB = u"bbb";
-    constexpr OStringConstExpr FOO[] { AAA, BBB };
-*/
-class OString;
-class OStringConstExpr
-{
-public:
-    template<std::size_t N> constexpr OStringConstExpr(OStringLiteral<N> const & literal):
-        pData(const_cast<rtl_String *>(&literal.str)) {}
+namespace detail {
 
-    // prevent mis-use
-    template<std::size_t N> constexpr OStringConstExpr(OStringLiteral<N> && literal)
-        = delete;
-
-    // no destructor necessary because we know we are pointing at a compile-time
-    // constant OStringLiteral, which bypasses ref-counting.
-
-    /**
-      make it easier to pass to OStringBuffer and similar without casting/converting
-    */
-    constexpr std::string_view asView() const { return std::string_view(pData->buffer, pData->length); }
-
-    inline operator const OString&() const;
-
-private:
-    rtl_String* pData;
+template<OStringLiteral L> struct OStringHolder {
+    static constexpr auto & literal = L;
 };
+
+}
+
+#endif
 
 #endif
 
@@ -233,10 +209,23 @@ public:
 
       @param    str         an OString.
     */
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+    constexpr
+#endif
     OString( const OString & str )
     {
         pData = str.pData;
-        rtl_string_acquire( pData );
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+        if (std::is_constant_evaluated()) {
+            //TODO: We would want to
+            //
+            //   assert(SAL_STRING_IS_STATIC(pData));
+            //
+            // here, but that wouldn't work because read of member `str` of OUStringLiteral's
+            // anonymous union with active member `more` is not allowed in a constant expression.
+        } else
+#endif
+            rtl_string_acquire( pData );
     }
 
 #if defined LIBO_INTERNAL_ONLY
@@ -246,9 +235,23 @@ public:
       @param    str         an OString.
       @since LibreOffice 5.2
     */
+#if !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+    constexpr
+#endif
     OString( OString && str ) noexcept
     {
         pData = str.pData;
+#if !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+        if (std::is_constant_evaluated()) {
+            //TODO: We would want to
+            //
+            //   assert(SAL_STRING_IS_STATIC(pData));
+            //
+            // here, but that wouldn't work because read of member `str` of OUStringLiteral's
+            // anonymous union with active member `more` is not allowed in a constant expression.
+            return;
+        }
+#endif
         str.pData = nullptr;
         rtl_string_new( &str.pData );
     }
@@ -382,6 +385,12 @@ public:
     /// @endcond
 #endif
 
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+    // For operator ""_tstr:
+    template<OStringLiteral L> constexpr OString(detail::OStringHolder<L> const & holder):
+        pData(const_cast<rtl_String *>(&holder.literal.str)) {}
+#endif
+
 #if defined LIBO_INTERNAL_ONLY
     explicit OString(std::string_view sv) {
         if (sv.size() > sal_uInt32(std::numeric_limits<sal_Int32>::max())) {
@@ -439,8 +448,8 @@ public:
      @overload
      @internal
     */
-    template< typename T, std::size_t N >
-    OString( StringNumberBase< char, T, N >&& n )
+    template< std::size_t N >
+    OString( OStringNumber< N >&& n )
         : OString( n.buf, n.length )
     {}
 #endif
@@ -452,9 +461,22 @@ public:
     /**
       Release the string data.
     */
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+    constexpr
+#endif
     ~OString()
     {
-        rtl_string_release( pData );
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+        if (std::is_constant_evaluated()) {
+           //TODO: We would want to
+           //
+           //   assert(SAL_STRING_IS_STATIC(pData));
+           //
+           // here, but that wouldn't work because read of member `str` of OUStringLiteral's
+           // anonymous union with active member `more` is not allowed in a constant expression.
+        } else
+#endif
+            rtl_string_release( pData );
     }
 
 #if defined LIBO_INTERNAL_ONLY
@@ -609,12 +631,12 @@ public:
      @overload
      @internal
     */
-    template< typename T, std::size_t N >
-    OString& operator+=( StringNumberBase< char, T, N >&& n ) & {
+    template< std::size_t N >
+    OString& operator+=( OStringNumber< N >&& n ) & {
         return operator +=(std::string_view(n.buf, n.length));
     }
-    template<typename T, std::size_t N> void operator +=(
-        StringNumberBase<char, T, N> &&) && = delete;
+    template<std::size_t N> void operator +=(
+        OStringNumber<N> &&) && = delete;
 #endif
 
     /**
@@ -1984,37 +2006,29 @@ public:
 
 #ifdef LIBO_INTERNAL_ONLY // "RTL_FAST_STRING"
 
-    static OStringNumber< int > number( int i, sal_Int16 radix = 10 )
+    static auto number( int i, sal_Int16 radix = 10 )
     {
-        return OStringNumber< int >( i, radix );
+        return OStringNumber<RTL_STR_MAX_VALUEOFINT32>(rtl_str_valueOfInt32, i, radix);
     }
-    static OStringNumber< long long > number( long long ll, sal_Int16 radix = 10 )
+    static auto number( long long ll, sal_Int16 radix = 10 )
     {
-        return OStringNumber< long long >( ll, radix );
+        return OStringNumber<RTL_STR_MAX_VALUEOFINT64>(rtl_str_valueOfInt64, ll, radix);
     }
-    static OStringNumber< unsigned long long > number( unsigned long long ll, sal_Int16 radix = 10 )
+    static auto number( unsigned long long ll, sal_Int16 radix = 10 )
     {
-        return OStringNumber< unsigned long long >( ll, radix );
+        return OStringNumber<RTL_STR_MAX_VALUEOFUINT64>(rtl_str_valueOfUInt64, ll, radix);
     }
-    static OStringNumber< unsigned long long > number( unsigned int i, sal_Int16 radix = 10 )
+    static auto number( unsigned int i, sal_Int16 radix = 10 )
     {
         return number( static_cast< unsigned long long >( i ), radix );
     }
-    static OStringNumber< long long > number( long i, sal_Int16 radix = 10)
+    static auto number( long i, sal_Int16 radix = 10)
     {
         return number( static_cast< long long >( i ), radix );
     }
-    static OStringNumber< unsigned long long > number( unsigned long i, sal_Int16 radix = 10 )
+    static auto number( unsigned long i, sal_Int16 radix = 10 )
     {
         return number( static_cast< unsigned long long >( i ), radix );
-    }
-    static OStringNumber< float > number( float f )
-    {
-        return OStringNumber< float >( f );
-    }
-    static OStringNumber< double > number( double d )
-    {
-        return OStringNumber< double >( d );
     }
 #else
     /**
@@ -2064,6 +2078,7 @@ public:
         char aBuf[RTL_STR_MAX_VALUEOFUINT64];
         return OString(aBuf, rtl_str_valueOfUInt64(aBuf, ll, radix));
     }
+#endif
 
     /**
       Returns the string representation of the float argument.
@@ -2076,8 +2091,15 @@ public:
     */
     static OString number( float f )
     {
-        char aBuf[RTL_STR_MAX_VALUEOFFLOAT];
-        return OString(aBuf, rtl_str_valueOfFloat(aBuf, f));
+        rtl_String* pNew = NULL;
+        // Same as rtl::str::valueOfFP, used for rtl_str_valueOfFloat
+        rtl_math_doubleToString(&pNew, NULL, 0, f, rtl_math_StringFormat_G,
+                                RTL_STR_MAX_VALUEOFFLOAT - SAL_N_ELEMENTS("-x.E-xxx") + 1, '.',
+                                NULL, 0, true);
+        if (pNew == NULL)
+            throw std::bad_alloc();
+
+        return OString(pNew, SAL_NO_ACQUIRE);
     }
 
     /**
@@ -2091,11 +2113,23 @@ public:
     */
     static OString number( double d )
     {
-        char aBuf[RTL_STR_MAX_VALUEOFDOUBLE];
-        return OString(aBuf, rtl_str_valueOfDouble(aBuf, d));
-    }
-#endif
+        rtl_String* pNew = NULL;
+        // Same as rtl::str::valueOfFP, used for rtl_str_valueOfDouble
+        rtl_math_doubleToString(&pNew, NULL, 0, d, rtl_math_StringFormat_G,
+                                RTL_STR_MAX_VALUEOFDOUBLE - SAL_N_ELEMENTS("-x.E-xxx") + 1, '.',
+                                NULL, 0, true);
+        if (pNew == NULL)
+            throw std::bad_alloc();
 
+        return OString(pNew, SAL_NO_ACQUIRE);
+    }
+
+#ifdef LIBO_INTERNAL_ONLY // "RTL_FAST_STRING"
+    static auto boolean(bool b)
+    {
+        return OStringNumber<RTL_STR_MAX_VALUEOFBOOLEAN>(rtl_str_valueOfBoolean, b);
+    }
+#else
     /**
       Returns the string representation of the sal_Bool argument.
 
@@ -2128,6 +2162,7 @@ public:
         char aBuf[RTL_STR_MAX_VALUEOFBOOLEAN];
         return OString(aBuf, rtl_str_valueOfBoolean(aBuf, b));
     }
+#endif
 
     /**
       Returns the string representation of the char argument.
@@ -2216,21 +2251,16 @@ public:
     // would not compile):
     template<typename T> [[nodiscard]] static
     OStringConcat<OStringConcatMarker, T>
-    Concat(T const & value) { return OStringConcat<OStringConcatMarker, T>({}, value); }
+    Concat(T const & value) { return OStringConcat<OStringConcatMarker, T>(value); }
 
     // This overload is needed so that an argument of type 'char const[N]' ends up as
     // 'OStringConcat<rtl::OStringConcatMarker, char const[N]>' rather than as
     // 'OStringConcat<rtl::OStringConcatMarker, char[N]>':
     template<typename T, std::size_t N> [[nodiscard]] static
     OStringConcat<OStringConcatMarker, T[N]>
-    Concat(T (& value)[N]) { return OStringConcat<OStringConcatMarker, T[N]>({}, value); }
+    Concat(T (& value)[N]) { return OStringConcat<OStringConcatMarker, T[N]>(value); }
 #endif
 };
-
-#if defined LIBO_INTERNAL_ONLY
-// Can only define this after we define OString
-inline OStringConstExpr::operator const OString &() const { return OString::unacquired(&pData); }
-#endif
 
 #if defined LIBO_INTERNAL_ONLY
 inline bool operator ==(OString const & lhs, StringConcatenation<char> const & rhs)
@@ -2347,6 +2377,43 @@ using ::rtl::OStringHash;
 using ::rtl::OStringLiteral;
 #endif
 
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+
+template<
+#if defined RTL_STRING_UNITTEST
+    rtlunittest::
+#endif
+    OStringLiteral L>
+constexpr
+#if defined RTL_STRING_UNITTEST
+    rtlunittest::
+#endif
+    OString
+operator ""_ostr() { return L; }
+
+template<
+#if defined RTL_STRING_UNITTEST
+    rtlunittest::
+#endif
+    OStringLiteral L>
+constexpr
+#if defined RTL_STRING_UNITTEST
+rtlunittest
+#else
+rtl
+#endif
+::detail::OStringHolder<L> operator ""_tstr() {
+    return
+#if defined RTL_STRING_UNITTEST
+        rtlunittest
+#else
+        rtl
+#endif
+        ::detail::OStringHolder<L>();
+}
+
+#endif
+
 /// @cond INTERNAL
 /**
   Make OString hashable by default for use in STL containers.
@@ -2364,9 +2431,9 @@ struct hash<::rtl::OString>
         if constexpr (sizeof(std::size_t) == 8)
         {
             // return a hash that uses the full 64-bit range instead of a 32-bit value
-            size_t n = 0;
+            size_t n = s.getLength();
             for (sal_Int32 i = 0, len = s.getLength(); i < len; ++i)
-                n = 31 * n + s[i];
+                n = 37 * n + s[i];
             return n;
         }
         else

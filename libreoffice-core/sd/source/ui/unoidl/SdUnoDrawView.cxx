@@ -51,8 +51,7 @@ namespace sd {
 SdUnoDrawView::SdUnoDrawView(
     DrawViewShell& rViewShell,
     View& rView) noexcept
-    :   DrawSubControllerInterfaceBase(m_aMutex),
-        mrDrawViewShell(rViewShell),
+    :   mrDrawViewShell(rViewShell),
         mrView(rView)
 {
 }
@@ -115,7 +114,7 @@ Reference<drawing::XLayer> SdUnoDrawView::getActiveLayer() const
         // Get the corresponding XLayer object from the implementation
         // object of the layer manager.
         Reference<drawing::XLayerManager> xManager (pModel->getLayerManager(), uno::UNO_QUERY);
-        SdLayerManager* pManager = comphelper::getFromUnoTunnel<SdLayerManager> (xManager);
+        SdLayerManager* pManager = dynamic_cast<SdLayerManager*> (xManager.get());
         if (pManager != nullptr)
             xCurrentLayer = pManager->GetLayer (pLayer);
     }
@@ -130,7 +129,7 @@ void SdUnoDrawView::setActiveLayer (const Reference<drawing::XLayer>& rxLayer)
     if ( ! rxLayer.is())
         return;
 
-    SdLayer* pLayer = comphelper::getFromUnoTunnel<SdLayer> (rxLayer);
+    SdLayer* pLayer = dynamic_cast<SdLayer*> (rxLayer.get());
     if (pLayer == nullptr)
         return;
 

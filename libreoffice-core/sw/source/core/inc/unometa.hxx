@@ -24,7 +24,6 @@
 #include <deque>
 
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XChild.hpp>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
@@ -37,20 +36,22 @@
 
 #include <unobaseclass.hxx>
 
-typedef std::deque<
-    css::uno::Reference< css::text::XTextRange > >
-    TextRangeList_t;
-
+class SwXTextPortion;
 class SwPaM;
 class SwTextNode;
-
+class SwXText;
 namespace sw {
     class Meta;
 }
 
+typedef std::deque<
+    rtl::Reference<SwXTextPortion> >
+    TextRangeList_t;
+
+
+
 typedef ::cppu::ImplInheritanceHelper
 <   ::sfx2::MetadatableMixin
-,   css::lang::XUnoTunnel
 ,   css::lang::XServiceInfo
 ,   css::container::XChild
 ,   css::container::XEnumerationAccess
@@ -83,7 +84,7 @@ protected:
 
     /// @param pDoc and pMeta != 0, but not & because of ImplInheritanceHelper
     SwXMeta(SwDoc *const pDoc, ::sw::Meta *const pMeta,
-        css::uno::Reference< css::text::XText> const&  xParentText,
+        css::uno::Reference<SwXText> const&  xParentText,
         std::unique_ptr<TextRangeList_t const> pPortions);
 
     SwXMeta(SwDoc *const pDoc);
@@ -93,15 +94,15 @@ public:
     static rtl::Reference<SwXMeta>
         CreateXMeta(
             ::sw::Meta & rMeta,
-            css::uno::Reference< css::text::XText> const& xParentText = nullptr,
-            std::unique_ptr<TextRangeList_t const> && pPortions = std::unique_ptr<TextRangeList_t const>());
+            css::uno::Reference<SwXText> xParentText,
+            std::unique_ptr<TextRangeList_t const> && pPortions);
 
     static rtl::Reference<SwXMeta>
         CreateXMeta(SwDoc & rDoc, bool isField);
 
     /// init params with position of the attribute content (w/out CH_TXTATR)
     bool SetContentRange( SwTextNode *& rpNode, sal_Int32 & rStart, sal_Int32 & rEnd) const;
-    css::uno::Reference< css::text::XText > const & GetParentText() const;
+    css::uno::Reference< SwXText > const & GetParentText() const;
 
     /// @throws css::lang::IllegalArgumentException
     /// @throws css::uno::RuntimeException
@@ -111,12 +112,6 @@ public:
     virtual ::sfx2::Metadatable * GetCoreObject() override;
     virtual css::uno::Reference< css::frame::XModel >
         GetModel() override;
-
-    static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
-
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething(
-            const css::uno::Sequence< sal_Int8 >& Identifier ) override;
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
@@ -200,11 +195,11 @@ private:
 
     friend rtl::Reference<SwXMeta>
         SwXMeta::CreateXMeta(::sw::Meta &,
-            css::uno::Reference< css::text::XText> const&,
+            css::uno::Reference<SwXText>,
             std::unique_ptr<TextRangeList_t const> && pPortions);
 
     SwXMetaField(SwDoc *const pDoc, ::sw::Meta *const pMeta,
-        css::uno::Reference< css::text::XText> const& xParentText,
+        css::uno::Reference<SwXText> const& xParentText,
         std::unique_ptr<TextRangeList_t const> pPortions);
 
     friend rtl::Reference<SwXMeta>

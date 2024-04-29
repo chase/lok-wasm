@@ -36,9 +36,9 @@ using namespace ::com::sun::star::xml::sax;
 #define ELEMENT_EXTERNALIMAGES      "externalimages"
 #define ELEMENT_EXTERNALENTRY       "externalentry"
 
-constexpr OUStringLiteral ELEMENT_NS_IMAGESCONTAINER = u"image:imagescontainer";
-constexpr OUStringLiteral ELEMENT_NS_IMAGES = u"image:images";
-constexpr OUStringLiteral ELEMENT_NS_ENTRY = u"image:entry";
+constexpr OUString ELEMENT_NS_IMAGESCONTAINER = u"image:imagescontainer"_ustr;
+constexpr OUString ELEMENT_NS_IMAGES = u"image:images"_ustr;
+constexpr OUString ELEMENT_NS_ENTRY = u"image:entry"_ustr;
 
 #define ATTRIBUTE_HREF                  "href"
 #define ATTRIBUTE_MASKCOLOR             "maskcolor"
@@ -48,7 +48,6 @@ constexpr OUStringLiteral ELEMENT_NS_ENTRY = u"image:entry";
 #define ATTRIBUTE_MASKMODE              "maskmode"
 #define ATTRIBUTE_HIGHCONTRASTURL       "highcontrasturl"
 #define ATTRIBUTE_HIGHCONTRASTMASKURL   "highcontrastmaskurl"
-constexpr OUStringLiteral ATTRIBUTE_TYPE_CDATA = u"CDATA";
 
 constexpr OUStringLiteral ATTRIBUTE_XMLNS_IMAGE = u"xmlns:image";
 constexpr OUStringLiteral ATTRIBUTE_XMLNS_XLINK = u"xmlns:xlink";
@@ -56,8 +55,8 @@ constexpr OUStringLiteral ATTRIBUTE_XMLNS_XLINK = u"xmlns:xlink";
 constexpr OUStringLiteral ATTRIBUTE_XLINK_TYPE = u"xlink:type";
 constexpr OUStringLiteral ATTRIBUTE_XLINK_TYPE_VALUE = u"simple";
 
-constexpr OUStringLiteral XMLNS_IMAGE = u"http://openoffice.org/2001/image";
-constexpr OUStringLiteral XMLNS_XLINK = u"http://www.w3.org/1999/xlink";
+constexpr OUString XMLNS_IMAGE = u"http://openoffice.org/2001/image"_ustr;
+constexpr OUString XMLNS_XLINK = u"http://www.w3.org/1999/xlink"_ustr;
 constexpr OUStringLiteral XMLNS_IMAGE_PREFIX = u"image:";
 
 constexpr OUStringLiteral XMLNS_FILTER_SEPARATOR = u"^";
@@ -288,7 +287,6 @@ OWriteImagesDocumentHandler::OWriteImagesDocumentHandler(
     m_xWriteDocumentHandler( rWriteDocumentHandler )
 {
     m_xEmptyList = new ::comphelper::AttributeList;
-    m_aAttributeType        = ATTRIBUTE_TYPE_CDATA;
     m_aXMLImageNS           = XMLNS_IMAGE_PREFIX;
     m_aAttributeXlinkType   = ATTRIBUTE_XLINK_TYPE;
     m_aAttributeValueSimple = ATTRIBUTE_XLINK_TYPE_VALUE;
@@ -313,11 +311,9 @@ void OWriteImagesDocumentHandler::WriteImagesDocument()
     rtl::Reference<::comphelper::AttributeList> pList = new ::comphelper::AttributeList;
 
     pList->AddAttribute( ATTRIBUTE_XMLNS_IMAGE,
-                         m_aAttributeType,
                          XMLNS_IMAGE );
 
     pList->AddAttribute( ATTRIBUTE_XMLNS_XLINK,
-                         m_aAttributeType,
                          XMLNS_XLINK );
 
     m_xWriteDocumentHandler->startElement( ELEMENT_NS_IMAGESCONTAINER, pList );
@@ -339,7 +335,6 @@ void OWriteImagesDocumentHandler::WriteImageList( const ImageItemDescriptorList*
 
     // save required attributes
     pList->AddAttribute( m_aAttributeXlinkType,
-                         m_aAttributeType,
                          m_aAttributeValueSimple );
 
     m_xWriteDocumentHandler->startElement( ELEMENT_NS_IMAGES, pList );
@@ -357,7 +352,6 @@ void OWriteImagesDocumentHandler::WriteImage( const ImageItemDescriptor* pImage 
     rtl::Reference<::comphelper::AttributeList> pList = new ::comphelper::AttributeList;
 
     pList->AddAttribute( m_aXMLImageNS + ATTRIBUTE_COMMAND,
-                         m_aAttributeType,
                          pImage->aCommandURL );
 
     m_xWriteDocumentHandler->startElement( ELEMENT_NS_ENTRY, pList );

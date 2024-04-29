@@ -17,14 +17,15 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_SW_INC_IDOCUMENTFIELDSACCESS_HXX
-#define INCLUDED_SW_INC_IDOCUMENTFIELDSACCESS_HXX
+#pragma once
 
 #include <sal/config.h>
 
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
+#include "swtypes.hxx"
 #include "nodeoffset.hxx"
+#include <unordered_map>
 
 class SwFieldTypes;
 class SwFieldType;
@@ -38,9 +39,8 @@ class SwMsgPoolItem;
 class DateTime;
 class SetGetExpField;
 class SwNode;
+class SwTable;
 enum class SwFieldIds : sal_uInt16;
-template <class T> class SwHashTable;
-struct HashStr;
 class SwRootFrame;
 class IDocumentRedlineAccess;
 
@@ -91,17 +91,17 @@ namespace com::sun::star::uno { class Any; }
         @retval true             update was successful
         @retval false            else
     */
-    virtual bool UpdateField(SwTextField * rDstFormatField, SwField & rSrcField, SwMsgPoolItem * pMsgHint, bool bUpdateTableFields) = 0;
+    virtual bool UpdateField(SwTextField * rDstFormatField, SwField & rSrcField, bool bUpdateTableFields) = 0;
 
     virtual void UpdateRefFields() = 0;
 
-    virtual void UpdateTableFields(SfxPoolItem* pHt) = 0;
+    virtual void UpdateTableFields(const SwTable* pTable) = 0;
 
     virtual void UpdateExpFields(SwTextField* pField, bool bUpdateRefFields) = 0;
 
     virtual void UpdateUsrFields() = 0;
 
-    virtual void UpdatePageFields(SfxPoolItem*) = 0;
+    virtual void UpdatePageFields(const SwTwips) = 0;
 
     virtual void LockExpFields() = 0;
 
@@ -127,7 +127,7 @@ namespace com::sun::star::uno { class Any; }
 
     virtual void FieldsToCalc(SwCalc& rCalc, const SetGetExpField& rToThisField, SwRootFrame const* pLayout) = 0;
 
-    virtual void FieldsToExpand(SwHashTable<HashStr> & rTable, const SetGetExpField& rToThisField, SwRootFrame const& rLayout) = 0;
+    virtual void FieldsToExpand(std::unordered_map<OUString,OUString> & rTable, const SetGetExpField& rToThisField, SwRootFrame const& rLayout) = 0;
 
     virtual bool IsNewFieldLst() const = 0;
 
@@ -145,7 +145,5 @@ namespace sw {
 bool IsFieldDeletedInModel(IDocumentRedlineAccess const& rIDRA,
         SwTextField const& rTextField);
 }
-
-#endif // INCLUDED_SW_INC_IDOCUMENTFIELDSACCESS_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

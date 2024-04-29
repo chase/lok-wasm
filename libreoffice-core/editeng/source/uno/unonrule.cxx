@@ -50,7 +50,6 @@ using ::com::sun::star::util::XCloneable;
 using ::com::sun::star::ucb::XAnyCompare;
 
 
-using namespace ::std;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
@@ -88,8 +87,6 @@ static unsigned short ConvertUnoAdjust( SvxAdjust eAdjust )
     DBG_ASSERT( static_cast<int>(eAdjust) <= 6, "Enum has changed! [CL]" );
     return aSvxToUnoAdjust[eAdjust];
 }
-
-UNO3_GETIMPLEMENTATION_IMPL( SvxUnoNumberingRules );
 
 SvxUnoNumberingRules::SvxUnoNumberingRules(SvxNumRule aRule)
 : maRule(std::move( aRule ))
@@ -210,8 +207,7 @@ Sequence<beans::PropertyValue> SvxUnoNumberingRules::getNumberingRuleByIndex(sal
         sal_UCS4 nCode = rFmt.GetBulletChar();
         OUString aStr( &nCode, 1 );
         aVal <<= aStr;
-        beans::PropertyValue aBulletProp( "BulletChar", -1, aVal, beans::PropertyState_DIRECT_VALUE);
-        pArray[nIdx++] = aBulletProp;
+        pArray[nIdx++] = beans::PropertyValue("BulletChar", -1, aVal, beans::PropertyState_DIRECT_VALUE);
     }
 
     if( rFmt.GetBulletFont() )
@@ -474,7 +470,7 @@ void SvxUnoNumberingRules::setNumberingRuleByIndex(const Sequence<beans::Propert
 
 const SvxNumRule& SvxGetNumRule( Reference< XIndexReplace > const & xRule )
 {
-    SvxUnoNumberingRules* pRule = comphelper::getFromUnoTunnel<SvxUnoNumberingRules>( xRule );
+    SvxUnoNumberingRules* pRule = dynamic_cast<SvxUnoNumberingRules*>( xRule.get() );
     if( pRule == nullptr )
         throw IllegalArgumentException();
 
@@ -488,7 +484,7 @@ css::uno::Reference< css::container::XIndexReplace > SvxCreateNumRule(const SvxN
 
 namespace {
 
-class SvxUnoNumberingRulesCompare : public ::cppu::WeakAggImplHelper1< XAnyCompare >
+class SvxUnoNumberingRulesCompare : public ::cppu::WeakImplHelper< XAnyCompare >
 {
 public:
     virtual sal_Int16 SAL_CALL compare( const Any& Any1, const Any& Any2 ) override;
@@ -510,10 +506,10 @@ sal_Int16 SvxUnoNumberingRules::Compare( const Any& Any1, const Any& Any2 )
     if( x1.get() == x2.get() )
         return 0;
 
-    SvxUnoNumberingRules* pRule1 = comphelper::getFromUnoTunnel<SvxUnoNumberingRules>( x1 );
+    SvxUnoNumberingRules* pRule1 = dynamic_cast<SvxUnoNumberingRules*>( x1.get() );
     if( !pRule1 )
         return -1;
-    SvxUnoNumberingRules* pRule2 = comphelper::getFromUnoTunnel<SvxUnoNumberingRules>( x2 );
+    SvxUnoNumberingRules* pRule2 = dynamic_cast<SvxUnoNumberingRules*>( x2.get() );
     if( !pRule2 )
         return -1;
 

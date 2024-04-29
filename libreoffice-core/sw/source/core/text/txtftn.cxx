@@ -972,16 +972,15 @@ SwNumberPortion *SwTextFormatter::NewFootnoteNumPortion( SwTextFormatInfo const 
     pNumFnt->SetWeight( WEIGHT_NORMAL, SwFontScript::CJK );
     pNumFnt->SetWeight( WEIGHT_NORMAL, SwFontScript::CTL );
 
-    const auto xAnchor = rFootnote.getAnchor(*pDoc);
-    uno::Reference<beans::XPropertySet> xAnchorProps(xAnchor, uno::UNO_QUERY);
-    if (xAnchorProps.is())
+    const rtl::Reference<SwXTextRange> xAnchor = rFootnote.getAnchor(*pDoc);
+    if (xAnchor.is())
     {
-        auto aAny = xAnchorProps->getPropertyValue("CharFontCharSet");
+        auto aAny = xAnchor->getPropertyValue("CharFontCharSet");
         sal_Int16 eCharSet;
         if ((aAny >>= eCharSet) && eCharSet == awt::CharSet::SYMBOL)
         {
             OUString aFontName;
-            aAny = xAnchorProps->getPropertyValue("CharFontName");
+            aAny = xAnchor->getPropertyValue("CharFontName");
             if (aAny  >>= aFontName)
             {
                 pNumFnt->SetName(aFontName, SwFontScript::Latin);
@@ -1010,14 +1009,13 @@ SwNumberPortion *SwTextFormatter::NewFootnoteNumPortion( SwTextFormatInfo const 
             SwAttrPool& rPool = pDoc->GetAttrPool();
             SfxItemSetFixed<RES_CHRATR_BEGIN, RES_CHRATR_END-1> aSet(rPool);
 
-            std::size_t aAuthor = (1 < pRedline->GetStackCount())
-                    ? pRedline->GetAuthor( 1 )
-                    : pRedline->GetAuthor();
 
             if ( RedlineType::Delete == pRedline->GetType() )
-                SW_MOD()->GetDeletedAuthorAttr(aAuthor, aSet);
+                // MACRO:
+                SW_MOD()->GetDeletedAuthorAttr(aSet);
             else
-                SW_MOD()->GetInsertAuthorAttr(aAuthor, aSet);
+                // MACRO:
+                SW_MOD()->GetInsertAuthorAttr(aSet);
 
             if (const SvxColorItem* pItem = aSet.GetItemIfSet(RES_CHRATR_COLOR))
                 pNumFnt->SetColor(pItem->GetValue());

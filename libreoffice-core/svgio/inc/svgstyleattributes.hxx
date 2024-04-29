@@ -34,6 +34,7 @@ namespace svgio::svgreader {
     class SvgPatternNode;
     class SvgMarkerNode;
     class SvgClipPathNode;
+    class SvgFilterNode;
     class SvgMaskNode;
 }
 
@@ -161,6 +162,21 @@ namespace svgio::svgreader
             Length
         };
 
+        enum class DominantBaseline
+        {
+            Auto,
+            Middle,
+            Hanging,
+            Central
+        };
+
+        enum class Overflow
+        {
+            notset,
+            hidden,
+            visible
+        };
+
         enum class Visibility
         {
             notset,
@@ -198,23 +214,20 @@ namespace svgio::svgreader
             TextAnchor                  maTextAnchor;
             SvgPaint                    maColor;
             SvgNumber                   maOpacity;
+            Overflow                    maOverflow;
             Visibility                  maVisibility;
             OUString               maTitle;
             OUString               maDesc;
 
             /// link to content. If set, the node can be fetched on demand
             OUString               maClipPathXLink;
-            const SvgClipPathNode* mpClipPathXLink;
+            OUString               maFilterXLink;
             OUString               maMaskXLink;
-            const SvgMaskNode*     mpMaskXLink;
 
             /// link to markers. If set, the node can be fetched on demand
             OUString               maMarkerStartXLink;
-            const SvgMarkerNode*        mpMarkerStartXLink;
             OUString               maMarkerMidXLink;
-            const SvgMarkerNode*        mpMarkerMidXLink;
             OUString               maMarkerEndXLink;
-            const SvgMarkerNode*        mpMarkerEndXLink;
 
             /// fill rule
             FillRule                    maFillRule;
@@ -226,12 +239,10 @@ namespace svgio::svgreader
             BaselineShift               maBaselineShift;
             SvgNumber                   maBaselineShiftNumber;
 
+            DominantBaseline            maDominantBaseline;
+
             mutable std::vector<sal_uInt16> maResolvingParent;
 
-            // defines if this attributes are part of a ClipPath. If yes,
-            // rough geometry will be created on decomposition by patching
-            // values for fill, stroke, strokeWidth and others
-            bool                        mbIsClipPathContent : 1;
 
             // #121221# Defines if evtl. an empty array *is* set
             bool                        mbStrokeDasharraySet : 1;
@@ -302,6 +313,11 @@ namespace svgio::svgreader
 
             SvgStyleAttributes(SvgNode& rOwner);
             ~SvgStyleAttributes();
+
+            // Check if this attribute is part of a ClipPath.
+            // If so, rough geometry will be created on decomposition by patching
+            // values for fill, stroke, strokeWidth and others
+            bool isClipPathContent() const;
 
             /// fill content
             bool isFillSet() const; // #i125258# ask if fill is a direct hard attribute (no hierarchy)
@@ -403,6 +419,10 @@ namespace svgio::svgreader
             SvgNumber getOpacity() const;
             void setOpacity(const SvgNumber& rOpacity) { maOpacity = rOpacity; }
 
+            /// Overflow
+            Overflow getOverflow() const;
+            void setOverflow(const Overflow aOverflow) { maOverflow = aOverflow; }
+
             /// Visibility
             Visibility getVisibility() const;
             void setVisibility(const Visibility aVisibility) { maVisibility = aVisibility; }
@@ -416,6 +436,10 @@ namespace svgio::svgreader
             // ClipPathXLink content
             OUString getClipPathXLink() const;
             const SvgClipPathNode* accessClipPathXLink() const;
+
+            // FilterXLink content
+            OUString getFilterXLink() const;
+            const SvgFilterNode* accessFilterXLink() const;
 
             // MaskXLink content
             OUString getMaskXLink() const;
@@ -435,8 +459,12 @@ namespace svgio::svgreader
 
             // BaselineShift
             void setBaselineShift(const BaselineShift aBaselineShift) { maBaselineShift = aBaselineShift; }
-            BaselineShift getBaselineShift() const { return maBaselineShift; }
+            BaselineShift getBaselineShift() const;
             SvgNumber getBaselineShiftNumber() const;
+
+            // DominantBaseline
+            void setDominantBaseline(const DominantBaseline aDominantBaseline) { maDominantBaseline = aDominantBaseline; }
+            DominantBaseline getDominantBaseline() const;
         };
 
 } // end of namespace svgio::svgreader

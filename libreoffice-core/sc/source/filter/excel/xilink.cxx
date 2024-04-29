@@ -20,6 +20,7 @@
 #include <utility>
 #include <xilink.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <scextopt.hxx>
 #include <xistream.hxx>
 #include <xihelper.hxx>
@@ -399,7 +400,7 @@ XclImpExtName::XclImpExtName( XclImpSupbook& rSupbook, XclImpStream& rStrm, XclS
             }
         break;
         case xlExtOLE:
-            mpMOper.reset( new MOper(rSupbook.GetSharedStringPool(), rStrm) );
+            moMOper.emplace( rSupbook.GetSharedStringPool(), rStrm );
         break;
         default:
             ;
@@ -472,7 +473,7 @@ bool extractSheetAndRange(const OUString& rName, OUString& rSheet, OUString& rRa
 bool XclImpExtName::CreateOleData(const ScDocument& rDoc, const OUString& rUrl,
                                   sal_uInt16& rFileId, OUString& rTabName, ScRange& rRange) const
 {
-    if (!mpMOper)
+    if (!moMOper)
         return false;
 
     OUString aSheet, aRangeStr;
@@ -488,7 +489,7 @@ bool XclImpExtName::CreateOleData(const ScDocument& rDoc, const OUString& rUrl,
         // We don't support multi-sheet range for this.
         return false;
 
-    const ScMatrix& rCache = mpMOper->GetCache();
+    const ScMatrix& rCache = moMOper->GetCache();
     SCSIZE nC, nR;
     rCache.GetDimensions(nC, nR);
     if (!nC || !nR)

@@ -36,6 +36,7 @@
 #include <vcl/dockwin.hxx>
 #include <vcl/wall.hxx>
 #include <vcl/toolkit/fixed.hxx>
+#include <vcl/toolkit/button.hxx>
 #include <vcl/taskpanelist.hxx>
 #include <vcl/toolkit/unowrap.hxx>
 #include <vcl/lazydelete.hxx>
@@ -62,7 +63,7 @@
 #include <com/sun/star/accessibility/AccessibleRelation.hpp>
 #include <com/sun/star/accessibility/XAccessible.hpp>
 #include <com/sun/star/accessibility/XAccessibleEditableText.hpp>
-#include <com/sun/star/awt/XWindowPeer.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 #include <com/sun/star/datatransfer/dnd/XDragGestureRecognizer.hpp>
 #include <com/sun/star/datatransfer/dnd/XDropTarget.hpp>
@@ -157,7 +158,7 @@ void Window::dispose()
     CallEventListeners( VclEventId::ObjectDying );
 
     // do not send child events for frames that were registered as native frames
-    if( !ImplIsAccessibleNativeFrame() && mpWindowImpl->mbReallyVisible )
+    if( !IsNativeFrame() && mpWindowImpl->mbReallyVisible )
         if ( ImplIsAccessibleCandidate() && GetAccessibleParentWindow() )
             GetAccessibleParentWindow()->CallEventListeners( VclEventId::WindowChildDestroyed, this );
 
@@ -223,6 +224,7 @@ void Window::dispose()
         Reference< XComponent> xC( mpWindowImpl->mxAccessible, UNO_QUERY );
         if ( xC.is() )
             xC->dispose();
+        mpWindowImpl->mxAccessible.clear();
     }
 
     ImplSVData* pSVData = ImplGetSVData();
@@ -736,7 +738,6 @@ WindowImpl::WindowImpl( vcl::Window& rWindow, WindowType nType )
     mbDoubleBufferingRequested = bDoubleBuffer; // when we are not sure, assume it cannot do double-buffering via RenderContext
     mpLOKNotifier                       = nullptr;
     mnLOKWindowId                       = 0;
-    mbLOKParentNotifier                 = false;
     mbUseFrameData                      = false;
 }
 
@@ -1392,8 +1393,7 @@ void Window::ImplPointToLogic(vcl::RenderContext const & rRenderContext, vcl::Fo
     aSize.AdjustHeight(72/2 );
     aSize.setHeight( aSize.Height() / 72 );
 
-    if (rRenderContext.IsMapModeEnabled())
-        aSize = rRenderContext.PixelToLogic(aSize);
+    aSize = rRenderContext.PixelToLogic(aSize);
 
     rFont.SetFontSize(aSize);
 }
@@ -1401,9 +1401,7 @@ void Window::ImplPointToLogic(vcl::RenderContext const & rRenderContext, vcl::Fo
 void Window::ImplLogicToPoint(vcl::RenderContext const & rRenderContext, vcl::Font& rFont) const
 {
     Size aSize = rFont.GetFontSize();
-
-    if (rRenderContext.IsMapModeEnabled())
-        aSize = rRenderContext.LogicToPixel(aSize);
+    aSize = rRenderContext.LogicToPixel(aSize);
 
     if (aSize.Width())
     {
@@ -1523,7 +1521,7 @@ void Window::ImplPosSizeWindow( tools::Long nX, tools::Long nY,
     if ( nFlags & PosSizeFlags::X )
     {
         tools::Long nOrgX = nX;
-        Point aPtDev( Point( nX+GetOutDev()->mnOutOffX, 0 ) );
+        Point aPtDev( nX+GetOutDev()->mnOutOffX, 0 );
         OutputDevice *pOutDev = GetOutDev();
         if( pOutDev->HasMirroredGraphics() )
         {
@@ -1910,7 +1908,7 @@ void Window::RequestHelp( const HelpEvent& rHEvt )
     }
     else if (!mpWindowImpl->maHelpRequestHdl.IsSet() || mpWindowImpl->maHelpRequestHdl.Call(*this))
     {
-        OUString aStrHelpId( OStringToOUString( GetHelpId(), RTL_TEXTENCODING_UTF8 ) );
+        OUString aStrHelpId( GetHelpId() );
         if ( aStrHelpId.isEmpty() && ImplGetParent() )
             ImplGetParent()->RequestHelp( rHEvt );
         else
@@ -2402,9 +2400,6 @@ void Window::Show(bool bVisible, ShowFlags nFlags)
     // now only notify with a NULL data pointer, for all other clients except the access bridge.
     if ( !bRealVisibilityChanged )
         CallEventListeners( mpWindowImpl->mbVisible ? VclEventId::WindowShow : VclEventId::WindowHide );
-    if( xWindow->isDisposed() )
-        return;
-
 }
 
 Size Window::GetSizePixel() const
@@ -2804,9 +2799,9 @@ Point Window::GetPosPixel() const
     return mpWindowImpl->maPos;
 }
 
-tools::Rectangle Window::GetDesktopRectPixel() const
+AbsoluteScreenPixelRectangle Window::GetDesktopRectPixel() const
 {
-    tools::Rectangle rRect;
+    AbsoluteScreenPixelRectangle rRect;
     mpWindowImpl->mpFrameWindow->mpWindowImpl->mpFrame->GetWorkArea( rRect );
     return rRect;
 }
@@ -2823,11 +2818,11 @@ Point Window::ScreenToOutputPixel( const Point& rPos ) const
     return Point( rPos.X() - GetOutDev()->mnOutOffX, rPos.Y() - GetOutDev()->mnOutOffY );
 }
 
-tools::Long Window::ImplGetUnmirroredOutOffX()
+tools::Long Window::ImplGetUnmirroredOutOffX() const
 {
     // revert mnOutOffX changes that were potentially made in ImplPosSizeWindow
     tools::Long offx = GetOutDev()->mnOutOffX;
-    OutputDevice *pOutDev = GetOutDev();
+    const OutputDevice *pOutDev = GetOutDev();
     if( pOutDev->HasMirroredGraphics() )
     {
         if( mpWindowImpl->mpParent && !mpWindowImpl->mpParent->mpWindowImpl->mbFrame && mpWindowImpl->mpParent->GetOutDev()->ImplIsAntiparallel() )
@@ -2849,38 +2844,38 @@ tools::Long Window::ImplGetUnmirroredOutOffX()
 Point Window::OutputToNormalizedScreenPixel( const Point& rPos ) const
 {
     // relative to top level parent
-    tools::Long offx = const_cast<vcl::Window*>(this)->ImplGetUnmirroredOutOffX();
+    tools::Long offx = ImplGetUnmirroredOutOffX();
     return Point( rPos.X()+offx, rPos.Y() + GetOutDev()->mnOutOffY );
 }
 
 Point Window::NormalizedScreenToOutputPixel( const Point& rPos ) const
 {
     // relative to top level parent
-    tools::Long offx = const_cast<vcl::Window*>(this)->ImplGetUnmirroredOutOffX();
+    tools::Long offx = ImplGetUnmirroredOutOffX();
     return Point( rPos.X()-offx, rPos.Y() - GetOutDev()->mnOutOffY );
 }
 
-Point Window::OutputToAbsoluteScreenPixel( const Point& rPos ) const
+AbsoluteScreenPixelPoint Window::OutputToAbsoluteScreenPixel( const Point& rPos ) const
 {
     // relative to the screen
     Point p = OutputToScreenPixel( rPos );
     SalFrameGeometry g = mpWindowImpl->mpFrame->GetGeometry();
     p.AdjustX(g.x() );
     p.AdjustY(g.y() );
-    return p;
+    return AbsoluteScreenPixelPoint(p);
 }
 
-Point Window::AbsoluteScreenToOutputPixel( const Point& rPos ) const
+Point Window::AbsoluteScreenToOutputPixel( const AbsoluteScreenPixelPoint& rPos ) const
 {
     // relative to the screen
-    Point p = ScreenToOutputPixel( rPos );
+    Point p = ScreenToOutputPixel( Point(rPos) );
     SalFrameGeometry g = mpWindowImpl->mpFrame->GetGeometry();
     p.AdjustX( -(g.x()) );
     p.AdjustY( -(g.y()) );
     return p;
 }
 
-tools::Rectangle Window::ImplOutputToUnmirroredAbsoluteScreenPixel( const tools::Rectangle &rRect ) const
+AbsoluteScreenPixelRectangle Window::ImplOutputToUnmirroredAbsoluteScreenPixel( const tools::Rectangle &rRect ) const
 {
     // this method creates unmirrored screen coordinates to be compared with the desktop
     // and is used for positioning of RTL popup windows correctly on the screen
@@ -2896,20 +2891,20 @@ tools::Rectangle Window::ImplOutputToUnmirroredAbsoluteScreenPixel( const tools:
     p2.setX( g.x()+g.width()-p2.X() );
     p2.AdjustY(g.y() );
 
-    return tools::Rectangle( p1, p2 );
+    return AbsoluteScreenPixelRectangle( AbsoluteScreenPixelPoint(p1), AbsoluteScreenPixelPoint(p2) );
 }
 
-tools::Rectangle Window::ImplUnmirroredAbsoluteScreenToOutputPixel( const tools::Rectangle &rRect ) const
+tools::Rectangle Window::ImplUnmirroredAbsoluteScreenToOutputPixel( const AbsoluteScreenPixelRectangle &rRect ) const
 {
     // undo ImplOutputToUnmirroredAbsoluteScreenPixel
     SalFrameGeometry g = mpWindowImpl->mpFrame->GetUnmirroredGeometry();
 
-    Point p1 = rRect.TopRight();
+    Point p1( rRect.TopRight() );
     p1.AdjustY(-g.y() );
     p1.setX( g.x()+g.width()-p1.X() );
     p1 = ScreenToOutputPixel(p1);
 
-    Point p2 = rRect.BottomLeft();
+    Point p2( rRect.BottomLeft() );
     p2.AdjustY(-g.y());
     p2.setX( g.x()+g.width()-p2.X() );
     p2 = ScreenToOutputPixel(p2);
@@ -2918,38 +2913,36 @@ tools::Rectangle Window::ImplUnmirroredAbsoluteScreenToOutputPixel( const tools:
 }
 
 
-tools::Rectangle Window::GetWindowExtentsRelative(const vcl::Window *pRelativeWindow) const
+// with decoration
+tools::Rectangle Window::GetWindowExtentsRelative(const vcl::Window & rRelativeWindow) const
 {
-    // with decoration
-    return ImplGetWindowExtentsRelative( pRelativeWindow );
+    AbsoluteScreenPixelRectangle aRect = GetWindowExtentsAbsolute();
+    // #106399# express coordinates relative to borderwindow
+    const vcl::Window *pRelWin = rRelativeWindow.mpWindowImpl->mpBorderWindow ? rRelativeWindow.mpWindowImpl->mpBorderWindow.get() : &rRelativeWindow;
+    return tools::Rectangle(
+        pRelWin->AbsoluteScreenToOutputPixel( aRect.GetPos() ),
+        aRect.GetSize() );
 }
 
-tools::Rectangle Window::ImplGetWindowExtentsRelative(const vcl::Window *pRelativeWindow) const
+// with decoration
+AbsoluteScreenPixelRectangle Window::GetWindowExtentsAbsolute() const
 {
-    SalFrameGeometry g = mpWindowImpl->mpFrame->GetGeometry();
     // make sure we use the extent of our border window,
     // otherwise we miss a few pixels
     const vcl::Window *pWin = mpWindowImpl->mpBorderWindow ? mpWindowImpl->mpBorderWindow : this;
 
-    Point aPos( pWin->OutputToScreenPixel( Point(0,0) ) );
-    aPos.AdjustX(g.x() );
-    aPos.AdjustY(g.y() );
+    AbsoluteScreenPixelPoint aPos( pWin->OutputToAbsoluteScreenPixel( Point(0,0) ) );
     Size aSize ( pWin->GetSizePixel() );
     // #104088# do not add decoration to the workwindow to be compatible to java accessibility api
     if( mpWindowImpl->mbFrame || (mpWindowImpl->mpBorderWindow && mpWindowImpl->mpBorderWindow->mpWindowImpl->mbFrame && GetType() != WindowType::WORKWINDOW) )
     {
+        SalFrameGeometry g = mpWindowImpl->mpFrame->GetGeometry();
         aPos.AdjustX( -sal_Int32(g.leftDecoration()) );
         aPos.AdjustY( -sal_Int32(g.topDecoration()) );
         aSize.AdjustWidth(g.leftDecoration() + g.rightDecoration() );
         aSize.AdjustHeight(g.topDecoration() + g.bottomDecoration() );
     }
-    if( pRelativeWindow )
-    {
-        // #106399# express coordinates relative to borderwindow
-        const vcl::Window *pRelWin = pRelativeWindow->mpWindowImpl->mpBorderWindow ? pRelativeWindow->mpWindowImpl->mpBorderWindow.get() : pRelativeWindow;
-        aPos = pRelWin->AbsoluteScreenToOutputPixel( aPos );
-    }
-    return tools::Rectangle( aPos, aSize );
+    return AbsoluteScreenPixelRectangle( aPos, aSize );
 }
 
 void Window::Scroll( tools::Long nHorzScroll, tools::Long nVertScroll, ScrollFlags nFlags )
@@ -3100,7 +3093,7 @@ const Wallpaper& Window::GetDisplayBackground() const
 
 const OUString& Window::GetHelpText() const
 {
-    OUString aStrHelpId( OStringToOUString( GetHelpId(), RTL_TEXTENCODING_UTF8 ) );
+    OUString aStrHelpId( GetHelpId() );
     bool bStrHelpId = !aStrHelpId.isEmpty();
 
     if ( !mpWindowImpl->maHelpText.getLength() && bStrHelpId )
@@ -3120,8 +3113,7 @@ const OUString& Window::GetHelpText() const
         static const char* pEnv = getenv( "HELP_DEBUG" );
         if( pEnv && *pEnv )
         {
-            OUString aTxt = mpWindowImpl->maHelpText + "\n------------------\n" + aStrHelpId;
-            mpWindowImpl->maHelpText = aTxt;
+            mpWindowImpl->maHelpText = mpWindowImpl->maHelpText + "\n------------------\n" + aStrHelpId;
         }
         mpWindowImpl->mbHelpTextDynamic = false;
     }
@@ -3132,7 +3124,7 @@ const OUString& Window::GetHelpText() const
     return mpWindowImpl->maHelpText;
 }
 
-void Window::SetWindowPeer( Reference< css::awt::XWindowPeer > const & xPeer, VCLXWindow* pVCLXWindow  )
+void Window::SetWindowPeer( Reference< css::awt::XVclWindowPeer > const & xPeer, VCLXWindow* pVCLXWindow  )
 {
     if (!mpWindowImpl || mpWindowImpl->mbInDispose)
         return;
@@ -3153,7 +3145,7 @@ void Window::SetWindowPeer( Reference< css::awt::XWindowPeer > const & xPeer, VC
     mpWindowImpl->mpVCLXWindow = pVCLXWindow;
 }
 
-Reference< css::awt::XWindowPeer > Window::GetComponentInterface( bool bCreate )
+Reference< css::awt::XVclWindowPeer > Window::GetComponentInterface( bool bCreate )
 {
     if ( !mpWindowImpl->mxWindowPeer.is() && bCreate )
     {
@@ -3164,7 +3156,7 @@ Reference< css::awt::XWindowPeer > Window::GetComponentInterface( bool bCreate )
     return mpWindowImpl->mxWindowPeer;
 }
 
-void Window::SetComponentInterface( Reference< css::awt::XWindowPeer > const & xIFace )
+void Window::SetComponentInterface( Reference< css::awt::XVclWindowPeer > const & xIFace )
 {
     UnoWrapperBase* pWrapper = UnoWrapperBase::GetUnoWrapper();
     SAL_WARN_IF( !pWrapper, "vcl.window", "SetComponentInterface: No Wrapper!" );
@@ -3204,8 +3196,6 @@ void Window::SetLOKNotifier(const vcl::ILibreOfficeKitNotifier* pNotifier, bool 
         mpWindowImpl->mnLOKWindowId = sLastLOKWindowId++;
         GetLOKWindowsMap().emplace(mpWindowImpl->mnLOKWindowId, this);
     }
-    else
-        mpWindowImpl->mbLOKParentNotifier = true;
 
     mpWindowImpl->mpLOKNotifier = pNotifier;
 }
@@ -3355,6 +3345,7 @@ std::string_view windowTypeName(WindowType nWindowType)
         case WindowType::RULER:                     return "ruler";
         case WindowType::HEADERBAR:                 return "headerbar";
         case WindowType::VERTICALTABCONTROL:        return "verticaltabcontrol";
+        case WindowType::PROGRESSBAR:               return "progressbar";
 
         // nothing to do here, but for completeness
         case WindowType::TOOLKIT_FRAMEWINDOW:       return "toolkit_framewindow";
@@ -3409,6 +3400,17 @@ void Window::DumpAsPropertyTree(tools::JsonWriter& rJsonWriter)
     vcl::Window* pAccLabelledBy = GetAccessibleRelationLabeledBy();
     if (pAccLabelledBy)
         rJsonWriter.put("labelledBy", pAccLabelledBy->get_id());
+
+    if(!pAccLabelFor && !pAccLabelledBy)
+    {
+        auto aAria = rJsonWriter.startNode("aria");
+
+        OUString sAccString = GetAccessibleName();
+        rJsonWriter.put("label", sAccString);
+
+        sAccString = GetAccessibleDescription();
+        rJsonWriter.put("description", sAccString);
+    }
 
     mpWindowImpl->maDumpAsPropertyTreeHdl.Call(rJsonWriter);
 }

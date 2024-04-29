@@ -63,15 +63,14 @@
 #include <vcl/svapp.hxx>
 #include <vcl/taskpanelist.hxx>
 #include <vcl/help.hxx>
-#include <o3tl/string_view.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <vector>
 #include <com/sun/star/reflection/theCoreReflection.hpp>
 #include <unotools/charclass.hxx>
-#include <o3tl/string_view.hxx>
 #include "textwindowpeer.hxx"
 #include "uiobject.hxx"
 #include <basegfx/utils/zoomtools.hxx>
+#include <svl/itemset.hxx>
 
 namespace basctl
 {
@@ -564,7 +563,11 @@ void EditorWindow::KeyInput( const KeyEvent& rKEvt )
 
     if (pCodeCompleteWnd->IsVisible() && CodeCompleteOptions::IsCodeCompleteOn())
     {
-        if (pCodeCompleteWnd->HandleKeyInput(rKEvt))
+        pCodeCompleteWnd->HandleKeyInput(rKEvt);
+        if( rKEvt.GetKeyCode().GetCode() == KEY_UP
+            || rKEvt.GetKeyCode().GetCode() == KEY_DOWN
+            || rKEvt.GetKeyCode().GetCode() == KEY_TAB
+            || rKEvt.GetKeyCode().GetCode() == KEY_POINT)
             return;
     }
 
@@ -628,6 +631,13 @@ void EditorWindow::KeyInput( const KeyEvent& rKEvt )
             {
                 pBindings->Update( SID_BASICIDE_STAT_POS );
                 pBindings->Update( SID_BASICIDE_STAT_TITLE );
+            }
+            if ( rKEvt.GetKeyCode().GetGroup() == KEYGROUP_ALPHA ||
+                 rKEvt.GetKeyCode().GetGroup() == KEYGROUP_NUM )
+            {
+                // If the module is read-only, warn that it can't be edited
+                if ( rModulWindow.IsReadOnly() )
+                    rModulWindow.ShowReadOnlyInfoBar();
             }
             if ( !bWasModified && pEditEngine->IsModified() )
             {
@@ -1040,7 +1050,7 @@ void EditorWindow::CreateEditEngine()
     // nLines*4: SetText+Formatting+DoHighlight+Formatting
     // it could be cut down on one formatting but you would wait even longer
     // for the text then if the source code is long...
-    pProgress.reset(new ProgressInfo(GetShell()->GetViewFrame()->GetObjectShell(),
+    pProgress.reset(new ProgressInfo(GetShell()->GetViewFrame().GetObjectShell(),
                                      IDEResId(RID_STR_GENERATESOURCE),
                                      nLines * 4));
     setTextEngineText(*pEditEngine, aOUSource);
@@ -1242,9 +1252,12 @@ void EditorWindow::ChangeFontColor( Color aColor )
 
 void EditorWindow::UpdateSyntaxHighlighting ()
 {
-    const sal_uInt32 nCount = pEditEngine->GetParagraphCount();
-    for (sal_uInt32 i = 0; i < nCount; ++i)
-        DoDelayedSyntaxHighlight(i);
+    if (pEditEngine)
+    {
+        const sal_uInt32 nCount = pEditEngine->GetParagraphCount();
+        for (sal_uInt32 i = 0; i < nCount; ++i)
+            DoDelayedSyntaxHighlight(i);
+    }
 }
 
 void EditorWindow::ImplSetFont()
@@ -1388,7 +1401,7 @@ void EditorWindow::CreateProgress( const OUString& rText, sal_uInt32 nRange )
 {
     DBG_ASSERT( !pProgress, "ProgressInfo exists already" );
     pProgress.reset(new ProgressInfo(
-        GetShell()->GetViewFrame()->GetObjectShell(),
+        GetShell()->GetViewFrame().GetObjectShell(),
         rText,
         nRange
     ));
@@ -1461,7 +1474,7 @@ void BreakPointWindow::ShowMarker(vcl::RenderContext& rRenderContext)
     Size const aOutSz = GetOutDev()->GetOutputSize();
     tools::Long const nLineHeight = GetTextHeight();
 
-    Image aMarker = GetImage(bErrorMarker ? OUString(RID_BMP_ERRORMARKER) : OUString(RID_BMP_STEPMARKER));
+    Image aMarker = GetImage(bErrorMarker ? RID_BMP_ERRORMARKER : RID_BMP_STEPMARKER);
 
     Size aMarkerSz(aMarker.GetSizePixel());
     aMarkerSz = rRenderContext.PixelToLogic(aMarkerSz);
@@ -1469,7 +1482,7 @@ void BreakPointWindow::ShowMarker(vcl::RenderContext& rRenderContext)
     aMarkerOff.setX( (aOutSz.Width() - aMarkerSz.Width()) / 2 );
     aMarkerOff.setY( (nLineHeight - aMarkerSz.Height()) / 2 );
 
-    sal_uLong nY = nMarkerPos * nLineHeight - nCurYOffset;
+    tools::Long nY = nMarkerPos * nLineHeight - nCurYOffset;
     Point aPos(0, nY);
     aPos += aMarkerOff;
 
@@ -1524,7 +1537,7 @@ void BreakPointWindow::MouseButtonDown( const MouseEvent& rMEvt )
         {
             tools::Long nYPos = aMousePos.Y() + nCurYOffset;
             tools::Long nLine = nYPos / nLineHeight + 1;
-            rModulWindow.ToggleBreakPoint( static_cast<sal_uLong>(nLine) );
+            rModulWindow.ToggleBreakPoint( static_cast<sal_uInt16>(nLine) );
             Invalidate();
         }
     }
@@ -1548,7 +1561,7 @@ void BreakPointWindow::Command( const CommandEvent& rCEvt )
         // test if break point is enabled...
         std::unique_ptr<weld::Menu> xBrkPropMenu = xUIBuilder->weld_menu("breakmenu");
         xBrkPropMenu->set_active("active", pBrk->bEnabled);
-        OString sCommand = xBrkPropMenu->popup_at_rect(pPopupParent, aRect);
+        OUString sCommand = xBrkPropMenu->popup_at_rect(pPopupParent, aRect);
         if (sCommand == "active")
         {
             pBrk->bEnabled = !pBrk->bEnabled;
@@ -1566,7 +1579,7 @@ void BreakPointWindow::Command( const CommandEvent& rCEvt )
     else
     {
         std::unique_ptr<weld::Menu> xBrkListMenu = xUIBuilder->weld_menu("breaklistmenu");
-        OString sCommand = xBrkListMenu->popup_at_rect(pPopupParent, aRect);
+        OUString sCommand = xBrkListMenu->popup_at_rect(pPopupParent, aRect);
         if (sCommand == "manage")
         {
             BreakPointDialog aBrkDlg(pPopupParent, GetBreakPoints());
@@ -2084,10 +2097,10 @@ void ComplexEditorWindow::SetLineNumberDisplay(bool b)
     Resize();
 }
 
-uno::Reference< awt::XWindowPeer >
+uno::Reference< awt::XVclWindowPeer >
 EditorWindow::GetComponentInterface(bool bCreate)
 {
-    uno::Reference< awt::XWindowPeer > xPeer(
+    uno::Reference< awt::XVclWindowPeer > xPeer(
         Window::GetComponentInterface(false));
     if (!xPeer.is() && bCreate)
     {

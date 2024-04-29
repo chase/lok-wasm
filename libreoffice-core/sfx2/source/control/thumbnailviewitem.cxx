@@ -33,10 +33,15 @@
 #include <drawinglayer/primitive2d/textlayoutdevice.hxx>
 #include <drawinglayer/primitive2d/textprimitive2d.hxx>
 #include <drawinglayer/processor2d/baseprocessor2d.hxx>
+#include <vcl/event.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/mnemonic.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/texteng.hxx>
+#include <bitmaps.hlst>
+#include <drawinglayer/primitive2d/discretebitmapprimitive2d.hxx>
+#include <unotools/historyoptions.hxx>
+
 
 using namespace basegfx;
 using namespace basegfx::utils;
@@ -58,7 +63,7 @@ ThumbnailViewItem::~ThumbnailViewItem()
 {
     if( mxAcc.is() )
     {
-        static_cast< ThumbnailViewItemAcc* >( mxAcc.get() )->ParentDestroyed();
+        mxAcc->ParentDestroyed();
     }
 }
 
@@ -106,7 +111,7 @@ void ThumbnailViewItem::setTitle (const OUString& rTitle)
         maTitle = rTitle;
 }
 
-uno::Reference< accessibility::XAccessible > const & ThumbnailViewItem::GetAccessible( bool bIsTransientChildrenDisabled )
+const rtl::Reference< ThumbnailViewItemAcc > & ThumbnailViewItem::GetAccessible( bool bIsTransientChildrenDisabled )
 {
     if( !mxAcc.is() )
         mxAcc = new ThumbnailViewItemAcc( this, bIsTransientChildrenDisabled );
@@ -134,6 +139,9 @@ void ThumbnailViewItem::calculateItemsPosition (const tools::Long nThumbnailHeig
     const Point aPos = maDrawArea.TopCenter();
     maPrev1Pos = aPos + Point(-aImageSize.Width() / 2, nPadding + (nThumbnailHeight - aImageSize.Height()) / 2);
 
+    // Calculate pin position
+    maPinPos = maDrawArea.TopLeft() + Point(nPadding, nPadding);
+
     // Calculate text position
     maTextPos = aPos + Point(-aTextDev.getTextWidth(maTitle, 0, nMaxTextLength) / 2, nThumbnailHeight + nPadding * 2);
 }
@@ -147,7 +155,7 @@ void ThumbnailViewItem::Paint (drawinglayer::processor2d::BaseProcessor2D *pProc
 
     // Draw background
     if( mbSelected && mbHover)
-        aFillColor = pAttrs->aSelectHighlightColor;
+        aFillColor = pAttrs->aHighlightColor;
     else if (mbSelected || mbHover)
     {
         aFillColor = pAttrs->aHighlightColor;
@@ -227,9 +235,9 @@ void ThumbnailViewItem::addTextPrimitives (const OUString& rText, const Thumbnai
     rSeq.resize(nFinalPrimCount);
 
     // Create the text primitives
-    sal_uInt16 nLineStart = 0;
+    sal_Int32 nLineStart = 0;
     OUString aText(aOrigText);
-    for (sal_uInt16 i=0; i < aTextEngine.GetLineCount(0); ++i)
+    for (sal_Int32 i=0; i < aTextEngine.GetLineCount(0); ++i)
     {
         sal_Int32 nLineLength = aTextEngine.GetLineLen(0, i);
         double nLineWidth = aTextDev.getTextWidth (aText, nLineStart, nLineLength);
@@ -260,10 +268,7 @@ void ThumbnailViewItem::addTextPrimitives (const OUString& rText, const Thumbnai
         BColor aTextColor = pAttrs->aTextColor;
         if(mbSelected)
         {
-            if (mbHover)
-                aTextColor = pAttrs->aSelectHighlightTextColor;
-            else
-                aTextColor = pAttrs->aHighlightTextColor;
+            aTextColor = pAttrs->aHighlightTextColor;
         }
 
         rSeq[nPrimitives++] = drawinglayer::primitive2d::Primitive2DReference(
@@ -279,10 +284,11 @@ void ThumbnailViewItem::addTextPrimitives (const OUString& rText, const Thumbnai
         {
             rSeq.resize(nFinalPrimCount + 1);
 
-            auto aCaretPositions = aTextDev.getCaretPositions(aText, nLineStart, nLineLength);
+            auto aTextArray = aTextDev.getTextArray(aText, nLineStart, nLineLength, true);
 
-            auto lc_x1 = aCaretPositions[2*(nMnemonicPos - nLineStart)];
-            auto lc_x2 = aCaretPositions[2*(nMnemonicPos - nLineStart)+1];
+            auto nPos = nMnemonicPos - nLineStart;
+            auto lc_x1 = nPos ? aTextArray[nPos - 1] : 0;
+            auto lc_x2 = aTextArray[nPos];
             auto fMnemonicWidth = std::abs(lc_x1 - lc_x2);
             auto fMnemonicHeight = aTextDev.getUnderlineHeight();
 

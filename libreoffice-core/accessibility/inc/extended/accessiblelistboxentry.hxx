@@ -29,11 +29,12 @@
 #include <com/sun/star/accessibility/XAccessibleSelection.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/accessibility/XAccessibleValue.hpp>
-#include <cppuhelper/compbase9.hxx>
+#include <cppuhelper/compbase.hxx>
 #include <cppuhelper/basemutex.hxx>
 #include <comphelper/accessibletexthelper.hxx>
 #include <vcl/toolkit/treelistentry.hxx>
 #include <tools/gen.hxx>
+#include <unotools/weakref.hxx>
 
 // forward ---------------------------------------------------------------
 
@@ -53,7 +54,7 @@ namespace accessibility
     class AccessibleListBox;
 
 // class AccessibleListBoxEntry ------------------------------------------
-    typedef ::cppu::WeakAggComponentImplHelper9< css::accessibility::XAccessible
+    typedef ::cppu::WeakComponentImplHelper< css::accessibility::XAccessible
                                                 , css::accessibility::XAccessibleContext
                                                 , css::accessibility::XAccessibleComponent
                                                 , css::accessibility::XAccessibleEventBroadcaster
@@ -80,8 +81,7 @@ namespace accessibility
         /// client id in the AccessibleEventNotifier queue
         sal_uInt32                          m_nClientId;
 
-        css::uno::WeakReference<css::accessibility::XAccessible> m_wListBox;
-        AccessibleListBox & m_rListBox;
+        unotools::WeakReference<AccessibleListBox> m_wListBox;
 
         tools::Rectangle               GetBoundingBox_Impl() const;
         tools::Rectangle               GetBoundingBoxOnScreen_Impl() const;
@@ -94,6 +94,8 @@ namespace accessibility
         /// @throws css::lang::DisposedException
         /// @throws css::uno::RuntimeException
         tools::Rectangle               GetBoundingBoxOnScreen();
+        /// @throws css::lang::IndexOutOfBoundsException
+        void CheckActionIndex(sal_Int32 nIndex);
         /// @throws css::lang::DisposedException
         void                    EnsureIsAlive() const;
 

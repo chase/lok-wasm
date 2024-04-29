@@ -282,7 +282,7 @@ void SAL_CALL GeometryHandler::inspect( const uno::Reference< uno::XInterface > 
         const uno::Reference< container::XNameContainer > xObjectAsContainer( _rxInspectee, uno::UNO_QUERY );
         m_xReportComponent.set( xObjectAsContainer->getByName("ReportComponent"), uno::UNO_QUERY );
 
-        static const OUStringLiteral sRowSet(u"RowSet");
+        static constexpr OUString sRowSet(u"RowSet"_ustr);
         if ( xObjectAsContainer->hasByName( sRowSet ) )
         {
             const uno::Any aRowSet( xObjectAsContainer->getByName(sRowSet) );
@@ -1262,40 +1262,40 @@ uno::Sequence< beans::Property > SAL_CALL GeometryHandler::getSupportedPropertie
 
     const OUString pIncludeProperties[] =
     {
-         OUString(PROPERTY_FORCENEWPAGE)
-        ,OUString(PROPERTY_KEEPTOGETHER)
-        ,OUString(PROPERTY_CANGROW)
-        ,OUString(PROPERTY_CANSHRINK)
-        ,OUString(PROPERTY_REPEATSECTION)
-        ,OUString(PROPERTY_PRINTREPEATEDVALUES)
-        ,OUString(PROPERTY_CONDITIONALPRINTEXPRESSION)
-        ,OUString(PROPERTY_STARTNEWCOLUMN)
-        ,OUString(PROPERTY_RESETPAGENUMBER)
-        ,OUString(PROPERTY_PRINTWHENGROUPCHANGE)
-        ,OUString(PROPERTY_VISIBLE)
-        ,OUString(PROPERTY_PAGEHEADEROPTION)
-        ,OUString(PROPERTY_PAGEFOOTEROPTION)
+         PROPERTY_FORCENEWPAGE
+        ,PROPERTY_KEEPTOGETHER
+        ,PROPERTY_CANGROW
+        ,PROPERTY_CANSHRINK
+        ,PROPERTY_REPEATSECTION
+        ,PROPERTY_PRINTREPEATEDVALUES
+        ,PROPERTY_CONDITIONALPRINTEXPRESSION
+        ,PROPERTY_STARTNEWCOLUMN
+        ,PROPERTY_RESETPAGENUMBER
+        ,PROPERTY_PRINTWHENGROUPCHANGE
+        ,PROPERTY_VISIBLE
+        ,PROPERTY_PAGEHEADEROPTION
+        ,PROPERTY_PAGEFOOTEROPTION
         ,OUString("ControlLabel")
-        ,OUString(PROPERTY_POSITIONX)
-        ,OUString(PROPERTY_POSITIONY)
-        ,OUString(PROPERTY_WIDTH)
-        ,OUString(PROPERTY_HEIGHT)
-        ,OUString(PROPERTY_AUTOGROW)
-        ,OUString(PROPERTY_PREEVALUATED)
-        ,OUString(PROPERTY_DEEPTRAVERSING)
-        ,OUString(PROPERTY_FORMULA)
-        ,OUString(PROPERTY_INITIALFORMULA)
-        ,OUString(PROPERTY_PRESERVEIRI)
-        ,OUString(PROPERTY_DATAFIELD)
-        ,OUString(PROPERTY_FONT)
-        ,OUString(PROPERTY_BACKCOLOR)
-        ,OUString(PROPERTY_BACKTRANSPARENT)
-        ,OUString(PROPERTY_CONTROLBACKGROUND)
-        ,OUString(PROPERTY_CONTROLBACKGROUNDTRANSPARENT)
-        ,OUString(PROPERTY_LABEL)
-        ,OUString(PROPERTY_MIMETYPE)
-        ,OUString(PROPERTY_VERTICALALIGN)
-        ,OUString(PROPERTY_PARAADJUST)
+        ,PROPERTY_POSITIONX
+        ,PROPERTY_POSITIONY
+        ,PROPERTY_WIDTH
+        ,PROPERTY_HEIGHT
+        ,PROPERTY_AUTOGROW
+        ,PROPERTY_PREEVALUATED
+        ,PROPERTY_DEEPTRAVERSING
+        ,PROPERTY_FORMULA
+        ,PROPERTY_INITIALFORMULA
+        ,PROPERTY_PRESERVEIRI
+        ,PROPERTY_DATAFIELD
+        ,PROPERTY_FONT
+        ,PROPERTY_BACKCOLOR
+        ,PROPERTY_BACKTRANSPARENT
+        ,PROPERTY_CONTROLBACKGROUND
+        ,PROPERTY_CONTROLBACKGROUNDTRANSPARENT
+        ,PROPERTY_LABEL
+        ,PROPERTY_MIMETYPE
+        ,PROPERTY_VERTICALALIGN
+        ,PROPERTY_PARAADJUST
     };
     const uno::Reference < beans::XPropertySetInfo > xInfo = m_xReportComponent->getPropertySetInfo();
     const uno::Sequence< beans::Property> aSeq = xInfo->getProperties();
@@ -2093,8 +2093,8 @@ void GeometryHandler::impl_createFunction(const OUString& _sFunctionName,std::u1
     m_xFunction.set(report::Function::create(m_xContext));
     m_xFunction->setName( _sFunctionName );
 
-    static const OUStringLiteral sPlaceHolder1(u"%Column");
-    static const OUStringLiteral sPlaceHolder2(u"%FunctionName");
+    static constexpr OUString sPlaceHolder1(u"%Column"_ustr);
+    static constexpr OUString sPlaceHolder2(u"%FunctionName"_ustr);
     OUString sFormula(_aFunction.m_sFormula);
     sFormula = sFormula.replaceAll(sPlaceHolder1,_sDataField);
     sFormula = sFormula.replaceAll(sPlaceHolder2,_sFunctionName);

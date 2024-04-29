@@ -28,6 +28,7 @@
 #include <vector>
 #include <set>
 
+#include "format.hxx"
 #include "utility.hxx"
 
 
@@ -37,7 +38,7 @@ class SmSym
 {
 private:
     SmFace              m_aFace;
-    OUString            m_aName;
+    OUString            m_aUiName;
     OUString            m_aExportName;
     OUString            m_aSetName;
     sal_UCS4            m_cChar;
@@ -51,9 +52,9 @@ public:
 
     SmSym&      operator = (const SmSym& rSymbol);
 
-    const vcl::Font&  GetFace() const { return m_aFace; }
+    const vcl::Font&  GetFace(const SmFormat* pFormat = nullptr) const;
     sal_UCS4        GetCharacter() const { return m_cChar; }
-    const OUString&   GetName() const { return m_aName; }
+    const OUString&   GetUiName() const { return m_aUiName; }
 
     bool            IsPredefined() const        { return m_bPredefined; }
     const OUString& GetSymbolSetName() const    { return m_aSetName; }
@@ -92,11 +93,9 @@ public:
     bool                    AddOrReplaceSymbol( const SmSym & rSymbol, bool bForceChange = false );
     void                    RemoveSymbol( const OUString & rSymbolName );
 
-    SmSym       *   GetSymbolByName(const OUString& rSymbolName);
-    const SmSym *   GetSymbolByName(const OUString& rSymbolName) const
-    {
-        return const_cast<SmSymbolManager *>(this)->GetSymbolByName(rSymbolName);
-    }
+    SmSym* GetSymbolByName(std::u16string_view rSymbolName);
+    SmSym* GetSymbolByUiName(std::u16string_view rSymbolName);
+    SmSym* GetSymbolByExportName(std::u16string_view rSymbolName);
 
     bool        IsModified() const          { return m_bModified; }
     void        SetModified(bool bModify)   { m_bModified = bModify; }

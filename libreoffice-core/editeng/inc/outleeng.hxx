@@ -46,8 +46,8 @@ public:
     virtual void        ParagraphConnected( sal_Int32 nLeftParagraph, sal_Int32 nRightParagraph ) override;
 
     virtual void DrawingText( const Point& rStartPos, const OUString& rText, sal_Int32 nTextStart,
-                              sal_Int32 nTextLen, o3tl::span<const sal_Int32> pDXArray,
-                              o3tl::span<const sal_Bool> pKashidaArray, const SvxFont& rFont,
+                              sal_Int32 nTextLen, std::span<const sal_Int32> pDXArray,
+                              std::span<const sal_Bool> pKashidaArray, const SvxFont& rFont,
                               sal_Int32 nPara, sal_uInt8 nRightToLeft,
                               const EEngineData::WrongSpellVector* pWrongSpellVector,
                               const SvxFieldData* pFieldData,
@@ -73,7 +73,7 @@ public:
     // for text conversion
     virtual bool        ConvertNextDocument() override;
 
-    virtual OUString    CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rTxtColor, std::optional<Color>& rFldColor ) override;
+    virtual OUString    CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rTxtColor, std::optional<Color>& rFldColor, std::optional<FontLineStyle>& rFldLineStyle ) override;
 
     virtual tools::Rectangle   GetBulletArea( sal_Int32 nPara ) override;
 

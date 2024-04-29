@@ -37,7 +37,6 @@
 #include <com/sun/star/util/XCloseable.hpp>
 
 #include <com/sun/star/ui/XSidebarProvider.hpp>
-#include <sfx2/userinputinterception.hxx>
 
 #include <datasourceconnector.hxx>
 #include <com/sun/star/frame/FrameSearchFlag.hpp>
@@ -73,32 +72,11 @@ typedef std::unordered_map< sal_Int16, sal_Int16 > CommandHashMap;
 namespace dbaui
 {
 
-namespace {
-
-// UserDefinedFeatures
-class UserDefinedFeatures
-{
-public:
-    explicit UserDefinedFeatures( const Reference< XController >& _rxController );
-
-    void            execute( const URL& _rFeatureURL, const Sequence< PropertyValue>& _rArgs );
-
-private:
-    css::uno::WeakReference< XController > m_aController;
-};
-
-}
-
-UserDefinedFeatures::UserDefinedFeatures( const Reference< XController >& _rxController )
-    :m_aController( _rxController )
-{
-}
-
-void UserDefinedFeatures::execute( const URL& _rFeatureURL, const Sequence< PropertyValue>& _rArgs )
+void OGenericUnoController::executeUserDefinedFeatures( const URL& _rFeatureURL, const Sequence< PropertyValue>& _rArgs )
 {
     try
     {
-        Reference< XController > xController( Reference< XController >(m_aController), UNO_SET_THROW );
+        Reference< XController > xController( getXController(), UNO_SET_THROW );
         Reference< XDispatchProvider > xDispatchProvider( xController->getFrame(), UNO_QUERY_THROW );
         Reference< XDispatch > xDispatch( xDispatchProvider->queryDispatch(
             _rFeatureURL,
@@ -121,22 +99,10 @@ void UserDefinedFeatures::execute( const URL& _rFeatureURL, const Sequence< Prop
     }
 }
 
-// OGenericUnoController_Data
-struct OGenericUnoController_Data
-{
-    ::sfx2::UserInputInterception   m_aUserInputInterception;
-    UserDefinedFeatures             m_aUserDefinedFeatures;
-
-    OGenericUnoController_Data( OGenericUnoController& _rController, ::osl::Mutex& _rMutex )
-        :m_aUserInputInterception( _rController, _rMutex )
-        ,m_aUserDefinedFeatures( _rController.getXController() )
-    {
-    }
-};
-
 // OGenericUnoController
 OGenericUnoController::OGenericUnoController(const Reference< XComponentContext >& _rM)
     :OGenericUnoController_Base( getMutex() )
+    ,m_aUserInputInterception(*this, getMutex())
     ,m_pView(nullptr)
 #ifdef DBG_UTIL
     ,m_bDescribingSupportedFeatures( false )
@@ -150,12 +116,6 @@ OGenericUnoController::OGenericUnoController(const Reference< XComponentContext 
     ,m_bCurrentlyModified(false)
     ,m_bExternalTitle(false)
 {
-    osl_atomic_increment( &m_refCount );
-    {
-        m_pData.reset( new OGenericUnoController_Data( *this, getMutex() ) );
-    }
-    osl_atomic_decrement( &m_refCount );
-
 
     try
     {
@@ -371,9 +331,9 @@ namespace
         //          framework's implementation details
         if ( !!_rFeatureState.sTitle )
             _out_rStates.push_back( Any( *_rFeatureState.sTitle ) );
-        if ( !!_rFeatureState.bChecked )
+        if ( _rFeatureState.bChecked.has_value() )
             _out_rStates.push_back( Any( *_rFeatureState.bChecked ) );
-        if ( !!_rFeatureState.bInvisible )
+        if ( _rFeatureState.bInvisible.has_value() )
             _out_rStates.push_back( Any( Visibility( !*_rFeatureState.bInvisible ) ) );
         if ( _rFeatureState.aValue.hasValue() )
             _out_rStates.push_back( _rFeatureState.aValue );
@@ -459,7 +419,7 @@ void OGenericUnoController::InvalidateFeature_Impl()
     bool bEmpty = true;
     FeatureListener aNextFeature;
     {
-        ::osl::MutexGuard aGuard( m_aFeatureMutex);
+        std::unique_lock aGuard( m_aFeatureMutex);
         bEmpty = m_aFeaturesToInvalidate.empty();
         if (!bEmpty)
             aNextFeature = m_aFeaturesToInvalidate.front();
@@ -492,7 +452,7 @@ void OGenericUnoController::InvalidateFeature_Impl()
                 ImplBroadcastFeatureState( aFeaturePos->first, aNextFeature.xListener, aNextFeature.bForceBroadcast );
         }
 
-        ::osl::MutexGuard aGuard( m_aFeatureMutex);
+        std::unique_lock aGuard( m_aFeatureMutex);
         m_aFeaturesToInvalidate.pop_front();
         bEmpty = m_aFeaturesToInvalidate.empty();
         if (!bEmpty)
@@ -521,7 +481,7 @@ void OGenericUnoController::ImplInvalidateFeature( sal_Int32 _nId, const Referen
 
     bool bWasEmpty;
     {
-        ::osl::MutexGuard aGuard( m_aFeatureMutex );
+        std::unique_lock aGuard( m_aFeatureMutex );
         bWasEmpty = m_aFeaturesToInvalidate.empty();
         m_aFeaturesToInvalidate.push_back( aListener );
     }
@@ -547,7 +507,7 @@ void OGenericUnoController::InvalidateAll_Impl()
         ImplBroadcastFeatureState( supportedFeature.first, nullptr, true );
 
     {
-        ::osl::MutexGuard aGuard( m_aFeatureMutex);
+        std::unique_lock aGuard( m_aFeatureMutex);
         OSL_ENSURE(m_aFeaturesToInvalidate.size(), "OGenericUnoController::InvalidateAll_Impl: to be called from within InvalidateFeature_Impl only!");
         m_aFeaturesToInvalidate.pop_front();
         if(!m_aFeaturesToInvalidate.empty())
@@ -653,9 +613,7 @@ void OGenericUnoController::removeStatusListener(const Reference< XStatusListene
 {
     if (_rURL.Complete.isEmpty())
     {
-        m_arrStatusListener.erase(std::remove_if(m_arrStatusListener.begin(), m_arrStatusListener.end(),
-            [&aListener](const DispatchTarget& rCurrent) { return rCurrent.xListener == aListener; }),
-            m_arrStatusListener.end());
+        std::erase_if(m_arrStatusListener, [&aListener](const DispatchTarget& rCurrent) { return rCurrent.xListener == aListener; });
     }
     else
     {
@@ -680,12 +638,8 @@ void OGenericUnoController::removeStatusListener(const Reference< XStatusListene
     }
 
     // now remove the listener from the deque
-    ::osl::MutexGuard aGuard( m_aFeatureMutex );
-    m_aFeaturesToInvalidate.erase(
-        std::remove_if(   m_aFeaturesToInvalidate.begin(),
-                            m_aFeaturesToInvalidate.end(),
-                            FindFeatureListener(aListener))
-        ,m_aFeaturesToInvalidate.end());
+    std::unique_lock aGuard( m_aFeatureMutex );
+    std::erase_if( m_aFeaturesToInvalidate, FindFeatureListener(aListener));
 }
 
 void OGenericUnoController::releaseNumberForComponent()
@@ -717,7 +671,7 @@ void OGenericUnoController::disposing()
 
     m_xDatabaseContext = nullptr;
     {
-        ::osl::MutexGuard aGuard( m_aFeatureMutex);
+        std::unique_lock aGuard( m_aFeatureMutex);
         m_aAsyncInvalidateAll.CancelCall();
         m_aFeaturesToInvalidate.clear();
     }
@@ -815,7 +769,7 @@ void OGenericUnoController::Execute( sal_uInt16 _nId, const Sequence< PropertyVa
 
     // user defined features can be handled by dispatch interceptors resp. protocol handlers only.
     // So, we need to do a queryDispatch, and dispatch the URL
-    m_pData->m_aUserDefinedFeatures.execute( getURLForId( _nId ), _rArgs );
+    executeUserDefinedFeatures( getURLForId( _nId ), _rArgs );
 }
 
 URL OGenericUnoController::getURLForId(sal_Int32 _nId) const
@@ -1102,23 +1056,23 @@ void SAL_CALL OGenericUnoController::removeTitleChangeListener(const Reference< 
 void SAL_CALL OGenericUnoController::addKeyHandler( const Reference< XKeyHandler >& _rxHandler )
 {
     if ( _rxHandler.is() )
-        m_pData->m_aUserInputInterception.addKeyHandler( _rxHandler );
+        m_aUserInputInterception.addKeyHandler( _rxHandler );
 }
 
 void SAL_CALL OGenericUnoController::removeKeyHandler( const Reference< XKeyHandler >& _rxHandler )
 {
-    m_pData->m_aUserInputInterception.removeKeyHandler( _rxHandler );
+    m_aUserInputInterception.removeKeyHandler( _rxHandler );
 }
 
 void SAL_CALL OGenericUnoController::addMouseClickHandler( const Reference< XMouseClickHandler >& _rxHandler )
 {
     if ( _rxHandler.is() )
-        m_pData->m_aUserInputInterception.addMouseClickHandler( _rxHandler );
+        m_aUserInputInterception.addMouseClickHandler( _rxHandler );
 }
 
 void SAL_CALL OGenericUnoController::removeMouseClickHandler( const Reference< XMouseClickHandler >& _rxHandler )
 {
-    m_pData->m_aUserInputInterception.removeMouseClickHandler( _rxHandler );
+    m_aUserInputInterception.removeMouseClickHandler( _rxHandler );
 }
 
 void OGenericUnoController::executeChecked(sal_uInt16 _nCommandId, const Sequence< PropertyValue >& aArgs)
@@ -1144,14 +1098,14 @@ Reference< XController > OGenericUnoController::getXController()
 
 bool OGenericUnoController::interceptUserInput( const NotifyEvent& _rEvent )
 {
-    return m_pData->m_aUserInputInterception.handleNotifyEvent( _rEvent );
+    return m_aUserInputInterception.handleNotifyEvent( _rEvent );
 }
 
 bool OGenericUnoController::isCommandChecked(sal_uInt16 _nCommandId) const
 {
     FeatureState aState = GetState( _nCommandId );
 
-    return aState.bChecked && *aState.bChecked;
+    return aState.bChecked.has_value() && *aState.bChecked;
 }
 
 bool OGenericUnoController::isCommandEnabled( const OUString& _rCompleteCommandURL ) const
@@ -1205,6 +1159,11 @@ void SAL_CALL OGenericUnoController::dispose()
 {
     SolarMutexGuard aSolarGuard;
     OGenericUnoController_Base::dispose();
+    m_xUrlTransformer.clear();
+    m_xSlaveDispatcher.clear();
+    m_xMasterDispatcher.clear();
+    m_xDatabaseContext.clear();
+    m_xTitleHelper.clear();
 }
 
 weld::Window* OGenericUnoController::getFrameWeld() const

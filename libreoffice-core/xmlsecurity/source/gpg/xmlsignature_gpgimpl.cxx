@@ -20,6 +20,7 @@
 #include <sal/config.h>
 #include <sal/log.hxx>
 #include <xmlsec-wrapper.h>
+#include <comphelper/servicehelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <gpg/xmlsignature_gpgimpl.hxx>
 

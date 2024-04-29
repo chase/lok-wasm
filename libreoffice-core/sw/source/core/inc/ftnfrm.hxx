@@ -64,6 +64,8 @@ public:
         const SwBorderAttrs&) const override;
     virtual void PaintSubsidiaryLines( const SwPageFrame*, const SwRect& ) const override;
             void    PaintLine( const SwRect &, const SwPageFrame * ) const;
+
+    void dumpAsXml(xmlTextWriterPtr writer = nullptr) const override;
 };
 
 inline SwFootnoteFrame* SwFootnoteContFrame::AppendChained(SwFrame* pThis, bool bDefaultFormat)
@@ -76,11 +78,12 @@ inline SwFootnoteFrame* SwFootnoteContFrame::PrependChained(SwFrame* pThis, bool
     return AddChained(false, pThis, bDefaultFormat);
 }
 
+/// Represents one footnote or endnote in the layout. Typical upper is an SwFootnoteContFrame,
+/// typical lower is an SwTextFrame.
 class SwFootnoteFrame final : public SwLayoutFrame
 {
     // Pointer to FootnoteFrame in which the footnote will be continued:
     //  - 0     no following existent
-    //  - this  for the last one
     //  - otherwise the following FootnoteFrame
     SwFootnoteFrame     *mpFollow;
     SwFootnoteFrame     *mpMaster;      // FootnoteFrame from which I am the following
@@ -158,6 +161,9 @@ public:
         pointer to found last content frame. NULL, if none is found.
     */
     SwContentFrame* FindLastContent();
+
+    void dumpAsXml(xmlTextWriterPtr writer = nullptr) const override;
+    void dumpAsXmlAttributes(xmlTextWriterPtr writer) const override;
 };
 
 #endif

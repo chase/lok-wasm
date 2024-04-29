@@ -146,19 +146,18 @@ void setLegendOverlay(const css::uno::Reference<css::frame::XModel>& xModel, boo
 
 bool isTitleVisible(const rtl::Reference<::chart::ChartModel>& xModel, TitleHelper::eTitleType eTitle)
 {
-    css::uno::Reference<css::uno::XInterface> xTitle = TitleHelper::getTitle(eTitle, xModel);
+    rtl::Reference<Title> xTitle = TitleHelper::getTitle(eTitle, xModel);
     if (!xTitle.is())
         return false;
 
-    css::uno::Reference<css::beans::XPropertySet> xPropSet(xTitle, css::uno::UNO_QUERY_THROW);
-    css::uno::Any aAny = xPropSet->getPropertyValue("Visible");
+    css::uno::Any aAny = xTitle->getPropertyValue("Visible");
     bool bVisible = aAny.get<bool>();
     return bVisible;
 }
 
 bool isGridVisible(const rtl::Reference<::chart::ChartModel>& xModel, GridType eType)
 {
-    rtl::Reference< Diagram > xDiagram(ChartModelHelper::findDiagram(xModel));
+    rtl::Reference< Diagram > xDiagram(xModel->getFirstChartDiagram());
     if(xDiagram.is())
     {
         sal_Int32 nDimensionIndex = 0;
@@ -175,7 +174,7 @@ bool isGridVisible(const rtl::Reference<::chart::ChartModel>& xModel, GridType e
 
 void setGridVisible(const rtl::Reference<::chart::ChartModel>& xModel, GridType eType, bool bVisible)
 {
-    rtl::Reference< Diagram > xDiagram(ChartModelHelper::findDiagram(xModel));
+    rtl::Reference< Diagram > xDiagram(xModel->getFirstChartDiagram());
     if(!xDiagram.is())
         return;
 
@@ -195,7 +194,7 @@ void setGridVisible(const rtl::Reference<::chart::ChartModel>& xModel, GridType 
 
 bool isAxisVisible(const rtl::Reference<::chart::ChartModel>& xModel, AxisType eType)
 {
-    rtl::Reference< Diagram > xDiagram(ChartModelHelper::findDiagram(xModel));
+    rtl::Reference< Diagram > xDiagram(xModel->getFirstChartDiagram());
     if(xDiagram.is())
     {
         sal_Int32 nDimensionIndex = 0;
@@ -214,7 +213,7 @@ bool isAxisVisible(const rtl::Reference<::chart::ChartModel>& xModel, AxisType e
 
 void setAxisVisible(const rtl::Reference<::chart::ChartModel>& xModel, AxisType eType, bool bVisible)
 {
-    rtl::Reference< Diagram > xDiagram(ChartModelHelper::findDiagram(xModel));
+    rtl::Reference< Diagram > xDiagram(xModel->getFirstChartDiagram());
     if(!xDiagram.is())
         return;
 
@@ -432,8 +431,10 @@ void ChartElementsPanel::updateData()
     if (!mbModelValid)
         return;
 
-    rtl::Reference< Diagram > xDiagram(ChartModelHelper::findDiagram(mxModel));
-    sal_Int32 nDimension = DiagramHelper::getDimension(xDiagram);
+    rtl::Reference< Diagram > xDiagram(mxModel->getFirstChartDiagram());
+    sal_Int32 nDimension = 0;
+    if (xDiagram)
+        nDimension = xDiagram->getDimension();
     SolarMutexGuard aGuard;
 
     mxCBLegend->set_active(isLegendVisible(mxModel));
@@ -556,7 +557,7 @@ void ChartElementsPanel::modelInvalid()
     mbModelValid = false;
 }
 
-void ChartElementsPanel::doUpdateModel(rtl::Reference<::chart::ChartModel> xModel)
+void ChartElementsPanel::doUpdateModel(const rtl::Reference<::chart::ChartModel>& xModel)
 {
     if (mbModelValid)
     {

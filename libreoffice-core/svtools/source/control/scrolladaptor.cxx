@@ -21,7 +21,8 @@
 
 ScrollAdaptor::ScrollAdaptor(vcl::Window* pWin, bool bHoriz)
     : InterimItemWindow(pWin, "svt/ui/scrollbars.ui", "ScrollBars")
-    , m_xScrollBar(m_xBuilder->weld_scrollbar(bHoriz ? "horizontal" : "vertical"))
+    , m_xScrollBar(
+          m_xBuilder->weld_scrollbar(bHoriz ? OUString("horizontal") : OUString("vertical")))
     , m_bHori(bHoriz)
 {
     m_xScrollBar->show();
@@ -120,5 +121,7 @@ tools::Long ScrollAdaptor::DoScroll(tools::Long nNewPos)
 }
 
 void ScrollAdaptor::SetThickness(int nThickness) { m_xScrollBar->set_scroll_thickness(nThickness); }
+
+void ScrollAdaptor::SetSwapArrows(bool bSwap) { m_xScrollBar->set_scroll_swap_arrows(bSwap); }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

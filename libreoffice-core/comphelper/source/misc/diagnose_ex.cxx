@@ -62,6 +62,9 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
     auto toOString = [](OUString const & s) {
         return OUStringToOString( s, osl_getThreadTextEncoding() );
     };
+    // when called recursively, we might not have any exception to print
+    if (!caught.hasValue())
+        return;
     sMessage.append(toOString(caught.getValueTypeName()));
     css::uno::Exception exception;
     caught >>= exception;
@@ -71,7 +74,6 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
         sMessage.append(toOString(exception.Message));
         sMessage.append("\"");
     }
-/*  TODO FIXME (see https://gerrit.libreoffice.org/#/c/83245/)
     if ( exception.Context.is() )
     {
         const char* pContext = typeid( *exception.Context ).name();
@@ -86,7 +88,6 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
         std::free(const_cast<char *>(pContext));
 #endif
     }
-*/
     {
         css::configuration::CorruptedConfigurationException specialized;
         if ( caught >>= specialized )
@@ -116,7 +117,7 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
         if ( caught >>= specialized )
         {
             sMessage.append("\n    wrapped: ");
-            sMessage.append(exceptionToString(specialized.ErrorDetails));
+            exceptionToStringImpl(sMessage, specialized.ErrorDetails);
         }
     }
     {
@@ -124,7 +125,7 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
         if ( caught >>= specialized )
         {
             sMessage.append("\n    wrapped: ");
-            sMessage.append(exceptionToString(specialized.BackendException));
+            exceptionToStringImpl(sMessage, specialized.BackendException);
         }
     }
     {
@@ -140,7 +141,7 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
         if ( caught >>= specialized )
         {
             sMessage.append("\n    wrapped: ");
-            sMessage.append(exceptionToString(specialized.Cause));
+            exceptionToStringImpl(sMessage, specialized.Cause);
         }
     }
     {
@@ -172,7 +173,7 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
         if ( caught >>= specialized )
         {
             sMessage.append("\n    wrapped: ");
-            sMessage.append(exceptionToString(specialized.TargetException));
+            exceptionToStringImpl(sMessage, specialized.TargetException);
         }
     }
     {
@@ -180,7 +181,7 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
         if ( caught >>= specialized )
         {
             sMessage.append("\n    wrapped: ");
-            sMessage.append(exceptionToString(specialized.TargetException));
+            exceptionToStringImpl(sMessage, specialized.TargetException);
         }
     }
     {
@@ -254,7 +255,7 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
             sMessage.append(" ErrorCode: ");
             sMessage.append(specialized.ErrorCode);
             sMessage.append("\n    wrapped: ");
-            sMessage.append(exceptionToString(specialized.NextException));
+            exceptionToStringImpl(sMessage, specialized.NextException);
         }
     }
     {
@@ -278,7 +279,7 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
         if ( caught >>= specialized )
         {
             sMessage.append("\n    Reason: ");
-            sMessage.append(exceptionToString( specialized.Reason ));
+            exceptionToStringImpl( sMessage, specialized.Reason );
         }
     }
     {
@@ -334,7 +335,7 @@ static void exceptionToStringImpl(OStringBuffer& sMessage, const css::uno::Any &
         if ( caught >>= specialized )
         {
             sMessage.append("\n    wrapped: ");
-            sMessage.append(exceptionToString( specialized.WrappedException ));
+            exceptionToStringImpl( sMessage, specialized.WrappedException );
         }
     }
     {
@@ -372,12 +373,10 @@ void DbgUnhandledException(const css::uno::Any & caught, const char* currentFunc
         const char* area, const char* explanatory)
 {
         OStringBuffer sMessage( 512 );
-        sMessage.append( "DBG_UNHANDLED_EXCEPTION in " );
-        sMessage.append(currentFunction);
+        sMessage.append( OString::Concat("DBG_UNHANDLED_EXCEPTION in ") + currentFunction);
         if (explanatory)
         {
-            sMessage.append("\n    when: ");
-            sMessage.append(explanatory);
+            sMessage.append(OString::Concat("\n    when: ") + explanatory);
         }
         sMessage.append(" exception: ");
         exceptionToStringImpl(sMessage, caught);

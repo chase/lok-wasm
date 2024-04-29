@@ -14,12 +14,9 @@
 
 using namespace css;
 
-// css::lang::XUnoTunnel
-UNO3_GETIMPLEMENTATION_IMPL(UnoBinaryDataContainer);
-
 css::uno::Sequence<sal_Int8> SAL_CALL UnoBinaryDataContainer::getCopyAsByteSequence()
 {
-    return maBinaryDataContainer.getAsSequence();
+    return maBinaryDataContainer.getCopyAsByteSequence();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -37,10 +37,11 @@
 #include <editeng/adjustitem.hxx>
 #include <editeng/outlobj.hxx>
 #include <editeng/editobj.hxx>
+#include <comphelper/base64.hxx>
+#include <docmodel/uno/UnoGradientTools.hxx>
 #include <undo/undomanager.hxx>
 #include <GraphicViewShell.hxx>
 #include <sdpage.hxx>
-#include <comphelper/base64.hxx>
 #include <LayerTabBar.hxx>
 #include <vcl/event.hxx>
 #include <vcl/keycodes.hxx>
@@ -81,6 +82,7 @@ public:
     void testTdf131033();
     void testTdf129898LayerDrawnInSlideshow();
     void testTdf136956();
+    void testTdf39519();
     void testEncodedTableStyles();
 
     CPPUNIT_TEST_SUITE(SdMiscTest);
@@ -103,13 +105,9 @@ public:
     CPPUNIT_TEST(testTdf131033);
     CPPUNIT_TEST(testTdf129898LayerDrawnInSlideshow);
     CPPUNIT_TEST(testTdf136956);
+    CPPUNIT_TEST(testTdf39519);
     CPPUNIT_TEST(testEncodedTableStyles);
     CPPUNIT_TEST_SUITE_END();
-
-    virtual void registerNamespaces(xmlXPathContextPtr& pXmlXPathCtx) override
-    {
-        XmlTestTools::registerODFNamespaces(pXmlXPathCtx);
-    }
 };
 
 void SdMiscTest::testTdf99396()
@@ -134,7 +132,7 @@ void SdMiscTest::testTdf99396()
     sdr::table::SvxTableController* pTableController
         = dynamic_cast<sdr::table::SvxTableController*>(pView->getSelectionController().get());
     CPPUNIT_ASSERT(pTableController);
-    SfxRequest aRequest(pViewShell->GetViewFrame(), SID_TABLE_VERT_BOTTOM);
+    SfxRequest aRequest(*pViewShell->GetViewFrame(), SID_TABLE_VERT_BOTTOM);
     pTableController->Execute(aRequest);
     // This was 0, it wasn't possible to undo a vertical alignment change.
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pDoc->GetUndoManager()->GetUndoActionCount());
@@ -163,7 +161,7 @@ void SdMiscTest::testTableObjectUndoTest()
     pView->SdrBeginTextEdit(pTableObject);
     CPPUNIT_ASSERT(pView->GetTextEditObject());
     {
-        SfxRequest aRequest(pViewShell->GetViewFrame(), SID_ATTR_PARA_ADJUST_RIGHT);
+        SfxRequest aRequest(*pViewShell->GetViewFrame(), SID_ATTR_PARA_ADJUST_RIGHT);
         SfxItemSet aEditAttr(pDoc->GetPool());
         pView->GetAttributes(aEditAttr);
         SfxItemSet aNewAttr(*(aEditAttr.GetPool()), aEditAttr.GetRanges());
@@ -179,7 +177,7 @@ void SdMiscTest::testTableObjectUndoTest()
         auto pTableController
             = dynamic_cast<sdr::table::SvxTableController*>(pView->getSelectionController().get());
         CPPUNIT_ASSERT(pTableController);
-        SfxRequest aRequest(pViewShell->GetViewFrame(), SID_TABLE_VERT_BOTTOM);
+        SfxRequest aRequest(*pViewShell->GetViewFrame(), SID_TABLE_VERT_BOTTOM);
         pTableController->Execute(aRequest);
     }
     // Global change "Format cell" is applied only - Change the vertical alignment to "Bottom"
@@ -244,7 +242,7 @@ void SdMiscTest::testTableObjectUndoTest()
     pTableObject = dynamic_cast<sdr::table::SdrTableObj*>(pPage->GetObj(0));
     pView->MarkObj(pTableObject, pView->GetSdrPageView()); // select table
     {
-        SfxRequest aRequest(pViewShell->GetViewFrame(), SID_GROW_FONT_SIZE);
+        SfxRequest aRequest(*pViewShell->GetViewFrame(), SID_GROW_FONT_SIZE);
         static_cast<sd::DrawViewShell*>(pViewShell)->ExecChar(aRequest);
     }
     Scheduler::ProcessEventsToIdle();
@@ -291,13 +289,14 @@ void SdMiscTest::testFillGradient()
     CPPUNIT_ASSERT(xPropSet2->getPropertyValue("FillGradient") >>= aGradient2);
 
     // MCGR: Use the completely imported gradient to check for correctness
-    const basegfx::BColorStops aColorStops(aGradient2.ColorStops);
+    const basegfx::BColorStops aColorStops
+        = model::gradient::getColorStopsFromUno(aGradient2.ColorStops);
 
     CPPUNIT_ASSERT_EQUAL(size_t(2), aColorStops.size());
     CPPUNIT_ASSERT(basegfx::fTools::equal(aColorStops[0].getStopOffset(), 0.0));
-    CPPUNIT_ASSERT_EQUAL(aColorStops[0].getStopColor(), basegfx::BColor(1.0, 0.0, 0.0));
+    CPPUNIT_ASSERT_EQUAL(Color(0xff0000), Color(aColorStops[0].getStopColor()));
     CPPUNIT_ASSERT(basegfx::fTools::equal(aColorStops[1].getStopOffset(), 1.0));
-    CPPUNIT_ASSERT_EQUAL(aColorStops[1].getStopColor(), basegfx::BColor(0.0, 1.0, 0.0));
+    CPPUNIT_ASSERT_EQUAL(Color(0x00ff00), Color(aColorStops[1].getStopColor()));
 }
 
 void SdMiscTest::testTdf44774()
@@ -480,8 +479,8 @@ void SdMiscTest::testTdf101242_ODF_add_settings()
     // Verify, that the saved document still has the ODF attributes
     xmlDocUniquePtr pXmlDoc = parseExport("styles.xml");
     CPPUNIT_ASSERT_MESSAGE("Failed to get 'styles.xml'", pXmlDoc);
-    const OString sPathStart(
-        "/office:document-styles/office:master-styles/draw:layer-set/draw:layer");
+    static constexpr OString sPathStart(
+        "/office:document-styles/office:master-styles/draw:layer-set/draw:layer"_ostr);
     assertXPath(pXmlDoc,
                 sPathStart + "[@draw:name='backgroundobjects' and @draw:protected='true']");
     assertXPath(pXmlDoc, sPathStart + "[@draw:name='controls' and @draw:display='screen']");
@@ -490,10 +489,10 @@ void SdMiscTest::testTdf101242_ODF_add_settings()
     // Verify, that the saved document has got the items in settings.xml
     xmlDocUniquePtr pXmlDoc2 = parseExport("settings.xml");
     CPPUNIT_ASSERT_MESSAGE("Failed to get 'settings.xml'", pXmlDoc2);
-    const OString sPathStart2("/office:document-settings/office:settings/"
-                              "config:config-item-set[@config:name='ooo:view-settings']/"
-                              "config:config-item-map-indexed[@config:name='Views']/"
-                              "config:config-item-map-entry");
+    static constexpr OString sPathStart2("/office:document-settings/office:settings/"
+                                         "config:config-item-set[@config:name='ooo:view-settings']/"
+                                         "config:config-item-map-indexed[@config:name='Views']/"
+                                         "config:config-item-map-entry"_ostr);
     // Value is a bitfield with first Byte in order '* * * measurelines controls backgroundobjects background layout'
     // The first three bits depend on initialization and may change. The values in file are Base64 encoded.
     OUString sBase64;
@@ -534,8 +533,8 @@ void SdMiscTest::testTdf101242_ODF_no_settings()
     // Verify, that the saved document still has the ODF attributes
     xmlDocUniquePtr pXmlDoc = parseExport("styles.xml");
     CPPUNIT_ASSERT_MESSAGE("Failed to get 'styles.xml'", pXmlDoc);
-    const OString sPathStart(
-        "/office:document-styles/office:master-styles/draw:layer-set/draw:layer");
+    static constexpr OString sPathStart(
+        "/office:document-styles/office:master-styles/draw:layer-set/draw:layer"_ostr);
     assertXPath(pXmlDoc,
                 sPathStart + "[@draw:name='backgroundobjects' and @draw:protected='true']");
     assertXPath(pXmlDoc, sPathStart + "[@draw:name='controls' and @draw:display='screen']");
@@ -544,22 +543,13 @@ void SdMiscTest::testTdf101242_ODF_no_settings()
     // Verify, that the saved document has no layer items in settings.xml
     xmlDocUniquePtr pXmlDoc2 = parseExport("settings.xml");
     CPPUNIT_ASSERT_MESSAGE("Failed to get 'settings.xml'", pXmlDoc2);
-    const OString sPathStart2("/office:document-settings/office:settings/"
-                              "config:config-item-set[@config:name='ooo:view-settings']/"
-                              "config:config-item-map-indexed[@config:name='Views']/"
-                              "config:config-item-map-entry");
-    xmlXPathObjectPtr pXmlObj
-        = getXPathNode(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='VisibleLayers']");
-    CPPUNIT_ASSERT_EQUAL(0, xmlXPathNodeSetGetLength(pXmlObj->nodesetval));
-    xmlXPathFreeObject(pXmlObj);
-    pXmlObj = getXPathNode(pXmlDoc2,
-                           sPathStart2 + "/config:config-item[@config:name='PrintableLayers']");
-    CPPUNIT_ASSERT_EQUAL(0, xmlXPathNodeSetGetLength(pXmlObj->nodesetval));
-    xmlXPathFreeObject(pXmlObj);
-    pXmlObj
-        = getXPathNode(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='LockedLayers']");
-    CPPUNIT_ASSERT_EQUAL(0, xmlXPathNodeSetGetLength(pXmlObj->nodesetval));
-    xmlXPathFreeObject(pXmlObj);
+    static constexpr OString sPathStart2("/office:document-settings/office:settings/"
+                                         "config:config-item-set[@config:name='ooo:view-settings']/"
+                                         "config:config-item-map-indexed[@config:name='Views']/"
+                                         "config:config-item-map-entry"_ostr);
+    assertXPath(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='VisibleLayers']", 0);
+    assertXPath(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='PrintableLayers']", 0);
+    assertXPath(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='LockedLayers']", 0);
 }
 
 void SdMiscTest::testTdf101242_settings_keep()
@@ -580,8 +570,8 @@ void SdMiscTest::testTdf101242_settings_keep()
     // Verify, that the saved document has the ODF attributes
     xmlDocUniquePtr pXmlDoc = parseExport("styles.xml");
     CPPUNIT_ASSERT_MESSAGE("Failed to get 'styles.xml'", pXmlDoc);
-    const OString sPathStart(
-        "/office:document-styles/office:master-styles/draw:layer-set/draw:layer");
+    static constexpr OString sPathStart(
+        "/office:document-styles/office:master-styles/draw:layer-set/draw:layer"_ostr);
     assertXPath(pXmlDoc,
                 sPathStart + "[@draw:name='backgroundobjects' and @draw:protected='true']");
     assertXPath(pXmlDoc, sPathStart + "[@draw:name='controls' and @draw:display='screen']");
@@ -590,10 +580,10 @@ void SdMiscTest::testTdf101242_settings_keep()
     // Verify, that the saved document still has the items in settings.xml
     xmlDocUniquePtr pXmlDoc2 = parseExport("settings.xml");
     CPPUNIT_ASSERT_MESSAGE("Failed to get 'settings.xml'", pXmlDoc2);
-    const OString sPathStart2("/office:document-settings/office:settings/"
-                              "config:config-item-set[@config:name='ooo:view-settings']/"
-                              "config:config-item-map-indexed[@config:name='Views']/"
-                              "config:config-item-map-entry");
+    static constexpr OString sPathStart2("/office:document-settings/office:settings/"
+                                         "config:config-item-set[@config:name='ooo:view-settings']/"
+                                         "config:config-item-map-indexed[@config:name='Views']/"
+                                         "config:config-item-map-entry"_ostr);
     // Value is a bitfield with first Byte in order '* * * measurelines controls backgroundobjects background layout'
     // The first three bits depend on initialization and may change. The values in file are Base64 encoded.
     OUString sBase64;
@@ -635,8 +625,8 @@ void SdMiscTest::testTdf101242_settings_remove()
     // Verify, that the saved document has the ODF attributes
     xmlDocUniquePtr pXmlDoc = parseExport("styles.xml");
     CPPUNIT_ASSERT_MESSAGE("Failed to get 'styles.xml'", pXmlDoc);
-    const OString sPathStart(
-        "/office:document-styles/office:master-styles/draw:layer-set/draw:layer");
+    static constexpr OString sPathStart(
+        "/office:document-styles/office:master-styles/draw:layer-set/draw:layer"_ostr);
     assertXPath(pXmlDoc,
                 sPathStart + "[@draw:name='backgroundobjects' and @draw:protected='true']");
     assertXPath(pXmlDoc, sPathStart + "[@draw:name='controls' and @draw:display='screen']");
@@ -645,22 +635,13 @@ void SdMiscTest::testTdf101242_settings_remove()
     // Verify, that the saved document has no layer items in settings.xml
     xmlDocUniquePtr pXmlDoc2 = parseExport("settings.xml");
     CPPUNIT_ASSERT_MESSAGE("Failed to get 'settings.xml'", pXmlDoc2);
-    const OString sPathStart2("/office:document-settings/office:settings/"
-                              "config:config-item-set[@config:name='ooo:view-settings']/"
-                              "config:config-item-map-indexed[@config:name='Views']/"
-                              "config:config-item-map-entry");
-    xmlXPathObjectPtr pXmlObj
-        = getXPathNode(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='VisibleLayers']");
-    CPPUNIT_ASSERT_EQUAL(0, xmlXPathNodeSetGetLength(pXmlObj->nodesetval));
-    xmlXPathFreeObject(pXmlObj);
-    pXmlObj = getXPathNode(pXmlDoc2,
-                           sPathStart2 + "/config:config-item[@config:name='PrintableLayers']");
-    CPPUNIT_ASSERT_EQUAL(0, xmlXPathNodeSetGetLength(pXmlObj->nodesetval));
-    xmlXPathFreeObject(pXmlObj);
-    pXmlObj
-        = getXPathNode(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='LockedLayers']");
-    CPPUNIT_ASSERT_EQUAL(0, xmlXPathNodeSetGetLength(pXmlObj->nodesetval));
-    xmlXPathFreeObject(pXmlObj);
+    static constexpr OString sPathStart2("/office:document-settings/office:settings/"
+                                         "config:config-item-set[@config:name='ooo:view-settings']/"
+                                         "config:config-item-map-indexed[@config:name='Views']/"
+                                         "config:config-item-map-entry"_ostr);
+    assertXPath(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='VisibleLayers']", 0);
+    assertXPath(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='PrintableLayers']", 0);
+    assertXPath(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='LockedLayers']", 0);
 }
 
 void SdMiscTest::testTdf119392()
@@ -689,10 +670,10 @@ void SdMiscTest::testTdf119392()
     // Verify correct bit order in bitfield in the config items in settings.xml
     xmlDocUniquePtr pXmlDoc = parseExport("settings.xml");
     CPPUNIT_ASSERT_MESSAGE("Failed to get 'settings.xml'", pXmlDoc);
-    const OString sPathStart("/office:document-settings/office:settings/"
-                             "config:config-item-set[@config:name='ooo:view-settings']/"
-                             "config:config-item-map-indexed[@config:name='Views']/"
-                             "config:config-item-map-entry");
+    static constexpr OString sPathStart("/office:document-settings/office:settings/"
+                                        "config:config-item-set[@config:name='ooo:view-settings']/"
+                                        "config:config-item-map-indexed[@config:name='Views']/"
+                                        "config:config-item-map-entry"_ostr);
     // First Byte is in order 'V-L -P- V-- measurelines controls backgroundobjects background layout'
     // Bits need to be: visible=10111111=0xbf=191 printable=01011111=0x5f=95 locked=10000000=0x80=128
     // The values in file are Base64 encoded.
@@ -789,9 +770,11 @@ void SdMiscTest::testTdf98839_ShearVFlipH()
     save("draw8");
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
     CPPUNIT_ASSERT_MESSAGE("Failed to get 'content.xml'", pXmlDoc);
-    const OString sPathStart("/office:document-content/office:body/office:drawing/draw:page");
+    static constexpr OString sPathStart(
+        "/office:document-content/office:body/office:drawing/draw:page"_ostr);
     assertXPath(pXmlDoc, sPathStart);
-    const OUString sTransform = getXPath(pXmlDoc, sPathStart + "/draw:custom-shape", "transform");
+    const OUString sTransform
+        = getXPath(pXmlDoc, sPathStart + "/draw:custom-shape", "transform"_ostr);
 
     // Error was, that the shear angle had a wrong sign.
     CPPUNIT_ASSERT_MESSAGE("expected: draw:transform='skewX (-0.64350...)",
@@ -854,7 +837,7 @@ void SdMiscTest::testTdf129898LayerDrawnInSlideshow()
     SdDrawDocument* pDoc = pXImpressDocument->GetDoc();
 
     // Verify model
-    static const OUStringLiteral sName = u"DrawnInSlideshow";
+    static constexpr OUString sName = u"DrawnInSlideshow"_ustr;
     SdrLayerAdmin& rLayerAdmin = pDoc->GetLayerAdmin();
     SdrLayer* pLayer = rLayerAdmin.GetLayer(sName);
     CPPUNIT_ASSERT_MESSAGE("No layer DrawnInSlideshow", pLayer);
@@ -899,6 +882,28 @@ void SdMiscTest::testTdf136956()
     // 4x3 Table after undo. Undo crashed before.
     CPPUNIT_ASSERT_EQUAL(sal_Int32(4), xTable->getColumnCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xTable->getRowCount());
+}
+
+void SdMiscTest::testTdf39519()
+{
+    createSdImpressDoc();
+    SdXImpressDocument* pXImpressDocument = dynamic_cast<SdXImpressDocument*>(mxComponent.get());
+    CPPUNIT_ASSERT(pXImpressDocument);
+
+    // Change the name of the first page in the newly created document
+    SdDrawDocument* pDoc = pXImpressDocument->GetDoc();
+    SdPage* pPage = static_cast<SdPage*>(pDoc->GetPage(1));
+    pPage->SetName("Test");
+
+    // Insert a bookmark as a new page using the same name
+    std::vector<OUString> aBookmarkList = { "Test" };
+    pDoc->InsertBookmarkAsPage(aBookmarkList, nullptr, false, false, 2, true, pDoc->GetDocSh(),
+                               true, false, false);
+
+    // Check if the copied page has a different name
+    SdPage* pCopiedPage = static_cast<SdPage*>(pDoc->GetPage(2));
+    // Without the fix in place, the names of the pages would not be different
+    CPPUNIT_ASSERT(pCopiedPage->GetName() != pPage->GetName());
 }
 
 void SdMiscTest::testEncodedTableStyles()

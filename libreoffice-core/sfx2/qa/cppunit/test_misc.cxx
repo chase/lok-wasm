@@ -76,17 +76,17 @@ CPPUNIT_TEST_FIXTURE(MiscTest, testODFCustomMetadata)
 
     // check that custom metadata is preserved
     xmlDocUniquePtr pXmlDoc = parseExport("meta.xml");
-    assertXPathContent(pXmlDoc, "/office:document-meta/office:meta/bork", "bork");
-    assertXPath(pXmlDoc, "/office:document-meta/office:meta/foo:bar", 1);
-    assertXPath(pXmlDoc, "/office:document-meta/office:meta/foo:bar/baz:foo", 1);
-    assertXPath(pXmlDoc, "/office:document-meta/office:meta/foo:bar/baz:foo[@baz:bar='foo']");
-    assertXPathContent(pXmlDoc, "/office:document-meta/office:meta/foo:bar/foo:baz", "bar");
+    assertXPathContent(pXmlDoc, "/office:document-meta/office:meta/bork"_ostr, "bork");
+    assertXPath(pXmlDoc, "/office:document-meta/office:meta/foo:bar"_ostr, 1);
+    assertXPath(pXmlDoc, "/office:document-meta/office:meta/foo:bar/baz:foo"_ostr, 1);
+    assertXPath(pXmlDoc, "/office:document-meta/office:meta/foo:bar/baz:foo[@baz:bar='foo']"_ostr);
+    assertXPathContent(pXmlDoc, "/office:document-meta/office:meta/foo:bar/foo:baz"_ostr, "bar");
 }
 
 CPPUNIT_TEST_FIXTURE(MiscTest, testNoThumbnail)
 {
     // Load a document.
-    loadFromURL(u"hello.odt");
+    loadFromFile(u"hello.odt");
 
     // Save it with the NoThumbnail option and assert that it has no thumbnail.
 #ifndef _WIN32

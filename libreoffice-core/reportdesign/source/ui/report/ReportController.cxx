@@ -146,13 +146,13 @@
 #define RPTUI_ID_ULSPACE    TypedWhichId<SvxULSpaceItem>(XATTR_FILL_FIRST - 7)
 #define RPTUI_ID_PAGE       TypedWhichId<SvxPageItem>(XATTR_FILL_FIRST - 6)
 #define RPTUI_ID_SIZE       TypedWhichId<SvxSizeItem>(XATTR_FILL_FIRST - 5)
-#define RPTUI_ID_PAGE_MODE  XATTR_FILL_FIRST - 4
-#define RPTUI_ID_START      XATTR_FILL_FIRST - 3
-#define RPTUI_ID_END        XATTR_FILL_FIRST - 2
+#define RPTUI_ID_PAGE_MODE  TypedWhichId<SfxUInt16Item>(XATTR_FILL_FIRST - 4)
+#define RPTUI_ID_START      TypedWhichId<SfxUInt16Item>(XATTR_FILL_FIRST - 3)
+#define RPTUI_ID_END        TypedWhichId<SfxUInt16Item>(XATTR_FILL_FIRST - 2)
 #define RPTUI_ID_BRUSH      TypedWhichId<SvxBrushItem>(XATTR_FILL_FIRST - 1)
 /// Note that we deliberately overlap an existing item id, so that we can have contiguous item ids for
 /// the static defaults.
-#define RPTUI_ID_METRIC     XATTR_FILL_LAST
+#define RPTUI_ID_METRIC     TypedWhichId<SfxUInt16Item>(XATTR_FILL_LAST)
 
 static_assert((RPTUI_ID_METRIC - RPTUI_ID_LRSPACE) == 28, "Item ids are not contiguous");
 
@@ -297,8 +297,8 @@ void OReportController::disposing()
     }
     if ( m_xGroupsFloater )
     {
-        SvtViewOptions aDlgOpt(EViewType::Window, OStringToOUString(m_xGroupsFloater->get_help_id(), RTL_TEXTENCODING_UTF8));
-        aDlgOpt.SetWindowState(OStringToOUString(m_xGroupsFloater->getDialog()->get_window_state(vcl::WindowDataMask::All), RTL_TEXTENCODING_ASCII_US));
+        SvtViewOptions aDlgOpt(EViewType::Window, m_xGroupsFloater->get_help_id());
+        aDlgOpt.SetWindowState(m_xGroupsFloater->getDialog()->get_window_state(vcl::WindowDataMask::All));
         if (m_xGroupsFloater->getDialog()->get_visible())
             m_xGroupsFloater->response(RET_CANCEL);
         m_xGroupsFloater.reset();
@@ -1469,8 +1469,7 @@ void OReportController::Execute(sal_uInt16 _nId, const Sequence< PropertyValue >
         case SID_ATTR_CHAR_COLOR2:
         case SID_ATTR_CHAR_COLOR_EXT:
             {
-                const SequenceAsHashMap aMap(aArgs);
-                const util::Color aColor = aMap.getUnpackedValueOrDefault(PROPERTY_FONTCOLOR,util::Color());
+                const util::Color aColor( lcl_extractBackgroundColor( aArgs ) );
                 impl_setPropertyAtControls_throw(RID_STR_UNDO_CHANGEFONT,PROPERTY_CHARCOLOR,uno::Any(aColor),aArgs);
                 bForceBroadcast = true;
             }
@@ -2332,35 +2331,36 @@ void OReportController::openPageDialog(const uno::Reference<report::XSection>& _
     // UNO->ItemSet
     static SfxItemInfo aItemInfos[] =
     {
-        { SID_ATTR_LRSPACE,     true },
-        { SID_ATTR_ULSPACE,     true },
-        { SID_ATTR_PAGE,        true },
-        { SID_ATTR_PAGE_SIZE,   true },
-        { SID_ENUM_PAGE_MODE,   true },
-        { SID_PAPER_START,      true },
-        { SID_PAPER_END,        true },
-        { SID_ATTR_BRUSH,       true },
-        { 0,      true }, // XATTR_FILLSTYLE
-        { 0,      true }, // XATTR_FILLCOLOR
-        { 0,       true }, // XATTR_FILLGRADIENT
-        { 0,      true }, // XATTR_FILLHATCH
-        { 0,     true }, // XATTR_FILLBITMAP
-        { 0,       true }, // XATTR_FILLTRANSPARENCE
-        { 0,      true }, // XATTR_GRADIENTSTEPCOUNT
-        { 0,       true }, // XATTR_FILLBMP_TILE
-        { 0,        true }, // XATTR_FILLBMP_POS
-        { 0,      true }, // XATTR_FILLBMP_SIZEX
-        { 0,      true }, // XATTR_FILLBMP_SIZEY
-        { 0,  true }, // XATTR_FILLFLOATTRANSPARENCE
-        { 0,     true }, // XATTR_SECONDARYFILLCOLOR
-        { 0,        true }, // XATTR_FILLBMP_SIZELOG
-        { 0,    true }, // XATTR_FILLBMP_TILEOFFSETX
-        { 0,    true }, // XATTR_FILLBMP_TILEOFFSETY
-        { 0,        true }, // XATTR_FILLBMP_STRETCH
-        { 0,     true }, // XATTR_FILLBMP_POSOFFSETX
-        { 0,     true }, // XATTR_FILLBMP_POSOFFSETY
-        { 0,     true }, // XATTR_FILLBACKGROUND
-        { SID_ATTR_METRIC,      true }
+        // _nSID, _bNeedsPoolRegistration, _bShareable
+        { SID_ATTR_LRSPACE,     false, true },
+        { SID_ATTR_ULSPACE,     false, true },
+        { SID_ATTR_PAGE,        false, true },
+        { SID_ATTR_PAGE_SIZE,   false, true },
+        { SID_ENUM_PAGE_MODE,   false, true },
+        { SID_PAPER_START,      false, true },
+        { SID_PAPER_END,        false, true },
+        { SID_ATTR_BRUSH,       false, true },
+        { 0,                    false, true }, // XATTR_FILLSTYLE
+        { 0,                    true,  true }, // XATTR_FILLCOLOR
+        { 0,                    false, true }, // XATTR_FILLGRADIENT
+        { 0,                    false, true }, // XATTR_FILLHATCH
+        { 0,                    false, true }, // XATTR_FILLBITMAP
+        { 0,                    false, true }, // XATTR_FILLTRANSPARENCE
+        { 0,                    false, true }, // XATTR_GRADIENTSTEPCOUNT
+        { 0,                    false, true }, // XATTR_FILLBMP_TILE
+        { 0,                    false, true }, // XATTR_FILLBMP_POS
+        { 0,                    false, true }, // XATTR_FILLBMP_SIZEX
+        { 0,                    false, true }, // XATTR_FILLBMP_SIZEY
+        { 0,                    false, true }, // XATTR_FILLFLOATTRANSPARENCE
+        { 0,                    false, true }, // XATTR_SECONDARYFILLCOLOR
+        { 0,                    false, true }, // XATTR_FILLBMP_SIZELOG
+        { 0,                    false, true }, // XATTR_FILLBMP_TILEOFFSETX
+        { 0,                    false, true }, // XATTR_FILLBMP_TILEOFFSETY
+        { 0,                    false, true }, // XATTR_FILLBMP_STRETCH
+        { 0,                    false, true }, // XATTR_FILLBMP_POSOFFSETX
+        { 0,                    false, true }, // XATTR_FILLBMP_POSOFFSETY
+        { 0,                    false, true }, // XATTR_FILLBACKGROUND
+        { SID_ATTR_METRIC,      false, true }
     };
 
     MeasurementSystem eSystem = SvtSysLocale().GetLocaleData().getMeasurementSystemEnum();
@@ -2426,7 +2426,7 @@ void OReportController::openPageDialog(const uno::Reference<report::XSection>& _
         {
             aDescriptor.Put(SvxSizeItem(RPTUI_ID_SIZE,VCLSize(getStyleProperty<awt::Size>(m_xReportDefinition,PROPERTY_PAPERSIZE))));
             aDescriptor.Put(SvxLRSpaceItem(getStyleProperty<sal_Int32>(m_xReportDefinition,PROPERTY_LEFTMARGIN)
-                                            ,getStyleProperty<sal_Int32>(m_xReportDefinition,PROPERTY_RIGHTMARGIN),0,0,RPTUI_ID_LRSPACE));
+                                            ,getStyleProperty<sal_Int32>(m_xReportDefinition,PROPERTY_RIGHTMARGIN),0,RPTUI_ID_LRSPACE));
             aDescriptor.Put(SvxULSpaceItem(static_cast<sal_uInt16>(getStyleProperty<sal_Int32>(m_xReportDefinition,PROPERTY_TOPMARGIN))
                                             ,static_cast<sal_uInt16>(getStyleProperty<sal_Int32>(m_xReportDefinition,PROPERTY_BOTTOMMARGIN)),RPTUI_ID_ULSPACE));
             aDescriptor.Put(SfxUInt16Item(SID_ATTR_METRIC,static_cast<sal_uInt16>(eUserMetric)));
@@ -2542,9 +2542,9 @@ void OReportController::openSortingAndGroupingDialog()
     if (!m_xGroupsFloater)
     {
         m_xGroupsFloater = std::make_shared<OGroupsSortingDialog>(getFrameWeld(), !isEditable(), this);
-        SvtViewOptions aDlgOpt(EViewType::Window, OStringToOUString(m_xGroupsFloater->get_help_id(), RTL_TEXTENCODING_UTF8));
+        SvtViewOptions aDlgOpt(EViewType::Window, m_xGroupsFloater->get_help_id());
         if ( aDlgOpt.Exists() )
-            m_xGroupsFloater->getDialog()->set_window_state(OUStringToOString(aDlgOpt.GetWindowState(), RTL_TEXTENCODING_ASCII_US));
+            m_xGroupsFloater->getDialog()->set_window_state(aDlgOpt.GetWindowState());
     }
     if (isUiVisible())
     {
@@ -2715,7 +2715,7 @@ uno::Any SAL_CALL OReportController::getViewData()
         sCommandURL = sCommandURL.copy( 5 );
 
         Any aCommandState;
-        if ( !!aFeatureState.bChecked )
+        if ( aFeatureState.bChecked.has_value() )
             aCommandState <<= *aFeatureState.bChecked;
         else if ( aFeatureState.aValue.hasValue() )
             aCommandState = aFeatureState.aValue;
@@ -2852,9 +2852,7 @@ uno::Reference<frame::XModel> OReportController::executeReport()
         dbtools::SQLExceptionInfo aInfo;
         if ( !bEnabled )
         {
-            sdb::SQLContext aFirstMessage;
-            OUString sInfo = RptResId( pErrorId );
-            aFirstMessage.Message = sInfo;
+            sdb::SQLContext aFirstMessage(RptResId(pErrorId), {}, {}, 0, {}, {});
             aInfo = aFirstMessage;
             if ( isEditable() )
             {
@@ -2899,29 +2897,25 @@ uno::Reference<frame::XModel> OReportController::executeReport()
             {
                 uno::Any aCaughtException( ::cppu::getCaughtException() );
 
-                // our first message says: we caught an exception
-                sdb::SQLContext aFirstMessage;
-                OUString sInfo(RptResId(RID_STR_CAUGHT_FOREIGN_EXCEPTION));
-                sInfo = sInfo.replaceAll("$type$", aCaughtException.getValueTypeName());
-                aFirstMessage.Message = sInfo;
-
-                // our second message: the message of the exception we caught
-                sdbc::SQLException aSecondMessage;
-                aSecondMessage.Message = e.Message;
-                aSecondMessage.Context = e.Context;
-
                 // maybe our third message: the message which is wrapped in the exception we caught
-                sdbc::SQLException aThirdMessage;
-                lang::WrappedTargetException aWrapped;
-                if ( aCaughtException >>= aWrapped )
+                css::uno::Any aOptThirdMessage;
+                if (lang::WrappedTargetException aWrapped; aCaughtException >>= aWrapped)
                 {
+                    sdbc::SQLException aThirdMessage;
                     aThirdMessage.Message = aWrapped.Message;
                     aThirdMessage.Context = aWrapped.Context;
+                    if ( !aThirdMessage.Message.isEmpty() )
+                        aOptThirdMessage <<= aThirdMessage;
                 }
 
-                if ( !aThirdMessage.Message.isEmpty() )
-                    aSecondMessage.NextException <<= aThirdMessage;
-                aFirstMessage.NextException <<= aSecondMessage;
+
+                // our second message: the message of the exception we caught
+                sdbc::SQLException aSecondMessage(e.Message, e.Context, {}, 0, aOptThirdMessage);
+
+                // our first message says: we caught an exception
+                OUString sInfo(RptResId(RID_STR_CAUGHT_FOREIGN_EXCEPTION));
+                sInfo = sInfo.replaceAll("$type$", aCaughtException.getValueTypeName());
+                sdb::SQLContext aFirstMessage(sInfo, {}, {}, 0, css::uno::Any(aSecondMessage), {});
 
                 aInfo = aFirstMessage;
             }
@@ -3173,14 +3167,14 @@ void OReportController::createControl(const Sequence< PropertyValue >& _aArgs,co
             uno::Reference<beans::XPropertySetInfo> xShapeInfo = xShapeProp->getPropertySetInfo();
             uno::Reference<beans::XPropertySetInfo> xInfo = xUnoProp->getPropertySetInfo();
 
-            const OUString sProps[] = {   OUString(PROPERTY_NAME)
-                                          ,OUString(PROPERTY_FONTDESCRIPTOR)
-                                          ,OUString(PROPERTY_FONTDESCRIPTORASIAN)
-                                          ,OUString(PROPERTY_FONTDESCRIPTORCOMPLEX)
-                                          ,OUString(PROPERTY_ORIENTATION)
-                                          ,OUString(PROPERTY_BORDER)
-                                          ,OUString(PROPERTY_FORMATSSUPPLIER)
-                                          ,OUString(PROPERTY_BACKGROUNDCOLOR)
+            const OUString sProps[] = {   PROPERTY_NAME
+                                          ,PROPERTY_FONTDESCRIPTOR
+                                          ,PROPERTY_FONTDESCRIPTORASIAN
+                                          ,PROPERTY_FONTDESCRIPTORCOMPLEX
+                                          ,PROPERTY_ORIENTATION
+                                          ,PROPERTY_BORDER
+                                          ,PROPERTY_FORMATSSUPPLIER
+                                          ,PROPERTY_BACKGROUNDCOLOR
             };
             for(const auto & sProp : sProps)
             {
@@ -3488,11 +3482,11 @@ void OReportController::addPairControls(const Sequence< PropertyValue >& aArgs)
 
                         uno::Reference<beans::XPropertySetInfo> xShapeInfo = xShapeProp->getPropertySetInfo();
                         uno::Reference<beans::XPropertySetInfo> xInfo = xUnoProp->getPropertySetInfo();
-                        const OUString sProps[] = {   OUString(PROPERTY_FONTDESCRIPTOR)
-                                                            ,OUString(PROPERTY_FONTDESCRIPTORASIAN)
-                                                            ,OUString(PROPERTY_FONTDESCRIPTORCOMPLEX)
-                                                            ,OUString(PROPERTY_BORDER)
-                                                            ,OUString(PROPERTY_BACKGROUNDCOLOR)
+                        const OUString sProps[] = {   PROPERTY_FONTDESCRIPTOR
+                                                            ,PROPERTY_FONTDESCRIPTORASIAN
+                                                            ,PROPERTY_FONTDESCRIPTORCOMPLEX
+                                                            ,PROPERTY_BORDER
+                                                            ,PROPERTY_BACKGROUNDCOLOR
                         };
                         for(const auto & sProp : sProps)
                         {
@@ -3654,9 +3648,9 @@ void OReportController::changeZOrder(sal_Int32 _nId)
 
 void OReportController::listen(const bool _bAdd)
 {
-    const OUString aProps [] = {    OUString(PROPERTY_REPORTHEADERON),OUString(PROPERTY_REPORTFOOTERON)
-                                            ,OUString(PROPERTY_PAGEHEADERON),OUString(PROPERTY_PAGEFOOTERON)
-                                            ,OUString(PROPERTY_COMMAND), OUString(PROPERTY_COMMANDTYPE),OUString(PROPERTY_CAPTION)
+    const OUString aProps [] = {    PROPERTY_REPORTHEADERON,PROPERTY_REPORTFOOTERON
+                                            ,PROPERTY_PAGEHEADERON,PROPERTY_PAGEFOOTERON
+                                            ,PROPERTY_COMMAND, PROPERTY_COMMANDTYPE,PROPERTY_CAPTION
     };
 
     void (SAL_CALL XPropertySet::*pPropertyListenerAction)( const OUString&, const uno::Reference< XPropertyChangeListener >& ) =
@@ -3705,8 +3699,8 @@ void OReportController::listen(const bool _bAdd)
     for (sal_Int32 i=0;i<nCount ; ++i)
     {
         uno::Reference< report::XGroup > xGroup(xGroups->getByIndex(i),uno::UNO_QUERY);
-        (xGroup.get()->*pPropertyListenerAction)( OUString(PROPERTY_HEADERON), static_cast< XPropertyChangeListener* >( this ) );
-        (xGroup.get()->*pPropertyListenerAction)( OUString(PROPERTY_FOOTERON), static_cast< XPropertyChangeListener* >( this ) );
+        (xGroup.get()->*pPropertyListenerAction)( PROPERTY_HEADERON, static_cast< XPropertyChangeListener* >( this ) );
+        (xGroup.get()->*pPropertyListenerAction)( PROPERTY_FOOTERON, static_cast< XPropertyChangeListener* >( this ) );
 
         (rUndoEnv.*pElementUndoFunction)( xGroup );
         (rUndoEnv.*pElementUndoFunction)( xGroup->getFunctions() );
@@ -3899,7 +3893,7 @@ void OReportController::createGroupSection(const bool _bUndo,const bool _bHeader
         return;
 
     const SequenceAsHashMap aMap(_aArgs);
-    const bool bSwitchOn = aMap.getUnpackedValueOrDefault(_bHeader ? OUString(PROPERTY_HEADERON) : OUString(PROPERTY_FOOTERON), false);
+    const bool bSwitchOn = aMap.getUnpackedValueOrDefault(_bHeader ? PROPERTY_HEADERON : PROPERTY_FOOTERON, false);
     uno::Reference< report::XGroup> xGroup = aMap.getUnpackedValueOrDefault(PROPERTY_GROUP,uno::Reference< report::XGroup>());
     if ( !xGroup.is() )
         return;
@@ -3990,7 +3984,7 @@ void OReportController::checkChartEnabled()
             ::utl::OConfigurationTreeRoot::createWithComponentContext( m_xContext, "/org.openoffice.Office.ReportDesign" ) );
 
         bool bChartEnabled = false;
-        static const OUStringLiteral sPropertyName( u"UserData/Chart" );
+        static constexpr OUString sPropertyName( u"UserData/Chart"_ustr );
         if ( aConfiguration.hasByHierarchicalName(sPropertyName) )
             aConfiguration.getNodeValue( sPropertyName ) >>= bChartEnabled;
         m_bChartEnabled = bChartEnabled;
@@ -4196,7 +4190,8 @@ void OReportController::openZoomDialog()
 
     static SfxItemInfo aItemInfos[] =
     {
-        { SID_ATTR_ZOOM, true }
+        // _nSID, _bNeedsPoolRegistration, _bShareable
+        { SID_ATTR_ZOOM, false, true }
     };
     std::vector<SfxPoolItem*> pDefaults
     {

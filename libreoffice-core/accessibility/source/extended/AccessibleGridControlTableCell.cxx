@@ -58,6 +58,10 @@ namespace accessibility
         ,m_nRowPos( _nRowPos )
         ,m_nColPos( _nColPos )
     {
+        assert(((m_eObjType == AccessibleTableControlObjType::TABLECELL)
+                || ((m_eObjType == AccessibleTableControlObjType::ROWHEADERCELL) && _nColPos == 0)
+                || ((m_eObjType == AccessibleTableControlObjType::COLUMNHEADERCELL) && _nRowPos == 0))
+               && "Unhandled table cell type");
     }
 
     void SAL_CALL AccessibleGridControlCell::grabFocus()
@@ -72,17 +76,7 @@ namespace accessibility
         SolarMutexGuard g;
 
         ensureIsAlive();
-
-        OUString sAccName;
-        if (m_eObjType == TCTYPE_TABLECELL)
-            sAccName = m_aTable.GetAccessibleObjectName(TCTYPE_TABLECELL, m_nRowPos, m_nColPos);
-        else if (m_eObjType == TCTYPE_ROWHEADERCELL)
-            sAccName = m_aTable.GetAccessibleObjectName(TCTYPE_ROWHEADERCELL, m_nRowPos, 0);
-        else if (m_eObjType == TCTYPE_COLUMNHEADERCELL)
-            sAccName = m_aTable.GetAccessibleObjectName(TCTYPE_COLUMNHEADERCELL, 0, m_nRowPos);
-        else
-            assert(false && "Unhandled table cell type");
-        return sAccName;
+        return m_aTable.GetAccessibleObjectName(m_eObjType, m_nRowPos, m_nColPos);
     }
 
     // implementation of a table cell
@@ -108,7 +102,7 @@ namespace accessibility
                                 ::vcl::table::IAccessibleTable& _rTable,
                                 sal_Int32 _nRowPos,
                                 sal_uInt16 _nColPos)
-        :AccessibleGridControlCell( _rxParent, _rTable, _nRowPos, _nColPos, TCTYPE_TABLECELL )
+        :AccessibleGridControlCell(_rxParent, _rTable, _nRowPos, _nColPos, AccessibleTableControlObjType::TABLECELL)
     {
     }
 
@@ -327,7 +321,7 @@ namespace accessibility
     {
         vcl::Window* pParent = m_aTable.GetAccessibleParentWindow();
         DBG_ASSERT( pParent, "implGetBoundingBox - missing parent window" );
-        tools::Rectangle aGridRect = m_aTable.GetWindowExtentsRelative( pParent );
+        tools::Rectangle aGridRect = m_aTable.GetWindowExtentsRelative( *pParent );
         sal_Int64 nIndex = getAccessibleIndexInParent();
         tools::Rectangle aCellRect = m_aTable.calcCellRect(nIndex%m_aTable.GetColumnCount(), nIndex/m_aTable.GetColumnCount());
         tools::Long nX = aGridRect.Left() + aCellRect.Left();
@@ -336,14 +330,14 @@ namespace accessibility
         return aCell;
     }
 
-    tools::Rectangle AccessibleGridControlTableCell::implGetBoundingBoxOnScreen()
+    AbsoluteScreenPixelRectangle AccessibleGridControlTableCell::implGetBoundingBoxOnScreen()
     {
-        tools::Rectangle aGridRect = m_aTable.GetWindowExtentsRelative( nullptr );
+        AbsoluteScreenPixelRectangle aGridRect = m_aTable.GetWindowExtentsAbsolute();
         sal_Int64 nIndex = getAccessibleIndexInParent();
         tools::Rectangle aCellRect = m_aTable.calcCellRect(nIndex%m_aTable.GetColumnCount(), nIndex/m_aTable.GetColumnCount());
         tools::Long nX = aGridRect.Left() + aCellRect.Left();
         tools::Long nY = aGridRect.Top() + aCellRect.Top();
-        tools::Rectangle aCell( Point( nX, nY ), aCellRect.GetSize());
+        AbsoluteScreenPixelRectangle aCell( AbsoluteScreenPixelPoint( nX, nY ), aCellRect.GetSize());
         return aCell;
     }
 }

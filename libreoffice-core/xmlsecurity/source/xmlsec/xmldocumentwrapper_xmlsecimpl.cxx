@@ -25,8 +25,7 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <xmlsec/xmldocumentwrapper_xmlsecimpl.hxx>
 #include "xmlelementwrapper_xmlsecimpl.hxx"
-
-#include <xmloff/attrlist.hxx>
+#include <comphelper/attributelist.hxx>
 #include <rtl/ref.hxx>
 
 #ifdef UNX
@@ -174,7 +173,7 @@ void XMLDocumentWrapper_XmlSecImpl::sendStartElement(
  *          This node must be an element type.
  ******************************************************************************/
 {
-    rtl::Reference<SvXMLAttributeList> pAttributeList = new SvXMLAttributeList();
+    rtl::Reference<comphelper::AttributeList> pAttributeList = new comphelper::AttributeList();
 
     xmlNsPtr pNsDef = pNode->nsDef;
 
@@ -370,9 +369,8 @@ xmlNodePtr XMLDocumentWrapper_XmlSecImpl::checkElement( const uno::Reference< cs
 
     if (xXMLElement.is())
     {
-        uno::Reference< css::lang::XUnoTunnel > xNodTunnel( xXMLElement, uno::UNO_QUERY_THROW ) ;
         XMLElementWrapper_XmlSecImpl* pElement
-            = comphelper::getFromUnoTunnel<XMLElementWrapper_XmlSecImpl>(xNodTunnel);
+            = dynamic_cast<XMLElementWrapper_XmlSecImpl*>(xXMLElement.get());
 
         if( pElement == nullptr ) {
             throw uno::RuntimeException() ;

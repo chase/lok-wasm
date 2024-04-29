@@ -33,14 +33,8 @@
   </node>
   <node oor:name="Help">
     <node oor:name="StartCenter">
-      <prop oor:name="AddFeatureURL" oor:type="xs:string">
-        <value>${STARTCENTER_ADDFEATURE_URL}</value>
-      </prop>
       <prop oor:name="InfoURL" oor:type="xs:string">
         <value>${STARTCENTER_INFO_URL}</value>
-      </prop>
-      <prop oor:name="TemplateRepositoryURL" oor:type="xs:string">
-        <value>${STARTCENTER_TEMPLREP_URL}</value>
       </prop>
     </node>
     <prop oor:name="System">
@@ -51,7 +45,7 @@
   </node>
   <node oor:name="VCL">
     <prop oor:name="UseSkia" oor:type="xs:boolean">
-      <value install:module="macosx">false</value>
+      <value install:module="macosx">true</value>
       <value install:module="unx">false</value>
       <value install:module="wnt">true</value>
     </prop>
@@ -73,9 +67,6 @@
     </node>
     <node oor:name="CJK" install:module="cjk">
       <prop oor:name="VerticalText">
-        <value>true</value>
-      </prop>
-      <prop oor:name="VerticalCallOut">
         <value>true</value>
       </prop>
       <prop oor:name="Ruby">
@@ -358,7 +349,7 @@
       <value>https://hub.libreoffice.org/donation/</value>
     </prop>
     <prop oor:name="ReleaseNotesURL" oor:type="xs:string">
-      <value>https://www.collaboraoffice.com/collabora-office-23.05-release-notes/</value>
+      <value>https://www.collaboraoffice.com/collabora-office-24.04-release-notes/</value>
     </prop>
     <prop oor:name="CreditsURL" oor:type="xs:string">
       <value>https://hub.libreoffice.org/credits/</value>
@@ -374,6 +365,9 @@
     </prop>
     <prop oor:name="PrivacyPolicyURL" oor:type="xs:string">
       <value>${PRIVACY_POLICY_URL}</value>
+    </prop>
+    <prop oor:name="ExtensionsURL" oor:type="xs:string">
+      <value>https://hub.libreoffice.org/extensions/</value>
     </prop>
   </node>
   <node oor:name="Forms">
@@ -401,22 +395,6 @@
         <prop oor:name="UseDocumentTextMetrics" oor:type="xs:boolean">
           <value>false</value>
         </prop>
-      </node>
-    </node>
-  </node>
-  <node oor:name="Startup">
-    <node oor:name="RunOnce">
-      <node oor:name="AddressSourcePilot" oor:op="replace">
-        <prop oor:name="ServiceName">
-          <value>com.sun.star.ui.dialogs.AddressBookSourcePilot</value>
-        </prop>
-        <prop oor:name="UserInteraction">
-          <value>true</value>
-        </prop>
-        <prop oor:name="AllowAsync">
-          <value>false</value>
-        </prop>
-        <node oor:name="ExecutionArguments"/>
       </node>
     </node>
   </node>
@@ -491,22 +469,6 @@
     <node oor:name="Scripting">
       <prop oor:name="HyperlinksWithCtrlClick" oor:type="xs:boolean">
         <value>true</value>
-      </prop>
-    </node>
-  </node>
-  <node oor:name="Cache">
-    <node oor:name="GraphicManager">
-      <prop oor:name="TotalCacheSize" oor:type="xs:int">
-        <value install:module="32bit">200000000</value>
-      </prop>
-    </node>
-  </node>
-  <node oor:name="Path">
-    <node oor:name="Current">
-      <prop oor:name="Temp" oor:type="xs:string">
-        <value install:module="macosx">$(userurl)/temp</value>
-        <value install:module="unx">$(temp)</value>
-        <value install:module="wnt">$(temp)</value>
       </prop>
     </node>
   </node>

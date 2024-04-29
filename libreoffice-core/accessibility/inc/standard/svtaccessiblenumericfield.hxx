@@ -19,24 +19,20 @@
 
 #pragma once
 
-#include <cppuhelper/implbase1.hxx>
+#include <cppuhelper/implbase.hxx>
+#include <vcl/vclevent.hxx>
+
 #include <standard/vclxaccessibleedit.hxx>
 
 #include <com/sun/star/accessibility/XAccessibleValue.hpp>
 
-typedef ::cppu::ImplHelper1<css::accessibility::XAccessibleValue> SVTXAccessibleNumericField_BASE;
-
-class SVTXAccessibleNumericField final : public VCLXAccessibleEdit,
-                                         public SVTXAccessibleNumericField_BASE
+class SVTXAccessibleNumericField final
+    : public cppu::ImplInheritanceHelper<VCLXAccessibleEdit, css::accessibility::XAccessibleValue>
 {
 public:
     SVTXAccessibleNumericField(VCLXWindow* pVCLXindow);
 
-    // XInterface
-    DECLARE_XINTERFACE()
-
-    // XTypeProvider
-    DECLARE_XTYPEPROVIDER()
+    virtual void ProcessWindowEvent(const VclWindowEvent& rVclWindowEvent) override;
 
     // XAccessibleContext
     virtual sal_Int16 SAL_CALL getAccessibleRole() override;

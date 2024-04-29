@@ -33,21 +33,17 @@ enum class UnoMSAAEvent;
  * EMBEDDED_OBJECT, END_NOTE, FILLER, FOOTNOTE, FOOTER, GRAPHIC, HEADER, LAYERED_PANE,
  * MENU_BAR, POPUP_MENU, OPTION_PANE, PAGE_TAB, PAGE_TAB_LIST, PANEL, SCROLL_PANE, SPLIT_PANE,
  * STATUS_BAR, TABLE_CELL, TEXT_FRAME, TOOL_BAR, VIEW_PORT.
- * It defines the procedure of specific event handling related with containsers and provides
+ * It defines the procedure of specific event handling related with containers and provides
  * the detailed support for some related methods.
  */
 class AccContainerEventListener: public AccEventListener
 {
 public:
-    AccContainerEventListener(css::accessibility::XAccessible* pAcc, AccObjectManagerAgent* Agent);
+    AccContainerEventListener(css::accessibility::XAccessible* pAcc, AccObjectWinManager* pManager);
     virtual ~AccContainerEventListener() override;
 
     //AccessibleEventListener
     virtual void SAL_CALL notifyEvent( const css::accessibility::AccessibleEventObject& aEvent ) override;
-
-    //for child changed event
-    virtual void HandleChildChangedEvent(
-            css::uno::Any oldValue, css::uno::Any newValue);
 
     //for selection changed event
     virtual void HandleSelectionChangedEvent(

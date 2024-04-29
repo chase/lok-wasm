@@ -211,15 +211,13 @@ sal_Bool WriterFilter::filter(const uno::Sequence<beans::PropertyValue>& rDescri
         {
             // note: SfxObjectShell checks for WrongFormatException
             io::WrongFormatException wfe(lcl_GetExceptionMessage(e));
-            throw lang::WrappedTargetRuntimeException("", static_cast<OWeakObject*>(this),
-                                                      uno::Any(wfe));
+            throw lang::WrappedTargetRuntimeException("", getXWeak(), uno::Any(wfe));
         }
         catch (xml::sax::SAXException const& e)
         {
             // note: SfxObjectShell checks for WrongFormatException
             io::WrongFormatException wfe(lcl_GetExceptionMessage(e));
-            throw lang::WrappedTargetRuntimeException("", static_cast<OWeakObject*>(this),
-                                                      uno::Any(wfe));
+            throw lang::WrappedTargetRuntimeException("", getXWeak(), uno::Any(wfe));
         }
         catch (uno::RuntimeException const&)
         {
@@ -230,7 +228,7 @@ sal_Bool WriterFilter::filter(const uno::Sequence<beans::PropertyValue>& rDescri
             css::uno::Any anyEx = cppu::getCaughtException();
             SAL_WARN("writerfilter",
                      "WriterFilter::filter(): failed with " << exceptionToString(anyEx));
-            throw lang::WrappedTargetRuntimeException("", static_cast<OWeakObject*>(this), anyEx);
+            throw lang::WrappedTargetRuntimeException("", getXWeak(), anyEx);
         }
 
         // Adding some properties to the document's grab bag for interoperability purposes:
@@ -306,7 +304,7 @@ void WriterFilter::setTargetDocument(const uno::Reference<lang::XComponent>& xDo
 
     xSettings->setPropertyValue("UseOldNumbering", uno::Any(false));
     xSettings->setPropertyValue("IgnoreFirstLineIndentInNumbering", uno::Any(false));
-    xSettings->setPropertyValue("NoGapAfterNoteNumber", uno::Any(true));
+    xSettings->setPropertyValue(u"NoGapAfterNoteNumber"_ustr, uno::Any(true));
     xSettings->setPropertyValue("DoNotResetParaAttrsForNumFont", uno::Any(false));
     xSettings->setPropertyValue("UseFormerLineSpacing", uno::Any(false));
     xSettings->setPropertyValue("AddParaSpacingToTableCells", uno::Any(true));
@@ -324,7 +322,6 @@ void WriterFilter::setTargetDocument(const uno::Reference<lang::XComponent>& xDo
     xSettings->setPropertyValue("TabOverSpacing", uno::Any(true));
     xSettings->setPropertyValue("UnbreakableNumberings", uno::Any(true));
 
-    xSettings->setPropertyValue("FloattableNomargins", uno::Any(true));
     xSettings->setPropertyValue("ClippedPictures", uno::Any(true));
     xSettings->setPropertyValue("BackgroundParaOverDrawings", uno::Any(true));
     xSettings->setPropertyValue("TreatSingleColumnBreakAsPageBreak", uno::Any(true));
@@ -333,6 +330,7 @@ void WriterFilter::setTargetDocument(const uno::Reference<lang::XComponent>& xDo
     xSettings->setPropertyValue("DisableOffPagePositioning", uno::Any(true));
     xSettings->setPropertyValue("DropCapPunctuation", uno::Any(true));
     // rely on default for HyphenateURLs=false
+    // rely on default for APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH=true
 }
 
 void WriterFilter::setSourceDocument(const uno::Reference<lang::XComponent>& xDoc)

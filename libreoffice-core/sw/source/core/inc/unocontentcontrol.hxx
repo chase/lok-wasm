@@ -23,7 +23,6 @@
 #include <deque>
 
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XChild.hpp>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
@@ -36,21 +35,23 @@
 #include <unobaseclass.hxx>
 #include <unocoll.hxx>
 
-typedef std::deque<css::uno::Reference<css::text::XTextRange>> TextRangeList_t;
-
 class SwPaM;
 class SwTextNode;
 class SwFormatContentControl;
 class SwContentControl;
+class SwXText;
+class SwXTextPortion;
+
+typedef std::deque<rtl::Reference<SwXTextPortion>> TextRangeList_t;
 
 /**
  * UNO API wrapper around an SwContentControl, exposed as the com.sun.star.text.ContentControl
  * service.
  */
-class SwXContentControl
-    : public cppu::WeakImplHelper<css::lang::XUnoTunnel, css::lang::XServiceInfo,
-                                  css::container::XEnumerationAccess, css::text::XTextContent,
-                                  css::text::XText, css::beans::XPropertySet>
+class SwXContentControl final
+    : public cppu::WeakImplHelper<css::lang::XServiceInfo, css::container::XEnumerationAccess,
+                                  css::text::XTextContent, css::text::XText,
+                                  css::beans::XPropertySet>
 {
     class Impl;
     sw::UnoImplPtr<Impl> m_pImpl;
@@ -65,7 +66,7 @@ protected:
     SwXContentControl& operator=(const SwXContentControl&) = delete;
 
     SwXContentControl(SwDoc* pDoc, SwContentControl* pContentControl,
-                      const css::uno::Reference<css::text::XText>& xParentText,
+                      const css::uno::Reference<SwXText>& xParentText,
                       std::unique_ptr<const TextRangeList_t> pPortions);
 
     SwXContentControl(SwDoc* pDoc);
@@ -73,7 +74,7 @@ protected:
 public:
     static rtl::Reference<SwXContentControl>
     CreateXContentControl(SwContentControl& rContentControl,
-                          const css::uno::Reference<css::text::XText>& xParentText = nullptr,
+                          const css::uno::Reference<SwXText>& xParentText = nullptr,
                           std::unique_ptr<const TextRangeList_t>&& pPortions
                           = std::unique_ptr<const TextRangeList_t>());
 
@@ -81,12 +82,7 @@ public:
 
     /// Initializes params with position of the attribute content (without CH_TXTATR).
     bool SetContentRange(SwTextNode*& rpNode, sal_Int32& rStart, sal_Int32& rEnd) const;
-    const css::uno::Reference<css::text::XText>& GetParentText() const;
-
-    static const css::uno::Sequence<sal_Int8>& getUnoTunnelId();
-
-    // XUnoTunnel
-    sal_Int64 SAL_CALL getSomething(const css::uno::Sequence<sal_Int8>& Identifier) override;
+    const css::uno::Reference<SwXText>& GetParentText() const;
 
     // XServiceInfo
     OUString SAL_CALL getImplementationName() override;

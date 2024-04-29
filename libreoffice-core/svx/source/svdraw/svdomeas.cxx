@@ -557,7 +557,7 @@ basegfx::B2DPolyPolygon SdrMeasureObj::ImpCalcXPoly(const ImpMeasurePoly& rPol)
 
 bool SdrMeasureObj::CalcFieldValue(const SvxFieldItem& rField, sal_Int32 nPara, sal_uInt16 nPos,
     bool bEdit,
-    std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor, OUString& rRet) const
+    std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor, std::optional<FontLineStyle>& rpFldLineStyle, OUString& rRet) const
 {
     const SvxFieldData* pField=rField.GetField();
     const SdrMeasureField* pMeasureField=dynamic_cast<const SdrMeasureField*>( pField );
@@ -569,7 +569,7 @@ bool SdrMeasureObj::CalcFieldValue(const SvxFieldItem& rField, sal_Int32 nPara, 
         }
         return true;
     } else {
-        return SdrTextObj::CalcFieldValue(rField,nPara,nPos,bEdit,rpTxtColor,rpFldColor,rRet);
+        return SdrTextObj::CalcFieldValue(rField,nPara,nPos,bEdit,rpTxtColor,rpFldColor,rpFldLineStyle,rRet);
     }
 }
 
@@ -690,18 +690,18 @@ void SdrMeasureObj::TakeUnrotatedSnapRect(tools::Rectangle& rRect) const
             aTextPos.AdjustY( -(aTextSize2.Width()) );
         }
     }
-    if (aMPol.nTextAngle != maGeo.nRotationAngle) {
-        const_cast<SdrMeasureObj*>(this)->maGeo.nRotationAngle=aMPol.nTextAngle;
+    if (aMPol.nTextAngle != maGeo.m_nRotationAngle) {
+        const_cast<SdrMeasureObj*>(this)->maGeo.m_nRotationAngle=aMPol.nTextAngle;
         const_cast<SdrMeasureObj*>(this)->maGeo.RecalcSinCos();
     }
     RotatePoint(aTextPos,aPt1b,aMPol.nLineSin,aMPol.nLineCos);
     aTextSize2.AdjustWidth( 1 ); aTextSize2.AdjustHeight( 1 ); // because of the Rect-Ctor's odd behavior
     rRect=tools::Rectangle(aTextPos,aTextSize2);
     rRect.Normalize();
-    const_cast<SdrMeasureObj*>(this)->maRect=rRect;
+    const_cast<SdrMeasureObj*>(this)->setRectangle(rRect);
 
-    if (aMPol.nTextAngle != maGeo.nRotationAngle) {
-        const_cast<SdrMeasureObj*>(this)->maGeo.nRotationAngle=aMPol.nTextAngle;
+    if (aMPol.nTextAngle != maGeo.m_nRotationAngle) {
+        const_cast<SdrMeasureObj*>(this)->maGeo.m_nRotationAngle=aMPol.nTextAngle;
         const_cast<SdrMeasureObj*>(this)->maGeo.RecalcSinCos();
     }
 }

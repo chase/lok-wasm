@@ -366,18 +366,6 @@ SwGetRefField::~SwGetRefField()
 {
 }
 
-void SwGetRefField::SetText(OUString sText, SwRootFrame* pLayout)
-{
-    if (pLayout->IsHideRedlines())
-    {
-        m_sTextRLHidden = sText;
-    }
-    else
-    {
-        m_sText = sText;
-    }
-}
-
 OUString SwGetRefField::GetDescription() const
 {
     return SwResId(STR_REFERENCE);
@@ -422,8 +410,7 @@ static OUString lcl_formatStringByCombiningCharacter(std::u16string_view sText, 
     OUStringBuffer sRet(sText.size() * 2);
     for (size_t i = 0; i < sText.size(); ++i)
     {
-        sRet.append(sText[i]);
-        sRet.append(cChar);
+        sRet.append(OUStringChar(sText[i]) + OUStringChar(cChar));
     }
     return sRet.makeStringAndClear();
 }
@@ -523,8 +510,6 @@ void SwGetRefField::UpdateField(const SwTextField* pFieldTextAttr, SwFrame* pFra
 {
     SwDoc& rDoc = static_cast<SwGetRefFieldType*>(GetTyp())->GetDoc();
 
-    rText.clear();
-
     // finding the reference target (the number)
     sal_Int32 nNumStart = -1;
     sal_Int32 nNumEnd = -1;
@@ -535,10 +520,16 @@ void SwGetRefField::UpdateField(const SwTextField* pFieldTextAttr, SwFrame* pFra
     // not found?
     if ( !pTextNd )
     {
-        rText = SwViewShell::GetShellRes()->aGetRefField_RefItemNotFound;
+        // MACRO:
+        // LibreOffice would update the referenced text to "Error: Reference source not found"
+        // when the source is, well, not found, e.g source got deleted
+        // rText = SwViewShell::GetShellRes()->aGetRefField_RefItemNotFound;
 
         return;
     }
+
+    // MACRO:
+    rText.clear();
 
     // where is the category name (e.g. "Illustration")?
     const OUString aText = pTextNd->GetText();
@@ -1438,7 +1429,7 @@ SwTextNode* SwGetRefFieldType::FindAnchor(SwDoc* pDoc, const OUString& rRefMark,
                     Point aPt;
                     std::pair<Point, bool> const tmp(aPt, false);
 
-                    if (!pContentFrame) break;
+                    if (!pContentFrame) SAL_WARN("xmloff.text", "<SwGetRefFieldType::FindAnchor(..)>: Missing content frame for marginal styleref");
                     const SwPageFrame* pPageFrame = nullptr;
 
                     if (pContentFrame)

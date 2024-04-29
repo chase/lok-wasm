@@ -129,8 +129,7 @@ BitmapEx convertMetafileToBitmapEx(
 }
 
 SdrPaintView::SdrPaintView(SdrModel& rSdrModel, OutputDevice* pOut)
-    : mrSdrModelFromSdrView(rSdrModel)
-    , mpModel(&rSdrModel)
+    : mrModel(rSdrModel)
     , mpActualOutDev(nullptr)
     , mpDragWin(nullptr)
     , mpDefaultStyleSheet(nullptr)
@@ -159,7 +158,8 @@ SdrPaintView::SdrPaintView(SdrModel& rSdrModel, OutputDevice* pOut)
     , mbAnimationPause(false)
     , mbBufferedOutputAllowed(false)
     , mbBufferedOverlayAllowed(false)
-    , mbPagePaintingAllowed(true)
+    , mbPageDecorationAllowed(true)
+    , mbMasterPageVisualizationAllowed(true)
     , mbPreviewRenderer(false)
     , mbHideOle(false)
     , mbHideChart(false)
@@ -171,8 +171,7 @@ SdrPaintView::SdrPaintView(SdrModel& rSdrModel, OutputDevice* pOut)
     maComeBackIdle.SetPriority(TaskPriority::REPAINT);
     maComeBackIdle.SetInvokeHandler(LINK(this,SdrPaintView,ImpComeBackHdl));
 
-    if (mpModel)
-        SetDefaultStyleSheet(mpModel->GetDefaultStyleSheet(), true);
+    SetDefaultStyleSheet(GetModel().GetDefaultStyleSheet(), true);
 
     if (pOut)
         AddDeviceToPaintView(*pOut, nullptr);
@@ -646,22 +645,23 @@ void SdrPaintView::EndCompleteRedraw(SdrPaintWindow& rPaintWindow, bool bPaintFo
         {
             // Look for active text edits in other views showing the same page,
             // and show them as well. Show only if Page/MasterPage mode is matching.
-            SdrViewIter aIter(pPageView->GetPage());
             bool bRequireMasterPage = pPageView->GetPage() ? pPageView->GetPage()->IsMasterPage() : false;
-            for (SdrView* pView = aIter.FirstView(); pView; pView = aIter.NextView())
-            {
-                SdrPageView* pCurrentPageView = pView->GetSdrPageView();
-                bool bIsCurrentMasterPage = (pCurrentPageView && pCurrentPageView->GetPage()) ?
-                    pCurrentPageView->GetPage()->IsMasterPage() : false;
-
-                if (pView == this || bRequireMasterPage != bIsCurrentMasterPage)
-                    continue;
-
-                if (pView->IsTextEdit() && pView->GetSdrPageView())
+            SdrViewIter::ForAllViews(pPageView->GetPage(),
+                [this, &bRequireMasterPage, &rPaintWindow] (SdrView* pView)
                 {
-                    pView->TextEditDrawing(rPaintWindow);
-                }
-            }
+                    SdrPageView* pCurrentPageView = pView->GetSdrPageView();
+                    bool bIsCurrentMasterPage = (pCurrentPageView && pCurrentPageView->GetPage()) ?
+                        pCurrentPageView->GetPage()->IsMasterPage() : false;
+
+                    if (pView == this || bRequireMasterPage != bIsCurrentMasterPage)
+                        return false;
+
+                    if (pView->IsTextEdit() && pView->GetSdrPageView())
+                    {
+                        pView->TextEditDrawing(rPaintWindow);
+                    }
+                    return false;
+                });
         }
 
         // draw Overlay, also to PreRender device if exists
@@ -765,7 +765,7 @@ void SdrPaintView::ImpFormLayerDrawing( SdrPaintWindow& rPaintWindow )
 
     if(pKnownTarget)
     {
-        const SdrModel& rModel = *(GetModel());
+        const SdrModel& rModel = GetModel();
         const SdrLayerAdmin& rLayerAdmin = rModel.GetLayerAdmin();
         const SdrLayerID nControlLayerId = rLayerAdmin.GetLayerID(rLayerAdmin.GetControlLayerName());
 
@@ -803,12 +803,10 @@ void SdrPaintView::GlueInvalidate() const
             if(mpPageView)
             {
                 const SdrObjList* pOL=mpPageView->GetObjList();
-                const size_t nObjCount = pOL->GetObjCount();
-                for (size_t nObjNum=0; nObjNum<nObjCount; ++nObjNum) {
-                    const SdrObject* pObj=pOL->GetObj(nObjNum);
+                for (const rtl::Reference<SdrObject>& pObj : *pOL) {
                     const SdrGluePointList* pGPL=pObj->GetGluePointList();
                     if (pGPL!=nullptr && pGPL->GetCount()!=0) {
-                        pGPL->Invalidate(*rOutDev.GetOwnerWindow(), pObj);
+                        pGPL->Invalidate(*rOutDev.GetOwnerWindow(), pObj.get());
                     }
                 }
             }
@@ -860,7 +858,12 @@ void SdrPaintView::InvalidateAllWin(const tools::Rectangle& rRect)
 void SdrPaintView::InvalidateOneWin(OutputDevice& rDevice)
 {
     // do not erase background, that causes flicker (!)
-    rDevice.GetOwnerWindow()->Invalidate(InvalidateFlags::NoErase);
+    // tdf#160444 check device's owner window is a nullptr
+    // Since commit 563f7077f1dbce31ff95ee8d2e8d17b629693db1, the
+    // device's owner window gets deleted before this object is
+    // deleted.
+    if (rDevice.GetOwnerWindow())
+        rDevice.GetOwnerWindow()->Invalidate(InvalidateFlags::NoErase);
 }
 
 void SdrPaintView::InvalidateOneWin(OutputDevice& rDevice, const tools::Rectangle& rRect)
@@ -903,7 +906,7 @@ void SdrPaintView::SetNotPersistDefaultAttr(const SfxItemSet& rAttr)
     if (const SdrLayerIdItem *pPoolItem = rAttr.GetItemIfSet(SDRATTR_LAYERID))
     {
         SdrLayerID nLayerId = pPoolItem->GetValue();
-        const SdrLayer* pLayer=mpModel->GetLayerAdmin().GetLayerPerID(nLayerId);
+        const SdrLayer* pLayer = GetModel().GetLayerAdmin().GetLayerPerID(nLayerId);
         if (pLayer!=nullptr) {
             if (bMeasure) maMeasureLayer=pLayer->GetName();
             else maActualLayer=pLayer->GetName();
@@ -922,7 +925,7 @@ void SdrPaintView::MergeNotPersistDefaultAttr(SfxItemSet& rAttr) const
     bool bMeasure= dynamic_cast<const SdrView*>(this) != nullptr && static_cast<const SdrView*>(this)->IsMeasureTool();
     const OUString& aNam = bMeasure ? maMeasureLayer : maActualLayer;
     rAttr.Put(SdrLayerNameItem(aNam));
-    SdrLayerID nLayer=mpModel->GetLayerAdmin().GetLayerID(aNam);
+    SdrLayerID nLayer = GetModel().GetLayerAdmin().GetLayerID(aNam);
     if (nLayer!=SDRLAYER_NOTFOUND) {
         rAttr.Put(SdrLayerIdItem(nLayer));
     }
@@ -1178,11 +1181,19 @@ void SdrPaintView::SetBufferedOverlayAllowed(bool bNew)
 }
 
 
-void SdrPaintView::SetPagePaintingAllowed(bool bNew)
+void SdrPaintView::SetPageDecorationAllowed(bool bNew)
 {
-    if(bNew != mbPagePaintingAllowed)
+    if(bNew != mbPageDecorationAllowed)
     {
-        mbPagePaintingAllowed = bNew;
+        mbPageDecorationAllowed = bNew;
+    }
+}
+
+void SdrPaintView::SetMasterPageVisualizationAllowed(bool bNew)
+{
+    if(bNew != mbMasterPageVisualizationAllowed)
+    {
+        mbMasterPageVisualizationAllowed = bNew;
     }
 }
 

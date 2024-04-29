@@ -22,6 +22,7 @@
 #include <vcl/outdev.hxx>
 #include <vcl/settings.hxx>
 #include <officecfg/Office/Common.hxx>
+#include <unotools/configmgr.hxx>
 #include <drawinglayer/geometry/viewinformation2d.hxx>
 #include <mutex>
 
@@ -59,33 +60,33 @@ sal_uInt16 GetStripeLength()
 
 bool IsOverlayBuffer_Calc()
 {
-    return officecfg::Office::Common::Drawinglayer::OverlayBuffer_Calc::get();
+    return !utl::ConfigManager::IsFuzzing() && officecfg::Office::Common::Drawinglayer::OverlayBuffer_Calc::get();
 }
 
 bool IsOverlayBuffer_Writer()
 {
-    return officecfg::Office::Common::Drawinglayer::OverlayBuffer_Writer::get();
+    return !utl::ConfigManager::IsFuzzing() && officecfg::Office::Common::Drawinglayer::OverlayBuffer_Writer::get();
 }
 
 bool IsOverlayBuffer_DrawImpress()
 {
-    return officecfg::Office::Common::Drawinglayer::OverlayBuffer_DrawImpress::get();
+    return !utl::ConfigManager::IsFuzzing() && officecfg::Office::Common::Drawinglayer::OverlayBuffer_DrawImpress::get();
 }
 
 // #i74769#, #i75172#
 bool IsPaintBuffer_Calc()
 {
-    return officecfg::Office::Common::Drawinglayer::PaintBuffer_Calc::get();
+    return !utl::ConfigManager::IsFuzzing() && officecfg::Office::Common::Drawinglayer::PaintBuffer_Calc::get();
 }
 
 bool IsPaintBuffer_Writer()
 {
-    return officecfg::Office::Common::Drawinglayer::PaintBuffer_Writer::get();
+    return !utl::ConfigManager::IsFuzzing() && officecfg::Office::Common::Drawinglayer::PaintBuffer_Writer::get();
 }
 
 bool IsPaintBuffer_DrawImpress()
 {
-    return officecfg::Office::Common::Drawinglayer::PaintBuffer_DrawImpress::get();
+    return !utl::ConfigManager::IsFuzzing() && officecfg::Office::Common::Drawinglayer::PaintBuffer_DrawImpress::get();
 }
 
 // #i4219#
@@ -119,53 +120,25 @@ sal_uInt32 GetMaximumPaperBottomMargin()
     return officecfg::Office::Common::Drawinglayer::MaximumPaperBottomMargin::get();
 }
 
-static std::mutex gaAntiAliasMutex;
-static bool gbAntiAliasingInit = false;
-static bool gbAntiAliasing = false;
-static bool gbAllowAAInit = false;
-static bool gbAllowAA = false;
-
-static bool gbAntiAliasingForwardInitial(false);
-static bool gbAntiAliasingForwardLast(true);
-
 static bool gbPixelSnapHairlineForwardInitial(false);
 static bool gbPixelSnapHairlineForwardLast(true);
 
 bool IsAAPossibleOnThisSystem()
 {
-    std::scoped_lock aGuard(gaAntiAliasMutex);
-    if (!gbAllowAAInit)
-    {
-        gbAllowAAInit = true;
-        gbAllowAA = Application::GetDefaultDevice()->SupportsOperation( OutDevSupportType::TransparentRect );
-    }
+    static const bool gbAllowAA
+        = Application::GetDefaultDevice()->SupportsOperation(OutDevSupportType::TransparentRect);
     return gbAllowAA;
 }
 
 
 bool IsAntiAliasing()
 {
-    bool bAntiAliasing;
+    bool bAntiAliasing = drawinglayer::geometry::ViewInformation2D::getGlobalAntiAliasing();
+    if (bAntiAliasing && !IsAAPossibleOnThisSystem())
     {
-        std::scoped_lock aGuard(gaAntiAliasMutex);
-        if (!gbAntiAliasingInit)
-        {
-            gbAntiAliasingInit = true;
-            gbAntiAliasing = officecfg::Office::Common::Drawinglayer::AntiAliasing::get();
-        }
-        bAntiAliasing = gbAntiAliasing;
+        drawinglayer::geometry::ViewInformation2D::setGlobalAntiAliasing(false, true);
+        bAntiAliasing = false;
     }
-
-    bAntiAliasing = bAntiAliasing && IsAAPossibleOnThisSystem();
-
-    //
-    if (!gbAntiAliasingForwardInitial || gbAntiAliasingForwardLast != bAntiAliasing)
-    {
-        gbAntiAliasingForwardInitial = true;
-        gbAntiAliasingForwardLast = bAntiAliasing;
-        drawinglayer::geometry::ViewInformation2D::forwardAntiAliasing(bAntiAliasing);
-    }
-
     return bAntiAliasing;
 }
 
@@ -176,23 +149,7 @@ bool IsAntiAliasing()
   */
 void SetAntiAliasing( bool bOn, bool bTemporary )
 {
-    std::scoped_lock aGuard(gaAntiAliasMutex);
-    if (!bTemporary)
-    {
-        std::shared_ptr<comphelper::ConfigurationChanges> batch =
-                comphelper::ConfigurationChanges::create();
-        officecfg::Office::Common::Drawinglayer::AntiAliasing::set(bOn, batch);
-        batch->commit();
-    }
-
-    if (!gbAntiAliasingForwardInitial || gbAntiAliasingForwardLast != bOn)
-    {
-        gbAntiAliasingForwardInitial = true;
-        gbAntiAliasingForwardLast = bOn;
-        drawinglayer::geometry::ViewInformation2D::forwardAntiAliasing(bOn);
-    }
-
-    gbAntiAliasing = bOn;
+    drawinglayer::geometry::ViewInformation2D::setGlobalAntiAliasing(bOn, bTemporary);
 }
 
 
@@ -208,37 +165,6 @@ bool IsSnapHorVerLinesToDiscrete()
     }
 
     return bRetval;
-}
-
-bool IsSolidDragCreate()
-{
-    return officecfg::Office::Common::Drawinglayer::SolidDragCreate::get();
-}
-
-bool IsRenderDecoratedTextDirect()
-{
-    return officecfg::Office::Common::Drawinglayer::RenderDecoratedTextDirect::get();
-}
-
-bool IsRenderSimpleTextDirect()
-{
-    return officecfg::Office::Common::Drawinglayer::RenderSimpleTextDirect::get();
-}
-
-sal_uInt32 GetQuadratic3DRenderLimit()
-{
-    return officecfg::Office::Common::Drawinglayer::Quadratic3DRenderLimit::get();
-}
-
-sal_uInt32 GetQuadraticFormControlRenderLimit()
-{
-    return officecfg::Office::Common::Drawinglayer::QuadraticFormControlRenderLimit::get();
-}
-
-// #i97672# selection settings
-bool IsTransparentSelection()
-{
-    return officecfg::Office::Common::Drawinglayer::TransparentSelection::get();
 }
 
 sal_uInt16 GetTransparentSelectionPercent()

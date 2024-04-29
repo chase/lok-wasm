@@ -24,6 +24,7 @@
 
 #include <svx/svdpage.hxx>
 #include <svx/unoshape.hxx>
+#include <svx/unopage.hxx>
 
 #include <o3tl/safeint.hxx>
 #include <string.h>
@@ -45,13 +46,13 @@
 #include <svx/svdpagv.hxx>
 #include <svx/svdundo.hxx>
 #include <svx/xfillit0.hxx>
-#include <svx/fmdpage.hxx>
 #include <svx/ColorSets.hxx>
 
 #include <sdr/contact/viewcontactofsdrpage.hxx>
 #include <svx/sdr/contact/viewobjectcontact.hxx>
 #include <svx/sdr/contact/displayinfo.hxx>
 #include <algorithm>
+#include <clonelist.hxx>
 #include <svl/hint.hxx>
 #include <rtl/strbuf.hxx>
 #include <libxml/xmlwriter.h>
@@ -113,14 +114,9 @@ void SdrObjList::ClearSdrObjList()
 
 SdrObjList::~SdrObjList()
 {
-    // clear SdrObjects without broadcasting
-    while(!maList.empty())
-    {
-        // remove last object from list
-        SdrObject& rObj = *maList.back();
-        rObj.setParentOfSdrObject(nullptr);
-        maList.pop_back();
-    }
+    // Clear SdrObjects without broadcasting.
+    for (auto& rxObj : maList)
+        rxObj->setParentOfSdrObject(nullptr);
 }
 
 SdrPage* SdrObjList::getSdrPageFromSdrObjList() const
@@ -137,13 +133,16 @@ SdrObject* SdrObjList::getSdrObjectFromSdrObjList() const
 
 void SdrObjList::CopyObjects(const SdrObjList& rSrcList)
 {
+    CloneList aCloneList;
+
     // clear SdrObjects with broadcasting
     ClearSdrObjList();
 
     mbObjOrdNumsDirty = false;
     mbRectsDirty = false;
+#ifdef DBG_UTIL
     size_t nCloneErrCnt(0);
-    const size_t nCount(rSrcList.GetObjCount());
+#endif
 
     if(nullptr == getSdrObjectFromSdrObjList() && nullptr == getSdrPageFromSdrObjList())
     {
@@ -155,68 +154,28 @@ void SdrObjList::CopyObjects(const SdrObjList& rSrcList)
         ? getSdrPageFromSdrObjList()->getSdrModelFromSdrPage()
         : getSdrObjectFromSdrObjList()->getSdrModelFromSdrObject());
 
-    for (size_t no(0); no < nCount; ++no)
+    for (const rtl::Reference<SdrObject>& pSO : rSrcList)
     {
-        SdrObject* pSO(rSrcList.GetObj(no));
         rtl::Reference<SdrObject> pDO(pSO->CloneSdrObject(rTargetSdrModel));
 
         if(pDO)
         {
             NbcInsertObject(pDO.get(), SAL_MAX_SIZE);
+            aCloneList.AddPair(pSO.get(), pDO.get());
         }
+#ifdef DBG_UTIL
         else
         {
             nCloneErrCnt++;
         }
+#endif
     }
 
-    // and now for the Connectors
-    // The new objects would be shown in the rSrcList
-    // and then the object connections are made.
-    // Similar implementation are setup as the following:
-    //    void SdrObjList::CopyObjects(const SdrObjList& rSrcList)
-    //    SdrModel* SdrExchangeView::CreateMarkedObjModel() const
-    //    BOOL SdrExchangeView::Paste(const SdrModel& rMod,...)
-    //    void SdrEditView::CopyMarked()
-    if (nCloneErrCnt==0) {
-        for (size_t no=0; no<nCount; ++no) {
-            const SdrObject* pSrcOb=rSrcList.GetObj(no);
-            const SdrEdgeObj* pSrcEdge=dynamic_cast<const SdrEdgeObj*>( pSrcOb );
-            if (pSrcEdge!=nullptr) {
-                SdrObject* pSrcNode1=pSrcEdge->GetConnectedNode(true);
-                SdrObject* pSrcNode2=pSrcEdge->GetConnectedNode(false);
-                if (pSrcNode1!=nullptr && pSrcNode1->getParentSdrObjListFromSdrObject()!=pSrcEdge->getParentSdrObjListFromSdrObject()) pSrcNode1=nullptr; // can't do this
-                if (pSrcNode2!=nullptr && pSrcNode2->getParentSdrObjListFromSdrObject()!=pSrcEdge->getParentSdrObjListFromSdrObject()) pSrcNode2=nullptr; // across all lists (yet)
-                if (pSrcNode1!=nullptr || pSrcNode2!=nullptr) {
-                    SdrObject* pEdgeObjTmp=GetObj(no);
-                    SdrEdgeObj* pDstEdge=dynamic_cast<SdrEdgeObj*>( pEdgeObjTmp );
-                    if (pDstEdge!=nullptr) {
-                        if (pSrcNode1!=nullptr) {
-                            sal_uInt32 nDstNode1=pSrcNode1->GetOrdNum();
-                            SdrObject* pDstNode1=GetObj(nDstNode1);
-                            if (pDstNode1!=nullptr) { // else we get an error!
-                                pDstEdge->ConnectToNode(true,pDstNode1);
-                            } else {
-                                OSL_FAIL("SdrObjList::operator=(): pDstNode1==NULL!");
-                            }
-                        }
-                        if (pSrcNode2!=nullptr) {
-                            sal_uInt32 nDstNode2=pSrcNode2->GetOrdNum();
-                            SdrObject* pDstNode2=GetObj(nDstNode2);
-                            if (pDstNode2!=nullptr) { // else the node was probably not selected
-                                pDstEdge->ConnectToNode(false,pDstNode2);
-                            } else {
-                                OSL_FAIL("SdrObjList::operator=(): pDstNode2==NULL!");
-                            }
-                        }
-                    } else {
-                        OSL_FAIL("SdrObjList::operator=(): pDstEdge==NULL!");
-                    }
-                }
-            }
-        }
-    } else {
+    // Wires up the connections
+    aCloneList.CopyConnections();
 #ifdef DBG_UTIL
+    if (nCloneErrCnt != 0)
+    {
         OStringBuffer aStr("SdrObjList::operator=(): Error when cloning ");
 
         if(nCloneErrCnt == 1)
@@ -225,15 +184,13 @@ void SdrObjList::CopyObjects(const SdrObjList& rSrcList)
         }
         else
         {
-            aStr.append(static_cast<sal_Int32>(nCloneErrCnt));
-            aStr.append(" drawing objects.");
+            aStr.append(OString::number(static_cast<sal_Int32>(nCloneErrCnt))
+                + " drawing objects.");
         }
 
-        aStr.append(" Not copying connectors.");
-
         OSL_FAIL(aStr.getStr());
-#endif
     }
+#endif
 }
 
 void SdrObjList::RecalcObjOrdNums()
@@ -248,10 +205,9 @@ void SdrObjList::RecalcRects()
 {
     maSdrObjListOutRect=tools::Rectangle();
     maSdrObjListSnapRect=maSdrObjListOutRect;
-    const size_t nCount = GetObjCount();
-    for (size_t i=0; i<nCount; ++i) {
-        SdrObject* pObj=GetObj(i);
-        if (i==0) {
+    for (auto it = begin(), itEnd = end(); it != itEnd; ++it) {
+        SdrObject* pObj = it->get();
+        if (it == begin()) {
             maSdrObjListOutRect=pObj->GetCurrentBoundRect();
             maSdrObjListSnapRect=pObj->GetSnapRect();
         } else {
@@ -813,10 +769,8 @@ void SdrObjList::ImplReformatAllEdgeObjects(const SdrObjList& rObjList)
 
 void SdrObjList::BurnInStyleSheetAttributes()
 {
-    for(size_t a = 0; a < GetObjCount(); ++a)
-    {
-        GetObj(a)->BurnInStyleSheetAttributes();
-    }
+    for (const rtl::Reference<SdrObject>& pObj : *this)
+        pObj->BurnInStyleSheetAttributes();
 }
 
 size_t SdrObjList::GetObjCount() const
@@ -830,6 +784,16 @@ SdrObject* SdrObjList::GetObj(size_t nNum) const
     if (nNum < maList.size())
         return maList[nNum].get();
 
+    return nullptr;
+}
+
+SdrObject* SdrObjList::GetObjByName(std::u16string_view sName) const
+{
+    for (const rtl::Reference<SdrObject>& pObj : *this)
+    {
+        if (pObj->GetName() == sName)
+            return pObj.get();
+    }
     return nullptr;
 }
 
@@ -1123,12 +1087,8 @@ void SdrObjList::dumpAsXml(xmlTextWriterPtr pWriter) const
     (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", this);
     (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("symbol"), "%s", BAD_CAST(typeid(*this).name()));
 
-    size_t nObjCount = GetObjCount();
-    for (size_t i = 0; i < nObjCount; ++i)
-    {
-        if (const SdrObject* pObject = GetObj(i))
-            pObject->dumpAsXml(pWriter);
-    }
+    for (const rtl::Reference<SdrObject>& pObject : *this)
+        pObject->dumpAsXml(pWriter);
 
     (void)xmlTextWriterEndElement(pWriter);
 }
@@ -1140,7 +1100,7 @@ void SdrPageGridFrameList::Clear()
     for (sal_uInt16 i=0; i<nCount; i++) {
         delete GetObject(i);
     }
-    aList.clear();
+    m_aList.clear();
 }
 
 
@@ -1345,7 +1305,7 @@ SdrPage::SdrPage(SdrModel& rModel, bool bMasterPage)
     mnBorderRight(0),
     mnBorderLower(0),
     mpLayerAdmin(new SdrLayerAdmin(&rModel.GetLayerAdmin())),
-    nPageNum(0),
+    m_nPageNum(0),
     mbMaster(bMasterPage),
     mbInserted(false),
     mbObjectsNotPersistent(false),
@@ -1407,7 +1367,7 @@ void SdrPage::lateInit(const SdrPage& rSrcPage)
     mnBorderRight = rSrcPage.mnBorderRight;
     mnBorderLower = rSrcPage.mnBorderLower;
     mbBackgroundFullSize = rSrcPage.mbBackgroundFullSize;
-    nPageNum = rSrcPage.nPageNum;
+    m_nPageNum = rSrcPage.m_nPageNum;
 
     if(rSrcPage.TRG_HasMasterPage())
     {
@@ -1611,10 +1571,10 @@ bool SdrPage::IsBackgroundFullSize() const
 // #i68775# React on PageNum changes (from Model in most cases)
 void SdrPage::SetPageNum(sal_uInt16 nNew)
 {
-    if(nNew != nPageNum)
+    if(nNew != m_nPageNum)
     {
         // change
-        nPageNum = nNew;
+        m_nPageNum = nNew;
 
         // notify visualisations, also notifies e.g. buffered MasterPages
         ActionChanged();
@@ -1633,7 +1593,7 @@ sal_uInt16 SdrPage::GetPageNum() const
         if (getSdrModelFromSdrPage().IsPagNumsDirty())
             getSdrModelFromSdrPage().RecalcPageNums(false);
     }
-    return nPageNum;
+    return m_nPageNum;
 }
 
 void SdrPage::SetChanged()
@@ -1715,24 +1675,20 @@ void SdrPage::TRG_ImpMasterPageRemoved(const SdrPage& rRemovedPage)
 void SdrPage::MakePageObjectsNamesUnique()
 {
     std::unordered_set<OUString> aNameSet;
-    for (size_t no(0); no < GetObjCount(); ++no)
+    for (const rtl::Reference<SdrObject>& pObj : *this)
     {
-        SdrObject* pObj(GetObj(no));
-        if(nullptr != pObj)
+        if (!pObj->GetName().isEmpty())
         {
-            if (!pObj->GetName().isEmpty())
+            pObj->MakeNameUnique(aNameSet);
+            SdrObjList* pSdrObjList = pObj->GetSubList(); // group
+            if (pSdrObjList)
             {
-                pObj->MakeNameUnique(aNameSet);
-                SdrObjList* pSdrObjList = pObj->GetSubList(); // group
-                if (pSdrObjList)
+                SdrObject* pListObj;
+                SdrObjListIter aIter(pSdrObjList, SdrIterMode::DeepWithGroups);
+                while (aIter.IsMore())
                 {
-                    SdrObject* pListObj;
-                    SdrObjListIter aIter(pSdrObjList, SdrIterMode::DeepWithGroups);
-                    while (aIter.IsMore())
-                    {
-                        pListObj = aIter.Next();
-                        pListObj->MakeNameUnique(aNameSet);
-                    }
+                    pListObj = aIter.Next();
+                    pListObj->MakeNameUnique(aNameSet);
                 }
             }
         }
@@ -1800,9 +1756,7 @@ uno::Reference< uno::XInterface > const & SdrPage::getUnoPage()
 
 uno::Reference< uno::XInterface > SdrPage::createUnoPage()
 {
-    css::uno::Reference< css::uno::XInterface > xInt =
-        static_cast<cppu::OWeakObject*>( new SvxFmDrawPage( this ) );
-    return xInt;
+    return cppu::getXWeak(new SvxDrawPage(this));
 }
 
 SfxStyleSheet* SdrPage::GetTextStyleSheetForObject( SdrObject* pObj ) const
@@ -1841,7 +1795,8 @@ Color SdrPage::GetPageBackgroundColor( SdrPageView const * pView, bool bScreenDi
         }
     }
 
-    GetDraftFillColor(*pBackgroundFill, aColor);
+    if (auto oColor = GetDraftFillColor(*pBackgroundFill))
+        aColor = *oColor;
 
     return aColor;
 }

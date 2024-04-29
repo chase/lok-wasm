@@ -209,7 +209,7 @@ bool ScConversionEngineBase::FindNextConversionCell()
             {
                 // GetPattern may implicitly allocates the column if not exists,
                 pPattern = mrDoc.GetPattern( nNewCol, nNewRow, mnStartTab );
-                if( pPattern && (pPattern != pLastPattern) )
+                if( pPattern && !SfxPoolItem::areSame(pPattern, pLastPattern) )
                 {
                     pPattern->FillEditItemSet( &aEditDefaults );
                     SetDefaults( aEditDefaults );
@@ -355,10 +355,10 @@ void ScSpellingEngine::ShowFinishDialog()
 weld::Widget* ScSpellingEngine::GetDialogParent()
 {
     sal_uInt16 nWinId = ScSpellDialogChildWindow::GetChildWindowId();
-    SfxViewFrame* pViewFrm = mrViewData.GetViewShell()->GetViewFrame();
-    if( pViewFrm->HasChildWindow( nWinId ) )
+    SfxViewFrame& rViewFrm = mrViewData.GetViewShell()->GetViewFrame();
+    if( rViewFrm.HasChildWindow( nWinId ) )
     {
-        if( SfxChildWindow* pChild = pViewFrm->GetChildWindow( nWinId ) )
+        if( SfxChildWindow* pChild = rViewFrm.GetChildWindow( nWinId ) )
         {
             auto xController = pChild->GetController();
             if (xController)

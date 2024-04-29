@@ -45,10 +45,9 @@ class SfxItemPropertySet;
 namespace com::sun::star::frame { class XModel; }
 
 class BaseFrameProperties_Impl;
-class SAL_DLLPUBLIC_RTTI SwXFrame : public cppu::WeakImplHelper
+class SAL_DLLPUBLIC_RTTI SAL_LOPLUGIN_ANNOTATE("crosscast") SwXFrame : public cppu::WeakImplHelper
 <
     css::lang::XServiceInfo,
-    css::lang::XUnoTunnel,
     css::beans::XPropertySet,
     css::beans::XPropertyState,
     css::drawing::XShape,
@@ -97,11 +96,6 @@ protected:
     CreateXFrame(SwDoc & rDoc, SwFrameFormat *const pFrameFormat);
 
 public:
-    static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
-
-    //XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
-
 
     //XNamed
     virtual OUString SAL_CALL getName() override;
@@ -180,9 +174,6 @@ class SAL_DLLPUBLIC_RTTI SwXTextFrame final : public SwXTextFrameBaseClass,
 
     virtual const SwStartNode *GetStartNode() const override;
 
-    virtual css::uno::Reference< css::text::XTextCursor >
-        CreateCursor() override;
-
     virtual ~SwXTextFrame() override;
 
     SwXTextFrame(SwDoc *pDoc);
@@ -207,8 +198,9 @@ public:
     virtual SW_DLLPUBLIC css::uno::Reference< css::text::XText >  SAL_CALL getText() override;
 
     //XText
-    virtual css::uno::Reference< css::text::XTextCursor >  SAL_CALL createTextCursor() override;
-    virtual css::uno::Reference< css::text::XTextCursor >  SAL_CALL createTextCursorByRange(const css::uno::Reference< css::text::XTextRange > & aTextPosition) override;
+    virtual rtl::Reference< SwXTextCursor > createXTextCursor() override;
+    virtual rtl::Reference< SwXTextCursor > createXTextCursorByRange(
+            const ::css::uno::Reference< ::css::text::XTextRange >& aTextPosition ) override;
 
     //XEnumerationAccess - frueher XParagraphEnumerationAccess
     virtual css::uno::Reference< css::container::XEnumeration >  SAL_CALL createEnumeration() override;
@@ -233,9 +225,6 @@ public:
 
     // XEventsSupplier
     virtual css::uno::Reference< css::container::XNameReplace > SAL_CALL getEvents(  ) override;
-
-    //XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
 
     //XPropertySet
     virtual SW_DLLPUBLIC css::uno::Any SAL_CALL getPropertyValue( const OUString& PropertyName ) override;

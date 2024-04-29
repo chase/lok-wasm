@@ -17,6 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
+
 #include <i18nutil/unicode.hxx>
 #include <o3tl/safeint.hxx>
 #include <utility>
@@ -105,7 +107,7 @@ OfaAutoCorrDlg::OfaAutoCorrDlg(weld::Window* pParent, const SfxItemSet* _pSet )
     //! will be set to LANGUAGE_UNDETERMINED
     SvxLanguageListFlags nLangList = SvxLanguageListFlags::WESTERN;
 
-    if( SvtCTLOptions().IsCTLFontEnabled() )
+    if( SvtCTLOptions::IsCTLFontEnabled() )
         nLangList |= SvxLanguageListFlags::CTL;
     if( SvtCJKOptions::IsCJKFontEnabled() )
         nLangList |= SvxLanguageListFlags::CJK;
@@ -165,7 +167,7 @@ IMPL_LINK_NOARG(OfaAutoCorrDlg, SelectLanguageHdl, weld::ComboBox&, void)
     if(eNewLang == eLastDialogLanguage)
         return;
 
-    OString sPageId = GetCurPageId();
+    OUString sPageId = GetCurPageId();
     if (sPageId == "replace")
     {
         OfaAutocorrReplacePage* pPage = static_cast<OfaAutocorrReplacePage*>(GetTabPage(sPageId));
@@ -187,6 +189,7 @@ OfaAutocorrOptionsPage::OfaAutocorrOptionsPage(weld::Container* pPage, weld::Dia
     , m_sStartCap(CuiResId(RID_CUISTR_CPTL_STT_SENT))
     , m_sBoldUnderline(CuiResId(RID_CUISTR_BOLD_UNDER))
     , m_sURL(CuiResId(RID_CUISTR_DETECT_URL))
+    , m_sDOI(CuiResId(RID_CUISTR_DETECT_DOI))
     , m_sNoDblSpaces(CuiResId(RID_CUISTR_NO_DBL_SPACES))
     , m_sDash(CuiResId(RID_CUISTR_DASH))
     , m_sAccidentalCaps(CuiResId(RID_CUISTR_CORRECT_ACCIDENTAL_CAPS_LOCK))
@@ -221,6 +224,7 @@ bool OfaAutocorrOptionsPage::FillItemSet( SfxItemSet* )
     pAutoCorrect->SetAutoCorrFlag(ACFlags::CapitalStartSentence, m_xCheckLB->get_toggle(nPos++) == TRISTATE_TRUE);
     pAutoCorrect->SetAutoCorrFlag(ACFlags::ChgWeightUnderl,      m_xCheckLB->get_toggle(nPos++) == TRISTATE_TRUE);
     pAutoCorrect->SetAutoCorrFlag(ACFlags::SetINetAttr,          m_xCheckLB->get_toggle(nPos++) == TRISTATE_TRUE);
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::SetDOIAttr,           m_xCheckLB->get_toggle(nPos++) == TRISTATE_TRUE);
     pAutoCorrect->SetAutoCorrFlag(ACFlags::ChgToEnEmDash,        m_xCheckLB->get_toggle(nPos++) == TRISTATE_TRUE);
     pAutoCorrect->SetAutoCorrFlag(ACFlags::IgnoreDoubleSpace,    m_xCheckLB->get_toggle(nPos++) == TRISTATE_TRUE);
     pAutoCorrect->SetAutoCorrFlag(ACFlags::CorrectCapsLock,      m_xCheckLB->get_toggle(nPos++) == TRISTATE_TRUE);
@@ -261,6 +265,7 @@ void OfaAutocorrOptionsPage::Reset( const SfxItemSet* )
     InsertEntry(m_sStartCap);
     InsertEntry(m_sBoldUnderline);
     InsertEntry(m_sURL);
+    InsertEntry(m_sDOI);
     InsertEntry(m_sDash);
     InsertEntry(m_sNoDblSpaces);
     InsertEntry(m_sAccidentalCaps);
@@ -271,6 +276,7 @@ void OfaAutocorrOptionsPage::Reset( const SfxItemSet* )
     m_xCheckLB->set_toggle( nPos++, bool(nFlags & ACFlags::CapitalStartSentence) ? TRISTATE_TRUE : TRISTATE_FALSE );
     m_xCheckLB->set_toggle( nPos++, bool(nFlags & ACFlags::ChgWeightUnderl) ? TRISTATE_TRUE : TRISTATE_FALSE );
     m_xCheckLB->set_toggle( nPos++, bool(nFlags & ACFlags::SetINetAttr) ? TRISTATE_TRUE : TRISTATE_FALSE );
+    m_xCheckLB->set_toggle( nPos++, bool(nFlags & ACFlags::SetDOIAttr) ? TRISTATE_TRUE : TRISTATE_FALSE );
     m_xCheckLB->set_toggle( nPos++, bool(nFlags & ACFlags::ChgToEnEmDash) ? TRISTATE_TRUE : TRISTATE_FALSE );
     m_xCheckLB->set_toggle( nPos++, bool(nFlags & ACFlags::IgnoreDoubleSpace) ? TRISTATE_TRUE : TRISTATE_FALSE );
     m_xCheckLB->set_toggle( nPos++, bool(nFlags & ACFlags::CorrectCapsLock) ? TRISTATE_TRUE : TRISTATE_FALSE );
@@ -331,12 +337,14 @@ enum OfaAutoFmtOptions
     BEGIN_UPPER,
     BOLD_UNDERLINE,
     DETECT_URL,
+    DETECT_DOI,
     REPLACE_DASHES,
     DEL_SPACES_AT_STT_END,
     DEL_SPACES_BETWEEN_LINES,
     IGNORE_DBLSPACE,
     CORRECT_CAPS_LOCK,
     APPLY_NUMBERING,
+    APPLY_NUMBERING_AFTER_SPACE,
     INSERT_BORDER,
     CREATE_TABLE,
     REPLACE_STYLES,
@@ -361,9 +369,11 @@ OfaSwAutoFmtOptionsPage::OfaSwAutoFmtOptionsPage(weld::Container* pPage, weld::D
     , sNoDblSpaces(CuiResId(RID_CUISTR_NO_DBL_SPACES))
     , sCorrectCapsLock(CuiResId(RID_CUISTR_CORRECT_ACCIDENTAL_CAPS_LOCK))
     , sDetectURL(CuiResId(RID_CUISTR_DETECT_URL))
+    , sDetectDOI(CuiResId(RID_CUISTR_DETECT_DOI))
     , sDash(CuiResId(RID_CUISTR_DASH))
     , sRightMargin(CuiResId(RID_CUISTR_RIGHT_MARGIN))
     , sNum(CuiResId(RID_CUISTR_NUM))
+    , sBulletsAfterSpace(CuiResId(RID_SVXSTR_NUM_FORMAT_AFTER_SPACE))
     , sBorder(CuiResId(RID_CUISTR_BORDER))
     , sTable(CuiResId(RID_CUISTR_CREATE_TABLE))
     , sReplaceTemplates(CuiResId(RID_CUISTR_REPLACE_TEMPLATES))
@@ -453,6 +463,12 @@ bool OfaSwAutoFmtOptionsPage::FillItemSet( SfxItemSet*  )
     pAutoCorrect->SetAutoCorrFlag(ACFlags::SetINetAttr,
                         m_xCheckLB->get_toggle(DETECT_URL, CBCOL_SECOND) == TRISTATE_TRUE);
 
+    bCheck = m_xCheckLB->get_toggle(DETECT_DOI, CBCOL_FIRST) == TRISTATE_TRUE;
+    bModified |= pOpt->bSetDOIAttr != bCheck;
+    pOpt->bSetDOIAttr = bCheck;
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::SetDOIAttr,
+                        m_xCheckLB->get_toggle(DETECT_DOI, CBCOL_SECOND) == TRISTATE_TRUE);
+
     bCheck = m_xCheckLB->get_toggle(DEL_EMPTY_NODE, CBCOL_FIRST) == TRISTATE_TRUE;
     bModified |= pOpt->bDelEmptyNode != bCheck;
     pOpt->bDelEmptyNode = bCheck;
@@ -483,6 +499,10 @@ bool OfaSwAutoFmtOptionsPage::FillItemSet( SfxItemSet*  )
     bCheck = m_xCheckLB->get_toggle(APPLY_NUMBERING, CBCOL_SECOND) == TRISTATE_TRUE;
     bModified |= pOpt->bSetNumRule != bCheck;
     pOpt->bSetNumRule = bCheck;
+
+    bCheck = m_xCheckLB->get_toggle(APPLY_NUMBERING_AFTER_SPACE, CBCOL_SECOND) == TRISTATE_TRUE;
+    bModified |= pOpt->bSetNumRuleAfterSpace != bCheck;
+    pOpt->bSetNumRuleAfterSpace = bCheck;
 
     bCheck = m_xCheckLB->get_toggle(INSERT_BORDER, CBCOL_SECOND) == TRISTATE_TRUE;
     bModified |= pOpt->bSetBorder != bCheck;
@@ -556,6 +576,7 @@ void OfaSwAutoFmtOptionsPage::Reset( const SfxItemSet* )
     CreateEntry(sCapitalStartSentence, CBCOL_BOTH  );
     CreateEntry(sBoldUnder,         CBCOL_BOTH  );
     CreateEntry(sDetectURL,         CBCOL_BOTH  );
+    CreateEntry(sDetectDOI,         CBCOL_BOTH  );
     CreateEntry(sDash,              CBCOL_BOTH  );
     CreateEntry(sDelSpaceAtSttEnd,  CBCOL_BOTH  );
     CreateEntry(sDelSpaceBetweenLines, CBCOL_BOTH  );
@@ -563,6 +584,7 @@ void OfaSwAutoFmtOptionsPage::Reset( const SfxItemSet* )
     CreateEntry(sNoDblSpaces,       CBCOL_SECOND);
     CreateEntry(sCorrectCapsLock,   CBCOL_SECOND);
     CreateEntry(sNum.replaceFirst("%1", sBulletChar), CBCOL_SECOND);
+    CreateEntry(sBulletsAfterSpace,  CBCOL_SECOND);
     CreateEntry(sBorder,            CBCOL_SECOND);
     CreateEntry(sTable,             CBCOL_SECOND);
     CreateEntry(sReplaceTemplates,  CBCOL_SECOND);
@@ -581,6 +603,8 @@ void OfaSwAutoFmtOptionsPage::Reset( const SfxItemSet* )
     m_xCheckLB->set_toggle(BOLD_UNDERLINE, bool(nFlags & ACFlags::ChgWeightUnderl) ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
     m_xCheckLB->set_toggle(DETECT_URL, pOpt->bSetINetAttr ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_FIRST);
     m_xCheckLB->set_toggle(DETECT_URL, bool(nFlags & ACFlags::SetINetAttr) ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
+    m_xCheckLB->set_toggle(DETECT_DOI, pOpt->bSetDOIAttr ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_FIRST);
+    m_xCheckLB->set_toggle(DETECT_DOI, bool(nFlags & ACFlags::SetDOIAttr) ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
     m_xCheckLB->set_toggle(REPLACE_DASHES, pOpt->bChgToEnEmDash ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_FIRST);
     m_xCheckLB->set_toggle(REPLACE_DASHES, bool(nFlags & ACFlags::ChgToEnEmDash) ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
     m_xCheckLB->set_toggle(DEL_SPACES_AT_STT_END, pOpt->bAFormatDelSpacesAtSttEnd ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_FIRST);
@@ -590,6 +614,7 @@ void OfaSwAutoFmtOptionsPage::Reset( const SfxItemSet* )
     m_xCheckLB->set_toggle(IGNORE_DBLSPACE, bool(nFlags & ACFlags::IgnoreDoubleSpace) ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
     m_xCheckLB->set_toggle(CORRECT_CAPS_LOCK, bool(nFlags & ACFlags::CorrectCapsLock) ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
     m_xCheckLB->set_toggle(APPLY_NUMBERING, pOpt->bSetNumRule ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
+    m_xCheckLB->set_toggle(APPLY_NUMBERING_AFTER_SPACE, pOpt->bSetNumRuleAfterSpace ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
     m_xCheckLB->set_toggle(INSERT_BORDER, pOpt->bSetBorder ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
     m_xCheckLB->set_toggle(CREATE_TABLE, pOpt->bCreateTable ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
     m_xCheckLB->set_toggle(REPLACE_STYLES, pOpt->bReplaceStyles ? TRISTATE_TRUE : TRISTATE_FALSE, CBCOL_SECOND);
@@ -665,6 +690,7 @@ IMPL_LINK_NOARG(OfaSwAutoFmtOptionsPage, EditHdl, weld::Button&, void)
 OfaAutocorrReplacePage::OfaAutocorrReplacePage(weld::Container* pPage, weld::DialogController* pController,
                                                const SfxItemSet& rSet)
     : SfxTabPage(pPage, pController, "cui/ui/acorreplacepage.ui", "AcorReplacePage", &rSet)
+    , maCompareClass(comphelper::getProcessComponentContext())
     , eLang(eLastDialogLanguage)
     , bHasSelectionText(false)
     , bFirstSelect(true)
@@ -696,8 +722,7 @@ OfaAutocorrReplacePage::OfaAutocorrReplacePage(weld::Container* pPage, weld::Dia
     bSWriter = pMod == SfxModule::GetActiveModule();
 
     LanguageTag aLanguageTag( eLastDialogLanguage );
-    pCompareClass.reset( new CollatorWrapper( comphelper::getProcessComponentContext() ) );
-    pCompareClass->loadDefaultCollator( aLanguageTag.getLocale(), 0 );
+    maCompareClass.loadDefaultCollator( aLanguageTag.getLocale(), 0 );
     pCharClass.reset( new CharClass( std::move(aLanguageTag) ) );
 
     auto nColWidth = m_xReplaceTLB->get_approximate_digit_width() * 32;
@@ -720,7 +745,6 @@ OfaAutocorrReplacePage::~OfaAutocorrReplacePage()
     aDoubleStringTable.clear();
     aChangesTable.clear();
 
-    pCompareClass.reset();
     pCharClass.reset();
 }
 
@@ -902,8 +926,8 @@ void OfaAutocorrReplacePage::SetLanguage(LanguageType eSet)
         eLastDialogLanguage = eSet;
 
         LanguageTag aLanguageTag( eLastDialogLanguage );
-        pCompareClass.reset( new CollatorWrapper( comphelper::getProcessComponentContext() ) );
-        pCompareClass->loadDefaultCollator( aLanguageTag.getLocale(), 0 );
+        maCompareClass = CollatorWrapper( comphelper::getProcessComponentContext() );
+        maCompareClass.loadDefaultCollator( aLanguageTag.getLocale(), 0 );
         pCharClass.reset( new CharClass( std::move(aLanguageTag) ) );
         ModifyHdl(*m_xShortED);
     }
@@ -917,7 +941,7 @@ IMPL_LINK(OfaAutocorrReplacePage, SelectHdl, weld::TreeView&, rBox, void)
         OUString sTmpShort(rBox.get_text(nEntry, 0));
         // if the text is set via ModifyHdl, the cursor is always at the beginning
         // of a word, although you're editing here
-        bool bSameContent = 0 == pCompareClass->compareString(sTmpShort, m_xShortED->get_text());
+        bool bSameContent = 0 == maCompareClass.compareString(sTmpShort, m_xShortED->get_text());
         int nStartPos, nEndPos;
         m_xShortED->get_selection_bounds(nStartPos, nEndPos);
         if (m_xShortED->get_text() != sTmpShort)
@@ -1055,7 +1079,7 @@ bool OfaAutocorrReplacePage::NewDelHdl(const weld::Widget* pBtn)
                 int nCount = m_xReplaceTLB->n_children();
                 for (j = 0; j < nCount; ++j)
                 {
-                    if (0 >= pCompareClass->compareString(sEntry, m_xReplaceTLB->get_text(j, 0)))
+                    if (0 >= maCompareClass.compareString(sEntry, m_xReplaceTLB->get_text(j, 0)))
                         break;
                 }
                 nPos = j;
@@ -1108,7 +1132,7 @@ IMPL_LINK(OfaAutocorrReplacePage, ModifyHdl, weld::Entry&, rEdt, void)
                                         &bTmpSelEntry, &bFirstSelIterSet,
                                         &xFirstSel, &aWordStr](weld::TreeIter& rIter){
                 OUString aTestStr = m_xReplaceTLB->get_text(rIter, 0);
-                if( pCompareClass->compareString(rEntry, aTestStr ) == 0 )
+                if( maCompareClass.compareString(rEntry, aTestStr ) == 0 )
                 {
                     if (!rRepString.isEmpty())
                         bFirstSelect = true;
@@ -1189,6 +1213,7 @@ static bool lcl_FindInArray(std::vector<OUString>& rStrings, std::u16string_view
 
 OfaAutocorrExceptPage::OfaAutocorrExceptPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rSet)
     : SfxTabPage(pPage, pController, "cui/ui/acorexceptpage.ui", "AcorExceptPage", &rSet)
+    , maCompareClass(comphelper::getProcessComponentContext())
     , eLang(eLastDialogLanguage)
     , m_xAbbrevED(m_xBuilder->weld_entry("abbrev"))
     , m_xAbbrevLB(m_xBuilder->weld_tree_view("abbrevlist"))
@@ -1208,8 +1233,7 @@ OfaAutocorrExceptPage::OfaAutocorrExceptPage(weld::Container* pPage, weld::Dialo
     m_xDoubleCapsLB->set_size_request(-1, m_xDoubleCapsLB->get_height_rows(6));
 
     css::lang::Locale aLcl( LanguageTag::convertToLocale(eLastDialogLanguage ));
-    pCompareClass.reset( new CollatorWrapper( comphelper::getProcessComponentContext() ) );
-    pCompareClass->loadDefaultCollator( aLcl, 0 );
+    maCompareClass.loadDefaultCollator( aLcl, 0 );
 
     m_xNewAbbrevPB->connect_clicked(LINK(this, OfaAutocorrExceptPage, NewDelButtonHdl));
     m_xDelAbbrevPB->connect_clicked(LINK(this, OfaAutocorrExceptPage, NewDelButtonHdl));
@@ -1228,7 +1252,6 @@ OfaAutocorrExceptPage::OfaAutocorrExceptPage(weld::Container* pPage, weld::Dialo
 OfaAutocorrExceptPage::~OfaAutocorrExceptPage()
 {
     aStringsTable.clear();
-    pCompareClass.reset();
 }
 
 std::unique_ptr<SfxTabPage> OfaAutocorrExceptPage::Create(weld::Container* pPage, weld::DialogController* pController,
@@ -1363,8 +1386,8 @@ void OfaAutocorrExceptPage::SetLanguage(LanguageType eSet)
         // save old settings and fill anew
         RefillReplaceBoxes(false, eLang, eSet);
         eLastDialogLanguage = eSet;
-        pCompareClass.reset( new CollatorWrapper( comphelper::getProcessComponentContext() ) );
-        pCompareClass->loadDefaultCollator( LanguageTag::convertToLocale( eLastDialogLanguage ), 0 );
+        maCompareClass = CollatorWrapper( comphelper::getProcessComponentContext() );
+        maCompareClass.loadDefaultCollator( LanguageTag::convertToLocale( eLastDialogLanguage ), 0 );
         ModifyHdl(*m_xAbbrevED);
         ModifyHdl(*m_xDoubleCapsED);
     }
@@ -1509,7 +1532,7 @@ IMPL_LINK(OfaAutocorrExceptPage, ModifyHdl, weld::Entry&, rEdt, void)
     bool bEntryLen = !sEntry.isEmpty();
     if (&rEdt == m_xAbbrevED.get())
     {
-        bool bSame = lcl_FindEntry(*m_xAbbrevLB, sEntry, *pCompareClass);
+        bool bSame = lcl_FindEntry(*m_xAbbrevLB, sEntry, maCompareClass);
         if(bSame && sEntry != m_xAbbrevLB->get_selected_text())
             rEdt.set_text(m_xAbbrevLB->get_selected_text());
         m_xNewAbbrevPB->set_sensitive(!bSame && bEntryLen);
@@ -1517,7 +1540,7 @@ IMPL_LINK(OfaAutocorrExceptPage, ModifyHdl, weld::Entry&, rEdt, void)
     }
     else
     {
-        bool bSame = lcl_FindEntry(*m_xDoubleCapsLB, sEntry, *pCompareClass);
+        bool bSame = lcl_FindEntry(*m_xDoubleCapsLB, sEntry, maCompareClass);
         if(bSame && sEntry != m_xDoubleCapsLB->get_selected_text())
             rEdt.set_text(m_xDoubleCapsLB->get_selected_text());
         m_xNewDoublePB->set_sensitive(!bSame && bEntryLen);
@@ -1966,7 +1989,6 @@ bool OfaAutoCompleteTabPage::FillItemSet( SfxItemSet* )
     bool bModified = false, bCheck;
     SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
     SvxSwAutoFormatFlags *pOpt = &pAutoCorrect->GetSwFlags();
-    sal_uInt16 nVal;
 
     bCheck = m_xCBActiv->get_active();
     bModified |= pOpt->bAutoCompleteWords != bCheck;
@@ -1984,13 +2006,13 @@ bool OfaAutoCompleteTabPage::FillItemSet( SfxItemSet* )
     bModified |= pOpt->bAutoCmpltShowAsTip != bCheck;
     pOpt->bAutoCmpltShowAsTip = bCheck;
 
-    nVal = static_cast<sal_uInt16>(m_xNFMinWordlen->get_value());
+    sal_uInt16 nVal = static_cast<sal_uInt16>(m_xNFMinWordlen->get_value());
     bModified |= nVal != pOpt->nAutoCmpltWordLen;
     pOpt->nAutoCmpltWordLen = nVal;
 
-    nVal = static_cast<sal_uInt16>(m_xNFMaxEntries->get_value());
-    bModified |= nVal != pOpt->nAutoCmpltListLen;
-    pOpt->nAutoCmpltListLen = nVal;
+    sal_uInt32 nList = static_cast<sal_uInt32>(m_xNFMaxEntries->get_value());
+    bModified |= nList != pOpt->nAutoCmpltListLen;
+    pOpt->nAutoCmpltListLen = nList;
 
     const int nPos = m_xDCBExpandKey->get_active();
     if (nPos != -1)
@@ -2113,12 +2135,7 @@ void OfaAutoCompleteTabPage::CopyToClipboard() const
 
     for (auto a : rows)
     {
-        sData.append(OUStringToOString(m_xLBEntries->get_text(a), nEncode));
-#if defined(_WIN32)
-        sData.append("\015\012");
-#else
-        sData.append("\012");
-#endif
+        sData.append(OUStringToOString(m_xLBEntries->get_text(a), nEncode) + SAL_NEWLINE_STRING);
     }
     pCntnr->CopyByteString( SotClipboardFormatId::STRING, sData.makeStringAndClear() );
     pCntnr->CopyToClipboard(m_xLBEntries->get_clipboard());

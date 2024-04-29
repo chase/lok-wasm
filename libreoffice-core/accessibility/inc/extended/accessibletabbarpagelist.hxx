@@ -22,28 +22,22 @@
 #include <com/sun/star/accessibility/XAccessible.hpp>
 #include <com/sun/star/accessibility/XAccessibleSelection.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <cppuhelper/implbase3.hxx>
+#include <cppuhelper/implbase.hxx>
 #include <extended/accessibletabbarbase.hxx>
+#include <extended/accessibletabbarpage.hxx>
 
 #include <vector>
 
-
 namespace accessibility
 {
-
-
-
-
-    typedef ::cppu::ImplHelper3<
-        css::accessibility::XAccessible,
-        css::accessibility::XAccessibleSelection,
-        css::lang::XServiceInfo > AccessibleTabBarPageList_BASE;
-
-    class AccessibleTabBarPageList final : public AccessibleTabBarBase,
-                                           public AccessibleTabBarPageList_BASE
+    class AccessibleTabBarPageList final : public cppu::ImplInheritanceHelper<
+                                               AccessibleTabBarBase,
+                                               css::accessibility::XAccessible,
+                                               css::accessibility::XAccessibleSelection,
+                                               css::lang::XServiceInfo>
     {
     private:
-        typedef std::vector< css::uno::Reference< css::accessibility::XAccessible > > AccessibleChildren;
+        typedef std::vector< rtl::Reference< AccessibleTabBarPage > > AccessibleChildren;
 
         AccessibleChildren      m_aAccessibleChildren;
         sal_Int32               m_nIndexInParent;
@@ -67,12 +61,6 @@ namespace accessibility
 
     public:
         AccessibleTabBarPageList( TabBar* pTabBar, sal_Int32 nIndexInParent );
-
-        // XInterface
-        DECLARE_XINTERFACE()
-
-        // XTypeProvider
-        DECLARE_XTYPEPROVIDER()
 
         // XServiceInfo
         virtual OUString SAL_CALL getImplementationName() override;
@@ -113,6 +101,9 @@ namespace accessibility
         virtual sal_Int64 SAL_CALL getSelectedAccessibleChildCount(  ) override;
         virtual css::uno::Reference< css::accessibility::XAccessible > SAL_CALL getSelectedAccessibleChild( sal_Int64 nSelectedChildIndex ) override;
         virtual void SAL_CALL deselectAccessibleChild( sal_Int64 nChildIndex ) override;
+
+    private:
+        rtl::Reference< AccessibleTabBarPage > getAccessibleChildImpl( sal_Int64 i );
     };
 
 

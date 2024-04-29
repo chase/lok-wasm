@@ -35,9 +35,11 @@ $(if $(UNOAPI_ENTITIES), \
 $(if $(UNOAPI_ENTITIES),&& rm -f $${RESPONSEFILE}) \
 $(if $(UNOAPI_REFERENCE), \
 	$(call gb_Output_announce,$(2),$(true),DBc,3) \
-	&& $(gb_UnoApiTarget_UNOIDLCHECKCOMMAND) $(UNOAPI_REFERENCE) -- \
-		$(foreach rdb,$(UNOAPI_DEPRDBS),$(call gb_UnoApiTarget_get_target,$(rdb))) \
-		$(1))
+	&& { $(gb_UnoApiTarget_UNOIDLCHECKCOMMAND) $(UNOAPI_REFERENCE) -- \
+			$(foreach rdb,$(UNOAPI_DEPRDBS),$(call gb_UnoApiTarget_get_target,$(rdb))) \
+			$(1) \
+		|| { printf 'ERROR: Published UNO API must not be changed incompatibly!\n(If published UNO API shall be changed incompatibly after all, see\n<https://wiki.documentfoundation.org/Development/Incompatible_UNO_API_Changes>.)\n'; \
+		     false; } })
 endef
 
 $(call gb_UnoApiTarget_get_target,%) :
@@ -149,7 +151,8 @@ $(call gb_UnoApiHeadersTarget_get_real_comprehensive_target,%) : \
 		$(gb_UnoApiHeadersTarget_CPPUMAKERDEPS)
 	$(call gb_Output_announce,$*,$(true),HPC,3)
 	$(call gb_Trace_StartRange,$*,HPC)
-	$(call gb_UnoApiHeadersTarget__command,$@,$*,$(call gb_UnoApiHeadersTarget_get_comprehensive_dir,$*),-C)
+	$(call gb_UnoApiHeadersTarget__command,$@,$*,$(call gb_UnoApiHeadersTarget_get_comprehensive_dir,$*), \
+		-C $(if $(filter EMSCRIPTEN, $(OS)), -W))
 	$(call gb_Trace_EndRange,$*,HPC)
 
 $(call gb_UnoApiHeadersTarget_get_real_target,%) : \
@@ -227,6 +230,21 @@ endef
 # call gb_UnoApiHeadersTarget_add_headerfiles,unoapi,directory,headerfilenames
 define gb_UnoApiHeadersTarget_add_headerfiles
 $(foreach hdr,$(3),$(call gb_UnoApiHeadersTarget_add_headerfile,$(1),$(2)/$(hdr)))
+endef
+
+# call gb_UnoApiEmbindTarget_add_embind,unoapi,directory,headerfilenames
+define gb_UnoApiHeadersTarget_add_embind
+$(if $(filter offapi udkapi, $(1)),\
+	$(foreach hdr,$(3),$(eval $(call gb_UnoApiEmbindTarget__add_embind,$(1),$(2),$(hdr)))))
+endef
+
+# CaptionEscapeDirection contains "auto" as a variable name.. so exclude that
+define gb_UnoApiEmbindTarget__add_embind
+$(if $(filter-out CaptionEscapeDirection_embind, $(3)),\
+$(eval $(call gb_StaticLibrary_add_generated_exception_objects,unoembind,\
+	UnoApiHeadersTarget/$(1)/comprehensive/$(2)/$(3) \
+)))
+
 endef
 
 define gb_UnoApiHeadersTarget__use_api_for_target

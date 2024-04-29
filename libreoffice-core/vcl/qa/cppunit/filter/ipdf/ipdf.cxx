@@ -11,12 +11,10 @@
 
 #include <com/sun/star/drawing/XDrawPagesSupplier.hpp>
 #include <com/sun/star/drawing/XDrawView.hpp>
-#include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/view/XSelectionSupplier.hpp>
 #include <com/sun/star/xml/crypto/SEInitializer.hpp>
 
 #include <comphelper/propertyvalue.hxx>
-#include <osl/file.hxx>
 #include <unotools/tempfile.hxx>
 #include <sfx2/sfxbasemodel.hxx>
 #include <svx/svdview.hxx>
@@ -42,7 +40,6 @@ public:
     }
 
     void setUp() override;
-    void tearDown() override;
     uno::Reference<xml::crypto::XXMLSecurityContext>& getSecurityContext()
     {
         return mxSecurityContext;
@@ -52,17 +49,10 @@ public:
 void VclFilterIpdfTest::setUp()
 {
     UnoApiTest::setUp();
-    MacrosTest::setUpNssGpg(m_directories, "vcl_filter_ipdf");
+    MacrosTest::setUpX509(m_directories, "vcl_filter_ipdf");
 
     mxSEInitializer = xml::crypto::SEInitializer::create(mxComponentContext);
     mxSecurityContext = mxSEInitializer->createSecurityContext(OUString());
-}
-
-void VclFilterIpdfTest::tearDown()
-{
-    MacrosTest::tearDownNssGpg();
-
-    UnoApiTest::tearDown();
 }
 
 CPPUNIT_TEST_FIXTURE(VclFilterIpdfTest, testPDFAddVisibleSignatureLastPage)
@@ -112,6 +102,10 @@ CPPUNIT_TEST_FIXTURE(VclFilterIpdfTest, testPDFAddVisibleSignatureLastPage)
     SdrView* pView = SfxViewShell::Current()->GetDrawView();
     svx::SignatureLineHelper::setShapeCertificate(pView, xCert);
 
+    // the document is modified now, but Sign function can't show SaveAs dialog
+    // in unit test, so just clear the modified
+    pObjectShell->SetModified(false);
+
     // When: do the actual signing.
     pObjectShell->SignDocumentContentUsingCertificate(xCert);
 
@@ -143,7 +137,7 @@ CPPUNIT_TEST_FIXTURE(VclFilterIpdfTest, testDictArrayDict)
     std::vector<vcl::filter::PDFObjectElement*> aPages = aDocument.GetPages();
     CPPUNIT_ASSERT(!aPages.empty());
     vcl::filter::PDFObjectElement* pPage = aPages[0];
-    auto pKey = dynamic_cast<vcl::filter::PDFArrayElement*>(pPage->Lookup("Key"));
+    auto pKey = dynamic_cast<vcl::filter::PDFArrayElement*>(pPage->Lookup("Key"_ostr));
 
     // Without the accompanying fix in place, this test would have failed, because the value of Key
     // was a dictionary element, not an array element.
@@ -199,7 +193,7 @@ CPPUNIT_TEST_FIXTURE(VclFilterIpdfTest, testMixedArrayWithNumbers)
     std::vector<vcl::filter::PDFObjectElement*> aPages = aDocument.GetPages();
     CPPUNIT_ASSERT(!aPages.empty());
     vcl::filter::PDFObjectElement* pPage = aPages[0];
-    auto pTest = dynamic_cast<vcl::filter::PDFArrayElement*>(pPage->Lookup("Test"));
+    auto pTest = dynamic_cast<vcl::filter::PDFArrayElement*>(pPage->Lookup("Test"_ostr));
     std::vector<vcl::filter::PDFElement*> aElements = pTest->GetElements();
 
     // Without the accompanying fix in place, this test would have failed with

@@ -117,7 +117,7 @@ void SwView::InvalidateRulerPos()
         0
     };
 
-    GetViewFrame()->GetBindings().Invalidate(aInval);
+    GetViewFrame().GetBindings().Invalidate(aInval);
 
     assert(m_pHRuler && "Why is the ruler not there?");
     m_pHRuler->ForceUpdate();
@@ -188,9 +188,9 @@ void SwView::DocSzChgd(const Size &rSz)
         SetVisArea( aNewVisArea, false );
 
     if ( UpdateScrollbars() && !m_bInOuterResizePixel && !m_bInInnerResizePixel &&
-            !GetViewFrame()->GetFrame().IsInPlace())
+            !GetViewFrame().GetFrame().IsInPlace())
         OuterResizePixel( Point(),
-                          GetViewFrame()->GetWindow().GetOutputSizePixel() );
+                          GetViewFrame().GetWindow().GetOutputSizePixel() );
 }
 
 // Set VisArea newly
@@ -279,7 +279,7 @@ void SwView::SetVisArea( const tools::Rectangle &rRect, bool bUpdateScrollbar )
 
     if ( bOuterResize && !m_bInOuterResizePixel && !m_bInInnerResizePixel)
             OuterResizePixel( Point(),
-                GetViewFrame()->GetWindow().GetOutputSizePixel() );
+                GetViewFrame().GetWindow().GetOutputSizePixel() );
 }
 
 // Set Pos VisArea
@@ -294,7 +294,7 @@ void SwView::SetVisArea( const Point &rPt, bool bUpdateScrollbar )
     // Let's see how far we get with half BrushSize.
     Point aPt = GetEditWin().LogicToPixel( rPt );
 #if HAVE_FEATURE_DESKTOP
-    const tools::Long nTmp = GetWrtShell().IsFrameView() ? 4 : 8;
+    const tools::Long nTmp = 8;
     aPt.AdjustX( -(aPt.X() % nTmp) );
     aPt.AdjustY( -(aPt.Y() % nTmp) );
 #endif
@@ -315,8 +315,9 @@ void SwView::SetVisArea( const Point &rPt, bool bUpdateScrollbar )
 
 void SwView::CheckVisArea()
 {
-    m_pHScrollbar->SetAuto( m_pWrtShell->GetViewOptions()->getBrowseMode() &&
-                            !GetViewFrame()->GetFrame().IsInPlace() );
+    if (m_pHScrollbar)
+        m_pHScrollbar->SetAuto( m_pWrtShell->GetViewOptions()->getBrowseMode() &&
+                                !GetViewFrame().GetFrame().IsInPlace() );
     if ( IsDocumentBorder() )
     {
         if ( m_aVisArea.Left() != DOCUMENTBORDER ||
@@ -405,8 +406,8 @@ void SwView::Scroll( const tools::Rectangle &rRect, sal_uInt16 nRangeX, sal_uInt
         tools::Rectangle aDlgRect;
         if (pCareDialog->get_extents_relative_to(*GetEditWin().GetFrameWeld(), x, y, width, height))
         {
-            Point aTopLeft(GetEditWin().GetSystemWindow()->OutputToAbsoluteScreenPixel(Point(x, y)));
-            aTopLeft = GetEditWin().AbsoluteScreenToOutputPixel(aTopLeft);
+            AbsoluteScreenPixelPoint aTopLeftAbs(GetEditWin().GetSystemWindow()->OutputToAbsoluteScreenPixel(Point(x, y)));
+            Point aTopLeft = GetEditWin().AbsoluteScreenToOutputPixel(aTopLeftAbs);
             aDlgRect = GetEditWin().PixelToLogic(tools::Rectangle(aTopLeft, Size(width, height)));
         }
 
@@ -668,6 +669,8 @@ bool SwView::PageDownCursor(bool bSelect)
     return false;
 }
 
+static void HideQuickHelp(vcl::Window* pParent) { Help::ShowQuickHelp(pParent, {}, {}); }
+
 // Handler of the scrollbars
 IMPL_LINK(SwView, VertScrollHdl, weld::Scrollbar&, rScrollbar, void)
 {
@@ -677,6 +680,8 @@ IMPL_LINK(SwView, VertScrollHdl, weld::Scrollbar&, rScrollbar, void)
     if (rScrollbar.get_scroll_type() == ScrollType::Drag)
         m_pWrtShell->EnableSmooth( false );
 
+    bool bHidePending = nPgNum != 0;
+    nPgNum = 0; // avoid flicker from hiding then showing help window again
     EndScrollHdl(rScrollbar, false);
 
     if (!m_pWrtShell->GetViewOptions()->getBrowseMode() &&
@@ -695,43 +700,39 @@ IMPL_LINK(SwView, VertScrollHdl, weld::Scrollbar&, rScrollbar, void)
             OUString sDisplay;
             if(m_pWrtShell->GetPageNumber( aPos.Y(), false, nPhNum, nVirtNum, sDisplay ))
             {
-                // The end scrollhandler invalidate the FN_STAT_PAGE,
-                // so we don't must do it again.
-        //      if(!GetViewFrame()->GetFrame().IsInPlace())
-        //            S F X_BINDINGS().Update(FN_STAT_PAGE);
-
                 //QuickHelp:
                 if( m_pWrtShell->GetPageCnt() > 1 )
                 {
-                    if( !nPgNum || nPgNum != nPhNum )
+                    tools::Rectangle aRect;
+                    aRect.SetLeft( m_pVScrollbar->GetParent()->OutputToScreenPixel(
+                                        m_pVScrollbar->GetPosPixel() ).X() -8 );
+                    aRect.SetTop( m_pVScrollbar->OutputToScreenPixel(
+                                    m_pVScrollbar->GetPointerPosPixel() ).Y() );
+                    aRect.SetRight( aRect.Left() );
+                    aRect.SetBottom( aRect.Top() );
+
+                    OUString sPageStr( GetPageStr( nPhNum, nVirtNum, sDisplay ));
+                    SwContentAtPos aCnt(IsAttrAtPos::Outline | IsAttrAtPos::AllowContaining);
+                    bool bSuccess = m_pWrtShell->GetContentAtPos(aPos, aCnt);
+                    if (bSuccess && !aCnt.sStr.isEmpty())
                     {
-                        tools::Rectangle aRect;
-                        aRect.SetLeft( m_pVScrollbar->GetParent()->OutputToScreenPixel(
-                                            m_pVScrollbar->GetPosPixel() ).X() -8 );
-                        aRect.SetTop( m_pVScrollbar->OutputToScreenPixel(
-                                        m_pVScrollbar->GetPointerPosPixel() ).Y() );
-                        aRect.SetRight( aRect.Left() );
-                        aRect.SetBottom( aRect.Top() );
-
-                        OUString sPageStr( GetPageStr( nPhNum, nVirtNum, sDisplay ));
-                        SwContentAtPos aCnt(IsAttrAtPos::Outline | IsAttrAtPos::AllowContaining);
-                        bool bSuccess = m_pWrtShell->GetContentAtPos(aPos, aCnt);
-                        if (bSuccess && !aCnt.sStr.isEmpty())
-                        {
-                            sal_Int32 nChunkLen = std::min<sal_Int32>(aCnt.sStr.getLength(), 80);
-                            std::u16string_view sChunk = aCnt.sStr.subView(0, nChunkLen);
-                            sPageStr = sPageStr + "  - " + sChunk;
-                            sPageStr = sPageStr.replace('\t', ' ').replace(0x0a, ' ');
-                        }
-
-                        Help::ShowQuickHelp(m_pVScrollbar, aRect, sPageStr,
-                                        QuickHelpFlags::Right|QuickHelpFlags::VCenter);
+                        sal_Int32 nChunkLen = std::min<sal_Int32>(aCnt.sStr.getLength(), 80);
+                        std::u16string_view sChunk = aCnt.sStr.subView(0, nChunkLen);
+                        sPageStr = sPageStr + "  - " + sChunk;
+                        sPageStr = sPageStr.replace('\t', ' ').replace(0x0a, ' ');
                     }
+
+                    Help::ShowQuickHelp(m_pVScrollbar, aRect, sPageStr,
+                                    QuickHelpFlags::Right|QuickHelpFlags::VCenter);
+                    bHidePending = false;
                     nPgNum = nPhNum;
                 }
             }
         }
     }
+
+    if (bHidePending)
+        HideQuickHelp(m_pVScrollbar);
 
     if (rScrollbar.get_scroll_type() == ScrollType::Drag)
         m_pWrtShell->EnableSmooth( true );
@@ -746,7 +747,7 @@ void SwView::EndScrollHdl(weld::Scrollbar& rScrollbar, bool bHorizontal)
     if(nPgNum)
     {
         nPgNum = 0;
-        Help::ShowQuickHelp(bHorizontal ? m_pHScrollbar : m_pVScrollbar, tools::Rectangle(), OUString());
+        HideQuickHelp(bHorizontal ? m_pHScrollbar : m_pVScrollbar);
     }
     Point aPos( m_aVisArea.TopLeft() );
     bool bBorder = IsDocumentBorder();
@@ -756,7 +757,7 @@ void SwView::EndScrollHdl(weld::Scrollbar& rScrollbar, bool bHorizontal)
     else
         SetVisArea( aPos, false );
 
-    GetViewFrame()->GetBindings().Update(FN_STAT_PAGE);
+    GetViewFrame().GetBindings().Update(FN_STAT_PAGE);
 }
 
 IMPL_LINK(SwView, HoriScrollHdl, weld::Scrollbar&, rScrollBar, void)
@@ -797,8 +798,8 @@ void SwView::CalcVisArea( const Size &rOutPixel )
         }
     }
     SetVisArea( aRect );
-    GetViewFrame()->GetBindings().Invalidate( SID_ATTR_ZOOM );
-    GetViewFrame()->GetBindings().Invalidate( SID_ATTR_ZOOMSLIDER ); // for snapping points
+    GetViewFrame().GetBindings().Invalidate( SID_ATTR_ZOOM );
+    GetViewFrame().GetBindings().Invalidate( SID_ATTR_ZOOMSLIDER ); // for snapping points
 }
 
 // Rearrange control elements
@@ -959,7 +960,7 @@ void SwView::InnerResizePixel( const Point &rOfst, const Size &rSize, bool )
         Size aSz( rSize );
         SvBorder aBorder;
         CalcAndSetBorderPixel( aBorder );
-        if ( GetViewFrame()->GetFrame().IsInPlace() )
+        if ( GetViewFrame().GetFrame().IsInPlace() )
         {
             Size aViewSize( aSz );
             Point aViewPos( rOfst );

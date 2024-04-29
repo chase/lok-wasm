@@ -115,6 +115,10 @@ CurlUri::CurlUri(::std::u16string_view const rURI)
     }
 
     // use curl to parse the URI, to get a consistent interpretation
+    if (rURI.find(u'\0') != std::u16string_view::npos)
+    {
+        throw DAVException(DAVException::DAV_INVALID_ARG);
+    }
     OString const utf8URI(OUStringToOString(rURI, RTL_TEXTENCODING_UTF8));
     auto uc = curl_url_set(m_pUrl.get(), CURLUPART_URL, utf8URI.getStr(), 0);
     if (uc != CURLUE_OK)
@@ -307,9 +311,7 @@ OUString ConnectionEndPointString(std::u16string_view rHostName, sal_uInt16 cons
     // Is host a numeric IPv6 address?
     if ((rHostName.find(':') != std::u16string_view::npos) && (rHostName[0] != '['))
     {
-        aBuf.append("[");
-        aBuf.append(rHostName);
-        aBuf.append("]");
+        aBuf.append(OUString::Concat("[") + rHostName + "]");
     }
     else
     {
@@ -318,8 +320,7 @@ OUString ConnectionEndPointString(std::u16string_view rHostName, sal_uInt16 cons
 
     if ((nPort != DEFAULT_HTTP_PORT) && (nPort != DEFAULT_HTTPS_PORT))
     {
-        aBuf.append(":");
-        aBuf.append(sal_Int32(nPort));
+        aBuf.append(":" + OUString::number(sal_Int32(nPort)));
     }
     return aBuf.makeStringAndClear();
 }

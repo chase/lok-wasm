@@ -26,6 +26,7 @@
 #include <osl/thread.h>
 #include <o3tl/sorted_vector.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
+#include <officecfg/Office/Common.hxx>
 
 namespace {
 
@@ -354,12 +355,16 @@ DdeService::DdeService( const OUString& rService )
 
     if ( !pInst->hDdeInstSvr )
     {
-        nStatus = sal::static_int_cast< short >(
-            DdeInitializeW( &pInst->hDdeInstSvr,
-                            DdeInternal::SvrCallback,
-                            APPCLASS_STANDARD |
-                            CBF_SKIP_REGISTRATIONS |
-                            CBF_SKIP_UNREGISTRATIONS, 0 ) );
+        nStatus = DMLERR_SYS_ERROR;
+        if ( !officecfg::Office::Common::Security::Scripting::DisableActiveContent::get() )
+        {
+            nStatus = sal::static_int_cast< short >(
+                DdeInitializeW( &pInst->hDdeInstSvr,
+                                DdeInternal::SvrCallback,
+                                APPCLASS_STANDARD |
+                                CBF_SKIP_REGISTRATIONS |
+                                CBF_SKIP_UNREGISTRATIONS, 0 ) );
+        }
         pInst->pServicesSvr = new DdeServices;
     }
     else
@@ -392,7 +397,7 @@ DdeService::~DdeService()
     DdeInstData* pInst = ImpGetInstData();
     assert(pInst);
     if ( pInst->pServicesSvr )
-        pInst->pServicesSvr->erase(std::remove(pInst->pServicesSvr->begin(), pInst->pServicesSvr->end(), this), pInst->pServicesSvr->end());
+        std::erase(*pInst->pServicesSvr, this);
 
     delete pSysTopic;
     delete pName;
@@ -608,8 +613,7 @@ DdeItem::DdeItem( const DdeItem& r)
 DdeItem::~DdeItem()
 {
     if( pMyTopic )
-        pMyTopic->aItems.erase(std::remove(pMyTopic->aItems.begin(),
-                                           pMyTopic->aItems.end(),this));
+        std::erase(pMyTopic->aItems, this);
     delete pName;
     delete pImpData;
 }

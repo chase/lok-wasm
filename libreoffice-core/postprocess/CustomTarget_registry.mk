@@ -30,7 +30,6 @@ postprocess_XCDS := \
 	lingucomponent.xcd \
 	main.xcd \
 	math.xcd \
-	pyuno.xcd \
 	writer.xcd \
 	xsltfilter.xcd
 
@@ -202,7 +201,6 @@ postprocess_FILES_main := \
 	$(postprocess_XCS)/VCL.xcs \
 	$(postprocess_XCS)/ucb/Configuration.xcs \
 	$(postprocess_XCS)/ucb/Hierarchy.xcs \
-	$(postprocess_XCS)/ucb/InteractionHandler.xcs \
 	$(postprocess_XCS)/ucb/Store.xcs \
 	$(postprocess_XCU)/Inet.xcu \
 	$(postprocess_XCU)/Interaction.xcu \
@@ -224,7 +222,6 @@ postprocess_FILES_main := \
 	$(postprocess_XCU)/Office/Math.xcu \
 	$(postprocess_XCU)/Office/Paths.xcu \
 	$(postprocess_XCU)/Office/ProtocolHandler.xcu \
-	$(postprocess_XCU)/Office/Scripting.xcu \
 	$(postprocess_XCU)/Office/Security.xcu \
 	$(postprocess_XCU)/Office/TableWizard.xcu \
 	$(postprocess_XCU)/Office/UI/BaseWindowState.xcu \
@@ -323,7 +320,7 @@ else
 postprocess_FILES_main += $(postprocess_MOD)/org/openoffice/Office/Paths-internallibnumbertextdata.xcu
 endif
 
-ifneq ($(filter POWERPC INTEL ARM HPPA MIPS M68K SPARC S390,$(CPUNAME)),)
+ifneq ($(filter POWERPC INTEL ARM HPPA MIPS M68K SPARC,$(CPUNAME)),)
 postprocess_FILES_main += \
 	$(postprocess_MOD)/org/openoffice/Office/Common-32bit.xcu
 endif
@@ -339,10 +336,6 @@ postprocess_FILES_math := \
 	$(postprocess_MOD)/org/openoffice/Office/Common-math.xcu \
 	$(postprocess_MOD)/org/openoffice/Office/Embedding-math.xcu \
 	$(postprocess_MOD)/org/openoffice/Setup-math.xcu
-
-postprocess_DEPS_pyuno := main
-postprocess_FILES_pyuno := \
-	$(postprocess_MOD)/org/openoffice/Office/Scripting-python.xcu
 
 ifeq ($(ENABLE_REPORTBUILDER),TRUE)
 postprocess_XCDS += reportbuilder.xcd
@@ -578,9 +571,7 @@ postprocess_main_SED := \
 	-e 's,$${PRODUCTNAME},$(PRODUCTNAME),g' \
 	-e 's,$${PRODUCTVERSION},$(PRODUCTVERSION),g' \
 	-e 's,$${PRODUCTEXTENSION},.$(LIBO_VERSION_MICRO).$(LIBO_VERSION_PATCH)$(LIBO_VERSION_SUFFIX),g' \
-	-e 's,$${STARTCENTER_ADDFEATURE_URL},https://extensions.libreoffice.org/,g' \
 	-e 's,$${STARTCENTER_INFO_URL},https://collaboraoffice.com,g' \
-	-e 's,$${STARTCENTER_TEMPLREP_URL},https://extensions.libreoffice.org/template-center/,g' \
 	-e 's,$${SYSTEM_LIBEXTTEXTCAT_DATA},$(SYSTEM_LIBEXTTEXTCAT_DATA),g' \
 	-e 's,$${SYSTEM_LIBNUMBERTEXT_DATA},$(SYSTEM_LIBNUMBERTEXT_DATA),g' \
 	-e 's,$${PRIVACY_POLICY_URL},$(PRIVACY_POLICY_URL),g' \

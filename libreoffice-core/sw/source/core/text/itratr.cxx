@@ -334,7 +334,6 @@ bool SwAttrIter::Seek(TextFrameIndex const nNewPos)
             }
             while (nPos < m_pTextNode->Len());
         }
-        assert(m_nChgCnt == 0); // should have reset it all? there cannot be ExtOn() inside of a Delete redline, surely?
         // Unapply current para items:
         // the SwAttrHandler doesn't appear to be capable of *unapplying*
         // items at all; it can only apply a previously effective item.
@@ -660,9 +659,9 @@ static bool CanSkipOverRedline(
     }
     for (size_t i = 0; i < SAL_N_ELEMENTS(activeCharAttrsStart); ++i)
     {
-        // all of these are poolable
-//        assert(!activeCharAttrsStart[i] || activeCharAttrsStart[i]->GetItemPool()->IsItemPoolable(*activeCharAttrsStart[i]));
-        if (activeCharAttrsStart[i] != activeCharAttrsEnd[i])
+        // all of these should be shareable (but we have no SfxItemPool to check it here)
+        // assert(!activeCharAttrsStart[i] || activeCharAttrsStart[i]->GetItemPool()->Shareable(*activeCharAttrsStart[i]));
+        if (!SfxPoolItem::areSame(activeCharAttrsStart[i], activeCharAttrsEnd[i]))
         {
             if (!isTheAnswerYes) return false;
         }
@@ -1027,8 +1026,9 @@ void SwTextNode::GetMinMaxSize( SwNodeOffset nIndex, sal_uLong& rMin, sal_uLong 
     rMax = 0;
     rAbsMin = 0;
 
-    const SvxLRSpaceItem &rSpace = GetSwAttrSet().GetLRSpace();
-    tools::Long nLROffset = rSpace.GetTextLeft() + GetLeftMarginWithNum( true );
+    SvxTextLeftMarginItem const& rTextLeftMargin(GetSwAttrSet().GetTextLeftMargin());
+    SvxRightMarginItem const& rRightMargin(GetSwAttrSet().GetRightMargin());
+    tools::Long nLROffset = rTextLeftMargin.GetTextLeft() + GetLeftMarginWithNum( true );
     short nFLOffs;
     // For enumerations a negative first line indentation is probably filled already
     if( !GetFirstLineOfsWithNum( nFLOffs ) || nFLOffs > nLROffset )
@@ -1038,16 +1038,16 @@ void SwTextNode::GetMinMaxSize( SwNodeOffset nIndex, sal_uLong& rMin, sal_uLong 
     aNodeArgs.m_nMinWidth = 0;
     aNodeArgs.m_nMaxWidth = 0;
     aNodeArgs.m_nLeftRest = nLROffset;
-    aNodeArgs.m_nRightRest = rSpace.GetRight();
+    aNodeArgs.m_nRightRest = rRightMargin.GetRight();
     aNodeArgs.m_nLeftDiff = 0;
     aNodeArgs.m_nRightDiff = 0;
     if( nIndex )
     {
-        SwFrameFormats* pTmp = const_cast<SwFrameFormats*>(GetDoc().GetSpzFrameFormats());
-        if( pTmp )
+        sw::SpzFrameFormats* pSpzs = const_cast<sw::SpzFrameFormats*>(GetDoc().GetSpzFrameFormats());
+        if(pSpzs)
         {
             aNodeArgs.m_nIndex = nIndex;
-            for( SwFrameFormat *pFormat : *pTmp )
+            for(auto pFormat: *pSpzs)
                 lcl_MinMaxNode(pFormat, aNodeArgs);
         }
     }
@@ -1058,7 +1058,7 @@ void SwTextNode::GetMinMaxSize( SwNodeOffset nIndex, sal_uLong& rMin, sal_uLong 
         aNodeArgs.m_nMaxWidth -= aNodeArgs.m_nLeftRest;
 
     if (aNodeArgs.m_nRightRest < 0)
-        aNodeArgs.Minimum(rSpace.GetRight() - aNodeArgs.m_nRightRest);
+        aNodeArgs.Minimum(rRightMargin.GetRight() - aNodeArgs.m_nRightRest);
     aNodeArgs.m_nRightRest -= aNodeArgs.m_nRightDiff;
     if (aNodeArgs.m_nRightRest < 0)
         aNodeArgs.m_nMaxWidth -= aNodeArgs.m_nRightRest;
@@ -1231,7 +1231,7 @@ void SwTextNode::GetMinMaxSize( SwNodeOffset nIndex, sal_uLong& rMin, sal_uLong 
     if (static_cast<tools::Long>(rMax) < aArg.m_nRowWidth)
         rMax = aArg.m_nRowWidth;
 
-    nLROffset += rSpace.GetRight();
+    nLROffset += rRightMargin.GetRight();
 
     rAbsMin += nLROffset;
     rAbsMin += nAdd;
@@ -1576,7 +1576,7 @@ bool SwTextFrame::IsEmptyWithSplitFly() const
     }
 
     // It has a split fly anchored to it.
-    if (pFlyFrame->GetFrameFormat().GetVertOrient().GetPos() >= 0)
+    if (pFlyFrame->GetFrameFormat()->GetVertOrient().GetPos() >= 0)
     {
         return false;
     }

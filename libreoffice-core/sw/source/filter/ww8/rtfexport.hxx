@@ -186,10 +186,8 @@ public:
     OString getStream();
     /// Return back to the real stream.
     void resetStream();
-    SvStream& OutULong(sal_uLong nVal);
-    SvStream& OutLong(tools::Long nVal);
-    void OutUnicode(const char* pToken, const OUString& rContent, bool bUpr = false);
-    void OutDateTime(const char* pStr, const css::util::DateTime& rDT);
+    void OutUnicode(std::string_view pToken, std::u16string_view rContent, bool bUpr = false);
+    void OutDateTime(std::string_view pStr, const css::util::DateTime& rDT);
     void OutPageDescription(const SwPageDesc& rPgDsc, bool bCheckForFirstPage);
 
     sal_uInt16 GetColor(const Color& rColor) const;
@@ -213,13 +211,11 @@ private:
     /// Writes a single user property type.
     void WriteUserPropType(int nType);
     /// Writes a single user property value.
-    void WriteUserPropValue(const OUString& rValue);
+    void WriteUserPropValue(std::u16string_view rValue);
     /// Writes the userprops group: user defined document properties.
     void WriteUserProps();
     /// Writes document variables
     void WriteDocVars();
-    /// Writes the writer-specific \pgdsctbl group.
-    void WritePageDescTable();
     /// This is necessary to have the numbering table ready before the main text is being processed.
     void BuildNumbering();
     void WriteHeaderFooter(const SfxPoolItem& rItem, bool bHeader);

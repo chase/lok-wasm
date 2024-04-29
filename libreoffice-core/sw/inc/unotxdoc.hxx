@@ -210,6 +210,9 @@ private:
     virtual SdrModel& getSdrModelFromUnoModel() const override;
 
     virtual ~SwXTextDocument() override;
+
+    SwDoc& GetDocOrThrow() const;
+
 public:
     SwXTextDocument(SwDocShell* pShell);
 
@@ -414,14 +417,25 @@ public:
     virtual VclPtr<vcl::Window> getDocWindow() override;
     /// @see vcl::ITiledRenderable::initializeForTiledRendering().
     virtual void initializeForTiledRendering(const css::uno::Sequence<css::beans::PropertyValue>& rArguments) override;
+
+    // MACRO: {
+
+    /// @see vcl::ITiledRenderable::setAuthor().
+    virtual void setAuthor(OUString sAuthor) override;
+    // For MACRO-1212
+    /// @see vcl::ITiledRenderable::batchUpdateTrackChange().
+    void batchUpdateTrackChange( const css::uno::Sequence<sal_uInt32>& rArguments, bool accept) override;
+    // MACRO-1392: Request layout updates for redlines
+    void updateRedlines( const css::uno::Sequence<sal_uInt32>& rArguments) override;
+
+    // MACRO: }
+
     /// @see vcl::ITiledRenderable::postKeyEvent().
     virtual void postKeyEvent(int nType, int nCharCode, int nKeyCode) override;
     /// @see vcl::ITiledRenderable::postMouseEvent().
     virtual void postMouseEvent(int nType, int nX, int nY, int nCount, int nButtons, int nModifier) override;
     /// @see vcl::ITiledRenderable::setTextSelection().
     virtual void setTextSelection(int nType, int nX, int nY) override;
-    /// @see vcl::ITiledRenderable::hyperlinkInfoAtPosition().
-    virtual OUString hyperlinkInfoAtPosition(int x, int y) override;
     /// @see vcl::ITiledRenderable::getSelection().
     virtual css::uno::Reference<css::datatransfer::XTransferable> getSelection() override;
     /// @see vcl::ITiledRenderable::setGraphicSelection().

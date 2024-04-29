@@ -482,7 +482,7 @@ void OSQLMessageBox::impl_createStandardButtons( MessBoxStyle _nStyle )
     else
         aTmp = m_sHelpURL;
 
-    m_xDialog->set_help_id(OUStringToOString(aTmp, RTL_TEXTENCODING_UTF8));
+    m_xDialog->set_help_id(aTmp);
 }
 
 void OSQLMessageBox::impl_addDetailsButton()
@@ -565,11 +565,10 @@ OSQLMessageBox::OSQLMessageBox(weld::Window* pParent, const SQLExceptionInfo& rE
 
 OSQLMessageBox::OSQLMessageBox(weld::Window* pParent, const OUString& rTitle, const OUString& rMessage, MessBoxStyle nStyle, MessageType eType, const ::dbtools::SQLExceptionInfo* pAdditionalErrorInfo )
 {
-    SQLContext aError;
-    aError.Message = rTitle;
-    aError.Details = rMessage;
+    css::uno::Any next;
     if (pAdditionalErrorInfo)
-        aError.NextException = pAdditionalErrorInfo->get();
+        next = pAdditionalErrorInfo->get();
+    SQLContext aError(rTitle, {}, {}, 0, next, rMessage);
 
     m_pImpl.reset(new SQLMessageBox_Impl(SQLExceptionInfo(aError)));
 

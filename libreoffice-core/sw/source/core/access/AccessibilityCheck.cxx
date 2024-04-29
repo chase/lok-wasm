@@ -36,12 +36,17 @@
 #include <txtftn.hxx>
 #include <txtfrm.hxx>
 #include <svl/itemiter.hxx>
+#include <o3tl/string_view.hxx>
 #include <o3tl/vector_utils.hxx>
 #include <svx/swframetypes.hxx>
 #include <fmtanchr.hxx>
 #include <dcontact.hxx>
+#include <unotext.hxx>
 #include <svx/svdoashp.hxx>
 #include <svx/sdasitm.hxx>
+#include <ndgrf.hxx>
+#include <svl/fstathelper.hxx>
+#include <osl/file.h>
 
 namespace sw
 {
@@ -96,13 +101,48 @@ class NoTextNodeAltTextCheck : public NodeCheck
         if (!pNoTextNode)
             return;
 
-        OUString sAlternative = pNoTextNode->GetTitle();
-        if (!sAlternative.isEmpty())
+        const SwFrameFormat* pFrameFormat = pNoTextNode->GetFlyFormat();
+        if (!pFrameFormat)
             return;
 
-        OUString sName = pNoTextNode->GetFlyFormat()->GetName();
+        // linked graphic with broken link
+        if (pNoTextNode->IsGrfNode() && pNoTextNode->GetGrfNode()->IsLinkedFile())
+        {
+            OUString sURL(pNoTextNode->GetGrfNode()->GetGraphic().getOriginURL());
+            if (!FStatHelper::IsDocument(sURL))
+            {
+                INetURLObject aURL(sURL);
+                OUString aSystemPath = sURL;
 
-        OUString sIssueText = SwResId(STR_NO_ALT).replaceAll("%OBJECT_NAME%", sName);
+                // abbreviate URL
+                if (aURL.GetProtocol() == INetProtocol::File)
+                {
+                    OUString aAbbreviatedPath;
+                    aSystemPath = aURL.getFSysPath(FSysStyle::Detect);
+                    osl_abbreviateSystemPath(aSystemPath.pData, &aAbbreviatedPath.pData, 46,
+                                             nullptr);
+                    sURL = aAbbreviatedPath;
+                }
+
+                OUString sIssueText = SwResId(STR_LINKED_GRAPHIC)
+                                          .replaceAll("%OBJECT_NAME%", pFrameFormat->GetName())
+                                          .replaceFirst("%LINK%", sURL);
+
+                auto pIssue = lclAddIssue(m_rIssueCollection, sIssueText,
+                                          sfx::AccessibilityIssueID::LINKED_GRAPHIC);
+                pIssue->setDoc(pNoTextNode->GetDoc());
+                pIssue->setIssueObject(IssueObject::LINKED);
+                pIssue->setObjectID(pFrameFormat->GetName());
+                pIssue->setNode(pNoTextNode);
+                pIssue->setAdditionalInfo({ aSystemPath });
+            }
+        }
+
+        if (!pNoTextNode->GetTitle().isEmpty() || !pNoTextNode->GetDescription().isEmpty())
+            return;
+
+        OUString sIssueText
+            = SwResId(STR_NO_ALT).replaceAll("%OBJECT_NAME%", pFrameFormat->GetName());
 
         if (pNoTextNode->IsOLENode())
         {
@@ -110,15 +150,20 @@ class NoTextNodeAltTextCheck : public NodeCheck
                                       sfx::AccessibilityIssueID::NO_ALT_OLE);
             pIssue->setDoc(pNoTextNode->GetDoc());
             pIssue->setIssueObject(IssueObject::OLE);
-            pIssue->setObjectID(pNoTextNode->GetFlyFormat()->GetName());
+            pIssue->setObjectID(pFrameFormat->GetName());
         }
         else if (pNoTextNode->IsGrfNode())
         {
-            auto pIssue = lclAddIssue(m_rIssueCollection, sIssueText,
-                                      sfx::AccessibilityIssueID::NO_ALT_GRAPHIC);
-            pIssue->setDoc(pNoTextNode->GetDoc());
-            pIssue->setIssueObject(IssueObject::GRAPHIC);
-            pIssue->setObjectID(pNoTextNode->GetFlyFormat()->GetName());
+            const SfxBoolItem* pIsDecorItem = pFrameFormat->GetItemIfSet(RES_DECORATIVE);
+            if (!(pIsDecorItem && pIsDecorItem->GetValue()))
+            {
+                auto pIssue = lclAddIssue(m_rIssueCollection, sIssueText,
+                                          sfx::AccessibilityIssueID::NO_ALT_GRAPHIC);
+                pIssue->setDoc(pNoTextNode->GetDoc());
+                pIssue->setIssueObject(IssueObject::GRAPHIC);
+                pIssue->setObjectID(pFrameFormat->GetName());
+                pIssue->setNode(pNoTextNode);
+            }
         }
     }
 
@@ -245,8 +290,15 @@ private:
             }
             // If more than half of the boxes are empty we can assume that it is used for formatting
             if (nEmptyBoxes > nBoxCount / 2)
-                lclAddIssue(m_rIssueCollection, SwResId(STR_TABLE_FORMATTING),
-                            sfx::AccessibilityIssueID::TABLE_FORMATTING);
+            {
+                auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_TABLE_FORMATTING),
+                                          sfx::AccessibilityIssueID::TABLE_FORMATTING);
+
+                pIssue->setDoc(pTableNode->GetDoc());
+                pIssue->setIssueObject(IssueObject::TABLE);
+                if (const SwTableFormat* pFormat = rTable.GetFrameFormat())
+                    pIssue->setObjectID(pFormat->GetName());
+            }
         }
     }
 
@@ -292,6 +344,10 @@ public:
         if (!pNextTextNode)
             return;
 
+        SwSectionNode* pNd = pCurrentTextNode->FindSectionNode();
+        if (pNd && pNd->GetSection().GetType() == SectionType::ToxContent)
+            return;
+
         for (auto& rPair : m_aNumberingCombinations)
         {
             if (pCurrentTextNode->GetText().startsWith(rPair.first)
@@ -300,8 +356,11 @@ public:
                 OUString sNumbering = rPair.first + " " + rPair.second + "...";
                 OUString sIssueText
                     = SwResId(STR_FAKE_NUMBERING).replaceAll("%NUMBERING%", sNumbering);
-                lclAddIssue(m_rIssueCollection, sIssueText,
-                            sfx::AccessibilityIssueID::MANUAL_NUMBERING);
+                auto pIssue = lclAddIssue(m_rIssueCollection, sIssueText,
+                                          sfx::AccessibilityIssueID::MANUAL_NUMBERING);
+                pIssue->setIssueObject(IssueObject::TEXT);
+                pIssue->setDoc(pCurrent->GetDoc());
+                pIssue->setNode(pCurrent);
             }
         }
     }
@@ -322,17 +381,24 @@ private:
         if (!sHyperlink.isEmpty())
         {
             OUString sText = xTextRange->getString();
-            if (INetURLObject(sText) == INetURLObject(sHyperlink))
+            INetURLObject aHyperlink(sHyperlink);
+            std::shared_ptr<sw::AccessibilityIssue> pIssue;
+            if (aHyperlink.GetProtocol() != INetProtocol::NotValid
+                && INetURLObject(sText) == aHyperlink)
             {
                 OUString sIssueText
                     = SwResId(STR_HYPERLINK_TEXT_IS_LINK).replaceFirst("%LINK%", sHyperlink);
-                lclAddIssue(m_rIssueCollection, sIssueText,
-                            sfx::AccessibilityIssueID::HYPERLINK_IS_TEXT);
+                pIssue = lclAddIssue(m_rIssueCollection, sIssueText,
+                                     sfx::AccessibilityIssueID::HYPERLINK_IS_TEXT);
             }
             else if (sText.getLength() <= 5)
             {
-                auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_HYPERLINK_TEXT_IS_SHORT),
-                                          sfx::AccessibilityIssueID::HYPERLINK_SHORT);
+                pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_HYPERLINK_TEXT_IS_SHORT),
+                                     sfx::AccessibilityIssueID::HYPERLINK_SHORT);
+            }
+
+            if (pIssue)
+            {
                 pIssue->setIssueObject(IssueObject::TEXT);
                 pIssue->setNode(pTextNode);
                 SwDoc& rDocument = pTextNode->GetDoc();
@@ -355,13 +421,12 @@ public:
             return;
 
         SwTextNode* pTextNode = pCurrent->GetTextNode();
-        uno::Reference<text::XTextContent> xParagraph
-            = SwXParagraph::CreateXParagraph(pTextNode->GetDoc(), pTextNode);
+        rtl::Reference<SwXParagraph> xParagraph
+            = SwXParagraph::CreateXParagraph(pTextNode->GetDoc(), pTextNode, nullptr);
         if (!xParagraph.is())
             return;
 
-        uno::Reference<container::XEnumerationAccess> xRunEnumAccess(xParagraph, uno::UNO_QUERY);
-        uno::Reference<container::XEnumeration> xRunEnum = xRunEnumAccess->createEnumeration();
+        uno::Reference<container::XEnumeration> xRunEnum = xParagraph->createEnumeration();
         sal_Int32 nStart = 0;
         while (xRunEnum->hasMoreElements())
         {
@@ -415,6 +480,9 @@ private:
                         uno::Reference<text::XTextContent> const& xParagraph, SwTextNode* pTextNode,
                         sal_Int32 nTextStart)
     {
+        if (xTextRange->getString().isEmpty())
+            return;
+
         Color nParaBackColor(COL_AUTO);
         uno::Reference<beans::XPropertySet> xParagraphProperties(xParagraph, uno::UNO_QUERY);
         if (!(xParagraphProperties->getPropertyValue("ParaBackColor") >>= nParaBackColor))
@@ -468,15 +536,43 @@ private:
             aBackgroundColor = nParaBackColor;
         else
         {
-            auto pIssue
-                = lclAddIssue(m_rIssueCollection, SwResId(STR_TEXT_FORMATTING_CONVEYS_MEANING),
-                              sfx::AccessibilityIssueID::TEXT_FORMATTING);
-            pIssue->setIssueObject(IssueObject::TEXT);
-            pIssue->setNode(pTextNode);
-            SwDoc& rDocument = pTextNode->GetDoc();
-            pIssue->setDoc(rDocument);
-            pIssue->setStart(nTextStart);
-            pIssue->setEnd(nTextStart + xTextRange->getString().getLength());
+            OUString sCharStyleName;
+            Color nCharStyleBackColor(COL_AUTO);
+            if (xProperties->getPropertyValue("CharStyleName") >>= sCharStyleName)
+            {
+                try
+                {
+                    uno::Reference<style::XStyleFamiliesSupplier> xStyleFamiliesSupplier(
+                        pTextNode->GetDoc().GetDocShell()->GetModel(), uno::UNO_QUERY);
+                    uno::Reference<container::XNameAccess> xCont
+                        = xStyleFamiliesSupplier->getStyleFamilies();
+                    uno::Reference<container::XNameAccess> xStyleFamily(
+                        xCont->getByName("CharacterStyles"), uno::UNO_QUERY);
+                    uno::Reference<beans::XPropertySet> xInfo(
+                        xStyleFamily->getByName(sCharStyleName), uno::UNO_QUERY);
+                    xInfo->getPropertyValue("CharBackColor") >>= nCharStyleBackColor;
+                }
+                catch (const uno::Exception&)
+                {
+                }
+            }
+            else
+            {
+                SAL_WARN("sw.a11y", "CharStyleName void");
+            }
+
+            if (aBackgroundColor != nCharStyleBackColor)
+            {
+                auto pIssue
+                    = lclAddIssue(m_rIssueCollection, SwResId(STR_TEXT_FORMATTING_CONVEYS_MEANING),
+                                  sfx::AccessibilityIssueID::TEXT_FORMATTING);
+                pIssue->setIssueObject(IssueObject::TEXT);
+                pIssue->setNode(pTextNode);
+                SwDoc& rDocument = pTextNode->GetDoc();
+                pIssue->setDoc(rDocument);
+                pIssue->setStart(nTextStart);
+                pIssue->setEnd(nTextStart + xTextRange->getString().getLength());
+            }
         }
 
         Color aForegroundColor(ColorTransparency, nCharColor);
@@ -494,7 +590,12 @@ private:
         double fContrastRatio = calculateContrastRatio(aForegroundColor, aBackgroundColor);
         if (fContrastRatio < 4.5)
         {
-            lclAddIssue(m_rIssueCollection, SwResId(STR_TEXT_CONTRAST));
+            auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_TEXT_CONTRAST));
+            pIssue->setIssueObject(IssueObject::TEXT);
+            pIssue->setNode(pTextNode);
+            pIssue->setDoc(pTextNode->GetDoc());
+            pIssue->setStart(nTextStart);
+            pIssue->setEnd(nTextStart + xTextRange->getString().getLength());
         }
     }
 
@@ -510,13 +611,12 @@ public:
             return;
 
         SwTextNode* pTextNode = pCurrent->GetTextNode();
-        uno::Reference<text::XTextContent> xParagraph;
-        xParagraph = SwXParagraph::CreateXParagraph(pTextNode->GetDoc(), pTextNode);
+        rtl::Reference<SwXParagraph> xParagraph
+            = SwXParagraph::CreateXParagraph(pTextNode->GetDoc(), pTextNode, nullptr);
         if (!xParagraph.is())
             return;
 
-        uno::Reference<container::XEnumerationAccess> xRunEnumAccess(xParagraph, uno::UNO_QUERY);
-        uno::Reference<container::XEnumeration> xRunEnum = xRunEnumAccess->createEnumeration();
+        uno::Reference<container::XEnumeration> xRunEnum = xParagraph->createEnumeration();
         sal_Int32 nStart = 0;
         while (xRunEnum->hasMoreElements())
         {
@@ -649,17 +749,20 @@ public:
             auto nParagraphLength = pTextNode->GetText().getLength();
             if (nParagraphLength == 0)
                 return;
-            if (aSwAttrSet.HasItem(RES_CHRATR_WEIGHT) || aSwAttrSet.HasItem(RES_CHRATR_CJK_WEIGHT)
-                || aSwAttrSet.HasItem(RES_CHRATR_CTL_WEIGHT)
-                || aSwAttrSet.HasItem(RES_CHRATR_POSTURE)
-                || aSwAttrSet.HasItem(RES_CHRATR_CJK_POSTURE)
-                || aSwAttrSet.HasItem(RES_CHRATR_CTL_POSTURE)
-                || aSwAttrSet.HasItem(RES_CHRATR_SHADOWED) || aSwAttrSet.HasItem(RES_CHRATR_COLOR)
-                || aSwAttrSet.HasItem(RES_CHRATR_EMPHASIS_MARK)
-                || aSwAttrSet.HasItem(RES_CHRATR_UNDERLINE)
-                || aSwAttrSet.HasItem(RES_CHRATR_OVERLINE)
-                || aSwAttrSet.HasItem(RES_CHRATR_CROSSEDOUT)
-                || aSwAttrSet.HasItem(RES_CHRATR_RELIEF) || aSwAttrSet.HasItem(RES_CHRATR_CONTOUR))
+            if (aSwAttrSet.GetItem(RES_CHRATR_WEIGHT, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_CJK_WEIGHT, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_CTL_WEIGHT, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_POSTURE, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_CJK_POSTURE, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_CTL_POSTURE, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_SHADOWED, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_COLOR, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_EMPHASIS_MARK, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_UNDERLINE, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_OVERLINE, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_CROSSEDOUT, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_RELIEF, false)
+                || aSwAttrSet.GetItem(RES_CHRATR_CONTOUR, false))
             {
                 auto pIssue
                     = lclAddIssue(m_rIssueCollection, SwResId(STR_TEXT_FORMATTING_CONVEYS_MEANING),
@@ -677,21 +780,20 @@ public:
 class NewlineSpacingCheck : public NodeCheck
 {
 private:
-    static SwTextNode* getNextTextNode(SwNode* pCurrent)
+    static SwTextNode* getPrevTextNode(SwNode* pCurrent)
     {
         SwTextNode* pTextNode = nullptr;
 
         auto nIndex = pCurrent->GetIndex();
-        auto nCount = pCurrent->GetNodes().Count();
 
-        nIndex++; // go to next node
+        nIndex--; // go to previous node
 
-        while (pTextNode == nullptr && nIndex < nCount)
+        while (pTextNode == nullptr && nIndex >= SwNodeOffset(0))
         {
             auto pNode = pCurrent->GetNodes()[nIndex];
             if (pNode->IsTextNode())
                 pTextNode = pNode->GetTextNode();
-            nIndex++;
+            nIndex--;
         }
 
         return pTextNode;
@@ -715,16 +817,16 @@ public:
         auto nParagraphLength = pTextNode->GetText().getLength();
         if (nParagraphLength == 0)
         {
-            SwTextNode* pNextTextNode = getNextTextNode(pCurrent);
-            if (!pNextTextNode)
+            SwTextNode* pPrevTextNode = getPrevTextNode(pCurrent);
+            if (!pPrevTextNode)
                 return;
-            if (pNextTextNode->GetText().getLength() == 0)
+            if (pPrevTextNode->GetText().getLength() == 0)
             {
                 auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_AVOID_NEWLINES_SPACE),
                                           sfx::AccessibilityIssueID::TEXT_FORMATTING);
                 pIssue->setIssueObject(IssueObject::TEXT);
-                pIssue->setNode(pNextTextNode);
-                SwDoc& rDocument = pNextTextNode->GetDoc();
+                pIssue->setNode(pTextNode);
+                SwDoc& rDocument = pTextNode->GetDoc();
                 pIssue->setDoc(rDocument);
             }
         }
@@ -799,6 +901,11 @@ public:
                 }
                 case '\t':
                 {
+                    // Don't warn about tabs in ToC
+                    auto pSection = SwDoc::GetCurrSection(SwPosition(*pTextNode, 0));
+                    if (pSection && pSection->GetTOXBase())
+                        continue;
+
                     if (bPreviousWasChar)
                     {
                         ++nTabCount;
@@ -978,7 +1085,8 @@ public:
 class BlinkingTextCheck : public NodeCheck
 {
 private:
-    void checkTextRange(uno::Reference<text::XTextRange> const& xTextRange)
+    void checkTextRange(uno::Reference<text::XTextRange> const& xTextRange, SwTextNode* pTextNode,
+                        sal_Int32 nStart)
     {
         uno::Reference<beans::XPropertySet> xProperties(xTextRange, uno::UNO_QUERY);
         if (xProperties.is() && xProperties->getPropertySetInfo()->hasPropertyByName("CharFlash"))
@@ -988,7 +1096,12 @@ private:
 
             if (bBlinking)
             {
-                lclAddIssue(m_rIssueCollection, SwResId(STR_TEXT_BLINKING));
+                auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_TEXT_BLINKING));
+                pIssue->setIssueObject(IssueObject::TEXT);
+                pIssue->setNode(pTextNode);
+                pIssue->setDoc(pTextNode->GetDoc());
+                pIssue->setStart(nStart);
+                pIssue->setEnd(nStart + xTextRange->getString().getLength());
             }
         }
     }
@@ -1005,18 +1118,21 @@ public:
             return;
 
         SwTextNode* pTextNode = pCurrent->GetTextNode();
-        uno::Reference<text::XTextContent> xParagraph;
-        xParagraph = SwXParagraph::CreateXParagraph(pTextNode->GetDoc(), pTextNode);
+        rtl::Reference<SwXParagraph> xParagraph
+            = SwXParagraph::CreateXParagraph(pTextNode->GetDoc(), pTextNode, nullptr);
         if (!xParagraph.is())
             return;
 
-        uno::Reference<container::XEnumerationAccess> xRunEnumAccess(xParagraph, uno::UNO_QUERY);
-        uno::Reference<container::XEnumeration> xRunEnum = xRunEnumAccess->createEnumeration();
+        uno::Reference<container::XEnumeration> xRunEnum = xParagraph->createEnumeration();
+        sal_Int32 nStart = 0;
         while (xRunEnum->hasMoreElements())
         {
             uno::Reference<text::XTextRange> xRun(xRunEnum->nextElement(), uno::UNO_QUERY);
             if (xRun.is())
-                checkTextRange(xRun);
+            {
+                checkTextRange(xRun, pTextNode, nStart);
+                nStart += xRun->getString().getLength();
+            }
         }
     }
 };
@@ -1047,7 +1163,10 @@ public:
         assert(nLevel >= 0);
         if (nLevel > m_nPreviousLevel && std::abs(nLevel - m_nPreviousLevel) > 1)
         {
-            lclAddIssue(m_rIssueCollection, SwResId(STR_HEADINGS_NOT_IN_ORDER));
+            auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_HEADINGS_NOT_IN_ORDER));
+            pIssue->setIssueObject(IssueObject::TEXT);
+            pIssue->setDoc(pCurrent->GetDoc());
+            pIssue->setNode(pCurrent);
         }
         m_nPreviousLevel = nLevel;
     }
@@ -1067,10 +1186,10 @@ public:
         if (!pCurrent->IsTextNode())
             return;
 
-        const auto& text = pCurrent->GetTextNode()->GetText();
+        SwTextNode* pTextNode = pCurrent->GetTextNode();
+        const auto& text = pTextNode->GetText();
 
         // Series of tests to detect if there are fake forms in the text.
-
         bool bCheck = text.indexOf("___") == -1; // Repeated underscores.
 
         if (bCheck)
@@ -1087,7 +1206,15 @@ public:
 
         // Checking if all the tests are passed successfully. If not, adding a warning.
         if (!bCheck)
-            lclAddIssue(m_rIssueCollection, SwResId(STR_NON_INTERACTIVE_FORMS));
+        {
+            sal_Int32 nStart = 0;
+            auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_NON_INTERACTIVE_FORMS));
+            pIssue->setIssueObject(IssueObject::TEXT);
+            pIssue->setNode(pTextNode);
+            pIssue->setDoc(pTextNode->GetDoc());
+            pIssue->setStart(nStart);
+            pIssue->setEnd(nStart + text.getLength());
+        }
     }
 };
 
@@ -1108,10 +1235,38 @@ public:
             return;
 
         // If a node is in fly and if it is not anchored as char, throw warning.
-        const SwNode* startFly = pCurrent->FindFlyStartNode();
-        if (startFly
-            && startFly->GetFlyFormat()->GetAnchor().GetAnchorId() != RndStdIds::FLY_AS_CHAR)
-            lclAddIssue(m_rIssueCollection, SwResId(STR_FLOATING_TEXT));
+        const SwNode* pStartFly = pCurrent->FindFlyStartNode();
+        if (!pStartFly)
+            return;
+
+        const SwFrameFormat* pFormat = pStartFly->GetFlyFormat();
+        if (!pFormat)
+            return;
+
+        if (pFormat->GetAnchor().GetAnchorId() != RndStdIds::FLY_AS_CHAR)
+        {
+            SwNodeIndex aCurrentIdx(*pCurrent);
+            SwNodeIndex aIdx(*pStartFly);
+            SwNode* pFirstTextNode = &aIdx.GetNode();
+            SwNodeOffset nEnd = pStartFly->EndOfSectionIndex();
+            while (aIdx < nEnd)
+            {
+                if (pFirstTextNode->IsContentNode() && pFirstTextNode->IsTextNode())
+                {
+                    if (aIdx == aCurrentIdx)
+                    {
+                        auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_FLOATING_TEXT));
+                        pIssue->setIssueObject(IssueObject::TEXTFRAME);
+                        pIssue->setObjectID(pFormat->GetName());
+                        pIssue->setDoc(pCurrent->GetDoc());
+                        pIssue->setNode(pCurrent);
+                    }
+                    break;
+                }
+                ++aIdx;
+                pFirstTextNode = &aIdx.GetNode();
+            }
+        }
     }
 };
 
@@ -1143,7 +1298,10 @@ public:
             if (parentTable)
             {
                 m_bPrevPassed = false;
-                lclAddIssue(m_rIssueCollection, SwResId(STR_HEADING_IN_TABLE));
+                auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_HEADING_IN_TABLE));
+                pIssue->setIssueObject(IssueObject::TEXT);
+                pIssue->setDoc(pCurrent->GetDoc());
+                pIssue->setNode(pCurrent);
             }
         }
     }
@@ -1173,12 +1331,23 @@ public:
         if (currentLevel - m_prevLevel > 1)
         {
             // Preparing and posting a warning.
-            OUString resultString = SwResId(STR_HEADING_ORDER);
+            OUString resultString;
+            if (!m_prevLevel)
+            {
+                resultString = SwResId(STR_HEADING_START);
+            }
+            else
+            {
+                resultString = SwResId(STR_HEADING_ORDER);
+                resultString
+                    = resultString.replaceAll("%LEVEL_PREV%", OUString::number(m_prevLevel));
+            }
             resultString
                 = resultString.replaceAll("%LEVEL_CURRENT%", OUString::number(currentLevel));
-            resultString = resultString.replaceAll("%LEVEL_PREV%", OUString::number(m_prevLevel));
-
-            lclAddIssue(m_rIssueCollection, resultString);
+            auto pIssue = lclAddIssue(m_rIssueCollection, resultString);
+            pIssue->setIssueObject(IssueObject::TEXT);
+            pIssue->setDoc(pCurrent->GetDoc());
+            pIssue->setNode(pCurrent);
         }
 
         // Updating previous level.
@@ -1188,6 +1357,48 @@ public:
 private:
     // Previous heading level to compare with.
     int m_prevLevel = 0;
+};
+
+/// Checking content controls in header or footer
+class ContentControlCheck : public NodeCheck
+{
+public:
+    ContentControlCheck(sfx::AccessibilityIssueCollection& rIssueCollection)
+        : NodeCheck(rIssueCollection)
+    {
+    }
+
+    void check(SwNode* pCurrent) override
+    {
+        if (!pCurrent->IsContentNode())
+            return;
+
+        const SwTextNode* pTextNode = pCurrent->GetTextNode();
+        if (pTextNode)
+        {
+            if (pCurrent->FindHeaderStartNode() || pCurrent->FindFooterStartNode())
+            {
+                const SwpHints* pHts = pTextNode->GetpSwpHints();
+                if (pHts)
+                {
+                    for (size_t i = 0; i < pHts->Count(); ++i)
+                    {
+                        const SwTextAttr* pHt = pHts->Get(i);
+                        if (pHt->Which() == RES_TXTATR_CONTENTCONTROL)
+                        {
+                            auto pIssue
+                                = lclAddIssue(m_rIssueCollection,
+                                              SwResId(STR_CONTENT_CONTROL_IN_HEADER_OR_FOOTER));
+                            pIssue->setIssueObject(IssueObject::TEXT);
+                            pIssue->setDoc(pCurrent->GetDoc());
+                            pIssue->setNode(pCurrent);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 };
 
 class DocumentCheck : public BaseCheck
@@ -1217,8 +1428,11 @@ public:
         LanguageType eLanguage = rLang.GetLanguage();
         if (eLanguage == LANGUAGE_NONE)
         {
-            lclAddIssue(m_rIssueCollection, SwResId(STR_DOCUMENT_DEFAULT_LANGUAGE),
-                        sfx::AccessibilityIssueID::DOCUMENT_LANGUAGE);
+            auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_DOCUMENT_DEFAULT_LANGUAGE),
+                                      sfx::AccessibilityIssueID::DOCUMENT_LANGUAGE);
+            pIssue->setIssueObject(IssueObject::LANGUAGE_NOT_SET);
+            pIssue->setObjectID(OUString());
+            pIssue->setDoc(*pDoc);
         }
         else
         {
@@ -1230,8 +1444,12 @@ public:
                     OUString sName = pTextFormatCollection->GetName();
                     OUString sIssueText
                         = SwResId(STR_STYLE_NO_LANGUAGE).replaceAll("%STYLE_NAME%", sName);
-                    lclAddIssue(m_rIssueCollection, sIssueText,
-                                sfx::AccessibilityIssueID::STYLE_LANGUAGE);
+
+                    auto pIssue = lclAddIssue(m_rIssueCollection, sIssueText,
+                                              sfx::AccessibilityIssueID::STYLE_LANGUAGE);
+                    pIssue->setIssueObject(IssueObject::LANGUAGE_NOT_SET);
+                    pIssue->setObjectID(sName);
+                    pIssue->setDoc(*pDoc);
                 }
             }
         }
@@ -1257,10 +1475,12 @@ public:
         const uno::Reference<document::XDocumentProperties> xDocumentProperties(
             xDPS->getDocumentProperties());
         OUString sTitle = xDocumentProperties->getTitle();
-        if (sTitle.trim().isEmpty())
+        if (o3tl::trim(sTitle).empty())
         {
-            lclAddIssue(m_rIssueCollection, SwResId(STR_DOCUMENT_TITLE),
-                        sfx::AccessibilityIssueID::DOCUMENT_TITLE);
+            auto pIssue = lclAddIssue(m_rIssueCollection, SwResId(STR_DOCUMENT_TITLE),
+                                      sfx::AccessibilityIssueID::DOCUMENT_TITLE);
+            pIssue->setDoc(*pDoc);
+            pIssue->setIssueObject(IssueObject::DOCUMENT_TITLE);
         }
     }
 };
@@ -1275,17 +1495,15 @@ public:
 
     void check(SwDoc* pDoc) override
     {
-        for (SwTextFootnote const* pTextFootnote : pDoc->GetFootnoteIdxs())
+        for (SwTextFootnote* pTextFootnote : pDoc->GetFootnoteIdxs())
         {
             SwFormatFootnote const& rFootnote = pTextFootnote->GetFootnote();
-            if (rFootnote.IsEndNote())
-            {
-                lclAddIssue(m_rIssueCollection, SwResId(STR_AVOID_ENDNOTES));
-            }
-            else
-            {
-                lclAddIssue(m_rIssueCollection, SwResId(STR_AVOID_FOOTNOTES));
-            }
+            auto pIssue = lclAddIssue(m_rIssueCollection, rFootnote.IsEndNote()
+                                                              ? SwResId(STR_AVOID_ENDNOTES)
+                                                              : SwResId(STR_AVOID_FOOTNOTES));
+            pIssue->setDoc(*pDoc);
+            pIssue->setIssueObject(IssueObject::FOOTENDNOTE);
+            pIssue->setTextFootnote(pTextFootnote);
         }
     }
 };
@@ -1322,8 +1540,12 @@ public:
                 drawing::FillStyle aFillStyle = aFillStyleContainer.get<drawing::FillStyle>();
                 if (aFillStyle == drawing::FillStyle_BITMAP)
                 {
-                    lclAddIssue(m_rIssueCollection, SwResId(STR_AVOID_BACKGROUND_IMAGES),
-                                sfx::AccessibilityIssueID::DOCUMENT_BACKGROUND);
+                    auto pIssue
+                        = lclAddIssue(m_rIssueCollection, SwResId(STR_AVOID_BACKGROUND_IMAGES),
+                                      sfx::AccessibilityIssueID::DOCUMENT_BACKGROUND);
+
+                    pIssue->setDoc(*pDoc);
+                    pIssue->setIssueObject(IssueObject::DOCUMENT_BACKGROUND);
                 }
             }
         }
@@ -1333,7 +1555,7 @@ public:
 } // end anonymous namespace
 
 // Check Shapes, TextBox
-void AccessibilityCheck::checkObject(SdrObject* pObject)
+void AccessibilityCheck::checkObject(SwNode* pCurrent, SdrObject* pObject)
 {
     if (!pObject)
         return;
@@ -1353,17 +1575,38 @@ void AccessibilityCheck::checkObject(SdrObject* pObject)
     // (Floating objects with text create problems with reading order)
     if (pObject->HasText()
         && FindFrameFormat(pObject)->GetAnchor().GetAnchorId() != RndStdIds::FLY_AS_CHAR)
-        lclAddIssue(m_aIssueCollection, SwResId(STR_FLOATING_TEXT));
-
-    if (pObject->GetObjIdentifier() == SdrObjKind::CustomShape
-        || pObject->GetObjIdentifier() == SdrObjKind::Text)
     {
-        OUString sAlternative = pObject->GetTitle();
-        if (sAlternative.isEmpty())
+        auto pIssue = lclAddIssue(m_aIssueCollection, SwResId(STR_FLOATING_TEXT));
+        pIssue->setIssueObject(IssueObject::TEXTFRAME);
+        pIssue->setObjectID(pObject->GetName());
+        pIssue->setDoc(*m_pDoc);
+        if (pCurrent)
+            pIssue->setNode(pCurrent);
+    }
+
+    const SdrObjKind nObjId = pObject->GetObjIdentifier();
+    const SdrInventor nInv = pObject->GetObjInventor();
+
+    if (nObjId == SdrObjKind::CustomShape || nObjId == SdrObjKind::Text
+        || nObjId == SdrObjKind::Media || nObjId == SdrObjKind::Group
+        || nObjId == SdrObjKind::Graphic || nInv == SdrInventor::FmForm)
+    {
+        if (pObject->GetTitle().isEmpty() && pObject->GetDescription().isEmpty())
         {
             OUString sName = pObject->GetName();
             OUString sIssueText = SwResId(STR_NO_ALT).replaceAll("%OBJECT_NAME%", sName);
-            lclAddIssue(m_aIssueCollection, sIssueText, sfx::AccessibilityIssueID::NO_ALT_SHAPE);
+            auto pIssue = lclAddIssue(m_aIssueCollection, sIssueText,
+                                      sfx::AccessibilityIssueID::NO_ALT_SHAPE);
+            // Set FORM Issue for Form objects because of the design mode
+            if (nInv == SdrInventor::FmForm)
+                pIssue->setIssueObject(IssueObject::FORM);
+            else
+                pIssue->setIssueObject(IssueObject::SHAPE);
+
+            pIssue->setObjectID(pObject->GetName());
+            pIssue->setDoc(*m_pDoc);
+            if (pCurrent)
+                pIssue->setNode(pCurrent);
         }
     }
 }
@@ -1397,6 +1640,7 @@ void AccessibilityCheck::init()
         m_aNodeChecks.emplace_back(new SpaceSpacingCheck(m_aIssueCollection));
         m_aNodeChecks.emplace_back(new FakeFootnoteCheck(m_aIssueCollection));
         m_aNodeChecks.emplace_back(new FakeCaptionCheck(m_aIssueCollection));
+        m_aNodeChecks.emplace_back(new ContentControlCheck(m_aIssueCollection));
     }
 }
 
@@ -1452,19 +1696,13 @@ void AccessibilityCheck::check()
                 if (pNodeCheck)
                     pNodeCheck->check(pNode);
             }
-        }
-    }
 
-    IDocumentDrawModelAccess& rDrawModelAccess = m_pDoc->getIDocumentDrawModelAccess();
-    auto* pModel = rDrawModelAccess.GetDrawModel();
-    for (sal_uInt16 nPage = 0; nPage < pModel->GetPageCount(); ++nPage)
-    {
-        SdrPage* pPage = pModel->GetPage(nPage);
-        for (size_t nObject = 0; nObject < pPage->GetObjCount(); ++nObject)
-        {
-            SdrObject* pObject = pPage->GetObj(nObject);
-            if (pObject)
-                checkObject(pObject);
+            for (SwFrameFormat* const& pFrameFormat : pNode->GetAnchoredFlys())
+            {
+                SdrObject* pObject = pFrameFormat->FindSdrObject();
+                if (pObject)
+                    checkObject(pNode, pObject);
+            }
         }
     }
 }

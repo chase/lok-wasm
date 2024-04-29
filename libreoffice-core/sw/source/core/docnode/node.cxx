@@ -96,36 +96,34 @@ void AccessibilityCheckStatus::reset()
 namespace AttrSetHandleHelper
 {
 
-static void GetNewAutoStyle( std::shared_ptr<const SfxItemSet>& rpAttrSet,
+static void GetNewAutoStyle( std::shared_ptr<const SwAttrSet>& rpAttrSet,
                       const SwContentNode& rNode,
                       SwAttrSet const & rNewAttrSet )
 {
-    const SwAttrSet* pAttrSet = static_cast<const SwAttrSet*>(rpAttrSet.get());
     if( rNode.GetModifyAtAttr() )
-        const_cast<SwAttrSet*>(pAttrSet)->SetModifyAtAttr( nullptr );
-    IStyleAccess& rSA = pAttrSet->GetPool()->GetDoc()->GetIStyleAccess();
+        const_cast<SwAttrSet*>(rpAttrSet.get())->SetModifyAtAttr( nullptr );
+    IStyleAccess& rSA = rpAttrSet->GetPool()->GetDoc()->GetIStyleAccess();
     rpAttrSet = rSA.getAutomaticStyle( rNewAttrSet, rNode.IsTextNode() ?
                                                      IStyleAccess::AUTO_STYLE_PARA :
                                                      IStyleAccess::AUTO_STYLE_NOTXT );
-    const bool bSetModifyAtAttr = const_cast<SwAttrSet*>(static_cast<const SwAttrSet*>(rpAttrSet.get()))->SetModifyAtAttr( &rNode );
+    const bool bSetModifyAtAttr = const_cast<SwAttrSet*>(rpAttrSet.get())->SetModifyAtAttr( &rNode );
     rNode.SetModifyAtAttr( bSetModifyAtAttr );
 }
 
-static void SetParent( std::shared_ptr<const SfxItemSet>& rpAttrSet,
+static void SetParent( std::shared_ptr<const SwAttrSet>& rpAttrSet,
                 const SwContentNode& rNode,
                 const SwFormat* pParentFormat,
                 const SwFormat* pConditionalFormat )
 {
-    const SwAttrSet* pAttrSet = static_cast<const SwAttrSet*>(rpAttrSet.get());
-    OSL_ENSURE( pAttrSet, "no SwAttrSet" );
+    OSL_ENSURE( rpAttrSet, "no SwAttrSet" );
     OSL_ENSURE( pParentFormat || !pConditionalFormat, "ConditionalFormat without ParentFormat?" );
 
     const SwAttrSet* pParentSet = pParentFormat ? &pParentFormat->GetAttrSet() : nullptr;
 
-    if ( pParentSet == pAttrSet->GetParent() )
+    if ( pParentSet == rpAttrSet->GetParent() )
         return;
 
-    SwAttrSet aNewSet( *pAttrSet );
+    SwAttrSet aNewSet( *rpAttrSet );
     aNewSet.SetParent( pParentSet );
     aNewSet.ClearItem( RES_FRMATR_STYLE_NAME );
     aNewSet.ClearItem( RES_FRMATR_CONDITIONAL_STYLE_NAME );
@@ -147,21 +145,21 @@ static void SetParent( std::shared_ptr<const SfxItemSet>& rpAttrSet,
     GetNewAutoStyle( rpAttrSet, rNode, aNewSet );
 }
 
-static const SfxPoolItem* Put( std::shared_ptr<const SfxItemSet>& rpAttrSet,
+static const SfxPoolItem* Put( std::shared_ptr<const SwAttrSet>& rpAttrSet,
                         const SwContentNode& rNode,
                         const SfxPoolItem& rAttr )
 {
-    SwAttrSet aNewSet( static_cast<const SwAttrSet&>(*rpAttrSet) );
+    SwAttrSet aNewSet( *rpAttrSet );
     const SfxPoolItem* pRet = aNewSet.Put( rAttr );
     if ( pRet )
         GetNewAutoStyle( rpAttrSet, rNode, aNewSet );
     return pRet;
 }
 
-static bool Put( std::shared_ptr<const SfxItemSet>& rpAttrSet, const SwContentNode& rNode,
+static bool Put( std::shared_ptr<const SwAttrSet>& rpAttrSet, const SwContentNode& rNode,
          const SfxItemSet& rSet )
 {
-    SwAttrSet aNewSet( static_cast<const SwAttrSet&>(*rpAttrSet) );
+    SwAttrSet aNewSet( *rpAttrSet );
 
     // #i76273# Robust
     std::optional<SfxItemSetFixed<RES_FRMATR_STYLE_NAME, RES_FRMATR_CONDITIONAL_STYLE_NAME>> pStyleNames;
@@ -185,11 +183,11 @@ static bool Put( std::shared_ptr<const SfxItemSet>& rpAttrSet, const SwContentNo
     return bRet;
 }
 
-static bool Put_BC( std::shared_ptr<const SfxItemSet>& rpAttrSet,
+static bool Put_BC( std::shared_ptr<const SwAttrSet>& rpAttrSet,
             const SwContentNode& rNode, const SfxPoolItem& rAttr,
             SwAttrSet* pOld, SwAttrSet* pNew )
 {
-    SwAttrSet aNewSet( static_cast<const SwAttrSet&>(*rpAttrSet) );
+    SwAttrSet aNewSet( *rpAttrSet );
 
     // for a correct broadcast, we need to do a SetModifyAtAttr with the items
     // from aNewSet. The 'regular' SetModifyAtAttr is done in GetNewAutoStyle
@@ -204,11 +202,11 @@ static bool Put_BC( std::shared_ptr<const SfxItemSet>& rpAttrSet,
     return bRet;
 }
 
-static bool Put_BC( std::shared_ptr<const SfxItemSet>& rpAttrSet,
+static bool Put_BC( std::shared_ptr<const SwAttrSet>& rpAttrSet,
             const SwContentNode& rNode, const SfxItemSet& rSet,
             SwAttrSet* pOld, SwAttrSet* pNew )
 {
-    SwAttrSet aNewSet( static_cast<const SwAttrSet&>(*rpAttrSet) );
+    SwAttrSet aNewSet( *rpAttrSet );
 
     // #i76273# Robust
     std::optional<SfxItemSetFixed<RES_FRMATR_STYLE_NAME, RES_FRMATR_CONDITIONAL_STYLE_NAME>> pStyleNames;
@@ -237,11 +235,11 @@ static bool Put_BC( std::shared_ptr<const SfxItemSet>& rpAttrSet,
     return bRet;
 }
 
-static sal_uInt16 ClearItem_BC( std::shared_ptr<const SfxItemSet>& rpAttrSet,
+static sal_uInt16 ClearItem_BC( std::shared_ptr<const SwAttrSet>& rpAttrSet,
                      const SwContentNode& rNode, sal_uInt16 nWhich,
                      SwAttrSet* pOld, SwAttrSet* pNew )
 {
-    SwAttrSet aNewSet( static_cast<const SwAttrSet&>(*rpAttrSet) );
+    SwAttrSet aNewSet( *rpAttrSet );
     if( rNode.GetModifyAtAttr() )
         aNewSet.SetModifyAtAttr( &rNode );
     const sal_uInt16 nRet = aNewSet.ClearItem_BC( nWhich, pOld, pNew );
@@ -250,12 +248,12 @@ static sal_uInt16 ClearItem_BC( std::shared_ptr<const SfxItemSet>& rpAttrSet,
     return nRet;
 }
 
-static sal_uInt16 ClearItem_BC( std::shared_ptr<const SfxItemSet>& rpAttrSet,
+static sal_uInt16 ClearItem_BC( std::shared_ptr<const SwAttrSet>& rpAttrSet,
                      const SwContentNode& rNode,
                      sal_uInt16 nWhich1, sal_uInt16 nWhich2,
                      SwAttrSet* pOld, SwAttrSet* pNew )
 {
-    SwAttrSet aNewSet( static_cast<const SwAttrSet&>(*rpAttrSet) );
+    SwAttrSet aNewSet( *rpAttrSet );
     if( rNode.GetModifyAtAttr() )
         aNewSet.SetModifyAtAttr( &rNode );
     const sal_uInt16 nRet = aNewSet.ClearItem_BC( nWhich1, nWhich2, pOld, pNew );
@@ -547,16 +545,15 @@ const SwPageDesc* SwNode::FindPageDesc( SwNodeOffset* pPgDescNdIdx ) const
         {
             // Find the right Anchor first
             const SwFrameFormat* pFormat = nullptr;
-            const SwFrameFormats& rFormats = *rDoc.GetSpzFrameFormats();
+            const sw::SpzFrameFormats& rFormats = *rDoc.GetSpzFrameFormats();
 
-            for( size_t n = 0; n < rFormats.size(); ++n )
+            for(sw::SpzFrameFormat* pSpz: rFormats)
             {
-                const SwFrameFormat* pFrameFormat = rFormats[ n ];
-                const SwFormatContent& rContent = pFrameFormat->GetContent();
+                const SwFormatContent& rContent = pSpz->GetContent();
                 if( rContent.GetContentIdx() &&
                     &rContent.GetContentIdx()->GetNode() == static_cast<SwNode const *>(pSttNd) )
                 {
-                    pFormat = pFrameFormat;
+                    pFormat = pSpz;
                     break;
                 }
             }
@@ -751,18 +748,17 @@ SwFrameFormat* SwNode::GetFlyFormat() const
         if( !pRet )
         {
             // The hard way through the Doc is our last way out
-            const SwFrameFormats& rFrameFormatTable = *GetDoc().GetSpzFrameFormats();
-            for( size_t n = 0; n < rFrameFormatTable.size(); ++n )
+            const sw::SpzFrameFormats& rSpzs = *GetDoc().GetSpzFrameFormats();
+            for(sw::SpzFrameFormat* pSpz: rSpzs)
             {
-                SwFrameFormat* pFormat = rFrameFormatTable[n];
                 // Only Writer fly frames can contain Writer nodes.
-                if (pFormat->Which() != RES_FLYFRMFMT)
+                if (pSpz->Which() != RES_FLYFRMFMT)
                     continue;
-                const SwFormatContent& rContent = pFormat->GetContent();
+                const SwFormatContent& rContent = pSpz->GetContent();
                 if( rContent.GetContentIdx() &&
                     &rContent.GetContentIdx()->GetNode() == pSttNd )
                 {
-                    pRet = pFormat;
+                    pRet = pSpz;
                     break;
                 }
             }
@@ -1110,7 +1106,7 @@ SwContentNode::~SwContentNode()
     m_pCondColl = nullptr;
 
     if ( mpAttrSet && mbSetModifyAtAttr )
-        const_cast<SwAttrSet*>(static_cast<const SwAttrSet*>(mpAttrSet.get()))->SetModifyAtAttr( nullptr );
+        const_cast<SwAttrSet*>(mpAttrSet.get())->SetModifyAtAttr( nullptr );
     InvalidateInSwCache(RES_OBJECTDYING);
 }
 void SwContentNode::UpdateAttr(const SwUpdateAttr& rUpdate)
@@ -1143,15 +1139,10 @@ void SwContentNode::SwClientNotify( const SwModify&, const SfxHint& rHint)
                     // Do not mangle pointers if it is the upper-most format!
                     if(pFormat && GetRegisteredIn() == pFormat)
                     {
-                        if(pFormat->GetRegisteredIn())
-                        {
-                            // If Parent, register anew in the new Parent
-                            pFormat->GetRegisteredIn()->Add(this);
-                            pFormatColl = GetFormatColl();
-                        }
-                        else
-                            EndListeningAll();
-                        bSetParent = true;
+                        // As ~SwFormat calls CheckRegistrationFormat before
+                        // ~SwModify, which sends the RES_OBJECTDYING, we should never
+                        // reach this point.
+                        assert(false);
                     }
                 }
                 break;
@@ -1183,13 +1174,13 @@ void SwContentNode::SwClientNotify( const SwModify&, const SfxHint& rHint)
                 // Thus we are asserting here, but falling back to an proper
                 // hint instead. so that we at least will not spread such poison further.
 #ifdef DBG_UTIL
-                if(pLegacyHint->m_pNew != pLegacyHint->m_pOld)
+                if (!SfxPoolItem::areSame(pLegacyHint->m_pNew, pLegacyHint->m_pOld))
                 {
                     auto pBT = sal::backtrace_get(20);
                     SAL_WARN("sw.core", "UpdateAttr not matching! " << sal::backtrace_to_string(pBT.get()));
                 }
 #endif
-                assert(pLegacyHint->m_pNew == pLegacyHint->m_pOld);
+                assert(SfxPoolItem::areSame(pLegacyHint->m_pNew, pLegacyHint->m_pOld));
                 assert(dynamic_cast<const SwUpdateAttr*>(pLegacyHint->m_pNew));
                 const SwUpdateAttr aFallbackHint(0,0,0);
                 const SwUpdateAttr& rUpdateAttr = pLegacyHint->m_pNew ? *static_cast<const SwUpdateAttr*>(pLegacyHint->m_pNew) : aFallbackHint;
@@ -1201,6 +1192,11 @@ void SwContentNode::SwClientNotify( const SwModify&, const SfxHint& rHint)
         if(bCalcHidden)
             static_cast<SwTextNode*>(this)->SetCalcHiddenCharFlags();
         CallSwClientNotify(rHint);
+    }
+    else if (rHint.GetId() == SfxHintId::SwAutoFormatUsedHint)
+    {
+        static_cast<const sw::AutoFormatUsedHint&>(rHint).CheckNode(this);
+        return;
     }
     else if (auto pModifyChangedHint = dynamic_cast<const sw::ModifyChangedHint*>(&rHint))
     {
@@ -1569,31 +1565,17 @@ SwContentNode *SwContentNode::JoinNext()
     return this;
 }
 
+
 /// Get info from Modify
 bool SwContentNode::GetInfo( SfxPoolItem& rInfo ) const
 {
     switch( rInfo.Which() )
     {
-    case RES_AUTOFMT_DOCNODE:
-        if( &GetNodes() == static_cast<SwAutoFormatGetDocNode&>(rInfo).pNodes )
-        {
-            return false;
-        }
-        break;
-
     case RES_FINDNEARESTNODE:
         if( GetAttr( RES_PAGEDESC ).GetPageDesc() )
             static_cast<SwFindNearestNode&>(rInfo).CheckNode( *this );
         return true;
-
-    case RES_CONTENT_VISIBLE:
-        {
-            static_cast<SwPtrMsgPoolItem&>(rInfo).pObject =
-                SwIterator<SwFrame, SwContentNode, sw::IteratorMode::UnwrapMulti>(*this).First();
-        }
-        return false;
     }
-
     return sw::BroadcastingModify::GetInfo( rInfo );
 }
 
@@ -1643,7 +1625,9 @@ bool SwContentNode::SetAttr( const SfxItemSet& rSet )
         }
         else
         {
-            mpAttrSet = pFnd->GetStyleHandle();
+            std::shared_ptr<SfxItemSet> pItemSet = pFnd->GetStyleHandle();
+            mpAttrSet = std::dynamic_pointer_cast<SwAttrSet>(pItemSet);
+            assert(bool(pItemSet) == bool(mpAttrSet) && "types do not match");
         }
 
         if ( bSetParent )
@@ -1661,7 +1645,7 @@ bool SwContentNode::SetAttr( const SfxItemSet& rSet )
                  pNameItem->GetValue().isEmpty() )
                 AttrSetHandleHelper::SetParent( mpAttrSet, *this, &GetAnyFormatColl(), GetFormatColl() );
             else
-                const_cast<SfxItemSet*>(mpAttrSet.get())->SetParent( &GetFormatColl()->GetAttrSet() );
+                const_cast<SwAttrSet*>(mpAttrSet.get())->SetParent( &GetFormatColl()->GetAttrSet() );
         }
 
         return true;
@@ -2194,9 +2178,9 @@ void SwNode::RemoveAnchoredFly(SwFrameFormat *const pFlyFormat)
     m_aAnchoredFlys.erase(it);
 }
 
-void SwNode::resetAndQueueAccessibilityCheck()
+void SwNode::resetAndQueueAccessibilityCheck(bool bIssueObjectNameChanged)
 {
-    GetDoc().getOnlineAccessibilityCheck()->resetAndQueue(this);
+    GetDoc().getOnlineAccessibilityCheck()->resetAndQueue(this, bIssueObjectNameChanged);
 }
 
 

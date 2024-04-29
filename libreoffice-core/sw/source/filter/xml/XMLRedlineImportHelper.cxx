@@ -51,7 +51,6 @@ using namespace ::xmloff::token;
 using ::com::sun::star::text::XTextCursor;
 using ::com::sun::star::text::XTextRange;
 using ::com::sun::star::text::XWordCursor;
-using ::com::sun::star::lang::XUnoTunnel;
 using ::com::sun::star::beans::XPropertySet;
 using ::com::sun::star::beans::XPropertySetInfo;
 // collision with tools/DateTime: use UNO DateTime as util::DateTime
@@ -60,20 +59,16 @@ using ::com::sun::star::beans::XPropertySetInfo;
 // a few helper functions
 static SwDoc* lcl_GetDocViaTunnel( Reference<XTextCursor> const & rCursor )
 {
-    Reference<XUnoTunnel> xTunnel( rCursor, UNO_QUERY);
-    OSL_ENSURE(xTunnel.is(), "missing XUnoTunnel for XTextCursor");
     OTextCursorHelper *const pXCursor =
-        comphelper::getFromUnoTunnel<OTextCursorHelper>(xTunnel);
+        dynamic_cast<OTextCursorHelper*>(rCursor.get());
     OSL_ENSURE( pXCursor, "OTextCursorHelper missing" );
     return pXCursor ? pXCursor->GetDoc() : nullptr;
 }
 
 static SwDoc* lcl_GetDocViaTunnel( Reference<XTextRange> const & rRange )
 {
-    Reference<XUnoTunnel> xTunnel(rRange, UNO_QUERY);
-    OSL_ENSURE(xTunnel.is(), "missing XUnoTunnel for XTextRange");
-    SwXTextRange *const pXRange =
-        comphelper::getFromUnoTunnel<SwXTextRange>(xTunnel);
+    SwXTextRange *const pXRange = dynamic_cast<SwXTextRange*>(rRange.get());
+    OSL_ENSURE(pXRange, "missing SwXTextRange for XTextRange");
     // #i115174#: this may be a SvxUnoTextRange
     // OSL_ENSURE( pXRange, "SwXTextRange missing" );
     return pXRange ? &pXRange->GetDoc() : nullptr;
@@ -122,7 +117,7 @@ void XTextRangeOrNodeIndexPosition::Set( Reference<XTextRange> const & rRange )
 void XTextRangeOrNodeIndexPosition::Set( SwNode const & rIndex )
 {
     m_oIndex = rIndex;
-    (*m_oIndex)-- ;   // previous node!!!
+    --(*m_oIndex) ;   // previous node!!!
     m_xRange = nullptr;
 }
 
@@ -229,12 +224,12 @@ RedlineInfo::~RedlineInfo()
     delete pNextRedline;
 }
 
-constexpr OUStringLiteral g_sShowChanges = u"ShowChanges";
-constexpr OUStringLiteral g_sRecordChanges = u"RecordChanges";
-constexpr OUStringLiteral g_sRedlineProtectionKey = u"RedlineProtectionKey";
+constexpr OUString g_sShowChanges = u"ShowChanges"_ustr;
+constexpr OUString g_sRecordChanges = u"RecordChanges"_ustr;
+constexpr OUString g_sRedlineProtectionKey = u"RedlineProtectionKey"_ustr;
 
 XMLRedlineImportHelper::XMLRedlineImportHelper(
-    SvXMLImport & rImport,
+    SwXMLImport & rImport,
     bool bNoRedlinesPlease,
     const Reference<XPropertySet> & rModel,
     const Reference<XPropertySet> & rImportInfo )
@@ -344,7 +339,7 @@ XMLRedlineImportHelper::~XMLRedlineImportHelper()
             aAny <<= true;
             m_xModelPropertySet->setPropertyValue( g_sShowChanges, aAny );
             // TODO maybe we need some property for the view-setting?
-            SwDoc *const pDoc(static_cast<SwXMLImport&>(m_rImport).getDoc());
+            SwDoc *const pDoc(m_rImport.getDoc());
             assert(pDoc);
             pDoc->GetDocumentRedlineManager().SetHideRedlines(!m_bShowChanges);
         }
@@ -416,10 +411,10 @@ void XMLRedlineImportHelper::Add(
     pInfo->sMovedID = rMovedID;
     pInfo->bMergeLastParagraph = bMergeLastPara;
 
-    //reserve MoveID so it wont be reused by others
+    //reserve MoveID so it won't be reused by others
     if (!rMovedID.isEmpty())
     {
-        SwDoc* const pDoc(static_cast<SwXMLImport&>(m_rImport).getDoc());
+        SwDoc* const pDoc(m_rImport.getDoc());
         assert(pDoc);
         pDoc->GetDocumentRedlineManager().GetRedlineTable().setMovedIDIfNeeded(rMovedID.toInt32());
     }

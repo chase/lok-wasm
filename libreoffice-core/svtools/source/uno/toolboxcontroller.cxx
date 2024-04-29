@@ -36,7 +36,7 @@
 #include <comphelper/propertyvalue.hxx>
 
 const int TOOLBARCONTROLLER_PROPHANDLE_SUPPORTSVISIBLE  = 1;
-constexpr OUStringLiteral TOOLBARCONTROLLER_PROPNAME_SUPPORTSVISIBLE = u"SupportsVisible";
+constexpr OUString TOOLBARCONTROLLER_PROPNAME_SUPPORTSVISIBLE = u"SupportsVisible"_ustr;
 
 
 using namespace ::cppu;
@@ -163,21 +163,14 @@ css::uno::Sequence<css::uno::Type> ToolboxController::getTypes()
 
 void SAL_CALL ToolboxController::initialize( const Sequence< Any >& aArguments )
 {
-    bool bInitialized( true );
+    SolarMutexGuard aSolarMutexGuard;
 
-    {
-        SolarMutexGuard aSolarMutexGuard;
+    if ( m_bDisposed )
+        throw DisposedException();
 
-        if ( m_bDisposed )
-            throw DisposedException();
-
-        bInitialized = m_bInitialized;
-    }
-
-    if ( bInitialized )
+    if ( m_bInitialized )
         return;
 
-    SolarMutexGuard aSolarMutexGuard;
     m_bInitialized = true;
     m_bSupportVisible = false;
     PropertyValue aPropValue;
@@ -250,7 +243,7 @@ void SAL_CALL ToolboxController::dispose()
     {
         SolarMutexGuard aSolarMutexGuard;
         if ( m_bDisposed )
-            throw DisposedException();
+            return;
     }
 
     css::lang::EventObject aEvent( xThis );

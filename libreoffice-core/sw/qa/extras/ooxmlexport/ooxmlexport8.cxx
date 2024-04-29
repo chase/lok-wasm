@@ -30,7 +30,6 @@
 #include <com/sun/star/table/TableBorder2.hpp>
 
 #include <tools/UnitConversion.hxx>
-#include <unotools/fltrcfg.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <oox/drawingml/drawingmltypes.hxx>
 #include <xmloff/odffields.hxx>
@@ -46,21 +45,6 @@ class Test : public SwModelTestBase
 {
 public:
     Test() : SwModelTestBase("/sw/qa/extras/ooxmlexport/data/", "Office Open XML Text") {}
-
-    virtual std::unique_ptr<Resetter> preTest(const char* filename) override
-    {
-        if (filename == std::string_view("smartart.docx")
-            || filename == std::string_view("strict-smartart.docx") )
-        {
-            std::unique_ptr<Resetter> pResetter(new Resetter(
-                [] () {
-                    SvtFilterOptions::Get().SetSmartArt2Shape(false);
-                }));
-            SvtFilterOptions::Get().SetSmartArt2Shape(true);
-            return pResetter;
-        }
-        return nullptr;
-    }
 };
 
 DECLARE_OOXMLEXPORT_TEST(testN751054, "n751054.docx")
@@ -135,7 +119,6 @@ graphic = image(0).Graphic
 xray graphic.Size
 xray image.AnchorType
 */
-    uno::Reference<text::XTextDocument> textDocument(mxComponent, uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(1, getShapes());
     uno::Reference<drawing::XShapes> shapes(getShape(1), uno::UNO_QUERY);
     uno::Reference<drawing::XShape> image;
@@ -190,6 +173,12 @@ after they are loaded.
     CPPUNIT_ASSERT_EQUAL( OUString( "Black" ), descr1 );
     CPPUNIT_ASSERT_EQUAL( OUString( "Red" ), descr2 );
     CPPUNIT_ASSERT_EQUAL( OUString( "Green" ), descr3 );
+
+    // tdf#139915/tdf#159157 This was 826, but it should be -826
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(-826), getProperty<sal_Int32>(image1, "VertOrientPosition"));
+    sal_Int16 nExpected = text::RelOrientation::TEXT_LINE;
+    CPPUNIT_ASSERT_EQUAL(nExpected, getProperty<sal_Int16>(image1, "VertOrientRelation"));
+
 }
 
 DECLARE_OOXMLEXPORT_TEST(testN750255, "n750255.docx")
@@ -199,8 +188,8 @@ DECLARE_OOXMLEXPORT_TEST(testN750255, "n750255.docx")
 Column break without columns on the page is a page break, so check those paragraphs
 are on page 2 and page 3
 */
-    CPPUNIT_ASSERT_EQUAL( OUString("one"), parseDump("/root/page[2]/body/txt/text()") );
-    CPPUNIT_ASSERT_EQUAL( OUString("two"), parseDump("/root/page[3]/body/txt/text()") );
+    CPPUNIT_ASSERT_EQUAL( OUString("one"), parseDump("/root/page[2]/body/txt/text()"_ostr) );
+    CPPUNIT_ASSERT_EQUAL( OUString("two"), parseDump("/root/page[3]/body/txt/text()"_ostr) );
 }
 
 DECLARE_OOXMLEXPORT_TEST(testN652364, "n652364.docx")
@@ -508,7 +497,7 @@ DECLARE_OOXMLEXPORT_TEST(testFdo74357, "fdo74357.docx")
 DECLARE_OOXMLEXPORT_TEST(testFdo55187, "fdo55187.docx")
 {
     // 0x010d was imported as a newline.
-    getParagraph(1, OUString(u"lup\u010Dka"));
+    getParagraph(1, u"lup\u010Dka"_ustr);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testN780563, "n780563.docx")
@@ -539,7 +528,7 @@ DECLARE_OOXMLEXPORT_TEST(testN780853, "n780853.docx")
 
 DECLARE_OOXMLEXPORT_TEST(testN780843, "n780843.docx")
 {
-    CPPUNIT_ASSERT_EQUAL(OUString("shown footer"), parseDump("/root/page[2]/footer/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("shown footer"), parseDump("/root/page[2]/footer/txt/text()"_ostr));
 
     //tdf64372 this document should only have one page break (2 pages, not 3)
     CPPUNIT_ASSERT_EQUAL(2, getPages());
@@ -695,9 +684,9 @@ DECLARE_OOXMLEXPORT_TEST(testN793262, "n793262.docx")
 
 DECLARE_OOXMLEXPORT_TEST(testN793998, "n793998.docx")
 {
-    sal_Int32 nTextPortion = parseDump("/root/page/body/txt/SwParaPortion/SwLineLayout/child::*[1]", "width").toInt32(); // Width of the first (text) portion
-    sal_Int32 nTabPortion = parseDump("/root/page/body/txt/SwParaPortion/SwLineLayout/child::*[2]", "width").toInt32(); // Width of the second (tab) portion
-    sal_Int32 nParagraph = parseDump("/root/page/body/txt/infos/bounds", "width").toInt32(); // Width of the paragraph
+    sal_Int32 nTextPortion = parseDump("/root/page/body/txt/SwParaPortion/SwLineLayout/child::*[1]"_ostr, "width"_ostr).toInt32(); // Width of the first (text) portion
+    sal_Int32 nTabPortion = parseDump("/root/page/body/txt/SwParaPortion/SwLineLayout/child::*[2]"_ostr, "width"_ostr).toInt32(); // Width of the second (tab) portion
+    sal_Int32 nParagraph = parseDump("/root/page/body/txt/infos/bounds"_ostr, "width"_ostr).toInt32(); // Width of the paragraph
     sal_Int32 const nRightMargin = 3000;
     // The problem was that the tab portion didn't ignore the right margin, so text + tab width wasn't larger than body (paragraph - right margin) width.
     CPPUNIT_ASSERT(nTextPortion + nTabPortion > nParagraph - nRightMargin);
@@ -728,7 +717,7 @@ CPPUNIT_TEST_FIXTURE(Test, testN779642)
     };
     createSwDoc("n779642.docx");
     verify();
-    reload(mpFilter, "n779642.docx");
+    saveAndReload("Office Open XML Text");
     verify();
 }
 
@@ -790,7 +779,7 @@ DECLARE_OOXMLEXPORT_TEST(testFdo59638, "fdo59638.docx")
         if (rProp.Name == "BulletChar")
         {
             // Was '*', should be 'o'.
-            CPPUNIT_ASSERT_EQUAL(OUString(u"\uF0B7"), rProp.Value.get<OUString>());
+            CPPUNIT_ASSERT_EQUAL(u"\uF0B7"_ustr, rProp.Value.get<OUString>());
             return;
         }
     }
@@ -1018,7 +1007,7 @@ DECLARE_OOXMLEXPORT_TEST(testN820509, "n820509.docx")
         ::sw::mark::IFieldmark* pFieldmark = dynamic_cast<::sw::mark::IFieldmark*>(*pMarkAccess->getAllMarksBegin());
 
         CPPUNIT_ASSERT(pFieldmark);
-        CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMDATE), pFieldmark->GetFieldname());
+        CPPUNIT_ASSERT_EQUAL(ODF_FORMDATE, pFieldmark->GetFieldname());
 
         const sw::mark::IFieldmark::parameter_map_t* const pParameters = pFieldmark->GetParameters();
         OUString sDateFormat;

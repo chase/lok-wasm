@@ -913,7 +913,9 @@ rtl::Reference<ScAccessibleCell> ScAccessibleSpreadsheet::GetAccessibleCellAt(sa
             return m_pAccFormulaCell;
         }
         else
+        {
             return ScAccessibleCell::create(this, mpViewShell, aCellAddress, GetAccessibleIndexFormula(nRow, nColumn), meSplitPos, mpAccDoc);
+        }
     }
     else
     {
@@ -924,7 +926,9 @@ rtl::Reference<ScAccessibleCell> ScAccessibleSpreadsheet::GetAccessibleCellAt(sa
             return mpAccCell;
         }
         else
+        {
             return ScAccessibleCell::create(this, mpViewShell, aCellAddress, getAccessibleIndex(nRow, nColumn), meSplitPos, mpAccDoc);
+        }
     }
 }
 
@@ -1166,8 +1170,9 @@ uno::Reference<XAccessible > SAL_CALL
                 throw lang::IndexOutOfBoundsException();
             }
             ScMyAddress addr = CalcScAddressFromRangeList(mpMarkedRanges.get(),nSelectedChildIndex);
-            if( m_mapSelectionSend.find(addr) != m_mapSelectionSend.end() )
-                xAccessible = m_mapSelectionSend[addr];
+            auto it = m_mapSelectionSend.find(addr);
+            if( it != m_mapSelectionSend.end() )
+                xAccessible = it->second;
             else
                 xAccessible = getAccessibleCellAt(addr.Row(), addr.Col());
         }
@@ -1307,14 +1312,14 @@ void SAL_CALL ScAccessibleSpreadsheet::addAccessibleEventListener(const uno::Ref
 
 //====  internal  =========================================================
 
-tools::Rectangle ScAccessibleSpreadsheet::GetBoundingBoxOnScreen() const
+AbsoluteScreenPixelRectangle ScAccessibleSpreadsheet::GetBoundingBoxOnScreen() const
 {
-    tools::Rectangle aRect;
+    AbsoluteScreenPixelRectangle aRect;
     if (mpViewShell)
     {
         vcl::Window* pWindow = mpViewShell->GetWindowByPos(meSplitPos);
         if (pWindow)
-            aRect = pWindow->GetWindowExtentsRelative(nullptr);
+            aRect = pWindow->GetWindowExtentsAbsolute();
     }
     return aRect;
 }
@@ -1327,7 +1332,7 @@ tools::Rectangle ScAccessibleSpreadsheet::GetBoundingBox() const
         vcl::Window* pWindow = mpViewShell->GetWindowByPos(meSplitPos);
         if (pWindow)
             //#101986#; extends to the same window, because the parent is the document and it has the same window
-            aRect = pWindow->GetWindowExtentsRelative(pWindow);
+            aRect = pWindow->GetWindowExtentsRelative(*pWindow);
     }
     return aRect;
 }

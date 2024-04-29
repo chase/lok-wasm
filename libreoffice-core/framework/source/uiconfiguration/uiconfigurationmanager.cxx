@@ -40,7 +40,7 @@
 #include <com/sun/star/ui/ConfigurationEvent.hpp>
 #include <com/sun/star/ui/DocumentAcceleratorConfiguration.hpp>
 #include <com/sun/star/ui/XAcceleratorConfiguration.hpp>
-#include <com/sun/star/ui/XUIConfigurationManager3.hpp>
+#include <com/sun/star/ui/XUIConfigurationManager2.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 
@@ -73,7 +73,7 @@ namespace {
 
 class UIConfigurationManager :   public ::cppu::WeakImplHelper<
                                         css::lang::XServiceInfo  ,
-                                        css::ui::XUIConfigurationManager3 >
+                                        css::ui::XUIConfigurationManager2 >
 {
 public:
     virtual OUString SAL_CALL getImplementationName() override
@@ -351,7 +351,7 @@ void UIConfigurationManager::impl_requestUIElementData( sal_Int16 nElementType, 
                         {
                             MenuConfiguration aMenuCfg( m_xContext );
                             Reference< XIndexAccess > xContainer( aMenuCfg.CreateMenuBarConfigurationFromXML( xInputStream ));
-                            auto pRootItemContainer = comphelper::getFromUnoTunnel<RootItemContainer>( xContainer );
+                            auto pRootItemContainer = dynamic_cast<RootItemContainer*>( xContainer.get() );
                             if ( pRootItemContainer )
                                 aUIElementData.xSettings = new ConstItemContainer( pRootItemContainer, true );
                             else
@@ -370,7 +370,7 @@ void UIConfigurationManager::impl_requestUIElementData( sal_Int16 nElementType, 
                         {
                             Reference< XIndexContainer > xIndexContainer( new RootItemContainer() );
                             ToolBoxConfiguration::LoadToolBox( m_xContext, xInputStream, xIndexContainer );
-                            auto pRootItemContainer = comphelper::getFromUnoTunnel<RootItemContainer>( xIndexContainer );
+                            auto pRootItemContainer = dynamic_cast<RootItemContainer*>( xIndexContainer.get() );
                             aUIElementData.xSettings = new ConstItemContainer( pRootItemContainer, true );
                             return;
                         }
@@ -387,7 +387,7 @@ void UIConfigurationManager::impl_requestUIElementData( sal_Int16 nElementType, 
                         {
                             Reference< XIndexContainer > xIndexContainer( new RootItemContainer() );
                             StatusBarConfiguration::LoadStatusBar( m_xContext, xInputStream, xIndexContainer );
-                            auto pRootItemContainer = comphelper::getFromUnoTunnel<RootItemContainer>( xIndexContainer );
+                            auto pRootItemContainer = dynamic_cast<RootItemContainer*>( xIndexContainer.get() );
                             aUIElementData.xSettings = new ConstItemContainer( pRootItemContainer, true );
                             return;
                         }
@@ -1027,14 +1027,14 @@ void SAL_CALL UIConfigurationManager::removeSettings( const OUString& ResourceUR
             rElementType.bModified = true;
 
             Reference< XUIConfigurationManager > xThis(this);
-            Reference< XInterface > xIfac( xThis, UNO_QUERY );
 
             // Create event to notify listener about removed element settings
             ConfigurationEvent aEvent;
 
             aEvent.ResourceURL = ResourceURL;
             aEvent.Accessor <<= xThis;
-            aEvent.Source = xIfac;
+            aEvent.Source.set(xThis, UNO_QUERY);
+
             aEvent.Element <<= xRemovedSettings;
 
             aGuard.clear();

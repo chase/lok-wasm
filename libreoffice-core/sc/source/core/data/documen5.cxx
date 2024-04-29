@@ -30,6 +30,7 @@
 #include <svtools/embedhlp.hxx>
 
 #include <document.hxx>
+#include <docsh.hxx>
 #include <table.hxx>
 #include <drwlayer.hxx>
 #include <chartlis.hxx>
@@ -313,7 +314,7 @@ void ScDocument::UpdateChartArea( const OUString& rChartName,
                         uno::Reference< chart2::data::XDataProvider > xDataProvider = new ScChart2DataProvider( this );
                         xReceiver->attachDataProvider( xDataProvider );
                         uno::Reference< util::XNumberFormatsSupplier > xNumberFormatsSupplier(
-                                mpShell->GetModel(), uno::UNO_QUERY );
+                                static_cast<cppu::OWeakObject*>(mpShell->GetModel()), uno::UNO_QUERY );
                         xReceiver->attachNumberFormatsSupplier( xNumberFormatsSupplier );
                     }
 
@@ -453,7 +454,7 @@ void ScDocument::UpdateChartRef( UpdateRefMode eUpdateRefMode,
             uno::Reference<embed::XEmbeddedObject> xIPObj =
                 FindOleObjectByName(pChartListener->GetName());
 
-            svt::EmbeddedObjectRef::TryRunningState( xIPObj );
+            (void)svt::EmbeddedObjectRef::TryRunningState( xIPObj );
 
             // After the change, chart keeps track of its own data source ranges,
             // the listener doesn't need to listen anymore, except the chart has
@@ -528,11 +529,9 @@ void ScDocument::SetChartRangeList( std::u16string_view rChartName,
 
 bool ScDocument::HasData( SCCOL nCol, SCROW nRow, SCTAB nTab )
 {
-    if ( ValidTab(nTab) && nTab < static_cast<SCTAB>(maTabs.size()) && maTabs[nTab]
-            && nCol < maTabs[nTab]->GetAllocatedColumnsCount())
-        return maTabs[nTab]->HasData( nCol, nRow );
-    else
-        return false;
+    if (ScTable* pTable = FetchTable(nTab) ; pTable && nCol < pTable->GetAllocatedColumnsCount())
+        return pTable->HasData(nCol, nRow);
+    return false;
 }
 
 uno::Reference< embed::XEmbeddedObject >

@@ -267,7 +267,7 @@ bool SdrCreateView::CheckEdgeMode()
 
 void SdrCreateView::SetConnectMarker(const SdrObjConnection& rCon)
 {
-    SdrObject* pTargetObject = rCon.pObj;
+    SdrObject* pTargetObject = rCon.m_pSdrObj;
 
     if(pTargetObject)
     {
@@ -339,7 +339,7 @@ void SdrCreateView::SetCurrentObj(SdrObjKind nIdent, SdrInventor nInvent)
         mnCurrentIdent=nIdent;
         rtl::Reference<SdrObject> pObj = (nIdent == SdrObjKind::NONE) ? nullptr :
             SdrObjFactory::MakeNewObject(
-                *GetModel(),
+                GetModel(),
                 nInvent,
                 nIdent);
 
@@ -397,9 +397,7 @@ bool SdrCreateView::ImpBegCreateObj(SdrInventor nInvent, SdrObjKind nIdent, cons
             else
             {
                 mpCurrentCreate = SdrObjFactory::MakeNewObject(
-                    *mpModel,
-                    nInvent,
-                    nIdent);
+                    GetModel(), nInvent, nIdent);
             }
 
             Point aPnt(rPnt);
@@ -416,24 +414,23 @@ bool SdrCreateView::ImpBegCreateObj(SdrInventor nInvent, SdrObjKind nIdent, cons
                 // object should not be created. Since it is possible to use it as a helper
                 // object (e.g. in letting the user define an area with the interactive
                 // construction) at least no items should be set at that object.
-                if(nInvent != SdrInventor::Default || nIdent != SdrObjKind::NONE)
+                if(nInvent != SdrInventor::Default || nIdent != SdrObjKind::NewFrame)
                 {
                     mpCurrentCreate->SetMergedItemSet(maDefaultAttr);
                 }
 
-                if (mpModel && dynamic_cast<const SdrCaptionObj *>(mpCurrentCreate.get()) != nullptr)
+                if (dynamic_cast<const SdrCaptionObj *>(mpCurrentCreate.get()) != nullptr)
                 {
-                    SfxItemSet aSet(mpModel->GetItemPool());
+                    SfxItemSet aSet(GetModel().GetItemPool());
                     aSet.Put(XFillColorItem(OUString(),COL_WHITE)); // in case someone turns on Solid
                     aSet.Put(XFillStyleItem(drawing::FillStyle_NONE));
 
                     mpCurrentCreate->SetMergedItemSet(aSet);
                 }
-                if (mpModel && nInvent==SdrInventor::Default && (nIdent==SdrObjKind::Text ||
-                    nIdent==SdrObjKind::TitleText || nIdent==SdrObjKind::OutlineText))
+                if (nInvent == SdrInventor::Default && (nIdent==SdrObjKind::Text || nIdent==SdrObjKind::TitleText || nIdent==SdrObjKind::OutlineText))
                 {
                     // default for all text frames: no background, no border
-                    SfxItemSet aSet(mpModel->GetItemPool());
+                    SfxItemSet aSet(GetModel().GetItemPool());
                     aSet.Put(XFillColorItem(OUString(),COL_WHITE)); // in case someone turns on Solid
                     aSet.Put(XFillStyleItem(drawing::FillStyle_NONE));
                     aSet.Put(XLineColorItem(OUString(),COL_BLACK)); // in case someone turns on Solid
@@ -737,11 +734,11 @@ void SdrCreateView::ShowCreateObj(/*OutputDevice* pOut, sal_Bool bFull*/)
         // overlay objects instead.
         bool bUseSolidDragging(IsSolidDragging());
 
-        // #i101648# check if dragged object is a naked SdrObject (not
-        // a derivation). This is e.g. used in SW Frame construction
-        // as placeholder. Do not use SolidDragging for naked SdrObjects,
-        // they cannot have a valid optical representation
-        if(bUseSolidDragging && SdrObjKind::NONE == mpCurrentCreate->GetObjIdentifier())
+        // #i101648# check if dragged object is a SdrObjKind::NewFrame.
+        // This is e.g. used in SW Frame construction as placeholder.
+        // Do not use SolidDragging for SdrObjKind::NewFrame kind of objects,
+        // they cannot have a valid optical representation.
+        if (bUseSolidDragging && SdrObjKind::NewFrame == mpCurrentCreate->GetObjIdentifier())
         {
             bUseSolidDragging = false;
         }

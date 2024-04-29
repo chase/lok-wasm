@@ -47,7 +47,7 @@
 #include <bcaslot.hxx>
 
 #include <svl/numformat.hxx>
-#include <svl/poolcach.hxx>
+#include <poolcach.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/sharedstringpool.hxx>
 #include <editeng/fieldupdater.hxx>
@@ -82,15 +82,17 @@ ScNeededSizeOptions::ScNeededSizeOptions() :
 
 ScColumn::ScColumn(ScSheetLimits const & rSheetLimits) :
     maCellTextAttrs(rSheetLimits.GetMaxRowCount()),
-    maCellNotes(rSheetLimits.GetMaxRowCount()),
+    maCellNotes(sc::CellStoreEvent(this)),
     maBroadcasters(rSheetLimits.GetMaxRowCount()),
     maCells(sc::CellStoreEvent(this)),
     maSparklines(rSheetLimits.GetMaxRowCount()),
     mnBlkCountFormula(0),
+    mnBlkCountCellNotes(0),
     nCol( 0 ),
     nTab( 0 ),
     mbEmptyBroadcastersPending( false )
 {
+    maCellNotes.resize(rSheetLimits.GetMaxRowCount());
     maCells.resize(rSheetLimits.GetMaxRowCount());
 }
 
@@ -375,7 +377,7 @@ sal_uInt32 ScColumnData::GetNumberFormat( SCROW nStartRow, SCROW nEndRow ) const
     return nFormat;
 }
 
-void ScColumnData::ApplySelectionCache(SfxItemPoolCache* pCache, SCROW nStartRow, SCROW nEndRow,
+void ScColumnData::ApplySelectionCache(ScItemPoolCache* pCache, SCROW nStartRow, SCROW nEndRow,
                                        ScEditDataArray* pDataArray, bool* pIsChanged)
 {
     pAttrArray->ApplyCacheArea(nStartRow, nEndRow, pCache, pDataArray, pIsChanged);
@@ -410,23 +412,23 @@ void ScColumn::DeleteSelection( InsertDeleteFlags nDelFlag, const ScMarkData& rM
 void ScColumn::ApplyPattern( SCROW nRow, const ScPatternAttr& rPatAttr )
 {
     const SfxItemSet* pSet = &rPatAttr.GetItemSet();
-    SfxItemPoolCache aCache( GetDoc().GetPool(), pSet );
+    ScItemPoolCache aCache( GetDoc().GetPool(), pSet );
 
     const ScPatternAttr* pPattern = pAttrArray->GetPattern( nRow );
 
     //  true = keep old content
 
-    const ScPatternAttr* pNewPattern = static_cast<const ScPatternAttr*>( &aCache.ApplyTo( *pPattern ) );
+    const ScPatternAttr& rNewPattern = aCache.ApplyTo( *pPattern );
 
-    if (pNewPattern != pPattern)
-      pAttrArray->SetPattern( nRow, pNewPattern );
+    if (!SfxPoolItem::areSame(rNewPattern, *pPattern))
+      pAttrArray->SetPattern( nRow, &rNewPattern );
 }
 
 void ScColumnData::ApplyPatternArea( SCROW nStartRow, SCROW nEndRow, const ScPatternAttr& rPatAttr,
                                  ScEditDataArray* pDataArray, bool* const pIsChanged )
 {
     const SfxItemSet* pSet = &rPatAttr.GetItemSet();
-    SfxItemPoolCache aCache( GetDoc().GetPool(), pSet );
+    ScItemPoolCache aCache( GetDoc().GetPool(), pSet );
     pAttrArray->ApplyCacheArea( nStartRow, nEndRow, &aCache, pDataArray, pIsChanged );
 }
 
@@ -434,7 +436,7 @@ void ScColumn::ApplyPatternIfNumberformatIncompatible( const ScRange& rRange,
         const ScPatternAttr& rPattern, SvNumFormatType nNewType )
 {
     const SfxItemSet* pSet = &rPattern.GetItemSet();
-    SfxItemPoolCache aCache( GetDoc().GetPool(), pSet );
+    ScItemPoolCache aCache( GetDoc().GetPool(), pSet );
     SvNumberFormatter* pFormatter = GetDoc().GetFormatTable();
     SCROW nEndRow = rRange.aEnd.Row();
     for ( SCROW nRow = rRange.aStart.Row(); nRow <= nEndRow; nRow++ )
@@ -555,21 +557,19 @@ const ScStyleSheet* ScColumn::GetAreaStyle( bool& rFound, SCROW nRow1, SCROW nRo
 void ScColumn::ApplyAttr( SCROW nRow, const SfxPoolItem& rAttr )
 {
     //  in order to only create a new SetItem, we don't need SfxItemPoolCache.
-    //TODO: Warning: SfxItemPoolCache seems to create too many Refs for the new SetItem ??
+    //TODO: Warning: ScItemPoolCache seems to create too many Refs for the new SetItem ??
 
     ScDocumentPool* pDocPool = GetDoc().GetPool();
-
-    std::unique_lock aGuard(pDocPool->maPoolMutex);
 
     const ScPatternAttr* pOldPattern = pAttrArray->GetPattern( nRow );
     ScPatternAttr aTemp(*pOldPattern);
     aTemp.GetItemSet().Put(rAttr);
-    const ScPatternAttr* pNewPattern = &pDocPool->Put( aTemp );
+    const ScPatternAttr* pNewPattern = &pDocPool->DirectPutItemInPool( aTemp );
 
-    if ( pNewPattern != pOldPattern )
+    if (!SfxPoolItem::areSame( pNewPattern, pOldPattern ))
         pAttrArray->SetPattern( nRow, pNewPattern );
     else
-        pDocPool->Remove( *pNewPattern );       // free up resources
+        pDocPool->DirectRemoveItemFromPool( *pNewPattern );       // free up resources
 }
 
 ScRefCellValue ScColumn::GetCellValue( SCROW nRow ) const
@@ -882,14 +882,16 @@ public:
 void ScColumn::CopyToClip(
     sc::CopyToClipContext& rCxt, SCROW nRow1, SCROW nRow2, ScColumn& rColumn ) const
 {
-    pAttrArray->CopyArea( nRow1, nRow2, 0, *rColumn.pAttrArray,
-                          rCxt.isKeepScenarioFlags() ? (ScMF::All & ~ScMF::Scenario) : ScMF::All );
+    if (!rCxt.isCopyChartRanges()) // No need to copy attributes for chart ranges
+        pAttrArray->CopyArea( nRow1, nRow2, 0, *rColumn.pAttrArray,
+                              rCxt.isKeepScenarioFlags() ? (ScMF::All & ~ScMF::Scenario) : ScMF::All );
 
     {
         CopyToClipHandler aFunc(GetDoc(), *this, rColumn, rCxt.getBlockPosition(rColumn.nTab, rColumn.nCol));
         sc::ParseBlock(maCells.begin(), maCells, aFunc, nRow1, nRow2);
     }
 
+    if (!rCxt.isCopyChartRanges()) // No need to copy attributes for chart ranges
     {
         CopyTextAttrToClipHandler aFunc(rColumn.maCellTextAttrs);
         sc::ParseBlock(maCellTextAttrs.begin(), maCellTextAttrs, aFunc, nRow1, nRow2);
@@ -1745,13 +1747,13 @@ void resetColumnPosition(sc::CellStoreType& rCells, SCCOL nCol)
 
 class NoteCaptionUpdater
 {
-    const ScDocument* m_pDocument;
+    const ScDocument& m_rDocument;
     const ScAddress m_aAddress; // 'incomplete' address consisting of tab, column
     bool m_bUpdateCaptionPos;  // false if we want to skip updating the caption pos, only useful in kit mode
     bool m_bAddressChanged;  // false if the cell anchor address is unchanged
 public:
-    NoteCaptionUpdater(const ScDocument* pDocument, const ScAddress& rPos, bool bUpdateCaptionPos, bool bAddressChanged)
-        : m_pDocument(pDocument)
+    NoteCaptionUpdater(const ScDocument& rDocument, const ScAddress& rPos, bool bUpdateCaptionPos, bool bAddressChanged)
+        : m_rDocument(rDocument)
         , m_aAddress(rPos)
         , m_bUpdateCaptionPos(bUpdateCaptionPos)
         , m_bAddressChanged(bAddressChanged)
@@ -1769,7 +1771,7 @@ public:
 
         // Notify our LOK clients
         if (m_bAddressChanged)
-            ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Modify, m_pDocument, aAddr, p);
+            ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Modify, m_rDocument, aAddr, p);
     }
 };
 
@@ -1778,14 +1780,14 @@ public:
 void ScColumn::UpdateNoteCaptions( SCROW nRow1, SCROW nRow2, bool bAddressChanged )
 {
     ScAddress aAddr(nCol, 0, nTab);
-    NoteCaptionUpdater aFunc(&GetDoc(), aAddr, true, bAddressChanged);
+    NoteCaptionUpdater aFunc(GetDoc(), aAddr, true, bAddressChanged);
     sc::ProcessNote(maCellNotes.begin(), maCellNotes, nRow1, nRow2, aFunc);
 }
 
 void ScColumn::CommentNotifyAddressChange( SCROW nRow1, SCROW nRow2 )
 {
     ScAddress aAddr(nCol, 0, nTab);
-    NoteCaptionUpdater aFunc(&GetDoc(), aAddr, false, true);
+    NoteCaptionUpdater aFunc(GetDoc(), aAddr, false, true);
     sc::ProcessNote(maCellNotes.begin(), maCellNotes, nRow1, nRow2, aFunc);
 }
 
@@ -1836,7 +1838,9 @@ void ScColumn::SwapCol(ScColumn& rCol)
 
     // Swap all CellStoreEvent mdds event_func related.
     maCells.event_handler().swap(rCol.maCells.event_handler());
+    maCellNotes.event_handler().swap(rCol.maCellNotes.event_handler());
     std::swap( mnBlkCountFormula, rCol.mnBlkCountFormula);
+    std::swap(mnBlkCountCellNotes, rCol.mnBlkCountCellNotes);
 
     // notes update caption
     UpdateNoteCaptions(0, GetDoc().MaxRow());
@@ -2381,15 +2385,17 @@ bool ScColumn::UpdateReference( sc::RefUpdateContext& rCxt, ScDocument* pUndoDoc
 
     // Check the row positions at which the group must be split per relative
     // references.
-    UpdateRefGroupBoundChecker aBoundChecker(rCxt, aBounds);
-    std::for_each(maCells.begin(), maCells.end(), aBoundChecker);
+    {
+        UpdateRefGroupBoundChecker aBoundChecker(rCxt, aBounds);
+        std::for_each(maCells.begin(), maCells.end(), std::move(aBoundChecker));
+    }
 
     // If expand reference edges is on, splitting groups may happen anywhere
     // where a reference points to an adjacent row of the insertion.
     if (rCxt.mnRowDelta > 0 && rCxt.mrDoc.IsExpandRefs())
     {
         UpdateRefExpandGroupBoundChecker aExpandChecker(rCxt, aBounds);
-        std::for_each(maCells.begin(), maCells.end(), aExpandChecker);
+        std::for_each(maCells.begin(), maCells.end(), std::move(aExpandChecker));
     }
 
     // Do the actual splitting.

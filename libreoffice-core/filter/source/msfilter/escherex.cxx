@@ -109,8 +109,8 @@ EscherExContainer::EscherExContainer( SvStream& rSt, const sal_uInt16 nRecType, 
 }
 EscherExContainer::~EscherExContainer()
 {
-    sal_uInt32 nPos = rStrm.Tell();
-    sal_uInt32 nSize= nPos - nContPos;
+    sal_uInt64 nPos  = rStrm.Tell();
+    sal_uInt32 nSize = nPos - nContPos;
     if ( nSize )
     {
         rStrm.Seek( nContPos - 4 );
@@ -127,8 +127,8 @@ EscherExAtom::EscherExAtom( SvStream& rSt, const sal_uInt16 nRecType, const sal_
 }
 EscherExAtom::~EscherExAtom()
 {
-    sal_uInt32 nPos = rStrm.Tell();
-    sal_uInt32 nSize= nPos - nContPos;
+    sal_uInt64 nPos  = rStrm.Tell();
+    sal_uInt32 nSize = nPos - nContPos;
     if ( nSize )
     {
         rStrm.Seek( nContPos - 4 );
@@ -214,9 +214,8 @@ void EscherPropertyContainer::AddOpt(
     std::vector<sal_uInt8> aBuf;
     aBuf.reserve(rString.size() * 2 + 2);
 
-    for(size_t i(0); i < rString.size(); i++)
+    for(const sal_Unicode nUnicode: rString)
     {
-        const sal_Unicode nUnicode(rString[i]);
         aBuf.push_back(static_cast<sal_uInt8>(nUnicode));
         aBuf.push_back(static_cast<sal_uInt8>(nUnicode >> 8));
     }
@@ -599,7 +598,7 @@ void EscherPropertyContainer::CreateFillProperties(
     uno::Any aAny;
     AddOpt( ESCHER_Prop_WrapText, ESCHER_WrapNone );
     AddOpt( ESCHER_Prop_AnchorText, ESCHER_AnchorMiddle );
-    static const OUStringLiteral aPropName( u"FillStyle" );
+    static constexpr OUString aPropName( u"FillStyle"_ustr );
 
     if ( EscherPropertyValueHelper::GetPropertyValue(
             aAny, rXPropSet, aPropName ) )
@@ -2597,14 +2596,14 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
     if ( !(aGeoPropSet >>= aGeoPropSeq) )
         return;
 
-    static const OUStringLiteral sViewBox            ( u"ViewBox"  );
-    static const OUStringLiteral sTextRotateAngle    ( u"TextRotateAngle"  );
-    static const OUStringLiteral sExtrusion          ( u"Extrusion"  );
-    static const OUStringLiteral sEquations          ( u"Equations"  );
-    static const OUStringLiteral sPath               ( u"Path"  );
-    static const OUStringLiteral sTextPath           ( u"TextPath"  );
-    static const OUStringLiteral sHandles            ( u"Handles"  );
-    static const OUStringLiteral sAdjustmentValues   ( u"AdjustmentValues"  );
+    static constexpr OUStringLiteral sViewBox            ( u"ViewBox"  );
+    static constexpr OUStringLiteral sTextRotateAngle    ( u"TextRotateAngle"  );
+    static constexpr OUString sExtrusion          ( u"Extrusion"_ustr  );
+    static constexpr OUStringLiteral sEquations          ( u"Equations"  );
+    static constexpr OUStringLiteral sPath               ( u"Path"  );
+    static constexpr OUString sTextPath           ( u"TextPath"_ustr  );
+    static constexpr OUStringLiteral sHandles            ( u"Handles"  );
+    static constexpr OUStringLiteral sAdjustmentValues   ( u"AdjustmentValues"  );
 
     bool bAdjustmentValuesProp = false;
     uno::Any aAdjustmentValuesProp;
@@ -3453,7 +3452,7 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                         AddOpt(DFF_Prop_gtextAlign,gTextAlign);
                     }
                 }
-                if((nTextPathFlags & 0x4000) != 0)  // Is Font work
+                if((nTextPathFlags & 0x4000) != 0)  // Is Fontwork
                 {
                     OutlinerParaObject* pOutlinerParaObject(rSdrObjCustomShape.GetOutlinerParaObject());
                     if ( pOutlinerParaObject && pOutlinerParaObject->IsEffectivelyVertical() )
@@ -3789,12 +3788,8 @@ EscherPersistTable::~EscherPersistTable()
 
 bool EscherPersistTable::PtIsID( sal_uInt32 nID )
 {
-    for(auto const & pPtr : maPersistTable) {
-        if ( pPtr->mnID == nID ) {
-            return true;
-        }
-    }
-    return false;
+    return std::any_of(maPersistTable.begin(), maPersistTable.end(),
+        [&nID](const auto& rxEntry) { return rxEntry->mnID == nID; });
 }
 
 void EscherPersistTable::PtInsert( sal_uInt32 nID, sal_uInt32 nOfs )
@@ -4058,7 +4053,8 @@ void EscherGraphicProvider::WriteBlibStoreContainer( SvStream& rSt, SvStream* pM
 
     if ( pMergePicStreamBSE )
     {
-        sal_uInt32 nBlipSize, nOldPos = pMergePicStreamBSE->Tell();
+        sal_uInt32 nBlipSize;
+        sal_uInt64 nOldPos = pMergePicStreamBSE->Tell();
         const sal_uInt32 nBuf = 0x40000;    // 256KB buffer
         std::unique_ptr<sal_uInt8[]> pBuf(new sal_uInt8[ nBuf ]);
 
@@ -4345,7 +4341,7 @@ sal_uInt32 EscherGraphicProvider::GetBlibID( SvStream& rPicOutStrm, GraphicObjec
             }
             if ( nAtomSize )
             {
-                sal_uInt32  nPos = rPicOutStrm.Tell();
+                sal_uInt64  nPos = rPicOutStrm.Tell();
                 rPicOutStrm.Seek( nAtomSize - 4 );
                 rPicOutStrm.WriteUInt32( nPos - nAtomSize );
                 rPicOutStrm.Seek( nPos );
@@ -4925,7 +4921,8 @@ void EscherEx::Flush( SvStream* pPicStreamMergeBSE /* = NULL */ )
 
 void EscherEx::InsertAtCurrentPos( sal_uInt32 nBytes )
 {
-    sal_uInt32  nSize, nType, nSource, nBufSize, nToCopy, nCurPos = mpOutStrm->Tell();
+    sal_uInt32 nSize, nType, nSource, nBufSize, nToCopy;
+    sal_uInt64 nCurPos = mpOutStrm->Tell();
 
     // adjust persist table
     for(auto const & pPtr : maPersistTable) {
@@ -4940,7 +4937,7 @@ void EscherEx::InsertAtCurrentPos( sal_uInt32 nBytes )
     while ( mpOutStrm->Tell() < nCurPos )
     {
         mpOutStrm->ReadUInt32( nType ).ReadUInt32( nSize );
-        sal_uInt32 nEndOfRecord = mpOutStrm->Tell() + nSize;
+        sal_uInt64 nEndOfRecord = mpOutStrm->Tell() + nSize;
         bool bContainer = (nType & 0x0F) == 0x0F;
         /*  Expand the record, if the insertion position is inside, or if the
             position is at the end of a container (expands always), or at the
@@ -5017,7 +5014,7 @@ bool EscherEx::SeekToPersistOffset( sal_uInt32 nKey )
 
 void EscherEx::InsertAtPersistOffset( sal_uInt32 nKey, sal_uInt32 nValue )
 {
-    sal_uInt32  nOldPos = mpOutStrm->Tell();
+    sal_uInt64  nOldPos = mpOutStrm->Tell();
     bool        bRetValue = SeekToPersistOffset( nKey );
     if ( bRetValue )
     {
@@ -5084,8 +5081,8 @@ void EscherEx::OpenContainer( sal_uInt16 nEscherContainer, int nRecInstance )
 
 void EscherEx::CloseContainer()
 {
-    sal_uInt32 nSize, nPos = mpOutStrm->Tell();
-    nSize = ( nPos - mOffsets.back() ) - 4;
+    sal_uInt64 nPos = mpOutStrm->Tell();
+    sal_uInt32 nSize = ( nPos - mOffsets.back() ) - 4;
     mpOutStrm->Seek( mOffsets.back() );
     mpOutStrm->WriteUInt32( nSize );
 
@@ -5128,7 +5125,7 @@ void EscherEx::BeginAtom()
 
 void EscherEx::EndAtom( sal_uInt16 nRecType, int nRecVersion, int nRecInstance )
 {
-    sal_uInt32  nOldPos = mpOutStrm->Tell();
+    sal_uInt64  nOldPos = mpOutStrm->Tell();
     mpOutStrm->Seek( mnCountOfs );
     sal_uInt32 nSize = nOldPos - mnCountOfs;
     mpOutStrm->WriteUInt16( ( nRecInstance << 4 ) | ( nRecVersion & 0xf ) ).WriteUInt16( nRecType ).WriteUInt32( nSize - 8 );
@@ -5220,7 +5217,7 @@ void EscherEx::SetGroupSnapRect( sal_uInt32 nGroupLevel, const tools::Rectangle&
 {
     if ( nGroupLevel )
     {
-        sal_uInt32 nCurrentPos = mpOutStrm->Tell();
+        sal_uInt64 nCurrentPos = mpOutStrm->Tell();
         if ( DoSeek( ESCHER_Persist_Grouping_Snap | ( nGroupLevel - 1 ) ) )
         {
             mpOutStrm ->WriteInt32( rRect.Left() )  // Bounding box for the grouped shapes to which they will be attached
@@ -5236,7 +5233,7 @@ void EscherEx::SetGroupLogicRect( sal_uInt32 nGroupLevel, const tools::Rectangle
 {
     if ( nGroupLevel )
     {
-        sal_uInt32 nCurrentPos = mpOutStrm->Tell();
+        sal_uInt64 nCurrentPos = mpOutStrm->Tell();
         if ( DoSeek( ESCHER_Persist_Grouping_Logic | ( nGroupLevel - 1 ) ) )
         {
             mpOutStrm->WriteInt16( rRect.Top() ).WriteInt16( rRect.Left() ).WriteInt16( rRect.Right() ).WriteInt16( rRect.Bottom() );

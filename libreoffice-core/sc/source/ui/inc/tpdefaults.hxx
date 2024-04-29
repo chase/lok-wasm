@@ -18,6 +18,8 @@ public:
     static std::unique_ptr<SfxTabPage> Create(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rCoreSet);
     virtual ~ScTpDefaultsOptions() override;
 
+    virtual OUString GetAllStrings() override;
+
     virtual bool FillItemSet(SfxItemSet* rCoreSet) override;
     virtual void Reset(const SfxItemSet* rCoreSet) override;
     virtual DeactivateRC DeactivatePage(SfxItemSet* pSet) override;
@@ -36,8 +38,11 @@ private:
     OUString maOldPrefixValue;
 
     std::unique_ptr<weld::SpinButton> m_xEdNSheets;
+    std::unique_ptr<weld::Widget> m_xEdNSheetsImg;
     std::unique_ptr<weld::Entry> m_xEdSheetPrefix;
+    std::unique_ptr<weld::Widget> m_xEdSheetPrefixImg;
     std::unique_ptr<weld::CheckButton> m_xEdJumboSheets;
+    std::unique_ptr<weld::Widget> m_xEdJumboSheetsImg;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

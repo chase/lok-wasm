@@ -28,6 +28,7 @@
 
 #include <orcus/csv_parser.hpp>
 
+#include <atomic>
 #include <queue>
 
 namespace com::sun::star::ui { class XUIElement; }
@@ -66,21 +67,21 @@ public:
     static void begin_row() {}
     static void end_row() {}
 
-    void cell(const char* p, size_t n, bool /*transient*/)
+    void cell(std::string_view s, bool /*transient*/)
     {
         if (mnCols >= mnColCount)
             return;
 
         DataStream::Cell aCell;
-        if (ScStringUtil::parseSimpleNumber(p, n, '.', ',', aCell.mfValue))
+        if (ScStringUtil::parseSimpleNumber(s.data(), s.size(), '.', ',', aCell.mfValue))
         {
             aCell.mbValue = true;
         }
         else
         {
             aCell.mbValue = false;
-            aCell.maStr.Pos = std::distance(mpLineHead, p);
-            aCell.maStr.Size = n;
+            aCell.maStr.Pos = std::distance(mpLineHead, s.data());
+            aCell.maStr.Size = s.size();
         }
         mrLine.maCells.push_back(aCell);
 
@@ -96,12 +97,11 @@ class ReaderThread : public salhelper::Thread
 {
     std::unique_ptr<SvStream> mpStream;
     size_t mnColCount;
-    bool mbTerminate;
-    osl::Mutex maMtxTerminate;
+    std::atomic<bool> mbTerminate;
 
-    std::queue<std::unique_ptr<DataStream::LinesType>> maPendingLines;
-    std::queue<std::unique_ptr<DataStream::LinesType>> maUsedLines;
-    osl::Mutex maMtxLines;
+    std::queue<DataStream::LinesType> maPendingLines;
+    std::queue<DataStream::LinesType> maUsedLines;
+    std::mutex maMtxLines;
 
     osl::Condition maCondReadStream;
     osl::Condition maCondConsume;
@@ -122,14 +122,12 @@ public:
 
     bool isTerminateRequested()
     {
-        osl::MutexGuard aGuard(maMtxTerminate);
-        return mbTerminate;
+        return mbTerminate.load();
     }
 
     void requestTerminate()
     {
-        osl::MutexGuard aGuard(maMtxTerminate);
-        mbTerminate = true;
+        mbTerminate.store(true);
     }
 
     void endThread()
@@ -144,7 +142,7 @@ public:
         maCondConsume.reset();
     }
 
-    std::unique_ptr<DataStream::LinesType> popNewLines()
+    DataStream::LinesType popNewLines()
     {
         auto pLines = std::move(maPendingLines.front());
         maPendingLines.pop();
@@ -162,12 +160,12 @@ public:
         return !maPendingLines.empty();
     }
 
-    void pushUsedLines( std::unique_ptr<DataStream::LinesType> pLines )
+    void pushUsedLines( DataStream::LinesType pLines )
     {
         maUsedLines.push(std::move(pLines));
     }
 
-    osl::Mutex& getLinesMutex()
+    std::mutex& getLinesMutex()
     {
         return maMtxLines;
     }
@@ -177,42 +175,42 @@ private:
     {
         while (!isTerminateRequested())
         {
-            std::unique_ptr<DataStream::LinesType> pLines;
-            osl::ResettableMutexGuard aGuard(maMtxLines);
+            std::optional<DataStream::LinesType> oLines;
+            std::unique_lock aGuard(maMtxLines);
 
             if (!maUsedLines.empty())
             {
                 // Re-use lines from previous runs.
-                pLines = std::move(maUsedLines.front());
+                oLines = std::move(maUsedLines.front());
                 maUsedLines.pop();
-                aGuard.clear(); // unlock
+                aGuard.unlock(); // unlock
             }
             else
             {
-                aGuard.clear(); // unlock
-                pLines.reset(new DataStream::LinesType(10));
+                aGuard.unlock(); // unlock
+                oLines.emplace(10);
             }
 
             // Read & store new lines from stream.
-            for (DataStream::Line & rLine : *pLines)
+            for (DataStream::Line & rLine : *oLines)
             {
                 rLine.maCells.clear();
                 mpStream->ReadLine(rLine.maLine);
                 CSVHandler aHdl(rLine, mnColCount);
-                orcus::csv_parser<CSVHandler> parser(rLine.maLine.getStr(), rLine.maLine.getLength(), aHdl, maConfig);
+                orcus::csv_parser<CSVHandler> parser(rLine.maLine, aHdl, maConfig);
                 parser.parse();
             }
 
-            aGuard.reset(); // lock
+            aGuard.lock(); // lock
             while (!isTerminateRequested() && maPendingLines.size() >= 8)
             {
                 // pause reading for a bit
-                aGuard.clear(); // unlock
+                aGuard.unlock(); // unlock
                 maCondReadStream.wait();
                 maCondReadStream.reset();
-                aGuard.reset(); // lock
+                aGuard.lock(); // lock
             }
-            maPendingLines.push(std::move(pLines));
+            maPendingLines.push(std::move(*oLines));
             maCondConsume.set();
             if (!mpStream->good())
                 requestTerminate();
@@ -242,7 +240,7 @@ void DataStream::MakeToolbarVisible()
         return;
 
     css::uno::Reference< css::frame::XFrame > xFrame =
-        pViewData->GetViewShell()->GetViewFrame()->GetFrame().GetFrameInterface();
+        pViewData->GetViewShell()->GetViewFrame().GetFrame().GetFrameInterface();
     if (!xFrame.is())
         return;
 
@@ -255,7 +253,7 @@ void DataStream::MakeToolbarVisible()
     if (!xLayoutManager.is())
         return;
 
-    static const OUStringLiteral sResourceURL( u"private:resource/toolbar/datastreams" );
+    static constexpr OUString sResourceURL( u"private:resource/toolbar/datastreams"_ustr );
     css::uno::Reference< css::ui::XUIElement > xUIElement = xLayoutManager->getElement(sResourceURL);
     if (!xUIElement.is())
     {
@@ -266,16 +264,16 @@ void DataStream::MakeToolbarVisible()
 
 DataStream* DataStream::Set(
     ScDocShell *pShell, const OUString& rURL, const ScRange& rRange,
-    sal_Int32 nLimit, MoveType eMove, sal_uInt32 nSettings)
+    sal_Int32 nLimit, MoveType eMove)
 {
-    DataStream* pLink = new DataStream(pShell, rURL, rRange, nLimit, eMove, nSettings);
+    DataStream* pLink = new DataStream(pShell, rURL, rRange, nLimit, eMove);
     sc::DocumentLinkManager& rMgr = pShell->GetDocument().GetDocLinkManager();
     rMgr.setDataStream(pLink);
     return pLink;
 }
 
 DataStream::DataStream(ScDocShell *pShell, const OUString& rURL, const ScRange& rRange,
-        sal_Int32 nLimit, MoveType eMove, sal_uInt32 nSettings) :
+        sal_Int32 nLimit, MoveType eMove) :
     mpDocShell(pShell),
     maDocAccess(mpDocShell->GetDocument()),
     meOrigMove(NO_MOVE),
@@ -294,7 +292,7 @@ DataStream::DataStream(ScDocShell *pShell, const OUString& rURL, const ScRange& 
     maImportTimer.SetTimeout(0);
     maImportTimer.SetInvokeHandler( LINK(this, DataStream, ImportTimerHdl) );
 
-    Decode(rURL, rRange, nLimit, eMove, nSettings);
+    Decode(rURL, rRange, nLimit, eMove);
 }
 
 DataStream::~DataStream()
@@ -307,32 +305,35 @@ DataStream::~DataStream()
         mxReaderThread->endThread();
         mxReaderThread->join();
     }
-    mpLines.reset();
+    moLines.reset();
 }
 
 DataStream::Line DataStream::ConsumeLine()
 {
-    if (!mpLines || mnLinesCount >= mpLines->size())
+    if (!moLines || mnLinesCount >= moLines->size())
     {
         mnLinesCount = 0;
         if (mxReaderThread->isTerminateRequested())
             return Line();
 
-        osl::ResettableMutexGuard aGuard(mxReaderThread->getLinesMutex());
-        if (mpLines)
-            mxReaderThread->pushUsedLines(std::move(mpLines));
+        std::unique_lock aGuard(mxReaderThread->getLinesMutex());
+        if (moLines)
+        {
+            mxReaderThread->pushUsedLines(std::move(*moLines));
+            moLines.reset();
+        }
 
         while (!mxReaderThread->hasNewLines())
         {
-            aGuard.clear(); // unlock
+            aGuard.unlock(); // unlock
             mxReaderThread->waitForNewLines();
-            aGuard.reset(); // lock
+            aGuard.lock(); // lock
         }
 
-        mpLines = mxReaderThread->popNewLines();
+        moLines = mxReaderThread->popNewLines();
         mxReaderThread->resumeReadStream();
     }
-    return mpLines->at(mnLinesCount++);
+    return moLines->at(mnLinesCount++);
 }
 
 ScRange DataStream::GetRange() const
@@ -343,12 +344,11 @@ ScRange DataStream::GetRange() const
 }
 
 void DataStream::Decode(const OUString& rURL, const ScRange& rRange,
-        sal_Int32 nLimit, MoveType eMove, const sal_uInt32 nSettings)
+        sal_Int32 nLimit, MoveType eMove)
 {
     msURL = rURL;
     meMove = eMove;
     meOrigMove = eMove;
-    mnSettings = nSettings;
 
     mbValuesInLine = true; // always true.
 

@@ -24,8 +24,6 @@
 #include <config_features.h>
 
 #include "soffice.hxx"
-/* system headers */
-#include "system.hxx"
 
 #include "backtrace.h"
 
@@ -35,10 +33,7 @@
 #include <osl/signal.h>
 #include <sal/log.hxx>
 #include <sal/macros.h>
-#include <rtl/bootstrap.h>
-#include <rtl/digest.h>
 
-#include "file_path_helper.hxx"
 #define ACT_IGNORE  1
 #define ACT_EXIT    2
 #define ACT_SYSTEM  3
@@ -48,6 +43,9 @@
 #if defined HAVE_VALGRIND_HEADERS
 #include <valgrind/memcheck.h>
 #endif
+
+#include <signal.h>
+#include <unistd.h>
 
 namespace
 {

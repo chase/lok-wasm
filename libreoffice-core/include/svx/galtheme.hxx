@@ -22,7 +22,6 @@
 
 #include <svx/svxdllapi.h>
 #include <svx/galleryobjectcollection.hxx>
-#include <svx/gallerybinaryengine.hxx>
 
 #include <tools/debug.hxx>
 #include <tools/urlobj.hxx>
@@ -32,19 +31,21 @@
 #include <svx/galmisc.hxx>
 #include <memory>
 
-namespace weld { class ComboBox; }
-
-class SotStorageStream;
-
+class GalleryFileStorage;
 class GalleryThemeEntry;
 class SgaObject;
+class SotStorageStream;
 class FmFormModel;
 class Gallery;
-
 namespace unogallery
 {
-    class GalleryTheme;
     class GalleryItem;
+    class GalleryTheme;
+}
+namespace weld
+{
+    class ComboBox;
+    class Widget;
 }
 
 class SVXCORE_DLLPUBLIC GalleryTheme final : public SfxBroadcaster
@@ -56,7 +57,7 @@ class SVXCORE_DLLPUBLIC GalleryTheme final : public SfxBroadcaster
 
 private:
 
-    std::unique_ptr<GalleryBinaryEngine>     mpGalleryStorageEngine;
+    std::unique_ptr<GalleryFileStorage>     mpGalleryStorageEngine;
     GalleryObjectCollection     maGalleryObjectCollection;
     Gallery*                    pParent;
     GalleryThemeEntry*          pThm;
@@ -66,7 +67,7 @@ private:
     bool                        bDragging;
     bool                        bAbortActualize;
 
-    const std::unique_ptr<GalleryBinaryEngine>& getGalleryStorageEngine() const { return mpGalleryStorageEngine; }
+    const std::unique_ptr<GalleryFileStorage>& getGalleryStorageEngine() const { return mpGalleryStorageEngine; }
 
     SAL_DLLPRIVATE void         ImplSetModified( bool bModified );
     SAL_DLLPRIVATE void         ImplBroadcast(sal_uInt32 nUpdatePos);
@@ -152,7 +153,7 @@ public:
 
     DateTime getModificationDate() const;
 
-    const INetURLObject& getThemeURL() const { return mpGalleryStorageEngine->getThemeURL(); }
+    const INetURLObject& getThemeURL() const;
 
 public:
 

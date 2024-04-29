@@ -119,7 +119,7 @@ DECLARE_RTFEXPORT_TEST(test148518, "FORMDROPDOWN.rtf")
 
 DECLARE_RTFEXPORT_TEST(test150269, "hidden-linebreaks.rtf")
 {
-    uno::Reference<text::XTextRange> xRun = getRun(getParagraph(1), 1, u"\n\n\n");
+    uno::Reference<text::XTextRange> xRun = getRun(getParagraph(1), 1, u"\n\n\n"_ustr);
     CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xRun, "CharHidden"));
 }
 
@@ -243,7 +243,7 @@ DECLARE_RTFEXPORT_TEST(testAnchoredAtSamePosition, "anchor.fodt")
 
     CPPUNIT_ASSERT_EQUAL(OUString("foobar"), getParagraph(1)->getString());
 
-    SwFrameFormats& rFlys(*pDoc->GetSpzFrameFormats());
+    auto& rFlys = *pDoc->GetSpzFrameFormats();
     if (isExported())
     { // 2, not 3: the form control becomes a field on export...
         CPPUNIT_ASSERT_EQUAL(size_t(2), rFlys.size());
@@ -565,27 +565,14 @@ DECLARE_RTFEXPORT_TEST(testTdf116358, "tdf116358.rtf")
 
     // Entire table should go to page 2, no remains on first page
     xmlDocUniquePtr pDump = parseLayoutDump();
-    {
-        xmlXPathObjectPtr pXmlObj = getXPathNode(pDump, "/root/page[1]/body/tab");
-        xmlNodeSetPtr pXmlNodes = pXmlObj->nodesetval;
-        sal_Int32 tablesOnPage = xmlXPathNodeSetGetLength(pXmlNodes);
-        xmlXPathFreeObject(pXmlObj);
-        CPPUNIT_ASSERT_EQUAL(sal_Int32(0), tablesOnPage);
-    }
-
-    {
-        xmlXPathObjectPtr pXmlObj = getXPathNode(pDump, "/root/page[2]/body/tab");
-        xmlNodeSetPtr pXmlNodes = pXmlObj->nodesetval;
-        sal_Int32 tablesOnPage = xmlXPathNodeSetGetLength(pXmlNodes);
-        xmlXPathFreeObject(pXmlObj);
-        CPPUNIT_ASSERT_EQUAL(sal_Int32(1), tablesOnPage);
-    }
+    assertXPath(pDump, "/root/page[1]/body/tab"_ostr, 0);
+    assertXPath(pDump, "/root/page[2]/body/tab"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testGutterLeft)
 {
     createSwDoc("gutter-left.rtf");
-    reload(mpFilter, "gutter-left.rtf");
+    saveAndReload("Rich Text Format");
     uno::Reference<beans::XPropertySet> xPageStyle;
     getStyles("PageStyles")->getByName("Standard") >>= xPageStyle;
     sal_Int32 nGutterMargin{};
@@ -600,7 +587,7 @@ CPPUNIT_TEST_FIXTURE(Test, testGutterLeft)
 CPPUNIT_TEST_FIXTURE(Test, testGutterTop)
 {
     createSwDoc("gutter-top.rtf");
-    reload(mpFilter, "gutter-left.rtf");
+    saveAndReload("Rich Text Format");
     uno::Reference<lang::XMultiServiceFactory> xFactory(mxComponent, uno::UNO_QUERY);
     uno::Reference<beans::XPropertySet> xSettings(
         xFactory->createInstance("com.sun.star.document.Settings"), uno::UNO_QUERY);
@@ -638,7 +625,7 @@ CPPUNIT_TEST_FIXTURE(Test, testClearingBreak)
     createSwDoc("clearing-break.rtf");
     // Then make sure that the clear property of the break is not ignored:
     verify();
-    reload(mpFilter, "clearing-break.rtf");
+    saveAndReload("Rich Text Format");
     // Make sure that the clear property of the break is not ignored during export:
     verify();
 }
@@ -646,37 +633,37 @@ CPPUNIT_TEST_FIXTURE(Test, testClearingBreak)
 DECLARE_RTFEXPORT_TEST(testTdf95706, "tdf95706.rtf")
 {
     uno::Reference<text::XTextRange> xRun2
-        = getRun(getParagraph(2), 1, u"\u0104\u012e\u0100\u0106\u00c4");
+        = getRun(getParagraph(2), 1, u"\u0104\u012e\u0100\u0106\u00c4"_ustr);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun2, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun3
-        = getRun(getParagraph(3), 1, u"\u0154\u00c1\u00c2\u0102\u00c4");
+        = getRun(getParagraph(3), 1, u"\u0154\u00c1\u00c2\u0102\u00c4"_ustr);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun3, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun4
-        = getRun(getParagraph(4), 1, u"\u0410\u0411\u0412\u0413\u0414");
+        = getRun(getParagraph(4), 1, u"\u0410\u0411\u0412\u0413\u0414"_ustr);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun4, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun5
-        = getRun(getParagraph(5), 1, u"\u0390\u0391\u0392\u0393\u0394");
+        = getRun(getParagraph(5), 1, u"\u0390\u0391\u0392\u0393\u0394"_ustr);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun5, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun6
-        = getRun(getParagraph(6), 1, u"\u00c0\u00c1\u00c2\u00c3\u00c4");
+        = getRun(getParagraph(6), 1, u"\u00c0\u00c1\u00c2\u00c3\u00c4"_ustr);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun6, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun7
-        = getRun(getParagraph(7), 1, u"\u05b0\u05b1\u05b2\u05b3\u05b4");
+        = getRun(getParagraph(7), 1, u"\u05b0\u05b1\u05b2\u05b3\u05b4"_ustr);
     // Do not check font for Hebrew: it can be substituted by smth able to handle these chars
     //CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun7, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun8
-        = getRun(getParagraph(8), 1, u"\u06c1\u0621\u0622\u0623\u0624");
+        = getRun(getParagraph(8), 1, u"\u06c1\u0621\u0622\u0623\u0624"_ustr);
     // Do not check font for Arabic: it can be substituted by smth able to handle these chars
     //CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun8, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun9
-        = getRun(getParagraph(9), 1, u"\u00c0\u00c1\u00c2\u0102\u00c4");
+        = getRun(getParagraph(9), 1, u"\u00c0\u00c1\u00c2\u0102\u00c4"_ustr);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun9, "CharFontName"));
 
     // Ensure strange font remains strange. No reason to check content: in this case it can vary on locale
@@ -685,22 +672,22 @@ DECLARE_RTFEXPORT_TEST(testTdf95706, "tdf95706.rtf")
                          getProperty<OUString>(xRun10, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun12
-        = getRun(getParagraph(12), 1, u"\u0390\u0391\u0392\u0393\u0394");
+        = getRun(getParagraph(12), 1, u"\u0390\u0391\u0392\u0393\u0394"_ustr);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun12, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun13
-        = getRun(getParagraph(13), 1, u"\u0390\u0391\u0392\u0393\u0394");
+        = getRun(getParagraph(13), 1, u"\u0390\u0391\u0392\u0393\u0394"_ustr);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun13, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun14 = getRun(getParagraph(14), 1);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun14, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun15
-        = getRun(getParagraph(15), 1, u"\u0104\u012e\u0100\u0106\u00c4");
+        = getRun(getParagraph(15), 1, u"\u0104\u012e\u0100\u0106\u00c4"_ustr);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun15, "CharFontName"));
 
     uno::Reference<text::XTextRange> xRun16
-        = getRun(getParagraph(16), 1, u"\u0104\u012e\u0100\u0106\u00c4");
+        = getRun(getParagraph(16), 1, u"\u0104\u012e\u0100\u0106\u00c4"_ustr);
     CPPUNIT_ASSERT_EQUAL(OUString("Arial"), getProperty<OUString>(xRun16, "CharFontName"));
 }
 
@@ -792,33 +779,39 @@ DECLARE_RTFEXPORT_TEST(testTdf103956, "tdf103956.rtf")
     // table & cell widths are more than default minimal value of 41.
     CPPUNIT_ASSERT_MESSAGE(
         "Table #1 is too narrow!",
-        82 < parseDump("/root/page/body/tab[1]/row/infos/bounds", "width").toInt32());
+        82 < parseDump("/root/page/body/tab[1]/row/infos/bounds"_ostr, "width"_ostr).toInt32());
     CPPUNIT_ASSERT_MESSAGE(
         "Table #1 cell#1 is too narrow!",
-        41 < parseDump("/root/page/body/tab[1]/row/cell[1]/infos/bounds", "width").toInt32());
+        41 < parseDump("/root/page/body/tab[1]/row/cell[1]/infos/bounds"_ostr, "width"_ostr)
+                 .toInt32());
     CPPUNIT_ASSERT_MESSAGE(
         "Table #1 cell#2 is too narrow!",
-        41 < parseDump("/root/page/body/tab[1]/row/cell[2]/infos/bounds", "width").toInt32());
+        41 < parseDump("/root/page/body/tab[1]/row/cell[2]/infos/bounds"_ostr, "width"_ostr)
+                 .toInt32());
 
     CPPUNIT_ASSERT_MESSAGE(
         "Table #2 is too narrow!",
-        82 < parseDump("/root/page/body/tab[2]/row/infos/bounds", "width").toInt32());
+        82 < parseDump("/root/page/body/tab[2]/row/infos/bounds"_ostr, "width"_ostr).toInt32());
     CPPUNIT_ASSERT_MESSAGE(
         "Table #2 cell#1 is too narrow!",
-        41 < parseDump("/root/page/body/tab[2]/row/cell[1]/infos/bounds", "width").toInt32());
+        41 < parseDump("/root/page/body/tab[2]/row/cell[1]/infos/bounds"_ostr, "width"_ostr)
+                 .toInt32());
     CPPUNIT_ASSERT_MESSAGE(
         "Table #2 cell#2 is too narrow!",
-        41 < parseDump("/root/page/body/tab[2]/row/cell[2]/infos/bounds", "width").toInt32());
+        41 < parseDump("/root/page/body/tab[2]/row/cell[2]/infos/bounds"_ostr, "width"_ostr)
+                 .toInt32());
 
     CPPUNIT_ASSERT_MESSAGE(
         "Table #3 is too narrow!",
-        82 < parseDump("/root/page/body/tab[3]/row/infos/bounds", "width").toInt32());
+        82 < parseDump("/root/page/body/tab[3]/row/infos/bounds"_ostr, "width"_ostr).toInt32());
     CPPUNIT_ASSERT_MESSAGE(
         "Table #3 cell#1 is too narrow!",
-        41 < parseDump("/root/page/body/tab[3]/row/cell[1]/infos/bounds", "width").toInt32());
+        41 < parseDump("/root/page/body/tab[3]/row/cell[1]/infos/bounds"_ostr, "width"_ostr)
+                 .toInt32());
     CPPUNIT_ASSERT_MESSAGE(
         "Table #3 cell#2 is too narrow!",
-        41 < parseDump("/root/page/body/tab[3]/row/cell[2]/infos/bounds", "width").toInt32());
+        41 < parseDump("/root/page/body/tab[3]/row/cell[2]/infos/bounds"_ostr, "width"_ostr)
+                 .toInt32());
 }
 
 DECLARE_RTFEXPORT_TEST(testTdf148515, "tdf148515.rtf")

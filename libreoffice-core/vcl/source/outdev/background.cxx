@@ -57,19 +57,19 @@ void OutputDevice::SetBackground( const Wallpaper& rBackground )
     {
         BitmapEx bitmap = rBackground.GetBitmap();
         if( bitmap.IsAlpha())
-            mpAlphaVDev->SetBackground( Wallpaper( BitmapEx( Bitmap( bitmap.GetAlpha()))));
+            mpAlphaVDev->SetBackground( Wallpaper( BitmapEx( bitmap.GetAlphaMask().GetBitmap() ) ) );
         else
-            mpAlphaVDev->SetBackground( Wallpaper( COL_BLACK ));
+            mpAlphaVDev->SetBackground( Wallpaper( COL_ALPHA_OPAQUE ));
     }
     else if( rBackground.IsGradient())
     {
-        mpAlphaVDev->SetBackground( Wallpaper( COL_BLACK ));
+        mpAlphaVDev->SetBackground( Wallpaper( COL_ALPHA_OPAQUE ));
     }
     else
     {
         // Color background.
-        int transparency = 255 - rBackground.GetColor().GetAlpha();
-        mpAlphaVDev->SetBackground( Wallpaper( Color( transparency, transparency, transparency )));
+        int alpha = rBackground.GetColor().GetAlpha();
+        mpAlphaVDev->SetBackground( Wallpaper( Color( alpha, alpha, alpha )));
     }
 }
 

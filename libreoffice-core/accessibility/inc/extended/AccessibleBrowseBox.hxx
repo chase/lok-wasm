@@ -21,7 +21,6 @@
 #pragma once
 
 #include <extended/AccessibleBrowseBoxBase.hxx>
-#include <cppuhelper/implbase.hxx>
 #include <cppuhelper/weakref.hxx>
 #include <vcl/accessibletableprovider.hxx>
 #include <mutex>
@@ -143,7 +142,7 @@ protected:
     virtual tools::Rectangle implGetBoundingBox() override;
     /** @attention  This method requires locked mutex's and a living object.
         @return  The bounding box (VCL rect.) in screen coordinates. */
-    virtual tools::Rectangle implGetBoundingBoxOnScreen() override;
+    virtual AbsoluteScreenPixelRectangle implGetBoundingBoxOnScreen() override;
 
     // internal helper methods
 
@@ -192,9 +191,7 @@ private:
     The instance holds its XAccessibleContext with a hard reference, while
     the context holds this instance weak.
 */
-class AccessibleBrowseBoxAccess final :
-    public cppu::WeakImplHelper<css::accessibility::XAccessible>,
-    public ::vcl::IAccessibleBrowseBox
+class AccessibleBrowseBoxAccess final : public ::vcl::IAccessibleBrowseBox
 {
 private:
     std::mutex                          m_aMutex;
@@ -221,11 +218,6 @@ private:
         SAL_CALL getAccessibleContext() override;
 
     // IAccessibleBrowseBox
-    virtual css::uno::Reference< css::accessibility::XAccessible >
-        getMyself() override
-    {
-        return this;
-    }
     void dispose() override;
     virtual bool isAlive() const override
     {

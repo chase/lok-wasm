@@ -51,6 +51,7 @@
 #include <column.hxx>
 #include <poolhelp.hxx>
 #include <docpool.hxx>
+#include <docsh.hxx>
 #include <stlpool.hxx>
 #include <stlsheet.hxx>
 #include <docoptio.hxx>
@@ -133,7 +134,7 @@ SfxPrinter* ScDocument::GetPrinter(bool bCreateIfNotExist)
         mpPrinter = VclPtr<SfxPrinter>::Create( std::move(pSet) );
         mpPrinter->SetMapMode(MapMode(MapUnit::Map100thMM));
         UpdateDrawPrinter();
-        mpPrinter->SetDigitLanguage( SC_MOD()->GetOptDigitLanguage() );
+        mpPrinter->SetDigitLanguage( ScModule::GetOptDigitLanguage() );
     }
 
     return mpPrinter;
@@ -153,7 +154,7 @@ void ScDocument::SetPrinter( VclPtr<SfxPrinter> const & pNewPrinter )
         ScopedVclPtr<SfxPrinter> xKeepAlive( mpPrinter );
         mpPrinter = pNewPrinter;
         UpdateDrawPrinter();
-        mpPrinter->SetDigitLanguage( SC_MOD()->GetOptDigitLanguage() );
+        mpPrinter->SetDigitLanguage( ScModule::GetOptDigitLanguage() );
     }
     InvalidateTextWidth(nullptr, nullptr, false);     // in both cases
 }
@@ -186,7 +187,7 @@ VirtualDevice* ScDocument::GetVirtualDevice_100th_mm()
 #ifdef IOS
         mpVirtualDevice_100th_mm = VclPtr<VirtualDevice>::Create(DeviceFormat::GRAYSCALE);
 #else
-        mpVirtualDevice_100th_mm = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+        mpVirtualDevice_100th_mm = VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
 #endif
         mpVirtualDevice_100th_mm->SetReferenceDevice(VirtualDevice::RefDevMode::MSO1);
         MapMode aMapMode( mpVirtualDevice_100th_mm->GetMapMode() );
@@ -228,7 +229,7 @@ void ScDocument::ModifyStyleSheet( SfxStyleSheetBase& rStyleSheet,
                 if ( (nOldScale != nNewScale) || (nOldScaleToPages != nNewScaleToPages) )
                     InvalidateTextWidth( rStyleSheet.GetName() );
 
-                if( SvtCTLOptions().IsCTLFontEnabled() )
+                if( SvtCTLOptions::IsCTLFontEnabled() )
                 {
                     if( rChanges.GetItemState(ATTR_WRITINGDIR ) == SfxItemState::SET )
                         ScChartHelper::DoUpdateAllCharts( *this );
@@ -247,9 +248,9 @@ void ScDocument::ModifyStyleSheet( SfxStyleSheetBase& rStyleSheet,
                     if (maTabs[nTab])
                         maTabs[nTab]->SetStreamValid( false );
 
-                sal_uLong nOldFormat =
+                sal_uInt32 nOldFormat =
                     rSet.Get( ATTR_VALUE_FORMAT ).GetValue();
-                sal_uLong nNewFormat =
+                sal_uInt32 nNewFormat =
                     rChanges.Get( ATTR_VALUE_FORMAT ).GetValue();
                 LanguageType eNewLang, eOldLang;
                 eNewLang = eOldLang = LANGUAGE_DONTKNOW;
@@ -552,7 +553,7 @@ bool ScDocument::IdleCalcTextWidth()            // true = try next again
         aScope.incTab();
     }
 
-    if (!ValidTab(aScope.Tab()) || aScope.Tab() >= static_cast<SCTAB>(maTabs.size()) || !maTabs[aScope.Tab()])
+    if (!HasTable(aScope.Tab()))
         aScope.setTab(0);
 
     ScTable* pTab = maTabs[aScope.Tab()].get();
@@ -631,7 +632,7 @@ bool ScDocument::IdleCalcTextWidth()            // true = try next again
                 bNewTab = true;
             }
 
-            if (!ValidTab(aScope.Tab()) || aScope.Tab() >= static_cast<SCTAB>(maTabs.size()) || !maTabs[aScope.Tab()] )
+            if (!HasTable(aScope.Tab()))
             {
                 // Sheet doesn't exist at specified sheet position.  Restart at sheet 0.
                 aScope.setTab(0);
@@ -693,7 +694,7 @@ void ScDocument::RepaintRange( const ScRange& rRange )
 {
     if ( bIsVisible && mpShell )
     {
-        ScModelObj* pModel = comphelper::getFromUnoTunnel<ScModelObj>( mpShell->GetModel() );
+        ScModelObj* pModel = mpShell->GetModel();
         if ( pModel )
             pModel->RepaintRange( rRange );     // locked repaints are checked there
     }
@@ -703,7 +704,7 @@ void ScDocument::RepaintRange( const ScRangeList& rRange )
 {
     if ( bIsVisible && mpShell )
     {
-        ScModelObj* pModel = comphelper::getFromUnoTunnel<ScModelObj>( mpShell->GetModel() );
+        ScModelObj* pModel = mpShell->GetModel();
         if ( pModel )
             pModel->RepaintRange( rRange );     // locked repaints are checked there
     }
@@ -914,12 +915,10 @@ ScDdeLink* lclGetDdeLink(
     if( pLinkManager )
     {
         const ::sfx2::SvBaseLinks& rLinks = pLinkManager->GetLinks();
-        size_t nCount = rLinks.size();
         if( pnDdePos ) *pnDdePos = 0;
-        for( size_t nIndex = 0; nIndex < nCount; ++nIndex )
+        for( const auto& nLinks : rLinks )
         {
-            ::sfx2::SvBaseLink* pLink = rLinks[ nIndex ].get();
-            if( ScDdeLink* pDdeLink = dynamic_cast<ScDdeLink*>( pLink )  )
+            if( ScDdeLink* pDdeLink = dynamic_cast<ScDdeLink*>( nLinks.get() )  )
             {
                 if( (pDdeLink->GetAppl() == rAppl) &&
                     (pDdeLink->GetTopic() == rTopic) &&
@@ -940,13 +939,10 @@ ScDdeLink* lclGetDdeLink( const sfx2::LinkManager* pLinkManager, size_t nDdePos 
 {
     if( pLinkManager )
     {
-        const ::sfx2::SvBaseLinks& rLinks = pLinkManager->GetLinks();
-        size_t nCount = rLinks.size();
         size_t nDdeIndex = 0;       // counts only the DDE links
-        for( size_t nIndex = 0; nIndex < nCount; ++nIndex )
+        for( const auto& pLink : pLinkManager->GetLinks() )
         {
-            ::sfx2::SvBaseLink* pLink = rLinks[ nIndex ].get();
-            if( ScDdeLink* pDdeLink = dynamic_cast<ScDdeLink*>( pLink )  )
+            if( ScDdeLink* pDdeLink = dynamic_cast<ScDdeLink*>( pLink.get() )  )
             {
                 if( nDdeIndex == nDdePos )
                     return pDdeLink;

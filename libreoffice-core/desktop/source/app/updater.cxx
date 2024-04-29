@@ -28,15 +28,16 @@
 #include <rtl/ustring.hxx>
 #include <unotools/tempfile.hxx>
 #include <unotools/configmgr.hxx>
+#include <o3tl/char16_t2wchar_t.hxx>
 #include <osl/file.hxx>
 #include <rtl/process.h>
 #include <sal/log.hxx>
+#include <tools/stream.hxx>
 
 #include <curl/curl.h>
 
 #include <orcus/json_document_tree.hpp>
 #include <orcus/config.hpp>
-#include <orcus/pstring.hpp>
 
 #include <systools/curlinit.hxx>
 #include <comphelper/hash.hxx>
@@ -48,6 +49,7 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <string_view>
 
 namespace {
 
@@ -85,7 +87,12 @@ const char* pSofficeExeName = "soffice.exe";
 
 OUString normalizePath(const OUString& rPath)
 {
-    OUString aPath =  rPath.replaceAll("//", "/");
+    OUString aPath =  rPath;
+#if defined WNT
+    aPath = aPath.replace('\\', '/');
+#endif
+
+    aPath = aPath.replaceAll("//", "/");
 
     // remove final /
     if (aPath.endsWith("/"))
@@ -107,7 +114,10 @@ OUString normalizePath(const OUString& rPath)
         aPath = aTempPath.copy(0, i) + aPath.copy(nIndex + 3);
     }
 
-    return aPath.replaceAll("\\", "/");
+#if defined WNT
+    aPath = aPath.replace('/', '\\');
+#endif
+    return aPath;
 }
 
 void CopyFileToDir(const OUString& rTempDirURL, const OUString & rFileName, const OUString& rOldDir)
@@ -135,14 +145,17 @@ void CopyUpdaterToTempDir(const OUString& rInstallDirURL, const OUString& rTempD
 {
     OUString aUpdaterName = OUString::fromUtf8(pUpdaterName);
     CopyFileToDir(rTempDirURL, aUpdaterName, rInstallDirURL);
+    CopyFileToDir(rTempDirURL, u"updater.ini"_ustr, rInstallDirURL);
 }
 
 #ifdef UNX
 typedef char CharT;
 #define tstrncpy std::strncpy
+char const * toStream(char const * s) { return s; }
 #elif defined(_WIN32)
 typedef wchar_t CharT;
 #define tstrncpy std::wcsncpy
+OUString toStream(wchar_t const * s) { return OUString(o3tl::toU(s)); }
 #else
 #error "Need an implementation"
 #endif
@@ -162,17 +175,14 @@ void createStr(const OUString& rStr, CharT** pArgs, size_t i)
     pArgs[i] = pStr;
 }
 
-CharT** createCommandLine()
+CharT** createCommandLine(OUString const & argv0, int * argc)
 {
     OUString aInstallDir = Updater::getInstallationPath();
 
     size_t nCommandLineArgs = rtl_getAppCommandArgCount();
     size_t nArgs = 8 + nCommandLineArgs;
     CharT** pArgs = new CharT*[nArgs];
-    {
-        OUString aUpdaterName = OUString::fromUtf8(pUpdaterName);
-        createStr(aUpdaterName, pArgs, 0);
-    }
+    createStr(argv0, pArgs, 0);
     {
         // directory with the patch log
         OUString aPatchDir = Updater::getPatchDirURL();
@@ -228,6 +238,7 @@ CharT** createCommandLine()
 
     pArgs[nArgs - 1] = nullptr;
 
+    *argc = nArgs - 1;
     return pArgs;
 }
 
@@ -294,7 +305,8 @@ bool update()
     OUString aUpdaterPath = getPathFromURL(aTempDirURL + "/" + OUString::fromUtf8(pUpdaterName));
 
     Updater::log("Calling the updater with parameters: ");
-    CharT** pArgs = createCommandLine();
+    int argc;
+    CharT** pArgs = createCommandLine(aUpdaterPath, &argc);
 
     bool bSuccess = true;
     const char* pUpdaterTestReplace = std::getenv("LIBO_UPDATER_TEST_REPLACE");
@@ -308,7 +320,7 @@ bool update()
             bSuccess = false;
         }
 #elif defined(_WIN32)
-        bSuccess = WinLaunchChild((wchar_t*)aUpdaterPath.getStr(), 8, pArgs);
+        bSuccess = WinLaunchChild((wchar_t*)aUpdaterPath.getStr(), argc, pArgs);
 #endif
     }
     else
@@ -316,7 +328,7 @@ bool update()
         SAL_WARN("desktop.updater", "Updater executable path: " << aUpdaterPath);
         for (size_t i = 0; i < 8 + rtl_getAppCommandArgCount(); ++i)
         {
-            SAL_WARN("desktop.updater", pArgs[i]);
+            SAL_WARN("desktop.updater", toStream(pArgs[i]));
         }
         bSuccess = false;
     }
@@ -391,9 +403,9 @@ public:
     }
 };
 
-OUString toOUString(const std::string& rStr)
+OUString toOUString(const std::string_view& rStr)
 {
-    return OUString::fromUtf8(rStr.c_str());
+    return OUString::fromUtf8(rStr);
 }
 
 update_file parse_update_file(orcus::json::node& rNode)
@@ -422,12 +434,12 @@ update_file parse_update_file(orcus::json::node& rNode)
     }
 
     update_file aUpdateFile;
-    aUpdateFile.aURL = toOUString(aURLNode.string_value().str());
+    aUpdateFile.aURL = toOUString(aURLNode.string_value());
 
     if (aUpdateFile.aURL.isEmpty())
         throw invalid_update_info();
 
-    aUpdateFile.aHash = toOUString(aHashNode.string_value().str());
+    aUpdateFile.aHash = toOUString(aHashNode.string_value());
     aUpdateFile.nSize = static_cast<sal_uInt32>(aSizeNode.numeric_value());
     return aUpdateFile;
 }
@@ -454,7 +466,7 @@ update_info parse_response(const std::string& rResponse)
     {
         update_info aUpdateInfo;
         auto aMsgNode = aDocumentRoot.child("response");
-        aUpdateInfo.aMessage = toOUString(aMsgNode.string_value().str());
+        aUpdateInfo.aMessage = toOUString(aMsgNode.string_value());
         return aUpdateInfo;
     }
 
@@ -477,23 +489,23 @@ update_info parse_response(const std::string& rResponse)
     }
 
     orcus::json::node aLanguageNode = aDocumentRoot.child("languages");
-    if (aUpdateNode.type() != orcus::json::node_t::object)
+    if (aLanguageNode.type() != orcus::json::node_t::object)
     {
         throw invalid_update_info();
     }
 
     update_info aUpdateInfo;
-    aUpdateInfo.aFromBuildID = toOUString(aFromNode.string_value().str());
-    aUpdateInfo.aSeeAlsoURL = toOUString(aSeeAlsoNode.string_value().str());
+    aUpdateInfo.aFromBuildID = toOUString(aFromNode.string_value());
+    aUpdateInfo.aSeeAlsoURL = toOUString(aSeeAlsoNode.string_value());
 
     aUpdateInfo.aUpdateFile = parse_update_file(aUpdateNode);
 
-    std::vector<orcus::pstring> aLanguages = aLanguageNode.keys();
+    std::vector<std::string_view> aLanguages = aLanguageNode.keys();
     for (auto const& language : aLanguages)
     {
         language_file aLanguageFile;
         auto aLangEntry = aLanguageNode.child(language);
-        aLanguageFile.aLangCode = toOUString(language.str());
+        aLanguageFile.aLangCode = toOUString(language);
         aLanguageFile.aUpdateFile = parse_update_file(aLangEntry);
         aUpdateInfo.aLanguageFiles.push_back(aLanguageFile);
     }
@@ -663,8 +675,10 @@ void download_file(const OUString& rURL, size_t nFileSize, const OUString& rHash
         throw invalid_hash(rHash, aHash);
     }
 
-    OUString aPatchDirURL("${$BRAND_BASE_DIR/" LIBO_ETC_FOLDER "/" SAL_CONFIGFILE("bootstrap") ":UserInstallation}/patch/");
+    OUString aPatchDirURL("${$BRAND_BASE_DIR/" LIBO_ETC_FOLDER "/" SAL_CONFIGFILE("bootstrap") ":UserInstallation}/updates/");
     rtl::Bootstrap::expandMacros(aPatchDirURL);
+    osl::Directory::create(aPatchDirURL);
+    aPatchDirURL += "0/";
     osl::Directory::create(aPatchDirURL);
 
     OUString aDestFile = aPatchDirURL + aFileName;
@@ -751,6 +765,14 @@ void update_checker()
                         comphelper::ConfigurationChanges::create());
                 officecfg::Office::Update::Update::SeeAlso::set(aSeeAlsoURL, batch);
                 batch->commit();
+                OUString const statUrl = Updater::getPatchDirURL() + "update.status";
+                SvFileStream stat(statUrl, StreamMode::WRITE | StreamMode::TRUNC);
+                stat.WriteOString("pending-service");
+                stat.Flush();
+                if (auto const e = stat.GetError()) {
+                    Updater::log("Writing <" + statUrl + "> failed with " + e.toString());
+                }
+                stat.Close();
             }
         }
     }
@@ -783,7 +805,7 @@ void update_checker()
 
 OUString Updater::getUpdateInfoLog()
 {
-    OUString aUpdateInfoURL("${$BRAND_BASE_DIR/" LIBO_ETC_FOLDER "/" SAL_CONFIGFILE("bootstrap") ":UserInstallation}/patch/updating.log");
+    OUString aUpdateInfoURL("${$BRAND_BASE_DIR/" LIBO_ETC_FOLDER "/" SAL_CONFIGFILE("bootstrap") ":UserInstallation}/updates/updating.log");
     rtl::Bootstrap::expandMacros(aUpdateInfoURL);
 
     return aUpdateInfoURL;
@@ -791,7 +813,7 @@ OUString Updater::getUpdateInfoLog()
 
 OUString Updater::getPatchDirURL()
 {
-    OUString aPatchDirURL("${$BRAND_BASE_DIR/" LIBO_ETC_FOLDER "/" SAL_CONFIGFILE("bootstrap") ":UserInstallation}/patch/");
+    OUString aPatchDirURL("${$BRAND_BASE_DIR/" LIBO_ETC_FOLDER "/" SAL_CONFIGFILE("bootstrap") ":UserInstallation}/updates/0/");
     rtl::Bootstrap::expandMacros(aPatchDirURL);
 
     return aPatchDirURL;
@@ -842,7 +864,7 @@ void Updater::log(const char* pMessage)
     OUString aUpdateLog = getUpdateInfoLog();
     SvFileStream aLog(aUpdateLog, StreamMode::STD_READWRITE);
     aLog.Seek(aLog.Tell() + aLog.remainingSize()); // make sure we are at the end
-    aLog.WriteCharPtr(pMessage);
+    aLog.WriteOString(pMessage);
 }
 
 OUString Updater::getBuildID()

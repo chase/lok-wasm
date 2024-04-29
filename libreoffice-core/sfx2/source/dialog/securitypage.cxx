@@ -51,12 +51,11 @@ namespace
         SfxViewShell* pViewSh = SfxViewShell::Current();
         if (pViewSh)
         {
-            const SfxBoolItem* pItem;
-            SfxDispatcher* pDisp = pViewSh->GetDispatcher();
-            SfxItemState nState = pDisp->QueryState( _nSlot, pItem );
+            SfxPoolItemHolder aResult;
+            const SfxItemState nState(pViewSh->GetDispatcher()->QueryState(_nSlot, aResult));
             bRet = SfxItemState::DEFAULT <= nState;
             if (bRet)
-                _rValue = pItem->GetValue();
+                _rValue = static_cast<const SfxBoolItem*>(aResult.getItem())->GetValue();
         }
         return bRet;
     }
@@ -106,7 +105,7 @@ static bool lcl_GetPassword(
 }
 
 
-static bool lcl_IsPasswordCorrect( std::u16string_view rPassword )
+static bool lcl_IsPasswordCorrect(weld::Window *pParent, std::u16string_view rPassword)
 {
     SfxObjectShell* pCurDocShell = SfxObjectShell::Current();
     if (!pCurDocShell)
@@ -140,7 +139,7 @@ static bool lcl_IsPasswordCorrect( std::u16string_view rPassword )
 
     if ( !bRes )
     {
-        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pParent,
                                                       VclMessageType::Info, VclButtonsType::Ok,
                                                       SfxResId(RID_SVXSTR_INCORRECT_PASSWORD)));
         xInfoBox->run();
@@ -266,11 +265,12 @@ void SfxSecurityPage_Impl::Reset_Impl()
         SfxViewShell* pViewSh = SfxViewShell::Current();
         if (pViewSh)
         {
-            const SfxUInt16Item* pItem;
-            SfxDispatcher* pDisp = pViewSh->GetDispatcher();
-            if (SfxItemState::DEFAULT <= pDisp->QueryState( SID_HTML_MODE, pItem ))
+            SfxPoolItemHolder aResult;
+
+            if (SfxItemState::DEFAULT <= pViewSh->GetDispatcher()->QueryState(SID_HTML_MODE, aResult))
             {
-                sal_uInt16 nMode = pItem->GetValue();
+                const SfxUInt16Item* pItem(static_cast<const SfxUInt16Item*>(aResult.getItem()));
+                const sal_uInt16 nMode(pItem->GetValue());
                 bIsHTMLDoc = ( ( nMode & HTMLMODE_ON ) != 0 );
             }
         }
@@ -362,7 +362,7 @@ IMPL_LINK_NOARG(SfxSecurityPage_Impl, RecordChangesCBToggleHdl, weld::Toggleable
             bAlreadyDone = true;
 
         // ask for password and if dialog is canceled or no password provided return
-        if (lcl_IsPasswordCorrect( aPasswordText ))
+        if (lcl_IsPasswordCorrect(m_rMyTabPage.GetFrameWeld(), aPasswordText))
             m_bOrigPasswordIsConfirmed = true;
         else
             bAlreadyDone = true;
@@ -402,7 +402,7 @@ IMPL_LINK_NOARG(SfxSecurityPage_Impl, ChangeProtectionPBHdl, weld::Button&, void
         // provided password still needs to be checked?
         if (!bNewProtection && !m_bOrigPasswordIsConfirmed)
         {
-            if (lcl_IsPasswordCorrect( aPasswordText ))
+            if (lcl_IsPasswordCorrect(m_rMyTabPage.GetFrameWeld(), aPasswordText))
                 m_bOrigPasswordIsConfirmed = true;
             else
                 return;

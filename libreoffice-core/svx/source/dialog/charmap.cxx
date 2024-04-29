@@ -20,6 +20,7 @@
 #include <config_wasm_strip.h>
 
 #include <utility>
+#include <vcl/commandevent.hxx>
 #include <vcl/event.hxx>
 #include <vcl/fontcharmap.hxx>
 #include <vcl/svapp.hxx>
@@ -43,6 +44,7 @@
 #include <com/sun/star/datatransfer/clipboard/SystemClipboard.hpp>
 #include <officecfg/Office/Common.hxx>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/sequence.hxx>
 #include <unicode/uchar.h>
 #include <vcl/textview.hxx>
 #include <rtl/ustrbuf.hxx>
@@ -68,7 +70,6 @@ SvxShowCharSet::SvxShowCharSet(std::unique_ptr<weld::ScrolledWindow> pScrolledWi
     , nX(0)
     , nY(0)
     , maFontSize(0, 0)
-    , maPosition(0,0)
     , mbRecalculateFont(true)
     , mbUpdateForeground(true)
     , mbUpdateBackground(true)
@@ -136,19 +137,11 @@ bool SvxShowCharSet::MouseButtonDown(const MouseEvent& rMEvt)
 
         if ( !(rMEvt.GetClicks() % 2) )
             aDoubleClkHdl.Call( this );
+
+        return true;
     }
 
-    if (rMEvt.IsRight())
-    {
-        Point aPosition (rMEvt.GetPosPixel());
-        maPosition = aPosition;
-        int nIndex = PixelToMapIndex( rMEvt.GetPosPixel() );
-        // Fire the focus event
-        SelectIndex( nIndex, true);
-        createContextMenu();
-    }
-
-    return true;
+    return CustomWidgetController::MouseButtonDown(rMEvt);
 }
 
 bool SvxShowCharSet::MouseButtonUp(const MouseEvent& rMEvt)
@@ -189,6 +182,35 @@ bool SvxShowCharSet::MouseMove(const MouseEvent& rMEvt)
     return true;
 }
 
+bool SvxShowCharSet::Command(const CommandEvent& rCEvt)
+{
+    if (rCEvt.GetCommand() == CommandEventId::ContextMenu)
+    {
+        Point aPosition;
+        if (rCEvt.IsMouseEvent())
+        {
+            aPosition = rCEvt.GetMousePosPixel();
+            int nIndex = PixelToMapIndex(aPosition);
+            // Fire the focus event
+            SelectIndex(nIndex, true);
+        }
+        else
+        {
+            svx::SvxShowCharSetItem* pItem = ImplGetItem(nSelectedIndex);
+            if (!pItem)
+                return true;
+
+            // position context menu at centre of currently selected item
+            aPosition = MapIndexToPixel(nSelectedIndex);
+            aPosition.AdjustX(pItem->maRect.GetWidth() / 2);
+            aPosition.AdjustY(pItem->maRect.GetHeight() / 2);
+        }
+        createContextMenu(aPosition);
+        return true;
+    }
+    return weld::CustomWidgetController::Command(rCEvt);
+}
+
 sal_uInt16 SvxShowCharSet::GetRowPos(sal_uInt16 _nPos)
 {
     return _nPos / COLUMN_COUNT ;
@@ -207,21 +229,18 @@ void SvxShowCharSet::getFavCharacterList()
     comphelper::sequenceToContainer(maFavCharFontList, rFavCharFontList);
 }
 
-bool SvxShowCharSet::isFavChar(const OUString& sTitle, const OUString& rFont)
+bool SvxShowCharSet::isFavChar(std::u16string_view sTitle, std::u16string_view rFont)
 {
-    auto isFavCharTitleExists = std::any_of(maFavCharList.begin(),
-         maFavCharList.end(),
-         [sTitle] (const OUString & a) { return a == sTitle; });
-
-    auto isFavCharFontExists = std::any_of(maFavCharFontList.begin(),
-         maFavCharFontList.end(),
-         [rFont] (const OUString & a) { return a == rFont; });
-
-    // if Fav char to be added is already in list, return true
-    return isFavCharTitleExists && isFavCharFontExists;
+    assert(maFavCharList.size() == maFavCharFontList.size());
+    for (size_t i = 0; i < maFavCharList.size(); i++)
+    {
+        if (maFavCharList[i] == sTitle && maFavCharFontList[i] == rFont)
+            return true;
+    }
+    return false;
 }
 
-void SvxShowCharSet::createContextMenu()
+void SvxShowCharSet::createContextMenu(const Point& rPosition)
 {
     std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetDrawingArea(), "svx/ui/charsetmenu.ui"));
     std::unique_ptr<weld::Menu> xItemMenu(xBuilder->weld_menu("charsetmenu"));
@@ -233,24 +252,24 @@ void SvxShowCharSet::createContextMenu()
     else
         xItemMenu->set_visible("remove", false);
 
-    ContextMenuSelect(xItemMenu->popup_at_rect(GetDrawingArea(), tools::Rectangle(maPosition, Size(1,1))));
+    ContextMenuSelect(xItemMenu->popup_at_rect(GetDrawingArea(), tools::Rectangle(rPosition, Size(1,1))));
     GrabFocus();
     Invalidate();
 }
 
-void SvxShowCharSet::ContextMenuSelect(std::string_view rIdent)
+void SvxShowCharSet::ContextMenuSelect(std::u16string_view rIdent)
 {
     sal_UCS4 cChar = GetSelectCharacter();
     OUString aOUStr(&cChar, 1);
 
-    if (rIdent == "insert")
+    if (rIdent == u"insert")
         aDoubleClkHdl.Call(this);
-    else if (rIdent == "add" || rIdent == "remove")
+    else if (rIdent == u"add" || rIdent == u"remove")
     {
         updateFavCharacterList(aOUStr, mxVirDev->GetFont().GetFamilyName());
         aFavClickHdl.Call(this);
     }
-    else if (rIdent == "copy")
+    else if (rIdent == u"copy")
         CopyToClipboard(aOUStr);
 }
 
@@ -279,54 +298,32 @@ void SvxShowCharSet::CopyToClipboard(const OUString& rOUStr)
 
 void SvxShowCharSet::updateFavCharacterList(const OUString& sTitle, const OUString& rFont)
 {
-    if(isFavChar(sTitle, rFont))
+    if (isFavChar(sTitle, rFont))
     {
-        auto itChar = std::find(maFavCharList.begin(), maFavCharList.end(), sTitle);
-        auto itChar2 = std::find(maFavCharFontList.begin(), maFavCharFontList.end(), rFont);
-
-        // if Fav char to be added is already in list, remove it
-        if( itChar != maFavCharList.end() &&  itChar2 != maFavCharFontList.end() )
+        assert(maFavCharList.size() == maFavCharFontList.size());
+        auto fontIt = maFavCharFontList.begin();
+        for (auto charIt = maFavCharList.begin(); charIt != maFavCharList.end(); charIt++)
         {
-            maFavCharList.erase( itChar );
-            maFavCharFontList.erase( itChar2);
+            if (*charIt == sTitle && *fontIt == rFont)
+            {
+                maFavCharList.erase(charIt);
+                maFavCharFontList.erase(fontIt);
+                break;
+            }
+            fontIt++;
+        }
+    }
+    else
+    {
+        if (maFavCharList.size() == 16)
+        {
+            maFavCharList.pop_back();
+            maFavCharFontList.pop_back();
         }
 
-        css::uno::Sequence< OUString > aFavCharList(maFavCharList.size());
-        auto aFavCharListRange = asNonConstRange(aFavCharList);
-        css::uno::Sequence< OUString > aFavCharFontList(maFavCharFontList.size());
-        auto aFavCharFontListRange = asNonConstRange(aFavCharFontList);
-
-        for (size_t i = 0; i < maFavCharList.size(); ++i)
-        {
-            aFavCharListRange[i] = maFavCharList[i];
-            aFavCharFontListRange[i] = maFavCharFontList[i];
-        }
-
-        std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create());
-        officecfg::Office::Common::FavoriteCharacters::FavoriteCharacterList::set(aFavCharList, batch);
-        officecfg::Office::Common::FavoriteCharacters::FavoriteCharacterFontList::set(aFavCharFontList, batch);
-        batch->commit();
-        return;
+        maFavCharList.push_back(sTitle);
+        maFavCharFontList.push_back(rFont);
     }
-
-    auto itChar = std::find(maFavCharList.begin(), maFavCharList.end(), sTitle);
-    auto itChar2 = std::find(maFavCharFontList.begin(), maFavCharFontList.end(), rFont);
-
-    // if Fav char to be added is already in list, remove it
-    if( itChar != maFavCharList.end() &&  itChar2 != maFavCharFontList.end() )
-    {
-        maFavCharList.erase( itChar );
-        maFavCharFontList.erase( itChar2);
-    }
-
-    if (maFavCharList.size() == 16)
-    {
-        maFavCharList.pop_back();
-        maFavCharFontList.pop_back();
-    }
-
-    maFavCharList.push_back(sTitle);
-    maFavCharFontList.push_back(rFont);
 
     css::uno::Sequence< OUString > aFavCharList(maFavCharList.size());
     auto aFavCharListRange = asNonConstRange(aFavCharList);
@@ -397,9 +394,12 @@ bool SvxShowCharSet::KeyInput(const KeyEvent& rKEvt)
 
     switch (aCode.GetCode())
     {
+        case KEY_RETURN:
+            m_aReturnKeypressHdl.Call(this);
+            return true;
         case KEY_SPACE:
-            aSelectHdl.Call( this );
-            break;
+            aDoubleClkHdl.Call(this);
+            return true;
         case KEY_LEFT:
             --tmpSelected;
             break;
@@ -426,7 +426,6 @@ bool SvxShowCharSet::KeyInput(const KeyEvent& rKEvt)
             break;
         case KEY_TAB:   // some fonts have a character at these unicode control codes
         case KEY_ESCAPE:
-        case KEY_RETURN:
             tmpSelected = - 1;  // mark as invalid
             bRet = false;
             break;
@@ -535,12 +534,17 @@ void SvxShowCharSet::DrawChars_Impl(vcl::RenderContext& rRenderContext, int n1, 
     tools::Rectangle aBoundRect;
     for (i = n1; i <= n2; ++i)
     {
+        sal_UCS4 charValue = GetCharFromIndex(i);
+
+        if (charValue == 0)
+            continue;
+
+        OUString aCharStr(&charValue, 1);
+
         Point pix = MapIndexToPixel(i);
         int x = pix.X();
         int y = pix.Y();
 
-        sal_UCS4 nChar = mxFontCharMap->GetCharFromIndex(i);
-        OUString aCharStr(&nChar, 1);
         int nTextWidth = rRenderContext.GetTextWidth(aCharStr);
         int tx = x + (nX - nTextWidth + 1) / 2;
         int ty = y + (nY - nTextHeight + 1) / 2;
@@ -581,9 +585,9 @@ void SvxShowCharSet::DrawChars_Impl(vcl::RenderContext& rRenderContext, int n1, 
             rRenderContext.SetLineColor(aHighlightColor);
             rRenderContext.SetFillColor(COL_TRANSPARENT);
             // Outer border
-            rRenderContext.DrawRect(tools::Rectangle(Point(x - 1, y - 1), Size(nX + 3, nY + 3)));
+            rRenderContext.DrawRect(tools::Rectangle(Point(x - 1, y - 1), Size(nX + 3, nY + 3)), 1, 1);
             // Inner border
-            rRenderContext.DrawRect(tools::Rectangle(Point(x, y), Size(nX + 1, nY + 1)));
+            rRenderContext.DrawRect(tools::Rectangle(Point(x, y), Size(nX + 1, nY + 1)), 1, 1);
             rRenderContext.SetLineColor(aLineCol);
         }
 
@@ -627,6 +631,17 @@ void SvxShowCharSet::DrawChars_Impl(vcl::RenderContext& rRenderContext, int n1, 
         }
         rRenderContext.SetTextColor(aTextCol);
     }
+
+    // tdf#141319 - mark empty/unused cells
+    if (n2 - n1 < ROW_COUNT * COLUMN_COUNT)
+    {
+        rRenderContext.SetFillColor(rStyleSettings.GetDisableColor());
+        for (i = n2 - n1 + 1; i < ROW_COUNT * COLUMN_COUNT; i++)
+        {
+            rRenderContext.DrawRect(
+                tools::Rectangle(MapIndexToPixel(i + n1), Size(nX + 2, nY + 2)));
+        }
+    }
 }
 
 
@@ -662,6 +677,10 @@ sal_UCS4 SvxShowCharSet::GetSelectCharacter() const
     return getSelectedChar();
 }
 
+sal_UCS4 SvxShowCharSet::GetCharFromIndex(int index) const
+{
+    return mxFontCharMap->GetCharFromIndex(index);
+}
 
 void SvxShowCharSet::RecalculateFont(vcl::RenderContext& rRenderContext)
 {
@@ -683,6 +702,7 @@ void SvxShowCharSet::RecalculateFont(vcl::RenderContext& rRenderContext)
     aFont.SetTransparent(true);
     rRenderContext.SetFont(aFont);
     rRenderContext.GetFontCharMap(mxFontCharMap);
+    m_aItems.clear();
     getFavCharacterList();
 
     nX = aSize.Width() / COLUMN_COUNT;
@@ -757,11 +777,14 @@ void SvxShowCharSet::SelectIndex(int nNewIndex, bool bFocus)
         if( m_xAccessible.is() )
         {
             svx::SvxShowCharSetItem* pItem = ImplGetItem(nSelectedIndex);
+            rtl::Reference<svx::SvxShowCharSetItemAcc> xItemAcc = pItem->GetAccessible();
             // Don't fire the focus event.
             if ( bFocus )
-                m_xAccessible->fireEvent( AccessibleEventId::ACTIVE_DESCENDANT_CHANGED, Any(), Any(pItem->GetAccessible()) ); // this call assures that m_pItem is set
+                m_xAccessible->fireEvent( AccessibleEventId::ACTIVE_DESCENDANT_CHANGED, Any(),
+                                Any(uno::Reference<XAccessible>(xItemAcc)) ); // this call assures that m_pItem is set
             else
-                m_xAccessible->fireEvent( AccessibleEventId::ACTIVE_DESCENDANT_CHANGED_NOFOCUS, Any(), Any(pItem->GetAccessible()) ); // this call assures that m_pItem is set
+                m_xAccessible->fireEvent( AccessibleEventId::ACTIVE_DESCENDANT_CHANGED_NOFOCUS, Any(),
+                                Any(uno::Reference<XAccessible>(xItemAcc)) ); // this call assures that m_pItem is set
 
             assert(pItem->m_xItem.is() && "No accessible created!");
             Any aOldAny, aNewAny;
@@ -773,6 +796,7 @@ void SvxShowCharSet::SelectIndex(int nNewIndex, bool bFocus)
             aNewAny <<= AccessibleStateType::SELECTED;
             pItem->m_xItem->fireEvent( AccessibleEventId::STATE_CHANGED, aOldAny, aNewAny );
         }
+        aSelectHdl.Call(this);
 #endif
     }
     aHighHdl.Call( this );
@@ -815,7 +839,7 @@ IMPL_LINK_NOARG(SvxShowCharSet, VscrollHdl, weld::ScrolledWindow&, void)
             int nLast = LastInView();
             for ( ; nLast != nSelectedIndex; ++nLast)
             {
-                aOldAny <<= ImplGetItem(nLast)->GetAccessible();
+                aOldAny <<= uno::Reference<XAccessible>(ImplGetItem(nLast)->GetAccessible());
                 m_xAccessible ->fireEvent( AccessibleEventId::CHILD, aOldAny, aNewAny );
             }
         }
@@ -1542,8 +1566,6 @@ void SubsetMap::InitList()
                 case UBLOCK_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_D:
                     aAllSubsets.emplace_back( 0x2B740, 0x2B81F, SvxResId(RID_SUBSETSTR_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_D) );
                     break;
-// Note ICU version 49 (NOT 4.9), so the MAJOR_NUM is two digits.
-#if U_ICU_VERSION_MAJOR_NUM >= 49
                 case UBLOCK_ARABIC_EXTENDED_A:
                     aAllSubsets.emplace_back( 0x08A0, 0x08FF, SvxResId(RID_SUBSETSTR_ARABIC_EXTENDED_A) );
                     break;
@@ -1577,8 +1599,6 @@ void SubsetMap::InitList()
                 case UBLOCK_TAKRI:
                     aAllSubsets.emplace_back( 0x11680, 0x116CF, SvxResId(RID_SUBSETSTR_TAKRI) );
                     break;
-#endif
-#if U_ICU_VERSION_MAJOR_NUM >= 54
                 case UBLOCK_BASSA_VAH:
                     aAllSubsets.emplace_back( 0x16AD0, 0x16AFF, SvxResId(RID_SUBSETSTR_BASSA_VAH) );
                     break;
@@ -1675,8 +1695,6 @@ void SubsetMap::InitList()
                 case UBLOCK_WARANG_CITI:
                     aAllSubsets.emplace_back( 0x118A0, 0x118FF, SvxResId(RID_SUBSETSTR_WARANG_CITI) );
                     break;
-#endif
-#if U_ICU_VERSION_MAJOR_NUM >= 56
                 case UBLOCK_AHOM:
                     aAllSubsets.emplace_back( 0x11700, 0x1173F, SvxResId(RID_SUBSETSTR_AHOM) );
                     break;
@@ -1707,8 +1725,6 @@ void SubsetMap::InitList()
                 case UBLOCK_SUTTON_SIGNWRITING:
                     aAllSubsets.emplace_back( 0x1D800, 0x1DAAF, SvxResId(RID_SUBSETSTR_SUTTON_SIGNWRITING) );
                     break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 58)
                 case UBLOCK_ADLAM:
                     aAllSubsets.emplace_back( 0x1E900, 0x1E95F, SvxResId(RID_SUBSETSTR_ADLAM) );
                     break;
@@ -1742,8 +1758,6 @@ void SubsetMap::InitList()
                 case UBLOCK_TANGUT_COMPONENTS:
                     aAllSubsets.emplace_back( 0x18800, 0x18AFF, SvxResId(RID_SUBSETSTR_TANGUT_COMPONENTS) );
                     break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 60)
                 case UBLOCK_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_F:
                     aAllSubsets.emplace_back( 0x2CEB0, 0x2EBE0, SvxResId(RID_SUBSETSTR_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_F) );
                     break;
@@ -1765,8 +1779,6 @@ void SubsetMap::InitList()
                 case UBLOCK_ZANABAZAR_SQUARE:
                     aAllSubsets.emplace_back( 0x11A00, 0x11A4F, SvxResId(RID_SUBSETSTR_ZANABAZAR_SQUARE) );
                     break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 62)
                 case UBLOCK_CHESS_SYMBOLS:
                     aAllSubsets.emplace_back( 0x1FA00, 0x1FA6F, SvxResId(RID_SUBSETSTR_CHESS_SYMBOLS) );
                     break;
@@ -1800,8 +1812,6 @@ void SubsetMap::InitList()
                 case UBLOCK_SOGDIAN:
                     aAllSubsets.emplace_back( 0x10F30, 0x10F6F, SvxResId(RID_SUBSETSTR_SOGDIAN) );
                     break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 64)
                 case UBLOCK_EGYPTIAN_HIEROGLYPH_FORMAT_CONTROLS:
                     aAllSubsets.emplace_back( 0x13430, 0x1343F, SvxResId(RID_SUBSETSTR_EGYPTIAN_HIEROGLYPH_FORMAT_CONTROLS) );
                     break;
@@ -1829,8 +1839,6 @@ void SubsetMap::InitList()
                 case UBLOCK_WANCHO:
                     aAllSubsets.emplace_back( 0x1E2C0, 0x1E2FF, SvxResId(RID_SUBSETSTR_WANCHO) );
                     break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 66)
                 case UBLOCK_CHORASMIAN:
                     aAllSubsets.emplace_back( 0x10FB0, 0x10FDF, SvxResId(RID_SUBSETSTR_CHORASMIAN) );
                     break;
@@ -1855,7 +1863,6 @@ void SubsetMap::InitList()
                 case UBLOCK_YEZIDI:
                     aAllSubsets.emplace_back( 0x10E80, 0x10EBF, SvxResId(RID_SUBSETSTR_YEZIDI) );
                     break;
-#endif
 #if (U_ICU_VERSION_MAJOR_NUM >= 70)
                 case UBLOCK_ARABIC_EXTENDED_B:
                     aAllSubsets.emplace_back( 0x0870, 0x089F, SvxResId(RID_SUBSETSTR_ARABIC_EXTENDED_B) );
@@ -1948,14 +1955,13 @@ void SubsetMap::ApplyCharMap( const FontCharMapRef& rxFontCharMap )
         return;
 
     // remove subsets that are not matched in any range
-    maSubsets.erase(std::remove_if(maSubsets.begin(), maSubsets.end(),
+    std::erase_if(maSubsets,
         [&rxFontCharMap](const Subset& rSubset) {
             sal_uInt32 cMin = rSubset.GetRangeMin();
             sal_uInt32 cMax = rSubset.GetRangeMax();
             int nCount = rxFontCharMap->CountCharsInRange( cMin, cMax );
             return nCount <= 0;
-        }),
-        maSubsets.end());
+        });
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

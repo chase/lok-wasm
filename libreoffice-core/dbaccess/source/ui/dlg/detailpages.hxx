@@ -57,7 +57,7 @@ namespace dbaui
     public:
         virtual bool        FillItemSet (SfxItemSet* _rCoreAttrs) override;
 
-        OCommonBehaviourTabPage(weld::Container* pPage, weld::DialogController* pController, const OUString& rUIXMLDescription, const OString& rId, const SfxItemSet& _rCoreAttrs, OCommonBehaviourTabPageFlags nControlFlags);
+        OCommonBehaviourTabPage(weld::Container* pPage, weld::DialogController* pController, const OUString& rUIXMLDescription, const OUString& rId, const SfxItemSet& _rCoreAttrs, OCommonBehaviourTabPageFlags nControlFlags);
     protected:
 
         virtual ~OCommonBehaviourTabPage() override;
@@ -165,7 +165,7 @@ namespace dbaui
         DECL_LINK(OnTestJavaClickHdl, weld::Button&, void);
 
         OUString                   m_sDefaultJdbcDriverName;
-        sal_uInt16                 m_nPortId;
+        TypedWhichId<SfxInt32Item> m_nPortId;
         bool                       m_bUseClass;
 
         std::unique_ptr<weld::Entry> m_xEDHostname;

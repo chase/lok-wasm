@@ -77,8 +77,8 @@
 
 namespace basctl
 {
-constexpr OUStringLiteral BASIC_IDE_EDITOR_WINDOW = u"BasicIDEEditorWindow";
-constexpr OUStringLiteral BASIC_IDE_CURRENT_ZOOM = u"CurrentZoom";
+constexpr OUString BASIC_IDE_EDITOR_WINDOW = u"BasicIDEEditorWindow"_ustr;
+constexpr OUString BASIC_IDE_CURRENT_ZOOM = u"CurrentZoom"_ustr;
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star;
@@ -161,13 +161,13 @@ void basctl_Shell::InitInterface_Impl()
 
 unsigned Shell::nShellCount = 0;
 
-Shell::Shell( SfxViewFrame* pFrame_, SfxViewShell* /* pOldShell */ ) :
-    SfxViewShell( pFrame_, SfxViewShellFlags::NO_NEWWINDOW ),
+Shell::Shell( SfxViewFrame& rFrame_, SfxViewShell* /* pOldShell */ ) :
+    SfxViewShell( rFrame_, SfxViewShellFlags::NO_NEWWINDOW ),
     m_aCurDocument( ScriptDocument::getApplicationScriptDocument() ),
-    aHScrollBar( VclPtr<ScrollAdaptor>::Create(&GetViewFrame()->GetWindow(), true) ),
-    aVScrollBar( VclPtr<ScrollAdaptor>::Create(&GetViewFrame()->GetWindow(), false) ),
+    aHScrollBar( VclPtr<ScrollAdaptor>::Create(&GetViewFrame().GetWindow(), true) ),
+    aVScrollBar( VclPtr<ScrollAdaptor>::Create(&GetViewFrame().GetWindow(), false) ),
     pLayout(nullptr),
-    aObjectCatalog(VclPtr<ObjectCatalog>::Create(&GetViewFrame()->GetWindow())),
+    aObjectCatalog(VclPtr<ObjectCatalog>::Create(&GetViewFrame().GetWindow())),
     m_bAppBasicModified( false ),
     m_aNotifier( *this )
 {
@@ -192,15 +192,15 @@ void Shell::Init()
     LanguageBoxControl::RegisterControl( SID_BASICIDE_CURRENT_LANG );
     SvxZoomSliderControl::RegisterControl( SID_ATTR_ZOOMSLIDER );
 
-    GetViewFrame()->GetWindow().SetBackground(
-        GetViewFrame()->GetWindow().GetSettings().GetStyleSettings().GetWindowColor()
+    GetViewFrame().GetWindow().SetBackground(
+        GetViewFrame().GetWindow().GetSettings().GetStyleSettings().GetWindowColor()
     );
 
     pCurWin = nullptr;
     m_aCurDocument = ScriptDocument::getApplicationScriptDocument();
     bCreatingWindow = false;
 
-    pTabBar.reset(VclPtr<TabBar>::Create(&GetViewFrame()->GetWindow()));
+    pTabBar.reset(VclPtr<TabBar>::Create(&GetViewFrame().GetWindow()));
 
     nCurKey = 100;
     InitScrollBars();
@@ -427,17 +427,16 @@ void Shell::StoreAllWindowData( bool bPersistent )
     }
 }
 
-
 bool Shell::PrepareClose( bool bUI )
 {
     // reset here because it's modified after printing etc. (DocInfo)
-    GetViewFrame()->GetObjectShell()->SetModified(false);
+    GetViewFrame().GetObjectShell()->SetModified(false);
 
     if ( StarBASIC::IsRunning() )
     {
         if( bUI )
         {
-            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetViewFrame()->GetFrameWeld(),
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetViewFrame().GetFrameWeld(),
                                                           VclMessageType::Info, VclButtonsType::Ok,
                                                           IDEResId(RID_STR_CANNOTCLOSE)));
             xInfoBox->run();
@@ -628,6 +627,9 @@ void Shell::UpdateWindows()
 {
     // remove all windows that may not be displayed
     bool bChangeCurWindow = pCurWin == nullptr;
+    // stores the total number of modules and dialogs visible
+    sal_uInt16 nTotalTabs = 0;
+
     if ( !m_aCurLibName.isEmpty() )
     {
         std::vector<VclPtr<BaseWindow> > aDeleteVec;
@@ -704,6 +706,7 @@ void Shell::UpdateWindows()
                             Sequence< OUString > aModNames( doc.getObjectNames( E_SCRIPTS, aLibName ) );
                             sal_Int32 nModCount = aModNames.getLength();
                             const OUString* pModNames = aModNames.getConstArray();
+                            nTotalTabs += nModCount;
 
                             for ( sal_Int32 j = 0 ; j < nModCount ; j++ )
                             {
@@ -733,6 +736,7 @@ void Shell::UpdateWindows()
                             Sequence< OUString > aDlgNames = doc.getObjectNames( E_DIALOGS, aLibName );
                             sal_Int32 nDlgCount = aDlgNames.getLength();
                             const OUString* pDlgNames = aDlgNames.getConstArray();
+                            nTotalTabs += nDlgCount;
 
                             for ( sal_Int32 j = 0 ; j < nDlgCount ; j++ )
                             {
@@ -761,7 +765,12 @@ void Shell::UpdateWindows()
 
     if ( bChangeCurWindow )
     {
-        if ( !pNextActiveWindow )
+        if ( nTotalTabs == 0 )
+        {
+            // If no tabs are opened, create a generic module and make it visible
+            pNextActiveWindow = CreateBasWin( m_aCurDocument, m_aCurLibName, OUString() );
+        }
+        else if ( !pNextActiveWindow )
         {
             pNextActiveWindow = FindApplicationWindow().get();
         }

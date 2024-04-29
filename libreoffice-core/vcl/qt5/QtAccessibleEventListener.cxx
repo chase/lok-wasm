@@ -59,15 +59,13 @@ void QtAccessibleEventListener::HandleStateChangedEvent(
     switch (nState)
     {
         case AccessibleStateType::ACTIVE:
-            // ignore for now, since it somehow causes Orca to become unresponsive quite quickly
-            // TODO: analyze further and fix root cause
-            /*
             aState.active = true;
             break;
-            */
-            return;
         case AccessibleStateType::BUSY:
             aState.busy = true;
+            break;
+        case AccessibleStateType::CHECKABLE:
+            aState.checkable = true;
             break;
         case AccessibleStateType::CHECKED:
             aState.checked = true;
@@ -170,7 +168,6 @@ void QtAccessibleEventListener::notifyEvent(const css::accessibility::Accessible
 {
     QAccessibleInterface* pQAccessibleInterface = m_pAccessibleWidget;
 
-    Reference<XAccessible> xChild;
     switch (aEvent.EventId)
     {
         case AccessibleEventId::NAME_CHANGED:
@@ -213,14 +210,31 @@ void QtAccessibleEventListener::notifyEvent(const css::accessibility::Accessible
         }
         case AccessibleEventId::CHILD:
         {
-            QAccessible::Event event = QAccessible::InvalidEvent;
-            if (aEvent.OldValue >>= xChild)
-                event = QAccessible::ObjectDestroyed;
+            Reference<XAccessible> xChild;
             if (aEvent.NewValue >>= xChild)
-                event = QAccessible::ObjectCreated;
-            if (event != QAccessible::InvalidEvent)
-                QAccessible::updateAccessibility(
-                    new QAccessibleEvent(pQAccessibleInterface, event));
+            {
+                assert(xChild.is()
+                       && "AccessibleEventId::CHILD event NewValue without valid child set");
+                // tdf#159213 for now, workaround invalid events being sent and don't crash in release builds
+                if (!xChild.is())
+                    return;
+                QAccessible::updateAccessibility(new QAccessibleEvent(
+                    QtAccessibleRegistry::getQObject(xChild), QAccessible::ObjectCreated));
+                return;
+            }
+            if (aEvent.OldValue >>= xChild)
+            {
+                assert(xChild.is()
+                       && "AccessibleEventId::CHILD event OldValue without valid child set");
+                // tdf#159213 for now, workaround invalid events being sent and don't crash in release builds
+                if (!xChild.is())
+                    return;
+                QAccessible::updateAccessibility(new QAccessibleEvent(
+                    QtAccessibleRegistry::getQObject(xChild), QAccessible::ObjectDestroyed));
+                return;
+            }
+            SAL_WARN("vcl.qt",
+                     "Ignoring invalid AccessibleEventId::CHILD event without any child set.");
             return;
         }
         case AccessibleEventId::HYPERTEXT_CHANGED:

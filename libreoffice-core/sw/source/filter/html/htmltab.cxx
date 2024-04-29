@@ -36,6 +36,7 @@
 #include <svl/numformat.hxx>
 #include <svl/urihelper.hxx>
 #include <svx/sdrobjectuser.hxx>
+#include <svx/svdotext.hxx>
 #include <sal/log.hxx>
 #include <osl/diagnose.h>
 
@@ -1054,7 +1055,7 @@ void SwHTMLParser::DeregisterHTMLTable(HTMLTable* pOld)
 {
     if (pOld->m_xBox1)
         m_aOrphanedTableBoxes.emplace_back(std::move(pOld->m_xBox1));
-    m_aTables.erase(std::remove(m_aTables.begin(), m_aTables.end(), pOld));
+    std::erase(m_aTables, pOld);
 }
 
 SwDoc* SwHTMLParser::GetDoc() const
@@ -1486,11 +1487,34 @@ void HTMLTable::FixFrameFormat( SwTableBox *pBox,
             if (pTableFormat)
             {
                 sal_uInt8 nPos = SwTableAutoFormat::CountPos(nCol, m_nCols, nRow, m_nRows);
+                const SfxItemSet& rAttrSet = pFrameFormat->GetAttrSet();
+                std::unique_ptr<SvxBoxItem> pOldBoxItem;
+                if (const SvxBoxItem* pBoxItem2 = rAttrSet.GetItemIfSet(RES_BOX))
+                    pOldBoxItem.reset(pBoxItem2->Clone());
                 pTableFormat->UpdateToSet(nPos, m_nRows==1, m_nCols==1,
-                                          const_cast<SfxItemSet&>(static_cast<SfxItemSet const&>(
-                                              pFrameFormat->GetAttrSet())),
+                                          const_cast<SfxItemSet&>(rAttrSet),
                                           SwTableAutoFormatUpdateFlags::Box,
                                           pFrameFormat->GetDoc()->GetNumberFormatter());
+                if (pOldBoxItem)
+                {
+                    // There was an old item, so it's guaranteed that there's a new item
+                    const SvxBoxItem* pBoxItem2(rAttrSet.GetItem(RES_BOX));
+                    if (*pBoxItem2 != *pOldBoxItem)
+                    {
+                        std::unique_ptr<SvxBoxItem> pNewBoxItem(pBoxItem2->Clone());
+                        // Restore the box elements that could have been already set
+                        for (auto eLine : { SvxBoxItemLine::TOP, SvxBoxItemLine::BOTTOM,
+                                            SvxBoxItemLine::LEFT, SvxBoxItemLine::RIGHT })
+                        {
+                            if (auto pLine = pOldBoxItem->GetLine(eLine))
+                                pNewBoxItem->SetLine(pLine, eLine);
+                            if (auto nDistance = pOldBoxItem->GetDistance(eLine, true))
+                                pNewBoxItem->SetDistance(nDistance, eLine);
+                        }
+
+                        pFrameFormat->SetFormatAttr(*pNewBoxItem);
+                    }
+                }
             }
         }
     }
@@ -2031,10 +2055,9 @@ void HTMLTable::InsertCell( std::shared_ptr<HTMLTableCnts> const& rCnts,
     }
 
     Size aTwipSz( bRelWidth ? 0 : nCellWidth, nCellHeight );
-    if( (aTwipSz.Width() || aTwipSz.Height()) && Application::GetDefaultDevice() )
+    if( aTwipSz.Width() || aTwipSz.Height() )
     {
-        aTwipSz = Application::GetDefaultDevice()
-                    ->PixelToLogic( aTwipSz, MapMode( MapUnit::MapTwip ) );
+        aTwipSz = o3tl::convert(aTwipSz, o3tl::Length::px, o3tl::Length::twip);
     }
 
     // Only set width on the first cell!
@@ -2164,17 +2187,12 @@ void HTMLTable::InsertCol( sal_uInt16 nSpan, sal_uInt16 nColWidth, bool bRelWidt
         m_nCols = nColsReq;
     }
 
-    Size aTwipSz( bRelWidth ? 0 : nColWidth, 0 );
-    if( aTwipSz.Width() && Application::GetDefaultDevice() )
-    {
-        aTwipSz = Application::GetDefaultDevice()
-                    ->PixelToLogic( aTwipSz, MapMode( MapUnit::MapTwip ) );
-    }
+    sal_uInt16 nTwipWidth(bRelWidth ? 0 : o3tl::convert(nColWidth, o3tl::Length::px, o3tl::Length::twip));
 
     for( i=m_nCurrentColumn; i<nColsReq; i++ )
     {
         HTMLTableColumn& rCol = m_aColumns[i];
-        sal_uInt16 nTmp = bRelWidth ? nColWidth : o3tl::narrowing<sal_uInt16>(aTwipSz.Width());
+        sal_uInt16 nTmp = bRelWidth ? nColWidth : o3tl::narrowing<sal_uInt16>(nTwipWidth);
         rCol.SetWidth( nTmp, bRelWidth );
         rCol.SetAdjust( eAdjust );
         rCol.SetVertOri( eVertOrient );
@@ -3440,7 +3458,7 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
 
                     sal_uInt16 nSpace = pCurTable->GetHSpace();
                     if( nSpace )
-                        aFrameSet.Put( SvxLRSpaceItem(nSpace,nSpace, 0, 0, RES_LR_SPACE) );
+                        aFrameSet.Put( SvxLRSpaceItem(nSpace, nSpace, 0, RES_LR_SPACE) );
                     nSpace = pCurTable->GetVSpace();
                     if( nSpace )
                         aFrameSet.Put( SvxULSpaceItem(nSpace,nSpace, RES_UL_SPACE) );

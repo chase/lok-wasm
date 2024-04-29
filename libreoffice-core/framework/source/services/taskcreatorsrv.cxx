@@ -128,7 +128,7 @@ css::uno::Reference< css::uno::XInterface > SAL_CALL TaskCreatorService::createI
     bool                                  bSupportPersistentWindowState = lArgs.getUnpackedValueOrDefault(ARGUMENT_SUPPORTPERSISTENTWINDOWSTATE , false );
     bool                                  bEnableTitleBarUpdate         = lArgs.getUnpackedValueOrDefault(ARGUMENT_ENABLE_TITLEBARUPDATE        , true );
     // If the frame is explicitly requested to be hidden.
-    bool bHidden = lArgs.getUnpackedValueOrDefault("HiddenForConversion", false);
+    bool bHidden = lArgs.getUnpackedValueOrDefault(ARGUMENT_HIDDENFORCONVERSION, false);
 
     // We use FrameName property to set it as API name of the new created frame later.
     // But those frame names must be different from the set of special target names as e.g. _blank, _self etcpp !
@@ -176,7 +176,7 @@ css::uno::Reference< css::uno::XInterface > SAL_CALL TaskCreatorService::createI
     }
     css::uno::Reference< css::frame::XFrame2 > xFrame = implts_createFrame(xParentFrame, xContainerWindow, sRightName);
 
-    // special freature:
+    // special feature:
     // A special listener will restore pos/size states in case
     // a component was loaded into the frame first time.
     if (bSupportPersistentWindowState)
@@ -189,7 +189,7 @@ css::uno::Reference< css::uno::XInterface > SAL_CALL TaskCreatorService::createI
     if (bTopLevelDocumentWindow)
         implts_establishDocModifyListener (xFrame);
 
-    // special freature:
+    // special feature:
     // A special listener will update title bar (text and icon)
     // if component of frame will be changed.
     if (bEnableTitleBarUpdate)

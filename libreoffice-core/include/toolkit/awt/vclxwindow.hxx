@@ -32,7 +32,6 @@
 #include <com/sun/star/awt/XDockableWindow.hpp>
 #include <com/sun/star/awt/XStyleSettingsSupplier.hpp>
 
-#include <comphelper/servicehelper.hxx>
 #include <cppuhelper/implbase.hxx>
 
 #include <tools/gen.hxx>
@@ -42,7 +41,7 @@
 #include <vector>
 #include <functional>
 
-namespace comphelper { template <class ListenerT> class OInterfaceContainerHelper3; }
+template <class ListenerT> class ListenerMultiplexerBase;
 namespace com::sun::star::accessibility { class XAccessibleContext; }
 namespace com::sun::star::awt { class XTopWindowListener; }
 namespace com::sun::star::awt { class XVclContainerListener; }
@@ -99,8 +98,8 @@ protected:
                                         bool bWithDefaults = false );
     virtual void    GetPropertyIds( std::vector< sal_uInt16 > &aIds );
 
-    ::comphelper::OInterfaceContainerHelper3<css::awt::XVclContainerListener>& GetContainerListeners();
-    ::comphelper::OInterfaceContainerHelper3<css::awt::XTopWindowListener>& GetTopWindowListeners();
+    ListenerMultiplexerBase<css::awt::XVclContainerListener>& GetContainerListeners();
+    ListenerMultiplexerBase<css::awt::XTopWindowListener>& GetTopWindowListeners();
 
 public:
     typedef ::std::function<void ()>  Callback;
@@ -140,9 +139,6 @@ public:
     void    notifyWindowRemoved( vcl::Window const & _rWindow );
 
     bool IsDisposed() const;
-
-    // css::lang::XUnoTunnel
-    UNO3_GETIMPLEMENTATION_DECL(VCLXWindow)
 
     // css::lang::XEventListener
     virtual void SAL_CALL disposing( const css::lang::EventObject& Source ) override;

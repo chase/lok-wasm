@@ -25,10 +25,10 @@
 #include <scmod.hxx>
 #include <inputopt.hxx>
 
-ScSizeDeviceProvider::ScSizeDeviceProvider( ScDocShell* pDocSh, bool bForceOwnDevice )
+ScSizeDeviceProvider::ScSizeDeviceProvider( ScDocShell* pDocSh )
 {
     bool bTextWysiwyg = SC_MOD()->GetInputOptions().GetTextWysiwyg();
-    if ( bTextWysiwyg && !bForceOwnDevice)
+    if ( bTextWysiwyg )
     {
         pDevice = pDocSh->GetPrinter();
         bOwner = false;
@@ -40,7 +40,7 @@ ScSizeDeviceProvider::ScSizeDeviceProvider( ScDocShell* pDocSh, bool bForceOwnDe
     else
     {
         pDevice = VclPtr<VirtualDevice>::Create();
-        pDevice->SetDigitLanguage( SC_MOD()->GetOptDigitLanguage() );
+        pDevice->SetDigitLanguage( ScModule::GetOptDigitLanguage() );
         bOwner = true;
     }
 

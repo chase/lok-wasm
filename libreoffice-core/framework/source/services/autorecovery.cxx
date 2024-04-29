@@ -50,7 +50,7 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
-#include <com/sun/star/document/XDocumentRecovery.hpp>
+#include <com/sun/star/document/XDocumentRecovery2.hpp>
 #include <com/sun/star/document/XExtendedFilterDetection.hpp>
 #include <com/sun/star/util/XCloseable.hpp>
 #include <com/sun/star/awt/XWindow2.hpp>
@@ -88,6 +88,7 @@
 #include <unotools/pathoptions.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <unotools/tempfile.hxx>
+#include <unotools/ucbhelper.hxx>
 #include <ucbhelper/content.hxx>
 #include <svtools/sfxecode.hxx>
 
@@ -107,6 +108,41 @@ using namespace css::document;
 using namespace css::frame;
 using namespace css::lang;
 using namespace framework;
+
+/** After the fact documentation - hopefully it is correct.
+ *
+ * AutoRecovery handles 3 types of recovery, as well as periodic document saving
+ *   1) timed, ODF, temporary, recovery files created in the backup folder
+ *      -can instead be used to actually save the documents periodically if settings request that.
+ *      -temporary: deleted when the document itself is saved
+ *      -handles the situation where LO immediately exits (power outage, program crash, pkill -9 soffice)
+ *          -not restored immediately
+ *          -no guarantee of availability of recovery file (since deleted on document save)
+ *           or original document (perhaps /tmp, removeable, disconnected server).
+ *          -therefore does not include unmodified files in RecoveryList (@since LO 24.2).
+ *            -TODO: perhaps can be enhanced for users who always want sessions restored?
+ *   2) emergency save-and-restart immediately triggers creation of temporary, ODF, recovery files
+ *      -handles the situation where LO is partially functioning (pkill -6 soffice)
+ *          -restore attempted immediately, so try to restore entire session - all open files
+ *          -always create recovery file for every open document in emergency situation
+ *      -works without requiring AutoRecovery to be enabled
+ *   3) session save on exit desired by OS or user creates recovery files for every open document
+ *      -triggered by some OS's shutdown/logout (no known way for user to initiate within LO)
+ *      -same as emergency save, except maybe more time critical - OS kill timeout
+ *          -not restored until much later - the user has stopped doing computer work
+ *          -always create recovery file for every open document: needed for /tmp, disconnected docs
+ *
+ * All of these use the same recovery dialog - re-opening all the files listed in the RecoveryList
+ * of the user's officecfg settings.
+ *
+ * Since these 3 have very different expectations, and yet share the same code, keep all of them
+ * in mind when making code changes.
+ *
+ * Note: often, entries in m_lDocCache are copied. So realize that changes to aInfo/rInfo might not
+ * apply to async events like mark-document-as-saved-and-delete-TMP-URLs or set-modified-status,
+ * or ignoreClosing, or ListenForModify. For example, DocState::Modified should be considered only
+ * a good hint, and not as definitively accurate.
+ */
 
 namespace {
 
@@ -326,8 +362,8 @@ public:
             OUString FactoryURL;
             OUString TemplateURL;
 
-            OUString OldTempURL;
-            OUString NewTempURL;
+            OUString OldTempURL; // previous recovery file (filename_0.odf) which will be removed
+            OUString NewTempURL; // new recovery file (filename_1.odf) that is being created
 
             OUString AppModule;      // e.g. com.sun.star.text.TextDocument - used to identify app module
             OUString FactoryService; // the service to create a document of the module
@@ -385,11 +421,6 @@ private:
     */
     bool m_bListenForDocEvents;
     bool m_bListenForConfigChanges;
-
-    /** @short  specify the time interval between two save actions.
-        @descr  tools::Time is measured in [min].
-     */
-    sal_Int32 m_nAutoSaveTimeIntervall;
 
     /** @short  for an asynchronous operation we must know, if there is
                 at least one running job (may be asynchronous!).
@@ -579,9 +610,19 @@ private:
       */
     void implts_readAutoSaveConfig();
 
-    // TODO document me
-    void implts_flushConfigItem(const AutoRecovery::TDocumentInfo& rInfo                ,
-                                      bool                     bRemoveIt = false);
+    /** After the fact documentation
+     * @short adds/updates/removes entries in the RecoveryList - files to be recovered at startup
+     *
+     * @descr Deciding whether to add or remove an entry is very dependent on the context!
+     *        EmergencySave and SessionSave are interested in all open documents (which may not
+     *        even be available at next start - i.e. /tmp files might be lost after a reboot,
+     *        or removable media / server access might not be connected).
+     *        On the other hand, timer-based autorecovery should not be interested in recovering
+     *        the session, but only modified documents that are recoverable
+     *        (TODO: unless the user always wants to recover a session).
+     */
+    void implts_flushConfigItem(AutoRecovery::TDocumentInfo& rInfo, bool bRemoveIt = false,
+                                bool bAllowAdd = true);
 
     // TODO document me
     void implts_startListening();
@@ -646,7 +687,7 @@ private:
     /** @short  remove the specified document from our internal document list.
 
         @param  xDocument
-                the new document, which should be deregistered.
+                the closing document, which should be deregistered.
 
         @param  bStopListening
                 sal_False: must be used in case this method is called within disposing() of the document,
@@ -1000,23 +1041,23 @@ private:
 };
 
 // recovery.xcu
-constexpr OUStringLiteral CFG_PACKAGE_RECOVERY = u"org.openoffice.Office.Recovery/";
+constexpr OUStringLiteral CFG_PACKAGE_RECOVERY = u"/org.openoffice.Office.Recovery";
 
 const char CFG_ENTRY_AUTOSAVE_ENABLED[] = "AutoSave/Enabled";
-const char CFG_ENTRY_AUTOSAVE_TIMEINTERVALL[] = "AutoSave/TimeIntervall"; //sic!
+const char CFG_ENTRY_AUTOSAVE_USERAUTOSAVE_ENABLED[] = "AutoSave/UserAutoSaveEnabled";
 
 constexpr OUStringLiteral CFG_ENTRY_REALDEFAULTFILTER = u"ooSetupFactoryActualFilter";
 
-constexpr OUStringLiteral CFG_ENTRY_PROP_TEMPURL = u"TempURL";
-constexpr OUStringLiteral CFG_ENTRY_PROP_ORIGINALURL = u"OriginalURL";
-constexpr OUStringLiteral CFG_ENTRY_PROP_TEMPLATEURL = u"TemplateURL";
+constexpr OUString CFG_ENTRY_PROP_TEMPURL = u"TempURL"_ustr;
+constexpr OUString CFG_ENTRY_PROP_ORIGINALURL = u"OriginalURL"_ustr;
+constexpr OUString CFG_ENTRY_PROP_TEMPLATEURL = u"TemplateURL"_ustr;
 constexpr OUStringLiteral CFG_ENTRY_PROP_FACTORYURL = u"FactoryURL";
-constexpr OUStringLiteral CFG_ENTRY_PROP_MODULE = u"Module";
-constexpr OUStringLiteral CFG_ENTRY_PROP_DOCUMENTSTATE = u"DocumentState";
-constexpr OUStringLiteral CFG_ENTRY_PROP_FILTER = u"Filter";
-constexpr OUStringLiteral CFG_ENTRY_PROP_TITLE = u"Title";
+constexpr OUString CFG_ENTRY_PROP_MODULE = u"Module"_ustr;
+constexpr OUString CFG_ENTRY_PROP_DOCUMENTSTATE = u"DocumentState"_ustr;
+constexpr OUString CFG_ENTRY_PROP_FILTER = u"Filter"_ustr;
+constexpr OUString CFG_ENTRY_PROP_TITLE = u"Title"_ustr;
 constexpr OUStringLiteral CFG_ENTRY_PROP_ID = u"ID";
-constexpr OUStringLiteral CFG_ENTRY_PROP_VIEWNAMES = u"ViewNames";
+constexpr OUString CFG_ENTRY_PROP_VIEWNAMES = u"ViewNames"_ustr;
 
 constexpr OUStringLiteral FILTER_PROP_TYPE = u"Type";
 constexpr OUStringLiteral TYPE_PROP_EXTENSIONS = u"Extensions";
@@ -1039,7 +1080,7 @@ const char EVENT_ON_SAVEFAILED[] = "OnSaveFailed";
 const char EVENT_ON_SAVEASFAILED[] = "OnSaveAsFailed";
 const char EVENT_ON_SAVETOFAILED[] = "OnCopyToFailed";
 
-constexpr OUStringLiteral RECOVERY_ITEM_BASE_IDENTIFIER = u"recovery_item_";
+constexpr OUString RECOVERY_ITEM_BASE_IDENTIFIER = u"recovery_item_"_ustr;
 
 const char CMD_PROTOCOL[] = "vnd.sun.star.autorecovery:";
 
@@ -1063,9 +1104,9 @@ constexpr OUStringLiteral PROP_SAVEPATH = u"SavePath";
 constexpr OUStringLiteral PROP_ENTRY_ID = u"EntryID";
 constexpr OUStringLiteral PROP_AUTOSAVE_STATE = u"AutoSaveState";
 
-constexpr OUStringLiteral OPERATION_START = u"start";
-constexpr OUStringLiteral OPERATION_STOP = u"stop";
-constexpr OUStringLiteral OPERATION_UPDATE = u"update";
+constexpr OUString OPERATION_START = u"start"_ustr;
+constexpr OUString OPERATION_STOP = u"stop"_ustr;
+constexpr OUString OPERATION_UPDATE = u"update"_ustr;
 
 const sal_Int32       MIN_DISCSPACE_DOCSAVE                  =   5; // [MB]
 const sal_Int32       MIN_DISCSPACE_CONFIGSAVE               =   1; // [MB]
@@ -1218,7 +1259,6 @@ AutoRecovery::AutoRecovery(css::uno::Reference< css::uno::XComponentContext >  x
     , m_xContext                (std::move(xContext                                           ))
     , m_bListenForDocEvents     (false                                          )
     , m_bListenForConfigChanges (false                                          )
-    , m_nAutoSaveTimeIntervall  (0                                                  )
     , m_eJob                    (Job::NoJob)
     , m_aTimer( "framework::AutoRecovery m_aTimer" )
     , m_xAsyncDispatcher        (new vcl::EventPoster( LINK( this, AutoRecovery, implts_asyncDispatch )  ))
@@ -1646,9 +1686,17 @@ void SAL_CALL AutoRecovery::changesOccurred(const css::util::ChangesEvent& aEven
                 }
             }
         }
-        else
-        if ( sPath == CFG_ENTRY_AUTOSAVE_TIMEINTERVALL )
-            pChanges[i].Element >>= m_nAutoSaveTimeIntervall;
+        else if (sPath == CFG_ENTRY_AUTOSAVE_USERAUTOSAVE_ENABLED)
+        {
+            bool bEnabled = false;
+            if (pChanges[i].Element >>= bEnabled)
+            {
+                if (bEnabled)
+                    m_eJob |= Job::UserAutoSave;
+                else
+                    m_eJob &= ~Job::UserAutoSave;
+            }
+        }
     }
 
     } /* SAFE */
@@ -1754,7 +1802,7 @@ void AutoRecovery::implts_readAutoSaveConfig()
     implts_openConfig();
 
     // AutoSave [bool]
-    bool bEnabled(officecfg::Office::Common::Save::Document::AutoSave::get());
+    bool bEnabled(officecfg::Office::Recovery::AutoSave::Enabled::get());
 
     /* SAFE */ {
     osl::MutexGuard g(cppu::WeakComponentImplHelperBase::rBHelper.rMutex);
@@ -1780,15 +1828,6 @@ void AutoRecovery::implts_readAutoSaveConfig()
         m_eTimerType  = AutoRecovery::E_DONT_START_TIMER;
     }
     } /* SAFE */
-
-    // AutoSaveTimeIntervall [int] in min
-    sal_Int32 nTimeIntervall(
-        officecfg::Office::Common::Save::Document::AutoSaveTimeIntervall::get());
-
-    /* SAFE */ {
-    osl::MutexGuard g(cppu::WeakComponentImplHelperBase::rBHelper.rMutex);
-    m_nAutoSaveTimeIntervall = nTimeIntervall;
-    } /* SAFE */
 }
 
 void AutoRecovery::implts_readConfig()
@@ -1810,7 +1849,6 @@ void AutoRecovery::implts_readConfig()
 
     css::uno::Reference<css::container::XNameAccess> xRecoveryList(
             officecfg::Office::Recovery::RecoveryList::get());
-    const OUString sRECOVERY_ITEM_BASE_IDENTIFIER(RECOVERY_ITEM_BASE_IDENTIFIER);
     const css::uno::Sequence< OUString > lItems = xRecoveryList->getElementNames();
     const OUString*                      pItems = lItems.getConstArray();
     sal_Int32                            c      = lItems.getLength();
@@ -1842,9 +1880,9 @@ void AutoRecovery::implts_readConfig()
         implts_specifyAppModuleAndFactory(aInfo);
         implts_specifyDefaultFilterAndExtension(aInfo);
 
-        if (pItems[i].startsWith(sRECOVERY_ITEM_BASE_IDENTIFIER))
+        if (pItems[i].startsWith(RECOVERY_ITEM_BASE_IDENTIFIER))
         {
-            std::u16string_view sID = pItems[i].subView(sRECOVERY_ITEM_BASE_IDENTIFIER.getLength());
+            std::u16string_view sID = pItems[i].subView(RECOVERY_ITEM_BASE_IDENTIFIER.getLength());
             aInfo.ID = o3tl::toInt32(sID);
             /* SAFE */ {
             osl::MutexGuard g(cppu::WeakComponentImplHelperBase::rBHelper.rMutex);
@@ -1944,8 +1982,8 @@ void AutoRecovery::implts_specifyAppModuleAndFactory(AutoRecovery::TDocumentInfo
         rInfo.AppModule = xManager->identify(rInfo.Document);
 
     ::comphelper::SequenceAsHashMap lModuleDescription(xManager->getByName(rInfo.AppModule));
-    lModuleDescription[OUString(CFG_ENTRY_PROP_EMPTYDOCUMENTURL)] >>= rInfo.FactoryURL;
-    lModuleDescription[OUString(CFG_ENTRY_PROP_FACTORYSERVICE)] >>= rInfo.FactoryService;
+    lModuleDescription[CFG_ENTRY_PROP_EMPTYDOCUMENTURL] >>= rInfo.FactoryURL;
+    lModuleDescription[CFG_ENTRY_PROP_FACTORYSERVICE] >>= rInfo.FactoryService;
 }
 
 void AutoRecovery::implts_collectActiveViewNames( AutoRecovery::TDocumentInfo& i_rInfo )
@@ -1989,7 +2027,8 @@ void AutoRecovery::implts_persistAllActiveViewNames()
     }
 }
 
-void AutoRecovery::implts_flushConfigItem(const AutoRecovery::TDocumentInfo& rInfo, bool bRemoveIt)
+void AutoRecovery::implts_flushConfigItem(AutoRecovery::TDocumentInfo& rInfo, bool bRemoveIt,
+                                          bool bAllowAdd)
 {
     std::shared_ptr<comphelper::ConfigurationChanges> batch(
             comphelper::ConfigurationChanges::create());
@@ -2014,6 +2053,11 @@ void AutoRecovery::implts_flushConfigItem(const AutoRecovery::TDocumentInfo& rIn
             // DO IT!
             try
             {
+                osl::File::remove(rInfo.OldTempURL);
+                osl::File::remove(rInfo.NewTempURL);
+                rInfo.OldTempURL.clear();
+                rInfo.NewTempURL.clear();
+
                 xModify->removeByName(sID);
             }
             catch(const css::container::NoSuchElementException&)
@@ -2027,7 +2071,12 @@ void AutoRecovery::implts_flushConfigItem(const AutoRecovery::TDocumentInfo& rIn
             css::uno::Reference< css::beans::XPropertySet > xSet;
             bool                                        bNew = !xCheck->hasByName(sID);
             if (bNew)
+            {
+                if (!bAllowAdd)
+                    return; // no change made, just exit
+
                 xSet.set(xCreate->createInstance(), css::uno::UNO_QUERY_THROW);
+            }
             else
                 xCheck->getByName(sID) >>= xSet;
 
@@ -2203,7 +2252,7 @@ void AutoRecovery::implts_updateTimer()
 {
     implts_stopTimer();
 
-    sal_Int32 nMilliSeconds = 0;
+    sal_Int64 nMilliSeconds = 0;
 
     /* SAFE */ {
     osl::MutexGuard g(cppu::WeakComponentImplHelperBase::rBHelper.rMutex);
@@ -2216,7 +2265,27 @@ void AutoRecovery::implts_updateTimer()
 
     if (m_eTimerType == AutoRecovery::E_NORMAL_AUTOSAVE_INTERVALL)
     {
-        nMilliSeconds = (m_nAutoSaveTimeIntervall*60000); // [min] => 60.000 ms
+        const sal_Int64 nConfiguredAutoSaveInterval
+            = officecfg::Office::Recovery::AutoSave::TimeIntervall::get()
+              * sal_Int64(60000); // [min] => 60.000 ms
+        nMilliSeconds = nConfiguredAutoSaveInterval;
+
+        // Calculate how soon the nearest dirty document's autosave time is;
+        // store the shortest document autosave timeout as the next timer timeout.
+        for (const auto& docInfo : m_lDocCache)
+        {
+            if (auto xDocRecovery2 = docInfo.Document.query<XDocumentRecovery2>())
+            {
+                sal_Int64 nDirtyDuration = xDocRecovery2->getModifiedStateDuration();
+                if (nDirtyDuration < 0)
+                    continue;
+                if (nDirtyDuration > nConfiguredAutoSaveInterval)
+                    nDirtyDuration = nConfiguredAutoSaveInterval; // nMilliSeconds will be 0
+
+                nMilliSeconds
+                    = std::min(nMilliSeconds, nConfiguredAutoSaveInterval - nDirtyDuration);
+            }
+        }
     }
     else if (m_eTimerType == AutoRecovery::E_POLL_FOR_USER_IDLE)
     {
@@ -2304,7 +2373,9 @@ IMPL_LINK_NOARG(AutoRecovery, implts_timerExpired, Timer *, void)
         // force save of all currently open documents
         // The called method returns an info, if and how this
         // timer must be restarted.
-        AutoRecovery::ETimerType eSuggestedTimer = implts_saveDocs(true/*bAllowUserIdleLoop*/, false);
+        const bool bIsAlreadyIdle(m_eTimerType == AutoRecovery::E_POLL_FOR_USER_IDLE);
+        AutoRecovery::ETimerType eSuggestedTimer
+            = implts_saveDocs(/*AllowUserIdleLoop=*/!bIsAlreadyIdle, /*RemoveLockFiles=*/false);
 
         // If timer is not used for "short callbacks" (means polling
         // for special states) ... reset the handle state of all
@@ -2473,7 +2544,8 @@ void AutoRecovery::implts_registerDocument(const css::uno::Reference< css::frame
 
     } /* SAFE */
 
-    implts_flushConfigItem(aInfo);
+    // Even if the document is modified, we don't know if we have anything to recover, so don't add.
+    implts_flushConfigItem(aInfo, /*bRemoveIt=*/false, /*bAllowAdd=*/false);
     implts_startModifyListeningOnDoc(aInfo);
 
     aCacheLock.unlock();
@@ -2521,8 +2593,6 @@ void AutoRecovery::implts_deregisterDocument(const css::uno::Reference< css::fra
     if (bStopListening)
         implts_stopModifyListeningOnDoc(aInfo);
 
-    AutoRecovery::st_impl_removeFile(aInfo.OldTempURL);
-    AutoRecovery::st_impl_removeFile(aInfo.NewTempURL);
     implts_flushConfigItem(aInfo, true); // sal_True => remove it from config
 }
 
@@ -2650,7 +2720,8 @@ void AutoRecovery::implts_markDocumentAsSaved(const css::uno::Reference< css::fr
 
     } /* SAFE */
 
-    implts_flushConfigItem(aInfo);
+    // no need to recover a saved document until modified and new recovery file is created
+    implts_flushConfigItem(aInfo, /*bRemoveIt=*/true);
 
     aCacheLock.unlock();
 
@@ -2815,16 +2886,7 @@ AutoRecovery::ETimerType AutoRecovery::implts_saveDocs(       bool        bAllow
     if (pParams)
         xExternalProgress = pParams->m_xProgress;
 
-    css::uno::Reference< css::frame::XDesktop2 > xDesktop = css::frame::Desktop::create(m_xContext);
     OUString                              sBackupPath(SvtPathOptions().GetBackupPath());
-
-    css::uno::Reference< css::frame::XController > xActiveController;
-    css::uno::Reference< css::frame::XModel >      xActiveModel;
-    css::uno::Reference< css::frame::XFrame >      xActiveFrame     = xDesktop->getActiveFrame();
-    if (xActiveFrame.is())
-        xActiveController = xActiveFrame->getController();
-    if (xActiveController.is())
-        xActiveModel = xActiveController->getModel();
 
     // Set the default timer action for our call.
     // Default = NORMAL_AUTOSAVE
@@ -2838,6 +2900,10 @@ AutoRecovery::ETimerType AutoRecovery::implts_saveDocs(       bool        bAllow
     Job eJob = m_eJob;
 
     CacheLockGuard aCacheLock(this, cppu::WeakComponentImplHelperBase::rBHelper.rMutex, m_nDocCacheLock, LOCK_FOR_CACHE_USE);
+
+    const sal_Int64 nConfiguredAutoSaveInterval
+        = officecfg::Office::Recovery::AutoSave::TimeIntervall::get()
+          * sal_Int64(60000); // min -> ms
 
     /* SAFE */ {
     osl::ResettableMutexGuard g(cppu::WeakComponentImplHelperBase::rBHelper.rMutex);
@@ -2869,13 +2935,33 @@ AutoRecovery::ETimerType AutoRecovery::implts_saveDocs(       bool        bAllow
         if ((aInfo.DocumentState & DocState::Handled) == DocState::Handled)
             continue;
 
+        // don't allow implts_deregisterDocument to remove from RecoveryList during shutdown jobs
+        if (m_eJob & (Job::EmergencySave | Job::SessionSave))
+            aInfo.IgnoreClosing = true;
+
         // Not modified documents are not saved.
-        // We safe an information about the URL only!
+        // We save information about the URL only!
         Reference< XDocumentRecovery > xDocRecover( aInfo.Document, UNO_QUERY_THROW );
         if ( !xDocRecover->wasModifiedSinceLastSave() )
         {
             aInfo.DocumentState |= DocState::Handled;
+            *pIt = aInfo;
             continue;
+        }
+
+        // If the document became modified not too long ago, don't autosave it yet.
+        if (bAllowUserIdleLoop)
+        {
+            if (auto xDocRecovery2 = xDocRecover.query<XDocumentRecovery2>())
+            {
+                const sal_Int64 nDirtyDuration = xDocRecovery2->getModifiedStateDuration();
+                // Round up to second - if this document is almost ready for autosave, do it now.
+                if (nDirtyDuration + 999 < nConfiguredAutoSaveInterval)
+                {
+                    aInfo.DocumentState |= DocState::Handled;
+                    continue;
+                }
+            }
         }
 
         // check if this document is still used by a concurrent save operation
@@ -2918,30 +3004,22 @@ AutoRecovery::ETimerType AutoRecovery::implts_saveDocs(       bool        bAllow
             }
         }
 
-        // a) Document was not postponed - and is     active now. => postpone it (restart timer, restart loop)
-        // b) Document was not postponed - and is not active now. => save it
-        // c) Document was     postponed - and is not active now. => save it
-        // d) Document was     postponed - and is     active now. => save it (because user idle was checked already)
-        bool bActive       = (xActiveModel == aInfo.Document);
-        bool bWasPostponed = ((aInfo.DocumentState & DocState::Postponed) == DocState::Postponed);
-
-        if (
-            ! bWasPostponed &&
-              bActive
-           )
+        // a) Document was not postponed => wait for user idle if not urgent
+        // b) Document was postponed => save it (because user idle/call_back was checked already)
+        if (!(aInfo.DocumentState & DocState::Postponed))
         {
             aInfo.DocumentState |= DocState::Postponed;
             *pIt = aInfo;
             // postponed documents will be saved if this method is called again!
             // That can be done by an outside started timer           => E_POLL_FOR_USER_IDLE (if normal AutoSave is active)
             // or it must be done directly without starting any timer => E_CALL_ME_BACK       (if Emergency- or SessionSave is active and must be finished ASAP!)
-            eTimer = AutoRecovery::E_POLL_FOR_USER_IDLE;
             if (!bAllowUserIdleLoop)
                 eTimer = AutoRecovery::E_CALL_ME_BACK;
+            else
+                eTimer = AutoRecovery::E_POLL_FOR_USER_IDLE;
             continue;
         }
 
-        // b, c, d)
         // } /* SAFE */
         g.clear();
         // changing of aInfo and flushing it is done inside implts_saveOneDoc!
@@ -3021,27 +3099,44 @@ void AutoRecovery::implts_saveOneDoc(const OUString&                            
     // Because the last temp file is too old and does not include all changes.
     Reference< XDocumentRecovery > xDocRecover(rInfo.Document, css::uno::UNO_QUERY_THROW);
 
-    // safe the state about "trying to save"
+    // save the state about "trying to save"
     // ... we need it for recovery if e.g. a crash occurs inside next line!
     rInfo.DocumentState |= DocState::TrySave;
-    implts_flushConfigItem(rInfo);
+    // just update existing info: don't add any recovery record until recovery file created.
+    implts_flushConfigItem(rInfo, /*bRemoveIt=*/false, /*bAllowAdd=*/false);
 
     // If userautosave is enabled, first try to save the original file.
     // Note that we must do it *before* calling storeToRecoveryFile, so in case of failure here
     // we won't remain with the modified flag set to true, even though the autorecovery save succeeded.
+    const bool bEmergencySave(m_eJob & Job::EmergencySave);
+    bool bUserAutoSaved = false;
     try
     {
         // We must check here for an empty URL to avoid a "This operation is not supported on this operating system."
         // message during autosave.
-        if ((m_eJob & Job::UserAutoSave) == Job::UserAutoSave && !rInfo.OrgURL.isEmpty())
+        if (!bEmergencySave && m_eJob & Job::UserAutoSave && !rInfo.OrgURL.isEmpty())
         {
             Reference< XStorable > xDocSave(rInfo.Document, css::uno::UNO_QUERY_THROW);
             xDocSave->store();
+            bUserAutoSaved = true;
         }
     }
     catch(const css::uno::Exception&)
     {
     }
+
+    // DocState::Modified status cannot be trusted to be accurate, but at least attempt to be so,
+    // since this rInfo will eventually get assigned to m_lDocCache as the authoritative status.
+    const Reference<css::util::XModifiable> xModify(rInfo.Document, UNO_QUERY);
+    const bool bModified = xModify.is() && xModify->isModified();
+    if (bModified)
+        rInfo.DocumentState |= DocState::Modified;
+    else if (xModify.is())
+        rInfo.DocumentState &= ~DocState::Modified;
+
+    // If it is no longer modified, it is the same as on disk, and can be removed from RecoveryList.
+    const bool bRemoveIt
+        = xModify.is() && !xModify->isModified() && bUserAutoSaved && !(m_eJob & Job::SessionSave);
 
     sal_Int32 nRetry = RETRY_STORE_ON_FULL_DISC_FOREVER;
     bool  bError = false;
@@ -3049,7 +3144,10 @@ void AutoRecovery::implts_saveOneDoc(const OUString&                            
     {
         try
         {
-            xDocRecover->storeToRecoveryFile( rInfo.NewTempURL, lNewArgs.getAsConstPropertyValueList() );
+            // skip recovery if it will be removed anyway.
+            if (!bRemoveIt)
+                xDocRecover->storeToRecoveryFile(rInfo.NewTempURL,
+                                                 lNewArgs.getAsConstPropertyValueList());
 
 #ifdef TRIGGER_FULL_DISC_CHECK
             throw css::uno::Exception("trigger full disk check");
@@ -3091,7 +3189,13 @@ void AutoRecovery::implts_saveOneDoc(const OUString&                            
             else if (nRetry > RETRY_STORE_ON_MIGHT_FULL_DISC_USEFULL)
                 nRetry = RETRY_STORE_ON_MIGHT_FULL_DISC_USEFULL;
             else if (nRetry <= GIVE_UP_RETRY)
+            {
+                // delete the empty file created by implts_generateNewTempURL
+                if (tools::isEmptyFileUrl(rInfo.NewTempURL))
+                    osl::File::remove(rInfo.NewTempURL);
+
                 throw; // force stacktrace to know if there exist might other reasons, why an AutoSave can fail !!!
+            }
 
             --nRetry;
         }
@@ -3125,7 +3229,8 @@ void AutoRecovery::implts_saveOneDoc(const OUString&                            
     rInfo.OldTempURL = rInfo.NewTempURL;
     rInfo.NewTempURL.clear();
 
-    implts_flushConfigItem(rInfo);
+    // If it is modified, a recovery file has just been created, so add to RecoveryList.
+    implts_flushConfigItem(rInfo, bRemoveIt, /*bAllowAdd=*/bModified);
 
     // We must know if the user modifies the document again ...
     implts_startModifyListeningOnDoc(rInfo);
@@ -3267,7 +3372,8 @@ AutoRecovery::ETimerType AutoRecovery::implts_openDocs(const DispatchParams& aPa
                 info.DocumentState |=  DocState::Damaged;
             }
 
-            implts_flushConfigItem(info, true);
+            implts_flushConfigItem(info, /*bRemoveIt=*/true);
+
             implts_informListener(eJob,
                 AutoRecovery::implst_createFeatureStateEvent(eJob, OPERATION_UPDATE, &info));
 
@@ -3354,6 +3460,8 @@ void AutoRecovery::implts_openOneDoc(const OUString&               sURL       ,
             // TODO: remove load-process specific arguments from the descriptor, e.g. the status indicator
             xModel->attachResource( sURL, lDescriptor.getAsConstPropertyValueList() );
         }
+        else if (!utl::UCBContentHelper::Exists(sURL))
+            throw css::uno::Exception();
         else
         {
             OUString sFilterName;
@@ -3589,15 +3697,15 @@ css::frame::FeatureStateEvent AutoRecovery::implst_createFeatureStateEvent(     
     {
         // pack rInfo for transport via UNO
         ::comphelper::NamedValueCollection aInfo;
-        aInfo.put( OUString(CFG_ENTRY_PROP_ID), pInfo->ID );
-        aInfo.put( OUString(CFG_ENTRY_PROP_ORIGINALURL), pInfo->OrgURL );
-        aInfo.put( OUString(CFG_ENTRY_PROP_FACTORYURL), pInfo->FactoryURL );
-        aInfo.put( OUString(CFG_ENTRY_PROP_TEMPLATEURL), pInfo->TemplateURL );
-        aInfo.put( OUString(CFG_ENTRY_PROP_TEMPURL), pInfo->OldTempURL.isEmpty() ? pInfo->NewTempURL : pInfo->OldTempURL );
-        aInfo.put( OUString(CFG_ENTRY_PROP_MODULE), pInfo->AppModule);
-        aInfo.put( OUString(CFG_ENTRY_PROP_TITLE), pInfo->Title);
-        aInfo.put( OUString(CFG_ENTRY_PROP_VIEWNAMES), pInfo->ViewNames);
-        aInfo.put( OUString(CFG_ENTRY_PROP_DOCUMENTSTATE), sal_Int32(pInfo->DocumentState));
+        aInfo.put( CFG_ENTRY_PROP_ID, pInfo->ID );
+        aInfo.put( CFG_ENTRY_PROP_ORIGINALURL, pInfo->OrgURL );
+        aInfo.put( CFG_ENTRY_PROP_FACTORYURL, pInfo->FactoryURL );
+        aInfo.put( CFG_ENTRY_PROP_TEMPLATEURL, pInfo->TemplateURL );
+        aInfo.put( CFG_ENTRY_PROP_TEMPURL, pInfo->OldTempURL.isEmpty() ? pInfo->NewTempURL : pInfo->OldTempURL );
+        aInfo.put( CFG_ENTRY_PROP_MODULE, pInfo->AppModule);
+        aInfo.put( CFG_ENTRY_PROP_TITLE, pInfo->Title);
+        aInfo.put( CFG_ENTRY_PROP_VIEWNAMES, pInfo->ViewNames);
+        aInfo.put( CFG_ENTRY_PROP_DOCUMENTSTATE, sal_Int32(pInfo->DocumentState));
 
         aEvent.State <<= aInfo.getPropertyValues();
     }
@@ -3619,7 +3727,8 @@ void AutoRecovery::implts_resetHandleStates()
 
         // } /* SAFE */
         g.clear();
-        implts_flushConfigItem(info);
+        // just update existing records.
+        implts_flushConfigItem(info, /*bRemoveIt=*/false, /*bAllowAdd=*/false);
         g.reset();
         // /* SAFE */ {
     }
@@ -3841,8 +3950,6 @@ void AutoRecovery::implts_cleanUpWorkingEntry(const DispatchParams& aParams)
     if (pIt != m_lDocCache.end())
     {
         AutoRecovery::TDocumentInfo& rInfo = *pIt;
-        AutoRecovery::st_impl_removeFile(rInfo.OldTempURL);
-        AutoRecovery::st_impl_removeFile(rInfo.NewTempURL);
         implts_flushConfigItem(rInfo, true); // sal_True => remove it from xml config!
 
         m_lDocCache.erase(pIt);

@@ -60,7 +60,7 @@ void SwReadOnlyPopup::Check( sal_uInt16 nMID, sal_uInt16 nSID, SfxDispatcher con
         m_xMenu->EnableItem(nMID);
         if (_pItem)
         {
-            m_xMenu->CheckItem(nMID, !_pItem->IsVoidItem() &&
+            m_xMenu->CheckItem(nMID, !_pItem->isVoidItem() &&
                             dynamic_cast< const SfxBoolItem *>( _pItem.get() ) !=  nullptr &&
                             static_cast<SfxBoolItem*>(_pItem.get())->GetValue());
             //remove full screen entry when not in full screen mode
@@ -77,29 +77,29 @@ void SwReadOnlyPopup::Check( sal_uInt16 nMID, sal_uInt16 nSID, SfxDispatcher con
 
 SwReadOnlyPopup::SwReadOnlyPopup(const Point &rDPos, SwView &rV)
     : m_aBuilder(nullptr, AllSettings::GetUIRootDir(), "modules/swriter/ui/readonlymenu.ui", "")
-    , m_xMenu(m_aBuilder.get_menu("menu"))
-    , m_nReadonlyOpenurl(m_xMenu->GetItemId("openurl"))
-    , m_nReadonlyOpendoc(m_xMenu->GetItemId("opendoc"))
-    , m_nReadonlyEditdoc(m_xMenu->GetItemId("edit"))
-    , m_nReadonlySelectionMode(m_xMenu->GetItemId("selection"))
-    , m_nReadonlyReload(m_xMenu->GetItemId("reload"))
-    , m_nReadonlyReloadFrame(m_xMenu->GetItemId("reloadframe"))
-    , m_nReadonlySourceview(m_xMenu->GetItemId("html"))
-    , m_nReadonlyBrowseBackward(m_xMenu->GetItemId("backward"))
-    , m_nReadonlyBrowseForward(m_xMenu->GetItemId("forward"))
-    , m_nReadonlySaveGraphic(m_xMenu->GetItemId("savegraphic"))
-    , m_nReadonlyGraphictogallery(m_xMenu->GetItemId("graphictogallery"))
-    , m_nReadonlyTogallerylink(m_xMenu->GetItemId("graphicaslink"))
-    , m_nReadonlyTogallerycopy(m_xMenu->GetItemId("graphicascopy"))
-    , m_nReadonlySaveBackground(m_xMenu->GetItemId("savebackground"))
-    , m_nReadonlyBackgroundtogallery(m_xMenu->GetItemId("backgroundtogallery"))
-    , m_nReadonlyBackgroundTogallerylink(m_xMenu->GetItemId("backaslink"))
-    , m_nReadonlyBackgroundTogallerycopy(m_xMenu->GetItemId("backascopy"))
-    , m_nReadonlyCopylink(m_xMenu->GetItemId("copylink"))
-    , m_nReadonlyLoadGraphic(m_xMenu->GetItemId("loadgraphic"))
-    , m_nReadonlyGraphicoff(m_xMenu->GetItemId("imagesoff"))
-    , m_nReadonlyFullscreen(m_xMenu->GetItemId("fullscreen"))
-    , m_nReadonlyCopy(m_xMenu->GetItemId("copy"))
+    , m_xMenu(m_aBuilder.get_menu(u"menu"))
+    , m_nReadonlyOpenurl(m_xMenu->GetItemId(u"openurl"))
+    , m_nReadonlyOpendoc(m_xMenu->GetItemId(u"opendoc"))
+    , m_nReadonlyEditdoc(m_xMenu->GetItemId(u"edit"))
+    , m_nReadonlySelectionMode(m_xMenu->GetItemId(u"selection"))
+    , m_nReadonlyReload(m_xMenu->GetItemId(u"reload"))
+    , m_nReadonlyReloadFrame(m_xMenu->GetItemId(u"reloadframe"))
+    , m_nReadonlySourceview(m_xMenu->GetItemId(u"html"))
+    , m_nReadonlyBrowseBackward(m_xMenu->GetItemId(u"backward"))
+    , m_nReadonlyBrowseForward(m_xMenu->GetItemId(u"forward"))
+    , m_nReadonlySaveGraphic(m_xMenu->GetItemId(u"savegraphic"))
+    , m_nReadonlyGraphictogallery(m_xMenu->GetItemId(u"graphictogallery"))
+    , m_nReadonlyTogallerylink(m_xMenu->GetItemId(u"graphicaslink"))
+    , m_nReadonlyTogallerycopy(m_xMenu->GetItemId(u"graphicascopy"))
+    , m_nReadonlySaveBackground(m_xMenu->GetItemId(u"savebackground"))
+    , m_nReadonlyBackgroundtogallery(m_xMenu->GetItemId(u"backgroundtogallery"))
+    , m_nReadonlyBackgroundTogallerylink(m_xMenu->GetItemId(u"backaslink"))
+    , m_nReadonlyBackgroundTogallerycopy(m_xMenu->GetItemId(u"backascopy"))
+    , m_nReadonlyCopylink(m_xMenu->GetItemId(u"copylink"))
+    , m_nReadonlyLoadGraphic(m_xMenu->GetItemId(u"loadgraphic"))
+    , m_nReadonlyGraphicoff(m_xMenu->GetItemId(u"imagesoff"))
+    , m_nReadonlyFullscreen(m_xMenu->GetItemId(u"fullscreen"))
+    , m_nReadonlyCopy(m_xMenu->GetItemId(u"copy"))
     , m_rView(rV)
     , m_xBrushItem(std::make_unique<SvxBrushItem>(RES_BACKGROUND))
 {
@@ -147,8 +147,8 @@ SwReadOnlyPopup::SwReadOnlyPopup(const Point &rDPos, SwView &rV)
 
     m_xMenu->EnableItem(m_nReadonlyGraphictogallery, bEnableGraphicToGallery);
 
-    SfxViewFrame * pVFrame = rV.GetViewFrame();
-    SfxDispatcher &rDis = *pVFrame->GetDispatcher();
+    SfxViewFrame& rVFrame = rV.GetViewFrame();
+    SfxDispatcher &rDis = *rVFrame.GetDispatcher();
     const SwPageDesc &rDesc = rSh.GetPageDesc( rSh.GetCurPageDesc() );
     m_xBrushItem = rDesc.GetMaster().makeBackgroundBrushItem();
     bool bEnableBackGallery = false,
@@ -195,12 +195,12 @@ SwReadOnlyPopup::SwReadOnlyPopup(const Point &rDPos, SwView &rV)
 
     std::unique_ptr<SfxPoolItem> pState;
 
-    SfxItemState eState = pVFrame->GetBindings().QueryState( SID_COPY, pState );
+    SfxItemState eState = rVFrame.GetBindings().QueryState( SID_COPY, pState );
     Check(m_nReadonlyCopy, SID_COPY, rDis);
     if (eState < SfxItemState::DEFAULT)
         m_xMenu->EnableItem(m_nReadonlyCopy, false);
 
-    eState = pVFrame->GetBindings().QueryState( SID_EDITDOC, pState );
+    eState = rVFrame.GetBindings().QueryState( SID_EDITDOC, pState );
     if (
         eState < SfxItemState::DEFAULT ||
         (rSh.IsGlobalDoc() && m_rView.GetDocShell()->IsReadOnlyUI())
@@ -230,7 +230,7 @@ void SwReadOnlyPopup::Execute( vcl::Window* pWin, const Point &rPixPos )
 void SwReadOnlyPopup::Execute( vcl::Window* pWin, sal_uInt16 nId )
 {
     SwWrtShell &rSh = m_rView.GetWrtShell();
-    SfxDispatcher &rDis = *m_rView.GetViewFrame()->GetDispatcher();
+    SfxDispatcher &rDis = *m_rView.GetViewFrame().GetDispatcher();
     if (nId >= MN_READONLY_GRAPHICTOGALLERY)
     {
         OUString sTmp;
@@ -280,7 +280,7 @@ void SwReadOnlyPopup::Execute( vcl::Window* pWin, sal_uInt16 nId )
     else if (nId == m_nReadonlySelectionMode)
         nExecId = FN_READONLY_SELECTION_MODE;
     else if (nId == m_nReadonlyReload || nId == m_nReadonlyReloadFrame)
-        rSh.GetView().GetViewFrame()->GetDispatcher()->Execute(SID_RELOAD);
+        rSh.GetView().GetViewFrame().GetDispatcher()->Execute(SID_RELOAD);
     else if (nId == m_nReadonlyBrowseBackward)
         nExecId = SID_BROWSE_BACKWARD;
     else if (nId == m_nReadonlyBrowseForward)

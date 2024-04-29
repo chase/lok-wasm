@@ -21,6 +21,7 @@
 
 #include <compiler.hxx>
 
+#include <mutex>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <sfx2/app.hxx>
@@ -52,6 +53,7 @@
 #include <rangenam.hxx>
 #include <dbdata.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <callform.hxx>
 #include <addincol.hxx>
 #include <refupdat.hxx>
@@ -77,7 +79,6 @@ using namespace formula;
 using namespace ::com::sun::star;
 using ::std::vector;
 
-osl::Mutex                          ScCompiler::maMutex;
 const CharClass*                    ScCompiler::pCharClassEnglish = nullptr;
 const CharClass*                    ScCompiler::pCharClassLocalized = nullptr;
 const ScCompiler::Convention*       ScCompiler::pConventions[ ]   = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
@@ -221,11 +222,17 @@ bool ScCompiler::IsEnglishSymbol( const OUString& rName )
     return !aIntName.isEmpty();       // no valid function name
 }
 
+static std::mutex& getCharClassMutex()
+{
+    static std::mutex aMutex;
+    return aMutex;
+}
+
 const CharClass* ScCompiler::GetCharClassEnglish()
 {
     if (!pCharClassEnglish)
     {
-        osl::MutexGuard aGuard(maMutex);
+        std::scoped_lock aGuard(getCharClassMutex());
         if (!pCharClassEnglish)
         {
             pCharClassEnglish = new CharClass( ::comphelper::getProcessComponentContext(),
@@ -241,7 +248,7 @@ const CharClass* ScCompiler::GetCharClassLocalized()
     {
         // Switching UI language requires restart; if not, we would have to
         // keep track of that.
-        osl::MutexGuard aGuard(maMutex);
+        std::scoped_lock aGuard(getCharClassMutex());
         if (!pCharClassLocalized)
         {
             pCharClassLocalized = new CharClass( ::comphelper::getProcessComponentContext(),
@@ -769,7 +776,7 @@ struct Convention_A1 : public ScCompiler::Convention
             KParseTokens::ASC_UNDERSCORE | KParseTokens::ASC_DOLLAR;
         constexpr sal_Int32 nContFlags = nStartFlags | KParseTokens::ASC_DOT;
         // '?' allowed in range names because of Xcl :-/
-        static constexpr OUStringLiteral aAddAllowed(u"?#");
+        static constexpr OUString aAddAllowed(u"?#"_ustr);
         return pCharClass->parseAnyToken( rFormula,
                 nSrcPos, nStartFlags, aAddAllowed,
                 (bGroupSeparator ? nContFlags | KParseTokens::GROUP_SEPARATOR_IN_NUMBER : nContFlags),
@@ -1394,7 +1401,7 @@ struct ConventionXL_A1 : public Convention_A1, public ConventionXL
             KParseTokens::ASC_UNDERSCORE | KParseTokens::ASC_DOLLAR;
         constexpr sal_Int32 nContFlags = nStartFlags | KParseTokens::ASC_DOT;
         // '?' allowed in range names
-        static constexpr OUStringLiteral aAddAllowed(u"?!");
+        static constexpr OUString aAddAllowed(u"?!"_ustr);
         return pCharClass->parseAnyToken( rFormula,
                 nSrcPos, nStartFlags, aAddAllowed,
                 (bGroupSeparator ? nContFlags | KParseTokens::GROUP_SEPARATOR_IN_NUMBER : nContFlags),
@@ -1617,7 +1624,7 @@ struct ConventionXL_OOX : public ConventionXL_A1
 
     static void makeExternalDocStr( OUStringBuffer& rBuffer, sal_uInt16 nFileId )
     {
-        rBuffer.append('[').append( static_cast<sal_Int32>(nFileId+1) ).append(']');
+        rBuffer.append("[" + OUString::number( static_cast<sal_Int32>(nFileId+1) ) + "]");
     }
 };
 
@@ -1738,7 +1745,7 @@ struct ConventionXL_R1C1 : public ScCompiler::Convention, public ConventionXL
             KParseTokens::ASC_UNDERSCORE ;
         constexpr sal_Int32 nContFlags = nStartFlags | KParseTokens::ASC_DOT;
         // '?' allowed in range names
-        static constexpr OUStringLiteral aAddAllowed(u"?-[]!");
+        static constexpr OUString aAddAllowed(u"?-[]!"_ustr);
 
         return pCharClass->parseAnyToken( rFormula,
                 nSrcPos, nStartFlags, aAddAllowed,
@@ -2837,7 +2844,7 @@ Label_MaskStateMachine:
             else
             {
                 // When having parsed a second reference part, ensure that the
-                // i18n parser did not mistakingly parse a number that included
+                // i18n parser did not mistakenly parse a number that included
                 // a separator which happened to be meant as a parameter
                 // separator instead.
                 if (mnRangeOpPosInSymbol >= 0 && (aRes.TokenType & KParseType::ASC_NUMBER))
@@ -3087,17 +3094,16 @@ bool ScCompiler::ParseOpCode( const OUString& rName, bool bInArray )
 
 bool ScCompiler::ParseOpCode2( std::u16string_view rName )
 {
-    bool bFound = false;
-    sal_uInt16 i;
-
-    for( i = ocInternalBegin; i <= ocInternalEnd && !bFound; i++ )
-        bFound = o3tl::equalsAscii( rName, pInternal[ i-ocInternalBegin ] );
-
-    if (bFound)
+    for (sal_uInt16 i = ocInternalBegin; i <= ocInternalEnd; i++)
     {
-        maRawToken.SetOpCode( static_cast<OpCode>(--i) );
+        if (o3tl::equalsAscii(rName, pInternal[i - ocInternalBegin]))
+        {
+            maRawToken.SetOpCode(static_cast<OpCode>(i));
+            return true;
+        }
     }
-    return bFound;
+
+    return false;
 }
 
 static bool lcl_ParenthesisFollows( const sal_Unicode* p )
@@ -3229,7 +3235,7 @@ bool ScCompiler::ParsePredetectedReference( const OUString& rName )
     // It could also be a broken invalidated reference that contains #REF!
     // (but is not equal to), which we wrote prior to ODFF and also to ODFF
     // between 2013 and 2016 until 5.1.4
-    const OUString aErrRef("#REF!");    // not localized in ODFF
+    constexpr OUString aErrRef(u"#REF!"_ustr);    // not localized in ODFF
     sal_Int32 nPos = rName.indexOf( aErrRef);
     if (nPos != -1)
     {
@@ -3549,7 +3555,7 @@ bool ScCompiler::ParseMacro( const OUString& rName )
 
     OUString aName( rName);
     StarBASIC* pObj = nullptr;
-    SfxObjectShell* pDocSh = rDoc.GetDocumentShell();
+    ScDocShell* pDocSh = rDoc.GetDocumentShell();
 
     try
     {
@@ -3993,7 +3999,7 @@ bool ScCompiler::ParseTableRefItem( const OUString& rName )
     {
         // Only called when there actually is a current TableRef, hence
         // accessing maTableRefs.back() is safe.
-        ScTableRefToken* p = dynamic_cast<ScTableRefToken*>(maTableRefs.back().mxToken.get());
+        ScTableRefToken* p = maTableRefs.back().mxToken.get();
         assert(p);  // not a ScTableRefToken can't be
 
         switch ((*iLook).second)
@@ -4061,7 +4067,7 @@ bool ScCompiler::ParseTableRefColumn( const OUString& rName )
 {
     // Only called when there actually is a current TableRef, hence
     // accessing maTableRefs.back() is safe.
-    ScTableRefToken* p = dynamic_cast<ScTableRefToken*>(maTableRefs.back().mxToken.get());
+    ScTableRefToken* p = maTableRefs.back().mxToken.get();
     assert(p);  // not a ScTableRefToken can't be
 
     ScDBData* pDBData = rDoc.GetDBCollection()->getNamedDBs().findByIndex( p->GetIndex());
@@ -4732,6 +4738,7 @@ std::unique_ptr<ScTokenArray> ScCompiler::CompileString( const OUString& rFormul
     pFunctionStack[0].eOp = ocNone;
     pFunctionStack[0].nSep = 0;
     size_t nFunction = 0;
+    size_t nHighWatermark = 0;
     short nBrackets = 0;
     bool bInArray = false;
     eLastOp = ocOpen;
@@ -4751,6 +4758,7 @@ std::unique_ptr<ScTokenArray> ScCompiler::CompileString( const OUString& rFormul
                     ++nFunction;
                     pFunctionStack[ nFunction ].eOp = eLastOp;
                     pFunctionStack[ nFunction ].nSep = 0;
+                    nHighWatermark = nFunction;
                 }
             }
             break;
@@ -4789,6 +4797,7 @@ std::unique_ptr<ScTokenArray> ScCompiler::CompileString( const OUString& rFormul
                     ++nFunction;
                     pFunctionStack[ nFunction ].eOp = eOp;
                     pFunctionStack[ nFunction ].nSep = 0;
+                    nHighWatermark = nFunction;
                 }
             }
             break;
@@ -4819,6 +4828,7 @@ std::unique_ptr<ScTokenArray> ScCompiler::CompileString( const OUString& rFormul
                     ++nFunction;
                     pFunctionStack[ nFunction ].eOp = eOp;
                     pFunctionStack[ nFunction ].nSep = 0;
+                    nHighWatermark = nFunction;
                 }
             }
             break;
@@ -4861,9 +4871,9 @@ std::unique_ptr<ScTokenArray> ScCompiler::CompileString( const OUString& rFormul
             // Append a parameter for WEEKNUM, all 1.0
             // Function is already closed, parameter count is nSep+1
             size_t nFunc = nFunction + 1;
-            if (eOp == ocClose &&
-                    (pFunctionStack[ nFunc ].eOp == ocWeek &&   // 2nd week start
-                     pFunctionStack[ nFunc ].nSep == 0))
+            if (eOp == ocClose && nFunc <= nHighWatermark &&
+                     pFunctionStack[ nFunc ].nSep == 0 &&
+                     pFunctionStack[ nFunc ].eOp == ocWeek)   // 2nd week start
             {
                 if (    !static_cast<ScTokenArray*>(pArr)->Add( new FormulaToken( svSep, ocSep)) ||
                         !static_cast<ScTokenArray*>(pArr)->Add( new FormulaDoubleToken( 1.0)))
@@ -4912,7 +4922,7 @@ std::unique_ptr<ScTokenArray> ScCompiler::CompileString( const OUString& rFormul
             const FormulaToken* pPrev = pArr->PeekPrev( nIdx);
             if (pPrev && pPrev->GetOpCode() == ocDBArea)
             {
-                FormulaToken* pTableRefToken = new ScTableRefToken( pPrev->GetIndex(), ScTableRefToken::TABLE);
+                ScTableRefToken* pTableRefToken = new ScTableRefToken( pPrev->GetIndex(), ScTableRefToken::TABLE);
                 maTableRefs.emplace_back( pTableRefToken);
                 // pPrev may be dead hereafter.
                 static_cast<ScTokenArray*>(pArr)->ReplaceToken( nIdx, pTableRefToken,
@@ -5433,8 +5443,8 @@ void ScCompiler::CreateStringFromIndex( OUStringBuffer& rBuffer, const FormulaTo
                 }
                 else if (mbRefConventionChartOOXML)
                 {
-                    aBuffer.append("[0]");
-                    aBuffer.append(pConv->getSpecialSymbol(ScCompiler::Convention::SHEET_SEPARATOR));
+                    aBuffer.append("[0]"
+                        + OUStringChar(pConv->getSpecialSymbol(ScCompiler::Convention::SHEET_SEPARATOR)));
                 }
                 aBuffer.append(pData->GetName());
             }
@@ -6559,6 +6569,8 @@ void ScCompiler::AnnotateTrimOnDoubleRefs()
         // such that one of the operands of ocEqual is a double-ref.
         // Examples of formula that matches this are:
         //   SUMPRODUCT(IF($A:$A=$L12;$D:$D*G:G))
+        // Also in case of DoubleRef arguments around other Binary operators can be trimmable:
+        //   SUMPRODUCT(($D:$D>M47:M47)*($D:$D<M48:M48)*($I:$I=N$41))
         bool bTillClose = true;
         bool bCloseTillIf = false;
         sal_Int16 nToksTillIf = 0;
@@ -6588,6 +6600,39 @@ void ScCompiler::AnnotateTrimOnDoubleRefs()
                         if (lhsType == svDoubleRef && rhsType == svDoubleRef)
                         {
                             pLHS->GetDoubleRef()->SetTrimToData(true);
+                            pRHS->GetDoubleRef()->SetTrimToData(true);
+                        }
+                    }
+                    break;
+                case ocEqual:
+                case ocAdd:
+                case ocSub:
+                case ocAmpersand:
+                case ocPow:
+                case ocNotEqual:
+                case ocLess:
+                case ocGreater:
+                case ocLessEqual:
+                case ocGreaterEqual:
+                case ocAnd:
+                case ocOr:
+                case ocXor:
+                case ocIntersect:
+                case ocUnion:
+                case ocRange:
+                    {
+                        if (!pTok->IsInForceArray())
+                            break;
+                        FormulaToken* pLHS = *(ppTok - 1);
+                        FormulaToken* pRHS = *(ppTok - 2);
+                        StackVar lhsType = pLHS->GetType();
+                        StackVar rhsType = pRHS->GetType();
+                        if (lhsType == svDoubleRef && (rhsType == svSingleRef || rhsType == svDoubleRef))
+                        {
+                            pLHS->GetDoubleRef()->SetTrimToData(true);
+                        }
+                        if (rhsType == svDoubleRef && (lhsType == svSingleRef || lhsType == svDoubleRef))
+                        {
                             pRHS->GetDoubleRef()->SetTrimToData(true);
                         }
                     }

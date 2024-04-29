@@ -660,8 +660,8 @@ bool SdOutliner::SearchAndReplaceAll()
 
             std::stringstream aStream;
             boost::property_tree::write_json(aStream, aTree);
-            OString aPayload = aStream.str().c_str();
-            rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_RESULT_SELECTION, aPayload.getStr());
+            OString aPayload( aStream.str() );
+            rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_RESULT_SELECTION, aPayload);
         }
     }
 
@@ -672,7 +672,7 @@ bool SdOutliner::SearchAndReplaceAll()
         // Find-all, tiled rendering and we have at least one match.
         OString aPayload = OString::number(mnStartPageIndex);
         SfxViewShell& rSfxViewShell = pViewShell->GetViewShellBase();
-        rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_SET_PART, aPayload.getStr());
+        rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_SET_PART, aPayload);
 
         // Emit a selection callback here:
         // 1) The original one is no longer valid, as we there was a SET_PART in between
@@ -685,7 +685,7 @@ bool SdOutliner::SearchAndReplaceAll()
                 aRectangles.push_back(rSelection.m_aRectangles);
         }
         OString sRectangles = comphelper::string::join("; ", aRectangles);
-        rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, sRectangles.getStr());
+        rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, sRectangles);
     }
 
     mnStartPageIndex = sal_uInt16(-1);
@@ -780,7 +780,7 @@ void SdOutliner::sendLOKSearchResultCallback(const std::shared_ptr<sd::ViewShell
         // notify LibreOfficeKit about changed page
         OString aPayload = OString::number(maCurrentPosition.mnPageIndex);
         SfxViewShell& rSfxViewShell = pViewShell->GetViewShellBase();
-        rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_SET_PART, aPayload.getStr());
+        rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_SET_PART, aPayload);
 
         // also about search result selections
         boost::property_tree::ptree aTree;
@@ -796,12 +796,12 @@ void SdOutliner::sendLOKSearchResultCallback(const std::shared_ptr<sd::ViewShell
 
         std::stringstream aStream;
         boost::property_tree::write_json(aStream, aTree);
-        aPayload = aStream.str().c_str();
-        rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_RESULT_SELECTION, aPayload.getStr());
+        aPayload = OString(aStream.str());
+        rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_RESULT_SELECTION, aPayload);
 
         if (rVectorGraphicSearchContext.mbCurrentIsVectorGraphic)
         {
-            rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, sRectangles.getStr());
+            rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, sRectangles);
         }
     }
     else
@@ -1166,7 +1166,7 @@ bool lclIsValidTextObject(const sd::outliner::IteratorPosition& rPosition)
 
 bool isValidVectorGraphicObject(const sd::outliner::IteratorPosition& rPosition)
 {
-    auto* pGraphicObject = dynamic_cast<SdrGrafObj*>(rPosition.mxObject.get().get());
+    rtl::Reference<SdrGrafObj> pGraphicObject = dynamic_cast<SdrGrafObj*>(rPosition.mxObject.get().get());
     if (pGraphicObject)
     {
         auto const& pVectorGraphicData = pGraphicObject->GetGraphic().getVectorGraphicData();
@@ -1403,7 +1403,7 @@ void SdOutliner::ShowEndOfSearchDialog()
             if (pViewShell)
             {
                 SfxViewShell& rSfxViewShell = pViewShell->GetViewShellBase();
-                rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, mpSearchItem->GetSearchString().toUtf8().getStr());
+                rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, mpSearchItem->GetSearchString().toUtf8());
             }
         }
 

@@ -20,9 +20,9 @@
 #ifndef INCLUDED_SVL_SOURCE_PASSWORDCONTAINER_SYSCREDS_HXX
 #define INCLUDED_SVL_SOURCE_PASSWORDCONTAINER_SYSCREDS_HXX
 
-#include <set>
 #include <memory>
-#include <osl/mutex.hxx>
+#include <mutex>
+#include <set>
 #include <rtl/ustring.hxx>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <unotools/configitem.hxx>
@@ -44,9 +44,10 @@ class SysCredentialsConfigItem : public utl::ConfigItem
         //bool isSystemCredentialsURL( const OUString & rURL ) const;
 
     private:
+        css::uno::Sequence< OUString > getSystemCredentialsURLs(std::unique_lock<std::mutex>& rGuard);
         virtual void ImplCommit() override;
 
-        ::osl::Mutex m_aMutex;
+        std::mutex m_aMutex;
         bool m_bInited;
         css::uno::Sequence< OUString > m_seqURLs;
         SysCredentialsConfig * m_pOwner;
@@ -65,10 +66,10 @@ class SysCredentialsConfig
         void persistentConfigChanged();
 
     private:
-        void initCfg();
-        void writeCfg();
+        void initCfg(std::unique_lock<std::mutex>& rGuard);
+        void writeCfg(std::unique_lock<std::mutex>& rGuard);
 
-        ::osl::Mutex m_aMutex;
+        std::mutex m_aMutex;
         std::set< OUString >     m_aMemContainer;
         std::set< OUString >     m_aCfgContainer;
         SysCredentialsConfigItem m_aConfigItem;

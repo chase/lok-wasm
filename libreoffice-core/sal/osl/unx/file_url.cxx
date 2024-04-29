@@ -19,18 +19,13 @@
 
 #include "file_url.hxx"
 
-#include "system.hxx"
-
 #include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <stdexcept>
 #include <string_view>
-#include <type_traits>
 #include <limits.h>
 #include <errno.h>
-#include <strings.h>
-#include <unistd.h>
 
 #include <o3tl/safeint.hxx>
 #include <osl/file.hxx>
@@ -46,7 +41,6 @@
 #include <rtl/uri.h>
 #include <rtl/uri.hxx>
 #include <rtl/ustring.hxx>
-#include <rtl/ustrbuf.h>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/textcvt.h>
 #include <sal/log.hxx>
@@ -955,8 +949,7 @@ oslFileError osl::detail::convertPathnameToUrl(OString const & pathname, OUStrin
             static sal_Unicode const aHex[16]
                 = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
                     0x41, 0x42, 0x43, 0x44, 0x45, 0x46 }; /* '0'--'9', 'A'--'F' */
-            buf.append(aHex[c >> 4]);
-            buf.append(aHex[c & 15]);
+            buf.append(OUStringChar(aHex[c >> 4]) + OUStringChar(aHex[c & 15]));
             --convert;
             continue;
         }

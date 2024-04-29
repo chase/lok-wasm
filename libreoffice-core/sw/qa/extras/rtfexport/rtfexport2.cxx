@@ -30,6 +30,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <i18nlangtag/languagetag.hxx>
+#include <comphelper/scopeguard.hxx>
 
 #include <bordertest.hxx>
 
@@ -40,33 +41,6 @@ public:
         : SwModelTestBase("/sw/qa/extras/rtfexport/data/", "Rich Text Format")
     {
     }
-
-    virtual std::unique_ptr<Resetter> preTest(const char* filename) override
-    {
-        m_aSavedSettings = Application::GetSettings();
-        if (filename == std::string_view("fdo48023.rtf"))
-        {
-            std::unique_ptr<Resetter> pResetter(
-                new Resetter([this]() { Application::SetSettings(this->m_aSavedSettings); }));
-            AllSettings aSettings(m_aSavedSettings);
-            aSettings.SetLanguageTag(LanguageTag("ru"));
-            Application::SetSettings(aSettings);
-            return pResetter;
-        }
-        else if (filename == std::string_view("fdo44211.rtf"))
-        {
-            std::unique_ptr<Resetter> pResetter(
-                new Resetter([this]() { Application::SetSettings(this->m_aSavedSettings); }));
-            AllSettings aSettings(m_aSavedSettings);
-            aSettings.SetLanguageTag(LanguageTag("lt"));
-            Application::SetSettings(aSettings);
-            return pResetter;
-        }
-        return nullptr;
-    }
-
-protected:
-    AllSettings m_aSavedSettings;
 };
 
 DECLARE_RTFEXPORT_TEST(testFdo45553, "fdo45553.rtf")
@@ -204,7 +178,7 @@ DECLARE_RTFEXPORT_TEST(testFdo79384, "fdo79384.rtf")
 {
     uno::Reference<text::XTextRange> xTextRange = getRun(getParagraph(1), 1);
 
-    CPPUNIT_ASSERT_EQUAL(OUString(u"Маркеры спискамЫ"), xTextRange->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Маркеры спискамЫ"_ustr, xTextRange->getString());
 }
 
 DECLARE_RTFEXPORT_TEST(testFdo47326, "fdo47326.rtf")
@@ -253,7 +227,7 @@ DECLARE_RTFEXPORT_TEST(testFdo45394, "fdo45394.rtf")
         getStyles("PageStyles")->getByName("Standard"), "HeaderText");
     OUString aActual = xHeaderText->getString();
     // Encoding in the header was wrong.
-    CPPUNIT_ASSERT_EQUAL(OUString(u"\u041F\u041A \u0420\u0418\u041A"), aActual);
+    CPPUNIT_ASSERT_EQUAL(u"\u041F\u041A \u0420\u0418\u041A"_ustr, aActual);
 
     uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xIndexAccess(xTextTablesSupplier->getTextTables(),
@@ -316,14 +290,27 @@ DECLARE_RTFEXPORT_TEST(testFdo48356, "fdo48356.rtf")
     CPPUNIT_ASSERT_EQUAL(1, i);
 }
 
-DECLARE_RTFEXPORT_TEST(testFdo48023, "fdo48023.rtf")
+CPPUNIT_TEST_FIXTURE(Test, testFdo48023)
 {
-    uno::Reference<text::XTextRange> xTextRange = getRun(getParagraph(1), 1);
+    auto verify = [this]() {
+        uno::Reference<text::XTextRange> xTextRange = getRun(getParagraph(1), 1);
 
-    // Implicit encoding detection based on locale was missing
-    CPPUNIT_ASSERT_EQUAL(
-        OUString(u"\u041F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0438\u0441\u0442"),
-        xTextRange->getString());
+        // Implicit encoding detection based on locale was missing
+        CPPUNIT_ASSERT_EQUAL(
+            u"\u041F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0438\u0441\u0442"_ustr,
+            xTextRange->getString());
+    };
+
+    AllSettings aSavedSettings = Application::GetSettings();
+    AllSettings aSettings(aSavedSettings);
+    aSettings.SetLanguageTag(LanguageTag("ru"));
+    Application::SetSettings(aSettings);
+    comphelper::ScopeGuard g([&aSavedSettings] { Application::SetSettings(aSavedSettings); });
+
+    createSwDoc("fdo48023.rtf");
+    verify();
+    saveAndReload("Rich Text Format");
+    verify();
 }
 
 DECLARE_RTFEXPORT_TEST(testFdo48876, "fdo48876.rtf")
@@ -340,11 +327,24 @@ DECLARE_RTFEXPORT_TEST(testFdo48876, "fdo48876.rtf")
 
 DECLARE_RTFEXPORT_TEST(testFdo48193, "fdo48193.rtf") { CPPUNIT_ASSERT_EQUAL(7, getLength()); }
 
-DECLARE_RTFEXPORT_TEST(testFdo44211, "fdo44211.rtf")
+CPPUNIT_TEST_FIXTURE(Test, testFdo44211)
 {
-    uno::Reference<text::XTextRange> xTextRange = getRun(getParagraph(1), 1);
+    auto verify = [this]() {
+        uno::Reference<text::XTextRange> xTextRange = getRun(getParagraph(1), 1);
 
-    CPPUNIT_ASSERT_EQUAL(OUString(u"\u0105\u010D\u0119"), xTextRange->getString());
+        CPPUNIT_ASSERT_EQUAL(u"\u0105\u010D\u0119"_ustr, xTextRange->getString());
+    };
+
+    AllSettings aSavedSettings = Application::GetSettings();
+    AllSettings aSettings(aSavedSettings);
+    aSettings.SetLanguageTag(LanguageTag("lt"));
+    Application::SetSettings(aSettings);
+    comphelper::ScopeGuard g([&aSavedSettings] { Application::SetSettings(aSavedSettings); });
+
+    createSwDoc("fdo44211.rtf");
+    verify();
+    saveAndReload("Rich Text Format");
+    verify();
 }
 
 DECLARE_RTFEXPORT_TEST(testFdo48037, "fdo48037.rtf")
@@ -515,12 +515,16 @@ DECLARE_RTFEXPORT_TEST(testFdo36089, "fdo36089.rtf")
                          getProperty<sal_Int16>(getRun(getParagraph(1), 2), "CharEscapement"));
 }
 
-DECLARE_RTFEXPORT_TEST(testFdo48446, "fdo48446.rtf") { getParagraph(1, u"\u0418\u043C\u044F"); }
+DECLARE_RTFEXPORT_TEST(testFdo48446, "fdo48446.rtf")
+{
+    getParagraph(1, u"\u0418\u043C\u044F"_ustr);
+}
 
 DECLARE_RTFEXPORT_TEST(testFdo47495, "fdo47495.rtf")
 {
     // Used to have 4 paragraphs, as a result the original bugdoc had 2 pages instead of 1.
-    CPPUNIT_ASSERT_EQUAL(2, getParagraphs());
+    // Word 2013 shows 1 paragraph
+    CPPUNIT_ASSERT_EQUAL(1, getParagraphs());
 }
 
 DECLARE_RTFEXPORT_TEST(testAllGapsWord, "all_gaps_word.rtf")
@@ -583,7 +587,8 @@ CPPUNIT_TEST_FIXTURE(Test, testCopyPastePageStyle)
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText = xTextDocument->getText();
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste(u"rtfexport/data/copypaste-pagestyle-paste.rtf", xEnd);
+    paste(u"rtfexport/data/copypaste-pagestyle-paste.rtf", "com.sun.star.comp.Writer.RtfFilter",
+          xEnd);
 
     uno::Reference<beans::XPropertySet> xPropertySet(getStyles("PageStyles")->getByName("Standard"),
                                                      uno::UNO_QUERY);
@@ -598,7 +603,8 @@ CPPUNIT_TEST_FIXTURE(Test, testCopyPasteFootnote)
     uno::Reference<text::XFootnotesSupplier> xFootnotesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xFootnotes = xFootnotesSupplier->getFootnotes();
     uno::Reference<text::XTextRange> xTextRange(xFootnotes->getByIndex(0), uno::UNO_QUERY);
-    paste(u"rtfexport/data/copypaste-footnote-paste.rtf", xTextRange);
+    paste(u"rtfexport/data/copypaste-footnote-paste.rtf", "com.sun.star.comp.Writer.RtfFilter",
+          xTextRange);
 
     CPPUNIT_ASSERT_EQUAL(OUString("bbb"), xTextRange->getString());
 }
@@ -610,7 +616,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFdo63428)
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText = xTextDocument->getText();
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste(u"rtfexport/data/fdo63428.rtf", xEnd);
+    paste(u"rtfexport/data/fdo63428.rtf", "com.sun.star.comp.Writer.RtfFilter", xEnd);
 
     // Additionally, commented range was imported as a normal comment.
     CPPUNIT_ASSERT_EQUAL(OUString("Annotation"),
@@ -625,7 +631,7 @@ DECLARE_RTFEXPORT_TEST(testFdo69384, "fdo69384-paste.rtf")
     getStyles("ParagraphStyles")->getByName("Text body justified");
     // Ensure default styles were modified, vs testFdo69384Inserted where it is not
     uno::Reference<beans::XPropertySet> xPropertySet(
-        getStyles("ParagraphStyles")->getByName("Text Body"), uno::UNO_QUERY);
+        getStyles("ParagraphStyles")->getByName("Text body"), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(68.f, getProperty<float>(xPropertySet, "CharHeight"));
 }
 
@@ -635,12 +641,12 @@ CPPUNIT_TEST_FIXTURE(Test, testFdo69384Inserted)
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText = xTextDocument->getText();
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste(u"rtfexport/data/fdo69384-paste.rtf", xEnd);
+    paste(u"rtfexport/data/fdo69384-paste.rtf", "com.sun.star.comp.Writer.RtfFilter", xEnd);
 
     // During insert of the RTF document we do not change pre-existing styles
     // vs testFdo69384 where it is
     uno::Reference<beans::XPropertySet> xPropertySet(
-        getStyles("ParagraphStyles")->getByName("Text Body"), uno::UNO_QUERY);
+        getStyles("ParagraphStyles")->getByName("Text body"), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(12.f, getProperty<float>(xPropertySet, "CharHeight"));
 }
 
@@ -651,7 +657,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFdo61193)
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText = xTextDocument->getText();
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste(u"rtfexport/data/fdo61193.rtf", xEnd);
+    paste(u"rtfexport/data/fdo61193.rtf", "com.sun.star.comp.Writer.RtfFilter", xEnd);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf108123)
@@ -662,7 +668,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf108123)
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText = xTextDocument->getText();
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste(u"rtfexport/data/tdf108123.rtf", xEnd);
+    paste(u"rtfexport/data/tdf108123.rtf", "com.sun.star.comp.Writer.RtfFilter", xEnd);
 }
 
 DECLARE_RTFEXPORT_TEST(testShptxtPard, "shptxt-pard.rtf")
@@ -715,7 +721,7 @@ DECLARE_RTFEXPORT_TEST(testFdo56512, "fdo56512.rtf")
     uno::Reference<container::XIndexAccess> xIndexAccess(xTextFramesSupplier->getTextFrames(),
                                                          uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xTextRange(xIndexAccess->getByIndex(0), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"\u05E2\u05D5\u05E1\u05E7 \u05DE\u05D5\u05E8\u05E9\u05D4 "),
+    CPPUNIT_ASSERT_EQUAL(u"\u05E2\u05D5\u05E1\u05E7 \u05DE\u05D5\u05E8\u05E9\u05D4 "_ustr,
                          xTextRange->getString());
 }
 
@@ -872,7 +878,7 @@ DECLARE_RTFEXPORT_TEST(testFdo59638, "fdo59638.rtf")
         if (rProp.Name == "BulletChar")
         {
             // Was '*', should be 'o'.
-            CPPUNIT_ASSERT_EQUAL(OUString(u"\uF0B7"), rProp.Value.get<OUString>());
+            CPPUNIT_ASSERT_EQUAL(u"\uF0B7"_ustr, rProp.Value.get<OUString>());
             return;
         }
     }

@@ -8,6 +8,12 @@
  */
 #ifndef INCLUDED_VCL_GRAPHIC_GRAPHICMETADATA_HXX
 #define INCLUDED_VCL_GRAPHIC_GRAPHICMETADATA_HXX
+
+#include <tools/gen.hxx>
+#include <vcl/mapmod.hxx>
+
+#include <optional>
+
 // Info class for all supported file formats
 enum class GraphicFileFormat
 {
@@ -42,7 +48,8 @@ enum class GraphicFileFormat
     SVG = 0x00f9,
     WMZ = 0x00fa,
     EMZ = 0x00fb,
-    SVGZ = 0x00fc
+    SVGZ = 0x00fc,
+    APNG = 0x00fd
 };
 struct GraphicMetadata
 {

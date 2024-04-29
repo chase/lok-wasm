@@ -6,8 +6,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
-#ifndef INCLUDED_VCL_INC_UNX_GTK_GTKSYS_HXX
-#define INCLUDED_VCL_INC_UNX_GTK_GTKSYS_HXX
+
+#pragma once
 
 #include <unx/gensys.h>
 #include <gtk/gtk.h>
@@ -26,10 +26,9 @@ public:
     virtual ~GtkSalSystem() override;
     static   GtkSalSystem *GetSingleton();
 
-    virtual bool          IsUnifiedDisplay() override;
     virtual unsigned int  GetDisplayScreenCount() override;
     virtual unsigned int  GetDisplayBuiltInScreen() override;
-    virtual tools::Rectangle     GetDisplayScreenPosSizePixel   (unsigned int nScreen) override;
+    virtual AbsoluteScreenPixelRectangle GetDisplayScreenPosSizePixel(unsigned int nScreen) override;
     virtual int           ShowNativeDialog (const OUString&              rTitle,
                                             const OUString&              rMessage,
                                             const std::vector< OUString >& rButtons) override;
@@ -44,7 +43,5 @@ public:
     GdkScreen *getScreenMonitorFromIdx (int nIdx, gint &nMonitor);
 #endif
 };
-
-#endif // INCLUDED_VCL_INC_UNX_GTK_GTKSYS_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

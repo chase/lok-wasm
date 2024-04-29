@@ -134,7 +134,7 @@ void LangSelectionStatusbarController::LangMenu(
 
     // add first few entries to main menu
     sal_Int16 nItemId = static_cast< sal_Int16 >(MID_LANG_SEL_1);
-    static const OUStringLiteral sAsterisk(u"*");  // multiple languages in current selection
+    static constexpr OUString sAsterisk(u"*"_ustr);  // multiple languages in current selection
     const OUString sNone( SvtLanguageTable::GetLanguageString( LANGUAGE_NONE ));
     std::map< sal_Int16, OUString > aLangMap;
     for (auto const& langItem : aLangItems)
@@ -251,8 +251,7 @@ void LangSelectionStatusbarController::LangMenu(
     }
     else if (MID_LANG_PARA_1 <= nId && nId <= MID_LANG_PARA_9)
     {
-        aBuff.append( ".uno:LanguageStatus?Language:string=Paragraph_" );
-        aBuff.append( aSelectedLang );
+        aBuff.append( ".uno:LanguageStatus?Language:string=Paragraph_" +  aSelectedLang );
     }
     else if (nId == MID_LANG_PARA_NONE)
     {
@@ -345,7 +344,7 @@ void SAL_CALL LangSelectionStatusbarController::statusChanged( const FeatureStat
     else if ( !Event.State.hasValue() )
     {
         m_xStatusbarItem->setText( OUString() );
-        m_xStatusbarItem->setQuickHelpText(u"");
+        m_xStatusbarItem->setQuickHelpText(u""_ustr);
         m_bShowMenu = false;    // no language -> no menu
     }
 }

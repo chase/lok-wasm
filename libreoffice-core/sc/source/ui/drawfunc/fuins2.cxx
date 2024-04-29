@@ -32,6 +32,8 @@
 #include <unotools/moduleoptions.hxx>
 #include <svtools/insdlg.hxx>
 #include <svtools/embedhlp.hxx>
+#include <svtools/strings.hrc>
+#include <svtools/svtresid.hxx>
 #include <svx/svxdlg.hxx>
 #include <comphelper/classids.hxx>
 #include <svx/svdpagv.hxx>
@@ -57,6 +59,7 @@
 #include <com/sun/star/chart/ChartDataRowSource.hpp>
 #include <cppuhelper/bootstrap.hxx>
 #include <svtools/dialogclosedlistener.hxx>
+#include <officecfg/Office/Common.hxx>
 
 #include <PivotTableDataProvider.hxx>
 #include <chart2uno.hxx>
@@ -140,7 +143,7 @@ void lcl_ChartInit(const uno::Reference <embed::XEmbeddedObject>& xObj, ScViewDa
 
     xReceiver->attachDataProvider(xDataProvider);
 
-    uno::Reference< util::XNumberFormatsSupplier > xNumberFormatsSupplier( pDocShell->GetModel(), uno::UNO_QUERY );
+    uno::Reference< util::XNumberFormatsSupplier > xNumberFormatsSupplier( getXWeak(pDocShell->GetModel()), uno::UNO_QUERY );
     xReceiver->attachNumberFormatsSupplier( xNumberFormatsSupplier );
 
     // Same behavior as with old chart: Always assume data series in columns
@@ -236,13 +239,13 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView*
     if ( nSlot == SID_INSERT_OBJECT && pNameItem )
     {
         const SvGlobalName& aClassName = pNameItem->GetValue();
-        xObj = rViewShell.GetViewFrame()->GetObjectShell()->GetEmbeddedObjectContainer().CreateEmbeddedObject( aClassName.GetByteSequence(), aName );
+        xObj = rViewShell.GetViewFrame().GetObjectShell()->GetEmbeddedObjectContainer().CreateEmbeddedObject( aClassName.GetByteSequence(), aName );
     }
     else if ( nSlot == SID_INSERT_SMATH )
     {
         if ( SvtModuleOptions().IsMath() )
         {
-            xObj = rViewShell.GetViewFrame()->GetObjectShell()->GetEmbeddedObjectContainer().CreateEmbeddedObject( SvGlobalName( SO3_SM_CLASSID_60 ).GetByteSequence(), aName );
+            xObj = rViewShell.GetViewFrame().GetObjectShell()->GetEmbeddedObjectContainer().CreateEmbeddedObject( SvGlobalName( SO3_SM_CLASSID_60 ).GetByteSequence(), aName );
             rReq.AppendItem( SfxGlobalNameItem( SID_INSERT_OBJECT, SvGlobalName( SO3_SM_CLASSID_60 ) ) );
         }
     }
@@ -252,6 +255,14 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView*
         switch ( nSlot )
         {
             case SID_INSERT_OBJECT :
+                if (officecfg::Office::Common::Security::Scripting::DisableActiveContent::get())
+                {
+                    std::unique_ptr<weld::MessageDialog> xError(Application::CreateMessageDialog(
+                        nullptr, VclMessageType::Warning, VclButtonsType::Ok,
+                        SvtResId(STR_WARNING_ACTIVE_CONTENT_DISABLED)));
+                    xError->run();
+                    break;
+                }
                 aServerLst.FillInsertObjects();
                 aServerLst.Remove( ScDocShell::Factory().GetClassId() );   // Do not show Starcalc
                 //TODO/LATER: currently no inserting of ClassId into SfxRequest!
@@ -260,7 +271,7 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView*
             {
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 ScopedVclPtr<SfxAbstractInsertObjectDialog> pDlg(
-                        pFact->CreateInsertObjectDialog( rViewShell.GetFrameWeld(), SC_MOD()->GetSlotPool()->GetSlot(nSlot)->GetCommandString(),
+                        pFact->CreateInsertObjectDialog( rViewShell.GetFrameWeld(), SC_MOD()->GetSlotPool()->GetSlot(nSlot)->GetCommand(),
                         xStorage, &aServerLst ));
                 if ( pDlg )
                 {
@@ -673,6 +684,7 @@ FuInsertChart::FuInsertChart(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawV
                     }
 
                     pView->AddUndo(std::make_unique<SdrUndoNewObj>(*pObj));
+                    rViewSh.SetInsertWizardUndoMark();
                     rtl::Reference<::svt::DialogClosedListener> pListener = new ::svt::DialogClosedListener();
                     pListener->SetDialogClosedLink( rLink );
 

@@ -21,6 +21,11 @@
 #include <rtl/ustring.hxx>
 #include "file_impl.hxx"
 #include <cassert>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/time.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 /*
  *   ToDo:
@@ -40,6 +45,10 @@
 #include <machine/param.h>
 #endif
 
+#ifdef IOS
+#include <signal.h>
+#endif
+
 #include "system.hxx"
 #include "unixerrnostring.hxx"
 #if defined(__sun)
@@ -52,16 +61,11 @@
 #include <osl/thread.h>
 #include <osl/file.h>
 #include <osl/file.hxx>
-#include <osl/signal.h>
-#include <rtl/alloc.h>
 #include <sal/log.hxx>
-
-#include <grp.h>
 
 #include "createfilehandlefromfd.hxx"
 #include "file_url.hxx"
 #include "readwrite_helper.hxx"
-#include "sockimpl.hxx"
 #include "secimpl.hxx"
 
 #define MAX_ARGS        255
@@ -329,6 +333,7 @@ static void ChildStatusProc(void *pData)
                         else
                             pChild->m_status = -1;
 
+                        // coverity[lock_order : FALSE] - incorrect report of lock order error
                         osl_setCondition(pChild->m_terminated);
                     }
 
@@ -734,8 +739,12 @@ oslProcess SAL_CALL osl_getProcess(oslProcessIdentifier Ident)
 
             pProcImpl->m_status = pChild->m_status;
 
+            // coverity[lock_order : FALSE] - incorrect report of lock order error
             if (osl_checkCondition(pChild->m_terminated))
+            {
+                // coverity[lock_order : FALSE] - incorrect report of lock order error
                 osl_setCondition(pProcImpl->m_terminated);
+            }
         }
         else
             pProcImpl->m_pnext = nullptr;

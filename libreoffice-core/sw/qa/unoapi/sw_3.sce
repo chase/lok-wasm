@@ -20,10 +20,7 @@
 #i89021 -o sw.SwXTextDefaults
 -o sw.SwXTextDocument
 -o sw.SwXTextEmbeddedObject
--o sw.SwXTextEmbeddedObjects
 -o sw.SwXTextField
--o sw.SwXTextFieldMasters
--o sw.SwXTextFieldTypes
 -o sw.SwXTextFrame
 -o sw.SwXTextFrameText
 -o sw.SwXTextGraphicObject
@@ -34,4 +31,3 @@
 -o sw.SwXTextRanges
 -o sw.SwXTextSearch
 -o sw.SwXTextSection
--o sw.SwXTextSections

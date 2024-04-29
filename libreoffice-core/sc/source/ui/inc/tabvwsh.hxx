@@ -187,6 +187,10 @@ private:
     OUString   maScope;
 
     std::unique_ptr<ScDragData> m_pDragData;
+
+    // Chart insert wizard's mark to make sure it undoes the correct thing in LOK case
+    UndoStackMark m_InsertWizardUndoMark = MARK_INVALID;
+
 private:
     void    Construct( TriState nForceDesignMode );
 
@@ -244,8 +248,7 @@ private:
 public:
                     /** -> Clone Method for Factory
                         Created from a general shell and inherit as much as possible */
-                    ScTabViewShell( SfxViewFrame*           pViewFrame,
-                                    SfxViewShell*           pOldSh );
+                    ScTabViewShell(SfxViewFrame& rViewFrame, SfxViewShell* pOldSh);
 
     virtual         ~ScTabViewShell() override;
 
@@ -297,6 +300,9 @@ public:
 
     void            ExecDrawOpt(const SfxRequest& rReq);
     void            GetDrawOptState(SfxItemSet &rSet);
+
+    void            ExecStyle(SfxRequest& rReq);
+    void            GetStyleState(SfxItemSet &rSet);
 
     void            UpdateDrawShell();
     void            SetDrawShell( bool bActive );
@@ -378,7 +384,7 @@ public:
 
     static void UpdateNumberFormatter( const SvxNumberInfoItem&  rInfoItem );
 
-    void    ExecuteCellFormatDlg( SfxRequest& rReq, const OString &rTabPage);
+    void    ExecuteCellFormatDlg( SfxRequest& rReq, const OUString &rTabPage);
 
     bool    GetFunction( OUString& rFuncStr, FormulaError nErrCode );
 
@@ -433,12 +439,6 @@ public:
     void ClearFormEditData();
     ScFormEditData* GetFormEditData() { return mpFormEditData.get(); }
 
-    /// return true if "Edit Hyperlink" in context menu should be disabled
-    bool ShouldDisableEditHyperlink() const;
-    /// force "Edit Hyperlink" to true, with the expectation that SID_EDIT_HYPERLINK is
-    /// later Invalidated to reset it back to its natural value
-    void EnableEditHyperlink();
-
     virtual tools::Rectangle getLOKVisibleArea() const override;
 
     const ScDragData& GetDragData() const { return *m_pDragData; }
@@ -449,6 +449,8 @@ public:
 
     void SetMoveKeepEdit(bool value) { bMoveKeepEdit = value; };
     bool GetMoveKeepEdit() { return bMoveKeepEdit; };
+
+    void SetInsertWizardUndoMark();
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

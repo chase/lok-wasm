@@ -31,6 +31,7 @@
 #include <recursionhelper.hxx>
 #include <docsh.hxx>
 #include <editutil.hxx>
+#include <broadcast.hxx>
 
 #include <SparklineGroup.hxx>
 
@@ -267,12 +268,7 @@ void ScColumn::CopyOneCellFromClip( sc::CopyFromClipContext& rCxt, SCROW nRow1, 
             const ScPatternAttr* pAttr = (bSameDocPool ? rCxt.getSingleCellPattern(nColOffset) :
                     rCxt.getSingleCellPattern(nColOffset)->PutInPool( &rDocument, rCxt.getClipDoc()));
 
-            auto pNewPattern = std::make_unique<ScPatternAttr>(*pAttr);
-            sal_uInt16 pItems[2];
-            pItems[0] = ATTR_CONDITIONAL;
-            pItems[1] = 0;
-            pNewPattern->ClearItems(pItems);
-            pAttrArray->SetPatternArea(nRow1, nRow2, std::move(pNewPattern), true);
+            pAttrArray->SetPatternArea(nRow1, nRow2, pAttr, true);
         }
     }
 
@@ -366,7 +362,7 @@ void ScColumn::CopyOneCellFromClip( sc::CopyFromClipContext& rCxt, SCROW nRow1, 
     aDestPosition.SetRow(nRow1);
     for (size_t i = 0; i < nDestSize; ++i)
     {
-        ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Add, &rDocument, aDestPosition, aNotes[i]);
+        ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Add, rDocument, aDestPosition, aNotes[i]);
         aDestPosition.IncRow();
     }
 }
@@ -1252,10 +1248,10 @@ void ScColumn::Swap( ScColumn& rOther, SCROW nRow1, SCROW nRow2, bool bPattern )
         {
             const ScPatternAttr* pPat1 = GetPattern(nRow);
             const ScPatternAttr* pPat2 = rOther.GetPattern(nRow);
-            if (pPat1 != pPat2)
+            if (!SfxPoolItem::areSame(pPat1, pPat2))
             {
                 if (pPat1->GetRefCount() == 1)
-                    pPat1 = &rOther.GetDoc().GetPool()->Put(*pPat1);
+                    pPat1 = &rOther.GetDoc().GetPool()->DirectPutItemInPool(*pPat1);
                 SetPattern(nRow, *pPat2);
                 rOther.SetPattern(nRow, *pPat1);
             }
@@ -1864,7 +1860,7 @@ static bool lcl_InterpretSpan(sc::formula_block::const_iterator& rSpanIter, SCRO
 
 static void lcl_EvalDirty(sc::CellStoreType& rCells, SCROW nRow1, SCROW nRow2, ScDocument& rDoc,
                           const ScFormulaCellGroupRef& mxGroup, bool bThreadingDepEval, bool bSkipRunning,
-                          bool& bIsDirty, bool& bAllowThreading)
+                          bool& bIsDirty, bool& bAllowThreading, ScAddress* pDirtiedAddress)
 {
     ScRecursionHelper& rRecursionHelper = rDoc.GetRecursionHelper();
     std::pair<sc::CellStoreType::const_iterator,size_t> aPos = rCells.position(nRow1);
@@ -1970,6 +1966,8 @@ static void lcl_EvalDirty(sc::CellStoreType& rCells, SCROW nRow1, SCROW nRow2, S
                         {
                             // Set itCell as dirty as itCell may be interpreted in InterpretTail()
                             (*itCell)->SetDirtyVar();
+                            if (pDirtiedAddress)
+                                pDirtiedAddress->SetRow(nRow);
                             bAllowThreading = false;
                             return;
                         }
@@ -2005,17 +2003,17 @@ bool ScColumn::EnsureFormulaCellResults( SCROW nRow1, SCROW nRow2, bool bSkipRun
         return false;
 
     bool bAnyDirty = false, bTmp = false;
-    lcl_EvalDirty(maCells, nRow1, nRow2, GetDoc(), nullptr, false, bSkipRunning, bAnyDirty, bTmp);
+    lcl_EvalDirty(maCells, nRow1, nRow2, GetDoc(), nullptr, false, bSkipRunning, bAnyDirty, bTmp, nullptr);
     return bAnyDirty;
 }
 
-bool ScColumn::HandleRefArrayForParallelism( SCROW nRow1, SCROW nRow2, const ScFormulaCellGroupRef& mxGroup )
+bool ScColumn::HandleRefArrayForParallelism( SCROW nRow1, SCROW nRow2, const ScFormulaCellGroupRef& mxGroup, ScAddress* pDirtiedAddress )
 {
     if (nRow1 > nRow2)
         return false;
 
     bool bAllowThreading = true, bTmp = false;
-    lcl_EvalDirty(maCells, nRow1, nRow2, GetDoc(), mxGroup, true, false, bTmp, bAllowThreading);
+    lcl_EvalDirty(maCells, nRow1, nRow2, GetDoc(), mxGroup, true, false, bTmp, bAllowThreading, pDirtiedAddress);
 
     return bAllowThreading;
 }
@@ -2168,7 +2166,7 @@ void ScColumn::RestoreFromCache(SvStream& rStrm)
                     rStrm.ReadInt32(nStrLength);
                     std::unique_ptr<char[]> pStr(new char[nStrLength]);
                     rStrm.ReadBytes(pStr.get(), nStrLength);
-                    OString aOStr(pStr.get(), nStrLength);
+                    std::string_view aOStr(pStr.get(), nStrLength);
                     OUString aStr = OStringToOUString(aOStr, RTL_TEXTENCODING_UTF8);
                     rString = rPool.intern(aStr);
                 }
@@ -2190,7 +2188,7 @@ void ScColumn::RestoreFromCache(SvStream& rStrm)
                     rStrm.ReadInt32(nStrLength);
                     std::unique_ptr<char[]> pStr(new char[nStrLength]);
                     rStrm.ReadBytes(pStr.get(), nStrLength);
-                    OString aOStr(pStr.get(), nStrLength);
+                    std::string_view aOStr(pStr.get(), nStrLength);
                     OUString aStr = OStringToOUString(aOStr, RTL_TEXTENCODING_UTF8);
                     for (sal_uInt64 i = 0; i < nFormulaGroupSize; ++i)
                     {
@@ -2212,26 +2210,75 @@ void ScColumn::RestoreFromCache(SvStream& rStrm)
 
 void ScColumn::CheckIntegrity() const
 {
-    const ScColumn* pColTest = maCells.event_handler().getColumn();
-
-    if (pColTest != this)
+    auto checkEventHandlerColumnRef = [this](const auto& rStore, std::string_view pStoreName)
     {
-        std::ostringstream os;
-        os << "cell store's event handler references wrong column instance (this=" << this
-            << "; stored=" << pColTest << ")";
-        throw std::runtime_error(os.str());
-    }
+        if (const ScColumn* pColTest = rStore.event_handler().getColumn(); pColTest != this)
+        {
+            std::ostringstream os;
+            os << pStoreName << "'s event handler references wrong column instance (this=" << this
+                << "; stored=" << pColTest << ")";
+            throw std::runtime_error(os.str());
+        }
+    };
 
-    size_t nCount = std::count_if(maCells.cbegin(), maCells.cend(),
-        [](const auto& blk) { return blk.type == sc::element_type_formula; }
-    );
-
-    if (mnBlkCountFormula != nCount)
+    auto countBlocks = [](const auto& rStore, mdds::mtv::element_t nBlockType)
     {
-        std::ostringstream os;
-        os << "incorrect cached formula block count (expected=" << nCount << "; actual="
-            << mnBlkCountFormula << ")";
-        throw std::runtime_error(os.str());
+        std::size_t nCount = std::count_if(rStore.cbegin(), rStore.cend(),
+            [nBlockType](const auto& blk) { return blk.type == nBlockType; }
+        );
+
+        return nCount;
+    };
+
+    auto checkCachedBlockCount = [countBlocks](
+        const auto& rStore, mdds::mtv::element_t nBlockType, std::size_t nCachedBlkCount,
+        std::string_view pName)
+    {
+        std::size_t nCount = countBlocks(rStore, nBlockType);
+
+        if (nCachedBlkCount != nCount)
+        {
+            std::ostringstream os;
+            os << "incorrect cached " << pName << " block count (expected=" << nCount << "; actual="
+                << nCachedBlkCount << ")";
+            throw std::runtime_error(os.str());
+        }
+    };
+
+    checkEventHandlerColumnRef(maCells, "cell store");
+    checkEventHandlerColumnRef(maCellNotes, "cell-note store");
+
+    checkCachedBlockCount(maCells, sc::element_type_formula, mnBlkCountFormula, "formula");
+    checkCachedBlockCount(maCellNotes, sc::element_type_cellnote, mnBlkCountCellNotes, "cell note");
+}
+
+void ScColumn::CollectBroadcasterState(sc::BroadcasterState& rState) const
+{
+    for (const auto& block : maBroadcasters)
+    {
+        if (block.type != sc::element_type_broadcaster)
+            continue;
+
+        auto itBeg = sc::broadcaster_block::begin(*block.data);
+        auto itEnd = sc::broadcaster_block::end(*block.data);
+
+        for (auto it = itBeg; it != itEnd; ++it)
+        {
+            ScAddress aBCPos(nCol, block.position + std::distance(itBeg, it), nTab);
+
+            auto aRes = rState.aCellListenerStore.try_emplace(aBCPos);
+            auto& rLisStore = aRes.first->second;
+
+            const SvtBroadcaster& rBC = **it;
+            for (const SvtListener* pLis : rBC.GetAllListeners())
+            {
+                const auto* pFC = dynamic_cast<const ScFormulaCell*>(pLis);
+                if (pFC)
+                    rLisStore.emplace_back(pFC);
+                else
+                    rLisStore.emplace_back(pLis);
+            }
+        }
     }
 }
 

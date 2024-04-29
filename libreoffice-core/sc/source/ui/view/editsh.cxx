@@ -36,6 +36,7 @@
 #include <editeng/flstitem.hxx>
 #include <editeng/fontitem.hxx>
 #include <editeng/urlfieldhelper.hxx>
+#include <editeng/editund2.hxx>
 #include <svx/hlnkitem.hxx>
 #include <vcl/EnumContext.hxx>
 #include <editeng/postitem.hxx>
@@ -65,7 +66,6 @@
 #include <appoptio.hxx>
 #include <scmod.hxx>
 #include <sc.hrc>
-#include <scmod.hxx>
 #include <inputhdl.hxx>
 #include <viewutil.hxx>
 #include <viewdata.hxx>
@@ -485,7 +485,7 @@ void ScEditShell::Execute( SfxRequest& rReq )
                         OUStringBuffer aBuffer;
                         for (const auto& rName : aNames)
                         {
-                            aBuffer.append(rName).append(' ');
+                            aBuffer.append(rName + " ");
                         }
                         const OUString s = aBuffer.makeStringAndClear();
                         pTableView->InsertText(s);
@@ -580,7 +580,8 @@ void ScEditShell::Execute( SfxRequest& rReq )
                     bool bDone = false;
                     if ( (eMode == HLINK_DEFAULT || eMode == HLINK_FIELD) && !bCellLinksOnly )
                     {
-                        const SvxURLField* pURLField = GetURLField();
+                        std::unique_ptr<const SvxFieldData> aSvxFieldDataPtr(GetURLField());
+                        const SvxURLField* pURLField(static_cast<const SvxURLField*>(aSvxFieldDataPtr.get()));
                         if ( pURLField )
                         {
                             // select old field
@@ -640,8 +641,10 @@ void ScEditShell::Execute( SfxRequest& rReq )
             break;
         case SID_OPEN_HYPERLINK:
             {
-                const SvxURLField* pURLField = GetURLField();
-                if ( pURLField )
+                const SvxFieldItem* pFieldItem
+                    = pEditView->GetFieldAtSelection(/*AlsoCheckBeforeCursor=*/true);
+                const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
+                if (const SvxURLField* pURLField = dynamic_cast<const SvxURLField*>(pField))
                     ScGlobal::OpenURL( pURLField->GetURL(), pURLField->GetTargetFrame(), true );
                 return;
             }
@@ -649,13 +652,15 @@ void ScEditShell::Execute( SfxRequest& rReq )
             {
                 // Ensure the field is selected first
                 pEditView->SelectFieldAtCursor();
-                rViewData.GetViewShell()->GetViewFrame()->GetDispatcher()->Execute(
+                rViewData.GetViewShell()->GetViewFrame().GetDispatcher()->Execute(
                     SID_HYPERLINK_DIALOG);
             }
         break;
         case SID_COPY_HYPERLINK_LOCATION:
             {
-                const SvxFieldData* pField = pEditView->GetFieldAtCursor();
+                const SvxFieldItem* pFieldItem
+                    = pEditView->GetFieldAtSelection(/*AlsoCheckBeforeCursor=*/true);
+                const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
                 if (const SvxURLField* pURLField = dynamic_cast<const SvxURLField*>(pField))
                 {
                     uno::Reference<datatransfer::clipboard::XClipboard> xClipboard
@@ -733,28 +738,25 @@ static void lcl_DisableAll( SfxItemSet& rSet )    // disable all slots
     }
 }
 
-bool ScEditShell::ShouldDisableEditHyperlink() const
-{
-    return !rViewData.HasEditView(rViewData.GetActivePart()) || !URLFieldHelper::IsCursorAtURLField(*pEditView);
-}
-
-void ScEditShell::EnableEditHyperlink()
-{
-    moAtContextMenu_DisableEditHyperlink = false;
-}
-
 void ScEditShell::GetState( SfxItemSet& rSet )
 {
     // When deactivating the view, edit mode is stopped, but the EditShell is left active
     // (a shell can't be removed from within Deactivate). In that state, the EditView isn't inserted
     // into the EditEngine, so it can have an invalid selection and must not be used.
+    ScInputHandler* pHdl = GetMyInputHdl();
     if ( !rViewData.HasEditView( rViewData.GetActivePart() ) )
     {
         lcl_DisableAll( rSet );
+
+        // Some items are actually useful and still applicable when in formula building mode: enable
+        if (pHdl && pHdl->IsFormulaMode())
+        {
+            rSet.ClearItem(SID_TOGGLE_REL); //  F4 Cycle Cell Reference Types
+            rSet.ClearItem(SID_CHARMAP); // Insert Special Characters
+        }
         return;
     }
 
-    ScInputHandler* pHdl = GetMyInputHdl();
     EditView* pActiveView = pHdl ? pHdl->GetActiveView() : pEditView;
 
     SfxWhichIter aIter( rSet );
@@ -789,7 +791,8 @@ void ScEditShell::GetState( SfxItemSet& rSet )
                         = (SC_MOD()->GetAppOptions().GetLinksInsertedLikeMSExcel()
                           && rViewData.GetSfxDocShell()->GetMedium()->GetFilter()->IsMSOFormat())
                           || comphelper::LibreOfficeKit::isActive();
-                    const SvxURLField* pURLField = GetURLField();
+                    std::unique_ptr<const SvxFieldData> aSvxFieldDataPtr(GetURLField());
+                    const SvxURLField* pURLField(static_cast<const SvxURLField*>(aSvxFieldDataPtr.get()));
                     if (!bCellLinksOnly)
                     {
                         if (pURLField)
@@ -811,7 +814,8 @@ void ScEditShell::GetState( SfxItemSet& rSet )
                     {
                         if (!pURLField)
                         {
-                            pURLField = GetFirstURLFieldFromCell();
+                            aSvxFieldDataPtr = GetFirstURLFieldFromCell();
+                            pURLField = static_cast<const SvxURLField*>(aSvxFieldDataPtr.get());
                         }
                         if (pURLField)
                         {
@@ -833,18 +837,8 @@ void ScEditShell::GetState( SfxItemSet& rSet )
             case SID_COPY_HYPERLINK_LOCATION:
             case SID_REMOVE_HYPERLINK:
                 {
-                    bool bDisableEditHyperlink;
-                    if (!moAtContextMenu_DisableEditHyperlink)
-                        bDisableEditHyperlink = ShouldDisableEditHyperlink();
-                    else
-                    {
-                        // tdf#140361 if a popup menu was active, use the state as of when the popup was launched and then drop
-                        // moAtContextMenu_DisableEditHyperlink
-                        bDisableEditHyperlink = *moAtContextMenu_DisableEditHyperlink;
-                        moAtContextMenu_DisableEditHyperlink.reset();
-                    }
-
-                    if (bDisableEditHyperlink)
+                    if (!URLFieldHelper::IsCursorAtURLField(*pEditView,
+                                                            /*AlsoCheckBeforeCursor=*/true))
                         rSet.DisableItem (nWhich);
                 }
                 break;
@@ -890,21 +884,21 @@ void ScEditShell::GetState( SfxItemSet& rSet )
     }
 }
 
-const SvxURLField* ScEditShell::GetURLField()
+std::unique_ptr<const SvxFieldData> ScEditShell::GetURLField()
 {
     ScInputHandler* pHdl = GetMyInputHdl();
     EditView* pActiveView = pHdl ? pHdl->GetActiveView() : pEditView;
     if (!pActiveView)
-        return nullptr;
+        return std::unique_ptr<const SvxFieldData>();
 
-    const SvxFieldData* pField = pActiveView->GetFieldAtCursor();
+    const SvxFieldData* pField = pActiveView->GetFieldUnderMouseOrInSelectionOrAtCursor();
     if (auto pURLField = dynamic_cast<const SvxURLField*>(pField))
-        return pURLField;
+        return pURLField->Clone();
 
-    return nullptr;
+    return std::unique_ptr<const SvxFieldData>();
 }
 
-const SvxURLField* ScEditShell::GetFirstURLFieldFromCell()
+std::unique_ptr<const SvxFieldData> ScEditShell::GetFirstURLFieldFromCell()
 {
     EditEngine* pEE = GetEditView()->GetEditEngine();
     sal_Int32 nParaCount = pEE->GetParagraphCount();
@@ -926,14 +920,15 @@ const SvxURLField* ScEditShell::GetFirstURLFieldFromCell()
                     const SvxFieldData* pField = pItem->GetField();
                     if (const SvxURLField* pUrlField = dynamic_cast<const SvxURLField*>(pField))
                     {
-                        return pUrlField;
+                        return pUrlField->Clone();
                     }
                 }
             }
             aSel.nStartPos = aSel.nEndPos;
         }
     }
-    return nullptr;
+
+    return std::unique_ptr<const SvxFieldData>();
 }
 
 IMPL_LINK( ScEditShell, ClipboardChanged, TransferableDataHelper*, pDataHelper, void )
@@ -1046,21 +1041,7 @@ void ScEditShell::ExecuteAttr(SfxRequest& rReq)
             {
                 if (pArgs)
                 {
-                    if ( const SfxStringItem* pColorStringItem = pArgs->GetItemIfSet( SID_ATTR_COLOR_STR, false ) )
-                    {
-                        Color aColor;
-                        OUString sColor = pColorStringItem->GetValue();
-                        if ( sColor == "transparent" )
-                            aColor = COL_TRANSPARENT;
-                        else
-                            aColor = Color( ColorTransparency, sColor.toInt32( 16 ) );
-
-                        aSet.Put( SvxColorItem( aColor, EE_CHAR_COLOR ) );
-                    }
-                    else
-                    {
-                        aSet.Put( pArgs->Get( pArgs->GetPool()->GetWhich( nSlot ) ) );
-                    }
+                    aSet.Put( pArgs->Get( pArgs->GetPool()->GetWhich( nSlot ) ) );
                     rBindings.Invalidate( nSlot );
                 }
             }
@@ -1394,14 +1375,14 @@ void ScEditShell::GetUndoState(SfxItemSet &rSet)
 {
     //  Undo state is taken from normal ViewFrame state function
 
-    SfxViewFrame* pViewFrm = rViewData.GetViewShell()->GetViewFrame();
-    if ( pViewFrm && GetUndoManager() )
+    SfxViewFrame& rViewFrm = rViewData.GetViewShell()->GetViewFrame();
+    if ( GetUndoManager() )
     {
         SfxWhichIter aIter(rSet);
         sal_uInt16 nWhich = aIter.FirstWhich();
         while( nWhich )
         {
-            pViewFrm->GetSlotState( nWhich, nullptr, &rSet );
+            rViewFrm.GetSlotState( nWhich, nullptr, &rSet );
             nWhich = aIter.NextWhich();
         }
     }

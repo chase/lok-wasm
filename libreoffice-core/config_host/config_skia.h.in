@@ -31,7 +31,7 @@ are the same.
 
 
 // GPU support (set by configure).
-#undef SK_SUPPORT_GPU
+#undef SK_GANESH
 // Vulkan support enabled (set by configure).
 #undef SK_VULKAN
 // Metal support enabled (set by configure).
@@ -39,9 +39,6 @@ are the same.
 
 // Memory allocator for Vulkan.
 #define SK_USE_VMA 1
-
-// Set by Skia's BUILD.gn.
-#define GR_OP_ALLOCATE_USE_NEW
 
 #define SK_CODEC_DECODES_PNG 1
 #define SK_ENCODE_PNG 1
@@ -62,8 +59,9 @@ are the same.
 // the default X11 visual is actually also BGRA.
 #define SK_R32_SHIFT 16
 
-// Enable Skia's internal checks depending on DBG_UTIL mode. ENABLE_SKIA_DEBUG
-// controls whether to build with or without optimizations (set in Makefile).
+// Enable Skia's internal checks depending on DBG_UTIL mode.
+// ENABLE_SKIA_DEBUG controls whether to build with or without optimizations, and
+// is set by using --enable-skia=debug.
 #ifdef DBG_UTIL
 
 #define SK_DEBUG

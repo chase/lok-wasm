@@ -20,6 +20,7 @@
 #include <framework/ConfigurationController.hxx>
 #include <framework/Configuration.hxx>
 #include <framework/FrameworkHelper.hxx>
+#include <DrawController.hxx>
 #include "ConfigurationUpdater.hxx"
 #include "ConfigurationControllerBroadcaster.hxx"
 #include "ConfigurationTracer.hxx"
@@ -51,9 +52,9 @@ class ConfigurationController::Implementation
 public:
     Implementation (
         ConfigurationController& rController,
-        const Reference<frame::XController>& rxController);
+        const rtl::Reference<::sd::DrawController>& rxController);
 
-    Reference<XControllerManager> mxControllerManager;
+    rtl::Reference<::sd::DrawController> mxControllerManager;
 
     /** The Broadcaster class implements storing and calling of listeners.
     */
@@ -101,10 +102,15 @@ ConfigurationController::Lock::~Lock()
 
 //===== ConfigurationController ===============================================
 
-ConfigurationController::ConfigurationController() noexcept
+ConfigurationController::ConfigurationController(const rtl::Reference<::sd::DrawController>& rxController)
     : ConfigurationControllerInterfaceBase(m_aMutex)
     , mbIsDisposed(false)
 {
+    const SolarMutexGuard aSolarGuard;
+
+    mpImplementation.reset(new Implementation(
+        *this,
+        rxController));
 }
 
 ConfigurationController::~ConfigurationController() noexcept
@@ -475,22 +481,6 @@ Reference<XResourceFactory> SAL_CALL ConfigurationController::getResourceFactory
     return mpImplementation->mpResourceFactoryContainer->GetFactory(sResourceURL);
 }
 
-//----- XInitialization -------------------------------------------------------
-
-void SAL_CALL ConfigurationController::initialize (const Sequence<Any>& aArguments)
-{
-    ::osl::MutexGuard aGuard (m_aMutex);
-
-    if (aArguments.getLength() == 1)
-    {
-        const SolarMutexGuard aSolarGuard;
-
-        mpImplementation.reset(new Implementation(
-            *this,
-            Reference<frame::XController>(aArguments[0], UNO_QUERY_THROW)));
-    }
-}
-
 void ConfigurationController::ThrowIfDisposed () const
 {
     if (mbIsDisposed)
@@ -511,7 +501,7 @@ void ConfigurationController::ThrowIfDisposed () const
 
 ConfigurationController::Implementation::Implementation (
     ConfigurationController& rController,
-    const Reference<frame::XController>& rxController)
+    const rtl::Reference<::sd::DrawController>& rxController)
     : mxControllerManager(rxController, UNO_QUERY_THROW),
       mpBroadcaster(std::make_shared<ConfigurationControllerBroadcaster>(&rController)),
       mxRequestedConfiguration(new Configuration(&rController, true)),
@@ -527,15 +517,6 @@ ConfigurationController::Implementation::Implementation (
 }
 
 } // end of namespace sd::framework
-
-
-extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*
-com_sun_star_comp_Draw_framework_configuration_ConfigurationController_get_implementation(
-        css::uno::XComponentContext*,
-        css::uno::Sequence<css::uno::Any> const &)
-{
-    return cppu::acquire(new sd::framework::ConfigurationController());
-}
 
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

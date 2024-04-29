@@ -25,7 +25,7 @@
 class SwWrtShell;
 
 /// Page number wizard for easy header/footer page number insertion
-class SwPageNumberDlg : public SfxDialogController
+class SwPageNumberDlg final : public SfxDialogController
 {
     std::unique_ptr<weld::Button> m_xOk;
     std::unique_ptr<weld::Button> m_xCancel;
@@ -42,7 +42,6 @@ class SwPageNumberDlg : public SfxDialogController
     SvxNumType m_nPageNumberType;
 
     DECL_LINK(OkHdl, weld::Button&, void);
-    DECL_LINK(CancelHdl, weld::Button&, void);
     DECL_LINK(IncludePageTotalChangeHdl, weld::Toggleable&, void);
     DECL_LINK(PositionSelectHdl, weld::ComboBox&, void);
     DECL_LINK(AlignmentSelectHdl, weld::ComboBox&, void);

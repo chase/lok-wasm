@@ -45,7 +45,7 @@ public:
 class IndexEntrySupplier_##algorithm final : public IndexEntrySupplier_ja_phonetic {\
 public:\
     IndexEntrySupplier_##algorithm (const css::uno::Reference < css::uno::XComponentContext >& rxContext) : IndexEntrySupplier_ja_phonetic (rxContext) {\
-        implementationName = "com.sun.star.i18n.IndexEntrySupplier_"#algo_descr;\
+        implementationName = "com.sun.star.i18n.IndexEntrySupplier_ja_phonetic" algo_descr;\
     };\
     virtual sal_Bool SAL_CALL loadAlgorithm(\
         const css::lang::Locale& rLocale,\
@@ -55,7 +55,7 @@ public:\
 /** descriptions formed by concatenating strings here must match names in .component file */
 INDEXENTRYSUPPLIER_JA_PHONETIC( ja_phonetic_alphanumeric_first_by_syllable,  " (alphanumeric first) (grouped by syllable)" )
 INDEXENTRYSUPPLIER_JA_PHONETIC( ja_phonetic_alphanumeric_first_by_consonant, " (alphanumeric first) (grouped by consonant)" )
-INDEXENTRYSUPPLIER_JA_PHONETIC( ja_phonetic_alphanumeric_last_by_syllable,   " (alphanumeric last) (grouped by consonant)" )
+INDEXENTRYSUPPLIER_JA_PHONETIC( ja_phonetic_alphanumeric_last_by_syllable,   " (alphanumeric last) (grouped by syllable)" )
 INDEXENTRYSUPPLIER_JA_PHONETIC( ja_phonetic_alphanumeric_last_by_consonant,  " (alphanumeric last) (grouped by consonant)" )
 
 }

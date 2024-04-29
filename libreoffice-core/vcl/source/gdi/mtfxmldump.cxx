@@ -13,8 +13,13 @@
 
 #include <vcl/metaact.hxx>
 #include <vcl/outdev.hxx>
+#include <vcl/bitmap.hxx>
+#include <vcl/BitmapReadAccess.hxx>
+
 #include <rtl/string.hxx>
 #include <rtl/ustrbuf.hxx>
+
+#include <comphelper/hash.hxx>
 
 #include <sstream>
 
@@ -109,8 +114,6 @@ OUString convertDrawTextFlagsToString(DrawTextFlags eDrawTextFlags)
         aStrings.emplace_back("WordBreakHyphenation");
     if (eDrawTextFlags & DrawTextFlags::CenterEllipsis)
         aStrings.emplace_back("CenterEllipsis");
-    if (eDrawTextFlags & DrawTextFlags::HideMnemonic)
-        aStrings.emplace_back("HideMnemonic");
 
     OUString aString;
 
@@ -271,62 +274,62 @@ OString convertLineStyleToString(const MetaActionType nActionType)
 {
     switch (nActionType)
     {
-        case MetaActionType::NONE:                  return "null";
-        case MetaActionType::PIXEL:                 return "pixel";
-        case MetaActionType::POINT:                 return "point";
-        case MetaActionType::LINE:                  return "line";
-        case MetaActionType::RECT:                  return "rect";
-        case MetaActionType::ROUNDRECT:             return "roundrect";
-        case MetaActionType::ELLIPSE:               return "ellipse";
-        case MetaActionType::ARC:                   return "arc";
-        case MetaActionType::PIE:                   return "pie";
-        case MetaActionType::CHORD:                 return "chord";
-        case MetaActionType::POLYLINE:              return "polyline";
-        case MetaActionType::POLYGON:               return "polygon";
-        case MetaActionType::POLYPOLYGON:           return "polypolygon";
-        case MetaActionType::TEXT:                  return "text";
-        case MetaActionType::TEXTARRAY:             return "textarray";
-        case MetaActionType::STRETCHTEXT:           return "stretchtext";
-        case MetaActionType::TEXTRECT:              return "textrect";
-        case MetaActionType::TEXTLINE:              return "textline";
-        case MetaActionType::BMP:                   return "bmp";
-        case MetaActionType::BMPSCALE:              return "bmpscale";
-        case MetaActionType::BMPSCALEPART:          return "bmpscalepart";
-        case MetaActionType::BMPEX:                 return "bmpex";
-        case MetaActionType::BMPEXSCALE:            return "bmpexscale";
-        case MetaActionType::BMPEXSCALEPART:        return "bmpexscalepart";
-        case MetaActionType::MASK:                  return "mask";
-        case MetaActionType::MASKSCALE:             return "maskscale";
-        case MetaActionType::MASKSCALEPART:         return "maskscalepart";
-        case MetaActionType::GRADIENT:              return "gradient";
-        case MetaActionType::GRADIENTEX:            return "gradientex";
-        case MetaActionType::HATCH:                 return "hatch";
-        case MetaActionType::WALLPAPER:             return "wallpaper";
-        case MetaActionType::CLIPREGION:            return "clipregion";
-        case MetaActionType::ISECTRECTCLIPREGION:   return "sectrectclipregion";
-        case MetaActionType::ISECTREGIONCLIPREGION: return "sectregionclipregion";
-        case MetaActionType::MOVECLIPREGION:        return "moveclipregion";
-        case MetaActionType::LINECOLOR:             return "linecolor";
-        case MetaActionType::FILLCOLOR:             return "fillcolor";
-        case MetaActionType::TEXTCOLOR:             return "textcolor";
-        case MetaActionType::TEXTFILLCOLOR:         return "textfillcolor";
-        case MetaActionType::TEXTLINECOLOR:         return "textlinecolor";
-        case MetaActionType::OVERLINECOLOR:         return "overlinecolor";
-        case MetaActionType::TEXTALIGN:             return "textalign";
-        case MetaActionType::MAPMODE:               return "mapmode";
-        case MetaActionType::FONT:                  return "font";
-        case MetaActionType::PUSH:                  return "push";
-        case MetaActionType::POP:                   return "pop";
-        case MetaActionType::RASTEROP:              return "rasterop";
-        case MetaActionType::Transparent:           return "transparent";
-        case MetaActionType::FLOATTRANSPARENT:      return "floattransparent";
-        case MetaActionType::EPS:                   return "eps";
-        case MetaActionType::REFPOINT:              return "refpoint";
-        case MetaActionType::COMMENT:               return "comment";
-        case MetaActionType::LAYOUTMODE:            return "layoutmode";
-        case MetaActionType::TEXTLANGUAGE:          return "textlanguage";
+        case MetaActionType::NONE:                  return "null"_ostr;
+        case MetaActionType::PIXEL:                 return "pixel"_ostr;
+        case MetaActionType::POINT:                 return "point"_ostr;
+        case MetaActionType::LINE:                  return "line"_ostr;
+        case MetaActionType::RECT:                  return "rect"_ostr;
+        case MetaActionType::ROUNDRECT:             return "roundrect"_ostr;
+        case MetaActionType::ELLIPSE:               return "ellipse"_ostr;
+        case MetaActionType::ARC:                   return "arc"_ostr;
+        case MetaActionType::PIE:                   return "pie"_ostr;
+        case MetaActionType::CHORD:                 return "chord"_ostr;
+        case MetaActionType::POLYLINE:              return "polyline"_ostr;
+        case MetaActionType::POLYGON:               return "polygon"_ostr;
+        case MetaActionType::POLYPOLYGON:           return "polypolygon"_ostr;
+        case MetaActionType::TEXT:                  return "text"_ostr;
+        case MetaActionType::TEXTARRAY:             return "textarray"_ostr;
+        case MetaActionType::STRETCHTEXT:           return "stretchtext"_ostr;
+        case MetaActionType::TEXTRECT:              return "textrect"_ostr;
+        case MetaActionType::TEXTLINE:              return "textline"_ostr;
+        case MetaActionType::BMP:                   return "bmp"_ostr;
+        case MetaActionType::BMPSCALE:              return "bmpscale"_ostr;
+        case MetaActionType::BMPSCALEPART:          return "bmpscalepart"_ostr;
+        case MetaActionType::BMPEX:                 return "bmpex"_ostr;
+        case MetaActionType::BMPEXSCALE:            return "bmpexscale"_ostr;
+        case MetaActionType::BMPEXSCALEPART:        return "bmpexscalepart"_ostr;
+        case MetaActionType::MASK:                  return "mask"_ostr;
+        case MetaActionType::MASKSCALE:             return "maskscale"_ostr;
+        case MetaActionType::MASKSCALEPART:         return "maskscalepart"_ostr;
+        case MetaActionType::GRADIENT:              return "gradient"_ostr;
+        case MetaActionType::GRADIENTEX:            return "gradientex"_ostr;
+        case MetaActionType::HATCH:                 return "hatch"_ostr;
+        case MetaActionType::WALLPAPER:             return "wallpaper"_ostr;
+        case MetaActionType::CLIPREGION:            return "clipregion"_ostr;
+        case MetaActionType::ISECTRECTCLIPREGION:   return "sectrectclipregion"_ostr;
+        case MetaActionType::ISECTREGIONCLIPREGION: return "sectregionclipregion"_ostr;
+        case MetaActionType::MOVECLIPREGION:        return "moveclipregion"_ostr;
+        case MetaActionType::LINECOLOR:             return "linecolor"_ostr;
+        case MetaActionType::FILLCOLOR:             return "fillcolor"_ostr;
+        case MetaActionType::TEXTCOLOR:             return "textcolor"_ostr;
+        case MetaActionType::TEXTFILLCOLOR:         return "textfillcolor"_ostr;
+        case MetaActionType::TEXTLINECOLOR:         return "textlinecolor"_ostr;
+        case MetaActionType::OVERLINECOLOR:         return "overlinecolor"_ostr;
+        case MetaActionType::TEXTALIGN:             return "textalign"_ostr;
+        case MetaActionType::MAPMODE:               return "mapmode"_ostr;
+        case MetaActionType::FONT:                  return "font"_ostr;
+        case MetaActionType::PUSH:                  return "push"_ostr;
+        case MetaActionType::POP:                   return "pop"_ostr;
+        case MetaActionType::RASTEROP:              return "rasterop"_ostr;
+        case MetaActionType::Transparent:           return "transparent"_ostr;
+        case MetaActionType::FLOATTRANSPARENT:      return "floattransparent"_ostr;
+        case MetaActionType::EPS:                   return "eps"_ostr;
+        case MetaActionType::REFPOINT:              return "refpoint"_ostr;
+        case MetaActionType::COMMENT:               return "comment"_ostr;
+        case MetaActionType::LAYOUTMODE:            return "layoutmode"_ostr;
+        case MetaActionType::TEXTLANGUAGE:          return "textlanguage"_ostr;
     }
-    return "";
+    return ""_ostr;
 }
 
 OUString convertBitmapExTransparentType(BitmapEx const & rBitmapEx)
@@ -366,7 +369,7 @@ OUString convertFractionToString(const Fraction& aFraction)
 
     ss << aFraction;
 
-    return OUString::createFromAscii(ss.str().c_str());
+    return OUString::createFromAscii(ss.str());
 }
 
 OUString convertGradientStyleToOUString(css::awt::GradientStyle eStyle)
@@ -400,7 +403,7 @@ OUString convertLanguageTypeToString(LanguageType rLanguageType)
 {
     std::stringstream ss;
     ss << std::hex << std::setfill ('0') << std::setw(4) << rLanguageType.get();
-    return "#" + OUString::createFromAscii(ss.str().c_str());
+    return "#" + OUString::createFromAscii(ss.str());
 }
 
 OUString convertWallpaperStyleToString(WallpaperStyle eWallpaperStyle)
@@ -429,7 +432,6 @@ OUString convertPixelFormatToString(vcl::PixelFormat ePixelFormat)
     switch (ePixelFormat)
     {
         case vcl::PixelFormat::INVALID: return "INVALID";
-        case vcl::PixelFormat::N1_BPP: return "1BPP";
         case vcl::PixelFormat::N8_BPP: return "8BPP";
         case vcl::PixelFormat::N24_BPP: return "24BPP";
         case vcl::PixelFormat::N32_BPP: return "32BPP";
@@ -437,17 +439,33 @@ OUString convertPixelFormatToString(vcl::PixelFormat ePixelFormat)
     return OUString();
 }
 
-OUString convertComplexTestLayoutFlags(vcl::text::ComplexTextLayoutFlags eComplexTestLayoutFlags)
+OUString convertComplexTestLayoutFlags(vcl::text::ComplexTextLayoutFlags nFlags)
 {
-    switch(eComplexTestLayoutFlags)
+    if (nFlags == vcl::text::ComplexTextLayoutFlags::Default)
+        return "Default";
+
+    std::vector<OUString> aStrings;
+
+    if (nFlags & vcl::text::ComplexTextLayoutFlags::BiDiRtl)
+        aStrings.emplace_back("BiDiRtl");
+    if (nFlags & vcl::text::ComplexTextLayoutFlags::BiDiStrong)
+        aStrings.emplace_back("BiDiStrong");
+    if (nFlags & vcl::text::ComplexTextLayoutFlags::TextOriginLeft)
+        aStrings.emplace_back("TextOriginLeft");
+    if (nFlags & vcl::text::ComplexTextLayoutFlags::TextOriginRight)
+        aStrings.emplace_back("TextOriginRight");
+
+    OUString aString;
+
+    if (aStrings.empty())
+        return aString;
+
+    aString = aStrings[0];
+    for (size_t i = 1; i < aStrings.size(); ++i)
     {
-        default:
-        case vcl::text::ComplexTextLayoutFlags::Default: return "#0000";
-        case vcl::text::ComplexTextLayoutFlags::BiDiRtl: return "#0001";
-        case vcl::text::ComplexTextLayoutFlags::BiDiStrong: return "#0002";
-        case vcl::text::ComplexTextLayoutFlags::TextOriginLeft: return "#0004";
-        case vcl::text::ComplexTextLayoutFlags::TextOriginRight: return "#0008";
+        aString += ", " + aStrings[i];
     }
+    return aString;
 }
 
 OUString convertGfxLinkTypeToString(GfxLinkType eGfxLinkType)
@@ -476,7 +494,7 @@ OUString hex32(sal_uInt32 nNumber)
 {
     std::stringstream ss;
     ss << std::hex << std::setfill('0') << std::setw(8) << nNumber;
-    return OUString::createFromAscii(ss.str().c_str());
+    return OUString::createFromAscii(ss.str());
 }
 
 OUString toHexString(const sal_uInt8* nData, sal_uInt32 nDataSize){
@@ -487,7 +505,7 @@ OUString toHexString(const sal_uInt8* nData, sal_uInt32 nDataSize){
         aStrm << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(nData[i]);
     }
 
-    return OUString::createFromAscii(aStrm.str().c_str());
+    return OUString::createFromAscii(aStrm.str());
 }
 
 void writePoint(tools::XmlWriter& rWriter, Point const& rPoint)
@@ -519,11 +537,11 @@ void writeRectangle(tools::XmlWriter& rWriter, tools::Rectangle const& rRectangl
     rWriter.attribute("left", rRectangle.Left());
     rWriter.attribute("top", rRectangle.Top());
     if (rRectangle.IsWidthEmpty())
-        rWriter.attribute("right", OString("empty"));
+        rWriter.attribute("right", "empty"_ostr);
     else
         rWriter.attribute("right", rRectangle.Right());
     if (rRectangle.IsHeightEmpty())
-        rWriter.attribute("bottom", OString("empty"));
+        rWriter.attribute("bottom", "empty"_ostr);
     else
         rWriter.attribute("bottom", rRectangle.Bottom());
 }
@@ -561,6 +579,53 @@ void writeGradient(tools::XmlWriter& rWriter, Gradient const& rGradient)
     rWriter.attribute("startintensity", rGradient.GetStartIntensity());
     rWriter.attribute("endintensity", rGradient.GetEndIntensity());
     rWriter.attribute("steps", rGradient.GetSteps());
+}
+
+OString toHexString(const std::vector<unsigned char>& a)
+{
+    std::stringstream aStrm;
+    for (auto& i : a)
+    {
+        aStrm << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(i);
+    }
+
+    return OString(aStrm.str());
+}
+
+void writeBitmapContentChecksum(tools::XmlWriter& rWriter, Bitmap const& rBitmap)
+{
+    Bitmap aBitmap(rBitmap);
+
+    comphelper::Hash aHashEngine(comphelper::HashType::SHA1);
+    BitmapScopedReadAccess pReadAccess(aBitmap);
+    assert(pReadAccess);
+
+    for (tools::Long y = 0 ; y < pReadAccess->Height() ; ++y)
+    {
+        for (tools::Long x = 0 ; x < pReadAccess->Width() ; ++x)
+        {
+            BitmapColor aColor = pReadAccess->GetColor(y, x);
+            sal_uInt8 r = aColor.GetRed();
+            sal_uInt8 g = aColor.GetGreen();
+            sal_uInt8 b = aColor.GetBlue();
+            sal_uInt8 a = aColor.GetAlpha();
+            aHashEngine.update(&r, 1);
+            aHashEngine.update(&g, 1);
+            aHashEngine.update(&b, 1);
+            aHashEngine.update(&a, 1);
+        }
+    }
+    std::vector<unsigned char> aVector = aHashEngine.finalize();
+    rWriter.attribute("contentchecksum", toHexString(aVector));
+}
+
+void writeBitmap(tools::XmlWriter& rWriter, Bitmap const& rBitmap)
+{
+    writeBitmapContentChecksum(rWriter, rBitmap);
+    rWriter.attribute("bitmapwidth", rBitmap.GetSizePixel().Width());
+    rWriter.attribute("bitmapheight", rBitmap.GetSizePixel().Height());
+    rWriter.attribute("pixelformat", convertPixelFormatToString(rBitmap.getPixelFormat()));
+    rWriter.attribute("crc", hex32(rBitmap.GetChecksum()));
 }
 
 } // anonymous namespace
@@ -817,11 +882,10 @@ void MetafileXmlDump::writeXml(const GDIMetaFile& rMetaFile, tools::XmlWriter& r
                         rWriter.attribute("first", rArray[aIndex]);
                     if (aIndex + aLength - 1 < o3tl::narrowing<sal_Int32>(rArray.size()))
                         rWriter.attribute("last", rArray[aIndex + aLength - 1]);
-                    OUStringBuffer sDxLengthString;
+                    OUStringBuffer sDxLengthString(std::max((aLength - aIndex) * 4, sal_Int32(0)));
                     for (sal_Int32 i = 0; i < aLength - aIndex; ++i)
                     {
-                        sDxLengthString.append(rArray[aIndex + i]);
-                        sDxLengthString.append(" ");
+                        sDxLengthString.append(OUString::number(rArray[aIndex + i]) + " ");
                     }
                     rWriter.content(sDxLengthString);
                     rWriter.endElement();
@@ -881,9 +945,10 @@ void MetafileXmlDump::writeXml(const GDIMetaFile& rMetaFile, tools::XmlWriter& r
             case MetaActionType::BMP:
             {
                 auto pMeta = static_cast<MetaBmpAction*>(pAction);
+                Bitmap aBitmap = pMeta->GetBitmap();
                 rWriter.startElement(sCurrentElementTag);
                 writePoint(rWriter, pMeta->GetPoint());
-                rWriter.attribute("crc", hex32(pMeta->GetBitmap().GetChecksum()));
+                writeBitmap(rWriter, aBitmap);
                 rWriter.endElement();
             }
             break;
@@ -891,10 +956,11 @@ void MetafileXmlDump::writeXml(const GDIMetaFile& rMetaFile, tools::XmlWriter& r
             case MetaActionType::BMPSCALE:
             {
                 auto pMeta = static_cast<MetaBmpScaleAction*>(pAction);
+                Bitmap aBitmap = pMeta->GetBitmap();
                 rWriter.startElement(sCurrentElementTag);
                 writePoint(rWriter, pMeta->GetPoint());
                 writeSize(rWriter, pMeta->GetSize());
-                rWriter.attribute("crc", hex32(pMeta->GetBitmap().GetChecksum()));
+                writeBitmap(rWriter, aBitmap);
                 rWriter.endElement();
             }
             break;
@@ -902,6 +968,7 @@ void MetafileXmlDump::writeXml(const GDIMetaFile& rMetaFile, tools::XmlWriter& r
             case MetaActionType::BMPSCALEPART:
             {
                 auto pMeta = static_cast<MetaBmpScalePartAction*>(pAction);
+                Bitmap aBitmap = pMeta->GetBitmap();
                 rWriter.startElement(sCurrentElementTag);
                 rWriter.attribute("destx", pMeta->GetDestPoint().X());
                 rWriter.attribute("desty", pMeta->GetDestPoint().Y());
@@ -911,7 +978,7 @@ void MetafileXmlDump::writeXml(const GDIMetaFile& rMetaFile, tools::XmlWriter& r
                 rWriter.attribute("srcy", pMeta->GetSrcPoint().Y());
                 rWriter.attribute("srcwidth", pMeta->GetSrcSize().Width());
                 rWriter.attribute("srcheight", pMeta->GetSrcSize().Height());
-                rWriter.attribute("crc", hex32(pMeta->GetBitmap().GetChecksum()));
+                writeBitmap(rWriter, aBitmap);
                 rWriter.endElement();
             }
             break;
@@ -921,8 +988,9 @@ void MetafileXmlDump::writeXml(const GDIMetaFile& rMetaFile, tools::XmlWriter& r
                 auto pMeta = static_cast<MetaBmpExAction*>(pAction);
                 rWriter.startElement(sCurrentElementTag);
                 writePoint(rWriter, pMeta->GetPoint());
-                rWriter.attribute("crc", hex32(pMeta->GetBitmapEx().GetBitmap().GetChecksum()));
+                Bitmap aBitmap = pMeta->GetBitmapEx().GetBitmap();
                 rWriter.attribute("transparenttype", convertBitmapExTransparentType(pMeta->GetBitmapEx()));
+                writeBitmap(rWriter, aBitmap);
                 rWriter.endElement();
             }
             break;
@@ -933,8 +1001,9 @@ void MetafileXmlDump::writeXml(const GDIMetaFile& rMetaFile, tools::XmlWriter& r
                 rWriter.startElement(sCurrentElementTag);
                 writePoint(rWriter, pMeta->GetPoint());
                 writeSize(rWriter, pMeta->GetSize());
-                rWriter.attribute("crc", hex32(pMeta->GetBitmapEx().GetBitmap().GetChecksum()));
+                Bitmap aBitmap = pMeta->GetBitmapEx().GetBitmap();
                 rWriter.attribute("transparenttype", convertBitmapExTransparentType(pMeta->GetBitmapEx()));
+                writeBitmap(rWriter, aBitmap);
                 rWriter.endElement();
             }
             break;
@@ -942,6 +1011,7 @@ void MetafileXmlDump::writeXml(const GDIMetaFile& rMetaFile, tools::XmlWriter& r
             case MetaActionType::BMPEXSCALEPART:
             {
                 auto pMeta = static_cast<MetaBmpExScalePartAction*>(pAction);
+                Bitmap aBitmap = pMeta->GetBitmapEx().GetBitmap();
                 rWriter.startElement(sCurrentElementTag);
                 rWriter.attribute("destx", pMeta->GetDestPoint().X());
                 rWriter.attribute("desty", pMeta->GetDestPoint().Y());
@@ -951,8 +1021,8 @@ void MetafileXmlDump::writeXml(const GDIMetaFile& rMetaFile, tools::XmlWriter& r
                 rWriter.attribute("srcy", pMeta->GetSrcPoint().Y());
                 rWriter.attribute("srcwidth", pMeta->GetSrcSize().Width());
                 rWriter.attribute("srcheight", pMeta->GetSrcSize().Height());
-                rWriter.attribute("crc", hex32(pMeta->GetBitmapEx().GetBitmap().GetChecksum()));
                 rWriter.attribute("transparenttype", convertBitmapExTransparentType(pMeta->GetBitmapEx()));
+                writeBitmap(rWriter, aBitmap);
                 rWriter.endElement();
             }
             break;
@@ -1485,7 +1555,7 @@ void MetafileXmlDump::writeXml(const GDIMetaFile& rMetaFile, tools::XmlWriter& r
             default:
             {
                 rWriter.startElement(sCurrentElementTag);
-                rWriter.attribute("note", OString("not implemented in xml dump"));
+                rWriter.attribute("note", "not implemented in xml dump"_ostr);
                 rWriter.endElement();
             }
             break;

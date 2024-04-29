@@ -156,14 +156,14 @@ void Manager::dropCache()
     reduceGraphicMemory(aGuard, true);
 }
 
-void Manager::dumpState(rtl::OStringBuffer &rState)
+void Manager::dumpState(rtl::OStringBuffer& rState)
 {
     std::unique_lock aGuard(maMutex);
 
     rState.append("\nImage Manager items:\t");
     rState.append(static_cast<sal_Int32>(m_pImpGraphicList.size()));
     rState.append("\tsize:\t");
-    rState.append(static_cast<sal_Int64>(mnUsedSize/1024));
+    rState.append(static_cast<sal_Int64>(mnUsedSize / 1024));
     rState.append("\tkb");
 
     for (ImpGraphic* pEachImpGraphic : m_pImpGraphicList)

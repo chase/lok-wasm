@@ -35,6 +35,7 @@
 
 #include <com/sun/star/uri/UriReferenceFactory.hpp>
 #include <com/sun/star/beans/NamedValue.hpp>
+#include <o3tl/string_view.hxx>
 #include <utility>
 
 using namespace ::com::sun::star;
@@ -175,9 +176,9 @@ void FilterDetectDocHandler::parseRelationship( const AttributeList& rAttribs )
     }
 }
 
-OUString FilterDetectDocHandler::getFilterNameFromContentType( std::u16string_view rContentType, const OUString& rFileName )
+OUString FilterDetectDocHandler::getFilterNameFromContentType( std::u16string_view rContentType, std::u16string_view rFileName )
 {
-    bool bDocm = rFileName.endsWithIgnoreAsciiCase(".docm");
+    bool bDocm = o3tl::endsWithIgnoreAsciiCase(rFileName, ".docm");
 
     if( rContentType == u"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml" && !bDocm )
     {
@@ -268,9 +269,9 @@ FilterDetect::~FilterDetect()
 namespace
 {
 
-bool lclIsZipPackage( const Reference< XComponentContext >& rxContext, const Reference< XInputStream >& rxInStrm )
+bool lclIsZipPackage( const Reference< XComponentContext >& rxContext, const Reference< XInputStream >& rxInStrm, bool bRepairPackage )
 {
-    ZipStorage aZipStorage( rxContext, rxInStrm );
+    ZipStorage aZipStorage(rxContext, rxInStrm, bRepairPackage);
     return aZipStorage.isStorage();
 }
 
@@ -315,9 +316,10 @@ comphelper::DocPasswordVerifierResult PasswordVerifier::verifyEncryptionData( co
 
 Reference< XInputStream > FilterDetect::extractUnencryptedPackage( MediaDescriptor& rMediaDescriptor ) const
 {
+    const bool bRepairPackage(rMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
     // try the plain input stream
     Reference<XInputStream> xInputStream( rMediaDescriptor[ MediaDescriptor::PROP_INPUTSTREAM ], UNO_QUERY );
-    if( !xInputStream.is() || lclIsZipPackage( mxContext, xInputStream ) )
+    if (!xInputStream.is() || lclIsZipPackage(mxContext, xInputStream, bRepairPackage))
         return xInputStream;
 
     // check if a temporary file is passed in the 'ComponentData' property
@@ -325,7 +327,7 @@ Reference< XInputStream > FilterDetect::extractUnencryptedPackage( MediaDescript
     if( xDecrypted.is() )
     {
         Reference<XInputStream> xDecryptedInputStream = xDecrypted->getInputStream();
-        if( lclIsZipPackage( mxContext, xDecryptedInputStream ) )
+        if (lclIsZipPackage(mxContext, xDecryptedInputStream, bRepairPackage))
             return xDecryptedInputStream;
     }
 
@@ -379,7 +381,7 @@ Reference< XInputStream > FilterDetect::extractUnencryptedPackage( MediaDescript
                         rMediaDescriptor.setComponentDataEntry( "DecryptedPackage", Any( xTempStream ) );
 
                         Reference<XInputStream> xDecryptedInputStream = xTempStream->getInputStream();
-                        if( lclIsZipPackage( mxContext, xDecryptedInputStream ) )
+                        if (lclIsZipPackage(mxContext, xDecryptedInputStream, bRepairPackage))
                             return xDecryptedInputStream;
                     }
                 }
@@ -427,7 +429,8 @@ OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq
         Reference< XInputStream > xInputStream( extractUnencryptedPackage( aMediaDescriptor ), UNO_SET_THROW );
 
         // stream must be a ZIP package
-        ZipStorage aZipStorage( mxContext, xInputStream );
+        ZipStorage aZipStorage(mxContext, xInputStream,
+                               aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
         if( aZipStorage.isStorage() )
         {
             // create the fast parser, register the XML namespaces, set document handler

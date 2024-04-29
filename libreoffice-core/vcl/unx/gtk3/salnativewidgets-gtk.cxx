@@ -91,6 +91,7 @@ GtkStyleContext* GtkSalGraphics::mpRadioMenuItemStyle = nullptr;
 GtkStyleContext* GtkSalGraphics::mpRadioMenuItemRadioStyle = nullptr;
 GtkStyleContext* GtkSalGraphics::mpSeparatorMenuItemStyle = nullptr;
 GtkStyleContext* GtkSalGraphics::mpSeparatorMenuItemSeparatorStyle = nullptr;
+gint GtkSalGraphics::mnVerticalSeparatorMinWidth = 0;
 
 #if !GTK_CHECK_VERSION(4, 0, 0)
 static void style_context_get_margin(GtkStyleContext *pContext, GtkBorder *pMargin)
@@ -354,7 +355,6 @@ static GtkWidget* gCacheWindow;
 static GtkWidget* gDumbContainer;
 #if GTK_CHECK_VERSION(4, 0, 0)
 static GtkWidget* gVScrollbar;
-static GtkWidget* gHScrollbar;
 static GtkWidget* gTextView;
 #else
 static GtkWidget* gComboBox;
@@ -362,6 +362,7 @@ static GtkWidget* gListBox;
 static GtkWidget* gSpinBox;
 static GtkWidget* gTreeViewWidget;
 #endif
+static GtkWidget* gHScrollbar;
 static GtkWidget* gEntryBox;
 
 namespace
@@ -782,7 +783,6 @@ void GtkSalGraphics::PaintOneSpinButton( GtkStyleContext *context,
     tools::Rectangle buttonRect = NWGetSpinButtonRect( nPart, aAreaRect );
 
     gtk_style_context_set_state(context, stateFlags);
-    stateFlags = gtk_style_context_get_state(context);
 
     style_context_get_padding(context, &padding);
     style_context_get_border(context, &border);
@@ -1005,9 +1005,8 @@ void GtkSalGraphics::PaintCombobox( GtkStateFlags flags, cairo_t *cr,
         else
         {
             render_common(mpListboxStyle, cr, aRect, flags);
-            render_common(mpListboxBoxStyle, cr, aRect, flags);
-
             render_common(mpListboxButtonStyle, cr, aRect, flags);
+            render_common(mpListboxBoxStyle, cr, aRect, flags);
 
             gtk_render_arrow(mpListboxButtonArrowStyle, cr,
                              G_PI,
@@ -1533,16 +1532,10 @@ static gfloat getArrowSize(GtkStyleContext* context)
 
 namespace
 {
-    void draw_vertical_separator(GtkStyleContext *context, cairo_t *cr, const tools::Rectangle& rControlRegion)
+    void draw_vertical_separator(GtkStyleContext *context, cairo_t *cr, const tools::Rectangle& rControlRegion, gint nSeparatorWidth)
     {
         tools::Long nX = 0;
         tools::Long nY = 0;
-
-        gint nSeparatorWidth = 1;
-
-        gtk_style_context_get(context,
-            gtk_style_context_get_state(context),
-            "min-width", &nSeparatorWidth, nullptr);
 
         gint nHalfSeparatorWidth = nSeparatorWidth / 2;
         gint nHalfRegionWidth = rControlRegion.GetWidth() / 2;
@@ -1856,14 +1849,14 @@ bool GtkSalGraphics::drawNativeControl( ControlType nType, ControlPart nPart, co
         break;
     case RenderType::ToolbarSeparator:
     {
-        draw_vertical_separator(context, cr, rControlRegion);
+        draw_vertical_separator(context, cr, rControlRegion, mnVerticalSeparatorMinWidth);
         break;
     }
     case RenderType::Separator:
         if (nPart == ControlPart::SeparatorHorz)
             draw_horizontal_separator(context, cr, rControlRegion);
         else
-            draw_vertical_separator(context, cr, rControlRegion);
+            draw_vertical_separator(context, cr, rControlRegion, mnVerticalSeparatorMinWidth);
         break;
     case RenderType::Arrow:
         gtk_render_arrow(context, cr,
@@ -1882,13 +1875,24 @@ bool GtkSalGraphics::drawNativeControl( ControlType nType, ControlPart nPart, co
     case RenderType::Combobox:
         if (pBgCssProvider)
         {
-            gtk_style_context_add_provider(mpComboboxEntryStyle, GTK_STYLE_PROVIDER(pBgCssProvider),
-                                           GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+            if (nType == ControlType::Combobox)
+            {
+                gtk_style_context_add_provider(mpComboboxEntryStyle, GTK_STYLE_PROVIDER(pBgCssProvider),
+                                               GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+            }
+            else if (nType == ControlType::Listbox)
+            {
+                gtk_style_context_add_provider(mpListboxBoxStyle, GTK_STYLE_PROVIDER(pBgCssProvider),
+                                               GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+            }
         }
         PaintCombobox(flags, cr, rControlRegion, nType, nPart);
         if (pBgCssProvider)
         {
-            gtk_style_context_remove_provider(mpComboboxEntryStyle, GTK_STYLE_PROVIDER(pBgCssProvider));
+            if (nType == ControlType::Combobox)
+                gtk_style_context_remove_provider(mpComboboxEntryStyle, GTK_STYLE_PROVIDER(pBgCssProvider));
+            else if (nType == ControlType::Listbox)
+                gtk_style_context_remove_provider(mpListboxBoxStyle, GTK_STYLE_PROVIDER(pBgCssProvider));
         }
         break;
     case RenderType::Icon:
@@ -2215,39 +2219,43 @@ vcl::Font pango_to_vcl(const PangoFontDescription* font, const css::lang::Locale
     PangoWeight    eWeight    = pango_font_description_get_weight( font );
     PangoStretch eStretch = pango_font_description_get_stretch( font );
 
-    psp::FastPrintFontInfo aInfo;
+    FontAttributes aDFA;
+
     // set family name
-    aInfo.m_aFamilyName = OStringToOUString( aFamily, RTL_TEXTENCODING_UTF8 );
+    aDFA.SetFamilyName(OStringToOUString(aFamily, RTL_TEXTENCODING_UTF8));
+
     // set italic
     switch( eStyle )
     {
-        case PANGO_STYLE_NORMAL:    aInfo.m_eItalic = ITALIC_NONE;break;
-        case PANGO_STYLE_ITALIC:    aInfo.m_eItalic = ITALIC_NORMAL;break;
-        case PANGO_STYLE_OBLIQUE:    aInfo.m_eItalic = ITALIC_OBLIQUE;break;
+        case PANGO_STYLE_NORMAL:    aDFA.SetItalic(ITALIC_NONE);break;
+        case PANGO_STYLE_ITALIC:    aDFA.SetItalic(ITALIC_NORMAL);break;
+        case PANGO_STYLE_OBLIQUE:    aDFA.SetItalic(ITALIC_OBLIQUE);break;
     }
+
     // set weight
     if( eWeight <= PANGO_WEIGHT_ULTRALIGHT )
-        aInfo.m_eWeight = WEIGHT_ULTRALIGHT;
+        aDFA.SetWeight(WEIGHT_ULTRALIGHT);
     else if( eWeight <= PANGO_WEIGHT_LIGHT )
-        aInfo.m_eWeight = WEIGHT_LIGHT;
+        aDFA.SetWeight(WEIGHT_LIGHT);
     else if( eWeight <= PANGO_WEIGHT_NORMAL )
-        aInfo.m_eWeight = WEIGHT_NORMAL;
+        aDFA.SetWeight(WEIGHT_NORMAL);
     else if( eWeight <= PANGO_WEIGHT_BOLD )
-        aInfo.m_eWeight = WEIGHT_BOLD;
+        aDFA.SetWeight(WEIGHT_BOLD);
     else
-        aInfo.m_eWeight = WEIGHT_ULTRABOLD;
+        aDFA.SetWeight(WEIGHT_ULTRABOLD);
+
     // set width
     switch( eStretch )
     {
-        case PANGO_STRETCH_ULTRA_CONDENSED:    aInfo.m_eWidth = WIDTH_ULTRA_CONDENSED;break;
-        case PANGO_STRETCH_EXTRA_CONDENSED:    aInfo.m_eWidth = WIDTH_EXTRA_CONDENSED;break;
-        case PANGO_STRETCH_CONDENSED:        aInfo.m_eWidth = WIDTH_CONDENSED;break;
-        case PANGO_STRETCH_SEMI_CONDENSED:    aInfo.m_eWidth = WIDTH_SEMI_CONDENSED;break;
-        case PANGO_STRETCH_NORMAL:            aInfo.m_eWidth = WIDTH_NORMAL;break;
-        case PANGO_STRETCH_SEMI_EXPANDED:    aInfo.m_eWidth = WIDTH_SEMI_EXPANDED;break;
-        case PANGO_STRETCH_EXPANDED:        aInfo.m_eWidth = WIDTH_EXPANDED;break;
-        case PANGO_STRETCH_EXTRA_EXPANDED:    aInfo.m_eWidth = WIDTH_EXTRA_EXPANDED;break;
-        case PANGO_STRETCH_ULTRA_EXPANDED:    aInfo.m_eWidth = WIDTH_ULTRA_EXPANDED;break;
+        case PANGO_STRETCH_ULTRA_CONDENSED:    aDFA.SetWidthType(WIDTH_ULTRA_CONDENSED);break;
+        case PANGO_STRETCH_EXTRA_CONDENSED:    aDFA.SetWidthType(WIDTH_EXTRA_CONDENSED);break;
+        case PANGO_STRETCH_CONDENSED:        aDFA.SetWidthType(WIDTH_CONDENSED);break;
+        case PANGO_STRETCH_SEMI_CONDENSED:    aDFA.SetWidthType(WIDTH_SEMI_CONDENSED);break;
+        case PANGO_STRETCH_NORMAL:            aDFA.SetWidthType(WIDTH_NORMAL);break;
+        case PANGO_STRETCH_SEMI_EXPANDED:    aDFA.SetWidthType(WIDTH_SEMI_EXPANDED);break;
+        case PANGO_STRETCH_EXPANDED:        aDFA.SetWidthType(WIDTH_EXPANDED);break;
+        case PANGO_STRETCH_EXTRA_EXPANDED:    aDFA.SetWidthType(WIDTH_EXTRA_EXPANDED);break;
+        case PANGO_STRETCH_ULTRA_EXPANDED:    aDFA.SetWidthType(WIDTH_ULTRA_EXPANDED);break;
     }
 
 #if OSL_DEBUG_LEVEL > 1
@@ -2256,14 +2264,16 @@ vcl::Font pango_to_vcl(const PangoFontDescription* font, const css::lang::Locale
 #endif
 
     // match font to e.g. resolve "Sans"
-    psp::PrintFontManager::get().matchFont(aInfo, rLocale);
+    bool bFound = psp::PrintFontManager::get().matchFont(aDFA, rLocale);
 
 #if OSL_DEBUG_LEVEL > 1
     SAL_INFO("vcl.gtk3", "font match "
-            << (aInfo.m_nID != 0 ? "succeeded" : "failed")
+            << (bFound ? "succeeded" : "failed")
             << ", name AFTER: \""
-            << aInfo.m_aFamilyName
+            << aDFA.GetFamilyName()
             << "\".");
+#else
+    (void) bFound;
 #endif
 
     int nPangoHeight = pango_font_description_get_size(font) / PANGO_SCALE;
@@ -2276,15 +2286,15 @@ vcl::Font pango_to_vcl(const PangoFontDescription* font, const css::lang::Locale
         nPangoHeight = nPangoHeight / nDPIY;
     }
 
-    vcl::Font aFont(aInfo.m_aFamilyName, Size(0, nPangoHeight));
-    if( aInfo.m_eWeight != WEIGHT_DONTKNOW )
-        aFont.SetWeight( aInfo.m_eWeight );
-    if( aInfo.m_eWidth != WIDTH_DONTKNOW )
-        aFont.SetWidthType( aInfo.m_eWidth );
-    if( aInfo.m_eItalic != ITALIC_DONTKNOW )
-        aFont.SetItalic( aInfo.m_eItalic );
-    if( aInfo.m_ePitch != PITCH_DONTKNOW )
-        aFont.SetPitch( aInfo.m_ePitch );
+    vcl::Font aFont(aDFA.GetFamilyName(), Size(0, nPangoHeight));
+    if (aDFA.GetWeight() != WEIGHT_DONTKNOW)
+        aFont.SetWeight(aDFA.GetWeight());
+    if (aDFA.GetWidthType() != WIDTH_DONTKNOW)
+        aFont.SetWidthType(aDFA.GetWidthType());
+    if (aDFA.GetItalic() != ITALIC_DONTKNOW)
+        aFont.SetItalic(aDFA.GetItalic());
+    if (aDFA.GetPitch() != PITCH_DONTKNOW)
+        aFont.SetPitch(aDFA.GetPitch());
     return aFont;
 }
 
@@ -2322,6 +2332,7 @@ bool GtkSalGraphics::updateSettings(AllSettings& rSettings)
     gchar* pFontname = nullptr;
     g_object_get(pSettings, "gtk-font-name", &pFontname, nullptr);
     PangoFontDescription* pFontDesc = pango_font_description_from_string(pFontname);
+    g_free(pFontname);
     vcl::Font aFont(pango_to_vcl(pFontDesc, rSettings.GetUILanguageTag().getLocale()));
     pango_font_description_free(pFontDesc);
 #else
@@ -2411,6 +2422,7 @@ bool GtkSalGraphics::updateSettings(AllSettings& rSettings)
         ::Color aHighlightColor = style_context_get_background_color(pCStyle);
         style_context_get_color(pCStyle, &text_color);
         ::Color aHighlightTextColor = getColor( text_color );
+        aStyleSet.SetAccentColor( aHighlightColor ); // https://debugpointnews.com/gnome-native-accent-colour-announcement/
         aStyleSet.SetHighlightColor( aHighlightColor );
         aStyleSet.SetHighlightTextColor( aHighlightTextColor );
         aStyleSet.SetListBoxWindowHighlightColor( aHighlightColor );
@@ -2613,10 +2625,11 @@ bool GtkSalGraphics::updateSettings(AllSettings& rSettings)
     // set scrollbar settings
     gint min_slider_length = 21;
 
+    GtkRequisition natural_horz_scroll_size;
+    gtk_widget_get_preferred_size(gHScrollbar, nullptr, &natural_horz_scroll_size);
+
 #if GTK_CHECK_VERSION(4, 0, 0)
-    GtkRequisition natural_size;
-    gtk_widget_get_preferred_size(gHScrollbar, nullptr, &natural_size);
-    aStyleSet.SetScrollBarSize(natural_size.height);
+    aStyleSet.SetScrollBarSize(natural_horz_scroll_size.height);
 #else
     // Grab some button style attributes
     Size aSize;
@@ -2633,6 +2646,10 @@ bool GtkSalGraphics::updateSettings(AllSettings& rSettings)
                                 "has-secondary-backward-stepper", &has_backward2, nullptr);
     if (has_forward || has_backward || has_forward2 || has_backward2)
         QuerySize(mpHScrollbarButtonStyle, aSize);
+
+    // Recent breeze (Mar 2024) has 17 vs 10, while Adwaita still reports 14 vs 14.
+    if (natural_horz_scroll_size.height > aSize.Height())
+        aSize.setHeight(natural_horz_scroll_size.height);
 
     aStyleSet.SetScrollBarSize(aSize.Height());
 
@@ -2910,6 +2927,9 @@ GtkSalGraphics::GtkSalGraphics( GtkSalFrame *pFrame, GtkWidget *pWindow )
     GtkToolItem *item = gtk_separator_tool_item_new();
     gtk_toolbar_insert(GTK_TOOLBAR(pToolbar), item, -1);
     mpToolbarSeparatorStyle = gtk_widget_get_style_context(GTK_WIDGET(item));
+    gtk_style_context_get(mpToolbarSeparatorStyle,
+        gtk_style_context_get_state(mpToolbarSeparatorStyle),
+        "min-width", &mnVerticalSeparatorMinWidth, nullptr);
 
     GtkWidget *pButton = gtk_button_new();
     item = gtk_tool_button_new(pButton, nullptr);
@@ -2917,15 +2937,16 @@ GtkSalGraphics::GtkSalGraphics( GtkSalFrame *pFrame, GtkWidget *pWindow )
     mpToolButtonStyle = gtk_widget_get_style_context(GTK_WIDGET(pButton));
 #endif
 
+    gHScrollbar = gtk_scrollbar_new(GTK_ORIENTATION_HORIZONTAL, nullptr);
+    gtk_fixed_put(GTK_FIXED(gDumbContainer), gHScrollbar, 0, 0);
+    gtk_widget_show(gHScrollbar);
+
 #if GTK_CHECK_VERSION(4, 0, 0)
     gVScrollbar = gtk_scrollbar_new(GTK_ORIENTATION_VERTICAL, nullptr);
     gtk_fixed_put(GTK_FIXED(gDumbContainer), gVScrollbar, 0, 0);
     gtk_widget_show(gVScrollbar);
     mpVScrollbarStyle = gtk_widget_get_style_context(gVScrollbar);
 
-    gHScrollbar = gtk_scrollbar_new(GTK_ORIENTATION_HORIZONTAL, nullptr);
-    gtk_fixed_put(GTK_FIXED(gDumbContainer), gHScrollbar, 0, 0);
-    gtk_widget_show(gHScrollbar);
     mpHScrollbarStyle = gtk_widget_get_style_context(gHScrollbar);
 
     gTextView = gtk_text_view_new();

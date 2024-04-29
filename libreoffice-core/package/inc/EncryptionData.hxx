@@ -22,23 +22,29 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <cppuhelper/weak.hxx>
 
+#include <optional>
+#include <tuple>
+
 class BaseEncryptionData : public cppu::OWeakObject
 {
 public:
     css::uno::Sequence< sal_Int8 > m_aSalt;
     css::uno::Sequence< sal_Int8 > m_aInitVector;
     css::uno::Sequence< sal_Int8 > m_aDigest;
-    sal_Int32 m_nIterationCount;
+    ::std::optional<sal_Int32> m_oPBKDFIterationCount;
+    ::std::optional<::std::tuple<sal_Int32, sal_Int32, sal_Int32>> m_oArgon2Args;
 
     BaseEncryptionData()
-    : m_nIterationCount ( 0 ){}
+    {
+    }
 
     BaseEncryptionData( const BaseEncryptionData& aData )
     : cppu::OWeakObject()
     , m_aSalt( aData.m_aSalt )
     , m_aInitVector( aData.m_aInitVector )
     , m_aDigest( aData.m_aDigest )
-    , m_nIterationCount( aData.m_nIterationCount )
+    , m_oPBKDFIterationCount(aData.m_oPBKDFIterationCount)
+    , m_oArgon2Args(aData.m_oArgon2Args)
     {}
 };
 
@@ -47,16 +53,20 @@ class EncryptionData final : public BaseEncryptionData
 public:
     css::uno::Sequence < sal_Int8 > m_aKey;
     sal_Int32 m_nEncAlg;
-    sal_Int32 m_nCheckAlg;
+    ::std::optional<sal_Int32> m_oCheckAlg;
     sal_Int32 m_nDerivedKeySize;
     sal_Int32 m_nStartKeyGenID;
     bool m_bTryWrongSHA1;
 
-    EncryptionData(const BaseEncryptionData& aData, const css::uno::Sequence< sal_Int8 >& aKey, sal_Int32 nEncAlg, sal_Int32 nCheckAlg, sal_Int32 nDerivedKeySize, sal_Int32 nStartKeyGenID, bool const bTryWrongSHA1)
+    EncryptionData(const BaseEncryptionData& aData,
+        const css::uno::Sequence<sal_Int8>& aKey, sal_Int32 const nEncAlg,
+        ::std::optional<sal_Int32> const oCheckAlg,
+        sal_Int32 const nDerivedKeySize, sal_Int32 const nStartKeyGenID,
+        bool const bTryWrongSHA1)
     : BaseEncryptionData( aData )
     , m_aKey( aKey )
     , m_nEncAlg( nEncAlg )
-    , m_nCheckAlg( nCheckAlg )
+    , m_oCheckAlg( oCheckAlg )
     , m_nDerivedKeySize( nDerivedKeySize )
     , m_nStartKeyGenID( nStartKeyGenID )
     , m_bTryWrongSHA1(bTryWrongSHA1)
@@ -66,7 +76,7 @@ public:
     : BaseEncryptionData( aData )
     , m_aKey( aData.m_aKey )
     , m_nEncAlg( aData.m_nEncAlg )
-    , m_nCheckAlg( aData.m_nCheckAlg )
+    , m_oCheckAlg( aData.m_oCheckAlg )
     , m_nDerivedKeySize( aData.m_nDerivedKeySize )
     , m_nStartKeyGenID( aData.m_nStartKeyGenID )
     , m_bTryWrongSHA1(aData.m_bTryWrongSHA1)

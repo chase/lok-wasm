@@ -54,7 +54,6 @@ using namespace ::xmloff::token;
 
 using ::com::sun::star::beans::XPropertySet;
 using ::com::sun::star::uno::Reference;
-using ::com::sun::star::xml::sax::XAttributeList;
 using ::com::sun::star::lang::XMultiServiceFactory;
 using ::com::sun::star::lang::IllegalArgumentException;
 
@@ -189,9 +188,9 @@ void XMLIndexTOCContext::startFastElement(
 
             // preliminaries
 #ifndef DBG_UTIL
-            OUString const sMarker(" ");
+            static constexpr OUStringLiteral sMarker(u" ");
 #else
-            OUString const sMarker("Y");
+            static constexpr OUStringLiteral sMarker(u"Y");
 #endif
             rtl::Reference<XMLTextImportHelper> rImport =
                 GetImport().GetTextImport();

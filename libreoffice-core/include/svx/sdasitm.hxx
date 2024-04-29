@@ -43,16 +43,16 @@ private:
     typedef std::unordered_map <PropertyPair, sal_Int32, PropertyPairHash> PropertyPairHashMap;
     typedef std::unordered_map<OUString, sal_Int32> PropertyHashMap;
 
-    PropertyHashMap     aPropHashMap;
-    PropertyPairHashMap aPropPairHashMap;
+    PropertyHashMap     m_aPropHashMap;
+    PropertyPairHashMap m_aPropPairHashMap;
 
-    css::uno::Sequence< css::beans::PropertyValue > aPropSeq;
+    css::uno::Sequence< css::beans::PropertyValue > m_aPropSeq;
 
     // For fast comparisons keep a hash of the content, computed on demand
     // (unusable state is if anyToHash() returns no hash).
     enum HashState { Unknown, Valid, Unusable };
-    mutable HashState aHashState = HashState::Unknown;
-    mutable size_t aHash = 0xdeadbeef;
+    mutable HashState m_aHashState = HashState::Unknown;
+    mutable size_t m_aHash = 0xdeadbeef;
 
     void SetPropSeq( const css::uno::Sequence< css::beans::PropertyValue >& rPropSeq );
     inline void UpdateHash() const;
@@ -70,8 +70,6 @@ private:
             SdrCustomShapeGeometryItem & operator =(SdrCustomShapeGeometryItem &&) = delete; // due to SfxPoolItem
 
             virtual bool                operator==( const SfxPoolItem& ) const override;
-            virtual bool                operator<( const SfxPoolItem& ) const override;
-            virtual bool                IsSortable() const override { return true; }
 
             virtual bool GetPresentation(SfxItemPresentation ePresentation,
                                          MapUnit eCoreMetric, MapUnit ePresentationMetric,

@@ -355,9 +355,7 @@ namespace frm
             m_aText = sText;
             TextEvent aEvt;
             aEvt.Source = *this;
-            ::comphelper::OInterfaceIteratorHelper3 aIt(m_aTextListeners);
-            while( aIt.hasMoreElements() )
-                aIt.next()->textChanged(aEvt);
+            m_aTextListeners.notifyEach(&css::awt::XTextListener::textChanged, aEvt);
         }
 #endif
     }
@@ -414,18 +412,16 @@ namespace frm
             const Reference< XDatabaseMetaData >  xMeta( xConnection->getMetaData(), UNO_SET_THROW );
             const OUString sQuoteChar = xMeta->getIdentifierQuoteString();
 
-            aStatement.append( "SELECT DISTINCT " );
-            aStatement.append( sQuoteChar );
-            aStatement.append( sRealFieldName );
-            aStatement.append( sQuoteChar );
+            aStatement.append(
+                "SELECT DISTINCT "
+                + sQuoteChar
+                + sRealFieldName
+                + sQuoteChar );
 
             // if the field had an alias in our form's statement, give it this alias in the new statement, too
             if ( !sFieldName.isEmpty() && ( sFieldName != sRealFieldName ) )
             {
-                aStatement.append(" AS ");
-                aStatement.append( sQuoteChar );
-                aStatement.append( sFieldName );
-                aStatement.append( sQuoteChar );
+                aStatement.append(" AS "+ sQuoteChar + sFieldName + sQuoteChar );
             }
 
             aStatement.append( " FROM " );
@@ -519,9 +515,7 @@ namespace frm
             if ( !aPredicateInput.normalizePredicateString( aNewText, m_xField, &sErrorMessage ) )
             {
                 // display the error and outta here
-                SQLContext aError;
-                aError.Message = ResourceManager::loadString(RID_STR_SYNTAXERROR);
-                aError.Details = sErrorMessage;
+                SQLContext aError(ResourceManager::loadString(RID_STR_SYNTAXERROR), {}, {}, 0, {}, sErrorMessage);
                 displayException( aError );
                 return false;
             }
@@ -530,9 +524,7 @@ namespace frm
         setText(aNewText);
         TextEvent aEvt;
         aEvt.Source = *this;
-        ::comphelper::OInterfaceIteratorHelper3 aIt(m_aTextListeners);
-        while( aIt.hasMoreElements() )
-            aIt.next()->textChanged(aEvt);
+        m_aTextListeners.notifyEach(&css::awt::XTextListener::textChanged, aEvt);
 #endif
         return true;
     }

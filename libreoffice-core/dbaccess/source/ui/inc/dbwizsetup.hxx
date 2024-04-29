@@ -38,7 +38,6 @@ namespace com::sun::star {
 }
 
 using vcl::WizardTypes::WizardState;
-using vcl::WizardTypes::CommitPageReason;
 using vcl::RoadmapWizardTypes::PathId;
 
 namespace dbaui
@@ -72,6 +71,7 @@ private:
     OUString                m_sRM_JDBCText;
     OUString                m_sRM_MySQLNativePageTitle;
     OUString                m_sRM_OracleText;
+    OUString                m_sRM_PostgresText;
     OUString                m_sRM_MySQLText;
     OUString                m_sRM_ODBCText;
     OUString                m_sRM_DocumentOrSpreadSheetText;

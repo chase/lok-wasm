@@ -19,15 +19,11 @@
 
 #include <config_locales.h>
 
-#include <rtl/strbuf.hxx>
 #include <rtl/uri.hxx>
-#include <rtl/ustrbuf.hxx>
 
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
-#include <cppunit/plugin/TestPlugIn.h>
 
-#include <cstddef>
 #include <stdio.h>
 
 namespace {
@@ -184,7 +180,7 @@ void Test::test_Uri() {
     aText1 = u"\xD800" // %ED%A0%80
              u"\U000103FF" // 0xD800,0xDFFF -> %F0%90%8F%BF
              u"\xDFFF" // %ED%BF%BF
-             u"A"; // A
+             u"A"_ustr; // A
     aText2 = "%ED%A0%80" "%F0%90%8F%BF" "%ED%BF%BF" "A";
     CPPUNIT_ASSERT_EQUAL_MESSAGE(
         "failure 11",
@@ -206,7 +202,7 @@ void Test::test_Uri() {
             RTL_TEXTENCODING_UTF8));
 
     aText1 = "%ed%a0%80" "%f0%90%8f%bf" "%ed%bf%bf" "A";
-    aText2 = u"%ED%A0%80" u"\U000103FF" u"%ED%BF%BF" u"A";
+    aText2 = u"%ED%A0%80" u"\U000103FF" u"%ED%BF%BF" u"A"_ustr;
     CPPUNIT_ASSERT_EQUAL_MESSAGE(
         "failure 14",
         aText2,
@@ -242,7 +238,7 @@ void Test::test_Uri() {
     // Check IURI handling:
 
     aText1 = "%30%C3%BF";
-    aText2 = u"%30\u00FF";
+    aText2 = u"%30\u00FF"_ustr;
     CPPUNIT_ASSERT_EQUAL_MESSAGE(
         "failure 18",
         aText2,
@@ -326,31 +322,25 @@ void Test::test_Uri() {
             { "http://a/b/c/", "d", "http://a/b/c/d" },
             { "http://a/b/c//", "d", "http://a/b/c//d" } };
 
-    for (std::size_t i = 0; i < SAL_N_ELEMENTS(aRelToAbsTest); ++i)
+    for (auto const[pBase, pRel, pAbs] : aRelToAbsTest)
     {
-        OUString aAbs;
+        OUString aAbsResult;
         bool bMalformed = false;
-        try {
-            aAbs = rtl::Uri::convertRelToAbs(
-                OUString::createFromAscii(aRelToAbsTest[i].pBase),
-                OUString::createFromAscii(aRelToAbsTest[i].pRel));
-        } catch (const rtl::MalformedUriException &) {
+        try
+        {
+            aAbsResult = rtl::Uri::convertRelToAbs(OUString::createFromAscii(pBase),
+                                                   OUString::createFromAscii(pRel));
+        }
+        catch (const rtl::MalformedUriException &)
+        {
             bMalformed = true;
         }
-        if (bMalformed
-            ? aRelToAbsTest[i].pAbs != nullptr
-            : (aRelToAbsTest[i].pAbs == nullptr
-               || !aAbs.equalsAscii(aRelToAbsTest[i].pAbs)))
+        if (bMalformed ? pAbs != nullptr : (pAbs == nullptr || !aAbsResult.equalsAscii(pAbs)))
         {
-            printf(
-                "FAILED convertRelToAbs(%s, %s) -> %s != %s\n",
-                aRelToAbsTest[i].pBase, aRelToAbsTest[i].pRel,
-                (bMalformed
-                 ? "<MALFORMED>"
-                 : OUStringToOString(
-                     aAbs, RTL_TEXTENCODING_UTF8).getStr()),
-                (aRelToAbsTest[i].pAbs == nullptr
-                 ? "<MALFORMED>" : aRelToAbsTest[i].pAbs));
+            printf("FAILED convertRelToAbs(%s, %s) -> %s != %s\n", pBase, pRel,
+                (bMalformed ? "<MALFORMED>"
+                            : OUStringToOString(aAbsResult, RTL_TEXTENCODING_UTF8).getStr()),
+                (pAbs == nullptr ? "<MALFORMED>" : pAbs));
             CPPUNIT_ASSERT(false);
         }
     }
@@ -505,6 +495,47 @@ void Test::test_Uri() {
                 aText1, rtl_UriCharClassUric, rtl_UriEncodeStrictKeepEscapes,
                 RTL_TEXTENCODING_ISO_8859_5));
     }
+
+    CPPUNIT_ASSERT_EQUAL(
+        u"%80"_ustr,
+        rtl::Uri::encode(
+            u"%80"_ustr, rtl_UriCharClassUric, rtl_UriEncodeStrictKeepEscapes,
+            RTL_TEXTENCODING_ASCII_US));
+    CPPUNIT_ASSERT_EQUAL(
+        u"%80"_ustr,
+        rtl::Uri::encode(
+            u"%80"_ustr, rtl_UriCharClassUric, rtl_UriEncodeStrictKeepEscapes,
+            RTL_TEXTENCODING_ISO_8859_1));
+    CPPUNIT_ASSERT_EQUAL(
+        u"%80"_ustr,
+        rtl::Uri::encode(
+            u"%80"_ustr, rtl_UriCharClassUric, rtl_UriEncodeStrictKeepEscapes,
+            RTL_TEXTENCODING_UTF8));
+    CPPUNIT_ASSERT_EQUAL(
+        u"%80"_ustr,
+        rtl::Uri::encode(
+            u"%80"_ustr, rtl_UriCharClassUric, rtl_UriEncodeStrictKeepEscapes,
+            RTL_TEXTENCODING_SHIFT_JIS));
+    CPPUNIT_ASSERT_EQUAL(
+        u"%FE"_ustr,
+        rtl::Uri::encode(
+            u"%FE"_ustr, rtl_UriCharClassUric, rtl_UriEncodeStrictKeepEscapes,
+            RTL_TEXTENCODING_ASCII_US));
+    CPPUNIT_ASSERT_EQUAL(
+        u"%FE"_ustr,
+        rtl::Uri::encode(
+            u"%FE"_ustr, rtl_UriCharClassUric, rtl_UriEncodeStrictKeepEscapes,
+            RTL_TEXTENCODING_ISO_8859_1));
+    CPPUNIT_ASSERT_EQUAL(
+        u"%FE"_ustr,
+        rtl::Uri::encode(
+            u"%FE"_ustr, rtl_UriCharClassUric, rtl_UriEncodeStrictKeepEscapes,
+            RTL_TEXTENCODING_UTF8));
+    CPPUNIT_ASSERT_EQUAL(
+        u"%FE"_ustr,
+        rtl::Uri::encode(
+            u"%FE"_ustr, rtl_UriCharClassUric, rtl_UriEncodeStrictKeepEscapes,
+            RTL_TEXTENCODING_SHIFT_JIS));
 }
 
 }

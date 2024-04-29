@@ -43,8 +43,6 @@ PrinterInfoManager& PrinterInfoManager::get()
 PrinterInfoManager::PrinterInfoManager( Type eType ) :
     m_pQueueInfo( nullptr ),
     m_eType( eType ),
-    m_bUseIncludeFeature( false ),
-    m_bUseJobPatch( true ),
     m_aSystemDefaultPaper( "A4" )
 {
     // initSystemDefaultPaper();
@@ -81,7 +79,7 @@ const PrinterInfo& PrinterInfoManager::getPrinterInfo( const OUString& /* rPrint
     return aEmptyInfo;
 }
 
-bool PrinterInfoManager::checkFeatureToken( const OUString& /* rPrinterName */, const char* /* pToken */ ) const
+bool PrinterInfoManager::checkFeatureToken( const OUString& /* rPrinterName */, std::string_view /* pToken */ ) const
 {
     (void) this;
 

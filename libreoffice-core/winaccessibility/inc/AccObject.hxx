@@ -37,7 +37,7 @@
 #include  <UAccCOM.h>
 
 class AccEventListener;
-class AccObjectManagerAgent;
+class AccObjectWinManager;
 class AccObject;
 
 typedef std::vector<AccObject *> IAccChildList;
@@ -50,7 +50,7 @@ private:
     short               m_accRole;
     long                m_resID;
     HWND                m_pParantID;
-    IMAccessible*       m_pIMAcc;
+    IMAccessible* const m_pIMAcc; // AccObjectManager::GetTopWindowIMAccessible relies on this being const
     AccObject*          m_pParentObj;
     IAccChildList       m_childrenList;
     ::rtl::Reference<AccEventListener>  m_pListener;
@@ -71,7 +71,8 @@ private:
 
 public:
 
-    AccObject ( css::accessibility::XAccessible* pXAcc = nullptr,AccObjectManagerAgent* pAgent = nullptr ,AccEventListener* accListener=nullptr);
+    AccObject(css::accessibility::XAccessible* pXAcc = nullptr, AccObjectWinManager* pManager = nullptr,
+              AccEventListener* accListener=nullptr);
     virtual ~AccObject();
 
     bool UpdateAccessibleInfoFromUnoToMSAA(  ); //implement accessible information mapping
@@ -87,7 +88,7 @@ public:
     void SetParentHWND(HWND hWnd);//need to set top window handle when send event to AT
     HWND GetParentHWND();
 
-    void SetListener(::rtl::Reference<AccEventListener> const& pListener);
+    ::rtl::Reference<AccEventListener> SetListener(::rtl::Reference<AccEventListener> const& pListener);
     AccEventListener* getListener();
 
     void SetParentObj(AccObject* pParentAccObj);

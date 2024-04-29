@@ -32,7 +32,6 @@
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::text;
 using namespace ::com::sun::star::uno;
-using namespace ::std;
 
 using ::com::sun::star::beans::XPropertySet;
 
@@ -108,27 +107,27 @@ void XMLTextParagraphExport::exportListAndSectionChange(
 
         // Build stacks of old and new sections
         // Sections on top of mute sections should not be on the stack
-        vector< Reference<XTextSection> > aOldStack;
+        std::vector< Reference<XTextSection> > aOldStack;
         Reference<XTextSection> aCurrent(rPrevSection);
         while(aCurrent.is())
         {
             // if we have a mute section, ignore all its children
             // (all previous ones)
-            if (pSectionExport->IsMuteSection(aCurrent))
+            if (m_pSectionExport->IsMuteSection(aCurrent))
                 aOldStack.clear();
 
             aOldStack.push_back(aCurrent);
             aCurrent.set(aCurrent->getParentSection());
         }
 
-        vector< Reference<XTextSection> > aNewStack;
+        std::vector< Reference<XTextSection> > aNewStack;
         aCurrent.set(rNextSection);
         bool bMute = false;
         while(aCurrent.is())
         {
             // if we have a mute section, ignore all its children
             // (all previous ones)
-            if (pSectionExport->IsMuteSection(aCurrent))
+            if (m_pSectionExport->IsMuteSection(aCurrent))
             {
                 aNewStack.clear();
                 bMute = true;
@@ -139,9 +138,9 @@ void XMLTextParagraphExport::exportListAndSectionChange(
         }
 
         // compare the two stacks
-        vector<Reference<XTextSection> > ::reverse_iterator aOld =
+        std::vector<Reference<XTextSection> > ::reverse_iterator aOld =
             aOldStack.rbegin();
-        vector<Reference<XTextSection> > ::reverse_iterator aNew =
+        std::vector<Reference<XTextSection> > ::reverse_iterator aNew =
             aNewStack.rbegin();
         // compare bottom sections and skip equal section
         while ( (aOld != aOldStack.rend()) &&
@@ -156,23 +155,23 @@ void XMLTextParagraphExport::exportListAndSectionChange(
         // (order: newest to oldest)
         if (aOld != aOldStack.rend())
         {
-            vector<Reference<XTextSection> > ::iterator aOldForward(
+            std::vector<Reference<XTextSection> > ::iterator aOldForward(
                 aOldStack.begin());
             while ((aOldForward != aOldStack.end()) &&
                    (*aOldForward != *aOld))
             {
-                if ( !bAutoStyles && (nullptr != pRedlineExport) )
-                    pRedlineExport->ExportStartOrEndRedline(*aOldForward,
+                if ( !bAutoStyles && (nullptr != m_pRedlineExport) )
+                    m_pRedlineExport->ExportStartOrEndRedline(*aOldForward,
                                                                 false);
-                pSectionExport->ExportSectionEnd(*aOldForward, bAutoStyles);
+                m_pSectionExport->ExportSectionEnd(*aOldForward, bAutoStyles);
                 ++aOldForward;
             }
             if (aOldForward != aOldStack.end())
             {
-                if ( !bAutoStyles && (nullptr != pRedlineExport) )
-                    pRedlineExport->ExportStartOrEndRedline(*aOldForward,
+                if ( !bAutoStyles && (nullptr != m_pRedlineExport) )
+                    m_pRedlineExport->ExportStartOrEndRedline(*aOldForward,
                                                             false);
-                pSectionExport->ExportSectionEnd(*aOldForward, bAutoStyles);
+                m_pSectionExport->ExportSectionEnd(*aOldForward, bAutoStyles);
             }
         }
 
@@ -180,9 +179,9 @@ void XMLTextParagraphExport::exportListAndSectionChange(
         // (order: oldest to newest)
         while (aNew != aNewStack.rend())
         {
-            if ( !bAutoStyles && (nullptr != pRedlineExport) )
-                pRedlineExport->ExportStartOrEndRedline(*aNew, true);
-            pSectionExport->ExportSectionStart(*aNew, bAutoStyles);
+            if ( !bAutoStyles && (nullptr != m_pRedlineExport) )
+                m_pRedlineExport->ExportStartOrEndRedline(*aNew, true);
+            m_pSectionExport->ExportSectionStart(*aNew, bAutoStyles);
             ++aNew;
         }
 

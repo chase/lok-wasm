@@ -135,10 +135,10 @@ void SeriesPlotterContainer::initializeCooSysAndSeriesPlotter(ChartModel& rChart
         return;
 
     uno::Reference<util::XNumberFormatsSupplier> xNumberFormatsSupplier(&rChartModel);
-    if (rChartModel.hasInternalDataProvider() && DiagramHelper::isSupportingDateAxis(xDiagram))
+    if (rChartModel.hasInternalDataProvider() && xDiagram->isSupportingDateAxis())
         m_nDefaultDateNumberFormat = DiagramHelper::getDateNumberFormat(xNumberFormatsSupplier);
 
-    sal_Int32 nDimensionCount = DiagramHelper::getDimension(xDiagram);
+    sal_Int32 nDimensionCount = xDiagram->getDimension();
     if (!nDimensionCount)
     {
         //@todo handle mixed dimension
@@ -180,11 +180,11 @@ void SeriesPlotterContainer::initializeCooSysAndSeriesPlotter(ChartModel& rChart
 
     //iterate through all coordinate systems
     uno::Reference<XColorScheme> xColorScheme(xDiagram->getDefaultColorScheme());
-    auto& rCooSysList = xDiagram->getBaseCoordinateSystems();
+    auto aCooSysList = xDiagram->getBaseCoordinateSystems();
     sal_Int32 nGlobalSeriesIndex = 0; //for automatic symbols
-    for (std::size_t nCS = 0; nCS < rCooSysList.size(); ++nCS)
+    for (std::size_t nCS = 0; nCS < aCooSysList.size(); ++nCS)
     {
-        rtl::Reference<BaseCoordinateSystem> xCooSys(rCooSysList[nCS]);
+        rtl::Reference<BaseCoordinateSystem> xCooSys(aCooSysList[nCS]);
         VCoordinateSystem* pVCooSys
             = SeriesPlotterContainer::addCooSysToList(m_rVCooSysList, xCooSys, rChartModel);
         // Let's check whether the secondary Y axis is visible
@@ -212,11 +212,13 @@ void SeriesPlotterContainer::initializeCooSysAndSeriesPlotter(ChartModel& rChart
                 try
                 {
                     sal_Int32 n3DRelativeHeightOldValue(100);
-                    uno::Any aAny = xChartType->getPropertyValue("3DRelativeHeight");
+                    uno::Any aAny = xChartType->getFastPropertyValue(
+                        PROP_PIECHARTTYPE_3DRELATIVEHEIGHT); // "3DRelativeHeight"
                     aAny >>= n3DRelativeHeightOldValue;
                     if (n3DRelativeHeightOldValue != n3DRelativeHeight)
-                        xChartType->setPropertyValue("3DRelativeHeight",
-                                                     uno::Any(n3DRelativeHeight));
+                        xChartType->setFastPropertyValue(
+                            PROP_PIECHARTTYPE_3DRELATIVEHEIGHT, // "3DRelativeHeight"
+                            uno::Any(n3DRelativeHeight));
                 }
                 catch (const uno::Exception&)
                 {
@@ -227,8 +229,8 @@ void SeriesPlotterContainer::initializeCooSysAndSeriesPlotter(ChartModel& rChart
                 m_bChartTypeUsesShiftedCategoryPositionPerDefault
                     = ChartTypeHelper::shiftCategoryPosAtXAxisPerDefault(xChartType);
 
-            bool bExcludingPositioning = DiagramHelper::getDiagramPositioningMode(xDiagram)
-                                         == DiagramPositioningMode_EXCLUDING;
+            bool bExcludingPositioning
+                = xDiagram->getDiagramPositioningMode() == DiagramPositioningMode::Excluding;
             VSeriesPlotter* pPlotter = VSeriesPlotter::createSeriesPlotter(
                 xChartType, nDimensionCount, bExcludingPositioning);
             if (!pPlotter)
@@ -240,7 +242,7 @@ void SeriesPlotterContainer::initializeCooSysAndSeriesPlotter(ChartModel& rChart
             if (pVCooSys)
                 pPlotter->setExplicitCategoriesProvider(pVCooSys->getExplicitCategoriesProvider());
             sal_Int32 nMissingValueTreatment
-                = DiagramHelper::getCorrectedMissingValueTreatment(xDiagram, xChartType);
+                = xDiagram->getCorrectedMissingValueTreatment(xChartType);
 
             if (pVCooSys)
                 pVCooSys->addMinimumAndMaximumSupplier(pPlotter);
@@ -253,7 +255,7 @@ void SeriesPlotterContainer::initializeCooSysAndSeriesPlotter(ChartModel& rChart
             for (std::size_t nS = 0; nS < aSeriesList.size(); ++nS)
             {
                 rtl::Reference<DataSeries> const& xDataSeries = aSeriesList[nS];
-                if (!bIncludeHiddenCells && !DataSeriesHelper::hasUnhiddenData(xDataSeries))
+                if (!bIncludeHiddenCells && !xDataSeries->hasUnhiddenData())
                     continue;
 
                 std::unique_ptr<VDataSeries> pSeries(new VDataSeries(xDataSeries));
@@ -567,8 +569,7 @@ void SeriesPlotterContainer::AdaptScaleOfYAxisWithoutAttachedSeries(ChartModel& 
             bool bSeriesAttachedToThisAxis = false;
             sal_Int32 nAttachedAxisIndex = -1;
             {
-                std::vector<rtl::Reference<DataSeries>> aSeriesVector
-                    = DiagramHelper::getDataSeriesFromDiagram(xDiagram);
+                std::vector<rtl::Reference<DataSeries>> aSeriesVector = xDiagram->getDataSeries();
                 for (auto const& series : aSeriesVector)
                 {
                     sal_Int32 nCurrentIndex = DataSeriesHelper::getAttachedAxisIndex(series);

@@ -21,18 +21,22 @@
 #define INCLUDED_VCL_BITMAP_HXX
 
 #include <tools/degree.hxx>
+#include <tools/helpers.hxx>
 #include <vcl/checksum.hxx>
 #include <vcl/dllapi.h>
 #include <vcl/mapmod.hxx>
 #include <vcl/region.hxx>
-#include <vcl/scopedbitmapaccess.hxx>
 #include <vcl/bitmap/BitmapTypes.hxx>
 
 #include <o3tl/typed_flags_set.hxx>
 
+#include <algorithm>
 #include <memory>
 
-#define GAMMA( _def_cVal, _def_InvGamma )   (static_cast<sal_uInt8>(MinMax(FRound(pow( _def_cVal/255.0,_def_InvGamma)*255.0),0,255)))
+inline sal_uInt8 GAMMA(double _def_cVal, double _def_InvGamma)
+{
+    return FRound(std::clamp(pow(_def_cVal / 255.0, _def_InvGamma) * 255.0, 0.0, 255.0));
+}
 
 class Color;
 
@@ -102,7 +106,7 @@ struct BitmapSystemData
     int mnHeight;
 };
 
-class SAL_WARN_UNUSED VCL_DLLPUBLIC Bitmap
+class SAL_WARN_UNUSED VCL_DLLPUBLIC Bitmap final
 {
 public:
 
@@ -110,7 +114,7 @@ public:
                             Bitmap( const Bitmap& rBitmap );
                             Bitmap( const Size& rSizePixel, vcl::PixelFormat ePixelFormat, const BitmapPalette* pPal = nullptr );
     explicit                Bitmap( std::shared_ptr<SalBitmap> xSalBitmap );
-    virtual                 ~Bitmap();
+                            ~Bitmap();
 
     Bitmap&                 operator=( const Bitmap& rBitmap );
     Bitmap&                 operator=( Bitmap&& rBitmap ) noexcept;
@@ -228,21 +232,37 @@ public:
     bool                    CopyPixel(
                                 const tools::Rectangle& rRectDst,
                                 const tools::Rectangle& rRectSrc,
-                                const Bitmap* pBmpSrc = nullptr );
+                                const Bitmap& rBmpSrc );
+
+    /** Copy a rectangular area inside this bitmap.
+
+        @param rRectDst
+        Destination rectangle in this bitmap. This is clipped to the
+        bitmap dimensions.
+
+        @param rRectSrc
+        Source rectangle. This is clipped to the
+        bitmap dimensions. Note further that no scaling takes place
+        during this copy operation, i.e. only the minimum of source
+        and destination rectangle's width and height are used.
+
+        @return true, if the operation completed successfully. false
+        is not only returned when the operation failed, but also if
+        nothing had to be done, e.g. because one of the rectangles are
+        empty.
+     */
+    bool                    CopyPixel(
+                                const tools::Rectangle& rRectDst,
+                                const tools::Rectangle& rRectSrc );
 
     bool                    CopyPixel_AlphaOptimized(
                                 const tools::Rectangle& rRectDst,
                                 const tools::Rectangle& rRectSrc,
-                                const Bitmap* pBmpSrc );
+                                const AlphaMask& rBmpSrc );
 
-    /** Perform boolean OR operation with another bitmap
-
-        @param rMask
-        The mask bitmap in the selected combine operation
-
-        @return true, if the operation was completed successfully.
-     */
-    bool                    CombineOr( const Bitmap& rMask );
+    bool                    CopyPixel_AlphaOptimized(
+                                const tools::Rectangle& rRectDst,
+                                const tools::Rectangle& rRectSrc );
 
     /** Alpha-blend the given bitmap against a specified uniform
           background color.
@@ -352,6 +372,19 @@ public:
         @param rTransColor
         Color value where the bitmask should be transparent
 
+        @return the resulting bitmask.
+     */
+    Bitmap                  CreateMask( const Color& rTransColor ) const;
+
+    /** Create on-off mask from bitmap
+
+        This method creates a bitmask from the bitmap, where every
+        pixel that equals rTransColor is set transparent, the rest
+        opaque.
+
+        @param rTransColor
+        Color value where the bitmask should be transparent
+
         @param nTol
         Tolerance value. Specifies the maximal difference between
         rTransColor and the individual pixel values, such that the
@@ -359,7 +392,38 @@ public:
 
         @return the resulting bitmask.
      */
-    Bitmap                  CreateMask( const Color& rTransColor, sal_uInt8 nTol = 0 ) const;
+    Bitmap                  CreateMask( const Color& rTransColor, sal_uInt8 nTol ) const;
+
+    /** Create on-off alpha mask from bitmap
+
+        This method creates a bitmask from the bitmap, where every
+        pixel that equals rTransColor is set transparent, the rest
+        opaque.
+
+        @param rTransColor
+        Color value where the bitmask should be transparent
+
+        @return the resulting bitmask.
+     */
+    AlphaMask              CreateAlphaMask( const Color& rTransColor ) const;
+
+    /** Create on-off alpha mask from bitmap
+
+        This method creates a bitmask from the bitmap, where every
+        pixel that equals rTransColor is set transparent, the rest
+        opaque.
+
+        @param rTransColor
+        Color value where the bitmask should be transparent
+
+        @param nTol
+        Tolerance value. Specifies the maximal difference between
+        rTransColor and the individual pixel values, such that the
+        corresponding pixel is still regarded as transparent.
+
+        @return the resulting bitmask.
+     */
+    AlphaMask             CreateAlphaMask( const Color& rTransColor, sal_uInt8 nTol ) const;
 
     /** Create region of similar colors in a given rectangle
 
@@ -374,18 +438,6 @@ public:
      */
     vcl::Region                  CreateRegion( const Color& rColor, const tools::Rectangle& rRect ) const;
 
-    /** Replace all pixel where the given mask is on with the specified color
-
-        @param rMask
-        Mask specifying which pixel should be replaced
-
-        @param rReplaceColor
-        Color to be placed in all changed pixel
-
-        @return true, if the operation was completed successfully.
-     */
-    bool                    Replace( const Bitmap& rMask, const Color& rReplaceColor );
-
     /** Merge bitmap with given background color according to specified alpha mask
 
         @param rAlpha
@@ -397,6 +449,18 @@ public:
         @return true, if the operation was completed successfully.
      */
     bool                    Replace( const AlphaMask& rAlpha, const Color& rMergeColor );
+
+    /** Replace all pixel where the given mask/alpha layer is on with the specified color
+
+        @param rMask
+        Mask specifying which pixel should be replaced
+
+        @param rReplaceColor
+        Color to be placed in all changed pixel
+
+        @return true, if the operation was completed successfully.
+     */
+    bool                    ReplaceMask( const AlphaMask& rMask, const Color& rReplaceColor );
 
     /** Replace all pixel having the search color with the specified color
 
@@ -539,16 +603,6 @@ public:
     SAL_DLLPRIVATE void     ImplSetSalBitmap( const std::shared_ptr<SalBitmap>& xImpBmp );
 
     SAL_DLLPRIVATE bool     ImplMakeGreyscales();
-
-public:
-
-    BitmapInfoAccess*       AcquireInfoAccess();
-    BitmapReadAccess*       AcquireReadAccess();
-    BitmapWriteAccess*      AcquireWriteAccess();
-    static void             ReleaseAccess( BitmapInfoAccess* pAccess );
-
-    typedef vcl::ScopedBitmapAccess<BitmapReadAccess, Bitmap, &Bitmap::AcquireReadAccess> ScopedReadAccess;
-    typedef vcl::ScopedBitmapAccess<BitmapInfoAccess, Bitmap, &Bitmap::AcquireInfoAccess> ScopedInfoAccess;
 
 private:
     SAL_DLLPRIVATE bool ImplConvertUp(vcl::PixelFormat ePixelFormat, Color const* pExtColor = nullptr);

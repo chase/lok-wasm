@@ -19,7 +19,6 @@
 
 #include <com/sun/star/text/XTextDocument.hpp>
 #include <xmloff/xmlnamespace.hxx>
-#include <xmloff/attrlist.hxx>
 #include "xmlexpit.hxx"
 #include <xmloff/namespacemap.hxx>
 #include <xmloff/XMLTextListAutoStylePool.hxx>
@@ -309,7 +308,7 @@ class SwXMLAutoStylePoolP : public SvXMLAutoStylePoolP
 protected:
 
     virtual void exportStyleAttributes(
-            SvXMLAttributeList& rAttrList,
+            comphelper::AttributeList& rAttrList,
             XmlStyleFamily nFamily,
             const std::vector< XMLPropertyState >& rProperties,
             const SvXMLExportPropertyMapper& rPropExp
@@ -324,7 +323,7 @@ public:
 }
 
 void SwXMLAutoStylePoolP::exportStyleAttributes(
-            SvXMLAttributeList& rAttrList,
+            comphelper::AttributeList& rAttrList,
             XmlStyleFamily nFamily,
             const std::vector< XMLPropertyState >& rProperties,
             const SvXMLExportPropertyMapper& rPropExp

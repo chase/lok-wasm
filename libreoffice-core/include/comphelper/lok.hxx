@@ -20,10 +20,20 @@ class LanguageTag;
 
 namespace comphelper::LibreOfficeKit
 {
+/// interface for allowing threads to be transiently shutdown.
+class COMPHELPER_DLLPUBLIC SAL_LOPLUGIN_ANNOTATE("crosscast") ThreadJoinable
+{
+public:
+    /// shutdown and join threads, @returns true on success
+    virtual bool joinThreads() = 0;
+};
+
 // Functions to be called only from the LibreOfficeKit implementation in desktop, not from other
 // places in LibreOffice code.
 
 COMPHELPER_DLLPUBLIC void setActive(bool bActive = true);
+
+COMPHELPER_DLLPUBLIC void setForkedChild(bool bIsChild = true);
 
 enum class statusIndicatorCallbackType
 {
@@ -40,6 +50,10 @@ COMPHELPER_DLLPUBLIC void setStatusIndicatorCallback(
 
 // Check whether the code is running as invoked through LibreOfficeKit.
 COMPHELPER_DLLPUBLIC bool isActive();
+
+/// Is this a transient forked child process, that shares many
+/// eg. file-system resources with its parent process?
+COMPHELPER_DLLPUBLIC bool isForkedChild();
 
 /// Shift the coordinates before rendering each bitmap.
 /// Used by Calc to render each tile separately.
@@ -84,6 +98,8 @@ enum Compat : sal_uInt32
 COMPHELPER_DLLPUBLIC void setCompatFlag(Compat flag);
 /// Get compatibility flags
 COMPHELPER_DLLPUBLIC bool isCompatFlagSet(Compat flag);
+/// Reset compatibility flags
+COMPHELPER_DLLPUBLIC void resetCompatFlag();
 
 /// Check whether clients want viewId in visible cursor invalidation payload.
 COMPHELPER_DLLPUBLIC bool isViewIdForVisCursorInvalidation();

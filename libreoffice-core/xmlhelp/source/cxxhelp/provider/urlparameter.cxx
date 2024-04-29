@@ -102,7 +102,7 @@ OString URLParameter::getByName( const char* par )
     else if( strcmp( par,"HelpPrefix" ) == 0 )
         val = m_aPrefix;
 
-    return OString( val.getStr(),val.getLength(),RTL_TEXTENCODING_UTF8 );
+    return OUStringToOString( val, RTL_TEXTENCODING_UTF8 );
 }
 
 
@@ -255,7 +255,7 @@ void URLParameter::readHelpDataFile()
         if( !pHdf )
             break;
 
-        OString keyStr( m_aId.getStr(),m_aId.getLength(),RTL_TEXTENCODING_UTF8 );
+        OString keyStr = OUStringToOString( m_aId,RTL_TEXTENCODING_UTF8 );
         bSuccess = pHdf->getValueForKey( keyStr, aHDFData );
         if( bSuccess )
         {
@@ -720,63 +720,61 @@ InputStreamTransformer::InputStreamTransformer( URLParameter* urlParam,
         OString parString[46];
         int last = 0;
 
-        parString[last++] = "Program";
+        parString[last++] = "Program"_ostr;
         OString aPureProgramm( urlParam->getByName( "Program" ) );
         parString[last++] = "'" + aPureProgramm + "'";
-        parString[last++] = "Database";
+        parString[last++] = "Database"_ostr;
         parString[last++] = "'" + urlParam->getByName( "DatabasePar" ) + "'";
-        parString[last++] = "Id";
+        parString[last++] = "Id"_ostr;
         parString[last++] = "'" + urlParam->getByName( "Id" ) + "'";
-        parString[last++] = "Path";
+        parString[last++] = "Path"_ostr;
         OString aPath( urlParam->getByName( "Path" ) );
         parString[last++] = "'" + aPath + "'";
 
         OString aPureLanguage = urlParam->getByName( "Language" );
-        parString[last++] = "Language";
+        parString[last++] = "Language"_ostr;
         parString[last++] = "'" + aPureLanguage + "'";
-        parString[last++] = "System";
+        parString[last++] = "System"_ostr;
         parString[last++] = "'" + urlParam->getByName( "System" ) + "'";
-        parString[last++] = "productname";
-        parString[last++] = "'" + OString(
-            pDatabases->getProductName().getStr(),
-            pDatabases->getProductName().getLength(),
+        parString[last++] = "productname"_ostr;
+        parString[last++] = "'" + OUStringToOString(
+            pDatabases->getProductName(),
             RTL_TEXTENCODING_UTF8 ) + "'";
-        parString[last++] = "productversion";
+        parString[last++] = "productversion"_ostr;
         parString[last++] = "'" +
-            OString(  pDatabases->getProductVersion().getStr(),
-                          pDatabases->getProductVersion().getLength(),
+            OUStringToOString(  pDatabases->getProductVersion(),
                           RTL_TEXTENCODING_UTF8 ) + "'";
 
-        parString[last++] = "imgtheme";
+        parString[last++] = "imgtheme"_ostr;
         parString[last++] = "'" + pDatabases->getImageTheme() + "'";
-        parString[last++] = "hp";
+        parString[last++] = "hp"_ostr;
         parString[last++] = "'" + urlParam->getByName( "HelpPrefix" ) + "'";
 
         if( !parString[last-1].isEmpty() )
         {
-            parString[last++] = "sm";
-            parString[last++] = "'vnd.sun.star.help%3A%2F%2F'";
-            parString[last++] = "qm";
-            parString[last++] = "'%3F'";
-            parString[last++] = "es";
-            parString[last++] = "'%3D'";
-            parString[last++] = "am";
-            parString[last++] = "'%26'";
-            parString[last++] = "cl";
-            parString[last++] = "'%3A'";
-            parString[last++] = "sl";
-            parString[last++] = "'%2F'";
-            parString[last++] = "hm";
-            parString[last++] = "'%23'";
-            parString[last++] = "cs";
-            parString[last++] = "'css'";
+            parString[last++] = "sm"_ostr;
+            parString[last++] = "'vnd.sun.star.help%3A%2F%2F'"_ostr;
+            parString[last++] = "qm"_ostr;
+            parString[last++] = "'%3F'"_ostr;
+            parString[last++] = "es"_ostr;
+            parString[last++] = "'%3D'"_ostr;
+            parString[last++] = "am"_ostr;
+            parString[last++] = "'%26'"_ostr;
+            parString[last++] = "cl"_ostr;
+            parString[last++] = "'%3A'"_ostr;
+            parString[last++] = "sl"_ostr;
+            parString[last++] = "'%2F'"_ostr;
+            parString[last++] = "hm"_ostr;
+            parString[last++] = "'%23'"_ostr;
+            parString[last++] = "cs"_ostr;
+            parString[last++] = "'css'"_ostr;
 
-            parString[last++] = "vendorname";
-            parString[last++] = OString("''");
-            parString[last++] = "vendorversion";
-            parString[last++] = OString("''");
-            parString[last++] = "vendorshort";
-            parString[last++] = OString("''");
+            parString[last++] = "vendorname"_ostr;
+            parString[last++] = "''"_ostr;
+            parString[last++] = "vendorversion"_ostr;
+            parString[last++] = "''"_ostr;
+            parString[last++] = "vendorshort"_ostr;
+            parString[last++] = "''"_ostr;
         }
 
         // Do we need to add extension path?
@@ -810,7 +808,7 @@ InputStreamTransformer::InputStreamTransformer( URLParameter* urlParam,
             OUString aOUExpandedExtensionPath = Databases::expandURL( aExtensionRegistryPath, xContext );
             OString aExpandedExtensionPath = OUStringToOString( aOUExpandedExtensionPath, osl_getThreadTextEncoding() );
 
-            parString[last++] = "ExtensionPath";
+            parString[last++] = "ExtensionPath"_ostr;
             parString[last++] = "'" + aExpandedExtensionPath + "'";
 
             // ExtensionId
@@ -819,7 +817,7 @@ InputStreamTransformer::InputStreamTransformer( URLParameter* urlParam,
             if( iSlash != -1 )
                 aPureExtensionId = aPath.copy( 0, iSlash );
 
-            parString[last++] = "ExtensionId";
+            parString[last++] = "ExtensionId"_ostr;
             parString[last++] = "'" + aPureExtensionId + "'";
         }
 
@@ -829,9 +827,8 @@ InputStreamTransformer::InputStreamTransformer( URLParameter* urlParam,
 
         OUString xslURL = pDatabases->getInstallPathAsURL();
 
-        OString xslURLascii = OString(
-                xslURL.getStr(),
-                xslURL.getLength(),
+        OString xslURLascii = OUStringToOString(
+                xslURL,
                 RTL_TEXTENCODING_UTF8) +
             "main_transform.xsl";
 

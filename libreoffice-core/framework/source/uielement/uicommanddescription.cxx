@@ -55,7 +55,7 @@ using namespace ::com::sun::star::frame;
 const char CONFIGURATION_ROOT_ACCESS[]           = "/org.openoffice.Office.UI.";
 
 // Special resource URLs to retrieve additional information
-constexpr OUStringLiteral PRIVATE_RESOURCE_URL       = u"private:";
+constexpr OUString PRIVATE_RESOURCE_URL       = u"private:"_ustr;
 
 const sal_Int32   COMMAND_PROPERTY_IMAGE                = 1;
 const sal_Int32   COMMAND_PROPERTY_ROTATE               = 2;
@@ -71,7 +71,7 @@ namespace {
 class ConfigurationAccess_UICommand : // Order is necessary for right initialization!
                                         public  ::cppu::WeakImplHelper<XNameAccess,XContainerListener>
 {
-    osl::Mutex m_aMutex;
+    std::mutex m_aMutex;
     public:
                                   ConfigurationAccess_UICommand( std::u16string_view aModuleName, const Reference< XNameAccess >& xGenericUICommands, const Reference< XComponentContext >& rxContext );
         virtual                   ~ConfigurationAccess_UICommand() override;
@@ -176,7 +176,7 @@ ConfigurationAccess_UICommand::ConfigurationAccess_UICommand( std::u16string_vie
 ConfigurationAccess_UICommand::~ConfigurationAccess_UICommand()
 {
     // SAFE
-    osl::MutexGuard g(m_aMutex);
+    std::unique_lock g(m_aMutex);
     Reference< XContainer > xContainer( m_xConfigAccess, UNO_QUERY );
     if ( xContainer.is() )
         xContainer->removeContainerListener(m_xConfigListener);
@@ -188,7 +188,7 @@ ConfigurationAccess_UICommand::~ConfigurationAccess_UICommand()
 // XNameAccess
 Any ConfigurationAccess_UICommand::getByNameImpl( const OUString& rCommandURL )
 {
-    osl::MutexGuard g(m_aMutex);
+    std::unique_lock g(m_aMutex);
     if ( !m_bConfigAccessInitialized )
     {
         initializeConfigAccess();
@@ -266,13 +266,13 @@ Any ConfigurationAccess_UICommand::getSequenceFromCache( const OUString& aComman
         if ( !pIter->second.bCommandNameCreated )
             fillInfoFromResult( pIter->second, pIter->second.aLabel );
 
-        static constexpr OUStringLiteral sLabel = u"Label";
-        static constexpr OUStringLiteral sName = u"Name";
-        static constexpr OUStringLiteral sPopup = u"Popup";
-        static constexpr OUStringLiteral sPopupLabel = u"PopupLabel";
-        static constexpr OUStringLiteral sTooltipLabel = u"TooltipLabel";
-        static constexpr OUStringLiteral sTargetURL = u"TargetURL";
-        static constexpr OUStringLiteral sIsExperimental = u"IsExperimental";
+        static constexpr OUString sLabel = u"Label"_ustr;
+        static constexpr OUString sName = u"Name"_ustr;
+        static constexpr OUString sPopup = u"Popup"_ustr;
+        static constexpr OUString sPopupLabel = u"PopupLabel"_ustr;
+        static constexpr OUString sTooltipLabel = u"TooltipLabel"_ustr;
+        static constexpr OUString sTargetURL = u"TargetURL"_ustr;
+        static constexpr OUString sIsExperimental = u"IsExperimental"_ustr;
         Sequence< PropertyValue > aPropSeq{
             comphelper::makePropertyValue(sLabel, !pIter->second.aContextLabel.isEmpty()
                                                        ? Any(pIter->second.aContextLabel)
@@ -432,7 +432,7 @@ Any ConfigurationAccess_UICommand::getInfoFromCommand( const OUString& rCommandU
 Sequence< OUString > ConfigurationAccess_UICommand::getAllCommands()
 {
     // SAFE
-    osl::MutexGuard g(m_aMutex);
+    std::unique_lock g(m_aMutex);
 
     if ( !m_bConfigAccessInitialized )
     {
@@ -523,21 +523,21 @@ void ConfigurationAccess_UICommand::initializeConfigAccess()
 // container.XContainerListener
 void SAL_CALL ConfigurationAccess_UICommand::elementInserted( const ContainerEvent& )
 {
-    osl::MutexGuard g(m_aMutex);
+    std::unique_lock g(m_aMutex);
     m_bCacheFilled = false;
     fillCache();
 }
 
 void SAL_CALL ConfigurationAccess_UICommand::elementRemoved( const ContainerEvent& )
 {
-    osl::MutexGuard g(m_aMutex);
+    std::unique_lock g(m_aMutex);
     m_bCacheFilled = false;
     fillCache();
 }
 
 void SAL_CALL ConfigurationAccess_UICommand::elementReplaced( const ContainerEvent& )
 {
-    osl::MutexGuard g(m_aMutex);
+    std::unique_lock g(m_aMutex);
     m_bCacheFilled = false;
     fillCache();
 }
@@ -547,7 +547,7 @@ void SAL_CALL ConfigurationAccess_UICommand::disposing( const EventObject& aEven
 {
     // SAFE
     // remove our reference to the config access
-    osl::MutexGuard g(m_aMutex);
+    std::unique_lock g(m_aMutex);
 
     Reference< XInterface > xIfac1( aEvent.Source, UNO_QUERY );
     Reference< XInterface > xIfac2( m_xConfigAccess, UNO_QUERY );

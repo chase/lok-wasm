@@ -37,7 +37,7 @@ using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::ucb;
 using namespace ::svt;
 
-constexpr OStringLiteral aGroupIdent("dBase III");
+constexpr OString aGroupIdent("dBase III"_ostr);
 
 
 ODbaseIndexDialog::ODbaseIndexDialog(weld::Window * pParent, OUString aDataSrcName)
@@ -254,9 +254,6 @@ void ODbaseIndexDialog::Init()
 
     // first assume for all indexes they're free
 
-    OUString const aIndexExt("ndx");
-    OUString const aTableExt("dbf");
-
     std::vector< OUString > aUsedIndexes;
 
     aURL.SetSmartProtocol(INetProtocol::File);
@@ -267,11 +264,11 @@ void ODbaseIndexDialog::Init()
         osl::FileBase::getSystemPathFromFileURL(rURL,aName);
         aURL.SetSmartURL(aName);
         OUString aExt = aURL.getExtension();
-        if (aExt == aIndexExt)
+        if (aExt == "ndx")
         {
             m_aFreeIndexList.emplace_back(aURL.getName() );
         }
-        else if (aExt == aTableExt)
+        else if (aExt == "dbf")
         {
             m_aTableInfoList.emplace_back(aURL.getName() );
             OTableInfo& rTabInfo = m_aTableInfoList.back();

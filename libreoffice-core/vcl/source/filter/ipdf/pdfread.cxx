@@ -12,9 +12,10 @@
 
 #include <pdf/PdfConfig.hxx>
 #include <vcl/graph.hxx>
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <unotools/datetime.hxx>
+#include <tools/UnitConversion.hxx>
 
 #include <vcl/filter/PDFiumLibrary.hxx>
 #include <sal/log.hxx>
@@ -91,7 +92,7 @@ size_t RenderPDFBitmaps(const void* pBuffer, int nSize, std::vector<BitmapEx>& r
         AlphaMask aMask(Size(nPageWidth, nPageHeight));
         {
             BitmapScopedWriteAccess pWriteAccess(aBitmap);
-            AlphaScopedWriteAccess pMaskAccess(aMask);
+            BitmapScopedWriteAccess pMaskAccess(aMask);
             ConstScanline pPdfBuffer = pPdfBitmap->getBuffer();
             const int nStride = pPdfBitmap->getStride();
             std::vector<sal_uInt8> aScanlineAlpha(nPageWidth);
@@ -102,8 +103,7 @@ size_t RenderPDFBitmaps(const void* pBuffer, int nSize, std::vector<BitmapEx>& r
                 pWriteAccess->CopyScanline(nRow, pPdfLine, ScanlineFormat::N32BitTcBgra, nStride);
                 for (int nCol = 0; nCol < nPageWidth; ++nCol)
                 {
-                    // Invert alpha (source is alpha, target is opacity).
-                    aScanlineAlpha[nCol] = ~pPdfLine[3];
+                    aScanlineAlpha[nCol] = pPdfLine[3];
                     pPdfLine += 4;
                 }
                 pMaskAccess->CopyScanline(nRow, aScanlineAlpha.data(), ScanlineFormat::N8BitPal,
@@ -369,14 +369,10 @@ size_t ImportPDFUnloaded(const OUString& rURL, std::vector<PDFGraphicResult>& rG
         if (aPageSize.getWidth() <= 0.0 || aPageSize.getHeight() <= 0.0)
             continue;
 
-        // Returned unit is points, convert that to twip
-        // 1 pt = 20 twips
-        constexpr double pointToTwipconversionRatio = 20;
+        // Returned unit is points
 
-        tools::Long nPageWidth
-            = convertTwipToMm100(aPageSize.getWidth() * pointToTwipconversionRatio);
-        tools::Long nPageHeight
-            = convertTwipToMm100(aPageSize.getHeight() * pointToTwipconversionRatio);
+        tools::Long nPageWidth = std::round(convertPointToMm100(aPageSize.getWidth()));
+        tools::Long nPageHeight = std::round(convertPointToMm100(aPageSize.getHeight()));
 
         // Create the Graphic with the VectorGraphicDataPtr and link the original PDF stream.
         // We swap out this Graphic as soon as possible, and a later swap in

@@ -35,6 +35,7 @@
 #include <editeng/outliner.hxx>
 #include <functional>
 #include <unordered_set>
+#include <unordered_map>
 
 class SfxTabPage;
 class SfxBaseController;
@@ -58,6 +59,7 @@ class SfxInPlaceClient;
 class SfxLokCallbackInterface;
 class LOKDocumentFocusListener;
 class SfxStoringHelper;
+class VCLXPopupMenu;
 namespace rtl { class OStringBuffer; }
 namespace vcl { class PrinterController; }
 
@@ -129,15 +131,15 @@ class SfxViewFactory;
 private: \
     static SfxViewFactory *s_pFactory; \
 public: \
-    static SfxViewShell  *CreateInstance(SfxViewFrame *pFrame, SfxViewShell *pOldView); \
+    static SfxViewShell  *CreateInstance(SfxViewFrame& rFrame, SfxViewShell *pOldView); \
     static void           RegisterFactory( SfxInterfaceId nPrio ); \
     static SfxViewFactory*Factory() { return s_pFactory; } \
     static void           InitFactory()
 
 #define SFX_IMPL_NAMED_VIEWFACTORY(Class, AsciiViewName) \
     SfxViewFactory* Class::s_pFactory; \
-    SfxViewShell* Class::CreateInstance(SfxViewFrame *pFrame, SfxViewShell *pOldView) \
-    { return new Class(pFrame, pOldView); } \
+    SfxViewShell* Class::CreateInstance(SfxViewFrame& rFrame, SfxViewShell *pOldView) \
+    { return new Class(rFrame, pOldView); } \
     void Class::RegisterFactory( SfxInterfaceId nPrio ) \
     { \
         s_pFactory = new SfxViewFactory(&CreateInstance,nPrio,AsciiViewName);\
@@ -153,6 +155,8 @@ template<class T> bool checkSfxViewShell(const SfxViewShell* pShell)
     return dynamic_cast<const T*>(pShell) != nullptr;
 }
 
+typedef std::unordered_map<OUString, std::pair<Color, int>> StylesHighlighterColorMap;
+
 /**
  * One SfxViewShell more or less represents one edit window for a document, there can be multiple
  * ones for a single opened document (SfxObjectShell).
@@ -164,7 +168,7 @@ friend class SfxBaseController;
 friend class SfxPrinterController;
 
     std::unique_ptr<struct SfxViewShell_Impl>   pImpl;
-    SfxViewFrame*               pFrame;
+    SfxViewFrame&               rFrame;
     VclPtr<vcl::Window>         pWindow;
     bool                        bNoNewWindow;
     bool                        mbPrinterSettingsModified;
@@ -183,6 +187,9 @@ friend class SfxPrinterController;
     /// Used for async export
     std::shared_ptr<SfxStoringHelper> m_xHelper;
 
+    StylesHighlighterColorMap ParaStylesColorMap;
+    StylesHighlighterColorMap CharStylesColorMap;
+
 protected:
     virtual void                Activate(bool IsMDIActivate) override;
     virtual void                Deactivate(bool IsMDIActivate) override;
@@ -197,13 +204,14 @@ protected:
 
 public:
     // Iteration
-    static SfxViewShell*        GetFirst( bool bOnlyVisible = true, const std::function<bool ( const SfxViewShell* )>& isViewShell = nullptr );
-    static SfxViewShell*        GetNext( const SfxViewShell& rPrev,
+    SAL_WARN_UNUSED_RESULT static SfxViewShell* GetFirst( bool bOnlyVisible = true, const std::function<bool ( const SfxViewShell* )>& isViewShell = nullptr );
+    SAL_WARN_UNUSED_RESULT static SfxViewShell* GetNext( const SfxViewShell& rPrev,
                                          bool bOnlyVisible = true,
                                          const std::function<bool ( const SfxViewShell* )>& isViewShell = nullptr );
-    static SfxViewShell*        Current();
+    SAL_WARN_UNUSED_RESULT static SfxViewShell* Current();
+    SAL_WARN_UNUSED_RESULT static bool IsCurrentLokViewReadOnly();
 
-    static SfxViewShell*        Get( const css::uno::Reference< css::frame::XController>& i_rController );
+    SAL_WARN_UNUSED_RESULT static SfxViewShell* Get( const css::uno::Reference< css::frame::XController>& i_rController );
 
     // Initialize Constructors/Destructors
                                 SFX_DECL_INTERFACE(SFX_INTERFACE_SFXVIEWSH)
@@ -214,10 +222,12 @@ private:
 
     LOKDocumentFocusListener& GetLOKDocumentFocusListener();
     const LOKDocumentFocusListener& GetLOKDocumentFocusListener() const;
+    bool                        lokReadOnlyView = false; // When true, this is a LOK readonly view.
+    bool                        allowChangeComments = false; // When true, user can edit comments in readonly view mode.
 
 public:
 
-                                SfxViewShell( SfxViewFrame *pFrame, SfxViewShellFlags nFlags );
+                                SfxViewShell( SfxViewFrame& rFrame, SfxViewShellFlags nFlags );
     virtual                     ~SfxViewShell() override;
 
     /// Informs the view shell that it'll be deleted before the main loop processes the next user
@@ -236,6 +246,11 @@ public:
 
     void                        JumpToMark( const OUString& rMark );
     void                        VisAreaChanged();
+
+    void                        SetLokReadOnlyView(bool readOnlyView) { lokReadOnlyView = readOnlyView; };
+    bool                        IsLokReadOnlyView() const { return lokReadOnlyView; };
+    void                        SetAllowChangeComments(bool allow) { allowChangeComments = allow; }
+    bool                        IsAllowChangeComments() { return allowChangeComments; }
 
     // Misc
 
@@ -272,7 +287,22 @@ public:
     const SvBorder&             GetBorderPixel() const;
     void                        SetBorderPixel( const SvBorder &rBorder );
     void                        InvalidateBorder();
-    inline SfxViewFrame*        GetViewFrame() const;
+
+    /*  [Description]
+
+        This method returns a reference to the <SfxViewFrame> Instance in which
+        this SfxViewShell is displayed. This is the instance that was passed
+        on in the constructor. It is guaranteed that the returned reference
+        is a valid SfxViewFrame instance.
+
+        [Cross-reference]
+
+        <SfxShell::GetFrame()const>
+    */
+    SfxViewFrame& GetViewFrame() const
+    {
+        return rFrame;
+    }
 
     // Printing Interface
     virtual SfxPrinter*         GetPrinter( bool bCreate = false );
@@ -317,11 +347,11 @@ public:
     void                        SetController( SfxBaseController* pController );
     css::uno::Reference<css::frame::XController> GetController() const;
 
-    bool                        TryContextMenuInterception(const css::uno::Reference<css::awt::XPopupMenu>& rIn,
+    bool                        TryContextMenuInterception(const rtl::Reference<VCLXPopupMenu>& rIn,
                                                            const OUString& rMenuIdentifier,
-                                                           css::uno::Reference<css::awt::XPopupMenu>& rOut,
+                                                           rtl::Reference<VCLXPopupMenu>& rOut,
                                                            css::ui::ContextMenuExecuteEvent aEvent);
-    bool                        TryContextMenuInterception(const css::uno::Reference<css::awt::XPopupMenu>&,
+    bool                        TryContextMenuInterception(const rtl::Reference<VCLXPopupMenu>&,
                                                            const OUString& rMenuIdentifier,
                                                            css::ui::ContextMenuExecuteEvent aEvent);
 
@@ -365,8 +395,8 @@ public:
     /// dump view state for diagnostics
     void dumpLibreOfficeKitViewState(rtl::OStringBuffer &rState);
     /// Invokes the registered callback, if there are any.
-    virtual void libreOfficeKitViewCallback(int nType, const char* pPayload) const override;
-    virtual void libreOfficeKitViewCallbackWithViewId(int nType, const char* pPayload, int nViewId) const override;
+    virtual void libreOfficeKitViewCallback(int nType, const OString& pPayload) const override;
+    virtual void libreOfficeKitViewCallbackWithViewId(int nType, const OString& pPayload, int nViewId) const override;
     virtual void libreOfficeKitViewInvalidateTilesCallback(const tools::Rectangle* pRect, int nPart, int nMode) const override;
     virtual void libreOfficeKitViewUpdatedCallback(int nType) const override;
     virtual void libreOfficeKitViewUpdatedCallbackPerViewId(int nType, int nViewId, int nSourceViewId) const override;
@@ -455,34 +485,17 @@ public:
 
     // Blocked Command view settings
     void setBlockedCommandList(const char* blockedCommandList);
-    bool isBlockedCommand(OUString command);
+    bool isBlockedCommand(OUString command) const;
 
     void SetStoringHelper(std::shared_ptr<SfxStoringHelper> xHelper) { m_xHelper = xHelper; }
+
+    StylesHighlighterColorMap& GetStylesHighlighterParaColorMap() { return ParaStylesColorMap; }
+    StylesHighlighterColorMap& GetStylesHighlighterCharColorMap() { return CharStylesColorMap; }
 
     OUString getA11yFocusedParagraph() const;
     int getA11yCaretPosition() const;
 };
 
-
-inline SfxViewFrame* SfxViewShell::GetViewFrame() const
-
-/*  [Description]
-
-    This method returns a pointer to the <SfxViewFrame> Instance in which
-    this SfxViewShell is displayed. This is the instance that was passed
-    on in the constructor. It is guaranteed that the returned pointer
-    points on the valid SfxViewFrame instance.
-
-    [Cross-reference]
-
-    <SfxShell::GetFrame()const>
-*/
-
-{
-    return pFrame;
-}
-
 #endif // INCLUDED_SFX2_VIEWSH_HXX
-
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

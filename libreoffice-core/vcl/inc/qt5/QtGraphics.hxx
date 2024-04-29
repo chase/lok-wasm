@@ -24,6 +24,7 @@
 #include <salgdi.hxx>
 
 #include <memory>
+#include <optional>
 
 #include <QtGui/QPainter>
 #include <QtGui/QPainterPath>
@@ -50,8 +51,8 @@ class QtGraphicsBackend final : public SalGraphicsImpl, public QtGraphicsBase
     QImage* m_pQImage;
     QRegion m_aClipRegion;
     QPainterPath m_aClipPath;
-    Color m_aLineColor;
-    Color m_aFillColor;
+    std::optional<Color> m_oLineColor;
+    std::optional<Color> m_oFillColor;
     QPainter::CompositionMode m_eCompositionMode;
 
 public:
@@ -68,7 +69,7 @@ public:
 
     OUString getRenderBackendName() const override { return "qt5"; }
 
-    bool setClipRegion(vcl::Region const& rRegion) override;
+    void setClipRegion(vcl::Region const& rRegion) override;
     void ResetClipRegion() override;
 
     sal_uInt16 GetBitCount() const override;
@@ -93,7 +94,7 @@ public:
     void drawPolyPolygon(sal_uInt32 nPoly, const sal_uInt32* pPoints,
                          const Point** pPointArray) override;
 
-    bool drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
+    void drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
                          const basegfx::B2DPolyPolygon&, double fTransparency) override;
 
     bool drawPolyLine(const basegfx::B2DHomMatrix& rObjectToDevice, const basegfx::B2DPolygon&,
@@ -224,7 +225,7 @@ public:
 
     virtual void SetTextColor(Color nColor) override;
     virtual void SetFont(LogicalFontInstance*, int nFallbackLevel) override;
-    virtual void GetFontMetric(ImplFontMetricDataRef&, int nFallbackLevel) override;
+    virtual void GetFontMetric(FontMetricDataRef&, int nFallbackLevel) override;
     virtual FontCharMapRef GetFontCharMap() const override;
     virtual bool GetFontCapabilities(vcl::FontCapabilities& rFontCapabilities) const override;
     virtual void GetDevFontList(vcl::font::PhysicalFontCollection*) override;

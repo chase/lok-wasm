@@ -79,7 +79,7 @@ const SvxItemPropertySet* ImplGetSvxUnoOutlinerTextCursorSvxPropertySet()
     return &aTextCursorSvxPropertySet;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> ImplGetSvxTextPortionPropertyMap()
+std::span<const SfxItemPropertyMapEntry> ImplGetSvxTextPortionPropertyMap()
 {
     // Propertymap for an Outliner Text
     static const SfxItemPropertyMapEntry aSvxTextPortionPropertyMap[] =
@@ -88,10 +88,10 @@ o3tl::span<const SfxItemPropertyMapEntry> ImplGetSvxTextPortionPropertyMap()
         SVX_UNOEDIT_FONT_PROPERTIES,
         SVX_UNOEDIT_OUTLINER_PROPERTIES,
         SVX_UNOEDIT_PARA_PROPERTIES,
-        { u"TextField",                     EE_FEATURE_FIELD,   cppu::UnoType<text::XTextField>::get(),   beans::PropertyAttribute::READONLY, 0 },
-        { u"TextPortionType",               WID_PORTIONTYPE,    ::cppu::UnoType<OUString>::get(), beans::PropertyAttribute::READONLY, 0 },
-        { u"TextUserDefinedAttributes",     EE_CHAR_XMLATTRIBS,     cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
-        { u"ParaUserDefinedAttributes",     EE_PARA_XMLATTRIBS,     cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
+        { u"TextField"_ustr,                     EE_FEATURE_FIELD,   cppu::UnoType<text::XTextField>::get(),   beans::PropertyAttribute::READONLY, 0 },
+        { u"TextPortionType"_ustr,               WID_PORTIONTYPE,    ::cppu::UnoType<OUString>::get(), beans::PropertyAttribute::READONLY, 0 },
+        { u"TextUserDefinedAttributes"_ustr,     EE_CHAR_XMLATTRIBS,     cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
+        { u"ParaUserDefinedAttributes"_ustr,     EE_PARA_XMLATTRIBS,     cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
     };
     return aSvxTextPortionPropertyMap;
 }
@@ -107,7 +107,7 @@ static const SfxItemPropertySet* ImplGetSvxTextPortionSfxPropertySet()
     return &aSvxTextPortionSfxPropertySet;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> ImplGetSvxUnoOutlinerTextCursorPropertyMap()
+std::span<const SfxItemPropertyMapEntry> ImplGetSvxUnoOutlinerTextCursorPropertyMap()
 {
     // Propertymap for an Outliner Text
     static const SfxItemPropertyMapEntry aSvxUnoOutlinerTextCursorPropertyMap[] =
@@ -116,8 +116,8 @@ o3tl::span<const SfxItemPropertyMapEntry> ImplGetSvxUnoOutlinerTextCursorPropert
         SVX_UNOEDIT_FONT_PROPERTIES,
         SVX_UNOEDIT_OUTLINER_PROPERTIES,
         SVX_UNOEDIT_PARA_PROPERTIES,
-        { u"TextUserDefinedAttributes",         EE_CHAR_XMLATTRIBS,     cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
-        { u"ParaUserDefinedAttributes",         EE_PARA_XMLATTRIBS,     cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
+        { u"TextUserDefinedAttributes"_ustr,         EE_CHAR_XMLATTRIBS,     cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
+        { u"ParaUserDefinedAttributes"_ustr,         EE_PARA_XMLATTRIBS,     cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
     };
 
     return aSvxUnoOutlinerTextCursorPropertyMap;
@@ -431,7 +431,30 @@ void SvxUnoTextRangeBase::_setPropertyValue( const OUString& PropertyName, const
             ESelection aSel( GetSelection() );
             bool bParaAttrib = (pMap->nWID >= EE_PARA_START) && ( pMap->nWID <= EE_PARA_END );
 
-            if( nPara == -1 && !bParaAttrib )
+            if (pMap->nWID == WID_PARASTYLENAME)
+            {
+                OUString aStyle = aValue.get<OUString>();
+
+                sal_Int32 nEndPara;
+
+                if( nPara == -1 )
+                {
+                    nPara = aSel.nStartPara;
+                    nEndPara = aSel.nEndPara;
+                }
+                else
+                {
+                    // only one paragraph
+                    nEndPara = nPara;
+                }
+
+                while( nPara <= nEndPara )
+                {
+                    pForwarder->SetStyleSheet(nPara, aStyle);
+                    nPara++;
+                }
+            }
+            else if ( nPara == -1 && !bParaAttrib )
             {
                 SfxItemSet aOldSet( pForwarder->GetAttribs( aSel ) );
                 // we have a selection and no para attribute
@@ -632,9 +655,10 @@ void SvxUnoTextRangeBase::getPropertyValue( const SfxItemPropertyMapEntry* pMap,
             // get presentation string for field
             std::optional<Color> pTColor;
             std::optional<Color> pFColor;
+            std::optional<FontLineStyle> pFldLineStyle;
 
             SvxTextForwarder* pForwarder = mpEditSource->GetTextForwarder();
-            OUString aPresentation( pForwarder->CalcFieldValue( SvxFieldItem(*pData, EE_FEATURE_FIELD), maSelection.nStartPara, maSelection.nStartPos, pTColor, pFColor ) );
+            OUString aPresentation( pForwarder->CalcFieldValue( SvxFieldItem(*pData, EE_FEATURE_FIELD), maSelection.nStartPara, maSelection.nStartPos, pTColor, pFColor, pFldLineStyle ) );
 
             uno::Reference< text::XTextField > xField( new SvxUnoTextField( xAnchor, aPresentation, pData ) );
             rAny <<= xField;
@@ -649,6 +673,12 @@ void SvxUnoTextRangeBase::getPropertyValue( const SfxItemPropertyMapEntry* pMap,
         else
         {
             rAny <<= OUString("Text");
+        }
+        break;
+
+    case WID_PARASTYLENAME:
+        {
+            rAny <<= GetEditSource()->GetTextForwarder()->GetStyleSheet(maSelection.nStartPara);
         }
         break;
 
@@ -779,6 +809,8 @@ void SvxUnoTextRangeBase::_setPropertyValues( const uno::Sequence< OUString >& a
     std::optional<SfxItemSet> pOldParaSet;
     std::optional<SfxItemSet> pNewParaSet;
 
+    std::optional<OUString> aStyleName;
+
     for( ; nCount; nCount--, pPropertyNames++, pValues++ )
     {
         const SfxItemPropertyMapEntry* pMap = mpPropSet->getPropertyMapEntry( *pPropertyNames );
@@ -787,7 +819,11 @@ void SvxUnoTextRangeBase::_setPropertyValues( const uno::Sequence< OUString >& a
         {
             bool bParaAttrib = (pMap->nWID >= EE_PARA_START) && ( pMap->nWID <= EE_PARA_END );
 
-            if( (nPara == -1) && !bParaAttrib )
+            if (pMap->nWID == WID_PARASTYLENAME)
+            {
+                aStyleName.emplace((*pValues).get<OUString>());
+            }
+            else if( (nPara == -1) && !bParaAttrib )
             {
                 if( !pNewAttrSet )
                 {
@@ -832,7 +868,7 @@ void SvxUnoTextRangeBase::_setPropertyValues( const uno::Sequence< OUString >& a
 
     bool bNeedsUpdate = false;
 
-    if( pNewParaSet )
+    if( pNewParaSet || aStyleName )
     {
         if( pNewParaSet->Count() )
         {
@@ -841,6 +877,8 @@ void SvxUnoTextRangeBase::_setPropertyValues( const uno::Sequence< OUString >& a
                 SfxItemSet aSet( pForwarder->GetParaAttribs( nTempPara ) );
                 aSet.Put( *pNewParaSet );
                 pForwarder->SetParaAttribs( nTempPara, aSet );
+                if (aStyleName)
+                    pForwarder->SetStyleSheet(nTempPara, *aStyleName);
                 nTempPara++;
             }
             bNeedsUpdate = true;
@@ -983,6 +1021,7 @@ beans::PropertyState SvxUnoTextRangeBase::_getPropertyState(const SfxItemPropert
 
             case WID_NUMBERINGSTARTVALUE:
             case WID_PARAISNUMBERINGRESTART:
+            case WID_PARASTYLENAME:
                 eItemState = SfxItemState::SET;
                 bItemStateSet = true;
                 break;
@@ -1054,7 +1093,7 @@ uno::Sequence< beans::PropertyState > SvxUnoTextRangeBase::_getPropertyStates(co
         for( const OUString& rName : PropertyName )
         {
             const SfxItemPropertyMapEntry* pMap = mpPropSet->getPropertyMapEntry( rName );
-            if( !_getOnePropertyStates(&*pSet, pMap, *pState++) )
+            if( !_getOnePropertyStates(*pSet, pMap, *pState++) )
             {
                 throw beans::UnknownPropertyException(rName);
             }
@@ -1064,9 +1103,9 @@ uno::Sequence< beans::PropertyState > SvxUnoTextRangeBase::_getPropertyStates(co
     return aRet;
 }
 
-bool SvxUnoTextRangeBase::_getOnePropertyStates(const SfxItemSet* pSet, const SfxItemPropertyMapEntry* pMap, beans::PropertyState& rState)
+bool SvxUnoTextRangeBase::_getOnePropertyStates(const SfxItemSet& rSet, const SfxItemPropertyMapEntry* pMap, beans::PropertyState& rState)
 {
-    if(!pSet || !pMap)
+    if (!pMap)
         return true;
     SfxItemState eItemState = SfxItemState::DEFAULT;
     bool bItemStateSet(false);
@@ -1079,7 +1118,7 @@ bool SvxUnoTextRangeBase::_getOnePropertyStates(const SfxItemSet* pSet, const Sf
                 const sal_uInt16* pWhichId = aSvxUnoFontDescriptorWhichMap;
                 while( *pWhichId )
                 {
-                    const SfxItemState eTempItemState(pSet->GetItemState( *pWhichId ));
+                    const SfxItemState eTempItemState(rSet.GetItemState( *pWhichId ));
 
                     switch( eTempItemState )
                     {
@@ -1116,6 +1155,7 @@ bool SvxUnoTextRangeBase::_getOnePropertyStates(const SfxItemSet* pSet, const Sf
 
         case WID_NUMBERINGSTARTVALUE:
         case WID_PARAISNUMBERINGRESTART:
+        case WID_PARASTYLENAME:
             eItemState = SfxItemState::SET;
             bItemStateSet = true;
             break;
@@ -1123,7 +1163,7 @@ bool SvxUnoTextRangeBase::_getOnePropertyStates(const SfxItemSet* pSet, const Sf
         default:
             if(0 != pMap->nWID)
             {
-                eItemState = pSet->GetItemState( pMap->nWID, false );
+                eItemState = rSet.GetItemState( pMap->nWID, false );
                 bItemStateSet = true;
             }
             break;
@@ -1138,7 +1178,7 @@ bool SvxUnoTextRangeBase::_getOnePropertyStates(const SfxItemSet* pSet, const Sf
         {
             // Theme & effects can be DEFAULT_VALUE, even if the same pool item has a color
             // which is a DIRECT_VALUE.
-            const SvxColorItem* pColor = pSet->GetItem<SvxColorItem>(EE_CHAR_COLOR);
+            const SvxColorItem* pColor = rSet.GetItem<SvxColorItem>(EE_CHAR_COLOR);
             if (!pColor)
             {
                 SAL_WARN("editeng", "Missing EE_CHAR_COLOR SvxColorItem");
@@ -2000,7 +2040,7 @@ static void SvxPropertyValuesToItemSet(
     {
         const SfxItemPropertyMapEntry *pEntry = pPropSet->getPropertyMap().getByName( rProp.Name );
         if (!pEntry)
-            throw beans::UnknownPropertyException( "Unknown property: " + rProp.Name, static_cast < cppu::OWeakObject * > ( nullptr ) );
+            throw beans::UnknownPropertyException( "Unknown property: " + rProp.Name );
         // Note: there is no need to take special care of the properties
         //      TextField (EE_FEATURE_FIELD) and
         //      TextPortionType (WID_PORTIONTYPE)
@@ -2008,8 +2048,8 @@ static void SvxPropertyValuesToItemSet(
 
         if (pEntry->nFlags & beans::PropertyAttribute::READONLY)
             // should be PropertyVetoException which is not yet defined for the new import API's functions
-            throw uno::RuntimeException("Property is read-only: " + rProp.Name, static_cast < cppu::OWeakObject * > ( nullptr ) );
-            //throw PropertyVetoException ("Property is read-only: " + rProp.Name, static_cast < cppu::OWeakObject * > ( 0 ) );
+            throw uno::RuntimeException("Property is read-only: " + rProp.Name );
+            //throw PropertyVetoException ("Property is read-only: " + rProp.Name );
 
         if (pEntry->nWID == WID_FONTDESC)
         {
@@ -2082,11 +2122,43 @@ uno::Reference< text::XTextRange > SAL_CALL SvxUnoTextBase::finishParagraph(
 }
 
 uno::Reference< text::XTextRange > SAL_CALL SvxUnoTextBase::insertTextPortion(
-        const OUString& /*rText*/,
-        const uno::Sequence< beans::PropertyValue >& /*rCharAndParaProps*/,
-        const uno::Reference< text::XTextRange>& /*rTextRange*/ )
+        const OUString& rText,
+        const uno::Sequence< beans::PropertyValue >& rCharAndParaProps,
+        const uno::Reference< text::XTextRange>& rTextRange )
 {
+    SolarMutexGuard aGuard;
+
     uno::Reference< text::XTextRange > xRet;
+
+    if (!rTextRange.is())
+        return xRet;
+
+    SvxUnoTextRangeBase* pRange = comphelper::getFromUnoTunnel<SvxUnoTextRange>(rTextRange);
+    if (!pRange)
+        return xRet;
+
+    SvxEditSource *pEditSource = GetEditSource();
+    SvxTextForwarder *pTextForwarder = pEditSource ? pEditSource->GetTextForwarder() : nullptr;
+
+    if (pTextForwarder)
+    {
+        pRange->setString(rText);
+
+        ESelection aSelection(pRange->GetSelection());
+
+        pTextForwarder->RemoveAttribs(aSelection);
+        pEditSource->UpdateData();
+
+        SfxItemSet aItemSet( *pTextForwarder->GetEmptyItemSetPtr() );
+        SvxPropertyValuesToItemSet( aItemSet, rCharAndParaProps,
+                ImplGetSvxTextPortionSfxPropertySet(), pTextForwarder, aSelection.nStartPara );
+        pTextForwarder->QuickSetAttribs( aItemSet, aSelection);
+        rtl::Reference<SvxUnoTextRange> pNewRange = new SvxUnoTextRange( *this );
+        xRet = pNewRange;
+        pNewRange->SetSelection(aSelection);
+        for( const beans::PropertyValue& rProp : rCharAndParaProps )
+            pNewRange->setPropertyValue( rProp.Name, rProp.Value );
+    }
     return xRet;
 }
 
@@ -2315,6 +2387,15 @@ void SvxDummyTextSource::GetPortions( sal_Int32, std::vector<sal_Int32>& ) const
 {
 }
 
+OUString SvxDummyTextSource::GetStyleSheet(sal_Int32) const
+{
+    return OUString();
+}
+
+void SvxDummyTextSource::SetStyleSheet(sal_Int32, const OUString&)
+{
+}
+
 SfxItemState SvxDummyTextSource::GetItemState( const ESelection&, sal_uInt16 ) const
 {
     return SfxItemState::UNKNOWN;
@@ -2346,7 +2427,7 @@ void SvxDummyTextSource::QuickInsertLineBreak( const ESelection& )
 {
 };
 
-OUString SvxDummyTextSource::CalcFieldValue( const SvxFieldItem&, sal_Int32, sal_Int32, std::optional<Color>&, std::optional<Color>& )
+OUString SvxDummyTextSource::CalcFieldValue( const SvxFieldItem&, sal_Int32, sal_Int32, std::optional<Color>&, std::optional<Color>&, std::optional<FontLineStyle>& )
 {
     return OUString();
 }

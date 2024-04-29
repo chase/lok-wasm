@@ -277,21 +277,18 @@ bool DrawDocShell::Load( SfxMedium& rMedium )
     bool       bStartPresentation = false;
     ErrCode nError = ERRCODE_NONE;
 
-    SfxItemSet* pSet = rMedium.GetItemSet();
+    SfxItemSet& rSet = rMedium.GetItemSet();
 
-    if( pSet )
+    if( (  SfxItemState::SET == rSet.GetItemState(SID_PREVIEW ) ) && rSet.Get( SID_PREVIEW ).GetValue() )
     {
-        if( (  SfxItemState::SET == pSet->GetItemState(SID_PREVIEW ) ) && pSet->Get( SID_PREVIEW ).GetValue() )
-        {
-            mpDoc->SetStarDrawPreviewMode( true );
-        }
+        mpDoc->SetStarDrawPreviewMode( true );
+    }
 
-        if( SfxItemState::SET == pSet->GetItemState(SID_DOC_STARTPRESENTATION)&&
-            pSet->Get( SID_DOC_STARTPRESENTATION ).GetValue() )
-        {
-            bStartPresentation = true;
-            mpDoc->SetStartWithPresentation( true );
-        }
+    if( SfxItemState::SET == rSet.GetItemState(SID_DOC_STARTPRESENTATION)&&
+        rSet.Get( SID_DOC_STARTPRESENTATION ).GetValue() )
+    {
+        bStartPresentation = true;
+        mpDoc->SetStartWithPresentation( true );
     }
 
     bRet = SfxObjectShell::Load( rMedium );
@@ -340,9 +337,7 @@ bool DrawDocShell::Load( SfxMedium& rMedium )
     // tell SFX to change viewshell when in preview mode
     if( IsPreview() || bStartPresentation )
     {
-        SfxItemSet *pMediumSet = GetMedium()->GetItemSet();
-        if( pMediumSet )
-            pMediumSet->Put( SfxUInt16Item( SID_VIEW_ID, bStartPresentation ? 1 : 5 ) );
+        GetMedium()->GetItemSet().Put( SfxUInt16Item( SID_VIEW_ID, bStartPresentation ? 1 : 5 ) );
     }
 
     return bRet;
@@ -368,10 +363,7 @@ bool DrawDocShell::LoadFrom( SfxMedium& rMedium )
     // tell SFX to change viewshell when in preview mode
     if( IsPreview() )
     {
-        SfxItemSet *pSet = GetMedium()->GetItemSet();
-
-        if( pSet )
-            pSet->Put( SfxUInt16Item( SID_VIEW_ID, 5 ) );
+        GetMedium()->GetItemSet().Put( SfxUInt16Item( SID_VIEW_ID, 5 ) );
     }
 
     return bRet;
@@ -428,21 +420,16 @@ bool DrawDocShell::ImportFrom(SfxMedium &rMedium,
 
     const bool bRet = SfxObjectShell::ImportFrom(rMedium, xInsertPosition);
 
-    SfxItemSet* pSet = rMedium.GetItemSet();
-    if( pSet )
+    SfxItemSet& rSet = rMedium.GetItemSet();
+    if( SfxItemState::SET == rSet.GetItemState(SID_DOC_STARTPRESENTATION)&&
+        rSet.Get( SID_DOC_STARTPRESENTATION ).GetValue() )
     {
-        if( SfxItemState::SET == pSet->GetItemState(SID_DOC_STARTPRESENTATION)&&
-            pSet->Get( SID_DOC_STARTPRESENTATION ).GetValue() )
-        {
-            mpDoc->SetStartWithPresentation( true );
+        mpDoc->SetStartWithPresentation( true );
 
-            // tell SFX to change viewshell when in preview mode
-            if( IsPreview() )
-            {
-                SfxItemSet *pMediumSet = GetMedium()->GetItemSet();
-                if( pMediumSet )
-                    pMediumSet->Put( SfxUInt16Item( SID_VIEW_ID, 1 ) );
-            }
+        // tell SFX to change viewshell when in preview mode
+        if( IsPreview() )
+        {
+            GetMedium()->GetItemSet().Put( SfxUInt16Item( SID_VIEW_ID, 1 ) );
         }
     }
 
@@ -460,20 +447,17 @@ bool DrawDocShell::ConvertFrom( SfxMedium& rMedium )
 
     SetWaitCursor( true );
 
-    SfxItemSet* pSet = rMedium.GetItemSet();
-    if( pSet )
+    SfxItemSet& rSet = rMedium.GetItemSet();
+    if( (  SfxItemState::SET == rSet.GetItemState(SID_PREVIEW ) ) && rSet.Get( SID_PREVIEW ).GetValue() )
     {
-        if( (  SfxItemState::SET == pSet->GetItemState(SID_PREVIEW ) ) && pSet->Get( SID_PREVIEW ).GetValue() )
-        {
-            mpDoc->SetStarDrawPreviewMode( true );
-        }
+        mpDoc->SetStarDrawPreviewMode( true );
+    }
 
-        if( SfxItemState::SET == pSet->GetItemState(SID_DOC_STARTPRESENTATION)&&
-            pSet->Get( SID_DOC_STARTPRESENTATION ).GetValue() )
-        {
-            bStartPresentation = true;
-            mpDoc->SetStartWithPresentation( true );
-        }
+    if( SfxItemState::SET == rSet.GetItemState(SID_DOC_STARTPRESENTATION)&&
+        rSet.Get( SID_DOC_STARTPRESENTATION ).GetValue() )
+    {
+        bStartPresentation = true;
+        mpDoc->SetStartWithPresentation( true );
     }
 
     if( aFilterName == pFilterPowerPoint97
@@ -526,19 +510,14 @@ bool DrawDocShell::ConvertFrom( SfxMedium& rMedium )
     // tell SFX to change viewshell when in preview mode
     if( IsPreview() )
     {
-        SfxItemSet *pMediumSet = GetMedium()->GetItemSet();
-
-        if( pMediumSet )
-            pMediumSet->Put( SfxUInt16Item( SID_VIEW_ID, 5 ) );
+        GetMedium()->GetItemSet().Put( SfxUInt16Item( SID_VIEW_ID, 5 ) );
     }
     SetWaitCursor( false );
 
     // tell SFX to change viewshell when in preview mode
     if( IsPreview() || bStartPresentation )
     {
-        SfxItemSet *pMediumSet = GetMedium()->GetItemSet();
-        if( pMediumSet )
-            pMediumSet->Put( SfxUInt16Item( SID_VIEW_ID, bStartPresentation ? 1 : 5 ) );
+        GetMedium()->GetItemSet().Put( SfxUInt16Item( SID_VIEW_ID, bStartPresentation ? 1 : 5 ) );
     }
 
     return bRet;
@@ -604,7 +583,7 @@ bool DrawDocShell::SaveAs( SfxMedium& rMedium )
     if( bRet )
         bRet = SdXMLFilter( rMedium, *this, SdXMLFilterMode::Normal, SotStorage::GetVersion( rMedium.GetStorage() ) ).Export();
 
-    if( GetError() == ERRCODE_NONE )
+    if( GetErrorIgnoreWarning() == ERRCODE_NONE )
         SetError(ERRCODE_NONE);
 
     return bRet;
@@ -864,12 +843,14 @@ void DrawDocShell::GotoBookmark(std::u16string_view rBookmark)
         }
     }
 
-    SfxBindings& rBindings = ((pDrawViewShell && pDrawViewShell->GetViewFrame()!=nullptr)
+    if (SfxViewFrame* pViewFrame = (pDrawViewShell && pDrawViewShell->GetViewFrame())
         ? pDrawViewShell->GetViewFrame()
-        : SfxViewFrame::Current() )->GetBindings();
-
-    rBindings.Invalidate(SID_NAVIGATOR_STATE, true);
-    rBindings.Invalidate(SID_NAVIGATOR_PAGENAME);
+        : SfxViewFrame::Current())
+    {
+        SfxBindings& rBindings = pViewFrame->GetBindings();
+        rBindings.Invalidate(SID_NAVIGATOR_STATE, true);
+        rBindings.Invalidate(SID_NAVIGATOR_PAGENAME);
+    }
 }
 
 /**
@@ -891,7 +872,7 @@ bool DrawDocShell::SaveAsOwnFormat( SfxMedium& rMedium )
 
         OUString aLayoutName;
 
-        SfxStringItem const * pLayoutItem = rMedium.GetItemSet()->GetItemIfSet(SID_TEMPLATE_NAME, false);
+        SfxStringItem const * pLayoutItem = rMedium.GetItemSet().GetItemIfSet(SID_TEMPLATE_NAME, false);
         if( pLayoutItem )
         {
             aLayoutName = pLayoutItem->GetValue();
@@ -977,7 +958,8 @@ void DrawDocShell::OpenBookmark( const OUString& rBookmarkURL )
     SfxStringItem   aStrItem( SID_FILE_NAME, rBookmarkURL );
     SfxStringItem   aReferer( SID_REFERER, GetMedium()->GetName() );
     const SfxPoolItem* ppArgs[] = { &aStrItem, &aReferer, nullptr };
-    ( mpViewShell ? mpViewShell->GetViewFrame() : SfxViewFrame::Current() )->GetBindings().Execute( SID_OPENHYPERLINK, ppArgs );
+    if (SfxViewFrame* pFrame = mpViewShell ? mpViewShell->GetViewFrame() : SfxViewFrame::Current())
+        pFrame->GetBindings().Execute( SID_OPENHYPERLINK, ppArgs );
 }
 
 std::shared_ptr<SfxDocumentInfoDialog> DrawDocShell::CreateDocumentInfoDialog(weld::Window* pParent, const SfxItemSet &rSet)

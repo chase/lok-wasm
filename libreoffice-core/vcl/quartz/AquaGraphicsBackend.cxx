@@ -199,7 +199,7 @@ AquaGraphicsBackend::~AquaGraphicsBackend() {}
 void AquaGraphicsBackend::Init() {}
 void AquaGraphicsBackend::freeResources() {}
 
-bool AquaGraphicsBackend::setClipRegion(vcl::Region const& rRegion)
+void AquaGraphicsBackend::setClipRegion(vcl::Region const& rRegion)
 {
     // release old clip path
     mrShared.unsetClipPath();
@@ -227,8 +227,6 @@ bool AquaGraphicsBackend::setClipRegion(vcl::Region const& rRegion)
     // set the current path as clip region
     if (mrShared.checkContext())
         mrShared.setState();
-
-    return true;
 }
 
 void AquaGraphicsBackend::ResetClipRegion()
@@ -666,22 +664,22 @@ void AquaGraphicsBackend::drawPolyPolygon(sal_uInt32 nPolyCount, const sal_uInt3
     mrShared.refreshRect(leftX, topY, maxWidth, maxHeight);
 }
 
-bool AquaGraphicsBackend::drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
+void AquaGraphicsBackend::drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
                                           const basegfx::B2DPolyPolygon& rPolyPolygon,
                                           double fTransparency)
 {
 #ifdef IOS
     if (!mrShared.maContextHolder.isSet())
-        return true;
+        return;
 #endif
 
     // short circuit if there is nothing to do
     if (rPolyPolygon.count() == 0)
-        return true;
+        return;
 
     // ignore invisible polygons
     if ((fTransparency >= 1.0) || (fTransparency < 0))
-        return true;
+        return;
 
     // Fallback: Transform to DeviceCoordinates
     basegfx::B2DPolyPolygon aPolyPolygon(rPolyPolygon);
@@ -718,7 +716,7 @@ bool AquaGraphicsBackend::drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectTo
         {
             SAL_WARN("vcl.quartz", "Neither pen nor brush visible");
             CGPathRelease(xPath);
-            return true;
+            return;
         }
 
         // use the path to prepare the graphics context
@@ -737,8 +735,6 @@ bool AquaGraphicsBackend::drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectTo
     }
 
     CGPathRelease(xPath);
-
-    return true;
 }
 
 bool AquaGraphicsBackend::drawPolyLine(const basegfx::B2DHomMatrix& rObjectToDevice,
@@ -1145,7 +1141,11 @@ bool AquaGraphicsBackend::drawEPS(tools::Long nX, tools::Long nY, tools::Long nW
 {
     // convert the raw data to an NSImageRef
     NSData* xNSData = [NSData dataWithBytes:pEpsData length:static_cast<int>(nByteCount)];
+    SAL_WNODEPRECATED_DECLARATIONS_PUSH
+    // 'NSEPSImageRep' is deprecated: first deprecated in macOS 14.0 - `NSEPSImageRep` instances
+    // cannot be created on macOS 14.0 and later
     NSImageRep* xEpsImage = [NSEPSImageRep imageRepWithData:xNSData];
+    SAL_WNODEPRECATED_DECLARATIONS_POP
     if (!xEpsImage)
     {
         return false;
@@ -1336,7 +1336,6 @@ bool AquaGraphicsBackend::supportsOperation(OutDevSupportType eType) const
     switch (eType)
     {
         case OutDevSupportType::TransparentRect:
-        case OutDevSupportType::B2DDraw:
             return true;
         default:
             break;

@@ -197,8 +197,7 @@ sal_Bool SAL_CALL Desktop::terminate()
 
     css::lang::EventObject                                aEvent             ( static_cast< ::cppu::OWeakObject* >(this) );
     bool                                                  bAskQuickStart     = !m_bSuspendQuickstartVeto;
-    const bool bRestartableMainLoop = Application::IsEventTestingModeEnabled() ||
-                                      comphelper::LibreOfficeKit::isActive();
+    const bool bRestartableMainLoop = comphelper::LibreOfficeKit::isActive();
     aGuard.clear();
 
     // Allow using of any UI ... because Desktop.terminate() was designed as UI functionality in the past.
@@ -444,9 +443,7 @@ void SAL_CALL Desktop::removeTerminateListener( const css::uno::Reference< css::
         }
         else if (sImplementationName == "com.sun.star.comp.ComponentDLLListener")
         {
-            m_xComponentDllListeners.erase(
-                    std::remove(m_xComponentDllListeners.begin(), m_xComponentDllListeners.end(), xListener),
-                    m_xComponentDllListeners.end());
+            std::erase(m_xComponentDllListeners, xListener);
             return;
         }
     }
@@ -680,7 +677,7 @@ css::uno::Reference< css::frame::XDispatch > SAL_CALL Desktop::queryDispatch( co
         m_xCommandOptions.reset(new SvtCommandOptions);
 
     // Make std::unordered_map lookup if the current URL is in the disabled list
-    if (m_xCommandOptions && m_xCommandOptions->Lookup(SvtCommandOptions::CMDOPTION_DISABLED, aCommand))
+    if (m_xCommandOptions && m_xCommandOptions->LookupDisabled(aCommand))
         return css::uno::Reference< css::frame::XDispatch >();
     else
     {

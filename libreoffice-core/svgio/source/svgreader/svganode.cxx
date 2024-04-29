@@ -35,13 +35,13 @@ namespace svgio::svgreader
 
         const SvgStyleAttributes* SvgANode::getSvgStyleAttributes() const
         {
-            return checkForCssStyle("a", maSvgStyleAttributes);
+            return checkForCssStyle(maSvgStyleAttributes);
         }
 
-        void SvgANode::parseAttribute(const OUString& rTokenName, SVGToken aSVGToken, const OUString& aContent)
+        void SvgANode::parseAttribute(SVGToken aSVGToken, const OUString& aContent)
         {
             // call parent
-            SvgNode::parseAttribute(rTokenName, aSVGToken, aContent);
+            SvgNode::parseAttribute(aSVGToken, aContent);
 
             // read style attributes
             maSvgStyleAttributes.parseStyleAttribute(aSVGToken, aContent);
@@ -83,9 +83,7 @@ namespace svgio::svgreader
             if(!pStyle)
                 return;
 
-            const double fOpacity(pStyle->getOpacity().getNumber());
-
-            if (fOpacity > 0.0 && Display::None != getDisplay())
+            if (Display::None != getDisplay())
             {
                 drawinglayer::primitive2d::Primitive2DContainer aContent;
 

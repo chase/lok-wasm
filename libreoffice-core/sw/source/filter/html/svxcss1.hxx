@@ -115,6 +115,7 @@ public:
     bool m_bTextIndent : 1;
     bool m_bNumbering : 1;
     bool m_bBullet : 1;
+    bool m_bPreserveSpace : 1 = false;
 
     SvxAdjust m_eFloat;
 
@@ -258,7 +259,7 @@ public:
 
     // convert a string to enum value
     static bool GetEnum( const CSS1PropertyEnum *pPropTable,
-                         const OUString& rValue, sal_uInt16 &rEnum );
+                         std::u16string_view rValue, sal_uInt16 &rEnum );
 
     static void PixelToTwip( tools::Long &nWidth, tools::Long &nHeight );
 

@@ -377,8 +377,11 @@ bool SelectionFunction::KeyInput (const KeyEvent& rEvent)
                 }
                 else if (pViewShell->GetDispatcher() != nullptr)
                 {
+                    // tdf#111737 - add new (master) page depending on the edit mode
                     pViewShell->GetDispatcher()->Execute(
-                        SID_INSERTPAGE,
+                        mrSlideSorter.GetModel().GetEditMode() == EditMode::Page
+                            ? SID_INSERTPAGE
+                            : SID_INSERT_MASTER_PAGE,
                         SfxCallMode::ASYNCHRON | SfxCallMode::RECORD);
                 }
                 bResult = true;
@@ -466,9 +469,6 @@ bool SelectionFunction::KeyInput (const KeyEvent& rEvent)
         case KEY_DELETE:
         case KEY_BACKSPACE:
         {
-            if (mrSlideSorter.GetProperties()->IsUIReadOnly())
-                break;
-
             mrController.GetSelectionManager()->DeleteSelectedPages(rCode.GetCode()==KEY_DELETE);
 
             mnShiftKeySelectionAnchor = -1;
@@ -560,10 +560,7 @@ void SelectionFunction::MoveFocus (
 
 void SelectionFunction::DoCut()
 {
-    if ( ! mrSlideSorter.GetProperties()->IsUIReadOnly())
-    {
-        mrController.GetClipboard().DoCut();
-    }
+    mrController.GetClipboard().DoCut();
 }
 
 void SelectionFunction::DoCopy()
@@ -573,10 +570,7 @@ void SelectionFunction::DoCopy()
 
 void SelectionFunction::DoPaste()
 {
-    if ( ! mrSlideSorter.GetProperties()->IsUIReadOnly())
-    {
-        mrController.GetClipboard().DoPaste();
-    }
+    mrController.GetClipboard().DoPaste();
 }
 
 bool SelectionFunction::cancel()
@@ -950,10 +944,7 @@ void SelectionFunction::ModeHandler::StartDrag (
     if (SD_MOD()->pTransferDrag != nullptr)
         return;
 
-    if ( ! mrSlideSorter.GetProperties()->IsUIReadOnly())
-    {
-        mrSelectionFunction.SwitchToDragAndDropMode(rMousePosition);
-    }
+    mrSelectionFunction.SwitchToDragAndDropMode(rMousePosition);
 }
 
 //===== NormalModeHandler =====================================================

@@ -21,12 +21,15 @@
 
 #include <i18nlangtag/lang.h>
 #include "swdllapi.h"
+#include "swtypes.hxx"
 #include "calbck.hxx"
 #include "nodeoffset.hxx"
 
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <cppuhelper/weakref.hxx>
 #include <editeng/svxenum.hxx>
+#include <unotools/weakref.hxx>
+#include <rtl/ref.hxx>
 #include <vector>
 #include <climits>
 
@@ -38,6 +41,7 @@ class SwRootFrame;
 class SvNumberFormatter;
 class IDocumentRedlineAccess;
 class SwGetRefField;
+class SwXFieldMaster;
 namespace com::sun::star::uno { class Any; }
 
 typedef struct _xmlTextWriter* xmlTextWriterPtr;
@@ -241,7 +245,7 @@ SwFieldTypesEnum SwFieldTypeFromString(std::u16string_view rString);
 
 class SW_DLLPUBLIC SwFieldType : public sw::BroadcastingModify
 {
-    css::uno::WeakReference<css::beans::XPropertySet> m_wXFieldMaster;
+    unotools::WeakReference<SwXFieldMaster> m_wXFieldMaster;
 
     SwFieldIds m_nWhich;
 
@@ -256,12 +260,10 @@ protected:
 
 public:
 
-    SAL_DLLPRIVATE css::uno::WeakReference<css::beans::XPropertySet> const& GetXObject() const {
+    unotools::WeakReference<SwXFieldMaster> const& GetXObject() const {
         return m_wXFieldMaster;
     }
-    SAL_DLLPRIVATE void SetXObject(css::uno::Reference<css::beans::XPropertySet> const& xFieldMaster) {
-        m_wXFieldMaster = xFieldMaster;
-    }
+    void SetXObject(rtl::Reference<SwXFieldMaster> const& xFieldMaster);
 
     static const OUString & GetTypeStr( SwFieldTypesEnum nTypeId );
 
@@ -283,6 +285,7 @@ public:
     void GatherRefFields(std::vector<SwGetRefField*>& rvRFields, const sal_uInt16 nTyp);
     void GatherFields(std::vector<SwFormatField*>& rvFormatFields, bool bCollectOnlyInDocNodes=true) const;
     void GatherDdeTables(std::vector<SwDDETable*>& rvTables) const;
+    void UpdateDocPos(const SwTwips nDocPos);
     virtual void UpdateFields();
 };
 
@@ -346,13 +349,10 @@ public:
 
     /// ResId
     SwFieldIds          Which() const
-#ifdef DBG_UTIL
-    ;       // implemented in fldbas.cxx
-#else
     {
+        assert(m_pType);
         return m_pType->Which();
     }
-#endif
 
     // TYP_ID
     SwFieldTypesEnum    GetTypeId() const;
@@ -440,6 +440,8 @@ public:
     OUString        ExpandValue(const double& rVal, sal_uInt32 nFormat, LanguageType nLng) const;
     OUString        DoubleToString(const double &rVal, LanguageType eLng) const;
     OUString        DoubleToString(const double &rVal, sal_uInt32 nFormat) const;
+    /// Query input or formatted value for dialog.
+    OUString        GetInputOrDateTime( const OUString& rInput, const double& rVal, sal_uInt32 nFormat ) const;
 };
 
 class SW_DLLPUBLIC SwValueField : public SwField
@@ -487,6 +489,9 @@ public:
 
     void                    SetExpandedFormula(const OUString& rStr);
     OUString                GetExpandedFormula() const;
+
+    /// Query formula or formatted value for dialog.
+    OUString                GetInputOrDateTime() const;
 };
 
 #endif // INCLUDED_SW_INC_FLDBAS_HXX

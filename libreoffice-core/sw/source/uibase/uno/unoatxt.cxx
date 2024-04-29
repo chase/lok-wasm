@@ -148,9 +148,7 @@ uno::Reference< text::XAutoTextGroup >  SwXAutoTextContainer::insertNewByName(
     //check for non-ASCII characters
     if(aGroupName.isEmpty())
     {
-        lang::IllegalArgumentException aIllegal;
-        aIllegal.Message = "group name must not be empty";
-        throw aIllegal;
+        throw lang::IllegalArgumentException("group name must not be empty", nullptr, 0);
     }
     for(sal_Int32 nPos = 0; nPos < aGroupName.getLength(); nPos++)
     {
@@ -162,9 +160,7 @@ uno::Reference< text::XAutoTextGroup >  SwXAutoTextContainer::insertNewByName(
         {
             continue;
         }
-        lang::IllegalArgumentException aIllegal;
-        aIllegal.Message = "group name must contain a-z, A-z, '_', ' ' only";
-        throw aIllegal;
+        throw lang::IllegalArgumentException("group name must contain a-z, A-z, '_', ' ' only", nullptr, 0);
     }
     OUString sGroup(aGroupName);
     if (sGroup.indexOf(GLOS_DELIM)<0)
@@ -203,17 +199,6 @@ sal_Bool SwXAutoTextContainer::supportsService(const OUString& rServiceName)
 uno::Sequence< OUString > SwXAutoTextContainer::getSupportedServiceNames()
 {
     return { "com.sun.star.text.AutoTextContainer" };
-}
-
-const uno::Sequence< sal_Int8 > & SwXAutoTextGroup::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXAutoTextGroupUnoTunnelId;
-    return theSwXAutoTextGroupUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL SwXAutoTextGroup::getSomething( const uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
 }
 
 SwXAutoTextGroup::SwXAutoTextGroup(const OUString& rName,
@@ -329,9 +314,8 @@ uno::Reference< text::XAutoTextEntry >  SwXAutoTextGroup::insertNewByName(const 
     const OUString& sLongName(aTitle);
     if (pGlosGroup && !pGlosGroup->GetError())
     {
-        uno::Reference<lang::XUnoTunnel> xRangeTunnel( xTextRange, uno::UNO_QUERY);
-        SwXTextRange* pxRange = comphelper::getFromUnoTunnel<SwXTextRange>(xRangeTunnel);
-        OTextCursorHelper* pxCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xRangeTunnel);
+        SwXTextRange* pxRange = dynamic_cast<SwXTextRange*>(xTextRange.get());
+        OTextCursorHelper* pxCursor = dynamic_cast<OTextCursorHelper*>(xTextRange.get());
 
         OUString sOnlyText;
         OUString* pOnlyText = nullptr;
@@ -400,7 +384,7 @@ uno::Reference< text::XAutoTextEntry >  SwXAutoTextGroup::insertNewByName(const 
         css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetRuntimeException(
                "Error Getting AutoText!",
-               static_cast < OWeakObject * > ( this ),
+               getXWeak(),
                anyEx );
     }
 
@@ -656,17 +640,6 @@ uno::Sequence< OUString > SwXAutoTextGroup::getSupportedServiceNames()
     return aRet;
 }
 
-const uno::Sequence< sal_Int8 > & SwXAutoTextEntry::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXAutoTextEntryUnoTunnelId;
-    return theSwXAutoTextEntryUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL SwXAutoTextEntry::getSomething( const uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
 SwXAutoTextEntry::SwXAutoTextEntry(SwGlossaries* pGlss, OUString aGroupName,
                                             OUString aEntryName) :
     m_pGlossaries(pGlss),
@@ -849,12 +822,12 @@ void SwXAutoTextEntry::applyTo(const uno::Reference< text::XTextRange > & xTextR
         // This means that we would reflect any changes which were done to the AutoText by foreign instances
         // in the meantime
 
-    // The reference to the tunnel is needed during the whole call, likely because it could be a
+    // The reference to xKeepAlive is needed during the whole call, likely because it could be a
     // different object, not xTextRange itself, and the reference guards it from preliminary death
-    uno::Reference<lang::XUnoTunnel> xTunnel( xTextRange, uno::UNO_QUERY);
-    SwXTextRange* pRange = comphelper::getFromUnoTunnel<SwXTextRange>(xTunnel);
-    OTextCursorHelper* pCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xTunnel);
-    SwXText *pText = comphelper::getFromUnoTunnel<SwXText>(xTunnel);
+    auto xKeepAlive( xTextRange );
+    SwXTextRange* pRange = dynamic_cast<SwXTextRange*>(xTextRange.get());
+    OTextCursorHelper* pCursor = dynamic_cast<OTextCursorHelper*>(xTextRange.get());
+    SwXText *pText = dynamic_cast<SwXText*>(xTextRange.get());
 
     SwDoc* pDoc = nullptr;
     if (pRange)
@@ -863,8 +836,8 @@ void SwXAutoTextEntry::applyTo(const uno::Reference< text::XTextRange > & xTextR
         pDoc = pCursor->GetDoc();
     else if ( pText && pText->GetDoc() )
     {
-        xTunnel.set(pText->getStart(), uno::UNO_QUERY);
-        pCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xTunnel);
+        xKeepAlive = pText->getStart();
+        pCursor = dynamic_cast<OTextCursorHelper*>(xKeepAlive.get());
         if (pCursor)
             pDoc = pText->GetDoc();
     }

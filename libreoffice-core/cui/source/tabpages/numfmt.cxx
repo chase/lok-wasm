@@ -412,8 +412,7 @@ void SvxNumberFormatTabPage::Reset( const SfxItemSet* rSet )
 
     if(eState==SfxItemState::SET)
     {
-        const SfxBoolItem* pBoolItem = static_cast<const SfxBoolItem*>(
-                      GetItem( *rSet, SID_ATTR_NUMBERFORMAT_ONE_AREA));
+        const SfxBoolItem* pBoolItem = GetItem( *rSet, SID_ATTR_NUMBERFORMAT_ONE_AREA);
 
         if(pBoolItem!=nullptr)
         {
@@ -642,7 +641,7 @@ void SvxNumberFormatTabPage::EnableBySourceFormat_Impl()
 #*------------------------------------------------------------------------
 #*
 #*  Class:      SvxNumberFormatTabPage
-#*  Function:   Hides the language settings:
+#*  Function:   Hides the Languages and Locales:
 #*  Input:      sal_Bool nFlag
 #*  Output:     ---
 #*
@@ -673,7 +672,7 @@ bool SvxNumberFormatTabPage::FillItemSet( SfxItemSet* rCoreAttrs )
     if ( bDataChanged )
     {
         const SfxItemSet& rMyItemSet = GetItemSet();
-        sal_uInt16          nWhich       = GetWhich( SID_ATTR_NUMBERFORMAT_VALUE );
+        TypedWhichId<SfxUInt32Item> nWhich = GetWhich( SID_ATTR_NUMBERFORMAT_VALUE );
         SfxItemState    eItemState   = rMyItemSet.GetItemState( nWhich, false );
 
         // OK chosen - Is format code input entered already taken over?
@@ -942,7 +941,8 @@ void SvxNumberFormatTabPage::UpdateOptions_Impl( bool bCheckCatChange /*= sal_Fa
             m_xBtnNegRed->set_active( bNegRed );
             if ( nCategory != CAT_SCIENTIFIC )
             {
-                m_xBtnThousand->set_sensitive( nCategory != CAT_TIME );
+                m_xBtnThousand->set_sensitive( nCategory != CAT_TIME
+                                            && !pNumFmtShell->IsNatNum12( theFormat ) );
                 m_xBtnThousand->set_active( bThousand && nCategory != CAT_TIME );
             }
             break;

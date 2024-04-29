@@ -33,8 +33,10 @@
 #include <com/sun/star/embed/Aspects.hpp>
 
 #include <officecfg/Office/Common.hxx>
+#include <comphelper/dispatchcommand.hxx>
 #include <comphelper/indexedpropertyvalues.hxx>
 #include <comphelper/lok.hxx>
+#include <comphelper/propertysequence.hxx>
 #include <comphelper/propertyvalue.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/servicehelper.hxx>
@@ -127,7 +129,6 @@
 #include <sfx2/LokControlHandler.hxx>
 #include <tools/gen.hxx>
 #include <tools/debug.hxx>
-#include <tools/urlobj.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <tools/json_writer.hxx>
 #include <tools/UnitConversion.hxx>
@@ -243,7 +244,7 @@ static const SvxItemPropertySet* ImplGetDrawModelPropertySet()
     // Attention: the first parameter HAS TO BE sorted!!!
     const static SfxItemPropertyMapEntry aDrawModelPropertyMap_Impl[] =
     {
-        { u"BuildId",                      WID_MODEL_BUILDID,            ::cppu::UnoType<OUString>::get(),                      0, 0},
+        { u"BuildId"_ustr,                      WID_MODEL_BUILDID,            ::cppu::UnoType<OUString>::get(),                      0, 0},
         { sUNO_Prop_CharLocale,           WID_MODEL_LANGUAGE,           ::cppu::UnoType<lang::Locale>::get(),                                  0, 0},
         { sUNO_Prop_TabStop,              WID_MODEL_TABSTOP,            ::cppu::UnoType<sal_Int32>::get(),                                     0, 0},
         { sUNO_Prop_VisibleArea,          WID_MODEL_VISAREA,            ::cppu::UnoType<awt::Rectangle>::get(),                                0, 0},
@@ -251,11 +252,11 @@ static const SvxItemPropertySet* ImplGetDrawModelPropertySet()
         { sUNO_Prop_ForbiddenCharacters,  WID_MODEL_FORBCHARS,          cppu::UnoType<i18n::XForbiddenCharacters>::get(), beans::PropertyAttribute::READONLY, 0},
         { sUNO_Prop_AutomContFocus,       WID_MODEL_CONTFOCUS,          cppu::UnoType<bool>::get(),                                                 0, 0},
         { sUNO_Prop_ApplyFrmDsgnMode,     WID_MODEL_DSGNMODE,           cppu::UnoType<bool>::get(),                                                 0, 0},
-        { u"BasicLibraries",               WID_MODEL_BASICLIBS,          cppu::UnoType<script::XLibraryContainer>::get(),  beans::PropertyAttribute::READONLY, 0},
-        { u"DialogLibraries",              WID_MODEL_DIALOGLIBS,         cppu::UnoType<script::XLibraryContainer>::get(),  beans::PropertyAttribute::READONLY, 0},
+        { u"BasicLibraries"_ustr,               WID_MODEL_BASICLIBS,          cppu::UnoType<script::XLibraryContainer>::get(),  beans::PropertyAttribute::READONLY, 0},
+        { u"DialogLibraries"_ustr,              WID_MODEL_DIALOGLIBS,         cppu::UnoType<script::XLibraryContainer>::get(),  beans::PropertyAttribute::READONLY, 0},
         { sUNO_Prop_RuntimeUID,           WID_MODEL_RUNTIMEUID,         ::cppu::UnoType<OUString>::get(),                      beans::PropertyAttribute::READONLY, 0},
         { sUNO_Prop_HasValidSignatures,   WID_MODEL_HASVALIDSIGNATURES, ::cppu::UnoType<sal_Bool>::get(),                      beans::PropertyAttribute::READONLY, 0},
-        { u"Fonts",                        WID_MODEL_FONTS,              cppu::UnoType<uno::Sequence<uno::Any>>::get(),                     beans::PropertyAttribute::READONLY, 0},
+        { u"Fonts"_ustr,                        WID_MODEL_FONTS,              cppu::UnoType<uno::Sequence<uno::Any>>::get(),                     beans::PropertyAttribute::READONLY, 0},
         { sUNO_Prop_InteropGrabBag,       WID_MODEL_INTEROPGRABBAG,     cppu::UnoType<uno::Sequence< beans::PropertyValue >>::get(),       0, 0},
         { sUNO_Prop_Theme,                WID_MODEL_THEME,              cppu::UnoType<util::XTheme>::get(),       0, 0},
     };
@@ -1384,12 +1385,13 @@ uno::Any SAL_CALL SdXImpressDocument::getPropertyValue( const OUString& Property
 
                 for(sal_uInt16 nWhichId : aWhichIds)
                 {
-                    sal_uInt32 nItems = rPool.GetItemCount2( nWhichId );
+                    const registeredSfxPoolItems& rSurrogates(rPool.GetItemSurrogates(nWhichId));
+                    const sal_uInt32 nItems(rSurrogates.size());
 
                     aSeq.realloc( aSeq.getLength() + nItems*5 + 5 );
                     auto pSeq = aSeq.getArray();
 
-                    for (const SfxPoolItem* pItem : rPool.GetItemSurrogates(nWhichId))
+                    for (const SfxPoolItem* pItem : rSurrogates)
                     {
                         const SvxFontItem *pFont = static_cast<const SvxFontItem *>(pItem);
 
@@ -1682,7 +1684,8 @@ static void ImplPDFExportShapeInteraction( const uno::Reference< drawing::XShape
                 if (!aMediaURL.isEmpty())
                 {
                     SdrObject const*const pSdrObj(SdrObject::getSdrObjectFromXShape(xShape));
-                    sal_Int32 nScreenId = rPDFExtOutDevData.CreateScreen(aLinkRect, altText, rPDFExtOutDevData.GetCurrentPageNumber(), pSdrObj);
+                    OUString const mimeType(xShapePropSet->getPropertyValue("MediaMimeType").get<OUString>());
+                    sal_Int32 nScreenId = rPDFExtOutDevData.CreateScreen(aLinkRect, altText, mimeType, rPDFExtOutDevData.GetCurrentPageNumber(), pSdrObj);
                     if (aMediaURL.startsWith("vnd.sun.star.Package:"))
                     {
                         OUString aTempFileURL;
@@ -1891,7 +1894,7 @@ void SAL_CALL SdXImpressDocument::render( sal_Int32 nRenderer, const uno::Any& r
     if( !(xRenderDevice.is() && nPageNumber && ( nPageNumber <= mpDoc->GetSdPageCount( ePageKind ) )) )
         return;
 
-    VCLXDevice* pDevice = comphelper::getFromUnoTunnel<VCLXDevice>( xRenderDevice );
+    VCLXDevice* pDevice = dynamic_cast<VCLXDevice*>( xRenderDevice.get() );
     VclPtr< OutputDevice> pOut = pDevice ? pDevice->GetOutputDevice() : VclPtr< OutputDevice >();
 
     if( !pOut )
@@ -2022,8 +2025,8 @@ void SAL_CALL SdXImpressDocument::render( sal_Int32 nRenderer, const uno::Any& r
                         // exporting transition effects to pdf
                         if ( mbImpressDoc && !pPDFExtOutDevData->GetIsExportNotesPages() && pPDFExtOutDevData->GetIsExportTransitionEffects() )
                         {
-                            static const OUStringLiteral sEffect( u"Effect" );
-                            static const OUStringLiteral sSpeed ( u"Speed" );
+                            static constexpr OUString sEffect( u"Effect"_ustr );
+                            static constexpr OUString sSpeed ( u"Speed"_ustr );
                             sal_Int32 nTime = 800;
                             presentation::AnimationSpeed aAs;
                             if ( xPagePropSet->getPropertySetInfo( )->hasPropertyByName( sSpeed ) )
@@ -2331,19 +2334,16 @@ OString SdXImpressDocument::getViewRenderState(SfxViewShell* pViewShell)
     OStringBuffer aState;
     DrawViewShell* pView = nullptr;
 
-    if (pViewShell)
-    {
-        ViewShellBase* pShellBase = dynamic_cast<ViewShellBase*>(pViewShell);
+    if (ViewShellBase* pShellBase = dynamic_cast<ViewShellBase*>(pViewShell))
         pView = dynamic_cast<DrawViewShell*>(pShellBase->GetMainViewShell().get());
-    }
     else
-    {
         pView = GetViewShell();
-    }
 
     if (pView)
     {
         const SdViewOptions& pVOpt = pView->GetViewOptions();
+        if (mpDoc->GetOnlineSpell())
+            aState.append('S');
         aState.append(';');
 
         OString aThemeName = OUStringToOString(pVOpt.msColorSchemeName, RTL_TEXTENCODING_UTF8);
@@ -2463,8 +2463,9 @@ bool SdXImpressDocument::isMasterViewMode()
 
     if (pViewSh->GetDispatcher())
     {
-        const SfxBoolItem* isMasterViewMode = nullptr;
-        pViewSh->GetDispatcher()->QueryState(SID_SLIDE_MASTER_MODE, isMasterViewMode);
+        SfxPoolItemHolder aResult;
+        pViewSh->GetDispatcher()->QueryState(SID_SLIDE_MASTER_MODE, aResult);
+        const SfxBoolItem* isMasterViewMode(static_cast<const SfxBoolItem*>(aResult.getItem()));
         if (isMasterViewMode && isMasterViewMode->GetValue())
             return true;
     }
@@ -2553,11 +2554,11 @@ void SdXImpressDocument::getPostIts(::tools::JsonWriter& rJsonWriter)
         pPage = static_cast<SdPage*>(mpDoc->GetPage(nPage));
         const sd::AnnotationVector& aPageAnnotations = pPage->getAnnotations();
 
-        for (const uno::Reference<office::XAnnotation>& xAnnotation : aPageAnnotations)
+        for (const rtl::Reference<Annotation>& xAnnotation : aPageAnnotations)
         {
             sal_uInt32 nID = sd::getAnnotationId(xAnnotation);
             OString nodeName = "comment" + OString::number(nID);
-            auto commentNode = rJsonWriter.startNode(nodeName.getStr());
+            auto commentNode = rJsonWriter.startNode(nodeName);
             rJsonWriter.put("id", nID);
             rJsonWriter.put("author", xAnnotation->getAuthor());
             rJsonWriter.put("dateTime", utl::toISO8601(xAnnotation->getDateTime()));
@@ -2578,6 +2579,8 @@ void SdXImpressDocument::initializeForTiledRendering(const css::uno::Sequence<cs
 {
     SolarMutexGuard aGuard;
 
+    OUString sThemeName;
+
     if (DrawViewShell* pViewShell = GetViewShell())
     {
         DrawView* pDrawView = pViewShell->GetDrawView();
@@ -2589,6 +2592,8 @@ void SdXImpressDocument::initializeForTiledRendering(const css::uno::Sequence<cs
                 pDrawView->SetAuthor(rValue.Value.get<OUString>());
             else if (rValue.Name == ".uno:SpellOnline" && rValue.Value.has<bool>())
                 mpDoc->SetOnlineSpell(rValue.Value.get<bool>());
+            else if (rValue.Name == ".uno:ChangeTheme" && rValue.Value.has<OUString>())
+                sThemeName = rValue.Value.get<OUString>();
         }
 
         // Disable comments if requested
@@ -2630,6 +2635,16 @@ void SdXImpressDocument::initializeForTiledRendering(const css::uno::Sequence<cs
 
     if (!getenv("LO_TESTNAME"))
         SvtSlideSorterBarOptions().SetVisibleImpressView(true);
+
+    // if we know what theme the user wants, then we can dispatch that now early
+    if (!sThemeName.isEmpty())
+    {
+        css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
+        {
+            { "NewTheme", uno::Any(sThemeName) }
+        }));
+        comphelper::dispatchCommand(".uno:ChangeTheme", aPropertyValues);
+    }
 }
 
 void SdXImpressDocument::postKeyEvent(int nType, int nCharCode, int nKeyCode)
@@ -2700,31 +2715,6 @@ void SdXImpressDocument::setTextSelection(int nType, int nX, int nY)
         assert(false);
         break;
     }
-}
-
-OUString SdXImpressDocument::hyperlinkInfoAtPosition(int x, int y)
-{
-    ::sd::ViewShell* viewSh = GetViewShell();
-
-    if (viewSh)
-    {
-        Point point(x, y);
-        point = o3tl::convert(point, o3tl::Length::twip, o3tl::Length::mm100);
-        SdrView* pSdrView = SfxViewShell::Current()->GetDrawView();
-
-        if (pSdrView)
-        {
-            SdrViewEvent aVEvt;
-            pSdrView->PickAnything(point, aVEvt);
-            if (aVEvt.mpURLField)
-            {
-                OUString aURL = INetURLObject::decode(aVEvt.mpURLField->GetURL(), INetURLObject::DecodeMechanism::WithCharset);
-                return aURL;
-            }
-        }
-    }
-
-    return OUString();
 }
 
 uno::Reference<datatransfer::XTransferable> SdXImpressDocument::getSelection()
@@ -3427,9 +3417,8 @@ uno::Sequence< OUString > SAL_CALL SdMasterPagesAccess::getSupportedServiceNames
     return { "com.sun.star.drawing.MasterPages" };
 }
 
-
-SdDocLinkTargets::SdDocLinkTargets( SdXImpressDocument& rMyModel ) noexcept
-: mpModel( &rMyModel )
+SdDocLinkTargets::SdDocLinkTargets(SdXImpressDocument& rMyModel)
+    : mpModel(&rMyModel)
 {
     for (sal_uInt16 i=0; i < SdLinkTargetType::Count; i++)
         aNames[i] = SdResId(aTypeResIds[i]);
@@ -3545,7 +3534,7 @@ uno::Sequence< OUString > SAL_CALL SdDocLinkTargets::getSupportedServiceNames()
     return { "com.sun.star.document.LinkTargets" };
 }
 
-SdDocLinkTargetType::SdDocLinkTargetType(SdXImpressDocument* pModel, sal_uInt16 nT) noexcept
+SdDocLinkTargetType::SdDocLinkTargetType(SdXImpressDocument* pModel, sal_uInt16 nT)
     : mpModel(pModel)
     , mnType(nT)
 {

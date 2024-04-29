@@ -804,10 +804,6 @@ void DrawViewShell::Command(const CommandEvent& rCEvt, ::sd::Window* pWin)
         {
             GetActiveWindow()->ReleaseMouse();
 
-            // tdf#137445 at this context menu popup time get what the
-            // DisableEditHyperlink would be for this position
-            bool bShouldDisableEditHyperlink = ShouldDisableEditHyperlink();
-
             if(rCEvt.IsMouseEvent())
                 GetViewFrame()->GetDispatcher()->ExecutePopup( aPopupId );
             else
@@ -839,27 +835,12 @@ void DrawViewShell::Command(const CommandEvent& rCEvt, ::sd::Window* pWin)
                 //open context menu at that point
                 GetViewFrame()->GetDispatcher()->ExecutePopup( aPopupId, GetActiveWindow(), &aMenuPos );
             }
-
-            if (!bShouldDisableEditHyperlink)
-            {
-                SfxBindings& rBindings = GetViewFrame()->GetBindings();
-                // tdf#137445 set what the menu popup state for this was
-                EnableEditHyperlink();
-                // ensure moAtContextMenu_DisableEditHyperlink will be cleared
-                // in the case that EditHyperlink is not dispatched by the menu
-                rBindings.Invalidate(SID_EDIT_HYPERLINK);
-            }
         }
     }
     else
     {
         ViewShell::Command(rCEvt, pWin);
     }
-}
-
-void DrawViewShell::EnableEditHyperlink()
-{
-    moAtContextMenu_DisableEditHyperlink = false;
 }
 
 void DrawViewShell::ShowMousePosInfo(const ::tools::Rectangle& rRect,

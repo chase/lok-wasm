@@ -709,14 +709,14 @@ DocumentDigitalSignatures::chooseCertificatesImpl(std::map<OUString, OUString>& 
             xSecContexts.push_back(aSignatureManager.getGpgSecurityContext());
     }
 
-    CertificateChooser aChooser(Application::GetFrameWeld(mxParentWindow), std::move(xSecContexts), eAction);
+    std::unique_ptr<CertificateChooser> aChooser = CertificateChooser::getInstance(Application::GetFrameWeld(mxParentWindow), std::move(xSecContexts), eAction);
 
-    if (aChooser.run() != RET_OK)
+    if (aChooser->run() != RET_OK)
         return { Reference< css::security::XCertificate >(nullptr) };
 
-    uno::Sequence< Reference< css::security::XCertificate > >  xCerts = aChooser.GetSelectedCertificates();
-    rProperties["Description"] = aChooser.GetDescription();
-    rProperties["Usage"] = aChooser.GetUsageText();
+    uno::Sequence< Reference< css::security::XCertificate > >  xCerts = aChooser->GetSelectedCertificates();
+    rProperties["Description"] = aChooser->GetDescription();
+    rProperties["Usage"] = aChooser->GetUsageText();
 
     return xCerts;
 }
@@ -869,7 +869,13 @@ bool DocumentDigitalSignatures::signWithCertificateImpl(
     aSignatureManager.setSignatureStream(xStream);
     aSignatureManager.setModel(xModel);
 
-    Reference<XXMLSecurityContext> xSecurityContext = aSignatureManager.getSecurityContext();
+    Reference<XXMLSecurityContext> xSecurityContext;
+    Reference<XServiceInfo> xServiceInfo(xCertificate, UNO_QUERY);
+    if (xServiceInfo->getImplementationName()
+        == "com.sun.star.xml.security.gpg.XCertificate_GpgImpl")
+        xSecurityContext = aSignatureManager.getGpgSecurityContext();
+    else
+        xSecurityContext = aSignatureManager.getSecurityContext();
 
     sal_Int32 nSecurityId;
 

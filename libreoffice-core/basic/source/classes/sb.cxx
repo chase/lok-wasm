@@ -55,7 +55,7 @@
 
 using namespace ::com::sun::star::script;
 
-constexpr OUStringLiteral SB_RTLNAME = u"@SBRTL";
+constexpr OUString SB_RTLNAME = u"@SBRTL"_ustr;
 //  i#i68894#
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -901,18 +901,18 @@ StarBASIC::StarBASIC( StarBASIC* p, bool bIsDocBasic  )
 
     if( !GetSbData()->nInst++ )
     {
-        GetSbData()->pSbFac.reset( new SbiFactory );
-        AddFactory( GetSbData()->pSbFac.get() );
-        GetSbData()->pTypeFac.reset(new SbTypeFactory);
-        AddFactory( GetSbData()->pTypeFac.get() );
+        GetSbData()->pSbFac.emplace();
+        AddFactory( &*GetSbData()->pSbFac );
+        GetSbData()->pTypeFac.emplace();
+        AddFactory( &*GetSbData()->pTypeFac );
         GetSbData()->pClassFac.reset(new SbClassFactory);
         AddFactory( GetSbData()->pClassFac.get() );
-        GetSbData()->pOLEFac.reset(new SbOLEFactory);
-        AddFactory( GetSbData()->pOLEFac.get() );
-        GetSbData()->pFormFac.reset(new SbFormFactory);
-        AddFactory( GetSbData()->pFormFac.get() );
-        GetSbData()->pUnoFac.reset( new SbUnoFactory );
-        AddFactory( GetSbData()->pUnoFac.get() );
+        GetSbData()->pOLEFac.emplace();
+        AddFactory( &*GetSbData()->pOLEFac );
+        GetSbData()->pFormFac.emplace();
+        AddFactory( &*GetSbData()->pFormFac );
+        GetSbData()->pUnoFac.emplace();
+        AddFactory( &*GetSbData()->pUnoFac );
     }
     pRtl = new SbiStdObject(SB_RTLNAME, this );
     // Search via StarBasic is always global
@@ -940,17 +940,17 @@ StarBASIC::~StarBASIC()
 
     if( !--GetSbData()->nInst )
     {
-        RemoveFactory( GetSbData()->pSbFac.get() );
+        RemoveFactory( &*GetSbData()->pSbFac );
         GetSbData()->pSbFac.reset();
-        RemoveFactory( GetSbData()->pUnoFac.get() );
+        RemoveFactory( &*GetSbData()->pUnoFac );
         GetSbData()->pUnoFac.reset();
-        RemoveFactory( GetSbData()->pTypeFac.get() );
+        RemoveFactory( &*GetSbData()->pTypeFac );
         GetSbData()->pTypeFac.reset();
         RemoveFactory( GetSbData()->pClassFac.get() );
         GetSbData()->pClassFac.reset();
-        RemoveFactory( GetSbData()->pOLEFac.get() );
+        RemoveFactory( &*GetSbData()->pOLEFac );
         GetSbData()->pOLEFac.reset();
-        RemoveFactory( GetSbData()->pFormFac.get() );
+        RemoveFactory( &*GetSbData()->pFormFac );
         GetSbData()->pFormFac.reset();
 
         if( SbiGlobals::pGlobals )
@@ -1074,7 +1074,7 @@ void StarBASIC::Remove( SbxVariable* pVar )
     {
         // #87540 Can be last reference!
         SbModuleRef xVar = pModule;
-        pModules.erase(std::remove(pModules.begin(), pModules.end(), xVar));
+        std::erase(pModules, xVar);
         pVar->SetParent( nullptr );
         EndListening( pVar->GetBroadcaster() );
     }
@@ -1306,7 +1306,7 @@ SbxVariable* StarBASIC::Find( const OUString& rName, SbxClassType t )
             }
         }
     }
-    static constexpr OUStringLiteral aMainStr(u"Main");
+    static constexpr OUString aMainStr(u"Main"_ustr);
     if( !pRes && pNamed && ( t == SbxClassType::Method || t == SbxClassType::DontCare ) &&
         !pNamed->GetName().equalsIgnoreAsciiCase( aMainStr ) )
     {
@@ -1429,7 +1429,7 @@ sal_uInt16 StarBASIC::GetCol1()     { return GetSbData()->nCol1; }
 sal_uInt16 StarBASIC::GetCol2()     { return GetSbData()->nCol2; }
 
 // Specific to error handler
-ErrCode const & StarBASIC::GetErrorCode() { return GetSbData()->nCode; }
+ErrCodeMsg const & StarBASIC::GetErrorCode() { return GetSbData()->nCode; }
 const OUString& StarBASIC::GetErrorText() { return GetSbData()->aErrMsg; }
 
 // From 1996-03-29:
@@ -1531,7 +1531,7 @@ ErrCode StarBASIC::GetSfxFromVBError( sal_uInt16 nError )
 }
 
 // set Error- / Break-data
-void StarBASIC::SetErrorData( ErrCode nCode, sal_uInt16 nLine,
+void StarBASIC::SetErrorData( const ErrCodeMsg& nCode, sal_uInt16 nLine,
                               sal_uInt16 nCol1, sal_uInt16 nCol2 )
 {
     SbiGlobals& aGlobals = *GetSbData();
@@ -1620,11 +1620,12 @@ bool StarBASIC::CError( ErrCode code, const OUString& rMsg,
     MakeErrorText( code, rMsg );
 
     // Implementation of the code for the string transport to SFX-Error
+    ErrCodeMsg nErr = code;
     if( !rMsg.isEmpty() )
     {
-        code = *new StringErrorInfo( code, rMsg );
+        nErr = ErrCodeMsg( code, rMsg );
     }
-    SetErrorData( code, l, c1, c2 );
+    SetErrorData( nErr, l, c1, c2 );
     GetSbData()->bCompilerError = true;
     bool bRet;
     if( GetSbData()->aErrHdl.IsSet() )
@@ -1651,6 +1652,7 @@ bool StarBASIC::RTError( ErrCode code, const OUString& rMsg, sal_Int32 l, sal_In
     MakeErrorText( c, rMsg );
 
     // Implementation of the code for the string transport to SFX-Error
+    ErrCodeMsg nErr = code;
     if( !rMsg.isEmpty() )
     {
         // very confusing, even though MakeErrorText sets up the error text
@@ -1661,15 +1663,15 @@ bool StarBASIC::RTError( ErrCode code, const OUString& rMsg, sal_Int32 l, sal_In
         {
             OUString aTmp = "\'" + OUString::number(SbxErrObject::getUnoErrObject()->getNumber()) +
                             "\'\n" + (!GetSbData()->aErrMsg.isEmpty() ? GetSbData()->aErrMsg : rMsg);
-            code = *new StringErrorInfo( code, aTmp );
+            nErr = ErrCodeMsg( code, aTmp );
         }
         else
         {
-            code = *new StringErrorInfo( code, rMsg );
+            nErr = ErrCodeMsg( code, rMsg );
         }
     }
 
-    SetErrorData( code, l, c1, c2 );
+    SetErrorData( nErr, l, c1, c2 );
     if( GetSbData()->aErrHdl.IsSet() )
     {
         return GetSbData()->aErrHdl.Call( this );
@@ -1847,22 +1849,28 @@ bool StarBASIC::LoadData( SvStream& r, sal_uInt16 nVer )
     return true;
 }
 
-bool StarBASIC::StoreData( SvStream& r ) const
+std::pair<bool, sal_uInt32> StarBASIC::StoreData( SvStream& r ) const
 {
-    if( !SbxObject::StoreData( r ) )
+    auto [bSuccess, nVersion] = SbxObject::StoreData(r);
+    if( !bSuccess )
     {
-        return false;
+        return { false, 0 };
     }
     assert(pModules.size() < SAL_MAX_UINT16);
     r.WriteUInt16( static_cast<sal_uInt16>(pModules.size()));
     for( const auto& rpModule: pModules )
     {
-        if( !rpModule->Store( r ) )
+        const auto& [bSuccessModule, nVersionModule] = rpModule->Store(r);
+        if( !bSuccessModule )
         {
-            return false;
+            return { false, 0 };
+        }
+        else if (nVersionModule > nVersion)
+        {
+            nVersion = nVersionModule;
         }
     }
-    return true;
+    return { true, nVersion };
 }
 
 bool StarBASIC::GetUNOConstant( const OUString& rName, css::uno::Any& aOut )
@@ -1887,7 +1895,7 @@ Reference< frame::XModel > StarBASIC::GetModelFromBasic( SbxObject* pBasic )
     // look for the ThisComponent variable, first in the parent (which
     // might be the document's Basic), then in the parent's parent (which might be
     // the application Basic)
-    static const OUStringLiteral sThisComponent( u"ThisComponent");
+    static constexpr OUStringLiteral sThisComponent( u"ThisComponent");
     SbxVariable* pThisComponent = nullptr;
 
     SbxObject* pLookup = pBasic->GetParent();
@@ -1934,9 +1942,13 @@ void StarBASIC::DetachAllDocBasicItems()
 // #118116 Implementation Collection object
 
 
+// [-loplugin:ostr]
 constexpr OUStringLiteral pCountStr = u"Count";
+// [-loplugin:ostr]
 constexpr OUStringLiteral pAddStr = u"Add";
+// [-loplugin:ostr]
 constexpr OUStringLiteral pItemStr = u"Item";
+// [-loplugin:ostr]
 constexpr OUStringLiteral pRemoveStr = u"Remove";
 constexpr sal_uInt16 nCountHash = SbxVariable::MakeHashCode(pCountStr);
 constexpr sal_uInt16 nAddHash = SbxVariable::MakeHashCode(pAddStr);

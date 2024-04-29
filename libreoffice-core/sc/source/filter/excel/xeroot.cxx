@@ -44,6 +44,7 @@
 #include <excrecds.hxx>
 #include <tabprotection.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 
 #include <formulabase.hxx>
 #include <com/sun/star/sheet/FormulaOpCodeMapEntry.hpp>
@@ -229,7 +230,7 @@ void XclExpRoot::InitializeGlobals()
             // instantiated instead of a ScFormulaOpCodeMapperObj and the
             // ScCompiler virtuals not be called! Which would be the case with
             // the current (2013-01-24) rDoc.GetServiceManager()
-            const SfxObjectShell* pShell = rDoc.GetDocumentShell();
+            const ScDocShell* pShell = rDoc.GetDocumentShell();
             if (!pShell)
             {
                 SAL_WARN( "sc", "XclExpRoot::InitializeGlobals - no object shell");
@@ -316,8 +317,10 @@ uno::Sequence< beans::NamedValue > XclExpRoot::GenerateEncryptionData( std::u16s
     {
         rtlRandomPool aRandomPool = rtl_random_createPool ();
         sal_uInt8 pnDocId[16];
-        rtl_random_getBytes( aRandomPool, pnDocId, 16 );
-
+        if (rtl_random_getBytes(aRandomPool, pnDocId, 16) != rtl_Random_E_None)
+        {
+            throw uno::RuntimeException("rtl_random_getBytes failed");
+        }
         rtl_random_destroyPool( aRandomPool );
 
         sal_uInt16 pnPasswd[16] = {};
@@ -335,13 +338,13 @@ uno::Sequence< beans::NamedValue > XclExpRoot::GenerateEncryptionData( std::u16s
 uno::Sequence< beans::NamedValue > XclExpRoot::GetEncryptionData() const
 {
     uno::Sequence< beans::NamedValue > aEncryptionData;
-    const SfxUnoAnyItem* pEncryptionDataItem = SfxItemSet::GetItem<SfxUnoAnyItem>(GetMedium().GetItemSet(), SID_ENCRYPTIONDATA, false);
+    const SfxUnoAnyItem* pEncryptionDataItem = GetMedium().GetItemSet().GetItem(SID_ENCRYPTIONDATA, false);
     if ( pEncryptionDataItem )
         pEncryptionDataItem->GetValue() >>= aEncryptionData;
     else
     {
         // try to get the encryption data from the password
-        const SfxStringItem* pPasswordItem = SfxItemSet::GetItem<SfxStringItem>(GetMedium().GetItemSet(), SID_PASSWORD, false);
+        const SfxStringItem* pPasswordItem = GetMedium().GetItemSet().GetItem(SID_PASSWORD, false);
         if ( pPasswordItem && !pPasswordItem->GetValue().isEmpty() )
             aEncryptionData = GenerateEncryptionData( pPasswordItem->GetValue() );
     }

@@ -19,7 +19,7 @@
 
 #include <sal/config.h>
 
-#include <com/sun/star/awt/XWindowPeer.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
 #include <com/sun/star/embed/EmbedStates.hpp>
 #include <com/sun/star/embed/UnreachableStateException.hpp>
@@ -218,7 +218,7 @@ uno::Reference < frame::XFrame > const & SfxInPlaceClient_Impl::GetFrame() const
 {
     if ( !m_pClient )
         throw uno::RuntimeException();
-    return m_pClient->GetViewShell()->GetViewFrame()->GetFrame().GetFrameInterface();
+    return m_pClient->GetViewShell()->GetViewFrame().GetFrame().GetFrameInterface();
 }
 
 void SAL_CALL SfxInPlaceClient_Impl::saveObject()
@@ -359,7 +359,7 @@ void SAL_CALL SfxInPlaceClient_Impl::activatingInplace()
         }
 
         OString str = (m_bNegativeX ? lcl_negateRectX(aRect) : aRect).toString() + ", \"INPLACE\"";
-        pViewShell->libreOfficeKitViewCallback( LOK_CALLBACK_GRAPHIC_SELECTION, str.getStr() );
+        pViewShell->libreOfficeKitViewCallback( LOK_CALLBACK_GRAPHIC_SELECTION, str );
     }
 
 }
@@ -384,7 +384,7 @@ void SAL_CALL SfxInPlaceClient_Impl::deactivatedInplace()
     if ( comphelper::LibreOfficeKit::isActive() )
     {
         if ( SfxViewShell* pViewShell = m_pClient->GetViewShell() ) {
-            pViewShell->libreOfficeKitViewCallback( LOK_CALLBACK_GRAPHIC_SELECTION, "INPLACE EXIT" );
+            pViewShell->libreOfficeKitViewCallback( LOK_CALLBACK_GRAPHIC_SELECTION, "INPLACE EXIT"_ostr );
         }
     }
 }
@@ -707,8 +707,8 @@ void SfxInPlaceClient::SetObject( const uno::Reference < embed::XEmbeddedObject 
 {
     if ( m_xImp->m_xObject.is() && rObject != m_xImp->m_xObject )
     {
-        DBG_ASSERT( GetObject()->getClientSite() == static_cast<cppu::OWeakObject*>(m_xImp.get()), "Wrong ClientSite!" );
-        if ( GetObject()->getClientSite() == static_cast<cppu::OWeakObject*>(m_xImp.get()) )
+        DBG_ASSERT( GetObject()->getClientSite() == getXWeak(m_xImp.get()), "Wrong ClientSite!" );
+        if ( GetObject()->getClientSite() == getXWeak(m_xImp.get()) )
         {
             if ( GetObject()->getCurrentState() != embed::EmbedStates::LOADED )
                 SetObjectState( embed::EmbedStates::RUNNING );
@@ -725,7 +725,7 @@ void SfxInPlaceClient::SetObject( const uno::Reference < embed::XEmbeddedObject 
         }
     }
 
-    if ( m_pViewSh->GetViewFrame()->GetFrame().IsClosing_Impl() )
+    if ( m_pViewSh->GetViewFrame().GetFrame().IsClosing_Impl() )
         // sometimes applications reconnect clients on shutting down because it happens in their Paint methods
         return;
 
@@ -894,10 +894,10 @@ sal_Int64 SfxInPlaceClient::GetAspect() const
     return m_xImp->m_nAspect;
 }
 
-ErrCode SfxInPlaceClient::DoVerb(sal_Int32 nVerb)
+ErrCodeMsg SfxInPlaceClient::DoVerb(sal_Int32 nVerb)
 {
     SfxErrorContext aEc(ERRCTX_SO_DOVERB, m_pViewSh->GetFrameWeld(), RID_SO_ERRCTX);
-    ErrCode nError = ERRCODE_NONE;
+    ErrCodeMsg nError = ERRCODE_NONE;
 
     if ( m_xImp->m_xObject.is() )
     {
@@ -963,14 +963,14 @@ ErrCode SfxInPlaceClient::DoVerb(sal_Int32 nVerb)
                 {
                     pEditWin->EnableMapMode();
                 }
-                m_pViewSh->GetViewFrame()->GetFrame().LockResize_Impl(true);
+                m_pViewSh->GetViewFrame().GetFrame().LockResize_Impl(true);
                 try
                 {
                     m_xImp->m_xObject->setClientSite( m_xImp );
 
                     m_xImp->m_xObject->doVerb( nVerb );
                 }
-                catch ( embed::UnreachableStateException& )
+                catch ( embed::UnreachableStateException& e )
                 {
                     if (nVerb == embed::EmbedVerbs::MS_OLEVERB_PRIMARY || nVerb == embed::EmbedVerbs::MS_OLEVERB_OPEN || nVerb == embed::EmbedVerbs::MS_OLEVERB_SHOW)
                     {
@@ -996,7 +996,7 @@ ErrCode SfxInPlaceClient::DoVerb(sal_Int32 nVerb)
                         catch (uno::Exception const&)
                         {
                             TOOLS_WARN_EXCEPTION("embeddedobj", "SfxInPlaceClient::DoVerb: -9 fallback path");
-                            nError = ERRCODE_SO_GENERALERROR;
+                            nError = ErrCodeMsg(ERRCODE_SO_GENERALERROR, e.Message);
                         }
                     }
                 }
@@ -1017,9 +1017,9 @@ ErrCode SfxInPlaceClient::DoVerb(sal_Int32 nVerb)
                 {
                     pEditWin->EnableMapMode(false);
                 }
-                SfxViewFrame* pFrame = m_pViewSh->GetViewFrame();
-                pFrame->GetFrame().LockResize_Impl(false);
-                pFrame->GetFrame().Resize();
+                SfxViewFrame& rFrame = m_pViewSh->GetViewFrame();
+                rFrame.GetFrame().LockResize_Impl(false);
+                rFrame.GetFrame().Resize();
             }
         }
     }
@@ -1079,7 +1079,7 @@ void SfxInPlaceClient::DeactivateObject()
             }
         }
 
-        m_pViewSh->GetViewFrame()->GetFrame().LockResize_Impl(true);
+        m_pViewSh->GetViewFrame().GetFrame().LockResize_Impl(true);
 
         if ( m_xImp->m_xObject->getStatus( m_xImp->m_nAspect ) & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE )
         {
@@ -1097,10 +1097,10 @@ void SfxInPlaceClient::DeactivateObject()
                 m_xImp->m_xObject->changeState( embed::EmbedStates::RUNNING );
         }
 
-        SfxViewFrame* pFrame = m_pViewSh->GetViewFrame();
-        SfxViewFrame::SetViewFrame( pFrame );
-        pFrame->GetFrame().LockResize_Impl(false);
-        pFrame->GetFrame().Resize();
+        SfxViewFrame& rFrame = m_pViewSh->GetViewFrame();
+        SfxViewFrame::SetViewFrame( &rFrame );
+        rFrame.GetFrame().LockResize_Impl(false);
+        rFrame.GetFrame().Resize();
     }
     catch (css::uno::Exception& )
     {}

@@ -46,6 +46,7 @@
 #include <xmloff/xmlerror.hxx>
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/lang/ServiceNotRegisteredException.hpp>
 #include <com/sun/star/io/XOutputStream.hpp>
 #include <com/sun/star/util/MeasureUnit.hpp>
@@ -218,7 +219,14 @@ public:
                         }
                         else if ('7' == loVersion[0])
                         {
-                            mnGeneratorVersion = SvXMLImport::LO_7x;
+                            if (loVersion.getLength() > 2 && loVersion[2] == '6')
+                            {
+                                mnGeneratorVersion = SvXMLImport::LO_76; // 7.6
+                            }
+                            else
+                            {
+                                mnGeneratorVersion = SvXMLImport::LO_7x;
+                            }
                         }
                         else
                         {
@@ -333,7 +341,7 @@ public:
 
     std::unique_ptr< xmloff::RDFaImportHelper > mpRDFaHelper;
 
-    std::unique_ptr< DocumentInfo > mpDocumentInfo;
+    std::optional< DocumentInfo > moDocumentInfo;
 
     SvXMLImport_Impl( uno::Reference< uno::XComponentContext > xContext,
                       OUString theImplementationName,
@@ -358,12 +366,12 @@ public:
 
     sal_uInt16 getGeneratorVersion( const SvXMLImport& rImport )
     {
-        if (!mpDocumentInfo)
+        if (!moDocumentInfo)
         {
-            mpDocumentInfo.reset( new DocumentInfo( rImport ) );
+            moDocumentInfo.emplace( rImport );
         }
 
-        return mpDocumentInfo->getGeneratorVersion();
+        return moDocumentInfo->getGeneratorVersion();
     }
 
     ::comphelper::UnoInterfaceToUniqueIdentifierMapper maInterfaceToIdentifierMapper;
@@ -487,24 +495,12 @@ SvXMLImport::~SvXMLImport() noexcept
 }
 
 bool SvXMLImport::addEmbeddedFont(const css::uno::Reference< css::io::XInputStream >& stream,
-                                  const OUString& fontName, const char* extra,
+                                  const OUString& fontName, std::u16string_view extra,
                                   std::vector<unsigned char> const & key, bool eot)
 {
     if (!mxEmbeddedFontHelper)
         mxEmbeddedFontHelper.reset(new EmbeddedFontsHelper);
     return mxEmbeddedFontHelper->addEmbeddedFont(stream, fontName, extra, key, eot);
-}
-
-const css::uno::Sequence<sal_Int8>& SvXMLImport::getUnoTunnelId() noexcept
-{
-    static const comphelper::UnoIdInit theSvXMLImportUnoTunnelId;
-    return theSvXMLImportUnoTunnelId.getSeq();
-}
-
-// XUnoTunnel
-sal_Int64 SAL_CALL SvXMLImport::getSomething( const uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
 }
 
 namespace
@@ -1015,7 +1011,7 @@ void SAL_CALL SvXMLImport::initialize( const uno::Sequence< uno::Any >& aArgumen
                     uno::Any aAny = mxImportInfo->getPropertyValue(sPropName);
                     aAny >>= xIfc;
 
-                    StyleMap *pSMap = comphelper::getFromUnoTunnel<StyleMap>( xIfc );
+                    StyleMap *pSMap = dynamic_cast<StyleMap*>( xIfc.get() );
                     if( pSMap )
                     {
                         mpStyleMap = pSMap;
@@ -1426,7 +1422,7 @@ void SvXMLImport::AddStyleDisplayName( XmlStyleFamily nFamily,
                 xPropertySetInfo->hasPropertyByName(sPrivateData) )
             {
                 Reference < XInterface > xIfc(
-                        static_cast< XUnoTunnel *>( mpStyleMap.get() ) );
+                        static_cast< css::lang::XTypeProvider *>( mpStyleMap.get() ) );
                 mxImportInfo->setPropertyValue( sPrivateData, Any(xIfc) );
             }
         }
@@ -1805,8 +1801,8 @@ void SvXMLImport::DisposingModel()
     if( mxMasterStyles.is() )
         mxMasterStyles->dispose();
 
-    mxModel.set(nullptr);
-    mxEventListener.set(nullptr);
+    mxModel.clear();
+    mxEventListener.clear();
 }
 
 ::comphelper::UnoInterfaceToUniqueIdentifierMapper& SvXMLImport::getInterfaceToIdentifierMapper()
@@ -1965,9 +1961,9 @@ SvXMLImport::AddRDFa(const uno::Reference<rdf::XMetadatable>& i_xObject,
 
 bool SvXMLImport::embeddedFontAlreadyProcessed( const OUString& url )
 {
-    if( embeddedFontUrlsKnown.count( url ) != 0 )
+    if( m_embeddedFontUrlsKnown.count( url ) != 0 )
         return true;
-    embeddedFontUrlsKnown.insert( url );
+    m_embeddedFontUrlsKnown.insert( url );
     return false;
 }
 
@@ -2157,7 +2153,7 @@ void SvXMLImportFastNamespaceHandler::addNSDeclAttributes( rtl::Reference < comp
             sDecl = "xmlns";
         else
             sDecl = "xmlns:" + rPrefix;
-        rAttrList->AddAttribute( sDecl, "CDATA", rNamespaceURI );
+        rAttrList->AddAttribute( sDecl, rNamespaceURI );
     }
     m_aNamespaceDefines.clear();
 }

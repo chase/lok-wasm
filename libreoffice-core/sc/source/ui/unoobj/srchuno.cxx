@@ -32,7 +32,7 @@ using namespace com::sun::star;
 
 //  SfxItemPropertyMapEntry only for GetPropertySetInfo
 
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetSearchPropertyMap()
+static std::span<const SfxItemPropertyMapEntry> lcl_GetSearchPropertyMap()
 {
     static const SfxItemPropertyMapEntry aSearchPropertyMap_Impl[] =
     {
@@ -49,12 +49,13 @@ static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetSearchPropertyMap()
         { SC_UNO_SRCHSTYLES,   0,      cppu::UnoType<bool>::get(),       0, 0},
         { SC_UNO_SRCHTYPE,     0,      cppu::UnoType<sal_Int16>::get(), 0, 0}, // enum TableSearch is gone
         { SC_UNO_SRCHWORDS,    0,      cppu::UnoType<bool>::get(),       0, 0},
+        { SC_UNO_SRCHWCESCCHAR, 0,     cppu::UnoType<sal_Int32>::get(), 0, 0 },
     };
     return aSearchPropertyMap_Impl;
 }
 
-constexpr OUStringLiteral SCSEARCHDESCRIPTOR_SERVICE = u"com.sun.star.util.SearchDescriptor";
-constexpr OUStringLiteral SCREPLACEDESCRIPTOR_SERVICE = u"com.sun.star.util.ReplaceDescriptor";
+constexpr OUString SCSEARCHDESCRIPTOR_SERVICE = u"com.sun.star.util.SearchDescriptor"_ustr;
+constexpr OUString SCREPLACEDESCRIPTOR_SERVICE = u"com.sun.star.util.ReplaceDescriptor"_ustr;
 
 ScCellSearchObj::ScCellSearchObj() :
     aPropSet(lcl_GetSearchPropertyMap()),
@@ -144,6 +145,7 @@ void SAL_CALL ScCellSearchObj::setPropertyValue(
     else if (aPropertyName == SC_UNO_SRCHTYPE)   pSearchItem->SetCellType( static_cast<SvxSearchCellType>(ScUnoHelpFunctions::GetInt16FromAny( aValue )) );
     else if (aPropertyName == SC_UNO_SRCHFILTERED) pSearchItem->SetSearchFiltered( ScUnoHelpFunctions::GetBoolFromAny(aValue) );
     else if (aPropertyName == SC_UNO_SRCHFORMATTED) pSearchItem->SetSearchFormatted( ScUnoHelpFunctions::GetBoolFromAny(aValue) );
+    else if (aPropertyName == SC_UNO_SRCHWCESCCHAR) pSearchItem->SetWildcardEscapeCharacter( ScUnoHelpFunctions::GetInt32FromAny(aValue) );
 }
 
 uno::Any SAL_CALL ScCellSearchObj::getPropertyValue( const OUString& aPropertyName )
@@ -166,6 +168,7 @@ uno::Any SAL_CALL ScCellSearchObj::getPropertyValue( const OUString& aPropertyNa
     else if (aPropertyName == SC_UNO_SRCHTYPE)   aRet <<= static_cast<sal_Int16>(pSearchItem->GetCellType());
     else if (aPropertyName == SC_UNO_SRCHFILTERED) aRet <<= pSearchItem->IsSearchFiltered();
     else if (aPropertyName == SC_UNO_SRCHFORMATTED) aRet <<= pSearchItem->IsSearchFormatted();
+    else if (aPropertyName == SC_UNO_SRCHWCESCCHAR) aRet <<= pSearchItem->GetWildcardEscapeCharacter();
 
     return aRet;
 }
@@ -188,9 +191,5 @@ uno::Sequence<OUString> SAL_CALL ScCellSearchObj::getSupportedServiceNames()
 {
     return {SCSEARCHDESCRIPTOR_SERVICE, SCREPLACEDESCRIPTOR_SERVICE};
 }
-
-// XUnoTunnel
-
-UNO3_GETIMPLEMENTATION_IMPL(ScCellSearchObj);
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

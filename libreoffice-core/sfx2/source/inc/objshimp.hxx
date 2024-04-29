@@ -26,6 +26,7 @@
 
 #include <sfx2/objsh.hxx>
 #include <sfx2/docmacromode.hxx>
+#include <sfx2/namedcolor.hxx>
 #include <bitset.hxx>
 #include <vcl/timer.hxx>
 
@@ -94,7 +95,7 @@ struct SfxObjectShell_Impl final : public ::sfx2::IMacroDocumentAccess
                         m_bHadCheckedMacrosOnLoad:1; // if document contained macros (or calls) when loaded
 
     IndexBitSet         aBitSet;
-    ErrCode             lErr;
+    ErrCodeMsg          lErr;
     SfxEventHintId      nEventId;           // If Open/Create as to be sent
                                             // before Activate
     std::unique_ptr<AutoReloadTimer_Impl> pReloadTimer;
@@ -103,7 +104,7 @@ struct SfxObjectShell_Impl final : public ::sfx2::IMacroDocumentAccess
     bool                bModalMode;
     bool                bRunningMacro;
     bool                bReadOnlyUI;
-    tools::SvRef<SvRefBase>  xHeaderAttributes;
+    tools::SvRef<SvKeyValueIterator>  xHeaderAttributes;
     ::rtl::Reference< SfxBaseModel >
                         pBaseModel;
     sal_uInt16          nStyleFilter;
@@ -134,6 +135,9 @@ struct SfxObjectShell_Impl final : public ::sfx2::IMacroDocumentAccess
     /// Holds Infobars until View is fully loaded
     std::vector<InfobarData> m_aPendingInfobars;
 
+    // Recent colors used by toolbar buttons
+    std::unordered_map<sal_uInt16, NamedColor> m_aRecentColors;
+
     SfxObjectShell_Impl( SfxObjectShell& _rDocShell );
     virtual ~SfxObjectShell_Impl();
 
@@ -146,7 +150,8 @@ struct SfxObjectShell_Impl final : public ::sfx2::IMacroDocumentAccess
     virtual css::uno::Reference< css::document::XEmbeddedScripts > getEmbeddedDocumentScripts() const override;
     virtual SignatureState getScriptingSignatureState() override;
 
-    virtual bool hasTrustedScriptingSignature( bool bAllowUIToAddAuthor ) override;
+    virtual bool hasTrustedScriptingSignature(
+        const css::uno::Reference<css::task::XInteractionHandler>& _rxInteraction) override;
 };
 
 #endif

@@ -21,6 +21,7 @@
 
 #include <comphelper/propertyvalue.hxx>
 #include <i18nutil/unicode.hxx>
+#include <svl/voiditem.hxx>
 #include <vcl/commandevent.hxx>
 #include <vcl/event.hxx>
 #include <vcl/svapp.hxx>
@@ -39,6 +40,7 @@
 #include <bitmaps.hlst>
 
 #include <com/sun/star/beans/PropertyValue.hpp>
+#include <com/sun/star/frame/ModuleManager.hpp>
 
 SFX_IMPL_STATUSBAR_CONTROL(SvxZoomStatusBarControl,SvxZoomItem);
 
@@ -49,9 +51,9 @@ class ZoomPopup_Impl
 public:
     ZoomPopup_Impl(weld::Window* pPopupParent, sal_uInt16 nZ, SvxZoomEnableFlags nValueSet);
 
-    sal_uInt16 GetZoom(std::string_view ident) const;
+    sal_uInt16 GetZoom(std::u16string_view ident) const;
 
-    OString popup_at_rect(const tools::Rectangle& rRect)
+    OUString popup_at_rect(const tools::Rectangle& rRect)
     {
         return m_xMenu->popup_at_rect(m_pPopupParent, rRect);
     }
@@ -87,21 +89,21 @@ ZoomPopup_Impl::ZoomPopup_Impl(weld::Window* pPopupParent, sal_uInt16 nZ, SvxZoo
         m_xMenu->set_sensitive("width", false);
 }
 
-sal_uInt16 ZoomPopup_Impl::GetZoom(std::string_view ident) const
+sal_uInt16 ZoomPopup_Impl::GetZoom(std::u16string_view ident) const
 {
     sal_uInt16 nRet = nZoom;
 
-    if (ident == "200")
+    if (ident == u"200")
         nRet = 200;
-    else if (ident == "150")
+    else if (ident == u"150")
         nRet = 150;
-    else if (ident == "100")
+    else if (ident == u"100")
         nRet = 100;
-    else if (ident == "75")
+    else if (ident == u"75")
         nRet =  75;
-    else if (ident == "50")
+    else if (ident == u"50")
         nRet =  50;
-    else if (ident == "optimal" || ident == "width" || ident == "page")
+    else if (ident == u"optimal" || ident == u"width" || ident == u"page")
         nRet = 0;
 
     return nRet;
@@ -166,12 +168,12 @@ void SvxZoomStatusBarControl::Command( const CommandEvent& rCEvt )
         weld::Window* pPopupParent = weld::GetPopupParent(GetStatusBar(), aRect);
         ZoomPopup_Impl aPop(pPopupParent, nZoom, nValueSet);
 
-        OString sIdent = aPop.popup_at_rect(aRect);
+        OUString sIdent = aPop.popup_at_rect(aRect);
         if (!sIdent.isEmpty() && (nZoom != aPop.GetZoom(sIdent) || !nZoom))
         {
             nZoom = aPop.GetZoom(sIdent);
             ImplUpdateItemText();
-            SvxZoomItem aZoom(SvxZoomType::PERCENT, nZoom, GetId());
+            SvxZoomItem aZoom(SvxZoomType::PERCENT, nZoom, TypedWhichId<SvxZoomItem>(GetId()));
 
             if (sIdent == "optimal")
                 aZoom.SetType(SvxZoomType::OPTIMAL);
@@ -203,6 +205,26 @@ SvxZoomPageStatusBarControl::SvxZoomPageStatusBarControl(sal_uInt16 _nSlotId,
     GetStatusBar().SetQuickHelpText(GetId(), SvxResId(RID_SVXSTR_FIT_SLIDE));
 }
 
+void SAL_CALL SvxZoomPageStatusBarControl::initialize( const css::uno::Sequence< css::uno::Any >& aArguments )
+{
+    // Call inherited initialize
+    StatusbarController::initialize(aArguments);
+
+    // Get document type
+    css::uno::Reference< css::frame::XModuleManager2 > xModuleManager = css::frame::ModuleManager::create( m_xContext );
+    OUString aModuleIdentifier = xModuleManager->identify( css::uno::Reference<XInterface>( m_xFrame, css::uno::UnoReference_Query::UNO_QUERY ) );
+
+    // Decide what to show in zoom bar
+    if ( aModuleIdentifier == "com.sun.star.drawing.DrawingDocument" )
+    {
+        GetStatusBar().SetQuickHelpText(GetId(), SvxResId(RID_SVXSTR_FIT_PAGE));
+    }
+    else if ( aModuleIdentifier == "com.sun.star.presentation.PresentationDocument" )
+    {
+        GetStatusBar().SetQuickHelpText(GetId(), SvxResId(RID_SVXSTR_FIT_SLIDE));
+    }
+}
+
 void SvxZoomPageStatusBarControl::Paint(const UserDrawEvent& rUsrEvt)
 {
     vcl::RenderContext* pDev = rUsrEvt.GetRenderContext();
@@ -213,7 +235,7 @@ void SvxZoomPageStatusBarControl::Paint(const UserDrawEvent& rUsrEvt)
 
 bool SvxZoomPageStatusBarControl::MouseButtonDown(const MouseEvent&)
 {
-    SvxZoomItem aZoom( SvxZoomType::WHOLEPAGE, 0, GetId() );
+    SvxZoomItem aZoom( SvxZoomType::WHOLEPAGE, 0, TypedWhichId<SvxZoomItem>(GetId()) );
 
     css::uno::Any a;
     aZoom.QueryValue( a );

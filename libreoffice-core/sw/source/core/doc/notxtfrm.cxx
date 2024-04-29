@@ -651,6 +651,19 @@ double SwNoTextFrame::getLocalFrameRotation() const
     return 0.0;
 }
 
+void SwNoTextFrame::dumpAsXml(xmlTextWriterPtr writer) const
+{
+    (void)xmlTextWriterStartElement(writer, reinterpret_cast<const xmlChar*>("notxt"));
+    dumpAsXmlAttributes(writer);
+
+    (void)xmlTextWriterStartElement(writer, BAD_CAST("infos"));
+    dumpInfosAsXml(writer);
+    (void)xmlTextWriterEndElement(writer);
+    dumpChildrenAsXml(writer);
+
+    (void)xmlTextWriterEndElement(writer);
+}
+
 /** Calculate the Bitmap's site, if needed */
 void SwNoTextFrame::Format( vcl::RenderContext* /*pRenderContext*/, const SwBorderAttrs * )
 {
@@ -742,33 +755,24 @@ void SwNoTextFrame::SwClientNotify(const SwModify& rModify, const SfxHint& rHint
         }
         return;
     }
-    if(dynamic_cast<const sw::PreGraphicArrivedHint*>(&rHint))
+    if(rHint.GetId() == SfxHintId::SwPreGraphicArrived
+            || rHint.GetId() == SfxHintId::SwGraphicPieceArrived
+            || rHint.GetId() == SfxHintId::SwLinkedGraphicStreamArrived)
     {
         OnGraphicArrived();
         return;
     }
-    if (rHint.GetId() != SfxHintId::SwLegacyModify)
+    else if (rHint.GetId() != SfxHintId::SwLegacyModify)
         return;
     auto pLegacy = static_cast<const sw::LegacyModifyHint*>(&rHint);
     sal_uInt16 nWhich = pLegacy->GetWhich();
 
-    // #i73788#
-    // no <SwContentFrame::Modify(..)> for RES_LINKED_GRAPHIC_STREAM_ARRIVED
-    if ( RES_GRAPHIC_PIECE_ARRIVED != nWhich &&
-         RES_LINKED_GRAPHIC_STREAM_ARRIVED != nWhich )
-    {
-        SwContentFrame::SwClientNotify(rModify, rHint);
-    }
+    SwContentFrame::SwClientNotify(rModify, rHint);
 
     bool bComplete = true;
 
     switch( nWhich )
     {
-    case RES_GRAPHIC_PIECE_ARRIVED:
-    case RES_LINKED_GRAPHIC_STREAM_ARRIVED:
-        OnGraphicArrived();
-        return;
-
     case RES_OBJECTDYING:
         break;
 

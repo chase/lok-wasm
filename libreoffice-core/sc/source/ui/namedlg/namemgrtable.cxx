@@ -83,9 +83,17 @@ const ScRangeData* ScRangeManagerTable::findRangeData(const ScRangeNameLine& rLi
 {
     const ScRangeName* pRangeName;
     if (rLine.aScope == maGlobalString)
-        pRangeName = &m_RangeMap.find(OUString(STR_GLOBAL_RANGE_NAME))->second;
+    {
+        const auto iter = m_RangeMap.find(STR_GLOBAL_RANGE_NAME);
+        assert(iter != m_RangeMap.end());
+        pRangeName = &iter->second;
+    }
     else
-        pRangeName = &m_RangeMap.find(rLine.aScope)->second;
+    {
+        const auto iter = m_RangeMap.find(rLine.aScope);
+        assert(iter != m_RangeMap.end());
+        pRangeName = &iter->second;
+    }
 
     return pRangeName->findByUpperName(ScGlobal::getCharClass().uppercase(rLine.aName));
 }
@@ -152,7 +160,9 @@ void ScRangeManagerTable::Init()
             aLine.aScope = itr.first;
         for (const auto& rEntry : rLocalRangeName)
         {
-            if (!rEntry.second->HasType(ScRangeData::Type::Database))
+            // Database and hidden named ranges are not shown in the Manage Names dialog
+            if (!rEntry.second->HasType(ScRangeData::Type::Database)
+                && !rEntry.second->HasType(ScRangeData::Type::Hidden))
             {
                 aLine.aName = rEntry.second->GetName();
                 addEntry(aLine, false);

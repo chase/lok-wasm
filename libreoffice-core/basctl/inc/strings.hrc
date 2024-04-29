@@ -20,7 +20,7 @@
 #ifndef BASCTL_INC_BASIDESH_HRC
 #define BASCTL_INC_BASIDESH_HRC
 
-#define NC_(Context, String) TranslateId(Context, reinterpret_cast<char const *>(u8##String))
+#define NC_(Context, String) TranslateId(Context, u8##String)
 
 #define RID_STR_FILTER_ALLFILES             NC_("RID_STR_FILTER_ALLFILES", "<All>")
 #define RID_STR_NOMODULE                    NC_("RID_STR_NOMODULE", "< No Module >")
@@ -89,7 +89,7 @@
 #define RID_STR_DLGIMP_CLASH_RENAME         NC_("RID_STR_DLGIMP_CLASH_RENAME", "Rename")
 #define RID_STR_DLGIMP_CLASH_REPLACE        NC_("RID_STR_DLGIMP_CLASH_REPLACE", "Replace")
 #define RID_STR_DLGIMP_CLASH_TITLE          NC_("RID_STR_DLGIMP_CLASH_TITLE", "Dialog Import - Name already used")
-#define RID_STR_DLGIMP_CLASH_TEXT           NC_("RID_STR_DLGIMP_CLASH_TEXT", "The library already contains a dialog with the name:\n\n$(ARG1)\n\nRename dialog to keep current dialog or replace existing dialog.\n ")
+#define RID_STR_DLGIMP_CLASH_TEXT           NC_("RID_STR_DLGIMP_CLASH_TEXT", "The library already contains a dialog with the name:\n\n$(ARG1)\n\nChoose “Rename” to give the imported dialog a new automatic name, or “Replace” to overwrite the existing dialog completely.\n ")
 #define RID_STR_DLGIMP_MISMATCH_ADD         NC_("RID_STR_DLGIMP_MISMATCH_ADD", "Add")
 #define RID_STR_DLGIMP_MISMATCH_OMIT        NC_("RID_STR_DLGIMP_MISMATCH_OMIT", "Omit")
 #define RID_STR_DLGIMP_MISMATCH_TITLE       NC_("RID_STR_DLGIMP_MISMATCH_TITLE", "Dialog Import - Language Mismatch")
@@ -110,6 +110,9 @@
 #define RID_STR_EXPORTPACKAGE               NC_("RID_STR_EXPORTPACKAGE", "Export library as extension")
 #define RID_STR_EXPORTBASIC                 NC_("RID_STR_EXPORTBASIC", "Export as BASIC library")
 #define RID_STR_PACKAGE_BUNDLE              NC_("RID_STR_PACKAGE_BUNDLE", "Extension")
+#define RID_STR_READONLY                    NC_("RID_STR_READONLY", "Read-only")
+#define RID_STR_MODULE_READONLY             NC_("RID_STR_READONLY_WARNING", "This module is read-only and cannot be edited.")
+#define RID_STR_DIALOG_READONLY             NC_("RID_STR_READONLY_WARNING", "This dialog is read-only and cannot be edited.")
 
 #endif
 

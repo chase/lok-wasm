@@ -23,6 +23,7 @@
 #include <svl/itemprop.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <comphelper/processfactory.hxx>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/sdbc/ResultSetType.hpp>
 #include <com/sun/star/sdbc/ResultSetConcurrency.hpp>
 #include <com/sun/star/sdbc/SQLException.hpp>
@@ -514,7 +515,7 @@ Reference< XPropertySetInfo >  BibliographyLoader::getPropertySetInfo()
 {
     static const SfxItemPropertyMapEntry aBibProps_Impl[] =
     {
-        { u"BibliographyDataFieldNames", 0, cppu::UnoType<Sequence<PropertyValue>>::get(), PropertyAttribute::READONLY, 0},
+        { u"BibliographyDataFieldNames"_ustr, 0, cppu::UnoType<Sequence<PropertyValue>>::get(), PropertyAttribute::READONLY, 0},
     };
     static Reference< XPropertySetInfo >  xRet =
         SfxItemPropertySet(aBibProps_Impl).getPropertySetInfo();

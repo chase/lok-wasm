@@ -334,9 +334,11 @@ static OUString lcl_xmltble_appendBoxPrefix(std::u16string_view rNamePrefix,
                                                 false );
     const SvXMLAttrContainerItem *pAttCnt = rItemSet.GetItemIfSet( RES_UNKNOWNATR_CONTAINER,
                                                 false );
+    const SvxPrintItem *pHasTextChangesOnly = rItemSet.GetItemIfSet( RES_PRINT, false);
 
     // empty styles have not to be exported
-    if( !pVertOrient && !pBrush && !pBox && !pNumFormat && !pFrameDir && !pAttCnt )
+    if( !pVertOrient && !pBrush && !pBox && !pNumFormat && !pFrameDir && !pAttCnt &&
+        !pHasTextChangesOnly )
     {
         m_rFormatMap.try_emplace(&rFrameFormat); // empty just to enable assert
         return {};
@@ -357,6 +359,7 @@ static OUString lcl_xmltble_appendBoxPrefix(std::u16string_view rNamePrefix,
         const SwTableBoxNumFormat *pTestNumFormat = nullptr;
         const SvxFrameDirectionItem *pTestFrameDir = nullptr;
         const SvXMLAttrContainerItem *pTestAttCnt = nullptr;
+        const SvxPrintItem *pTestHasTextChangesOnly = rItemSet.GetItemIfSet( RES_PRINT, false);
         const SwFrameFormat* pTestFormat = *i;
         const SfxItemSet& rTestSet = pTestFormat->GetAttrSet();
         if( const SwFormatVertOrient* pItem = rTestSet.GetItemIfSet( RES_VERT_ORIENT, false ) )
@@ -443,6 +446,19 @@ static OUString lcl_xmltble_appendBoxPrefix(std::u16string_view rNamePrefix,
 
         }
 
+        if( const SvxPrintItem* pItem = rTestSet.GetItemIfSet( RES_PRINT, false ) )
+        {
+            if( !pHasTextChangesOnly )
+                break;
+
+            pTestHasTextChangesOnly = pItem;
+        }
+        else
+        {
+            if( pHasTextChangesOnly )
+                continue;
+        }
+
         if( pVertOrient &&
             pVertOrient->GetVertOrient() != pTestVertOrient->GetVertOrient() )
             continue;
@@ -460,6 +476,9 @@ static OUString lcl_xmltble_appendBoxPrefix(std::u16string_view rNamePrefix,
             continue;
 
         if( pAttCnt && ( *pAttCnt != *pTestAttCnt ) )
+            continue;
+
+        if( pHasTextChangesOnly && (!pHasTextChangesOnly->GetValue() != !pTestHasTextChangesOnly->GetValue()) )
             continue;
 
         // found!
@@ -537,9 +556,9 @@ void SwXMLExport::ExportTableColumnStyle( const SwXMLTableColumn_Impl& rCol )
     {
         SvXMLElementExport aElem( *this, XML_NAMESPACE_STYLE, XML_STYLE, true,
                                   true );
-        OUStringBuffer sValue;
         if( rCol.GetWidthOpt() )
         {
+            OUStringBuffer sValue;
             GetTwipUnitConverter().convertMeasureToXML( sValue,
                     rCol.GetWidthOpt() );
             AddAttribute( XML_NAMESPACE_STYLE, XML_COLUMN_WIDTH,
@@ -547,10 +566,9 @@ void SwXMLExport::ExportTableColumnStyle( const SwXMLTableColumn_Impl& rCol )
         }
         if( rCol.GetRelWidth() )
         {
-            sValue.append( static_cast<sal_Int32>(rCol.GetRelWidth()) );
-            sValue.append( '*' );
+            OUString sValue = OUString::number(static_cast<sal_Int32>(rCol.GetRelWidth()) ) + "*";
             AddAttribute( XML_NAMESPACE_STYLE, XML_REL_COLUMN_WIDTH,
-                          sValue.makeStringAndClear() );
+                          sValue );
         }
 
         {
@@ -682,18 +700,15 @@ void SwXMLExport::ExportTableLinesAutoStyles( const SwTableLines& rLines,
                     ExportFormat(*pFrameFormat2, XML_TABLE_CELL, std::move(oNew));
                 }
 
-                Reference < XCell > xCell = SwXCell::CreateXCell(
+                rtl::Reference < SwXCell > xCell = SwXCell::CreateXCell(
                                                 const_cast<SwFrameFormat *>(rTableInfo.GetTableFormat()),
                                                   pBox,
                                                  const_cast<SwTable *>(rTableInfo.GetTable()) );
                 if (xCell.is())
                 {
-                    Reference < XText > xText( xCell, UNO_QUERY );
                     if( !rTableInfo.IsBaseSectionValid() )
                     {
-                        Reference<XPropertySet> xCellPropertySet( xCell,
-                                                                 UNO_QUERY );
-                        Any aAny = xCellPropertySet->getPropertyValue("TextSection");
+                        Any aAny = xCell->getPropertyValue("TextSection");
                         Reference < XTextSection > xTextSection;
                         aAny >>= xTextSection;
                         rTableInfo.SetBaseSection( xTextSection );
@@ -704,7 +719,7 @@ void SwXMLExport::ExportTableLinesAutoStyles( const SwTableLines& rLines,
                     {
                         // AUTOSTYLES - not needed anymore if we are currently exporting content.xml
                         GetTextParagraphExport()->collectTextAutoStyles(
-                            xText, rTableInfo.GetBaseSection(), IsShowProgress() );
+                            xCell, rTableInfo.GetBaseSection(), IsShowProgress() );
                     }
                 }
                 else {
@@ -807,14 +822,12 @@ void SwXMLExport::ExportTableBox( const SwTableBox& rBox,
         {
             // start node -> normal cell
             // get cell range for table
-            Reference<XCell> xCell = SwXCell::CreateXCell( const_cast<SwFrameFormat *>(rTableInfo.GetTableFormat()),
+            rtl::Reference<SwXCell> xCell = SwXCell::CreateXCell( const_cast<SwFrameFormat *>(rTableInfo.GetTableFormat()),
                                                             const_cast<SwTableBox *>(&rBox),
                                                             const_cast<SwTable *>(rTableInfo.GetTable()) );
 
             if (xCell.is())
             {
-                Reference<XText> xText( xCell, UNO_QUERY );
-
                 // get formula (and protection)
                 const OUString sCellFormula = xCell->getFormula();
 
@@ -830,45 +843,40 @@ void SwXMLExport::ExportTableBox( const SwTableBox& rBox,
                 }
 
                 // value and format (if NumberFormat != -1)
-                Reference<XPropertySet> xCellPropertySet(xCell,
-                                                        UNO_QUERY);
-                if (xCellPropertySet.is())
+                sal_Int32 nNumberFormat = 0;
+                Any aAny = xCell->getPropertyValue("NumberFormat");
+                aAny >>= nNumberFormat;
+
+                if (static_cast<sal_Int32>(getSwDefaultTextFormat()) == nNumberFormat)
                 {
-                    sal_Int32 nNumberFormat = 0;
-                    Any aAny = xCellPropertySet->getPropertyValue("NumberFormat");
-                    aAny >>= nNumberFormat;
+                    // text format
+                    AddAttribute( XML_NAMESPACE_OFFICE,
+                                XML_VALUE_TYPE, XML_STRING );
+                }
+                else if ( (-1 != nNumberFormat) && !xCell->getString().isEmpty() )
+                {
+                    // number format key:
+                    // (export values only if cell contains text;)
+                    XMLNumberFormatAttributesExportHelper::
+                        SetNumberFormatAttributes(
+                            *this, nNumberFormat, xCell->getValue() );
+                }
+                // else: invalid key; ignore
 
-                    if (static_cast<sal_Int32>(getSwDefaultTextFormat()) == nNumberFormat)
-                    {
-                        // text format
-                        AddAttribute( XML_NAMESPACE_OFFICE,
-                                    XML_VALUE_TYPE, XML_STRING );
-                    }
-                    else if ( (-1 != nNumberFormat) && !xText->getString().isEmpty() )
-                    {
-                        // number format key:
-                        // (export values only if cell contains text;)
-                        XMLNumberFormatAttributesExportHelper::
-                            SetNumberFormatAttributes(
-                                *this, nNumberFormat, xCell->getValue() );
-                    }
-                    // else: invalid key; ignore
+                // cell protection
+                aAny = xCell->getPropertyValue("IsProtected");
+                if (*o3tl::doAccess<bool>(aAny))
+                {
+                    AddAttribute( XML_NAMESPACE_TABLE, XML_PROTECTED,
+                                    XML_TRUE );
+                }
 
-                    // cell protection
-                    aAny = xCellPropertySet->getPropertyValue("IsProtected");
-                    if (*o3tl::doAccess<bool>(aAny))
-                    {
-                        AddAttribute( XML_NAMESPACE_TABLE, XML_PROTECTED,
-                                        XML_TRUE );
-                    }
-
-                    if( !rTableInfo.IsBaseSectionValid() )
-                    {
-                        aAny = xCellPropertySet->getPropertyValue("TextSection");
-                        Reference < XTextSection > xTextSection;
-                        aAny >>= xTextSection;
-                        rTableInfo.SetBaseSection( xTextSection );
-                    }
+                if( !rTableInfo.IsBaseSectionValid() )
+                {
+                    aAny = xCell->getPropertyValue("TextSection");
+                    Reference < XTextSection > xTextSection;
+                    aAny >>= xTextSection;
+                    rTableInfo.SetBaseSection( xTextSection );
                 }
 
                 // export cell element
@@ -876,7 +884,7 @@ void SwXMLExport::ExportTableBox( const SwTableBox& rBox,
                                         XML_TABLE_CELL, true, true );
 
                 // export cell content
-                GetTextParagraphExport()->exportText( xText,
+                GetTextParagraphExport()->exportText( xCell,
                                                     rTableInfo.GetBaseSection(),
                                                     IsShowProgress() );
             }
@@ -1208,8 +1216,7 @@ void SwXMLTextParagraphExport::exportTable(
     OSL_ENSURE( xTextTable.is(), "text table missing" );
     if( xTextTable.is() )
     {
-        Reference<XUnoTunnel> xTableTunnel( rTextContent, UNO_QUERY);
-        SwXTextTable* pXTable = comphelper::getFromUnoTunnel<SwXTextTable>(xTableTunnel);
+        SwXTextTable* pXTable = dynamic_cast<SwXTextTable*>(rTextContent.get());
         if( pXTable )
         {
             SwFrameFormat *const pFormat = pXTable->GetFrameFormat();

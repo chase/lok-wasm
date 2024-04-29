@@ -45,7 +45,6 @@
 #include <com/sun/star/drawing/XShapes.hpp>
 #include <com/sun/star/text/XTextDocument.hpp>
 #include <com/sun/star/text/XTextSectionsSupplier.hpp>
-#include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/document/XDocumentInsertable.hpp>
 
@@ -69,9 +68,6 @@ public:
         : SwModelTestBase("/sw/qa/extras/rtfimport/data/", "Rich Text Format")
     {
     }
-
-protected:
-    AllSettings m_aSavedSettings;
 };
 
 CPPUNIT_TEST_FIXTURE(Test, testN695479)
@@ -273,8 +269,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFdo45182)
     uno::Reference<container::XIndexAccess> xFootnotes = xFootnotesSupplier->getFootnotes();
     uno::Reference<text::XTextRange> xTextRange(xFootnotes->getByIndex(0), uno::UNO_QUERY);
     // Encoding in the footnote was wrong.
-    CPPUNIT_ASSERT_EQUAL(OUString(u"\u017Eivnost\u00ED" SAL_NEWLINE_STRING),
-                         xTextRange->getString());
+    CPPUNIT_ASSERT_EQUAL(u"\u017Eivnost\u00ED" SAL_NEWLINE_STRING ""_ustr, xTextRange->getString());
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testFdo85812)
@@ -401,8 +396,8 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf112211_2)
     // Spacing between the bullet and the actual text was too large.
     // This is now around 269, large old value was 629.
     int nWidth = parseDump("/root/page/body/txt[2]/SwParaPortion/SwLineLayout/"
-                           "child::*[@type='PortionType::TabLeft']",
-                           "width")
+                           "child::*[@type='PortionType::TabLeft']"_ostr,
+                           "width"_ostr)
                      .toInt32();
     CPPUNIT_ASSERT_LESS(300, nWidth);
 }
@@ -444,7 +439,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFdo52052)
     createSwDoc("fdo52052.rtf");
     // Make sure the textframe containing the text "third" appears on the 3rd page.
     CPPUNIT_ASSERT_EQUAL(OUString("third"),
-                         parseDump("/root/page[3]/body/txt/anchored/fly/txt/text()"));
+                         parseDump("/root/page[3]/body/txt/anchored/fly/txt/text()"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testInk)
@@ -743,6 +738,10 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf116265)
     // matching \fi in list definition (and with invalid level numbers).
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0),
                          getProperty<sal_Int32>(getParagraph(2), "ParaFirstLineIndent"));
+
+    const auto& pLayout = parseLayoutDump();
+    // Ensure that there is a tabstop in the pseudo-numbering (numbering::NONE followed by tabstop)
+    assertXPath(pLayout, "//SwFixPortion"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testFdo66565)
@@ -831,7 +830,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFdo68291)
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText = xTextDocument->getText();
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste(u"rtfimport/data/fdo68291-paste.rtf", xEnd);
+    paste(u"rtfimport/data/fdo68291-paste.rtf", "com.sun.star.comp.Writer.RtfFilter", xEnd);
 
     // This was "Standard", causing an unwanted page break on next paste.
     CPPUNIT_ASSERT_EQUAL(uno::Any(),
@@ -850,7 +849,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf105511)
     DefaultLocale::set("ru-RU", batch);
     batch->commit();
     createSwDoc("tdf105511.rtf");
-    getParagraph(1, u"\u0418\u043C\u044F");
+    getParagraph(1, u"\u0418\u043C\u044F"_ustr);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testContSectionPageBreak)
@@ -865,6 +864,8 @@ CPPUNIT_TEST_FIXTURE(Test, testContSectionPageBreak)
                              ->getPropertyValue("PageDescName"));
     // actually not sure how many paragraph there should be between
     // SECOND and THIRD - important is that the page break is on there
+    // (could be either 1 or 2; in Word it's a 2-line paragraph with the 1st
+    // line containing only the page break being ~0 height)
     uno::Reference<text::XTextRange> xParaNext = getParagraph(3);
     CPPUNIT_ASSERT_EQUAL(OUString(), xParaNext->getString());
     //If PageDescName is not empty, a page break / switch to page style is defined
@@ -876,8 +877,56 @@ CPPUNIT_TEST_FIXTURE(Test, testContSectionPageBreak)
     CPPUNIT_ASSERT_EQUAL(uno::Any(),
                          uno::Reference<beans::XPropertySet>(xParaThird, uno::UNO_QUERY_THROW)
                              ->getPropertyValue("PageDescName"));
+    // there is an empty paragraph after THIRD
+    uno::Reference<text::XTextRange> xParaLast = getParagraph(5);
+    CPPUNIT_ASSERT_EQUAL(OUString(), xParaLast->getString());
+    try
+    {
+        getParagraph(6);
+    }
+    catch (container::NoSuchElementException const&)
+    {
+        // does not exist - expected
+    }
 
     CPPUNIT_ASSERT_EQUAL(2, getPages());
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testSectionPageBreak)
+{
+    createSwDoc("section-pagebreak.rtf");
+    uno::Reference<text::XTextRange> xParaSecond = getParagraph(2);
+    CPPUNIT_ASSERT_EQUAL(OUString("SECOND"), xParaSecond->getString());
+    CPPUNIT_ASSERT_EQUAL(style::BreakType_NONE,
+                         getProperty<style::BreakType>(xParaSecond, "BreakType"));
+    CPPUNIT_ASSERT(uno::Any() != getProperty<OUString>(xParaSecond, "PageDescName"));
+    // actually not sure how many paragraph there should be between
+    // SECOND and THIRD - important is that the page break is on there
+    // (could be either 1 or 2; in Word it's a 2-line paragraph with the 1st
+    // line containing only the page break being ~0 height)
+    uno::Reference<text::XTextRange> xParaNext = getParagraph(3);
+    CPPUNIT_ASSERT_EQUAL(OUString(), xParaNext->getString());
+    //If PageDescName is not empty, a page break / switch to page style is defined
+    CPPUNIT_ASSERT_EQUAL(style::BreakType_PAGE_BEFORE,
+                         getProperty<style::BreakType>(xParaNext, "BreakType"));
+    uno::Reference<text::XTextRange> xParaThird = getParagraph(4);
+    CPPUNIT_ASSERT_EQUAL(OUString("THIRD"), xParaThird->getString());
+    CPPUNIT_ASSERT_EQUAL(style::BreakType_NONE,
+                         getProperty<style::BreakType>(xParaThird, "BreakType"));
+    CPPUNIT_ASSERT(uno::Any() != getProperty<OUString>(xParaThird, "PageDescName"));
+    // there is an empty paragraph after THIRD
+    uno::Reference<text::XTextRange> xParaLast = getParagraph(5);
+    CPPUNIT_ASSERT_EQUAL(OUString(), xParaLast->getString());
+    try
+    {
+        getParagraph(6);
+    }
+    catch (container::NoSuchElementException const&)
+    {
+        // does not exist - expected
+    }
+
+    CPPUNIT_ASSERT_EQUAL(4, getPages());
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testBackground)
@@ -1244,7 +1293,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf90260Par)
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText = xTextDocument->getText();
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste(u"rtfimport/data/tdf90260-par.rtf", xEnd);
+    paste(u"rtfimport/data/tdf90260-par.rtf", "com.sun.star.comp.Writer.RtfFilter", xEnd);
     CPPUNIT_ASSERT_EQUAL(2, getParagraphs());
 }
 
@@ -1355,12 +1404,12 @@ CPPUNIT_TEST_FIXTURE(Test, testClassificatonPaste)
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
 
     // Not classified source, not classified destination: OK.
-    paste(u"rtfimport/data/classification-no.rtf", xEnd);
+    paste(u"rtfimport/data/classification-no.rtf", "com.sun.star.comp.Writer.RtfFilter", xEnd);
     CPPUNIT_ASSERT_EQUAL(OUString("classification-no"), getParagraph(2)->getString());
 
     // Classified source, not classified destination: nothing should happen.
     OUString aOld = xText->getString();
-    paste(u"rtfimport/data/classification-yes.rtf", xEnd);
+    paste(u"rtfimport/data/classification-yes.rtf", "com.sun.star.comp.Writer.RtfFilter", xEnd);
     CPPUNIT_ASSERT_EQUAL(aOld, xText->getString());
 }
 
@@ -1429,6 +1478,10 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf78506)
             // This was '0', invalid \levelnumbers wasn't ignored.
             CPPUNIT_ASSERT(rProp.Value.get<OUString>().isEmpty());
     }
+
+    const auto& pLayout = parseLayoutDump();
+    // Ensure that there is a tabstop in the pseudo-numbering (numbering::NONE followed by tabstop)
+    assertXPath(pLayout, "//SwFixPortion"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf117403)
@@ -1547,6 +1600,26 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf115242)
     // deduplication.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(2787),
                          getProperty<sal_Int32>(getParagraph(1), "ParaLeftMargin"));
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testTdf153196)
+{
+    createSwDoc("tdf153196.rtf");
+
+    const auto& pLayout = parseLayoutDump();
+
+    CPPUNIT_ASSERT_EQUAL(4, getPages());
+
+    // TODO: Writer creates an empty page 1 here, which Word does not
+    assertXPath(pLayout, "/root/page[1]/footer"_ostr, 0);
+    assertXPath(pLayout, "/root/page[2]/footer"_ostr, 1);
+    // the first page (2) has a page style applied, which has a follow page
+    // style; the problem was that the follow page style had a footer.
+    assertXPath(pLayout, "/root/page[3]/footer"_ostr, 0);
+    assertXPath(pLayout, "/root/page[4]/footer"_ostr, 1);
+
+    // TODO exporting this, wrongly produces "even" footer from stashed one
+    // TODO importing that, wrongly creates a footer even without evenAndOddHeaders
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDefaultValues)
@@ -1710,6 +1783,60 @@ CPPUNIT_TEST_FIXTURE(Test, testParaStyleBottomMargin)
                          getProperty<style::LineSpacing>(xPara, "ParaLineSpacing").Height);
 }
 
+CPPUNIT_TEST_FIXTURE(Test, test158044Tdf)
+{
+    createSwDoc("tdf158044.rtf");
+
+    {
+        auto xPara(getParagraph(1));
+        auto tabStops = getProperty<uno::Sequence<style::TabStop>>(xPara, "ParaTabStops");
+
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(0), tabStops.getLength());
+    }
+
+    {
+        auto xPara(getParagraph(2));
+        auto fillColor = getProperty<Color>(xPara, "FillColor");
+        auto fillStyle = getProperty<drawing::FillStyle>(xPara, "FillStyle");
+
+        CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_NONE, fillStyle);
+        CPPUNIT_ASSERT_EQUAL(Color(0xffffff), fillColor);
+    }
+
+    {
+        auto xPara(getParagraph(3));
+        auto adjust = getProperty<sal_Int16>(xPara, "ParaAdjust");
+
+        CPPUNIT_ASSERT_EQUAL(sal_Int16(0), adjust);
+    }
+
+    {
+        auto xPara(getParagraph(4));
+        auto tabStops = getProperty<uno::Sequence<style::TabStop>>(xPara, "ParaTabStops");
+
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(2), tabStops.getLength());
+    }
+
+    {
+        auto xPara(getParagraph(5));
+        auto fillColor = getProperty<Color>(xPara, "FillColor");
+        auto fillStyle = getProperty<drawing::FillStyle>(xPara, "FillStyle");
+        auto tabStops = getProperty<uno::Sequence<style::TabStop>>(xPara, "ParaTabStops");
+
+        CPPUNIT_ASSERT_LESS(sal_Int32(2), tabStops.getLength());
+        CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_SOLID, fillStyle);
+        CPPUNIT_ASSERT_EQUAL(Color(0xff0000), fillColor);
+    }
+
+    {
+        auto xPara(getParagraph(6));
+        auto fillStyle = getProperty<drawing::FillStyle>(xPara, "FillStyle");
+        auto tabStops = getProperty<uno::Sequence<style::TabStop>>(xPara, "ParaTabStops");
+
+        CPPUNIT_ASSERT_LESS(sal_Int32(2), tabStops.getLength());
+        CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_NONE, fillStyle);
+    }
+}
 // tests should only be added to rtfIMPORT *if* they fail round-tripping in rtfEXPORT
 
 CPPUNIT_PLUGIN_IMPLEMENT();

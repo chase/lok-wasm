@@ -53,7 +53,11 @@ namespace com::sun::star::embed { class XStorage; }
 
 // Defines the count of chars at which a paragraph read via ASCII/W4W-Reader
 // is forced to wrap. It has to be always greater than 200!!!
-#define MAX_ASCII_PARA 10000
+// Note: since version 4.3, maximum character count changed to 4 GiB from 64 KiB
+// in a paragraph, but because of the other limitations, we set a lower wrap value
+// to get a working text editor e.g. without freezing and crash during loading of
+// a 50 MB text line, or unusably slow editing of a 5 MB text line.
+#define MAX_ASCII_PARA 250000
 
 class SW_DLLPUBLIC SwAsciiOptions
 {
@@ -165,7 +169,7 @@ public:
     SwReader( css::uno::Reference < css::embed::XStorage > , OUString aFilename, SwPaM& );
 
     // The only export interface is SwReader::Read(...)!!!
-    ErrCode Read( const Reader& );
+    ErrCodeMsg Read( const Reader& );
 
     // Ask for glossaries.
     bool HasGlossaries( const Reader& );
@@ -271,7 +275,7 @@ public:
     void setSotStorageRef(const tools::SvRef<SotStorage>& pStgRef) { m_pStorage = pStgRef; };
 
 private:
-    virtual ErrCode Read(SwDoc &, const OUString& rBaseURL, SwPaM &, const OUString &)=0;
+    virtual ErrCodeMsg Read(SwDoc &, const OUString& rBaseURL, SwPaM &, const OUString &)=0;
 
     // Everyone who does not need the streams / storages open
     // has to override the method (W4W!!).
@@ -281,7 +285,7 @@ private:
 class AsciiReader final : public Reader
 {
     friend class SwReader;
-    virtual ErrCode Read( SwDoc &, const OUString& rBaseURL, SwPaM &, const OUString &) override;
+    virtual ErrCodeMsg Read( SwDoc &, const OUString& rBaseURL, SwPaM &, const OUString &) override;
 public:
     AsciiReader(): Reader() {}
 };
@@ -420,10 +424,10 @@ public:
     Writer();
     virtual ~Writer() override;
 
-    virtual ErrCode Write( SwPaM&, SfxMedium&, const OUString* );
-            ErrCode Write( SwPaM&, SvStream&,  const OUString* );
-    virtual ErrCode Write( SwPaM&, const css::uno::Reference < css::embed::XStorage >&, const OUString*, SfxMedium* = nullptr );
-    virtual ErrCode Write( SwPaM&, SotStorage&, const OUString* );
+    virtual ErrCodeMsg Write( SwPaM&, SfxMedium&, const OUString* );
+            ErrCodeMsg Write( SwPaM&, SvStream&,  const OUString* );
+    virtual ErrCodeMsg Write( SwPaM&, const css::uno::Reference < css::embed::XStorage >&, const OUString*, SfxMedium* = nullptr );
+    virtual ErrCodeMsg Write( SwPaM&, SotStorage&, const OUString* );
 
     virtual void SetupFilterOptions(SfxMedium& rMedium);
 
@@ -457,10 +461,6 @@ public:
 
     // Stream-specific routines. Do not use in storage-writer!
 
-    // Optimizing output on stream.
-    static SvStream& OutLong( SvStream& rStrm, tools::Long nVal );
-    static SvStream& OutULong( SvStream& rStrm, sal_uLong nVal );
-
     void SetStream(SvStream *const pStream);
     SvStream& Strm();
 
@@ -478,8 +478,8 @@ protected:
 
     // Create error at call.
     virtual ErrCode WriteStream() override;
-    virtual ErrCode WriteStorage() = 0;
-    virtual ErrCode WriteMedium( SfxMedium& ) = 0;
+    virtual ErrCodeMsg WriteStorage() = 0;
+    virtual ErrCodeMsg WriteMedium( SfxMedium& ) = 0;
 
     using Writer::Write;
 
@@ -488,8 +488,8 @@ public:
 
     virtual bool IsStgWriter() const override;
 
-    virtual ErrCode Write( SwPaM&, const css::uno::Reference < css::embed::XStorage >&, const OUString*, SfxMedium* = nullptr ) override;
-    virtual ErrCode Write( SwPaM&, SotStorage&, const OUString* ) override;
+    virtual ErrCodeMsg Write( SwPaM&, const css::uno::Reference < css::embed::XStorage >&, const OUString*, SfxMedium* = nullptr ) override;
+    virtual ErrCodeMsg Write( SwPaM&, SotStorage&, const OUString* ) override;
 
     SotStorage& GetStorage() const       { return *m_pStg; }
 };
@@ -509,7 +509,7 @@ class SW_DLLPUBLIC SwWriter
     bool m_bWriteAll;
 
 public:
-    ErrCode Write( WriterRef const & rxWriter, const OUString* = nullptr);
+    ErrCodeMsg Write( WriterRef const & rxWriter, const OUString* = nullptr);
 
     SwWriter( SvStream&, SwCursorShell &, bool bWriteAll = false );
     SwWriter( SvStream&, SwDoc & );

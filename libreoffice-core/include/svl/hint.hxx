@@ -117,6 +117,9 @@ enum class SfxHintId {
     SwSectionFrameMoveAndDelete,
     SwNavigatorUpdateTracking,
     SwNavigatorSelectOutlinesWithSelections,
+    SwPreGraphicArrived,
+    SwGraphicPieceArrived,
+    SwLinkedGraphicStreamArrived,
     SwLegacyModify,
     SwCollectTextMarks,
     SwCollectTextTOXMarksForLayout,
@@ -144,6 +147,13 @@ enum class SfxHintId {
     SwDeleteText,
     SwDeleteChar,
     SwSectionHidden,
+    SwTitleChanged,
+    SwDescriptionChanged,
+    SwDocPosUpdate,
+    SwDocPosUpdateAtIndex,
+    SwTableHeadingChange,
+    SwVirtPageNumHint,
+    SwAutoFormatUsedHint,
 
     ThisIsAnSdrHint,
     ThisIsAnSfxEventHint

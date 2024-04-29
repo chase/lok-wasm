@@ -331,6 +331,7 @@ bool SwCursor::IsSelOvr(SwCursorSelOverFlags const eFlags)
     if( pNd->IsContentNode() && !dynamic_cast<SwUnoCursor*>(this) )
     {
         const SwContentFrame* pFrame = static_cast<const SwContentNode*>(pNd)->getLayoutFrame( rDoc.getIDocumentLayoutAccess().GetCurrentLayout() );
+        // ^ null
         if ( (SwCursorSelOverFlags::ChangePos & eFlags)   //allowed to change position if it's a bad one
             && pFrame && pFrame->isFrameAreaDefinitionValid()
             && !pFrame->getFrameArea().Height()     //a bad zero height position
@@ -400,9 +401,16 @@ bool SwCursor::IsSelOvr(SwCursorSelOverFlags const eFlags)
 
         if( !pFrame )
         {
-            DeleteMark();
-            RestoreSavePos();
-            return true; // we need a frame
+            assert(!m_vSavePos.empty());
+            SwContentNode const*const pSaveNode(rNds[m_vSavePos.back().nNode]->GetContentNode());
+            // if the old position already didn't have a frame, allow moving
+            // anyway, hope the caller can handle that
+            if (pSaveNode && pSaveNode->getLayoutFrame(rDoc.getIDocumentLayoutAccess().GetCurrentLayout()))
+            {
+                DeleteMark();
+                RestoreSavePos();
+                return true; // we need a frame
+            }
         }
     }
 
@@ -645,8 +653,11 @@ SetNextCursor:
                 RestoreSavePos();
             return true;
         }
-        else if( pNd->IsTableNode() && aCellStt++ )
+        else if( pNd->IsTableNode() )
+        {
+            ++aCellStt;
             goto GoNextCell;
+        }
 
         bProt = false; // index is now on a content node
         goto SetNextCursor;
@@ -697,8 +708,11 @@ SetPrevCursor:
                 RestoreSavePos();
             return true;
         }
-        else if( pNd->StartOfSectionNode()->IsTableNode() && aCellStt-- )
+        else if( pNd->StartOfSectionNode()->IsTableNode() )
+        {
+            --aCellStt;
             goto GoPrevCell;
+        }
 
         bProt = false; // index is now on a content node
         goto SetPrevCursor;
@@ -899,7 +913,7 @@ static bool lcl_MakeSelFwrd( const SwNode& rSttNd, const SwNode& rEndNd,
 
     rPam.SetMark();
     rPam.GetPoint()->Assign(rEndNd);
-    pCNd = SwNodes::GoPrevious( rPam.GetPoint() );
+    pCNd = SwNodes::GoPrevious(rPam.GetPoint(), true);
     if( !pCNd )
         return false;
     rPam.GetPoint()->AssignEndIndex(*pCNd);
@@ -919,7 +933,7 @@ static bool lcl_MakeSelBkwrd( const SwNode& rSttNd, const SwNode& rEndNd,
     if( !bFirst )
     {
         rPam.GetPoint()->Assign(rSttNd);
-        pCNd = SwNodes::GoPrevious( rPam.GetPoint() );
+        pCNd = SwNodes::GoPrevious(rPam.GetPoint(), true);
         if( !pCNd )
             return false;
         rPam.GetPoint()->AssignEndIndex(*pCNd);
@@ -1423,7 +1437,7 @@ bool SwCursor::SelectWordWT( SwViewShell const * pViewShell, sal_Int16 nWordType
     {
         // Should we select the whole fieldmark?
         const IDocumentMarkAccess* pMarksAccess = GetDoc().getIDocumentMarkAccess( );
-        sw::mark::IFieldmark const*const pMark(pMarksAccess->getFieldmarkFor(*GetPoint()));
+        sw::mark::IFieldmark const*const pMark(pMarksAccess->getInnerFieldmarkFor(*GetPoint()));
         if (pMark && (IDocumentMarkAccess::GetType(*pMark) == IDocumentMarkAccess::MarkType::TEXT_FIELDMARK
                       || IDocumentMarkAccess::GetType(*pMark) == IDocumentMarkAccess::MarkType::DATE_FIELDMARK))
         {
@@ -1680,10 +1694,8 @@ SwCursor::DoSetBidiLevelLeftRight(
         const SwTextNode& rTNd = *rNode.GetTextNode();
         sal_Int32 nPos = GetPoint()->GetContentIndex();
 
-        const SvtCTLOptions& rCTLOptions = SW_MOD()->GetCTLOptions();
-        if ( bVisualAllowed && rCTLOptions.IsCTLFontEnabled() &&
-             SvtCTLOptions::MOVEMENT_VISUAL ==
-             rCTLOptions.GetCTLCursorMovement() )
+        if ( bVisualAllowed && SvtCTLOptions::IsCTLFontEnabled() &&
+             SvtCTLOptions::MOVEMENT_VISUAL == SvtCTLOptions::GetCTLCursorMovement() )
         {
             // for visual cursor travelling (used in bidi layout)
             // we first have to convert the logic to a visual position
@@ -2609,6 +2621,20 @@ bool SwTableCursor::HasReadOnlyBoxSel() const
     for (size_t n = m_SelectedBoxes.size(); n; )
     {
         if (m_SelectedBoxes[--n]->GetFrameFormat()->GetProtect().IsContentProtected())
+        {
+            bRet = true;
+            break;
+        }
+    }
+    return bRet;
+}
+
+bool SwTableCursor::HasHiddenBoxSel() const
+{
+    bool bRet = false;
+    for (size_t n = m_SelectedBoxes.size(); n; )
+    {
+        if (m_SelectedBoxes[--n]->GetFrameFormat()->IsHidden())
         {
             bRet = true;
             break;

@@ -398,8 +398,8 @@
 #define SC_OPCODE_CELL              385
 #define SC_OPCODE_ISPMT             386
 #define SC_OPCODE_HYPERLINK         387
-// free: 388
-// free: 389
+#define SC_OPCODE_X_LOOKUP          388
+#define SC_OPCODE_X_MATCH           389
 #define SC_OPCODE_GET_PIVOT_DATA    390
 #define SC_OPCODE_EUROCONVERT       391
 #define SC_OPCODE_NUMBERVALUE       392
@@ -510,7 +510,10 @@
 #define SC_OPCODE_REGEX             497
 #define SC_OPCODE_FOURIER           498
 #define SC_OPCODE_RANDBETWEEN_NV    499
-#define SC_OPCODE_STOP_2_PAR        500     /* last function with two or more parameters' OpCode + 1 */
+#define SC_OPCODE_FILTER            500
+#define SC_OPCODE_SORT              501
+#define SC_OPCODE_SORTBY            502
+#define SC_OPCODE_STOP_2_PAR        503     /* last function with two or more parameters' OpCode + 1 */
 
 #define SC_OPCODE_STOP_FUNCTION     SC_OPCODE_STOP_2_PAR            /* last function's OpCode + 1 */
 #define SC_OPCODE_LAST_OPCODE_ID    (SC_OPCODE_STOP_FUNCTION - 1)   /* last OpCode */

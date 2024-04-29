@@ -184,15 +184,15 @@ public:
     inline       SwSectionNode *GetSectionNode();
     inline const SwSectionNode *GetSectionNode() const;
 
-    inline bool IsStartNode() const;
-    inline bool IsContentNode() const;
-    inline bool IsEndNode() const;
-    inline bool IsTextNode() const;
-    inline bool IsTableNode() const;
-    inline bool IsSectionNode() const;
-    inline bool IsOLENode() const;
-    inline bool IsNoTextNode() const;
-    inline bool IsGrfNode() const;
+    bool IsStartNode() const { return bool(SwNodeType::Start & m_nNodeType); }
+    bool IsContentNode() const { return bool(SwNodeType::ContentMask & m_nNodeType); }
+    bool IsEndNode() const { return SwNodeType::End == m_nNodeType; }
+    bool IsTextNode() const { return SwNodeType::Text == m_nNodeType; }
+    bool IsTableNode() const { return SwNodeType::Table == m_nNodeType; }
+    bool IsSectionNode() const { return SwNodeType::Section == m_nNodeType; }
+    bool IsOLENode() const { return SwNodeType::Ole == m_nNodeType; }
+    bool IsNoTextNode() const { return bool(SwNodeType::NoTextMask & m_nNodeType); }
+    bool IsGrfNode() const { return SwNodeType::Grf == m_nNodeType; }
 
     /**
        Checks if this node is in redlines.
@@ -336,7 +336,7 @@ public:
         return m_aAccessibilityCheckStatus;
     }
 
-    void resetAndQueueAccessibilityCheck();
+    void resetAndQueueAccessibilityCheck(bool bIssueObjectNameChanged = false);
 
 private:
     SwNode( const SwNode & rNodes ) = delete;
@@ -410,7 +410,7 @@ protected:
 
     /**  Attribute-set for all auto attributes of a ContentNode.
       (e.g. TextNode or NoTextNode). */
-    std::shared_ptr<const SfxItemSet> mpAttrSet;
+    std::shared_ptr<const SwAttrSet> mpAttrSet;
 
     /// Make respective nodes create the specific AttrSets.
     virtual void NewAttrSet( SwAttrPool& ) = 0;
@@ -490,7 +490,7 @@ public:
     /** Does node has already its own auto-attributes?
      Access to SwAttrSet. */
     inline const SwAttrSet &GetSwAttrSet() const;
-    const SwAttrSet *GetpSwAttrSet() const { return static_cast<const SwAttrSet*>(mpAttrSet.get()); }
+    const SwAttrSet *GetpSwAttrSet() const { return mpAttrSet.get(); }
     bool  HasSwAttrSet() const { return mpAttrSet != nullptr; }
 
     virtual SwFormatColl* ChgFormatColl( SwFormatColl* );
@@ -568,6 +568,8 @@ private:
     SwTableNode & operator= ( const SwTableNode & rNode ) = delete;
 };
 
+/// A section node represents the start of a section on the UI, i.e. the container created using
+/// Insert -> Section menu item.
 class SAL_DLLPUBLIC_RTTI SwSectionNode final
     : public SwStartNode
 {
@@ -588,7 +590,7 @@ public:
     const SwSection& GetSection() const { return *m_pSection; }
           SwSection& GetSection()       { return *m_pSection; }
 
-    SwFrame *MakeFrame( SwFrame* );
+    SwFrame* MakeFrame(SwFrame* pSib, bool bHidden);
 
     /** Creates the frms for the SectionNode (i.e. the SectionFrames).
        On default the frames are created until the end of the range.
@@ -631,80 +633,43 @@ private:
 
 inline       SwEndNode   *SwNode::GetEndNode()
 {
-     return SwNodeType::End == m_nNodeType ? static_cast<SwEndNode*>(this) : nullptr;
+     return IsEndNode() ? static_cast<SwEndNode*>(this) : nullptr;
 }
 inline const SwEndNode   *SwNode::GetEndNode() const
 {
-     return SwNodeType::End == m_nNodeType ? static_cast<const SwEndNode*>(this) : nullptr;
+     return IsEndNode() ? static_cast<const SwEndNode*>(this) : nullptr;
 }
 inline       SwStartNode *SwNode::GetStartNode()
 {
-     return SwNodeType::Start & m_nNodeType ? static_cast<SwStartNode*>(this) : nullptr;
+     return IsStartNode() ? static_cast<SwStartNode*>(this) : nullptr;
 }
 inline const SwStartNode *SwNode::GetStartNode() const
 {
-     return SwNodeType::Start & m_nNodeType ? static_cast<const SwStartNode*>(this) : nullptr;
+     return IsStartNode() ? static_cast<const SwStartNode*>(this) : nullptr;
 }
 inline       SwTableNode *SwNode::GetTableNode()
 {
-     return SwNodeType::Table == m_nNodeType ? static_cast<SwTableNode*>(this) : nullptr;
+     return IsTableNode() ? static_cast<SwTableNode*>(this) : nullptr;
 }
 inline const SwTableNode *SwNode::GetTableNode() const
 {
-     return SwNodeType::Table == m_nNodeType ? static_cast<const SwTableNode*>(this) : nullptr;
+     return IsTableNode() ? static_cast<const SwTableNode*>(this) : nullptr;
 }
 inline       SwSectionNode *SwNode::GetSectionNode()
 {
-     return SwNodeType::Section == m_nNodeType ? static_cast<SwSectionNode*>(this) : nullptr;
+     return IsSectionNode() ? static_cast<SwSectionNode*>(this) : nullptr;
 }
 inline const SwSectionNode *SwNode::GetSectionNode() const
 {
-     return SwNodeType::Section == m_nNodeType ? static_cast<const SwSectionNode*>(this) : nullptr;
+     return IsSectionNode() ? static_cast<const SwSectionNode*>(this) : nullptr;
 }
 inline       SwContentNode *SwNode::GetContentNode()
 {
-     return SwNodeType::ContentMask & m_nNodeType ? static_cast<SwContentNode*>(this) : nullptr;
+     return IsContentNode() ? static_cast<SwContentNode*>(this) : nullptr;
 }
 inline const SwContentNode *SwNode::GetContentNode() const
 {
-     return SwNodeType::ContentMask & m_nNodeType ? static_cast<const SwContentNode*>(this) : nullptr;
-}
-
-inline bool SwNode::IsStartNode() const
-{
-    return bool(SwNodeType::Start & m_nNodeType);
-}
-inline bool SwNode::IsContentNode() const
-{
-    return bool(SwNodeType::ContentMask & m_nNodeType);
-}
-inline bool SwNode::IsEndNode() const
-{
-    return SwNodeType::End == m_nNodeType;
-}
-inline bool SwNode::IsTextNode() const
-{
-    return SwNodeType::Text == m_nNodeType;
-}
-inline bool SwNode::IsTableNode() const
-{
-    return SwNodeType::Table == m_nNodeType;
-}
-inline bool SwNode::IsSectionNode() const
-{
-    return SwNodeType::Section == m_nNodeType;
-}
-inline bool SwNode::IsNoTextNode() const
-{
-    return bool(SwNodeType::NoTextMask & m_nNodeType);
-}
-inline bool SwNode::IsOLENode() const
-{
-    return SwNodeType::Ole == m_nNodeType;
-}
-inline bool SwNode::IsGrfNode() const
-{
-    return SwNodeType::Grf == m_nNodeType;
+     return IsContentNode() ? static_cast<const SwContentNode*>(this) : nullptr;
 }
 
 inline const SwStartNode* SwNode::FindSttNodeByType( SwStartNodeType eTyp ) const
@@ -725,8 +690,7 @@ inline SwNodeOffset SwNode::StartOfSectionIndex() const
 }
 inline SwNodeOffset SwNode::EndOfSectionIndex() const
 {
-    const SwStartNode* pStNd = IsStartNode() ? static_cast<const SwStartNode*>(this) : m_pStartOfSection;
-    return pStNd->m_pEndOfSection->GetIndex();
+    return EndOfSectionNode()->GetIndex();
 }
 inline const SwEndNode* SwNode::EndOfSectionNode() const
 {

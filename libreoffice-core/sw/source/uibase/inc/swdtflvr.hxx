@@ -29,6 +29,7 @@
 #include <o3tl/deleter.hxx>
 #include <o3tl/typed_flags_set.hxx>
 #include <svx/swframetypes.hxx>
+#include <svl/urlbmk.hxx>
 #include <memory>
 #include <optional>
 
@@ -36,7 +37,6 @@
 
 class Graphic;
 class ImageMap;
-class INetBookmark;
 class INetImage;
 class SfxAbstractPasteDialog;
 class SwDoc;
@@ -73,12 +73,14 @@ enum class PasteTableType
         PASTE_TABLE    // paste table as nested table
 };
 
+class SwTransferDdeLink;
+
 class SW_DLLPUBLIC SwTransferable final : public TransferableHelper
 {
     friend class SwView_Impl;
     SfxObjectShellLock              m_aDocShellRef;
     TransferableObjectDescriptor    m_aObjDesc;
-    tools::SvRef<sfx2::SvBaseLink>  m_xDdeLink;
+    tools::SvRef<SwTransferDdeLink>  m_xDdeLink;
 
     SwWrtShell      *m_pWrtShell;
     /* #96392# Added pCreatorView to distinguish SwFrameShell from
@@ -88,7 +90,7 @@ class SW_DLLPUBLIC SwTransferable final : public TransferableHelper
     std::optional<Graphic>        m_oClpGraphic;
     std::optional<Graphic>        m_oClpBitmap;
     Graphic                         *m_pOrigGraphic;
-    std::unique_ptr<INetBookmark>   m_pBookmark;     // URL and description!
+    std::optional<INetBookmark>     m_oBookmark;     // URL and description!
     std::unique_ptr<ImageMap>       m_pImageMap;
     std::unique_ptr<INetImage>      m_pTargetURL;
 
@@ -239,9 +241,6 @@ public:
 
     // the related SwView is being closed and the SwTransferable is invalid now
     void    Invalidate() {m_pWrtShell = nullptr;}
-    static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
-
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& rId ) override;
 
     static void SelectPasteFormat(TransferableDataHelper& rData, sal_uInt8& nAction,
                                   SotClipboardFormatId& nFormat);

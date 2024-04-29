@@ -50,6 +50,7 @@
 #include <ucbhelper/content.hxx>
 
 #include <comphelper/bytereader.hxx>
+#include <comphelper/diagnose_ex.hxx>
 #include <comphelper/fileformat.h>
 #include <comphelper/hash.hxx>
 #include <comphelper/processfactory.hxx>
@@ -175,47 +176,32 @@ void OStorageHelper::CopyInputToOutput(
 {
     static const sal_Int32 nConstBufferSize = 32000;
 
-    uno::Reference< css::lang::XUnoTunnel > xInputTunnel( xInput, uno::UNO_QUERY );
-    comphelper::ByteReader* pByteReader = nullptr;
-    comphelper::ByteWriter* pByteWriter = nullptr;
-    if (xInputTunnel)
-        pByteReader = reinterpret_cast< comphelper::ByteReader* >( xInputTunnel->getSomething( comphelper::ByteReader::getUnoTunnelId() ) );
-    if (pByteReader)
+    if (auto pByteReader = dynamic_cast< comphelper::ByteReader* >( xInput.get() ))
     {
-        uno::Reference< css::lang::XUnoTunnel > xOutputTunnel( xOutput, uno::UNO_QUERY );
-        if (xOutputTunnel)
-            pByteWriter = reinterpret_cast< comphelper::ByteWriter* >( xOutputTunnel->getSomething( comphelper::ByteWriter::getUnoTunnelId() ) );
-    }
-
-    if (pByteWriter)
-    {
-        sal_Int32 nRead;
-        sal_Int8 aTempBuf[ nConstBufferSize ];
-        do
+        if (auto pByteWriter = dynamic_cast< comphelper::ByteWriter* >( xOutput.get() ))
         {
-            nRead = pByteReader->readSomeBytes ( aTempBuf, nConstBufferSize );
-            pByteWriter->writeBytes ( aTempBuf, nRead );
-        }
-        while ( nRead == nConstBufferSize );
-    }
-    else
-    {
-        sal_Int32 nRead;
-        uno::Sequence < sal_Int8 > aSequence ( nConstBufferSize );
-
-        do
-        {
-            nRead = xInput->readBytes ( aSequence, nConstBufferSize );
-            if ( nRead < nConstBufferSize )
+            sal_Int32 nRead;
+            sal_Int8 aTempBuf[ nConstBufferSize ];
+            do
             {
-                uno::Sequence < sal_Int8 > aTempBuf ( aSequence.getConstArray(), nRead );
-                xOutput->writeBytes ( aTempBuf );
+                nRead = pByteReader->readSomeBytes ( aTempBuf, nConstBufferSize );
+                pByteWriter->writeBytes ( aTempBuf, nRead );
             }
-            else
-                xOutput->writeBytes ( aSequence );
+            while ( nRead == nConstBufferSize );
+            return;
         }
-        while ( nRead == nConstBufferSize );
     }
+
+    sal_Int32 nRead;
+    uno::Sequence < sal_Int8 > aSequence ( nConstBufferSize );
+    do
+    {
+        nRead = xInput->readBytes ( aSequence, nConstBufferSize );
+        if ( nRead < nConstBufferSize )
+            aSequence.realloc( nRead );
+        xOutput->writeBytes ( aSequence );
+    }
+    while ( nRead == nConstBufferSize );
 }
 
 
@@ -403,7 +389,8 @@ uno::Sequence< beans::NamedValue > OStorageHelper::CreatePackageEncryptionData( 
         }
         catch ( uno::Exception& )
         {
-            OSL_ENSURE( false, "Can not create SHA256 digest!" );
+            TOOLS_WARN_EXCEPTION("comphelper", "Can not create SHA256 digest!" );
+            throw; // tdf#159519 DO NOT RETURN SUCCESS
         }
 
         // MS_1252 encoding was used for SO60 document format password encoding,
@@ -460,7 +447,10 @@ uno::Sequence< beans::NamedValue > OStorageHelper::CreateGpgPackageEncryptionDat
 
     // get 32 random chars out of it
     uno::Sequence < sal_Int8 > aVector(32);
-    rtl_random_getBytes( aRandomPool, aVector.getArray(), aVector.getLength() );
+    if (rtl_random_getBytes(aRandomPool, aVector.getArray(), aVector.getLength()) != rtl_Random_E_None)
+    {
+        throw uno::RuntimeException("rtl_random_getBytes failed");
+    }
 
     rtl_random_destroyPool(aRandomPool);
 
@@ -558,16 +548,9 @@ uno::Sequence< beans::NamedValue > OStorageHelper::CreateGpgPackageEncryptionDat
 
 bool OStorageHelper::IsValidZipEntryFileName( std::u16string_view aName, bool bSlashAllowed )
 {
-    return IsValidZipEntryFileName( aName.data(), aName.size(), bSlashAllowed );
-}
-
-
-bool OStorageHelper::IsValidZipEntryFileName(
-    const sal_Unicode *pChar, sal_Int32 nLength, bool bSlashAllowed )
-{
-    for ( sal_Int32 i = 0; i < nLength; i++ )
+    for ( size_t i = 0; i < aName.size(); i++ )
     {
-        switch ( pChar[i] )
+        switch ( aName[i] )
         {
             case '\\':
             case '?':
@@ -582,7 +565,7 @@ bool OStorageHelper::IsValidZipEntryFileName(
                     return false;
                 break;
             default:
-                if ( pChar[i] < 32  || (pChar[i] >= 0xD800 && pChar[i] <= 0xDFFF) )
+                if ( aName[i] < 32  || (aName[i] >= 0xD800 && aName[i] <= 0xDFFF) )
                     return false;
         }
     }

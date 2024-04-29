@@ -68,7 +68,7 @@ namespace o3tl {
     template<> struct typed_flags<FileDialogFlags> : is_typed_flags<FileDialogFlags, 0xFF> {};
 }
 
-inline constexpr OUStringLiteral FILEDIALOG_FILTER_ALL = u"*.*";
+inline constexpr OUString FILEDIALOG_FILTER_ALL = u"*.*"_ustr;
 
 namespace sfx2 {
 
@@ -123,7 +123,6 @@ public:
         SignatureLine,
         TemplateImport,
         WriterCreateAddressList,
-        WriterInsertDoc,
         WriterInsertImage,
         WriterInsertScript,
         WriterExport,

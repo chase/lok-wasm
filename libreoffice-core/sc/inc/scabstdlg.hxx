@@ -43,6 +43,7 @@ class ScTabViewShell;
 class ScConditionalFormat;
 class ScConditionalFormatList;
 class Date;
+class SdrView;
 enum class CreateNameFlags;
 enum class CellShiftDisabledFlags;
 
@@ -54,7 +55,7 @@ public:
     virtual ~ScAsyncTabController() = default;
     virtual bool  StartExecuteAsync(VclAbstractDialog::AsyncContext &rCtx) = 0;
     virtual const SfxItemSet*   GetOutputItemSet() const = 0;
-    virtual void                SetCurPageId( const OString &rName ) = 0;
+    virtual void                SetCurPageId( const OUString &rName ) = 0;
 };
 
 class AbstractScImportAsciiDlg : public VclAbstractDialog
@@ -350,7 +351,7 @@ protected:
     virtual             ~AbstractScShowTabDlg() override = default;
 public:
     virtual void Insert( const OUString& rString, bool bSelected ) = 0;
-    virtual void SetDescription(const OUString& rTitle, const OUString& rFixedText, const OString& nDlgHelpId, const OString& nLbHelpId ) = 0;
+    virtual void SetDescription(const OUString& rTitle, const OUString& rFixedText, const OUString& nDlgHelpId, const OUString& nLbHelpId ) = 0;
     virtual std::vector<sal_Int32> GetSelectedRows() const = 0;
     virtual OUString GetEntry(sal_Int32 nPos) const = 0;
 };
@@ -393,6 +394,7 @@ protected:
 public:
     virtual LanguageType GetLanguageType() const = 0;
     virtual bool IsDateConversionSet() const = 0;
+    virtual bool IsScientificConversionSet() const = 0;
     virtual bool IsKeepAskingSet() const = 0;
 };
 
@@ -403,7 +405,7 @@ protected:
 public:
     virtual void Insert( const OUString& rString, bool bSelected ) = 0;
     virtual void SetDescription(const OUString& rTitle, const OUString& rEntryLabel, const OUString& rListLabel,
-                                const OString& rDlgHelpId, const OString& rEnHelpId, const OString& rLbHelpId) = 0;
+                                const OUString& rDlgHelpId, const OUString& rEnHelpId, const OUString& rLbHelpId) = 0;
     virtual OUString GetSelectedEntry() const = 0;
 };
 
@@ -472,7 +474,7 @@ public:
     virtual VclPtr<AbstractScLinkedAreaDlg> CreateScLinkedAreaDlg(weld::Widget* pParent) = 0;
 
     virtual VclPtr<AbstractScMetricInputDlg> CreateScMetricInputDlg(weld::Window* pParent,
-                                                                const OString&  sDialogName,
+                                                                const OUString&  sDialogName,
                                                                 tools::Long            nCurrent,
                                                                 tools::Long            nDefault,
                                                                 FieldUnit       eFUnit,
@@ -523,8 +525,8 @@ public:
                                                                     const OUString& rTitle,
                                                                     const OUString& rEditTitle,
                                                                     const OUString& rDefault,
-                                                                    const OString& rHelpId,
-                                                                    const OString& rEditHelpId) = 0;
+                                                                    const OUString& rHelpId,
+                                                                    const OUString& rEditHelpId) = 0;
 
     virtual VclPtr<AbstractScTabBgColorDlg> CreateScTabBgColorDlg(weld::Window* pParent,
                                                                   const OUString& rTitle, //Dialog Title
@@ -550,6 +552,10 @@ public:
     virtual VclPtr<SfxAbstractTabDialog> CreateScStyleDlg(weld::Window* pParent,
                                                           SfxStyleSheetBase&  rStyleBase,
                                                           bool bPage /*true : page, false: para*/) = 0;
+
+    virtual VclPtr<SfxAbstractTabDialog> CreateScDrawStyleDlg(weld::Window* pParent,
+                                                              SfxStyleSheetBase& rStyleBase,
+                                                              SdrView* pView) = 0;
 
     virtual VclPtr<SfxAbstractTabDialog> CreateScSubTotalDlg(weld::Window* pParent,
                                                              const SfxItemSet& rArgSet) = 0;

@@ -38,11 +38,8 @@
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno ;
 using namespace ::com::sun::star::lang ;
-using ::com::sun::star::lang::XMultiServiceFactory ;
-using ::com::sun::star::lang::XSingleServiceFactory ;
 
 using ::com::sun::star::xml::wrapper::XXMLElementWrapper ;
-using ::com::sun::star::xml::wrapper::XXMLDocumentWrapper ;
 using ::com::sun::star::xml::crypto::XSecurityEnvironment ;
 using ::com::sun::star::xml::crypto::XXMLSignature ;
 using ::com::sun::star::xml::crypto::XXMLSignatureTemplate ;
@@ -102,8 +99,7 @@ SAL_CALL XMLSignature_MSCryptImpl::generate(
         throw RuntimeException() ;
 
     //Get Keys Manager
-    Reference< XUnoTunnel > xSecTunnel( aEnvironment , UNO_QUERY_THROW ) ;
-    SecurityEnvironment_MSCryptImpl* pSecEnv = comphelper::getFromUnoTunnel<SecurityEnvironment_MSCryptImpl>(xSecTunnel);
+    SecurityEnvironment_MSCryptImpl* pSecEnv = dynamic_cast<SecurityEnvironment_MSCryptImpl*>(aEnvironment.get());
     if( pSecEnv == nullptr )
         throw RuntimeException() ;
 
@@ -113,8 +109,7 @@ SAL_CALL XMLSignature_MSCryptImpl::generate(
         throw RuntimeException() ;
     }
 
-    Reference< XUnoTunnel > xNodTunnel( xElement , UNO_QUERY_THROW ) ;
-    XMLElementWrapper_XmlSecImpl* pElement = comphelper::getFromUnoTunnel<XMLElementWrapper_XmlSecImpl>(xNodTunnel);
+    XMLElementWrapper_XmlSecImpl* pElement = dynamic_cast<XMLElementWrapper_XmlSecImpl*>(xElement.get());
     if( pElement == nullptr ) {
         throw RuntimeException() ;
     }
@@ -191,8 +186,7 @@ SAL_CALL XMLSignature_MSCryptImpl::validate(
     Reference< XSecurityEnvironment > xSecEnv
         = aSecurityCtx->getSecurityEnvironmentByIndex(
             aSecurityCtx->getDefaultSecurityEnvironmentIndex());
-    Reference< XUnoTunnel > xSecTunnel( xSecEnv , UNO_QUERY_THROW ) ;
-    SecurityEnvironment_MSCryptImpl* pSecEnv = comphelper::getFromUnoTunnel<SecurityEnvironment_MSCryptImpl>(xSecTunnel);
+    SecurityEnvironment_MSCryptImpl* pSecEnv = dynamic_cast<SecurityEnvironment_MSCryptImpl*>(xSecEnv.get());
     if( pSecEnv == nullptr )
         throw RuntimeException() ;
 
@@ -201,8 +195,7 @@ SAL_CALL XMLSignature_MSCryptImpl::validate(
     if( !xElement.is() )
         throw RuntimeException() ;
 
-    Reference< XUnoTunnel > xNodTunnel( xElement , UNO_QUERY_THROW ) ;
-    XMLElementWrapper_XmlSecImpl* pElement = comphelper::getFromUnoTunnel<XMLElementWrapper_XmlSecImpl>(xNodTunnel);
+    XMLElementWrapper_XmlSecImpl* pElement = dynamic_cast<XMLElementWrapper_XmlSecImpl*>(xElement.get());
     if( pElement == nullptr )
         throw RuntimeException() ;
 

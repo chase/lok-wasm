@@ -21,10 +21,10 @@
 #define INCLUDED_VCL_ACCESSIBLETABLE_HXX
 
 #include <tools/gen.hxx>
-
 #include <com/sun/star/uno/Reference.hxx>
+#include <com/sun/star/accessibility/XAccessible.hpp>
+#include <cppuhelper/implbase.hxx>
 
-namespace com::sun::star::accessibility { class XAccessible; }
 namespace vcl { class Window; }
 
 namespace vcl::table
@@ -32,15 +32,15 @@ namespace vcl::table
 
 typedef sal_Int32   RowPos;
 
-enum AccessibleTableControlObjType
+enum class AccessibleTableControlObjType
 {
-    TCTYPE_GRIDCONTROL,           /// The GridControl itself.
-    TCTYPE_TABLE,               /// The data table.
-    TCTYPE_ROWHEADERBAR,        /// The row header bar.
-    TCTYPE_COLUMNHEADERBAR,     /// The horizontal column header bar.
-    TCTYPE_TABLECELL,           /// A cell of the data table.
-    TCTYPE_ROWHEADERCELL,       /// A cell of the row header bar.
-    TCTYPE_COLUMNHEADERCELL,    /// A cell of the column header bar.
+    GRIDCONTROL,         /// The GridControl itself.
+    TABLE,               /// The data table.
+    ROWHEADERBAR,        /// The row header bar.
+    COLUMNHEADERBAR,     /// The horizontal column header bar.
+    TABLECELL,           /// A cell of the data table.
+    ROWHEADERCELL,       /// A cell of the row header bar.
+    COLUMNHEADERCELL,    /// A cell of the column header bar.
 };
 
 
@@ -73,7 +73,8 @@ public:
             AccessibleTableControlObjType eObjType ) const= 0;
 
     // Window
-    virtual tools::Rectangle GetWindowExtentsRelative(const vcl::Window *pRelativeWindow) const = 0;
+    virtual AbsoluteScreenPixelRectangle GetWindowExtentsAbsolute() const = 0;
+    virtual tools::Rectangle GetWindowExtentsRelative(const vcl::Window& rRelativeWindow) const = 0;
     virtual void GrabFocus()= 0;
     virtual css::uno::Reference< css::accessibility::XAccessible > GetAccessible()= 0;
     virtual vcl::Window* GetAccessibleParentWindow() const= 0;
@@ -107,18 +108,9 @@ protected:
 
 /** interface for an implementation of a table control's Accessible component
 */
-class IAccessibleTableControl
+class IAccessibleTableControl : public ::cppu::WeakImplHelper< css::accessibility::XAccessible >
 {
 public:
-    /** returns the XAccessible object itself
-
-        The reference returned here can be used to control the life time of the
-        IAccessibleTableImplementation object.
-
-        The returned reference is guaranteed to not be <NULL/>.
-    */
-    virtual css::uno::Reference< css::accessibility::XAccessible >
-        getMyself() = 0;
 
     /** disposes the accessible implementation, so that it becomes defunc
     */

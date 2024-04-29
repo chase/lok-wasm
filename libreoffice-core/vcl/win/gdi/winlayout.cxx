@@ -83,7 +83,7 @@ bool ExTextOutRenderer::operator()(GenericSalLayout const& rLayout, SalGraphics&
                                    HDC hDC, bool /*bRenderingModeNatural*/)
 {
     int nStart = 0;
-    DevicePoint aPos;
+    basegfx::B2DPoint aPos;
     const GlyphItem* pGlyph;
     const WinFontInstance* pWinFont = static_cast<const WinFontInstance*>(&rLayout.GetFont());
     UINT nTextAlign = GetTextAlign(hDC);
@@ -135,7 +135,6 @@ WinFontInstance::WinFontInstance(const WinFontFace& rPFF, const vcl::font::FontS
     : LogicalFontInstance(rPFF, rFSP)
     , m_pGraphics(nullptr)
     , m_hFont(nullptr)
-    , m_fScale(1.0f)
     , m_bIsCJKVerticalFont(false)
     , m_nTmDescent(0)
 {
@@ -226,7 +225,7 @@ void WinSalGraphics::DrawTextLayout(const GenericSalLayout& rLayout)
     // DWrite text renderer performs vertical writing better except printing.
     const bool bVerticalScreenText
         = !mbPrinter && rLayout.GetFont().GetFontSelectPattern().mbVertical;
-    const bool bRenderingModeNatural = rLayout.GetTextRenderModeForResolutionIndependentLayout();
+    const bool bRenderingModeNatural = rLayout.GetSubpixelPositioning();
     const bool bUseDWrite = bVerticalScreenText || bRenderingModeNatural;
     DrawTextLayout(rLayout, hDC, bUseDWrite, bRenderingModeNatural);
 

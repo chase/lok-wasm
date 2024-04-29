@@ -26,6 +26,7 @@
 #include <rtl/character.hxx>
 #include <sal/log.hxx>
 #include <unicode/ucsdet.h>
+#include <unotools/configmgr.hxx>
 
 #include <vector>
 
@@ -77,10 +78,12 @@ SvParser<T>::SvParser( SvStream& rIn, sal_uInt8 nStackSize )
     : rInput( rIn )
     , nlLineNr( 1 )
     , nlLinePos( 1 )
+    , nConversionErrors( 0 )
     , pImplData( nullptr )
     , m_nTokenIndex(0)
     , nTokenValue( 0 )
     , bTokenHasValue( false )
+    , bFuzzing(utl::ConfigManager::IsFuzzing())
     , eState( SvParserState::NotStarted )
     , eSrcEnc( RTL_TEXTENCODING_DONTKNOW )
     , nNextChPos(0)
@@ -336,6 +339,7 @@ sal_uInt32 SvParser<T>::GetNextChar()
                                     // do
                                     c = '?';
                                     nChars = 1;
+                                    ++nConversionErrors;
                                 }
                             }
                         }
@@ -382,6 +386,7 @@ sal_uInt32 SvParser<T>::GetNextChar()
                                     c = reinterpret_cast<unsigned char&>( sBuffer[0] );
                                     rInput.SeekRel( -(nLen-1) );
                                     nChars = 1;
+                                    ++nConversionErrors;
                                 }
                             }
                         }
@@ -403,7 +408,7 @@ sal_uInt32 SvParser<T>::GetNextChar()
                         // because a conversion is not available, do no conversion at all.
                         c = reinterpret_cast<unsigned char&>( c1 );
                         nChars = 1;
-
+                        ++nConversionErrors;
                     }
                 }
             }
@@ -413,6 +418,12 @@ sal_uInt32 SvParser<T>::GetNextChar()
 
     if ( ! rtl::isUnicodeScalarValue( c ) )
         c = '?' ;
+
+    if (bFuzzing && nConversionErrors > 128)
+    {
+        SAL_WARN("svtools", "SvParser::GetNextChar too many conversion errors while fuzzing, abandoning for performance");
+        bErr = true;
+    }
 
     if( bErr )
     {

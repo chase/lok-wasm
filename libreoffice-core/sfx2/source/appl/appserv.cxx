@@ -188,10 +188,11 @@ namespace
             SfxStringItem aURL(SID_FILE_NAME, ".component:Bibliography/View1");
             SfxStringItem aRef(SID_REFERER, "private:user");
             SfxStringItem aTarget(SID_TARGETNAME, "_blank");
-            const SfxViewFrame* pViewFrame = SfxViewFrame::Current();
-            if ( pViewFrame )
+            if (const SfxViewFrame* pViewFrame = SfxViewFrame::Current())
+            {
                 pViewFrame->GetDispatcher()->ExecuteList(SID_OPENDOC,
                         SfxCallMode::ASYNCHRON, { &aURL, &aRef, &aTarget });
+            }
         }
         catch (const Exception &)
         {
@@ -255,6 +256,13 @@ namespace
         return xFrame;
     }
 
+    Reference<XFrame> GetDocFrame(const SfxRequest& rReq)
+    {
+        const SfxFrameItem* pFrameItem = rReq.GetArg<SfxFrameItem>(SID_DOCFRAME);
+        SfxFrame* pFrame = pFrameItem ? pFrameItem->GetFrame() : nullptr;
+        return pFrame ? pFrame->GetFrameInterface() : nullptr;
+    }
+
     class LicenseDialog : public weld::GenericDialogController
     {
     private:
@@ -272,12 +280,6 @@ namespace
         {
             m_xBtnLicense->connect_clicked( LINK(this, LicenseDialog, LicenseHdl) );
             m_xBtnEula->connect_clicked( LINK(this, LicenseDialog, EulaHdl) );
-        }
-
-        virtual short run() override
-        {
-            short nRet = GenericDialogController::run();
-            return nRet;
         }
     };
 
@@ -331,6 +333,8 @@ weld::Window* SfxRequest::GetFrameWeld() const
 
     Reference<XFrame> xFrame(GetRequestFrame(*this));
     if (!xFrame)
+        xFrame = GetDocFrame(*this);
+    if (!xFrame)
     {
         SAL_WARN("sfx.appl", "no parent for dialogs");
         return nullptr;
@@ -346,7 +350,7 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
         case SID_SETOPTIONS:
         {
             if( rReq.GetArgs() )
-                SetOptions_Impl( *rReq.GetArgs() );
+                SetOptions( *rReq.GetArgs() );
             break;
         }
 
@@ -506,7 +510,7 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
                 if ( pObjSh->IsModified() && !pObjSh->isSaveLocked())
                 {
                     pObjSh->ExecuteSlot( aReq );
-                    const SfxBoolItem *pItem = dynamic_cast<const SfxBoolItem*>( aReq.GetReturnValue()  );
+                    const SfxBoolItem* pItem(dynamic_cast<const SfxBoolItem*>(aReq.GetReturnValue().getItem()));
                     if ( !pItem || !pItem->GetValue() )
                         bOK = false;
                 }
@@ -807,7 +811,7 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
             OUString aCurrentMode;
 
             SfxViewFrame* pViewFrame = SfxViewFrame::Current();
-            if( pViewFrame )
+            if (pViewFrame)
             {
                 xCurrentFrame = pViewFrame->GetFrame().GetFrameInterface();
 
@@ -846,7 +850,7 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
             {
                 // in LOK case we want to apply changes only to the current view
                 if (comphelper::LibreOfficeKit::isActive() &&
-                    pViewFrame != SfxViewShell::Current()->GetViewFrame())
+                    pViewFrame != &SfxViewShell::Current()->GetViewFrame())
                 {
                     pViewFrame = SfxViewFrame::GetNext( *pViewFrame );
                     continue;
@@ -955,8 +959,8 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
                     // Show/Hide the Notebookbar
                     const SfxStringItem pItem(SID_NOTEBOOKBAR, aNewName);
                     pViewFrame->GetDispatcher()->ExecuteList(SID_NOTEBOOKBAR, SfxCallMode::SYNCHRON, {&pItem});
-                    const SfxPoolItem *pNbItem;
-                    pViewFrame->GetDispatcher()->QueryState(SID_NOTEBOOKBAR, pNbItem);
+                    SfxPoolItemHolder aNbItem;
+                    pViewFrame->GetDispatcher()->QueryState(SID_NOTEBOOKBAR, aNbItem);
 
                     // Show toolbars
                     for ( const OUString& rName : std::as_const(aMandatoryToolbars) )
@@ -1093,9 +1097,9 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
         case SID_DEVELOPMENT_TOOLS_DOCKING_WINDOW:
         {
             SfxViewShell* pViewShell = SfxViewShell::Current();
-            SfxViewFrame* pViewFrame = pViewShell->GetViewFrame();
+            SfxViewFrame& rViewFrame = pViewShell->GetViewFrame();
             auto nID = rReq.GetSlot();
-            pViewFrame->ToggleChildWindow(nID);
+            rViewFrame.ToggleChildWindow(nID);
 
             bDone = true;
             break;
@@ -1103,11 +1107,11 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
         case SID_INSPECT_SELECTED_OBJECT:
         {
             SfxViewShell* pViewShell = SfxViewShell::Current();
-            SfxViewFrame* pViewFrame = pViewShell->GetViewFrame();
+            SfxViewFrame& rViewFrame = pViewShell->GetViewFrame();
 
-            pViewFrame->ShowChildWindow(SID_DEVELOPMENT_TOOLS_DOCKING_WINDOW, true);
+            rViewFrame.ShowChildWindow(SID_DEVELOPMENT_TOOLS_DOCKING_WINDOW, true);
 
-            SfxChildWindow* pChild = pViewFrame->GetChildWindow(SID_DEVELOPMENT_TOOLS_DOCKING_WINDOW);
+            SfxChildWindow* pChild = rViewFrame.GetChildWindow(SID_DEVELOPMENT_TOOLS_DOCKING_WINDOW);
             if (!pChild)
                 return;
 
@@ -1128,8 +1132,7 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
         }
         case SID_TOOLBAR_LOCK:
         {
-            SfxViewFrame* pViewFrame = SfxViewFrame::Current();
-            if (pViewFrame)
+            if (SfxViewFrame* pViewFrame = SfxViewFrame::Current())
             {
                 Reference<XFrame> xCurrentFrame;
                 uno::Reference<uno::XComponentContext> xContext
@@ -1265,11 +1268,11 @@ void SfxApplication::MiscState_Impl(SfxItemSet &rSet)
                 case SID_ZOOM_ENTIRE_PAGE:
                 case SID_ZOOM_PAGE_WIDTH:
                     {
-                        SfxObjectShell* pCurrentShell = SfxObjectShell::Current();
+                        SfxObjectShell* pCurrentShell(SfxObjectShell::Current());
 
-                        const SfxPoolItem *pItem;
-                        SfxItemState aState = pCurrentShell ?
-                            pCurrentShell->GetDispatcher()->QueryState(SID_ATTR_ZOOM, pItem) : SfxItemState::DISABLED;
+                        SfxPoolItemHolder aResult;
+                        const SfxItemState aState(pCurrentShell ?
+                            pCurrentShell->GetDispatcher()->QueryState(SID_ATTR_ZOOM, aResult) : SfxItemState::DISABLED);
                         if ( aState == SfxItemState::DISABLED )
                             rSet.DisableItem( nWhich );
                     }
@@ -1323,10 +1326,10 @@ void SfxApplication::MiscState_Impl(SfxItemSet &rSet)
                     auto* pViewShell = SfxViewShell::Current();
                     if (pViewShell)
                     {
-                        auto* pViewFrame = pViewShell->GetViewFrame();
-                        if (pViewFrame && pViewFrame->KnowsChildWindow(nWhich))
+                        auto& rViewFrame = pViewShell->GetViewFrame();
+                        if (rViewFrame.KnowsChildWindow(nWhich))
                         {
-                            rSet.Put(SfxBoolItem(nWhich, pViewFrame->HasChildWindow(nWhich)));
+                            rSet.Put(SfxBoolItem(nWhich, rViewFrame.HasChildWindow(nWhich)));
                             bSuccess = true;
                         }
                     }
@@ -1341,8 +1344,8 @@ void SfxApplication::MiscState_Impl(SfxItemSet &rSet)
                     auto* pViewShell = SfxViewShell::Current();
                     if (pViewShell)
                     {
-                        auto* pViewFrame = pViewShell->GetViewFrame();
-                        if (pViewFrame && pViewFrame->KnowsChildWindow(SID_DEVELOPMENT_TOOLS_DOCKING_WINDOW))
+                        auto& rViewFrame = pViewShell->GetViewFrame();
+                        if (rViewFrame.KnowsChildWindow(SID_DEVELOPMENT_TOOLS_DOCKING_WINDOW))
                         {
                             bSuccess = true;
                         }
@@ -1467,10 +1470,16 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
             const SfxStringItem* pURLItem = rReq.GetArg<SfxStringItem>(SID_OPTIONS_PAGEURL);
             if ( pURLItem )
                 sPageURL = pURLItem->GetValue();
+
+            sal_uInt16 nPageID = 0;
+            const SfxUInt16Item* pIDItem = rReq.GetArg<SfxUInt16Item>(SID_OPTIONS_PAGEID);
+            if (pIDItem)
+                nPageID = pIDItem->GetValue();
+
             Reference <XFrame> xFrame(GetRequestFrame(rReq));
             SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
             VclPtr<VclAbstractDialog> pDlg =
-                pFact->CreateFrameDialog(rReq.GetFrameWeld(), xFrame, rReq.GetSlot(), sPageURL );
+                pFact->CreateFrameDialog(rReq.GetFrameWeld(), xFrame, rReq.GetSlot(), nPageID, sPageURL);
             short nRet = pDlg->Execute();
             pDlg.disposeAndClear();
             SfxViewFrame* pView = SfxViewFrame::GetFirst();
@@ -1485,6 +1494,20 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
                 pView->GetBindings().InvalidateAll(false);
                 pView = SfxViewFrame::GetNext( *pView );
             }
+            break;
+        }
+
+        case SID_OPTIONS_SECURITY:
+        {
+            SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
+            VclPtr<AbstractSecurityOptionsDialog> pDlg =
+                pFact->CreateSvxSecurityOptionsDialog(rReq.GetFrameWeld());
+
+            if (pDlg->Execute() == RET_OK) {
+                pDlg->SetSecurityOptions();
+            }
+
+            pDlg.disposeAndClear();
             break;
         }
 
@@ -1614,8 +1637,7 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
             Reference <XFrame> xFrame(GetRequestFrame(rReq));
             if ( !xFrame.is() )
             {
-                const SfxViewFrame* pViewFrame = SfxViewFrame::Current();
-                if ( pViewFrame )
+                if (const SfxViewFrame* pViewFrame = SfxViewFrame::Current())
                     xFrame = pViewFrame->GetFrame().GetFrameInterface();
             }
 
@@ -1733,7 +1755,7 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
             Reference< uno::XComponentContext > xContext = ::comphelper::getProcessComponentContext();
             Reference< frame::XDispatchProvider > xProv = drawing::ModuleDispatcher::create( xContext );
 
-            OUString aCmd = OUString::createFromAscii( GetInterface()->GetSlot( rReq.GetSlot() )->GetUnoName() );
+            OUString aCmd = GetInterface()->GetSlot( rReq.GetSlot() )->GetUnoName();
             Reference< frame::XDispatchHelper > xHelper( frame::DispatchHelper::create(xContext) );
             Sequence < beans::PropertyValue > aSeq;
             if ( rReq.GetArgs() )
@@ -1753,7 +1775,7 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
             Reference< uno::XComponentContext > xContext = ::comphelper::getProcessComponentContext();
             Reference< frame::XDispatchProvider > xProv = text::ModuleDispatcher::create( xContext );
 
-            OUString aCmd = OUString::createFromAscii( GetInterface()->GetSlot( rReq.GetSlot() )->GetUnoName() );
+            OUString aCmd = GetInterface()->GetSlot( rReq.GetSlot() )->GetUnoName();
             Reference< frame::XDispatchHelper > xHelper( frame::DispatchHelper::create(xContext) );
             Sequence < beans::PropertyValue > aSeq;
             if ( rReq.GetArgs() )

@@ -168,6 +168,9 @@
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">3D Objects</value>
         </prop>
+        <prop oor:name="TooltipLabel" oor:type="xs:string">
+          <value xml:lang="en-US">3D Objects (double click for multi-selection)</value>
+        </prop>
         <prop oor:name="Properties" oor:type="xs:int">
           <value>1</value>
         </prop>
@@ -791,6 +794,9 @@
       </node>
       <node oor:name=".uno:DiaMode" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Sli~de Sorter View</value>
+        </prop>
+        <prop oor:name="ContextLabel" oor:type="xs:string">
           <value xml:lang="en-US">Sli~de Sorter</value>
         </prop>
         <prop oor:name="Properties" oor:type="xs:int">
@@ -883,6 +889,9 @@
       <node oor:name=".uno:ConnectorToolbox" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">Connectors</value>
+        </prop>
+        <prop oor:name="TooltipLabel" oor:type="xs:string">
+          <value xml:lang="en-US">Connectors (double click for multi-selection)</value>
         </prop>
         <prop oor:name="Properties" oor:type="xs:int">
           <value>1</value>
@@ -991,6 +1000,20 @@
           <value>1</value>
         </prop>
       </node>
+      <node oor:name=".uno:ToggleLayerVisibility" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Toggle Layer Visibility</value>
+        </prop>
+        <prop oor:name="ContextLabel" oor:type="xs:string">
+          <value xml:lang="en-US">~Hide Layer</value>
+        </prop>
+        <prop oor:name="PopupLabel" oor:type="xs:string">
+          <value xml:lang="en-US">~Hide Layer (Shift+Click)</value>
+        </prop>
+        <prop oor:name="Properties" oor:type="xs:int">
+          <value>1</value>
+        </prop>
+      </node>
       <node oor:name=".uno:PageMode" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">~Normal</value>
@@ -1086,7 +1109,7 @@
       </node>
       <node oor:name=".uno:DrawingLayout" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
-          <value xml:lang="en-US">Master Page...</value>
+          <value xml:lang="en-US">Change Master Page...</value>
         </prop>
         <prop oor:name="TargetURL" oor:type="xs:string">
           <value>.uno:PresentationLayout</value>
@@ -1882,6 +1905,9 @@
       </node>
       <node oor:name=".uno:NormalMultiPaneGUI" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">~Normal View</value>
+        </prop>
+        <prop oor:name="ContextLabel" oor:type="xs:string">
           <value xml:lang="en-US">~Normal</value>
         </prop>
         <prop oor:name="Properties" oor:type="xs:int">
@@ -1917,6 +1943,17 @@
       <node oor:name=".uno:OptimizeTable" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">Optimize</value>
+        </prop>
+        <prop oor:name="Properties" oor:type="xs:int">
+          <value>1</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:TableTransformDialog" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Table Position and Size</value>
+        </prop>
+        <prop oor:name="TargetURL" oor:type="xs:string">
+          <value>.uno:TransformDialog</value>
         </prop>
         <prop oor:name="Properties" oor:type="xs:int">
           <value>1</value>
@@ -2128,7 +2165,7 @@
       </node>
       <node oor:name=".uno:TextAutoFitToSize" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
-          <value xml:lang="en-US">Autofit Text</value>
+          <value xml:lang="en-US">Shrink text on overflow</value>
         </prop>
       </node>
       <node oor:name=".uno:TaskPaneInsertPage" oor:op="replace">

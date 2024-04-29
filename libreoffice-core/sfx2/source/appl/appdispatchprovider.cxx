@@ -81,7 +81,7 @@ void SfxAppDispatchProvider::initialize(
     if (aArguments.getLength() != 1 || !(aArguments[0] >>= f)) {
         throw css::lang::IllegalArgumentException(
             "SfxAppDispatchProvider::initialize expects one XFrame argument",
-            static_cast<OWeakObject *>(this), 0);
+            getXWeak(), 0);
     }
     m_xFrame = f;
 }
@@ -205,7 +205,7 @@ Sequence< frame::DispatchInformation > SAL_CALL SfxAppDispatchProvider::getConfi
                     if ( pSfxSlot->GetMode() & nMode )
                     {
                         frame::DispatchInformation aCmdInfo;
-                        aCmdInfo.Command = ".uno:" + OUString::createFromAscii(pSfxSlot->GetUnoName());
+                        aCmdInfo.Command = pSfxSlot->GetCommand();
                         aCmdInfo.GroupId = nCommandGroup;
                         aCmdVector.push_back( aCmdInfo );
                     }

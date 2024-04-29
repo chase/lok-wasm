@@ -373,15 +373,18 @@ const basegfx::B2DHomMatrix& SalGraphics::getMirror( const OutputDevice& i_rOutD
     return m_aLastMirror;
 }
 
-bool SalGraphics::SetClipRegion( const vcl::Region& i_rClip, const OutputDevice& rOutDev )
+void SalGraphics::SetClipRegion( const vcl::Region& i_rClip, const OutputDevice& rOutDev )
 {
     if( (m_nLayout & SalLayoutFlags::BiDiRtl) || rOutDev.IsRTLEnabled() )
     {
         vcl::Region aMirror( i_rClip );
         mirror( aMirror, rOutDev );
-        return setClipRegion( aMirror );
+        setClipRegion( aMirror );
     }
-    return setClipRegion( i_rClip );
+    else
+    {
+        setClipRegion( i_rClip );
+    }
 }
 
 void SalGraphics::DrawPixel( tools::Long nX, tools::Long nY, const OutputDevice& rOutDev )
@@ -472,7 +475,7 @@ namespace
     }
 }
 
-bool SalGraphics::DrawPolyPolygon(
+void SalGraphics::DrawPolyPolygon(
     const basegfx::B2DHomMatrix& rObjectToDevice,
     const basegfx::B2DPolyPolygon& i_rPolyPolygon,
     double i_fTransparency,
@@ -484,14 +487,15 @@ bool SalGraphics::DrawPolyPolygon(
         const basegfx::B2DHomMatrix& rMirror(getMirror(i_rOutDev));
         if(!rMirror.isIdentity())
         {
-            return drawPolyPolygon(
+            drawPolyPolygon(
                 rMirror * rObjectToDevice,
                 i_rPolyPolygon,
                 i_fTransparency);
+            return;
         }
     }
 
-    return drawPolyPolygon(
+    drawPolyPolygon(
         rObjectToDevice,
         i_rPolyPolygon,
         i_fTransparency);

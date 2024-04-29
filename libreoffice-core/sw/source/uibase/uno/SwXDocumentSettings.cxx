@@ -126,7 +126,6 @@ enum SwDocumentSettingsPropertyHandles
     HANDLE_TAB_OVERFLOW,
     HANDLE_UNBREAKABLE_NUMBERINGS,
     HANDLE_STYLES_NODEFAULT,
-    HANDLE_FLOATTABLE_NOMARGINS,
     HANDLE_CLIPPED_PICTURES,
     HANDLE_BACKGROUND_PARA_OVER_DRAWINGS,
     HANDLE_EMBED_FONTS,
@@ -156,8 +155,11 @@ enum SwDocumentSettingsPropertyHandles
     HANDLE_HYPHENATE_URLS,
     HANDLE_DO_NOT_BREAK_WRAPPED_TABLES,
     HANDLE_ALLOW_TEXT_AFTER_FLOATING_TABLE_BREAK,
+    HANDLE_JUSTIFY_LINES_WITH_SHRINKING,
     HANDLE_NO_NUMBERING_SHOW_FOLLOWBY,
-    HANDLE_DROP_CAP_PUNCTUATION
+    HANDLE_DROP_CAP_PUNCTUATION,
+    HANDLE_USE_VARIABLE_WIDTH_NBSP,
+    HANDLE_APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH,
 };
 
 }
@@ -205,7 +207,7 @@ static rtl::Reference<MasterPropertySetInfo> lcl_createSettingsInfo()
         { OUString("RedlineProtectionKey"),       HANDLE_CHANGES_PASSWORD,                cppu::UnoType< cppu::UnoSequenceType<sal_Int8> >::get(),           0},
         { OUString("ConsiderTextWrapOnObjPos"),   HANDLE_CONSIDER_WRAP_ON_OBJPOS,         cppu::UnoType<bool>::get(),           0},
         { OUString("IgnoreFirstLineIndentInNumbering"),   HANDLE_IGNORE_FIRST_LINE_INDENT_IN_NUMBERING,         cppu::UnoType<bool>::get(),           0},
-        { OUString("NoGapAfterNoteNumber"),   HANDLE_NO_GAP_AFTER_NOTE_NUMBER, cppu::UnoType<bool>::get(),           0},
+        { u"NoGapAfterNoteNumber"_ustr,   HANDLE_NO_GAP_AFTER_NOTE_NUMBER, cppu::UnoType<bool>::get(),           0},
         { OUString("DoNotJustifyLinesWithManualBreak"),   HANDLE_DO_NOT_JUSTIFY_LINES_WITH_MANUAL_BREAK,         cppu::UnoType<bool>::get(),           0},
         { OUString("DoNotResetParaAttrsForNumFont"),   HANDLE_DO_NOT_RESET_PARA_ATTRS_FOR_NUM_FONT,         cppu::UnoType<bool>::get(),           0},
         { OUString("TableRowKeep"),               HANDLE_TABLE_ROW_KEEP,         cppu::UnoType<bool>::get(),           0},
@@ -230,7 +232,6 @@ static rtl::Reference<MasterPropertySetInfo> lcl_createSettingsInfo()
         { OUString("TabOverflow"), HANDLE_TAB_OVERFLOW, cppu::UnoType<bool>::get(), 0},
         { OUString("UnbreakableNumberings"), HANDLE_UNBREAKABLE_NUMBERINGS, cppu::UnoType<bool>::get(), 0},
         { OUString("StylesNoDefault"), HANDLE_STYLES_NODEFAULT, cppu::UnoType<bool>::get(), 0},
-        { OUString("FloattableNomargins"), HANDLE_FLOATTABLE_NOMARGINS, cppu::UnoType<bool>::get(), 0},
         { OUString("ClippedPictures"), HANDLE_CLIPPED_PICTURES, cppu::UnoType<bool>::get(), 0},
         { OUString("BackgroundParaOverDrawings"), HANDLE_BACKGROUND_PARA_OVER_DRAWINGS, cppu::UnoType<bool>::get(), 0},
         { OUString("EmbedFonts"), HANDLE_EMBED_FONTS, cppu::UnoType<bool>::get(), 0},
@@ -260,8 +261,11 @@ static rtl::Reference<MasterPropertySetInfo> lcl_createSettingsInfo()
         { OUString("HyphenateURLs"), HANDLE_HYPHENATE_URLS, cppu::UnoType<bool>::get(), 0 },
         { OUString("DoNotBreakWrappedTables"), HANDLE_DO_NOT_BREAK_WRAPPED_TABLES, cppu::UnoType<bool>::get(), 0 },
         { OUString("AllowTextAfterFloatingTableBreak"), HANDLE_ALLOW_TEXT_AFTER_FLOATING_TABLE_BREAK, cppu::UnoType<bool>::get(), 0 },
+        { OUString("JustifyLinesWithShrinking"), HANDLE_JUSTIFY_LINES_WITH_SHRINKING, cppu::UnoType<bool>::get(), 0 },
         { OUString("NoNumberingShowFollowBy"), HANDLE_NO_NUMBERING_SHOW_FOLLOWBY, cppu::UnoType<bool>::get(), 0 },
         { OUString("DropCapPunctuation"), HANDLE_DROP_CAP_PUNCTUATION, cppu::UnoType<bool>::get(), 0 },
+        { OUString("UseVariableWidthNBSP"), HANDLE_USE_VARIABLE_WIDTH_NBSP, cppu::UnoType<bool>::get(), 0 },
+        { OUString("ApplyTextAttrToEmptyLineAtEndOfParagraph"), HANDLE_APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH, cppu::UnoType<bool>::get(), 0 },
 
 /*
  * As OS said, we don't have a view when we need to set this, so I have to
@@ -365,7 +369,7 @@ void SwXDocumentSettings::_preSetValues ()
 void SwXDocumentSettings::_setSingleValue( const comphelper::PropertyInfo & rInfo, const uno::Any &rValue )
 {
     if (rInfo.mnAttributes & PropertyAttribute::READONLY)
-        throw PropertyVetoException ("Property is read-only: " + rInfo.maName, static_cast < cppu::OWeakObject * > ( nullptr ) );
+        throw PropertyVetoException ("Property is read-only: " + rInfo.maName);
 
     switch( rInfo.mnHandle )
     {
@@ -856,12 +860,6 @@ void SwXDocumentSettings::_setSingleValue( const comphelper::PropertyInfo & rInf
             mpDoc->getIDocumentSettingAccess().set(DocumentSettingId::STYLES_NODEFAULT, bTmp);
         }
         break;
-        case HANDLE_FLOATTABLE_NOMARGINS:
-        {
-            bool bTmp = *o3tl::doAccess<bool>(rValue);
-            mpDoc->getIDocumentSettingAccess().set(DocumentSettingId::FLOATTABLE_NOMARGINS, bTmp);
-        }
-        break;
         case HANDLE_CLIPPED_PICTURES:
         {
             bool bTmp = *o3tl::doAccess<bool>(rValue);
@@ -1078,6 +1076,16 @@ void SwXDocumentSettings::_setSingleValue( const comphelper::PropertyInfo & rInf
             }
         }
         break;
+        case HANDLE_APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH:
+        {
+            bool bTmp;
+            if (rValue >>= bTmp)
+            {
+                mpDoc->getIDocumentSettingAccess().set(
+                    DocumentSettingId::APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH, bTmp);
+            }
+        }
+        break;
         case HANDLE_DO_NOT_BREAK_WRAPPED_TABLES:
         {
             bool bTmp;
@@ -1098,6 +1106,16 @@ void SwXDocumentSettings::_setSingleValue( const comphelper::PropertyInfo & rInf
             }
         }
         break;
+        case HANDLE_JUSTIFY_LINES_WITH_SHRINKING:
+        {
+            bool bTmp;
+            if (rValue >>= bTmp)
+            {
+                mpDoc->getIDocumentSettingAccess().set(
+                    DocumentSettingId::JUSTIFY_LINES_WITH_SHRINKING, bTmp);
+            }
+        }
+        break;
         case HANDLE_NO_NUMBERING_SHOW_FOLLOWBY:
         {
             bool bTmp;
@@ -1112,6 +1130,14 @@ void SwXDocumentSettings::_setSingleValue( const comphelper::PropertyInfo & rInf
             if (rValue >>= bTmp)
                 mpDoc->getIDocumentSettingAccess().set(
                     DocumentSettingId::DROP_CAP_PUNCTUATION, bTmp);
+        }
+        break;
+        case HANDLE_USE_VARIABLE_WIDTH_NBSP:
+        {
+            bool bTmp;
+            if (rValue >>= bTmp)
+                mpDoc->getIDocumentSettingAccess().set(
+                    DocumentSettingId::USE_VARIABLE_WIDTH_NBSP, bTmp);
         }
         break;
         default:
@@ -1498,11 +1524,6 @@ void SwXDocumentSettings::_getSingleValue( const comphelper::PropertyInfo & rInf
             rValue <<= mpDoc->getIDocumentSettingAccess().get( DocumentSettingId::STYLES_NODEFAULT );
         }
         break;
-        case HANDLE_FLOATTABLE_NOMARGINS:
-        {
-            rValue <<= mpDoc->getIDocumentSettingAccess().get( DocumentSettingId::FLOATTABLE_NOMARGINS );
-        }
-        break;
         case HANDLE_CLIPPED_PICTURES:
         {
             rValue <<= mpDoc->getIDocumentSettingAccess().get( DocumentSettingId::CLIPPED_PICTURES );
@@ -1647,6 +1668,12 @@ void SwXDocumentSettings::_getSingleValue( const comphelper::PropertyInfo & rInf
                 DocumentSettingId::HYPHENATE_URLS);
         }
         break;
+        case HANDLE_APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH:
+        {
+            rValue <<= mpDoc->getIDocumentSettingAccess().get(
+                DocumentSettingId::APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH);
+        }
+        break;
         case HANDLE_DO_NOT_BREAK_WRAPPED_TABLES:
         {
             rValue <<= mpDoc->getIDocumentSettingAccess().get(
@@ -1659,6 +1686,12 @@ void SwXDocumentSettings::_getSingleValue( const comphelper::PropertyInfo & rInf
                 DocumentSettingId::ALLOW_TEXT_AFTER_FLOATING_TABLE_BREAK);
         }
         break;
+        case HANDLE_JUSTIFY_LINES_WITH_SHRINKING:
+        {
+            rValue <<= mpDoc->getIDocumentSettingAccess().get(
+                DocumentSettingId::JUSTIFY_LINES_WITH_SHRINKING);
+        }
+        break;
         case HANDLE_NO_NUMBERING_SHOW_FOLLOWBY:
         {
             rValue <<= mpDoc->getIDocumentSettingAccess().get(
@@ -1669,6 +1702,12 @@ void SwXDocumentSettings::_getSingleValue( const comphelper::PropertyInfo & rInf
         {
             rValue <<= mpDoc->getIDocumentSettingAccess().get(
                 DocumentSettingId::DROP_CAP_PUNCTUATION);
+        }
+        break;
+        case HANDLE_USE_VARIABLE_WIDTH_NBSP:
+        {
+            rValue <<= mpDoc->getIDocumentSettingAccess().get(
+                DocumentSettingId::USE_VARIABLE_WIDTH_NBSP);
         }
         break;
         default:

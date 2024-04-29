@@ -258,6 +258,14 @@ public:
     val getCommandValues(int viewId, std::string command)
     {
         doc_->setView(viewId);
+        desktop::WasmDocumentExtension* ext
+            = static_cast<desktop::WasmDocumentExtension*>(doc_->get());
+
+        if (command == ".uno:PageColor") {
+            return val(ext->getPageColor());
+        } else if (command == ".uno:PageOrientation") {
+            return val(ext->getPageOrientation());
+        }
         return val::u8string(doc_->getCommandValues(command.c_str()));
     }
 
@@ -272,6 +280,10 @@ public:
     uint32_t ref() const { return ref_; }
 
     int32_t getViewId() { return doc_->getView(); }
+
+    int32_t newView() {
+        return doc_->createView();
+    }
 
     val startTileRenderer(int32_t viewId, int32_t tileSize)
     {
@@ -310,6 +322,7 @@ public:
     }
 
     void setCurrentView(int viewId) { doc_->setView(viewId); }
+
 
 private:
     struct DocWithId
@@ -410,5 +423,6 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("dispatchCommand", &DocumentClient::dispatchCommand)
         .function("removeText", &DocumentClient::removeText)
         .function("startTileRenderer", &DocumentClient::startTileRenderer)
-        .function("ref", &DocumentClient::ref);
+        .function("ref", &DocumentClient::ref)
+        .function("newView", &DocumentClient::newView);
 }

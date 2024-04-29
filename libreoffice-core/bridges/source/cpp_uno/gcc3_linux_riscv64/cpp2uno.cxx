@@ -32,6 +32,7 @@
 #include <stdio.h>
 //#include <string.h>
 #include <cstring>
+#include <typeinfo>
 
 using namespace com::sun::star::uno;
 
@@ -356,8 +357,6 @@ cpp2uno_call(bridges::cpp_uno::shared::CppInterfaceProxy* pThis,
                 {
                     case typelib_TypeClass_HYPER:
                     case typelib_TypeClass_UNSIGNED_HYPER:
-                    case typelib_TypeClass_LONG:
-                    case typelib_TypeClass_UNSIGNED_LONG:
                     case typelib_TypeClass_ENUM:
                     case typelib_TypeClass_CHAR:
                     case typelib_TypeClass_SHORT:
@@ -365,6 +364,28 @@ cpp2uno_call(bridges::cpp_uno::shared::CppInterfaceProxy* pThis,
                     case typelib_TypeClass_BOOLEAN:
                     case typelib_TypeClass_BYTE:
                         std::memcpy(pReturn, pUnoReturn, 8);
+                        break;
+                    // Sometimes we need to return a 32 bit integer into a 64 bit integer.
+                    // For example, in pyuno.cxx:PyUNO_bool(), an int(32bit) is returned
+                    // in type Py_ssize_t(64bit)
+                    // We assume that this 32bit int was put in low 32 bit of register a0.
+                    // The bridge may return with high 32 bit uncleaned and compiler might
+                    // directly bind this register to 64 bit variable.
+                    //
+                    // This bug occurs when build pyuno with gcc-12 with -O2.
+                    // https://bugs.documentfoundation.org/show_bug.cgi?id=155937
+                    //
+                    // So we need to clean the high 32 bit in bridge.
+                    case typelib_TypeClass_UNSIGNED_LONG:
+                        std::memset(pReturn + 4, 0x0, 4);
+                        std::memcpy(pReturn, pUnoReturn, 4);
+                        break;
+                    case typelib_TypeClass_LONG:
+                        if (*reinterpret_cast<sal_uInt32*>(pUnoReturn) & 0x80000000)
+                            std::memset(pReturn + 4, 0xFF, 4);
+                        else
+                            std::memset(pReturn + 4, 0x0, 4);
+                        std::memcpy(pReturn, pUnoReturn, 4);
                         break;
                     case typelib_TypeClass_FLOAT:
                         std::memcpy(pReturn, pUnoReturn, 4);
@@ -627,7 +648,7 @@ unsigned char* codeSnippet(unsigned char* code, sal_Int32 functionIndex, sal_Int
 
     /* generate this code */
     /*
-       It is complex to load a 64bit address because uou cannot load
+       It is complex to load a 64bit address because you cannot load
        an unsigned number to register on RISC-V.
        # load functionIndex to t4
              00000eb7       lui  t4,0x0
@@ -709,7 +730,7 @@ void bridges::cpp_uno::shared::VtableFactory::flushCode(unsigned char const* bpt
 
 struct bridges::cpp_uno::shared::VtableFactory::Slot
 {
-    void* fn;
+    void const* fn;
 };
 
 bridges::cpp_uno::shared::VtableFactory::Slot*
@@ -723,6 +744,15 @@ std::size_t bridges::cpp_uno::shared::VtableFactory::getBlockSize(sal_Int32 slot
     return (slotCount + 2) * sizeof(Slot) + slotCount * codeSnippetSize;
 }
 
+namespace
+{
+// Some dummy type whose RTTI is used in the synthesized proxy vtables to make uses of dynamic_cast
+// on such proxy objects not crash:
+struct ProxyRtti
+{
+};
+}
+
 bridges::cpp_uno::shared::VtableFactory::Slot*
 bridges::cpp_uno::shared::VtableFactory::initializeBlock(void* block, sal_Int32 slotCount,
                                                          sal_Int32,
@@ -730,7 +760,7 @@ bridges::cpp_uno::shared::VtableFactory::initializeBlock(void* block, sal_Int32 
 {
     Slot* slots = mapBlockToVtable(block);
     slots[-2].fn = 0; //null
-    slots[-1].fn = 0; //destructor
+    slots[-1].fn = &typeid(ProxyRtti);
     return slots + slotCount;
 }
 

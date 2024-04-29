@@ -20,7 +20,7 @@
 #pragma once
 
 #include <com/sun/star/accessibility/XAccessibleSelection.hpp>
-#include <cppuhelper/implbase2.hxx>
+#include <cppuhelper/implbase.hxx>
 #include <vcl/vclevent.hxx>
 #include <toolkit/awt/vclxaccessiblecomponent.hxx>
 
@@ -38,10 +38,10 @@ namespace accessibility
     /** the class OAccessibleListBoxEntry represents the base class for an accessible object of a listbox entry
     */
     class AccessibleListBox :
-        public cppu::ImplHelper2<
+        public cppu::ImplInheritanceHelper<
+            VCLXAccessibleComponent,
             css::accessibility::XAccessible,
-            css::accessibility::XAccessibleSelection>,
-        public VCLXAccessibleComponent
+            css::accessibility::XAccessibleSelection>
     {
 
         css::uno::Reference< css::accessibility::XAccessible > m_xParent;
@@ -52,7 +52,6 @@ namespace accessibility
     protected:
         // VCLXAccessibleComponent
         virtual void    ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent ) override;
-        virtual void    ProcessWindowChildEvent( const VclWindowEvent& rVclWindowEvent ) override;
         virtual void    FillAccessibleStateSet( sal_Int64& rStateSet ) override;
 
     private:
@@ -75,12 +74,6 @@ namespace accessibility
         virtual ~AccessibleListBox() override;
 
         rtl::Reference<AccessibleListBoxEntry> implGetAccessible(SvTreeListEntry & rEntry);
-
-        // XTypeProvider
-        DECLARE_XTYPEPROVIDER()
-
-        // XInterface
-        DECLARE_XINTERFACE()
 
         // XServiceInfo
         virtual OUString SAL_CALL getImplementationName() override;
@@ -112,7 +105,7 @@ namespace accessibility
         typedef std::unordered_map<SvTreeListEntry*, rtl::Reference<AccessibleListBoxEntry>> MAP_ENTRY;
         MAP_ENTRY m_mapEntry;
 
-        css::uno::Reference< css::accessibility::XAccessible > m_xFocusedChild;
+        rtl::Reference<AccessibleListBoxEntry> m_xFocusedEntry;
 
         accessibility::AccessibleListBoxEntry* GetCurEventEntry( const VclWindowEvent& rVclWindowEvent );
 

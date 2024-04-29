@@ -28,6 +28,7 @@
 #include <memory>
 #include <vector>
 
+class SdrView;
 class SdDrawDocument;
 class SfxMedium;
 class SfxViewFrame;
@@ -54,12 +55,17 @@ class SdPageObjsTLVDropTarget final : public DropTargetHelper
 {
 private:
     weld::TreeView& m_rTreeView;
+    SdrView* m_pSdrView;
+    bool m_bOrderFrontToBack = false;
 
     virtual sal_Int8 AcceptDrop( const AcceptDropEvent& rEvt ) override;
     virtual sal_Int8 ExecuteDrop( const ExecuteDropEvent& rEvt ) override;
 
 public:
     SdPageObjsTLVDropTarget(weld::TreeView& rTreeView);
+
+    void SetDrawView(SdrView* pSdrView) { m_pSdrView = pSdrView; }
+    void SetOrderFrontToBack(bool bSet) { m_bOrderFrontToBack = bSet; }
 };
 
 class SD_DLLPUBLIC SdPageObjsTLV
@@ -78,6 +84,7 @@ private:
     SfxMedium* m_pOwnMedium;
     bool m_bLinkableSelected;
     bool m_bShowAllShapes;
+    bool m_bOrderFrontToBack;
 
     /** This flag controls whether to show all pages.
     */
@@ -95,6 +102,7 @@ private:
      */
     bool m_bNavigationGrabsFocus;
 
+    bool m_bMouseReleased = true; // hack for x11 inplace editing
     bool m_bEditing = false;
 
     SelectionMode m_eSelectionMode;
@@ -167,15 +175,6 @@ public:
     ~SdPageObjsTLV();
 
     bool IsEditingActive() const {return m_bEditing;}
-
-    void start_editing()
-    {
-        std::unique_ptr<weld::TreeIter> xIter(m_xTreeView->make_iterator());
-        if (m_xTreeView->get_cursor(xIter.get()))
-        {
-            m_xTreeView->start_editing(*xIter);
-        }
-    }
 
     void set_sensitive(bool bSensitive)
     {
@@ -326,6 +325,9 @@ public:
     void SetShowAllShapes (const bool bShowAllShapes, const bool bFill);
     bool GetShowAllShapes() const { return m_bShowAllShapes; }
 
+    void SetOrderFrontToBack (const bool bOrderFrontToBack);
+    bool GetOrderFrontToBack() const { return m_bOrderFrontToBack; }
+
     bool IsNavigationGrabsFocus() const { return m_bNavigationGrabsFocus; }
     bool IsEqualToDoc(const SdDrawDocument* pInDoc);
     /// Visits rList recursively and tries to advance rEntry accordingly.
@@ -391,7 +393,12 @@ public:
 
     void InsertEntry(const weld::TreeIter* pParent, const OUString& rId, const OUString &rName, const OUString &rExpander, weld::TreeIter* pEntry = nullptr)
     {
-        m_xTreeView->insert(pParent, -1, &rName, &rId, nullptr, nullptr, false, m_xScratchIter.get());
+        if (pParent)
+            m_xTreeView->insert(pParent, m_bOrderFrontToBack ? 0 : -1, &rName, &rId, nullptr,
+                                nullptr, false, m_xScratchIter.get());
+        else
+            // always append page/slide entry
+            m_xTreeView->insert(nullptr, -1, &rName, &rId, nullptr, nullptr, false, m_xScratchIter.get());
         m_xTreeView->set_image(*m_xScratchIter, rExpander);
         if (pEntry)
             m_xTreeView->copy_iterator(*m_xScratchIter, *pEntry);
@@ -416,7 +423,6 @@ public:
         ::sd::DrawDocShell&     GetDocShell() const { return mrDocShell;}
         NavigatorDragType   GetDragType() const { return meDragType;}
 
-        static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
         static SdPageObjsTransferable* getImplementation( const css::uno::Reference< css::uno::XInterface >& rxData ) noexcept;
         /** Return a temporary transferable data flavor that is used
             internally in the navigator for reordering entries.  Its
@@ -438,8 +444,6 @@ public:
         virtual void      AddSupportedFormats() override;
         virtual bool GetData( const css::datatransfer::DataFlavor& rFlavor, const OUString& rDestDoc ) override;
         virtual void      DragFinished( sal_Int8 nDropAction ) override;
-
-        virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& rId ) override;
     };
 
     friend class SdPageObjsTLV::SdPageObjsTransferable;

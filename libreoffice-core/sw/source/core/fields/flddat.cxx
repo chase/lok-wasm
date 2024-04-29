@@ -63,6 +63,11 @@ SwDateTimeField::SwDateTimeField(SwDateTimeFieldType* pInitType, sal_uInt16 nSub
 
 OUString SwDateTimeField::ExpandImpl(SwRootFrame const*const) const
 {
+    if (getenv("STABLE_FIELDS_HACK"))
+    {
+        const_cast<SwDateTimeField*>(this)->m_nSubType |= FIXEDFLD; //HACK
+    }
+
     double fVal;
 
     if (!(IsFixed()))
@@ -124,13 +129,18 @@ double SwDateTimeField::GetDateTime(SwDoc& rDoc, const DateTime& rDT)
     SvNumberFormatter* pFormatter = rDoc.GetNumberFormatter();
     const Date& rNullDate = pFormatter->GetNullDate();
 
-    double fResult = rDT - DateTime(rNullDate);
+    double fResult = DateTime::Sub(rDT, DateTime(rNullDate));
 
     return fResult;
 }
 
 double SwDateTimeField::GetValue() const
 {
+    if (getenv("STABLE_FIELDS_HACK"))
+    {
+        const_cast<SwDateTimeField*>(this)->m_nSubType |= FIXEDFLD; //HACK
+    }
+
     if (IsFixed())
         return SwValueField::GetValue();
     else

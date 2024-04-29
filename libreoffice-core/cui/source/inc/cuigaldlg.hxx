@@ -39,7 +39,7 @@ class SearchProgress;
 class TakeProgress;
 class TPGalleryThemeProperties;
 
-typedef std::vector< sal_uLong > TokenList_impl;
+typedef std::vector< sal_Int32 > TokenList_impl;
 
 struct FilterEntry
 {
@@ -182,7 +182,7 @@ class GalleryThemeProperties : public SfxTabDialogController
 {
     ExchangeData*   pData;
 
-    virtual void PageCreated(const OString& rId, SfxTabPage &rPage) override;
+    virtual void PageCreated(const OUString& rId, SfxTabPage &rPage) override;
 
 public:
     GalleryThemeProperties(weld::Widget* pParent, ExchangeData* pData, SfxItemSet const * pItemSet);

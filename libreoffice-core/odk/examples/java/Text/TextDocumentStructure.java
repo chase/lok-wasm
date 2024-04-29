@@ -60,7 +60,7 @@ public class TextDocumentStructure {
             Object oDesktop = xMCF.createInstanceWithContext(
                                         "com.sun.star.frame.Desktop", xContext);
 
-            // get the component laoder from the desktop to create a new
+            // get the component loader from the desktop to create a new
             // text document
             com.sun.star.frame.XComponentLoader xCLoader =
                 UnoRuntime.queryInterface(
@@ -186,7 +186,7 @@ public class TextDocumentStructure {
                 UnoRuntime.queryInterface(
                 com.sun.star.beans.XPropertySet.class, xWordCursor );
             xPropertySet.setPropertyValue("CharWeight",
-                             new Float( com.sun.star.awt.FontWeight.BOLD ));
+                             Float.valueOf( com.sun.star.awt.FontWeight.BOLD ));
 
             System.out.println("create example data");
         }

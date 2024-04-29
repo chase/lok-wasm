@@ -366,7 +366,7 @@ void BrowseBox::DrawCursor()
 }
 
 
-sal_uLong BrowseBox::GetColumnWidth( sal_uInt16 nId ) const
+tools::Long BrowseBox::GetColumnWidth( sal_uInt16 nId ) const
 {
 
     sal_uInt16 nItemPos = GetColumnPos( nId );
@@ -1382,7 +1382,7 @@ void BrowseBox::MouseMove( const MouseEvent& rEvt )
     sal_uInt16 nX = 0;
     for ( size_t nCol = 0;
           nCol < mvCols.size() &&
-            ( nX + mvCols[ nCol ]->Width() ) < o3tl::make_unsigned(GetOutputSizePixel().Width());
+            ( nX + mvCols[ nCol ]->Width() ) < GetOutputSizePixel().Width();
           ++nCol )
         // is this column visible?
         if ( mvCols[ nCol ]->IsFrozen() || nCol >= nFirstCol )
@@ -1405,7 +1405,7 @@ void BrowseBox::MouseMove( const MouseEvent& rEvt )
                     nDragX = std::max( rEvt.GetPosPixel().X(), nMinResizeX );
                     tools::Long nDeltaX = nDragX - nResizeX;
                     sal_uInt16 nId = GetColumnId(nResizeCol);
-                    sal_uLong nOldWidth = GetColumnWidth(nId);
+                    tools::Long nOldWidth = GetColumnWidth(nId);
                     nDragX = nOldWidth + nDeltaX + nResizeX - nOldWidth;
 
                     // draw new auxiliary line
@@ -1433,7 +1433,7 @@ void BrowseBox::MouseButtonUp( const MouseEvent & rEvt )
 
         // width changed?
         nDragX = std::max( rEvt.GetPosPixel().X(), nMinResizeX );
-        if ( (nDragX - nResizeX) != static_cast<tools::Long>(mvCols[ nResizeCol ]->Width()) )
+        if ( (nDragX - nResizeX) != mvCols[ nResizeCol ]->Width() )
         {
             // resize column
             tools::Long nMaxX = pDataWin->GetSizePixel().Width();
@@ -1958,9 +1958,15 @@ tools::Rectangle BrowseBox::calcHeaderRect(bool _bIsColumnBar, bool _bOnScreen)
     {
         aTopLeft.setY( GetDataRowHeight() );
         nWidth = GetColumnWidth(0);
-        nHeight = GetWindowExtentsRelative( pParent ).GetHeight() - aTopLeft.Y() - GetControlArea().GetSize().Height();
+        if (pParent)
+            nHeight = GetWindowExtentsRelative( *pParent ).GetHeight() - aTopLeft.Y() - GetControlArea().GetSize().Height();
+        else
+            nHeight = GetWindowExtentsAbsolute().GetHeight() - aTopLeft.Y() - GetControlArea().GetSize().Height();
     }
-    aTopLeft += GetWindowExtentsRelative( pParent ).TopLeft();
+    if (pParent)
+        aTopLeft += GetWindowExtentsRelative( *pParent ).TopLeft();
+    else
+        aTopLeft += Point(GetWindowExtentsAbsolute().TopLeft());
     return tools::Rectangle(aTopLeft,Size(nWidth,nHeight));
 }
 
@@ -1970,7 +1976,11 @@ tools::Rectangle BrowseBox::calcTableRect(bool _bOnScreen)
     if ( !_bOnScreen )
         pParent = GetAccessibleParentWindow();
 
-    tools::Rectangle aRect( GetWindowExtentsRelative( pParent ) );
+    tools::Rectangle aRect;
+    if (pParent)
+        aRect = GetWindowExtentsRelative( *pParent );
+    else
+        aRect = tools::Rectangle(GetWindowExtentsAbsolute());
     tools::Rectangle aRowBar = calcHeaderRect(false, pParent == nullptr);
 
     tools::Long nX = aRowBar.Right() - aRect.Left();
@@ -1980,7 +1990,7 @@ tools::Rectangle BrowseBox::calcTableRect(bool _bOnScreen)
     return tools::Rectangle(aRowBar.TopRight(), Size(aSize.Width() - nX, aSize.Height() - nY - GetBarHeight()) );
 }
 
-tools::Rectangle BrowseBox::GetFieldRectPixelAbs( sal_Int32 _nRowId, sal_uInt16 _nColId, bool /*_bIsHeader*/, bool _bOnScreen )
+tools::Rectangle BrowseBox::GetFieldRectPixel( sal_Int32 _nRowId, sal_uInt16 _nColId, bool /*_bIsHeader*/, bool _bOnScreen )
 {
     vcl::Window* pParent = nullptr;
     if ( !_bOnScreen )
@@ -1989,7 +1999,10 @@ tools::Rectangle BrowseBox::GetFieldRectPixelAbs( sal_Int32 _nRowId, sal_uInt16 
     tools::Rectangle aRect = GetFieldRectPixel(_nRowId,_nColId,_bOnScreen);
 
     Point aTopLeft = aRect.TopLeft();
-    aTopLeft += GetWindowExtentsRelative( pParent ).TopLeft();
+    if (pParent)
+        aTopLeft += GetWindowExtentsRelative( *pParent ).TopLeft();
+    else
+        aTopLeft += Point(GetWindowExtentsAbsolute().TopLeft());
 
     return tools::Rectangle(aTopLeft,aRect.GetSize());
 }

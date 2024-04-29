@@ -23,6 +23,7 @@
 #include <unx/cairotextrender.hxx>
 #include <unx/fc_fontoptions.hxx>
 #include <unx/freetype_glyphcache.hxx>
+#include <unx/gendata.hxx>
 #include <headless/CairoCommon.hxx>
 #include <vcl/svapp.hxx>
 #include <sallayout.hxx>
@@ -175,7 +176,8 @@ namespace {
     };
 }
 
-CairoTextRender::CairoTextRender()
+CairoTextRender::CairoTextRender(CairoCommon& rCairoCommon)
+    : mrCairoCommon(rCairoCommon)
 {
 }
 
@@ -183,12 +185,64 @@ CairoTextRender::~CairoTextRender()
 {
 }
 
-void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalGraphics& rGraphics)
+static void ApplyFont(cairo_t* cr, const CairoFontsCache::CacheId& rId, double nWidth, double nHeight, int nGlyphRotation,
+                      const GenericSalLayout& rLayout)
+{
+    cairo_font_face_t* font_face = CairoFontsCache::FindCachedFont(rId);
+    if (!font_face)
+    {
+        const FontConfigFontOptions *pOptions = rId.mpOptions;
+        FcPattern *pPattern = pOptions->GetPattern();
+        font_face = cairo_ft_font_face_create_for_pattern(pPattern);
+        CairoFontsCache::CacheFont(font_face, rId);
+    }
+    cairo_set_font_face(cr, font_face);
+
+    cairo_set_font_size(cr, nHeight);
+
+    cairo_matrix_t m;
+    cairo_matrix_init_identity(&m);
+
+    if (rLayout.GetOrientation())
+        cairo_matrix_rotate(&m, toRadian(rLayout.GetOrientation()));
+
+    cairo_matrix_scale(&m, nWidth, nHeight);
+
+    if (nGlyphRotation)
+        cairo_matrix_rotate(&m, toRadian(Degree10(nGlyphRotation * 900)));
+
+    const LogicalFontInstance& rInstance = rLayout.GetFont();
+    if (rInstance.NeedsArtificialItalic())
+    {
+        cairo_matrix_t shear;
+        cairo_matrix_init_identity(&shear);
+        shear.xy = -shear.xx * ARTIFICIAL_ITALIC_SKEW;
+        cairo_matrix_multiply(&m, &shear, &m);
+    }
+
+    cairo_set_font_matrix(cr, &m);
+}
+
+static CairoFontsCache::CacheId makeCacheId(const GenericSalLayout& rLayout)
 {
     const FreetypeFontInstance& rInstance = static_cast<FreetypeFontInstance&>(rLayout.GetFont());
     const FreetypeFont& rFont = rInstance.GetFreetypeFont();
 
-    const bool bResolutionIndependentLayoutEnabled = rLayout.GetTextRenderModeForResolutionIndependentLayout();
+    FT_Face aFace = rFont.GetFtFace();
+    CairoFontsCache::CacheId aId;
+    aId.maFace = aFace;
+    aId.mpOptions = rFont.GetFontOptions();
+    aId.mbEmbolden = rInstance.NeedsArtificialBold();
+    aId.mbVerticalMetrics = false;
+
+    return aId;
+}
+
+void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalGraphics& rGraphics)
+{
+    const LogicalFontInstance& rInstance = rLayout.GetFont();
+
+    const bool bSubpixelPositioning = rLayout.GetSubpixelPositioning();
 
     /*
      * It might be ideal to cache surface and cairo context between calls and
@@ -212,7 +266,7 @@ void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalG
     double nXScale, nYScale;
     dl_cairo_surface_get_device_scale(cairo_get_target(cr), &nXScale, &nYScale);
 
-    DevicePoint aPos;
+    basegfx::B2DPoint aPos;
     const GlyphItem* pGlyph;
     const GlyphItem* pPrevGlyph = nullptr;
     int nStart = 0;
@@ -226,7 +280,7 @@ void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalG
         const bool bVertical = pGlyph->IsVertical();
         glyph_extrarotation.push_back(bVertical ? 1 : 0);
 
-        if (bResolutionIndependentLayoutEnabled)
+        if (bSubpixelPositioning)
         {
             // tdf#150507 like skia, even when subpixel rendering pixel, snap y
             if (!bVertical)
@@ -255,7 +309,8 @@ void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalG
         cairo_glyphs.push_back(aGlyph);
     }
 
-    if (cairo_glyphs.empty())
+    const size_t nGlyphs = cairo_glyphs.size();
+    if (!nGlyphs)
         return;
 
     const vcl::font::FontSelectPattern& rFSD = rInstance.GetFontSelectPattern();
@@ -273,7 +328,82 @@ void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalG
         return;
     }
 
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
+    if (nHeight > 8000)
+    {
+        SAL_WARN("vcl", "rendering text would use > 2G Memory: " << nHeight);
+        return;
+    }
+
+    if (nWidth > 2000)
+    {
+        SAL_WARN("vcl", "rendering text would use > 2G Memory: " << nWidth);
+        return;
+    }
+#endif
+
+    clipRegion(cr);
+
+    cairo_set_source_rgba(cr,
+        mnTextColor.GetRed()/255.0,
+        mnTextColor.GetGreen()/255.0,
+        mnTextColor.GetBlue()/255.0,
+        mnTextColor.GetAlpha()/255.0);
+
     int nRatio = nWidth * 10 / nHeight;
+
+    // tdf#132112 excessive stretch of underbrace and overbrace can trigger freetype into an error, which propagates to cairo
+    // and once a cairo surface is in an error state, that cannot be cleared and all subsequent drawing fails, so bodge that
+    // with a high degree of stretch we draw the brace without stretch to a temp surface and stretch that to give a far
+    // poorer visual result, but one that can be rendered.
+    if (nGlyphs == 1 && nRatio > 100 && (cairo_glyphs[0].index == 974 || cairo_glyphs[0].index == 975) &&
+        rFSD.maTargetName == "OpenSymbol" && !glyph_extrarotation.back() && !rLayout.GetOrientation())
+    {
+        CairoFontsCache::CacheId aId = makeCacheId(rLayout);
+
+        ApplyFont(cr, aId, nWidth, nHeight, 0, rLayout);
+        cairo_text_extents_t stretched_extents;
+        cairo_glyph_extents(cr, cairo_glyphs.data(), nGlyphs, &stretched_extents);
+
+        ApplyFont(cr, aId, nHeight, nHeight, 0, rLayout);
+        cairo_text_extents_t unstretched_extents;
+        cairo_glyph_extents(cr, cairo_glyphs.data(), nGlyphs, &unstretched_extents);
+
+        cairo_surface_t *target = cairo_get_target(cr);
+        cairo_surface_t *temp_surface = cairo_surface_create_similar(target, cairo_surface_get_content(target),
+                                                                     unstretched_extents.width, unstretched_extents.height);
+        cairo_t *temp_cr = cairo_create(temp_surface);
+        cairo_glyph_t glyph;
+        glyph.x = -unstretched_extents.x_bearing;
+        glyph.y = -unstretched_extents.y_bearing;
+        glyph.index = cairo_glyphs[0].index;
+
+        ApplyFont(temp_cr, aId, nHeight, nHeight, 0, rLayout);
+
+        cairo_set_source_rgb(temp_cr,
+            mnTextColor.GetRed()/255.0,
+            mnTextColor.GetGreen()/255.0,
+            mnTextColor.GetBlue()/255.0);
+
+        cairo_show_glyphs(temp_cr, &glyph, 1);
+        cairo_destroy(temp_cr);
+
+        cairo_set_source_surface(cr, temp_surface, cairo_glyphs[0].x, cairo_glyphs[0].y + stretched_extents.y_bearing);
+
+        cairo_pattern_t* sourcepattern = cairo_get_source(cr);
+        cairo_matrix_t matrix;
+        cairo_pattern_get_matrix(sourcepattern, &matrix);
+        cairo_matrix_scale(&matrix, unstretched_extents.width / stretched_extents.width, 1);
+        cairo_pattern_set_matrix(sourcepattern, &matrix);
+
+        cairo_rectangle(cr, cairo_glyphs[0].x, cairo_glyphs[0].y + stretched_extents.y_bearing, stretched_extents.width, stretched_extents.height);
+        cairo_fill(cr);
+
+        cairo_surface_destroy(temp_surface);
+
+        return;
+    }
+
     if (nRatio >= 5120)
     {
         // as seen with freetype 2.12.1, so cairo surface status is "fail"
@@ -282,26 +412,21 @@ void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalG
     }
 
 #if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
-    if (nHeight > 8120)
-    {
-        SAL_WARN("vcl", "rendering text would use > 2G Memory: " << nHeight);
-        return;
-    }
-
     if (__lsan_disable)
         __lsan_disable();
 #endif
 
     const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
     const bool bDisableAA = !rStyleSettings.GetUseFontAAFromSystem() && !rGraphics.getAntiAlias();
+    static bool bAllowDefaultHinting = getenv("SAL_ALLOW_DEFAULT_HINTING") != nullptr;
 
     const cairo_font_options_t* pFontOptions = GetSalInstance()->GetCairoFontOptions();
-    if (pFontOptions || bDisableAA || bResolutionIndependentLayoutEnabled)
+    if (pFontOptions || bDisableAA || bSubpixelPositioning)
     {
         cairo_hint_style_t eHintStyle = pFontOptions ? cairo_font_options_get_hint_style(pFontOptions) : CAIRO_HINT_STYLE_DEFAULT;
-        bool bAllowedHintStyle = !bResolutionIndependentLayoutEnabled || (eHintStyle == CAIRO_HINT_STYLE_NONE || eHintStyle == CAIRO_HINT_STYLE_SLIGHT);
+        bool bAllowedHintStyle = !bSubpixelPositioning || bAllowDefaultHinting || (eHintStyle == CAIRO_HINT_STYLE_NONE || eHintStyle == CAIRO_HINT_STYLE_SLIGHT);
 
-        if (bDisableAA || !bAllowedHintStyle || bResolutionIndependentLayoutEnabled)
+        if (bDisableAA || !bAllowedHintStyle || bSubpixelPositioning)
         {
             // Disable font AA in case global AA setting is supposed to affect
             // font rendering (not the default) and AA is disabled.
@@ -311,7 +436,7 @@ void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalG
                 cairo_font_options_set_antialias(pOptions, CAIRO_ANTIALIAS_NONE);
             if (!bAllowedHintStyle)
                 cairo_font_options_set_hint_style(pOptions, CAIRO_HINT_STYLE_SLIGHT);
-            if (bResolutionIndependentLayoutEnabled)
+            if (bSubpixelPositioning)
             {
                 // Disable private CAIRO_ROUND_GLYPH_POS_ON by merging with
                 // font options known to have CAIRO_ROUND_GLYPH_POS_OFF
@@ -331,25 +456,7 @@ void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalG
             cairo_set_font_options(cr, pFontOptions);
     }
 
-    double nDX, nDY;
-    getSurfaceOffset(nDX, nDY);
-    cairo_translate(cr, nDX, nDY);
-
-    clipRegion(cr);
-
-    cairo_set_source_rgba(cr,
-        mnTextColor.GetRed()/255.0,
-        mnTextColor.GetGreen()/255.0,
-        mnTextColor.GetBlue()/255.0,
-        mnTextColor.GetAlpha()/255.0);
-
-    FT_Face aFace = rFont.GetFtFace();
-    CairoFontsCache::CacheId aId;
-    aId.maFace = aFace;
-    aId.mpOptions = rFont.GetFontOptions();
-    aId.mbEmbolden = rInstance.NeedsArtificialBold();
-
-    cairo_matrix_t m;
+    CairoFontsCache::CacheId aId = makeCacheId(rLayout);
 
     std::vector<int>::const_iterator aEnd = glyph_extrarotation.end();
     std::vector<int>::const_iterator aStart = glyph_extrarotation.begin();
@@ -364,53 +471,9 @@ void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalG
         size_t nLen = std::distance(aI, aNext);
 
         aId.mbVerticalMetrics = nGlyphRotation != 0.0;
-        cairo_font_face_t* font_face = CairoFontsCache::FindCachedFont(aId);
-        if (!font_face)
-        {
-            const FontConfigFontOptions *pOptions = aId.mpOptions;
-            FcPattern *pPattern = pOptions->GetPattern();
-            font_face = cairo_ft_font_face_create_for_pattern(pPattern);
-            CairoFontsCache::CacheFont(font_face, aId);
-        }
-        cairo_set_font_face(cr, font_face);
 
-        cairo_set_font_size(cr, nHeight);
+        ApplyFont(cr, aId, nWidth, nHeight, nGlyphRotation, rLayout);
 
-        cairo_matrix_init_identity(&m);
-
-        if (rLayout.GetOrientation())
-            cairo_matrix_rotate(&m, toRadian(rLayout.GetOrientation()));
-
-        cairo_matrix_scale(&m, nWidth, nHeight);
-
-        if (nGlyphRotation)
-        {
-            cairo_matrix_rotate(&m, toRadian(Degree10(nGlyphRotation * 900)));
-
-            cairo_matrix_t em_square;
-            cairo_matrix_init_identity(&em_square);
-            cairo_get_matrix(cr, &em_square);
-
-            cairo_matrix_scale(&em_square, aFace->units_per_EM,
-                aFace->units_per_EM);
-            cairo_set_matrix(cr, &em_square);
-
-            cairo_font_extents_t font_extents;
-            cairo_font_extents(cr, &font_extents);
-
-            cairo_matrix_init_identity(&em_square);
-            cairo_set_matrix(cr, &em_square);
-        }
-
-        if (rInstance.NeedsArtificialItalic())
-        {
-            cairo_matrix_t shear;
-            cairo_matrix_init_identity(&shear);
-            shear.xy = -shear.xx * ARTIFICIAL_ITALIC_SKEW;
-            cairo_matrix_multiply(&m, &shear, &m);
-        }
-
-        cairo_set_font_matrix(cr, &m);
         cairo_show_glyphs(cr, &cairo_glyphs[nStartIndex], nLen);
         if (cairo_status(cr) != CAIRO_STATUS_SUCCESS)
         {
@@ -433,6 +496,23 @@ void CairoTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalG
     if (__lsan_enable)
         __lsan_enable();
 #endif
+}
+
+cairo_t* CairoTextRender::getCairoContext()
+{
+    // Note that cairo_set_antialias (bAntiAlias property) doesn't affect cairo
+    // text rendering.  That's affected by cairo_font_options_set_antialias instead.
+    return mrCairoCommon.getCairoContext(/*bXorModeAllowed*/false, /*bAntiAlias*/true);
+}
+
+void CairoTextRender::clipRegion(cairo_t* cr)
+{
+    mrCairoCommon.clipRegion(cr);
+}
+
+void CairoTextRender::releaseCairoContext(cairo_t* cr)
+{
+    mrCairoCommon.releaseCairoContext(cr, /*bXorModeAllowed*/false, basegfx::B2DRange());
 }
 
 void FontConfigFontOptions::cairo_font_options_substitute(FcPattern* pPattern)

@@ -22,6 +22,7 @@
 #include "Chart2ModelContact.hxx"
 #include <AxisIndexDefines.hxx>
 #include <BaseCoordinateSystem.hxx>
+#include <GridProperties.hxx>
 
 #include <LinePropertiesHelper.hxx>
 #include <UserDefinedProperties.hxx>
@@ -40,42 +41,11 @@ using ::com::sun::star::beans::Property;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
 
-namespace
-{
-
-struct StaticGridWrapperPropertyArray_Initializer
-{
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence() );
-        return &aPropSeq;
-    }
-private:
-    static Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< css::beans::Property > aProperties;
-        ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
-        ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
-
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
-};
-
-struct StaticGridWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticGridWrapperPropertyArray_Initializer >
-{
-};
-
-} // anonymous namespace
-
 namespace chart::wrapper
 {
 
 GridWrapper::GridWrapper(tGridType eType, std::shared_ptr<Chart2ModelContact> spChart2ModelContact)
     : m_spChart2ModelContact(std::move(spChart2ModelContact))
-    , m_aEventListenerContainer(m_aMutex)
     , m_eType(eType)
 {
 }
@@ -108,8 +78,9 @@ void GridWrapper::getDimensionAndSubGridBool( tGridType eType, sal_Int32& rnDime
 // ____ XComponent ____
 void SAL_CALL GridWrapper::dispose()
 {
+    std::unique_lock g(m_aMutex);
     Reference< uno::XInterface > xSource( static_cast< ::cppu::OWeakObject* >( this ) );
-    m_aEventListenerContainer.disposeAndClear( lang::EventObject( xSource ) );
+    m_aEventListenerContainer.disposeAndClear( g, lang::EventObject( xSource ) );
 
     clearWrappedPropertySet();
 }
@@ -117,13 +88,15 @@ void SAL_CALL GridWrapper::dispose()
 void SAL_CALL GridWrapper::addEventListener(
     const Reference< lang::XEventListener >& xListener )
 {
-    m_aEventListenerContainer.addInterface( xListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.addInterface( g, xListener );
 }
 
 void SAL_CALL GridWrapper::removeEventListener(
     const Reference< lang::XEventListener >& aListener )
 {
-    m_aEventListenerContainer.removeInterface( aListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.removeInterface( g, aListener );
 }
 
 // WrappedPropertySet
@@ -141,7 +114,7 @@ Reference< beans::XPropertySet > GridWrapper::getInnerPropertySet()
         getDimensionAndSubGridBool( m_eType, nDimensionIndex, bSubGrid );
 
         sal_Int32 nSubGridIndex = bSubGrid ? 0 : -1;
-        xRet.set( AxisHelper::getGridProperties( xCooSys , nDimensionIndex, MAIN_AXIS_INDEX, nSubGridIndex ) );
+        xRet = AxisHelper::getGridProperties( xCooSys , nDimensionIndex, MAIN_AXIS_INDEX, nSubGridIndex );
     }
     catch( const uno::Exception & )
     {
@@ -152,7 +125,18 @@ Reference< beans::XPropertySet > GridWrapper::getInnerPropertySet()
 
 const Sequence< beans::Property >& GridWrapper::getPropertySequence()
 {
-    return *StaticGridWrapperPropertyArray::get();
+    static Sequence< Property > aPropSeq = []()
+        {
+            std::vector< css::beans::Property > aProperties;
+            ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
+            ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
+
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
+
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropSeq;
 }
 
 std::vector< std::unique_ptr<WrappedProperty> > GridWrapper::createWrappedProperties()

@@ -65,9 +65,9 @@ namespace tools
 
 class ScDocFunc
 {
-protected:
     ScDocShell&     rDocShell;
 
+protected:
     bool            AdjustRowHeight( const ScRange& rRange, bool bPaint, bool bApi );
     void            CreateOneName( ScRangeName& rList,
                                     SCCOL nPosX, SCROW nPosY, SCTAB nTab,
@@ -147,7 +147,7 @@ public:
                                        bool bCut, bool bRecord, bool bPaint, bool bApi );
 
     SC_DLLPUBLIC bool InsertTable( SCTAB nTab, const OUString& rName, bool bRecord, bool bApi );
-    bool            RenameTable( SCTAB nTab, const OUString& rName, bool bRecord, bool bApi );
+    SC_DLLPUBLIC bool RenameTable( SCTAB nTab, const OUString& rName, bool bRecord, bool bApi );
     bool            DeleteTable( SCTAB nTab, bool bRecord );
 
     bool            SetTabBgColor( SCTAB nTab, const Color& rColor, bool bRecord, bool bApi );

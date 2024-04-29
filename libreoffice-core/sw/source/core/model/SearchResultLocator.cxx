@@ -58,19 +58,15 @@ void SearchResultLocator::findOne(LocationResult& rResult, SearchIndexData const
         for (sal_uInt16 nPage = 0; nPage < pModel->GetPageCount(); ++nPage)
         {
             SdrPage* pPage = pModel->GetPage(nPage);
-            for (size_t nObject = 0; nObject < pPage->GetObjCount(); ++nObject)
+            for (const rtl::Reference<SdrObject>& pObject : *pPage)
             {
-                SdrObject* pObject = pPage->GetObj(nObject);
-                if (pObject)
+                if (pObject->GetName() == rSearchIndexData.maObjectName)
                 {
-                    if (pObject->GetName() == rSearchIndexData.maObjectName)
-                    {
-                        auto aRect = pObject->GetLogicRect();
-                        rResult.mbFound = true;
-                        rResult.maRectangles.emplace_back(aRect.Left(), aRect.Top(),
-                                                          aRect.Left() + aRect.GetWidth(),
-                                                          aRect.Top() + aRect.GetHeight());
-                    }
+                    auto aRect = pObject->GetLogicRect();
+                    rResult.mbFound = true;
+                    rResult.maRectangles.emplace_back(aRect.Left(), aRect.Top(),
+                                                      aRect.Left() + aRect.GetWidth(),
+                                                      aRect.Top() + aRect.GetHeight());
                 }
             }
         }
@@ -126,7 +122,7 @@ bool SearchResultLocator::tryParseJSON(const char* pPayload,
             OUString sObjectName;
             if (!sJsonObjectName.empty())
             {
-                OString sObjectNameOString(sJsonObjectName.c_str());
+                OString sObjectNameOString(sJsonObjectName);
                 sObjectName = OStringToOUString(sObjectNameOString, RTL_TEXTENCODING_UTF8);
             }
 
@@ -162,9 +158,9 @@ bool SearchResultLocator::tryParseXML(const char* pPayload,
     {
         if (aWalker.name() == "paragraph")
         {
-            OString sType = aWalker.attribute("node_type");
-            OString sIndex = aWalker.attribute("index");
-            OString sObjectName = aWalker.attribute("object_name");
+            OString sType = aWalker.attribute("node_type"_ostr);
+            OString sIndex = aWalker.attribute("index"_ostr);
+            OString sObjectName = aWalker.attribute("object_name"_ostr);
 
             if (!sType.isEmpty() && !sIndex.isEmpty())
             {

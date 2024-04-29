@@ -10,6 +10,8 @@
 #ifndef INCLUDED_SFX2_LOKHELPER_HXX
 #define INCLUDED_SFX2_LOKHELPER_HXX
 
+#include <com/sun/star/ui/XAcceleratorConfiguration.hpp>
+
 #include <vcl/IDialogRenderable.hxx>
 #include <vcl/ITiledRenderable.hxx>
 #include <vcl/event.hxx>
@@ -25,17 +27,17 @@
 #include <optional>
 #include <string_view>
 #include <unordered_map>
-#include <sfx2/app.hxx>
 
 #define LOK_NOTIFY_LOG_TO_CLIENT 1
 
 #define LOK_LOG_STREAM(level, area, stream) \
     do { \
             ::std::ostringstream lok_detail_stream; \
-            lok_detail_stream << level << ":"; \
+            lok_detail_stream << level << ':'; \
             if (std::strcmp(level, "debug") != 0) \
-                lok_detail_stream << area << ":"; \
-            lok_detail_stream << SAL_WHERE << stream; \
+                lok_detail_stream << area << ':'; \
+            const char* const where = SAL_WHERE; \
+            lok_detail_stream << where << stream; \
             SfxLokHelper::notifyLog(lok_detail_stream); \
         } while (false)
 
@@ -46,8 +48,6 @@
 #define LOK_WARN(area, stream) \
     LOK_LOG_STREAM("warn", area, stream)
 
-#define LOK_DBG(stream) \
-    LOK_LOG_STREAM("debug", "", stream)
 #else
 #define LOK_INFO(area, stream) \
     SAL_INFO(area, stream) \
@@ -55,8 +55,6 @@
 #define LOK_WARN(area, stream) \
     SAL_WARN(area, stream)
 
-#define LOK_DBG(stream) \
-    SAL_DEBUG(stream)
 #endif
 
 struct SFX2_DLLPUBLIC LokMouseEventData
@@ -201,7 +199,7 @@ public:
     static OString makePayloadJSON(const SfxViewShell* pThisView, int nViewId, std::string_view rKey, const OString& rPayload);
     /// Makes a LOK_CALLBACK_INVALIDATE_VISIBLE_CURSOR payload, but tweaks it according to setOptionalFeatures() if needed.
     static OString makeVisCursorInvalidation(int nViewId, const OString& rRectangle,
-                                             bool bMispelledWord = false, const OString& rHyperlink = "");
+                                             bool bMispelledWord = false, const OString& rHyperlink = ""_ostr);
 
     /// Helper for posting async key event
     static void postKeyEventAsync(const VclPtr<vcl::Window> &xWindow,
@@ -236,7 +234,7 @@ public:
     static void notifyLog(const std::ostringstream& stream);
 
 private:
-    static int createView(SfxViewFrame* pViewFrame, ViewShellDocId docId);
+    static int createView(SfxViewFrame& rViewFrame, ViewShellDocId docId);
 };
 
 template<typename ViewShellType, typename FunctionType>

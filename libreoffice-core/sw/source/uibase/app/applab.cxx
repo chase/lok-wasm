@@ -23,6 +23,7 @@
 #include <hintids.hxx>
 
 #include <comphelper/string.hxx>
+#include <svl/voiditem.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/printer.hxx>
 #include <sfx2/request.hxx>
@@ -62,7 +63,7 @@
 
 using namespace ::com::sun::star;
 
-constexpr OUStringLiteral MASTER_LABEL = u"MasterLabel";
+constexpr OUString MASTER_LABEL = u"MasterLabel"_ustr;
 
 static const SwFrameFormat *lcl_InsertBCText( SwWrtShell& rSh, const SwLabItem& rItem,
                         SwFrameFormat &rFormat,
@@ -280,7 +281,7 @@ void SwModule::InsertLab(SfxRequest& rReq, bool bLabel)
 
         //frame represents label itself, no border space
         SvxULSpaceItem aFrameNoULSpace( 0, 0, RES_UL_SPACE );
-        SvxLRSpaceItem aFrameNoLRSpace( 0, 0, 0, 0, RES_LR_SPACE );
+        SvxLRSpaceItem aFrameNoLRSpace( 0, 0, 0, RES_LR_SPACE );
         pFormat->SetFormatAttr( aFrameNoULSpace );
         pFormat->SetFormatAttr( aFrameNoLRSpace );
 
@@ -377,7 +378,7 @@ void SwModule::InsertLab(SfxRequest& rReq, bool bLabel)
         pSh->DoUndo();
     }
 
-    if( rItem.m_aWriting.indexOf( '<' ) >= 0 )
+    if (pSh && rItem.m_aWriting.indexOf('<') >= 0)
     {
         // Open database browser on recently used database
         ShowDBObj( *pNewView, pSh->GetDBData() );

@@ -40,7 +40,6 @@ using namespace com::sun::star::util;
 
 using namespace ::comphelper;
 using namespace ::osl;
-using namespace ::std;
 
 // ---- XBatchExecution - UNSUPPORTED ----------------------------------------
 void SAL_CALL OStatement::addBatch(const OUString&)
@@ -71,7 +70,8 @@ void SAL_CALL OStatement::release() noexcept
 void OStatement::disposeResultSet()
 {
     MutexGuard aGuard(m_aMutex);
-    checkDisposed(OStatementCommonBase_Base::rBHelper.bDisposed);
+    if (OStatementCommonBase_Base::rBHelper.bDisposed)
+        return;
 
     OStatementCommonBase::disposeResultSet();
 

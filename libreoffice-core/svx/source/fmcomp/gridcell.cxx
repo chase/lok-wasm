@@ -84,8 +84,8 @@ using namespace ::dbtools;
 
 using ::com::sun::star::util::XNumberFormatter;
 
-constexpr OUStringLiteral INVALIDTEXT = u"###";
-constexpr OUStringLiteral OBJECTTEXT = u"<OBJECT>";
+constexpr OUString INVALIDTEXT = u"###"_ustr;
+constexpr OUString OBJECTTEXT = u"<OBJECT>"_ustr;
 
 
 //= helper
@@ -458,7 +458,7 @@ void DbGridColumn::Paint(OutputDevice& rDev,
             if ( !bEnabled )
                 nStyle |= DrawTextFlags::Disable;
 
-            rDev.DrawText(rRect, OUString(INVALIDTEXT), nStyle);
+            rDev.DrawText(rRect, INVALIDTEXT, nStyle);
         }
         else if (m_bAutoValue && pRow->IsNew())
         {
@@ -493,14 +493,14 @@ void DbGridColumn::Paint(OutputDevice& rDev,
             if ( !bEnabled )
                 nStyle |= DrawTextFlags::Disable;
 
-            rDev.DrawText(rRect, OUString(INVALIDTEXT), nStyle);
+            rDev.DrawText(rRect, INVALIDTEXT, nStyle);
         }
         else if (pRow->HasField(m_nFieldPos) && m_bObject)
         {
             DrawTextFlags nStyle = DrawTextFlags::Clip | DrawTextFlags::Center;
             if ( !bEnabled )
                 nStyle |= DrawTextFlags::Disable;
-            rDev.DrawText(rRect, OUString(OBJECTTEXT), nStyle);
+            rDev.DrawText(rRect, OBJECTTEXT, nStyle);
         }
     }
     else if ( auto pFilterCell = dynamic_cast<FmXFilterCell*>( m_pCell.get() ) )
@@ -809,7 +809,7 @@ void DbCellControl::implAdjustReadOnly( const Reference< XPropertySet >& _rxMode
     bool bReadOnly = m_rColumn.IsReadOnly();
     if ( !bReadOnly )
     {
-        _rxModel->getPropertyValue( i_bReadOnly ? OUString(FM_PROP_READONLY) : OUString(FM_PROP_ISREADONLY)) >>= bReadOnly;
+        _rxModel->getPropertyValue( i_bReadOnly ? FM_PROP_READONLY : FM_PROP_ISREADONLY) >>= bReadOnly;
     }
     m_pWindow->SetEditableReadOnly(bReadOnly);
 }
@@ -2067,15 +2067,16 @@ void DbNumericField::updateFromModel( Reference< XPropertySet > _rxModel )
     OSL_ENSURE( _rxModel.is() && m_pWindow, "DbNumericField::updateFromModel: invalid call!" );
 
     FormattedControlBase* pControl = static_cast<FormattedControlBase*>(m_pWindow.get());
+    Formatter& rFormatter = pControl->get_formatter();
 
     double dValue = 0;
     if ( _rxModel->getPropertyValue( FM_PROP_VALUE ) >>= dValue )
-    {
-        Formatter& rFormatter = pControl->get_formatter();
         rFormatter.SetValue(dValue);
-    }
     else
+    {
         pControl->get_widget().set_text(OUString());
+        rFormatter.InvalidateValueState();
+    }
 }
 
 bool DbNumericField::commitControl()
@@ -2187,15 +2188,16 @@ void DbCurrencyField::updateFromModel( Reference< XPropertySet > _rxModel )
     OSL_ENSURE( _rxModel.is() && m_pWindow, "DbCurrencyField::updateFromModel: invalid call!" );
 
     FormattedControlBase* pControl = static_cast<FormattedControlBase*>(m_pWindow.get());
+    Formatter& rFormatter = pControl->get_formatter();
 
     double dValue = 0;
     if ( _rxModel->getPropertyValue( FM_PROP_VALUE ) >>= dValue )
-    {
-        Formatter& rFormatter = pControl->get_formatter();
         rFormatter.SetValue(dValue);
-    }
     else
+    {
         pControl->get_widget().set_text(OUString());
+        rFormatter.InvalidateValueState();
+    }
 }
 
 bool DbCurrencyField::commitControl()
@@ -2962,15 +2964,14 @@ bool DbFilterField::commitControl()
                                                     m_rColumn.GetField(),
                                                     OUString(),
                                                     aAppLocale,
-                                                    OUString("."),
+                                                    ".",
                                                     getParseContext());
                 m_aText = aPreparedText;
             }
             else
             {
 
-                SQLException aError;
-                aError.Message = aErrorMsg;
+                SQLException aError(aErrorMsg, {}, {}, 0, {});
                 displayException(aError, VCLUnoHelper::GetInterface(m_pWindow->GetParent()));
                     // TODO: transport the title
 
@@ -3092,12 +3093,12 @@ void DbFilterField::Update()
         Reference< XDatabaseMetaData >  xMeta = xConnection->getMetaData();
 
         OUString aQuote(xMeta->getIdentifierQuoteString());
-        OUStringBuffer aStatement("SELECT DISTINCT ");
-        aStatement.append(quoteName(aQuote, aName));
+        OUStringBuffer aStatement("SELECT DISTINCT "
+            + quoteName(aQuote, aName));
         if (!aFieldName.isEmpty() && aName != aFieldName)
         {
-            aStatement.append(" AS ");
-            aStatement.append(quoteName(aQuote, aFieldName));
+            aStatement.append(" AS "
+                + quoteName(aQuote, aFieldName));
         }
 
         aStatement.append(" FROM ");
@@ -4490,19 +4491,6 @@ FmXFilterCell::~FmXFilterCell()
     }
 
 }
-
-// XUnoTunnel
-sal_Int64 SAL_CALL FmXFilterCell::getSomething( const Sequence< sal_Int8 >& _rIdentifier )
-{
-    return comphelper::getSomethingImpl(_rIdentifier, this);
-}
-
-const Sequence<sal_Int8>& FmXFilterCell::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theFmXFilterCellUnoTunnelId;
-    return theFmXFilterCellUnoTunnelId.getSeq();
-}
-
 
 void FmXFilterCell::PaintCell( OutputDevice& rDev, const tools::Rectangle& rRect )
 {

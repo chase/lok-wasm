@@ -1054,11 +1054,11 @@ class MSFILTER_DLLPUBLIC EscherEx : public EscherPersistTable
         std::unique_ptr<SvStream> mxOwnStrm;
         SvStream*                   mpOutStrm;
         sal_uInt32                  mnStrmStartOfs;
-        std::vector< sal_uInt32 >   mOffsets;
+        std::vector< sal_uInt64 >   mOffsets;
         std::vector< sal_uInt16 >   mRecTypes;
 
         sal_uInt32                  mnCurrentDg;
-        sal_uInt32                  mnCountOfs;
+        sal_uInt64                  mnCountOfs;
 
         sal_uInt32                  mnGroupLevel;
         SdrLayerID                  mnHellLayerId;
@@ -1162,7 +1162,7 @@ public:
     void    AddUnoShapes( const css::uno::Reference< css::drawing::XShapes >& rxShapes, bool ooxmlExport = false );
 
                 /// returns the ShapeID
-    sal_uInt32  AddSdrObject( const SdrObject& rObj, bool ooxmlExport = false );
+    sal_uInt32  AddSdrObject(const SdrObject& rObj, bool ooxmlExport = false, sal_uInt32 nId = 0);
     virtual void  AddSdrObjectVMLObject( const SdrObject& /*rObj*/)
     {
         // Required for Exporting VML shape

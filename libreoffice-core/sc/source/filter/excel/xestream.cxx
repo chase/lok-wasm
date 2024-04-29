@@ -71,6 +71,7 @@
 
 #include <com/sun/star/task/XStatusIndicator.hpp>
 #include <memory>
+#include <comphelper/servicehelper.hxx>
 #include <comphelper/storagehelper.hxx>
 
 #include <externalrefmgr.hxx>
@@ -563,7 +564,10 @@ void XclExpBiff8Encrypter::Init( const Sequence< NamedValue >& rEncryptionData )
 
     // generate the salt here
     rtlRandomPool aRandomPool = rtl_random_createPool ();
-    rtl_random_getBytes( aRandomPool, mpnSalt, 16 );
+    if (rtl_random_getBytes(aRandomPool, mpnSalt, 16) != rtl_Random_E_None)
+    {
+        throw uno::RuntimeException("rtl_random_getBytes failed");
+    }
     rtl_random_destroyPool( aRandomPool );
 
     memset( mpnSaltDigest, 0, sizeof( mpnSaltDigest ) );
@@ -593,10 +597,9 @@ void XclExpBiff8Encrypter::EncryptBytes( SvStream& rStrm, vector<sal_uInt8>& aBy
     sal_uInt16 nBlockOffset = GetOffsetInBlock(nStrmPos);
     sal_uInt32 nBlockPos = GetBlockPos(nStrmPos);
 
-#if DEBUG_XL_ENCRYPTION
-    fprintf(stdout, "XclExpBiff8Encrypter::EncryptBytes: stream pos = %ld  offset in block = %d  block pos = %ld\n",
-            nStrmPos, nBlockOffset, nBlockPos);
-#endif
+    SAL_INFO("sc.filter", "XclExpBiff8Encrypter::EncryptBytes: stream pos = "
+                              << nStrmPos << " offset in block = " << nBlockOffset
+                              << " block pos = " << nBlockPos);
 
     sal_uInt16 nSize = static_cast< sal_uInt16 >( aBytes.size() );
     if (nSize == 0)
@@ -835,13 +838,6 @@ OUString XclXmlUtils::ToOUString( const XclExpString& s )
     return ToOUString( s.GetUnicodeBuffer() );
 }
 
-static void lcl_WriteValue( const sax_fastparser::FSHelperPtr& rStream, sal_Int32 nElement, const char* pValue )
-{
-    if( !pValue )
-        return;
-    rStream->singleElement(nElement, XML_val, pValue);
-}
-
 static const char* lcl_GetUnderlineStyle( FontLineStyle eUnderline, bool& bHaveUnderline )
 {
     bHaveUnderline = true;
@@ -874,9 +870,12 @@ sax_fastparser::FSHelperPtr XclXmlUtils::WriteFontData( sax_fastparser::FSHelper
     const char* pUnderline = lcl_GetUnderlineStyle( rFontData.GetScUnderline(), bHaveUnderline );
     const char* pVertAlign = lcl_ToVerticalAlignmentRun( rFontData.GetScEscapement(), bHaveVertAlign );
 
-    lcl_WriteValue( pStream, XML_b,          rFontData.mnWeight > 400 ? ToPsz( true ) : nullptr );
-    lcl_WriteValue( pStream, XML_i,          rFontData.mbItalic       ? ToPsz( true ) : nullptr );
-    lcl_WriteValue( pStream, XML_strike,     rFontData.mbStrikeout    ? ToPsz( true ) : nullptr );
+    if (rFontData.mnWeight > 400)
+        pStream->singleElement(XML_b, XML_val, ToPsz( true ));
+    if (rFontData.mbItalic)
+        pStream->singleElement(XML_i, XML_val, ToPsz( true ));
+    if (rFontData.mbStrikeout)
+        pStream->singleElement(XML_strike, XML_val, ToPsz( true ));
     // OOXTODO: lcl_WriteValue( rStream, XML_condense, );    // mac compatibility setting
     // OOXTODO: lcl_WriteValue( rStream, XML_extend, );      // compatibility setting
     if (rFontData.mbOutline)
@@ -1007,7 +1006,7 @@ ScDocShell* XclExpXmlStream::getDocShell()
 {
     uno::Reference< XInterface > xModel( getModel(), UNO_QUERY );
 
-    ScModelObj *pObj = dynamic_cast < ScModelObj* >( xModel.get() );
+    ScModelObj *pObj = comphelper::getFromUnoTunnel < ScModelObj >( xModel );
 
     if ( pObj )
         return static_cast < ScDocShell* >( pObj->GetEmbeddedObject() );
@@ -1078,7 +1077,7 @@ bool XclExpXmlStream::exportDocument()
         }
     }
 
-    OUString const workbook = "xl/workbook.xml";
+    static constexpr OUString workbook = u"xl/workbook.xml"_ustr;
     const char* pWorkbookContentType = nullptr;
     if (mbExportVBA)
     {

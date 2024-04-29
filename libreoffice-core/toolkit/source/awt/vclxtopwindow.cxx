@@ -41,7 +41,6 @@
 #include <vcl/svapp.hxx>
 
 using ::com::sun::star::uno::Sequence;
-using ::com::sun::star::uno::Type;
 using ::com::sun::star::uno::Any;
 using ::com::sun::star::lang::IndexOutOfBoundsException;
 
@@ -128,7 +127,7 @@ void VCLXTopWindow::setMenuBar( const css::uno::Reference< css::awt::XMenuBar >&
         pSystemWindow->SetMenuBar( nullptr );
         if ( rxMenu.is() )
         {
-            VCLXMenu* pMenu = comphelper::getFromUnoTunnel<VCLXMenu>( rxMenu );
+            VCLXMenu* pMenu = dynamic_cast<VCLXMenu*>( rxMenu.get() );
             if ( pMenu && !pMenu->IsPopupMenu() )
                 pSystemWindow->SetMenuBar( static_cast<MenuBar*>( pMenu->GetMenu() ));
         }

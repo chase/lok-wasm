@@ -67,7 +67,7 @@ public:
         terminates and before doing anything else.
     */
     ViewShellBase (
-        SfxViewFrame *pFrame,
+        SfxViewFrame& rFrame,
         SfxViewShell* pOldShell);
 
     virtual ~ViewShellBase() override;
@@ -198,7 +198,7 @@ public:
     std::shared_ptr<ToolBarManager> const & GetToolBarManager() const;
     std::shared_ptr<FormShellManager> const & GetFormShellManager() const;
 
-    DrawController& GetDrawController() const;
+    DrawController* GetDrawController() const;
 
     void SetViewTabBar (const ::rtl::Reference<ViewTabBar>& rViewTabBar);
 

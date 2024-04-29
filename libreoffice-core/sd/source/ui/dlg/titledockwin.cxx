@@ -68,6 +68,12 @@ namespace sd
         SfxDockingWindow::dispose();
     }
 
+    void TitledDockingWindow::SetTitle(const OUString& i_rText)
+    {
+        m_sTitle = i_rText;
+        Invalidate();
+    }
+
     void TitledDockingWindow::SetText( const OUString& i_rText )
     {
         SfxDockingWindow::SetText( i_rText );
@@ -155,7 +161,7 @@ namespace sd
         int nInnerBottom = nOuterBottom - m_aBorder.Bottom() + 1;
 
         // Paint title bar background.
-        ::tools::Rectangle aTitleBarBox(::tools::Rectangle(nOuterLeft, 0, nOuterRight, nInnerTop - 1));
+        ::tools::Rectangle aTitleBarBox(nOuterLeft, 0, nOuterRight, nInnerTop - 1);
         rRenderContext.DrawRect(aTitleBarBox);
 
         if (nInnerLeft > nOuterLeft)

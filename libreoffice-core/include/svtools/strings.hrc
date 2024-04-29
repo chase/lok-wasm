@@ -19,7 +19,7 @@
 
 #pragma once
 
-#define NC_(Context, String) TranslateId(Context, reinterpret_cast<char const *>(u8##String))
+#define NC_(Context, String) TranslateId(Context, u8##String)
 
 // To translators: tdf#125447 use no mnemonic in this string
 #define STR_UNDO                                NC_("STR_UNDO", "Undo: ")
@@ -153,6 +153,8 @@
 #define STR_SVT_STYLE_LIGHT_ITALIC              NC_("STR_SVT_STYLE_LIGHT_ITALIC", "Light Italic")
 #define STR_SVT_STYLE_NORMAL                    NC_("STR_SVT_STYLE_NORMAL", "Regular")
 #define STR_SVT_STYLE_NORMAL_ITALIC             NC_("STR_SVT_STYLE_NORMAL_ITALIC", "Italic")
+#define STR_SVT_STYLE_MEDIUM                    NC_("STR_SVT_STYLE_MEDIUM", "Medium")
+#define STR_SVT_STYLE_MEDIUM_ITALIC             NC_("STR_SVT_STYLE_MEDIUM_ITALIC", "Medium Italic")
 #define STR_SVT_STYLE_BOLD                      NC_("STR_SVT_STYLE_BOLD", "Bold")
 #define STR_SVT_STYLE_BOLD_ITALIC               NC_("STR_SVT_STYLE_BOLD_ITALIC", "Bold Italic")
 #define STR_SVT_STYLE_BLACK                     NC_("STR_SVT_STYLE_BLACK", "Black")
@@ -185,7 +187,7 @@
 #define STR_TABBAR_HINT_MOVELEFT_SHEETS         NC_("STR_TABBAR_HINT_MOVELEFT_SHEETS", "Scroll to previous sheet")
 #define STR_TABBAR_HINT_MOVERIGHT_SHEETS        NC_("STR_TABBAR_HINT_MOVERIGHT_SHEETS", "Scroll to next sheet")
 #define STR_TABBAR_HINT_MOVETOEND_SHEETS        NC_("STR_TABBAR_HINT_MOVETOEND_SHEETS", "Scroll to last sheet")
-#define STR_TABBAR_HINT_ADDTAB_SHEETS           NC_("STR_TABBAR_HINT_ADDTAB_SHEETS", "Add sheet")
+#define STR_TABBAR_HINT_ADDTAB_SHEETS           NC_("STR_TABBAR_HINT_ADDTAB_SHEETS", "Add new sheet (right click to see all non-hidden sheets)")
 
 #define STR_SVT_ACC_RULER_HORZ_NAME             NC_("STR_SVT_ACC_RULER_HORZ_NAME", "Horizontal Ruler")
 #define STR_SVT_ACC_RULER_VERT_NAME             NC_("STR_SVT_ACC_RULER_VERT_NAME", "Vertical Ruler")
@@ -261,6 +263,8 @@
 #define STR_FIELD_CALENDAR                      NC_("STR_FIELD_CALENDAR", "Calendar")
 #define STR_FIELD_INVITE                        NC_("STR_FIELD_INVITE", "Invite")
 
+#define STR_WARNING_ACTIVE_CONTENT_DISABLED     NC_("STR_WARNING_ACTIVE_CONTENT_DISABLED", "Active content is disabled.")
+#define STR_WARNING_EXTERNAL_LINK_EDIT_DISABLED NC_("STR_ERROR_EXTERNAL_LINK_EDIT_DISABLED", "It is not possible to edit external links. Active content is disabled in the security settings.")
 #define STR_SVT_DEFAULT_SERVICE_LABEL           NC_("STR_SVT_DEFAULT_SERVICE_LABEL", "$user$'s $service$")
 
 #define STR_WARNING_JAVANOTFOUND                NC_("STR_WARNING_JAVANOTFOUND", "%PRODUCTNAME requires a Java runtime environment (JRE) to perform this task. Please install a JRE and restart %PRODUCTNAME. %FAQLINK")

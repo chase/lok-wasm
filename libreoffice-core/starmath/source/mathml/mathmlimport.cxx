@@ -99,28 +99,22 @@ ErrCode SmXMLImportWrapper::Import(SfxMedium& rMedium)
 
     uno::Reference<uno::XComponentContext> xContext(comphelper::getProcessComponentContext());
 
-    //Make a model component from our SmModel
-    uno::Reference<lang::XComponent> xModelComp = xModel;
-    OSL_ENSURE(xModelComp.is(), "XMLReader::Read: got no model");
+    OSL_ENSURE(m_xModel.is(), "XMLReader::Read: got no model");
 
     // try to get an XStatusIndicator from the Medium
     uno::Reference<task::XStatusIndicator> xStatusIndicator;
 
     bool bEmbedded = false;
-    SmModel* pModel = comphelper::getFromUnoTunnel<SmModel>(xModel);
+    SmModel* pModel = m_xModel.get();
 
     SmDocShell* pDocShell = pModel ? static_cast<SmDocShell*>(pModel->GetObjectShell()) : nullptr;
     if (pDocShell)
     {
         OSL_ENSURE(pDocShell->GetMedium() == &rMedium, "different SfxMedium found");
 
-        SfxItemSet* pSet = rMedium.GetItemSet();
-        if (pSet)
-        {
-            const SfxUnoAnyItem* pItem = pSet->GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
-            if (pItem)
-                pItem->GetValue() >>= xStatusIndicator;
-        }
+        const SfxUnoAnyItem* pItem = rMedium.GetItemSet().GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
+        if (pItem)
+            pItem->GetValue() >>= xStatusIndicator;
 
         if (SfxObjectCreateMode::EMBEDDED == pDocShell->GetCreateMode())
             bEmbedded = true;
@@ -165,13 +159,10 @@ ErrCode SmXMLImportWrapper::Import(SfxMedium& rMedium)
         if (bEmbedded) // && !rMedium.GetStorage()->IsRoot() )
         {
             OUString aName("dummyObjName");
-            if (rMedium.GetItemSet())
-            {
-                const SfxStringItem* pDocHierarchItem
-                    = rMedium.GetItemSet()->GetItem(SID_DOC_HIERARCHICALNAME);
-                if (pDocHierarchItem)
-                    aName = pDocHierarchItem->GetValue();
-            }
+            const SfxStringItem* pDocHierarchItem
+                = rMedium.GetItemSet().GetItem(SID_DOC_HIERARCHICALNAME);
+            if (pDocHierarchItem)
+                aName = pDocHierarchItem->GetValue();
 
             if (!aName.isEmpty())
             {
@@ -184,7 +175,7 @@ ErrCode SmXMLImportWrapper::Import(SfxMedium& rMedium)
             xStatusIndicator->setValue(nSteps++);
 
         auto nWarn
-            = ReadThroughComponent(rMedium.GetStorage(), xModelComp, "meta.xml", xContext, xInfoSet,
+            = ReadThroughComponent(rMedium.GetStorage(), m_xModel, "meta.xml", xContext, xInfoSet,
                                    (bOASIS ? "com.sun.star.comp.Math.XMLOasisMetaImporter"
                                            : "com.sun.star.comp.Math.XMLMetaImporter"),
                                    m_bUseHTMLMLEntities);
@@ -194,7 +185,7 @@ ErrCode SmXMLImportWrapper::Import(SfxMedium& rMedium)
             if (xStatusIndicator.is())
                 xStatusIndicator->setValue(nSteps++);
 
-            nWarn = ReadThroughComponent(rMedium.GetStorage(), xModelComp, "settings.xml", xContext,
+            nWarn = ReadThroughComponent(rMedium.GetStorage(), m_xModel, "settings.xml", xContext,
                                          xInfoSet,
                                          (bOASIS ? "com.sun.star.comp.Math.XMLOasisSettingsImporter"
                                                  : "com.sun.star.comp.Math.XMLSettingsImporter"),
@@ -206,7 +197,7 @@ ErrCode SmXMLImportWrapper::Import(SfxMedium& rMedium)
                     xStatusIndicator->setValue(nSteps++);
 
                 nError = ReadThroughComponent(
-                    rMedium.GetStorage(), xModelComp, "content.xml", xContext, xInfoSet,
+                    rMedium.GetStorage(), m_xModel, "content.xml", xContext, xInfoSet,
                     "com.sun.star.comp.Math.XMLImporter", m_bUseHTMLMLEntities);
             }
             else
@@ -223,7 +214,7 @@ ErrCode SmXMLImportWrapper::Import(SfxMedium& rMedium)
         if (xStatusIndicator.is())
             xStatusIndicator->setValue(nSteps++);
 
-        nError = ReadThroughComponent(xInputStream, xModelComp, xContext, xInfoSet,
+        nError = ReadThroughComponent(xInputStream, m_xModel, xContext, xInfoSet,
                                       "com.sun.star.comp.Math.XMLImporter", false,
                                       m_bUseHTMLMLEntities);
     }
@@ -294,7 +285,7 @@ ErrCode SmXMLImportWrapper::ReadThroughComponent(const Reference<io::XInputStrea
             xParser->parseStream(aParserInput);
         }
 
-        auto pFilter = comphelper::getFromUnoTunnel<SmXMLImport>(xFilter);
+        auto pFilter = dynamic_cast<SmXMLImport*>(xFilter.get());
         if (pFilter && pFilter->GetSuccess())
             nError = ERRCODE_NONE;
     }
@@ -404,12 +395,6 @@ SmXMLImport::SmXMLImport(const css::uno::Reference<css::uno::XComponentContext>&
 {
 }
 
-const uno::Sequence<sal_Int8>& SmXMLImport::getUnoTunnelId() noexcept
-{
-    static const comphelper::UnoIdInit theSmXMLImportUnoTunnelId;
-    return theSmXMLImportUnoTunnelId.getSeq();
-}
-
 extern "C" SAL_DLLPUBLIC_EXPORT uno::XInterface*
 Math_XMLImporter_get_implementation(uno::XComponentContext* pCtx,
                                     uno::Sequence<uno::Any> const& /*rSeq*/)
@@ -434,12 +419,6 @@ Math_XMLOasisSettingsImporter_get_implementation(uno::XComponentContext* pCtx,
                                          SvXMLImportFlags::SETTINGS));
 }
 
-sal_Int64 SAL_CALL SmXMLImport::getSomething(const uno::Sequence<sal_Int8>& rId)
-{
-    return comphelper::getSomethingImpl(rId, this,
-                                        comphelper::FallbackToGetSomethingOf<SvXMLImport>{});
-}
-
 void SmXMLImport::endDocument()
 {
     //Set the resulted tree into the SmDocShell where it belongs
@@ -447,7 +426,7 @@ void SmXMLImport::endDocument()
     if (pTree && pTree->GetType() == SmNodeType::Table)
     {
         uno::Reference<frame::XModel> xModel = GetModel();
-        SmModel* pModel = comphelper::getFromUnoTunnel<SmModel>(xModel);
+        SmModel* pModel = dynamic_cast<SmModel*>(xModel.get());
 
         if (pModel)
         {
@@ -626,7 +605,7 @@ void SmXMLContext_Helper::ApplyAttrs()
         return;
 
     SmToken aToken;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.nLevel = 5;
 
     if (nIsBold != -1)
@@ -816,7 +795,7 @@ void SmXMLTokenAttrHelper::ApplyAttrs(MathMLMathvariantValue eDefaultMv)
     {
         SmToken aToken;
         aToken.eType = eType;
-        aToken.cMathChar = u"";
+        aToken.cMathChar = u""_ustr;
         aToken.nLevel = 5;
         std::unique_ptr<SmFontNode> pFontNode(new SmFontNode(aToken));
         pFontNode->SetSubNodes(nullptr, popOrZero(rNodeStack));
@@ -1012,7 +991,7 @@ void SmXMLPhantomContext_Impl::endFastElement(sal_Int32 nElement)
         SmXMLRowContext_Impl::endFastElement(nElement);
 
     SmToken aToken;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.nLevel = 5;
     aToken.eType = TPHANTOM;
 
@@ -1027,8 +1006,8 @@ namespace
 class SmXMLFencedContext_Impl : public SmXMLRowContext_Impl
 {
 protected:
-    sal_Unicode cBegin;
-    sal_Unicode cEnd;
+    OUString cBegin;
+    OUString cEnd;
     bool bIsStretchy;
 
 public:
@@ -1055,10 +1034,10 @@ void SmXMLFencedContext_Impl::startFastElement(
         {
             //temp, starmath cannot handle multichar brackets (I think)
             case XML_OPEN:
-                cBegin = aIter.toString()[0];
+                cBegin = aIter.toString();
                 break;
             case XML_CLOSE:
-                cEnd = aIter.toString()[0];
+                cEnd = aIter.toString();
                 break;
             case XML_STRETCHY:
                 bIsStretchy = IsXMLToken(aIter, XML_TRUE);
@@ -1074,7 +1053,7 @@ void SmXMLFencedContext_Impl::startFastElement(
 void SmXMLFencedContext_Impl::endFastElement(sal_Int32 /*nElement*/)
 {
     SmToken aToken;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.aText = ",";
     aToken.nLevel = 5;
 
@@ -1096,7 +1075,7 @@ void SmXMLFencedContext_Impl::endFastElement(sal_Int32 /*nElement*/)
 
     SmNodeArray aRelationArray;
     SmNodeStack& rNodeStack = GetSmImport().GetNodeStack();
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.eType = TIDENT;
 
     auto i = rNodeStack.size() - nElementCount;
@@ -1164,7 +1143,7 @@ public:
     SmXMLNumberContext_Impl(SmXMLImport& rImport)
         : SmXMLImportContext(rImport)
     {
-        aToken.cMathChar = u"";
+        aToken.cMathChar = u""_ustr;
         aToken.nLevel = 5;
         aToken.eType = TNUMBER;
     }
@@ -1241,7 +1220,7 @@ public:
     SmXMLTextContext_Impl(SmXMLImport& rImport)
         : SmXMLImportContext(rImport)
     {
-        aToken.cMathChar = u"";
+        aToken.cMathChar = u""_ustr;
         aToken.nLevel = 5;
         aToken.eType = TTEXT;
     }
@@ -1270,7 +1249,7 @@ public:
     SmXMLStringContext_Impl(SmXMLImport& rImport)
         : SmXMLImportContext(rImport)
     {
-        aToken.cMathChar = u"";
+        aToken.cMathChar = u""_ustr;
         aToken.nLevel = 5;
         aToken.eType = TTEXT;
     }
@@ -1315,7 +1294,7 @@ public:
         , maTokenAttrHelper(*this)
         , aStyleHelper(*this)
     {
-        aToken.cMathChar = u"";
+        aToken.cMathChar = u""_ustr;
         aToken.nLevel = 5;
         aToken.eType = TIDENT;
     }
@@ -1398,25 +1377,23 @@ public:
 
 void SmXMLOperatorContext_Impl::TCharacters(const OUString& rChars)
 {
-    aToken.setChar(rChars[0]);
+    aToken.setChar(rChars);
     SmToken bToken;
     if (bIsFenced)
     {
         if (isPrefix)
-            bToken
-                = starmathdatabase::Identify_Prefix_SmXMLOperatorContext_Impl(aToken.cMathChar[0]);
+            bToken = starmathdatabase::Identify_Prefix_SmXMLOperatorContext_Impl(aToken.cMathChar);
         else if (isInfix)
             bToken = SmToken(TMLINE, MS_VERTLINE, "mline", TG::NONE, 0);
         else if (isPostfix)
-            bToken
-                = starmathdatabase::Identify_Postfix_SmXMLOperatorContext_Impl(aToken.cMathChar[0]);
+            bToken = starmathdatabase::Identify_Postfix_SmXMLOperatorContext_Impl(aToken.cMathChar);
         else
             bToken = starmathdatabase::Identify_PrefixPostfix_SmXMLOperatorContext_Impl(
-                aToken.cMathChar[0]);
+                aToken.cMathChar);
     }
     else
-        bToken = starmathdatabase::Identify_SmXMLOperatorContext_Impl(aToken.cMathChar[0],
-                                                                      bIsStretchy);
+        bToken
+            = starmathdatabase::Identify_SmXMLOperatorContext_Impl(aToken.cMathChar, bIsStretchy);
     if (bToken.eType != TERROR)
         aToken = bToken;
 }
@@ -1531,7 +1508,7 @@ void SmXMLSpaceContext_Impl::startFastElement(
     }
     SmToken aToken;
     aToken.eType = TBLANK;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.nGroup = TG::Blank;
     aToken.nLevel = 5;
     std::unique_ptr<SmBlankNode> pBlank(new SmBlankNode(aToken));
@@ -1571,7 +1548,7 @@ void SmXMLSubContext_Impl::GenericEndElement(SmTokenType eType, SmSubSup eSubSup
         return;
 
     SmToken aToken;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.eType = eType;
     std::unique_ptr<SmSubSupNode> pNode(new SmSubSupNode(aToken));
     SmNodeStack& rNodeStack = GetSmImport().GetNodeStack();
@@ -1625,7 +1602,7 @@ void SmXMLSubSupContext_Impl::GenericEndElement(SmTokenType eType, SmSubSup aSub
         return;
 
     SmToken aToken;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.eType = eType;
     std::unique_ptr<SmSubSupNode> pNode(new SmSubSupNode(aToken));
     SmNodeStack& rNodeStack = GetSmImport().GetNodeStack();
@@ -1683,7 +1660,7 @@ void SmXMLUnderContext_Impl::HandleAccent()
     SmNodeStack& rNodeStack = GetSmImport().GetNodeStack();
     std::unique_ptr<SmNode> pTest = popOrZero(rNodeStack);
     SmToken aToken;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.eType = TUNDERLINE;
 
     std::unique_ptr<SmNode> pFirst;
@@ -1754,7 +1731,7 @@ void SmXMLOverContext_Impl::HandleAccent()
         return;
 
     SmToken aToken;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.eType = TACUTE;
 
     std::unique_ptr<SmAttributeNode> pNode(new SmAttributeNode(aToken));
@@ -1813,7 +1790,7 @@ public:
 void SmXMLNoneContext_Impl::endFastElement(sal_Int32)
 {
     SmToken aToken;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.aText.clear();
     aToken.nLevel = 5;
     aToken.eType = TIDENT;
@@ -2078,7 +2055,7 @@ void SmXMLFracContext_Impl::endFastElement(sal_Int32)
         return;
 
     SmToken aToken;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.eType = TFRAC;
     std::unique_ptr<SmStructureNode> pSNode(new SmBinVerNode(aToken));
     std::unique_ptr<SmNode> pOper(new SmRectangleNode(aToken));
@@ -2156,7 +2133,7 @@ void SmXMLRowContext_Impl::endFastElement(sal_Int32)
                 && (aRelationArray[nSize - 1]->GetType() == SmNodeType::Math)))
         {
             SmToken aToken;
-            aToken.cMathChar = u"";
+            aToken.cMathChar = u""_ustr;
             aToken.nLevel = 5;
 
             int nLeft = 0, nRight = 0;
@@ -2167,7 +2144,7 @@ void SmXMLRowContext_Impl::endFastElement(sal_Int32)
                 nLeft = 1;
             }
             else
-                aToken.cMathChar = u"";
+                aToken.cMathChar = u""_ustr;
 
             aToken.eType = TLPARENT;
             std::unique_ptr<SmNode> pLeft(new SmMathSymbolNode(aToken));
@@ -2179,7 +2156,7 @@ void SmXMLRowContext_Impl::endFastElement(sal_Int32)
                 nRight = 1;
             }
             else
-                aToken.cMathChar = u"";
+                aToken.cMathChar = u""_ustr;
 
             aToken.eType = TRPARENT;
             std::unique_ptr<SmNode> pRight(new SmMathSymbolNode(aToken));
@@ -2335,7 +2312,7 @@ void SmXMLMultiScriptsContext_Impl::ProcessSubSupPairs(bool bIsPrescript)
     if (nCount % 2 == 0)
     {
         SmToken aToken;
-        aToken.cMathChar = u"";
+        aToken.cMathChar = u""_ustr;
         aToken.eType = bIsPrescript ? TLSUB : TRSUB;
 
         SmNodeStack aReverseStack;
@@ -2443,7 +2420,7 @@ void SmXMLTableContext_Impl::endFastElement(sal_Int32)
     aReverseStack.clear();
 
     SmToken aToken;
-    aToken.cMathChar = u"";
+    aToken.cMathChar = u""_ustr;
     aToken.eType = TMATRIX;
     std::unique_ptr<SmMatrixNode> pSNode(new SmMatrixNode(aToken));
     pSNode->SetSubNodes(std::move(aExpressionArray));
@@ -2577,7 +2554,7 @@ void SmXMLImport::SetViewSettings(const Sequence<PropertyValue>& aViewProps)
     if (!xModel.is())
         return;
 
-    SmModel* pModel = comphelper::getFromUnoTunnel<SmModel>(xModel);
+    SmModel* pModel = dynamic_cast<SmModel*>(xModel.get());
 
     if (!pModel)
         return;
@@ -2631,9 +2608,9 @@ void SmXMLImport::SetConfigurationSettings(const Sequence<PropertyValue>& aConfP
     if (!xInfo.is())
         return;
 
-    static const OUStringLiteral sFormula(u"Formula");
-    static const OUStringLiteral sBasicLibraries(u"BasicLibraries");
-    static const OUStringLiteral sDialogLibraries(u"DialogLibraries");
+    static constexpr OUStringLiteral sFormula(u"Formula");
+    static constexpr OUStringLiteral sBasicLibraries(u"BasicLibraries");
+    static constexpr OUStringLiteral sDialogLibraries(u"DialogLibraries");
     for (const PropertyValue& rValue : aConfProps)
     {
         if (rValue.Name != sFormula && rValue.Name != sBasicLibraries

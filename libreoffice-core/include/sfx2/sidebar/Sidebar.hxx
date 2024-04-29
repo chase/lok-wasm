@@ -35,7 +35,8 @@ namespace sfx2::sidebar {
 class SFX2_DLLPUBLIC Sidebar
 {
 public:
-    static void ToggleDeck(std::u16string_view rsDeckId, SfxViewFrame *pViewFrame);
+    static void ShowDeck(std::u16string_view rsDeckId, SfxViewFrame* pViewFrame,
+                         bool bToggle);
 
     /** Switch to the deck that contains the specified panel and make
         sure that the panel is visible (expanded and scrolled into the
@@ -60,6 +61,8 @@ public:
     static bool IsPanelVisible(
         std::u16string_view rsPanelId,
         const css::uno::Reference<css::frame::XFrame>& rxFrame);
+
+    static bool Setup(std::u16string_view sidebarDeckId = u"");
 };
 
 } // end of namespace sfx2::sidebar

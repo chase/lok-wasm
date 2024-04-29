@@ -124,7 +124,7 @@ SwUndoInsert::SwUndoInsert( const SwNode& rNd )
 }
 
 // Check if the next Insert can be combined with the current one. If so
-// change the length and InsPos. As a result, SwDoc::Inser will not add a
+// change the length and InsPos. As a result, SwDoc::Insert will not add a
 // new object into the Undo list.
 
 bool SwUndoInsert::CanGrouping( sal_Unicode cIns )
@@ -535,31 +535,31 @@ MakeUndoReplaceRewriter(sal_uLong const occurrences,
         aResult.AddRule(UndoArg1, OUString::number(occurrences));
         aResult.AddRule(UndoArg2, SwResId(STR_OCCURRENCES_OF));
 
-        OUString aTmpStr = SwResId(STR_START_QUOTE);
-        aTmpStr += ShortenString(sOld, nUndoStringLength,
-                                 SwResId(STR_LDOTS));
-        aTmpStr += SwResId(STR_END_QUOTE);
+        OUString aTmpStr =
+            SwResId(STR_START_QUOTE)
+            + ShortenString(sOld, nUndoStringLength, SwResId(STR_LDOTS))
+            + SwResId(STR_END_QUOTE);
         aResult.AddRule(UndoArg3, aTmpStr);
     }
     else if (1 == occurrences)
     {
         {
-            OUString aTmpStr = SwResId(STR_START_QUOTE);
             // #i33488 #
-            aTmpStr += ShortenString(sOld, nUndoStringLength,
-                                     SwResId(STR_LDOTS));
-            aTmpStr += SwResId(STR_END_QUOTE);
+            OUString aTmpStr =
+                SwResId(STR_START_QUOTE)
+                + ShortenString(sOld, nUndoStringLength, SwResId(STR_LDOTS))
+                + SwResId(STR_END_QUOTE);
             aResult.AddRule(UndoArg1, aTmpStr);
         }
 
         aResult.AddRule(UndoArg2, SwResId(STR_YIELDS));
 
         {
-            OUString aTmpStr = SwResId(STR_START_QUOTE);
             // #i33488 #
-            aTmpStr += ShortenString(sNew, nUndoStringLength,
-                                     SwResId(STR_LDOTS));
-            aTmpStr += SwResId(STR_END_QUOTE);
+            OUString aTmpStr =
+                SwResId(STR_START_QUOTE)
+                + ShortenString(sNew, nUndoStringLength, SwResId(STR_LDOTS))
+                + SwResId(STR_END_QUOTE);
             aResult.AddRule(UndoArg3, aTmpStr);
         }
     }
@@ -613,7 +613,7 @@ SwUndoReplace::Impl::Impl(
     {
         if( pNd->HasSwAttrSet() )
             m_pHistory->CopyFormatAttr( *pNd->GetpSwAttrSet(), nNewPos );
-        m_pHistory->Add( pNd->GetTextColl(), nNewPos, SwNodeType::Text );
+        m_pHistory->AddColl(pNd->GetTextColl(), nNewPos, SwNodeType::Text);
 
         SwTextNode* pNext = pEnd->GetNode().GetTextNode();
         SwNodeOffset nTmp = pNext->GetIndex();
@@ -621,7 +621,7 @@ SwUndoReplace::Impl::Impl(
                             pNext->GetText().getLength(), true );
         if( pNext->HasSwAttrSet() )
             m_pHistory->CopyFormatAttr( *pNext->GetpSwAttrSet(), nTmp );
-        m_pHistory->Add( pNext->GetTextColl(),nTmp, SwNodeType::Text );
+        m_pHistory->AddColl(pNext->GetTextColl(),nTmp, SwNodeType::Text);
         // METADATA: store
         m_pMetadataUndoStart = pNd  ->CreateUndo();
         m_pMetadataUndoEnd   = pNext->CreateUndo();
@@ -998,10 +998,10 @@ SwRewriter SwUndoInsertLabel::CreateRewriter(const OUString &rStr)
 
     if (!rStr.isEmpty())
     {
-        aTmpStr += SwResId(STR_START_QUOTE);
-        aTmpStr += ShortenString(rStr, nUndoStringLength,
-                                 SwResId(STR_LDOTS));
-        aTmpStr += SwResId(STR_END_QUOTE);
+        aTmpStr =
+            SwResId(STR_START_QUOTE)
+            + ShortenString(rStr, nUndoStringLength, SwResId(STR_LDOTS))
+            + SwResId(STR_END_QUOTE);
     }
 
     aRewriter.AddRule(UndoArg1, aTmpStr);

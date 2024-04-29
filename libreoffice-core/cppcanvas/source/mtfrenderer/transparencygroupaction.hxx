@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cppcanvas/canvas.hxx>
+#include <vcl/gradient.hxx>
 #include <action.hxx>
 
 #include <memory>
@@ -30,7 +31,6 @@ namespace basegfx {
 }
 
 class GDIMetaFile;
-class Gradient;
 
 
 /* Definition of internal::TransparencyGroupActionFactory */
@@ -38,9 +38,6 @@ class Gradient;
 namespace cppcanvas::internal
     {
         struct OutDevState;
-
-        typedef std::unique_ptr< GDIMetaFile >  MtfAutoPtr;
-        typedef std::unique_ptr< Gradient >     GradientAutoPtr;
 
         /** Transparency group action.
 
@@ -75,8 +72,8 @@ namespace cppcanvas::internal
                 Size of the transparency group object, in current
                 state coordinate system.
              */
-            std::shared_ptr<Action> createTransparencyGroupAction( MtfAutoPtr&&                  rGroupMtf,
-                                                                  GradientAutoPtr&&             rAlphaGradient,
+            std::shared_ptr<Action> createTransparencyGroupAction( std::unique_ptr< GDIMetaFile >&& rGroupMtf,
+                                                                  std::optional< Gradient >&&   rAlphaGradient,
                                                                   const ::basegfx::B2DPoint&    rDstPoint,
                                                                   const ::basegfx::B2DVector&   rDstSize,
                                                                   const CanvasSharedPtr&        rCanvas,

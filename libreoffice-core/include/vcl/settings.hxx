@@ -20,6 +20,8 @@
 #ifndef INCLUDED_VCL_SETTINGS_HXX
 #define INCLUDED_VCL_SETTINGS_HXX
 
+#include <config_options.h>
+
 #include <vcl/dllapi.h>
 #include <tools/color.hxx>
 #include <tools/gen.hxx>
@@ -336,6 +338,9 @@ public:
     void                            SetDeactiveBorderColor( const Color& rColor );
     const Color&                    GetDeactiveBorderColor() const;
 
+    void                            SetAccentColor( const Color& rColor );
+    const Color&                    GetAccentColor() const;
+
     void                            SetHighlightColor( const Color& rColor );
     const Color&                    GetHighlightColor() const;
 
@@ -648,8 +653,12 @@ public:
     // 0 auto, 1 light, 2, dark
     static void                     SetDarkMode(int nMode);
     static int                      GetDarkMode();
+    // return if dark mode is active, resolving 'auto' to dark (true) or light (false)
+    static bool                     GetUseDarkMode();
     static void                     SetAppColorMode(int nMode);
     static int                      GetAppColorMode();
+    // return true if system preferences are set to use reduced animation
+    static bool                     GetUseReducedAnimation();
     bool                            operator ==( const MiscSettings& rSet ) const;
     bool                            operator !=( const MiscSettings& rSet ) const;
 };

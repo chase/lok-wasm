@@ -4,5 +4,6 @@
 #define CONFIG_BUILDCONFIG_H
 
 #define BUILDCONFIG ""
+#define BUILDCONFIG_RECORDED 0
 
 #endif

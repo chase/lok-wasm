@@ -68,42 +68,7 @@ basegfx::BGradient lcl_buildGradientFromStringMap(StringMap& rMap)
 
 namespace basegfx
 {
-void BColorStops::setColorStopSequence(const css::awt::ColorStopSequence& rColorStops)
-{
-    const sal_Int32 nLen(rColorStops.getLength());
-
-    if (0 != nLen)
-    {
-        // we have ColorStops
-        reserve(nLen);
-        const css::awt::ColorStop* pSourceColorStop(rColorStops.getConstArray());
-
-        for (sal_Int32 a(0); a < nLen; a++, pSourceColorStop++)
-        {
-            emplace_back(pSourceColorStop->StopOffset,
-                         BColor(pSourceColorStop->StopColor.Red, pSourceColorStop->StopColor.Green,
-                                pSourceColorStop->StopColor.Blue));
-        }
-    }
-}
-
-BColorStops::BColorStops(const css::awt::ColorStopSequence& rColorStops)
-{
-    setColorStopSequence(rColorStops);
-}
-
-BColorStops::BColorStops(const css::uno::Any& rVal)
-{
-    if (rVal.has<css::awt::ColorStopSequence>())
-    {
-        // we can use awt::ColorStopSequence
-        css::awt::ColorStopSequence aColorStopSequence;
-        rVal >>= aColorStopSequence;
-        setColorStopSequence(aColorStopSequence);
-    }
-}
-
-// constuctor with two colors to explicitly create a
+// constructor with two colors to explicitly create a
 // BColorStops for a single StartColor @0.0 & EndColor @1.0
 BColorStops::BColorStops(const BColor& rStart, const BColor& rEnd)
 {
@@ -498,28 +463,6 @@ bool BColorStops::checkPenultimate() const
     return true;
 }
 
-/* Tooling method to fill a awt::ColorStopSequence with
-        the data from the given ColorStops. This is used in
-        UNO API implementations.
-    */
-css::awt::ColorStopSequence BColorStops::getAsColorStopSequence() const
-{
-    css::awt::ColorStopSequence aRetval(size());
-    // rColorStopSequence.realloc(rColorStops.size());
-    css::awt::ColorStop* pTargetColorStop(aRetval.getArray());
-
-    for (const auto& candidate : *this)
-    {
-        pTargetColorStop->StopOffset = candidate.getStopOffset();
-        pTargetColorStop->StopColor = css::rendering::RGBColor(candidate.getStopColor().getRed(),
-                                                               candidate.getStopColor().getGreen(),
-                                                               candidate.getStopColor().getBlue());
-        pTargetColorStop++;
-    }
-
-    return aRetval;
-}
-
 /* Tooling method to check if a ColorStop vector is defined
         by a single color. It returns true if this is the case.
         If true is returned, rSingleColor contains that single
@@ -681,7 +624,7 @@ bool BColorStops::isSymmetrical() const
 
 void BColorStops::doApplyAxial()
 {
-    // preapare new ColorStops
+    // prepare new ColorStops
     basegfx::BColorStops aNewColorStops;
 
     // add gradient stops in reverse order, scaled to [0.0 .. 0.5]
@@ -746,10 +689,9 @@ void BColorStops::doApplySteps(sal_uInt16 nStepCount)
             // the same color as the previous one ended
             aNewColorStops.push_back(*aColorL);
         }
-
         if (!basegfx::fTools::equalZero(fDelta))
         {
-            // create in-between steps, always two at the same positon to
+            // create in-between steps, always two at the same position to
             // define a 'hard' color stop. Get start/end color for the segment
             const basegfx::BColor& rStartColor(aColorL->getStopColor());
             const basegfx::BColor& rEndColor(aColorR->getStopColor());
@@ -757,20 +699,21 @@ void BColorStops::doApplySteps(sal_uInt16 nStepCount)
             if (rStartColor != rEndColor)
             {
                 // get relative single-step width
-                const double fSingleStep(1.0 / static_cast<double>(nStepCount));
+                // tdf155852 Use same method for the color as in rendering.
+                const double fSingleStep(1.0 / static_cast<double>(nStepCount - 1));
+                const double fOffsetStep(fDelta / static_cast<double>(nStepCount));
 
                 for (sal_uInt16 a(1); a < nStepCount; a++)
                 {
-                    // calculate position since being used twice
-                    const double fPosition(fStart
-                                           + (fDelta * (static_cast<double>(a) * fSingleStep)));
+                    // calculate stop position since being used twice
+                    const double fPosition(fStart + fOffsetStep * static_cast<double>(a));
 
-                    // add start color of sub-segment
+                    // add end color of previous sub-segment
                     aNewColorStops.emplace_back(
                         fPosition, basegfx::interpolate(rStartColor, rEndColor,
                                                         static_cast<double>(a - 1) * fSingleStep));
 
-                    // add end color of sub-segment
+                    // add start color of current sub-segment
                     aNewColorStops.emplace_back(
                         fPosition, basegfx::interpolate(rStartColor, rEndColor,
                                                         static_cast<double>(a) * fSingleStep));
@@ -856,72 +799,6 @@ BGradient::BGradient(const basegfx::BColorStops& rColorStops, css::awt::Gradient
     SetColorStops(aColorStops);
 }
 
-void BGradient::setGradient2(const css::awt::Gradient2& rGradient2)
-{
-    // set values
-    SetGradientStyle(rGradient2.Style);
-    SetAngle(Degree10(rGradient2.Angle));
-    SetBorder(rGradient2.Border);
-    SetXOffset(rGradient2.XOffset);
-    SetYOffset(rGradient2.YOffset);
-    SetStartIntens(rGradient2.StartIntensity);
-    SetEndIntens(rGradient2.EndIntensity);
-    SetSteps(rGradient2.StepCount);
-
-    // set ColorStops
-    if (rGradient2.ColorStops.hasElements())
-    {
-        // if we have a awt::ColorStopSequence, use it
-        aColorStops = BColorStops(rGradient2.ColorStops);
-        aColorStops.sortAndCorrect();
-    }
-    else
-    {
-        // if not, for compatibility, use StartColor/EndColor
-        aColorStops = BColorStops{
-            BColorStop(0.0, ColorToBColorConverter(rGradient2.StartColor).getBColor()),
-            BColorStop(1.0, ColorToBColorConverter(rGradient2.EndColor).getBColor())
-        };
-    }
-}
-
-BGradient::BGradient(const css::awt::Gradient2& rGradient2) { setGradient2(rGradient2); }
-
-BGradient::BGradient(const css::uno::Any& rVal)
-    : BGradient()
-{
-    if (rVal.has<css::awt::Gradient2>())
-    {
-        // we can use awt::Gradient2 directly
-        css::awt::Gradient2 aGradient2;
-        rVal >>= aGradient2;
-
-        setGradient2(aGradient2);
-    }
-    else if (rVal.has<css::awt::Gradient>())
-    {
-        // use awt::Gradient
-        css::awt::Gradient aGradient;
-        rVal >>= aGradient;
-
-        // set values
-        SetGradientStyle(aGradient.Style);
-        SetAngle(Degree10(aGradient.Angle));
-        SetBorder(aGradient.Border);
-        SetXOffset(aGradient.XOffset);
-        SetYOffset(aGradient.YOffset);
-        SetStartIntens(aGradient.StartIntensity);
-        SetEndIntens(aGradient.EndIntensity);
-        SetSteps(aGradient.StepCount);
-
-        // complete data by creating ColorStops from fixe Start/EndColor
-        aColorStops = BColorStops{
-            BColorStop(0.0, ColorToBColorConverter(aGradient.StartColor).getBColor()),
-            BColorStop(1.0, ColorToBColorConverter(aGradient.EndColor).getBColor())
-        };
-    }
-}
-
 bool BGradient::operator==(const BGradient& rGradient) const
 {
     return (eStyle == rGradient.eStyle && aColorStops == rGradient.aColorStops
@@ -967,50 +844,6 @@ boost::property_tree::ptree BGradient::dumpAsJSON() const
     aTree.put("stepcount", std::to_string(nStepCount));
 
     return aTree;
-}
-
-css::awt::Gradient2 BGradient::getAsGradient2() const
-{
-    css::awt::Gradient2 aRetval;
-
-    // standard values
-    aRetval.Style = GetGradientStyle();
-    aRetval.Angle = static_cast<short>(GetAngle());
-    aRetval.Border = GetBorder();
-    aRetval.XOffset = GetXOffset();
-    aRetval.YOffset = GetYOffset();
-    aRetval.StartIntensity = GetStartIntens();
-    aRetval.EndIntensity = GetEndIntens();
-    aRetval.StepCount = GetSteps();
-
-    // for compatibility, still set StartColor/EndColor
-    // NOTE: All code after adapting to multi color gradients works
-    //       using the ColorSteps, so in principle Start/EndColor might
-    //       be either
-    //        (a) ignored consequently everywhere or
-    //        (b) be set/added consequently everywhere
-    //       since this is - in principle - redundant data.
-    //       Be aware that e.g. cases like DrawingML::EqualGradients
-    //       and others would have to be identified and adapted (!)
-    //       Since awt::Gradient2 is UNO API data there might
-    //       be cases where just awt::Gradient is transferred, so (b)
-    //       is far better backwards compatible and thus more safe, so
-    //       all changes will make use of additionally using/setting
-    //       these additionally, but will only make use of the given
-    //       ColorSteps if these are not empty, assuming that these
-    //       already contain Start/EndColor.
-    //       In principle that redundancy and that it is conflict-free
-    //       could even be checked and asserted, but consequently using
-    //       (b) methodically should be safe.
-    aRetval.StartColor
-        = static_cast<sal_Int32>(ColorToBColorConverter(aColorStops.front().getStopColor()));
-    aRetval.EndColor
-        = static_cast<sal_Int32>(ColorToBColorConverter(aColorStops.back().getStopColor()));
-
-    // fill ColorStops to extended Gradient2
-    aRetval.ColorStops = aColorStops.getAsColorStopSequence();
-
-    return aRetval;
 }
 
 void BGradient::tryToRecreateBorder(basegfx::BColorStops* pAssociatedTransparencyStops)

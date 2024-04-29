@@ -11,6 +11,8 @@
 
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
+#include <comphelper/propertyvalue.hxx>
+#include <com/sun/star/text/XTextTable.hpp>
 #include <sfx2/viewsh.hxx>
 #include <vcl/gdimtf.hxx>
 #include <vcl/scheduler.hxx>
@@ -32,6 +34,7 @@
 #include <ndtxt.hxx>
 #include <textcontentcontrol.hxx>
 #include <swdtflvr.hxx>
+#include <txtrfmrk.hxx>
 #include <frmmgr.hxx>
 #include <formatflysplit.hxx>
 #include <ftnidx.hxx>
@@ -61,12 +64,38 @@ CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testBtlrCellChinese)
     std::shared_ptr<GDIMetaFile> xMetaFile = pShell->GetPreviewMetaFile();
     MetafileXmlDump dumper;
     xmlDocUniquePtr pXmlDoc = dumpAndParse(dumper, *xMetaFile);
-    assertXPath(pXmlDoc, "//font[1]", "orientation", "900");
+    assertXPath(pXmlDoc, "//font[1]"_ostr, "orientation"_ostr, "900");
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: false
     // - Actual  : true
     // i.e. the glyph was rotated further, so it was upside down.
-    assertXPath(pXmlDoc, "//font[1]", "vertical", "false");
+    assertXPath(pXmlDoc, "//font[1]"_ostr, "vertical"_ostr, "false");
+}
+
+CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testSpecialInsertAfterMergedCells)
+{
+    // Load a document with a table with bottom right cells merged vertically.
+    // SpecialInsert with alt-Enter must work here, too.
+    createSwDoc("special-insert-after-merged-cells.fodt");
+    SwDoc* pDoc = getSwDoc();
+    SwNodeOffset const nNodes(pDoc->GetNodes().Count());
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    SwDocShell* pShell = pTextDoc->GetDocShell();
+    SwWrtShell* pWrtShell = pShell->GetWrtShell();
+    // go to the merged cell
+    pWrtShell->Right(SwCursorSkipMode::Chars, /*bSelect=*/false, 1, /*bBasicCall=*/false);
+
+    // When pressing alt-Enter on the keyboard:
+    SwEditWin& rEditWin = pWrtShell->GetView().GetEditWin();
+    vcl::KeyCode aKeyCode(KEY_RETURN, KEY_MOD2);
+    KeyEvent aKeyEvent(' ', aKeyCode);
+    rEditWin.KeyInput(aKeyEvent);
+
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: nNodes + 1
+    // - Actual  : nNodes
+    // i.e. new empty paragraph wasn't inserted under the table
+    CPPUNIT_ASSERT_EQUAL(nNodes + 1, pDoc->GetNodes().Count());
 }
 
 CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testTextBoxCopyAnchor)
@@ -81,7 +110,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testTextBoxCopyAnchor)
     pWrtShell->SttEndDoc(/*bStart=*/false);
     pWrtShell->Paste(aClipboard);
 
-    const SwFrameFormats& rFormats = *pShell->GetDoc()->GetSpzFrameFormats();
+    const auto& rFormats = *pShell->GetDoc()->GetSpzFrameFormats();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 4
     // - Actual  : 6
@@ -183,7 +212,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testFlyAnchorUndo)
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     SwDocShell* pShell = pTextDoc->GetDocShell();
     SwDoc* pDoc = pShell->GetDoc();
-    const SwFrameFormats& rSpz = *pDoc->GetSpzFrameFormats();
+    const auto& rSpz = *pDoc->GetSpzFrameFormats();
     sal_Int32 nExpected = rSpz[0]->GetAnchor().GetAnchorContentOffset();
 
     // When deleting that last character and undoing it:
@@ -225,6 +254,48 @@ CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testSplitNodeSuperscriptCopy)
     // superscript appeared in the next paragraph.
     CPPUNIT_ASSERT(!aSet.HasItem(RES_CHRATR_ESCAPEMENT));
 }
+
+/* FIXME: behavior change reverted due to regression;
+ * see sw/source/core/txtnode/atrref.cxx
+ *CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testDontExpandRefmark)
+ *{
+ *    // Given a document with a refmark:
+ *    createSwDoc();
+ *
+ *    uno::Sequence<css::beans::PropertyValue> aArgs = {
+ *        comphelper::makePropertyValue("TypeName", uno::Any(OUString("SetRef"))),
+ *        comphelper::makePropertyValue(
+ *            "Name", uno::Any(OUString("ZOTERO_ITEM CSL_CITATION {} RNDpyJknp173F"))),
+ *        comphelper::makePropertyValue("Content", uno::Any(OUString("foo"))),
+ *    };
+ *    dispatchCommand(mxComponent, ".uno:InsertField", aArgs);
+ *
+ *    SwDoc* pDoc = getSwDoc();
+ *    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+ *    SwPosition& rCursor = *pWrtShell->GetCursor()->GetPoint();
+ *    SwTextNode* pTextNode = rCursor.GetNode().GetTextNode();
+ *    std::vector<SwTextAttr*> aAttrs
+ *        = pTextNode->GetTextAttrsAt(rCursor.GetContentIndex(), RES_TXTATR_REFMARK);
+ *
+ *    auto& rRefmark = const_cast<SwFormatRefMark&>(aAttrs[0]->GetRefMark());
+ *    auto pTextRefMark = const_cast<SwTextRefMark*>(rRefmark.GetTextRefMark());
+ *
+ *    // When typing after the refmark...
+ *    pWrtShell->SttEndDoc(true);
+ *    pWrtShell->Right(SwCursorSkipMode::Chars, false, 3, false);
+ *    pWrtShell->Insert(" bar");
+ *
+ *    // and skipping back to insert a comma after the refmark
+ *    pWrtShell->Left(SwCursorSkipMode::Chars, false, 4, false);
+ *    pWrtShell->Insert(",");
+ *
+ *    // Without the accompanying fix in place, this test would have failed with:
+ *    // - Expected: 3
+ *    // - Actual  : 4
+ *    // i.e. the reference mark expanded
+ *    CPPUNIT_ASSERT_EQUAL(3, static_cast<int>(*pTextRefMark->End()));
+ *}
+ */
 
 CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testInsertDropDownContentControlTwice)
 {
@@ -366,6 +437,32 @@ CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testContentControlCopy)
     CPPUNIT_ASSERT_EQUAL(SwContentControlType::CHECKBOX, rFormat2.GetContentControl()->GetType());
 }
 
+CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testTdf157287)
+{
+    createSwDoc("tdf157287.odt");
+    uno::Reference<text::XTextFieldsSupplier> xTextFieldsSupplier(mxComponent, uno::UNO_QUERY);
+    auto xFieldsAccess(xTextFieldsSupplier->getTextFields());
+    uno::Reference<container::XEnumeration> xFields(xFieldsAccess->createEnumeration());
+    uno::Reference<text::XTextField> xField(xFields->nextElement(), uno::UNO_QUERY);
+
+    CPPUNIT_ASSERT_EQUAL(OUString("30"), xField->getPresentation(false));
+
+    uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xIndexAccess(xTextTablesSupplier->getTextTables(),
+                                                         uno::UNO_QUERY);
+    uno::Reference<text::XTextTable> xTextTable(xIndexAccess->getByIndex(0), uno::UNO_QUERY);
+
+    uno::Reference<text::XTextRange> xCellA1(xTextTable->getCellByName("B1"), uno::UNO_QUERY);
+    xCellA1->setString("100");
+
+    dispatchCommand(mxComponent, ".uno:UpdateFields", {});
+
+    // Without the fix in place, this test would have failed with
+    // - Expected: 120
+    // - Actual  :
+    CPPUNIT_ASSERT_EQUAL(OUString("120"), xField->getPresentation(false));
+}
+
 CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testFlySplitFootnote)
 {
     // Given a document with a split fly (to host a table):
@@ -378,8 +475,8 @@ CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testFlySplitFootnote)
     aMgr.InsertFlyFrame(eAnchor, aMgr.GetPos(), aMgr.GetSize());
     pWrtShell->EndAllAction();
     pWrtShell->StartAllAction();
-    SwFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
-    SwFrameFormat* pFly = rFlys[0];
+    sw::FrameFormats<sw::SpzFrameFormat*>& rFlys = *pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormat* pFly = rFlys[0];
     SwAttrSet aSet(pFly->GetAttrSet());
     aSet.Put(SwFormatFlySplit(true));
     pDoc->SetAttr(aSet, *pFly);
@@ -432,8 +529,9 @@ CPPUNIT_TEST_FIXTURE(SwCoreTxtnodeTest, testSplitFlyAnchorSplit)
     // Also test that the new follow anchor text frame still has a fly portion, otherwise the anchor
     // text and the floating table would overlap:
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    OUString aPortionType = getXPath(
-        pXmlDoc, "//page[2]/body/txt[1]/SwParaPortion/SwLineLayout[1]/child::*[1]", "type");
+    OUString aPortionType
+        = getXPath(pXmlDoc, "//page[2]/body/txt[1]/SwParaPortion/SwLineLayout[1]/child::*[1]"_ostr,
+                   "type"_ostr);
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: PortionType::Fly
     // - Actual  : PortionType::Para

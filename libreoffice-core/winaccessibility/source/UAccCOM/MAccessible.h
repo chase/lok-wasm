@@ -26,7 +26,7 @@
 #include <com/sun/star/accessibility/XAccessible.hpp>
 #include <com/sun/star/accessibility/XAccessibleSelection.hpp>
 #include <com/sun/star/accessibility/XAccessibleAction.hpp>
-#include <AccObjectManagerAgent.hxx>
+#include <AccObjectWinManager.hxx>
 #include "EnumVariant.h"
 #include "acccommon.h"
 #include <rtl/ustring.hxx>
@@ -145,7 +145,7 @@ public:
     STDMETHOD(Put_XAccParent)(IMAccessible __RPC_FAR *pIParent) override;
     STDMETHOD(Put_XAccWindowHandle)(HWND hwnd) override;
     STDMETHOD(Put_XAccChildID)(long dChildID) override;
-    STDMETHOD(Put_XAccAgent)(hyper pAgent) override;
+    STDMETHOD(Put_XAccObjectManager)(hyper pManager) override;
     STDMETHOD(NotifyDestroy)() override;
     STDMETHOD(Put_ActionDescription)( const OLECHAR* szAction) override;
     STDMETHOD(SetDefaultAction)(hyper pAction) override;
@@ -199,15 +199,14 @@ private:
     HRESULT WINAPI SmartQI(void* pv, REFIID iid, void** ppvObject);
 
 public:
-    // AccObjectManagerAgent is a management object in UNO, here keep its pointer for
+    // AccObjectWinManager is a management object in UNO, here keep its pointer for
     // the implementation of accNavigate when descendant manage happens for List,Tree, or Table
-    // AccObjectManagerAgent and the following UNO objects XAccessible,XAccessibleSelection,
+    // AccObjectWinManager and the following UNO objects XAccessible,XAccessibleSelection,
     // XAccessibleAction are all used to operate UNO accessibility information directly when
     // implement some specific MSAA methods,such as accSelection,accNavigate
-    static AccObjectManagerAgent* g_pAgent;
+    static AccObjectWinManager* g_pAccObjectManager;
 
-    static bool get_IAccessibleFromXAccessible(
-            css::accessibility::XAccessible * pXAcc, IAccessible** ppIA);
+    static IAccessible* get_IAccessibleFromXAccessible(css::accessibility::XAccessible* pXAcc);
     XGUIDToComObjHash m_containedObjects;
 
     static HRESULT WINAPI SmartQI_(void* pv,
@@ -215,11 +214,6 @@ public:
     {
         return static_cast<CMAccessible*>(pv)->SmartQI(pv,iid,ppvObject);
     }
-
-    static OUString get_StringFromAny(css::uno::Any const & pAny);
-
-    static OUString get_String4Numbering(const css::uno::Any& pAny,
-            sal_Int16 numberingLevel, std::u16string_view numberingPrefix);
 
     // Helper function for data conversion.
     static void ConvertAnyToVariant(const css::uno::Any &rAnyVal,

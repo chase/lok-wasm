@@ -14,11 +14,7 @@
 #include <comphelper/processfactory.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 
-#if !defined WIN32_LEAN_AND_MEAN
-# define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#include <odbcinst.h>
+#include <systools/win32/odbccp32.hxx>
 #endif
 
 using namespace ::com::sun::star;
@@ -118,6 +114,7 @@ void VBATest::testMiscVBAFunctions()
         "minute.vb",
         "month.vb",
         "monthname.vb",
+        "like.vb",
         "oct.vb",
         "optional_paramters.vb",
         "qbcolor.vb",
@@ -211,7 +208,8 @@ void VBATest::testMiscOLEStuff()
 
     const int nBufSize = 1024 * 4;
     wchar_t sBuf[nBufSize];
-    SQLGetInstalledDriversW( sBuf, nBufSize, nullptr );
+    if (!sal::systools::odbccp32().SQLGetInstalledDrivers(sBuf, nBufSize))
+        return;
 
     const wchar_t *pODBCDriverName = sBuf;
     bool bFound = false;

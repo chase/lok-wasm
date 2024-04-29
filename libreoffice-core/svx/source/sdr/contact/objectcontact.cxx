@@ -32,7 +32,7 @@ bool ObjectContact::supportsGridOffsets() const
     return false;
 }
 
-void ObjectContact::calculateGridOffsetForViewOjectContact(
+void ObjectContact::calculateGridOffsetForViewObjectContact(
     basegfx::B2DVector& /*rTarget*/,
     const ViewObjectContact& /*rClient*/) const
 {
@@ -157,6 +157,18 @@ void ObjectContact::SetViewObjectContactRedirector(ViewObjectContactRedirector* 
 bool ObjectContact::isOutputToPrinter() const
 {
     return false;
+}
+
+// display page decoration? Default is true
+bool ObjectContact::isPageDecorationActive() const
+{
+    return true;
+}
+
+// display mster page content (ViewContactOfMasterPage)? Default is true
+bool ObjectContact::isMasterPageActive() const
+{
+    return true;
 }
 
 // recording MetaFile? Default is false

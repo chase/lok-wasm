@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_GTK_GTKDATA_HXX
-#define INCLUDED_VCL_INC_UNX_GTK_GTKDATA_HXX
+#pragma once
 
 #define GLIB_DISABLE_DEPRECATION_WARNINGS
 #include <gtk/gtk.h>
@@ -38,7 +37,9 @@
 #include <osl/conditn.hxx>
 #include <saltimer.hxx>
 #include <o3tl/enumarray.hxx>
+#include <unotools/weakref.hxx>
 
+#include <exception>
 #include <string_view>
 #include <vector>
 
@@ -192,8 +193,8 @@ inline GdkGLContext* surface_create_gl_context(GdkSurface* pSurface)
 #endif
 }
 
-void set_buildable_id(GtkBuildable* pWidget, const OString& rId);
-OString get_buildable_id(GtkBuildable* pWidget);
+void set_buildable_id(GtkBuildable* pWidget, const OUString& rId);
+OUString get_buildable_id(GtkBuildable* pWidget);
 
 void container_remove(GtkWidget* pContainer, GtkWidget* pChild);
 void container_add(GtkWidget* pContainer, GtkWidget* pChild);
@@ -202,7 +203,7 @@ void container_add(GtkWidget* pContainer, GtkWidget* pChild);
 typedef GtkClipboard GdkClipboard;
 #endif
 
-int getButtonPriority(std::string_view rType);
+int getButtonPriority(std::u16string_view rType);
 
 class GtkSalTimer final : public SalTimer
 {
@@ -282,13 +283,13 @@ class GtkSalData final : public GenericUnixSalData
     osl::Condition  m_aDispatchCondition;
     std::exception_ptr m_aException;
 
-    rtl::Reference<DocumentFocusListener> m_xDocumentFocusListener;
+    unotools::WeakReference<DocumentFocusListener> m_xDocumentFocusListener;
 
 public:
     GtkSalData();
     virtual ~GtkSalData() override;
 
-    DocumentFocusListener & GetDocumentFocusListener();
+    rtl::Reference<DocumentFocusListener> GetDocumentFocusListener();
 
     void Init();
     virtual void Dispose() override;
@@ -335,7 +336,7 @@ public:
     virtual int CaptureMouse( SalFrame* pFrame );
 
     SalX11Screen GetDefaultXScreen() { return m_pSys->GetDisplayDefaultXScreen(); }
-    Size         GetScreenSize( int nDisplayScreen );
+    AbsoluteScreenPixelSize GetScreenSize( int nDisplayScreen );
 
     void startupNotificationCompleted() { m_bStartupCompleted = true; }
 
@@ -362,6 +363,5 @@ GtkSalDisplay *GtkSalData::GetGtkDisplay() const
     return static_cast<GtkSalDisplay *>(GetDisplay());
 }
 
-#endif // INCLUDED_VCL_INC_UNX_GTK_GTKDATA_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

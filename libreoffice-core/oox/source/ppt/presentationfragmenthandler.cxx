@@ -25,6 +25,10 @@
 #include <tools/multisel.hxx>
 #include <comphelper/diagnose_ex.hxx>
 
+#include <frozen/bits/defines.h>
+#include <frozen/bits/elsa_std.h>
+#include <frozen/unordered_map.h>
+
 #include <com/sun/star/container/XNamed.hpp>
 #include <com/sun/star/drawing/XMasterPagesSupplier.hpp>
 #include <com/sun/star/drawing/XDrawPages.hpp>
@@ -72,12 +76,15 @@ using namespace ::com::sun::star::drawing;
 using namespace ::com::sun::star::presentation;
 using namespace ::com::sun::star::xml::sax;
 
-namespace oox::ppt {
-
-static std::map<PredefinedClrSchemeId, sal_Int32> PredefinedClrTokens =
+namespace oox::ppt
 {
-    //{ dk1, XML_dk1 },
-    //{ lt1, XML_lt1 },
+
+namespace
+{
+constexpr frozen::unordered_map<PredefinedClrSchemeId, sal_Int32, 12> constPredefinedClrTokens
+{
+    { dk1, XML_dk1 },
+    { lt1, XML_lt1 },
     { dk2, XML_dk2 },
     { lt2, XML_lt2 },
     { accent1, XML_accent1 },
@@ -89,6 +96,15 @@ static std::map<PredefinedClrSchemeId, sal_Int32> PredefinedClrTokens =
     { hlink, XML_hlink },
     { folHlink, XML_folHlink }
 };
+
+sal_Int32 getPredefinedClrTokens(PredefinedClrSchemeId eID)
+{
+    auto iterator = constPredefinedClrTokens.find(eID);
+    if (iterator == constPredefinedClrTokens.end())
+        return XML_TOKEN_INVALID;
+    return iterator->second;
+}
+} // end anonymous ns
 
 PresentationFragmentHandler::PresentationFragmentHandler(XmlFilterBase& rFilter, const OUString& rFragmentPath)
     : FragmentHandler2( rFilter, rFragmentPath )
@@ -140,11 +156,11 @@ void PresentationFragmentHandler::importSlideNames(XmlFilterBase& rFilter, const
                 {
                     Reference<XDrawPage> xDrawPage(xDrawPages->getByIndex(i), UNO_QUERY);
                     Reference<container::XNamed> xNamed(xDrawPage, UNO_QUERY_THROW);
-                    OUString sRest;
-                    if (xNamed->getName().startsWith(aTitleText, &sRest)
-                        && (sRest.isEmpty()
-                            || (sRest.startsWith(" (") && sRest.endsWith(")")
-                                && o3tl::toInt32(sRest.subView(2, sRest.getLength() - 3)) > 0)))
+                    std::u16string_view sRest;
+                    if (o3tl::starts_with(xNamed->getName(), aTitleText, &sRest)
+                        && (sRest.empty()
+                            || (o3tl::starts_with(sRest, u" (") && o3tl::ends_with(sRest, u")")
+                                && o3tl::toInt32(sRest.substr(2, sRest.size() - 3)) > 0)))
                         nCount++;
                 }
                 Reference<container::XNamed> xName(rSlidePersist[nPage]->getPage(), UNO_QUERY_THROW);
@@ -178,7 +194,7 @@ void PresentationFragmentHandler::importCustomSlideShow(std::vector<CustomShow>&
                                                                     UNO_QUERY);
         if (xShow.is())
         {
-            static const OUStringLiteral sSlide = u"slides/slide";
+            static constexpr OUString sSlide = u"slides/slide"_ustr;
             for (size_t j = 0; j < rCustomShowList[i].maSldLst.size(); ++j)
             {
                 OUString sCustomSlide = rCustomShowList[i].maSldLst[j];
@@ -295,7 +311,7 @@ void PresentationFragmentHandler::saveThemeToGrabBag(const oox::drawingml::Theme
         {
             uno::Reference<beans::XPropertySetInfo> xPropsInfo = xDocProps->getPropertySetInfo();
 
-            static const OUStringLiteral aGrabBagPropName = u"InteropGrabBag";
+            static constexpr OUString aGrabBagPropName = u"InteropGrabBag"_ustr;
             if (xPropsInfo.is() && xPropsInfo->hasPropertyByName(aGrabBagPropName))
             {
                 // get existing grab bag
@@ -310,8 +326,9 @@ void PresentationFragmentHandler::saveThemeToGrabBag(const oox::drawingml::Theme
                 ClrScheme rClrScheme = pThemePtr->getClrScheme();
                 for (int nId = PredefinedClrSchemeId::dk2; nId != PredefinedClrSchemeId::Count; nId++)
                 {
-                    sal_uInt32 nToken = PredefinedClrTokens[static_cast<PredefinedClrSchemeId>(nId)];
-                    const OUString& sName = PredefinedClrNames[static_cast<PredefinedClrSchemeId>(nId)];
+                    auto eID = static_cast<PredefinedClrSchemeId>(nId);
+                    sal_uInt32 nToken = getPredefinedClrTokens(eID);
+                    OUString sName(getPredefinedClrNames(eID));
                     ::Color nColor;
 
                     rClrScheme.getColor(nToken, nColor);
@@ -354,7 +371,7 @@ void PresentationFragmentHandler::importMasterSlides()
     PowerPointImport& rFilter = dynamic_cast<PowerPointImport&>(getFilter());
     Reference<frame::XModel> xModel(rFilter.getModel());
 
-    for (sal_uInt32 nMaster = 0; nMaster < maSlideMasterVector.size(); ++nMaster)
+    for (size_t nMaster = 0; nMaster < maSlideMasterVector.size(); ++nMaster)
     {
         aMasterFragmentPath = getFragmentPathFromRelId(maSlideMasterVector[nMaster]);
         importMasterSlide(xModel, rFilter, aMasterFragmentPath);

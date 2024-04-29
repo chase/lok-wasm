@@ -101,25 +101,25 @@
 #include <comphelper/diagnose_ex.hxx>
 #include <IDocumentRedlineAccess.hxx>
 
-constexpr OUStringLiteral WATERMARK_NAME = u"PowerPlusWaterMarkObject";
+constexpr OUString WATERMARK_NAME = u"PowerPlusWaterMarkObject"_ustr;
 #define WATERMARK_AUTO_SIZE sal_uInt32(1)
 
 namespace
 {
-constexpr OUStringLiteral MetaFilename(u"tscp/bails.rdf");
-constexpr OUStringLiteral MetaNS(u"urn:bails");
-constexpr OUStringLiteral ParagraphSignatureRDFNamespace = u"urn:bails:loext:paragraph:signature:";
-constexpr OUStringLiteral ParagraphSignatureIdRDFName = u"urn:bails:loext:paragraph:signature:id";
-constexpr OUStringLiteral ParagraphSignatureDigestRDFName = u":digest";
-constexpr OUStringLiteral ParagraphSignatureDateRDFName = u":date";
-constexpr OUStringLiteral ParagraphSignatureUsageRDFName = u":usage";
-constexpr OUStringLiteral ParagraphSignatureLastIdRDFName = u"urn:bails:loext:paragraph:signature:lastid";
-constexpr OUStringLiteral ParagraphClassificationNameRDFName = u"urn:bails:loext:paragraph:classification:name";
-constexpr OUStringLiteral ParagraphClassificationValueRDFName = u"urn:bails:loext:paragraph:classification:value";
-constexpr OUStringLiteral ParagraphClassificationAbbrRDFName = u"urn:bails:loext:paragraph:classification:abbreviation";
-constexpr OUStringLiteral ParagraphClassificationFieldNamesRDFName = u"urn:bails:loext:paragraph:classification:fields";
-constexpr OUStringLiteral MetadataFieldServiceName = u"com.sun.star.text.textfield.MetadataField";
-constexpr OUStringLiteral DocInfoServiceName = u"com.sun.star.text.TextField.DocInfo.Custom";
+constexpr OUString MetaFilename(u"tscp/bails.rdf"_ustr);
+constexpr OUString MetaNS(u"urn:bails"_ustr);
+constexpr OUString ParagraphSignatureRDFNamespace = u"urn:bails:loext:paragraph:signature:"_ustr;
+constexpr OUString ParagraphSignatureIdRDFName = u"urn:bails:loext:paragraph:signature:id"_ustr;
+constexpr OUString ParagraphSignatureDigestRDFName = u":digest"_ustr;
+constexpr OUString ParagraphSignatureDateRDFName = u":date"_ustr;
+constexpr OUString ParagraphSignatureUsageRDFName = u":usage"_ustr;
+constexpr OUString ParagraphSignatureLastIdRDFName = u"urn:bails:loext:paragraph:signature:lastid"_ustr;
+constexpr OUString ParagraphClassificationNameRDFName = u"urn:bails:loext:paragraph:classification:name"_ustr;
+constexpr OUString ParagraphClassificationValueRDFName = u"urn:bails:loext:paragraph:classification:value"_ustr;
+constexpr OUString ParagraphClassificationAbbrRDFName = u"urn:bails:loext:paragraph:classification:abbreviation"_ustr;
+constexpr OUString ParagraphClassificationFieldNamesRDFName = u"urn:bails:loext:paragraph:classification:fields"_ustr;
+constexpr OUString MetadataFieldServiceName = u"com.sun.star.text.textfield.MetadataField"_ustr;
+constexpr OUString DocInfoServiceName = u"com.sun.star.text.TextField.DocInfo.Custom"_ustr;
 
 /// Find all page styles which are currently used in the document.
 std::vector<OUString> lcl_getUsedPageStyles(SwViewShell const * pShell)
@@ -1190,11 +1190,9 @@ static void lcl_ApplyParagraphClassification(SwDoc* pDoc,
     // need to insert in reverse order.
     std::reverse(aResults.begin(), aResults.end());
     // Ignore "PARAGRAPH" types
-    aResults.erase(std::remove_if(aResults.begin(),
-                                  aResults.end(),
+    std::erase_if(aResults,
                                   [](const svx::ClassificationResult& rResult)-> bool
-                                            { return rResult.meType == svx::ClassificationType::PARAGRAPH; }),
-                                  aResults.end());
+                                            { return rResult.meType == svx::ClassificationType::PARAGRAPH; });
 
     sfx::ClassificationKeyCreator aKeyCreator(SfxClassificationHelper::getPolicyType());
     std::vector<OUString> aFieldNames;
@@ -1286,7 +1284,7 @@ void SwEditShell::ApplyParagraphClassification(std::vector<svx::ClassificationRe
     });
 
     uno::Reference<frame::XModel> xModel = pDocShell->GetBaseModel();
-    rtl::Reference<SwXParagraph> xParent = SwXParagraph::CreateXParagraph(pNode->GetDoc(), pNode);
+    rtl::Reference<SwXParagraph> xParent = SwXParagraph::CreateXParagraph(pNode->GetDoc(), pNode, nullptr);
     lcl_ApplyParagraphClassification(GetDoc(), xModel, xParent, css::uno::Reference<css::rdf::XResource>(xParent), std::move(aResults));
 }
 
@@ -1322,7 +1320,7 @@ static std::vector<svx::ClassificationResult> lcl_CollectParagraphClassification
         uno::Reference<text::XTextRange> xTextRange(xField, uno::UNO_QUERY);
         const OUString aName = rdfNamePair.first;
         const OUString aValue = rdfNamePair.second;
-        static const OUStringLiteral sBlank(u"");
+        static constexpr OUString sBlank(u""_ustr);
         if (aKeyCreator.isMarkingTextKey(aName))
         {
             aResult.push_back({ svx::ClassificationType::TEXT, aValue, sBlank, sBlank });
@@ -1360,7 +1358,7 @@ std::vector<svx::ClassificationResult> SwEditShell::CollectParagraphClassificati
     if (pNode == nullptr)
         return aResult;
 
-    uno::Reference<text::XTextContent> xParent = SwXParagraph::CreateXParagraph(pNode->GetDoc(), pNode);
+    rtl::Reference<SwXParagraph> xParent = SwXParagraph::CreateXParagraph(pNode->GetDoc(), pNode, nullptr);
     uno::Reference<frame::XModel> xModel = pDocShell->GetBaseModel();
     return lcl_CollectParagraphClassification(xModel, xParent);
 }
@@ -1379,9 +1377,10 @@ static sal_Int16 lcl_GetAngle(const drawing::HomogenMatrix3& rMatrix)
     aTransformation.set(1, 0, rMatrix.Line2.Column1);
     aTransformation.set(1, 1, rMatrix.Line2.Column2);
     aTransformation.set(1, 2, rMatrix.Line2.Column3);
-    aTransformation.set(2, 0, rMatrix.Line3.Column1);
-    aTransformation.set(2, 1, rMatrix.Line3.Column2);
-    aTransformation.set(2, 2, rMatrix.Line3.Column3);
+    // For this to be a valid 2D transform matrix, the last row must be [0,0,1]
+    assert( rMatrix.Line3.Column1 == 0 );
+    assert( rMatrix.Line3.Column2 == 0 );
+    assert( rMatrix.Line3.Column3 == 1 );
 
     aTransformation.decompose(aScale, aTranslate, fRotate, fShear);
     sal_Int16 nDeg = round(basegfx::rad2deg(fRotate));
@@ -1553,9 +1552,9 @@ static void lcl_placeWatermarkInHeader(const SfxWatermarkItem& rWatermark,
     aMatrix.Line2.Column1 = aTransformation.get(1, 0);
     aMatrix.Line2.Column2 = aTransformation.get(1, 1);
     aMatrix.Line2.Column3 = aTransformation.get(1, 2);
-    aMatrix.Line3.Column1 = aTransformation.get(2, 0);
-    aMatrix.Line3.Column2 = aTransformation.get(2, 1);
-    aMatrix.Line3.Column3 = aTransformation.get(2, 2);
+    aMatrix.Line3.Column1 = 0;
+    aMatrix.Line3.Column2 = 0;
+    aMatrix.Line3.Column3 = 1;
     uno::Reference<beans::XPropertySet> xPropertySet(xShape, uno::UNO_QUERY);
     xPropertySet->setPropertyValue(UNO_NAME_ANCHOR_TYPE, uno::Any(text::TextContentAnchorType_AT_CHARACTER));
     uno::Reference<text::XTextContent> xTextContent(xShape, uno::UNO_QUERY);
@@ -1778,7 +1777,7 @@ void SwEditShell::SignParagraph()
         return;
 
     // 1. Get the text (without fields).
-    const uno::Reference<text::XTextContent> xParagraph = SwXParagraph::CreateXParagraph(pNode->GetDoc(), pNode);
+    const rtl::Reference<SwXParagraph> xParagraph = SwXParagraph::CreateXParagraph(pNode->GetDoc(), pNode, nullptr);
     const OString utf8Text = lcl_getParagraphBodyText(xParagraph);
     if (utf8Text.isEmpty())
         return;
@@ -1848,7 +1847,7 @@ void SwEditShell::ValidateParagraphSignatures(SwTextNode* pNode, bool updateDont
             SetParagraphSignatureValidation(bOldValidationFlag);
         });
 
-    uno::Reference<text::XTextContent> xParentText = SwXParagraph::CreateXParagraph(*GetDoc(), pNode);
+    rtl::Reference<SwXParagraph> xParentText = SwXParagraph::CreateXParagraph(*GetDoc(), pNode, nullptr);
     lcl_ValidateParagraphSignatures(*GetDoc(), xParentText, updateDontRemove);
 }
 
@@ -1938,7 +1937,7 @@ void SwEditShell::RestoreMetadataFieldsAndValidateParagraphSignatures()
         return;
     rtl::Reference<SwXParagraphEnumeration> xParagraphs = xBodyText->createParagraphEnumeration();
 
-    static constexpr OUStringLiteral sBlank(u"");
+    static constexpr OUString sBlank(u""_ustr);
     const sfx::ClassificationKeyCreator aKeyCreator(SfxClassificationHelper::getPolicyType());
     const css::uno::Sequence<css::uno::Reference<rdf::XURI>> aGraphNames = SwRDFHelper::getGraphNames(xModel, MetaNS);
 

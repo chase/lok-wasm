@@ -30,8 +30,7 @@
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/virdev.hxx>
-
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <pdf/pdfwriter_impl.hxx>
 #include <salgdi.hxx>
 
@@ -113,8 +112,7 @@ void OutputDevice::DrawTransparent(
     if( mbInitFillColor )
         InitFillColor();
 
-    if(mpGraphics->supportsOperation(OutDevSupportType::B2DDraw) &&
-       (RasterOp::OverPaint == GetRasterOp()) )
+    if (RasterOp::OverPaint == GetRasterOp())
     {
         // b2dpolygon support not implemented yet on non-UNX platforms
         basegfx::B2DPolyPolygon aB2DPolyPolygon(rB2DPolyPoly);
@@ -131,18 +129,17 @@ void OutputDevice::DrawTransparent(
         // TODO: this must not drop transparency for mpAlphaVDev case, but instead use premultiplied
         // alpha... but that requires using premultiplied alpha also for already drawn data
         const double fAdjustedTransparency = mpAlphaVDev ? 0 : fTransparency;
-        bool bDrawnOk(true);
 
-        if( IsFillColor() )
+        if (IsFillColor())
         {
-            bDrawnOk = mpGraphics->DrawPolyPolygon(
+            mpGraphics->DrawPolyPolygon(
                 aFullTransform,
                 aB2DPolyPolygon,
                 fAdjustedTransparency,
                 *this);
         }
 
-        if( bDrawnOk && IsLineColor() )
+        if (IsLineColor())
         {
             const bool bPixelSnapHairline(mnAntialiasing & AntialiasingFlags::PixelSnapHairline);
 
@@ -162,24 +159,21 @@ void OutputDevice::DrawTransparent(
             }
         }
 
-        if( bDrawnOk )
+        if( mpMetaFile )
         {
-            if( mpMetaFile )
-            {
-                // tdf#119843 need transformed Polygon here
-                basegfx::B2DPolyPolygon aB2DPolyPoly(rB2DPolyPoly);
-                aB2DPolyPoly.transform(rObjectTransform);
-                mpMetaFile->AddAction(
-                    new MetaTransparentAction(
-                        tools::PolyPolygon(aB2DPolyPoly),
-                        static_cast< sal_uInt16 >(fTransparency * 100.0)));
-            }
-
-            if (mpAlphaVDev)
-                mpAlphaVDev->DrawTransparent(rObjectTransform, rB2DPolyPoly, fTransparency);
-
-            return;
+            // tdf#119843 need transformed Polygon here
+            basegfx::B2DPolyPolygon aB2DPolyPoly(rB2DPolyPoly);
+            aB2DPolyPoly.transform(rObjectTransform);
+            mpMetaFile->AddAction(
+                new MetaTransparentAction(
+                    tools::PolyPolygon(aB2DPolyPoly),
+                    static_cast< sal_uInt16 >(fTransparency * 100.0)));
         }
+
+        if (mpAlphaVDev)
+            mpAlphaVDev->DrawTransparent(rObjectTransform, rB2DPolyPoly, fTransparency);
+
+        return;
     }
 
     // fallback to old polygon drawing if needed
@@ -198,7 +192,7 @@ bool OutputDevice::DrawTransparentNatively ( const tools::PolyPolygon& rPolyPoly
 
     bool bDrawn = false;
 
-    if (mpGraphics->supportsOperation(OutDevSupportType::B2DDraw)
+    if (true
 #if defined UNX && ! defined MACOSX && ! defined IOS
         && GetBitCount() > 8
 #endif
@@ -237,11 +231,12 @@ bool OutputDevice::DrawTransparentNatively ( const tools::PolyPolygon& rPolyPoly
             // functionality and we use the fallback some lines below (which is not very good,
             // though. For now, WinSalGraphics::drawPolyPolygon will detect printer usage and
             // correct the wrong mapping (see there for details)
-            bDrawn = mpGraphics->DrawPolyPolygon(
+            mpGraphics->DrawPolyPolygon(
                 aTransform,
                 aB2DPolyPolygon,
                 fTransparency,
                 *this);
+            bDrawn = true;
         }
 
         if( mbLineColor )
@@ -341,7 +336,7 @@ void OutputDevice::EmulateDrawTransparent ( const tools::PolyPolygon& rPolyPoly,
         {
             ScopedVclPtrInstance< VirtualDevice > aVDev(*this);
             const Size aDstSz( aDstRect.GetSize() );
-            const sal_uInt8 cTrans = static_cast<sal_uInt8>(MinMax( FRound( nTransparencePercent * 2.55 ), 0, 255 ));
+            const sal_uInt8 cTrans = FRound( std::clamp( nTransparencePercent * 2.55, 0.0, 255.0 ) );
 
             if( aDstRect.Left() || aDstRect.Top() )
                 aPolyPoly.Move( -aDstRect.Left(), -aDstRect.Top() );
@@ -363,7 +358,7 @@ void OutputDevice::EmulateDrawTransparent ( const tools::PolyPolygon& rPolyPoly,
                 if( !aPaint.IsEmpty() && !aPolyMask.IsEmpty() )
                 {
                     BitmapScopedWriteAccess pW(aPaint);
-                    Bitmap::ScopedReadAccess pR(aPolyMask);
+                    BitmapScopedReadAccess pR(aPolyMask);
 
                     if( pW && pR )
                     {
@@ -549,9 +544,8 @@ void OutputDevice::DrawTransparent( const tools::PolyPolygon& rPolyPoly,
     if( mpAlphaVDev )
     {
         const Color aFillCol( mpAlphaVDev->GetFillColor() );
-        mpAlphaVDev->SetFillColor( Color(sal::static_int_cast<sal_uInt8>(255*nTransparencePercent/100),
-                                         sal::static_int_cast<sal_uInt8>(255*nTransparencePercent/100),
-                                         sal::static_int_cast<sal_uInt8>(255*nTransparencePercent/100)) );
+        sal_uInt8 nAlpha = 255 - sal::static_int_cast<sal_uInt8>(255*nTransparencePercent/100);
+        mpAlphaVDev->SetFillColor( Color(nAlpha, nAlpha, nAlpha) );
 
         mpAlphaVDev->DrawTransparent( rPolyPoly, nTransparencePercent );
 
@@ -592,7 +586,7 @@ void OutputDevice::DrawTransparent( const GDIMetaFile& rMtf, const Point& rPos, 
     else
     {
         GDIMetaFile* pOldMetaFile = mpMetaFile;
-        tools::Rectangle aOutRect( LogicToPixel( rPos ), LogicToPixel( rSize ) );
+        tools::Rectangle aOutRect( LogicToPixel( tools::Rectangle(rPos, rSize) ) );
         Point aPoint;
         tools::Rectangle aDstRect( aPoint, GetOutputSizePixel() );
 
@@ -604,12 +598,12 @@ void OutputDevice::DrawTransparent( const GDIMetaFile& rMtf, const Point& rPos, 
         if( !aDstRect.IsEmpty() )
         {
             // Create transparent buffer
-            ScopedVclPtrInstance<VirtualDevice> xVDev(DeviceFormat::DEFAULT, DeviceFormat::DEFAULT);
+            ScopedVclPtrInstance<VirtualDevice> xVDev(DeviceFormat::WITH_ALPHA);
 
             xVDev->mnDPIX = mnDPIX;
             xVDev->mnDPIY = mnDPIY;
 
-            if( xVDev->SetOutputSizePixel( aDstRect.GetSize() ) )
+            if( xVDev->SetOutputSizePixel( aDstRect.GetSize(), true, true ) )
             {
                 // tdf#150610 fix broken rendering of text meta actions
                 // Even when drawing to a VirtualDevice that has antialiasing
@@ -669,7 +663,11 @@ void OutputDevice::DrawTransparent( const GDIMetaFile& rMtf, const Point& rPos, 
                     xVDev->EnableMapMode(false);
 
                     AlphaMask aAlpha(xVDev->GetBitmap(aPoint, xVDev->GetOutputSizePixel()));
-                    aAlpha.BlendWith(aPaint.GetAlpha());
+                    AlphaMask aPaintAlpha(aPaint.GetAlphaMask());
+                    // The alpha mask is inverted from what
+                    // is expected so invert it again
+                    aAlpha.Invert(); // convert to alpha
+                    aAlpha.BlendWith(aPaintAlpha);
 
                     xVDev.disposeAndClear();
 
@@ -702,7 +700,11 @@ void OutputDevice::DrawTransparent( const GDIMetaFile& rMtf, const Point& rPos, 
                     xVDev->EnableMapMode( false );
 
                     AlphaMask aAlpha(xVDev->GetBitmap(Point(), xVDev->GetOutputSizePixel()));
-                    aAlpha.BlendWith(aPaint.GetAlpha());
+                    AlphaMask aPaintAlpha(aPaint.GetAlphaMask());
+                    // The alpha mask is inverted from what
+                    // is expected so invert it again
+                    aAlpha.Invert(); // convert to alpha
+                    aAlpha.BlendWith(aPaintAlpha);
 
                     xVDev.disposeAndClear();
 
@@ -870,7 +872,7 @@ void ImplConvertTransparentAction( GDIMetaFile&        o_rMtf,
         {
             // blend with alpha channel
             aBmp.Convert(BmpConversion::N24Bit);
-            aBmp.Blend(aBmpEx.GetAlpha(), aBgColor);
+            aBmp.Blend(aBmpEx.GetAlphaMask(), aBgColor);
         }
 
         // add corresponding action
@@ -1842,9 +1844,9 @@ bool OutputDevice::RemoveTransparenciesFromMetaFile( const GDIMetaFile& rInMtf, 
                                                                          Point(), aBandBmp.GetSizePixel(),
                                                                          aBandBmp, nMaxBmpDPIX, nMaxBmpDPIY);
 
-                                    rOutMtf.AddAction( new MetaCommentAction( "PRNSPOOL_TRANSPARENTBITMAP_BEGIN" ) );
+                                    rOutMtf.AddAction( new MetaCommentAction( "PRNSPOOL_TRANSPARENTBITMAP_BEGIN"_ostr ) );
                                     rOutMtf.AddAction( new MetaBmpScaleAction( aDstPtPix, aDstSzPix, aBandBmp ) );
-                                    rOutMtf.AddAction( new MetaCommentAction( "PRNSPOOL_TRANSPARENTBITMAP_END" ) );
+                                    rOutMtf.AddAction( new MetaCommentAction( "PRNSPOOL_TRANSPARENTBITMAP_END"_ostr ) );
 
                                     aPaintVDev->mbMap = true;
                                     mbMap = bOldMap;

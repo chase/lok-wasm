@@ -19,10 +19,8 @@
 #ifndef INCLUDED_VCL_STRHELPER_HXX
 #define INCLUDED_VCL_STRHELPER_HXX
 
-#include <cstring>
 #include <rtl/math.hxx>
 #include <rtl/ustring.hxx>
-#include <vcl/dllapi.h>
 
 namespace psp
 {
@@ -47,22 +45,6 @@ namespace psp
     inline double StringToDouble( std::u16string_view rStr )
     {
         return rtl::math::stringToDouble(rStr, u'.', u'\0');
-    }
-
-    inline double StringToDouble(std::string_view rStr)
-    {
-        return rtl::math::stringToDouble(rStr, '.', static_cast<char>(0));
-    }
-
-    // fills a character buffer with the string representation of a double
-    // the buffer has to be long enough (e.g. 128 bytes)
-    // returns the string len
-    inline int getValueOfDouble( char* pBuffer, double f, int nPrecision = 0)
-    {
-        OString aStr( rtl::math::doubleToString( f, rtl_math_StringFormat_G, nPrecision, '.', true ) );
-        int nLen = aStr.getLength();
-        std::strncpy( pBuffer, aStr.getStr(), nLen+1 ); // copy string including terminating zero
-        return nLen;
     }
 
 } // namespace

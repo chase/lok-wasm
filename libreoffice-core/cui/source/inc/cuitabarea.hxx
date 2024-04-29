@@ -108,7 +108,7 @@ class SvxAreaTabDialog final : public SfxTabDialogController
     ChangeType          mnGradientListState;
     ChangeType          mnHatchingListState;
 
-    virtual void        PageCreated(const OString& rId, SfxTabPage &rPage) override;
+    virtual void        PageCreated(const OUString& rId, SfxTabPage &rPage) override;
 
     virtual short       Ok() override;
     DECL_LINK(CancelHdlImpl, weld::Button&, void);
@@ -169,7 +169,7 @@ class SvxTransparenceTabPage : public SfxTabPage
     std::unique_ptr<weld::CustomWeld> m_xCtlBitmapPreview;
     std::unique_ptr<weld::CustomWeld> m_xCtlXRectPreview;
 
-    // MCGR: Preserve in-between ColorStops until we have an UI to edit these
+    // MCGR: Preserve ColorStops until we have a UI to edit these
     basegfx::BColorStops maColorStops;
 
     DECL_LINK(ClickTransOffHdl_Impl, weld::Toggleable&, void);
@@ -187,7 +187,7 @@ class SvxTransparenceTabPage : public SfxTabPage
     bool InitPreview ( const SfxItemSet& rSet );
     void InvalidatePreview (bool bEnable = true );
 
-    // MCGR: Preserve in-between ColorStops until we have an UI to edit these
+    // MCGR: Preserve ColorStops until we have a UI to edit these
     basegfx::BColorStops createColorStops();
 
 public:
@@ -253,7 +253,6 @@ protected:
     void SetOptimalSize(weld::DialogController* pController);
 
     void SelectFillType( weld::Toggleable& rButton, const SfxItemSet* _pSet = nullptr );
-    SfxTabPage* GetFillTabPage() { return m_xFillTabPage.get(); }
 
     bool IsBtnClicked() const { return m_bBtnClicked; }
 
@@ -277,6 +276,8 @@ public:
     CreateWithSlideBackground(weld::Container* pPage, weld::DialogController* pController,
                               const SfxItemSet*);
     static WhichRangesContainer GetRanges() { return pAreaRanges; }
+
+    virtual OUString GetAllStrings() override;
 
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
@@ -367,7 +368,7 @@ private:
     XFillAttrSetItem    m_aXFillAttr;
     SfxItemSet&         m_rXFSet;
 
-    // MCGR: Preserve in-between ColorStops until we have an UI to edit these
+    // MCGR: Preserve ColorStops until we have a UI to edit these
     basegfx::BColorStops m_aColorStops;
 
     SvxXRectPreview m_aCtlPreview;
@@ -409,7 +410,7 @@ private:
     void SetControlState_Impl( css::awt::GradientStyle eXGS );
     sal_Int32 SearchGradientList(std::u16string_view rGradientName);
 
-    // MCGR: Preserve in-between ColorStops until we have an UI to edit these
+    // MCGR: Preserve ColorStops until we have a UI to edit these
     basegfx::BColorStops createColorStops();
 
 public:
@@ -745,8 +746,6 @@ public:
 
 
     void    SetColorChgd( ChangeType* pIn ) { pnColorListState = pIn; }
-
-    void    SetCtlPreviewOld( const SfxItemSet& rAttrs ) { m_aCtlPreviewOld.SetAttributes( rAttrs ); }
 
     virtual void FillUserData() override;
 };

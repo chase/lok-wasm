@@ -53,6 +53,11 @@ const handler: AsyncMessage = {
     return ref;
   },
 
+  newView: async function(ref: DocumentRef): Promise<DocumentRef | null> {
+    const doc = byRef(ref);
+    return doc?.newView();
+  },
+
   close: async function (ref: DocumentRef): Promise<void> {
     const doc = docMap[ref];
     doc?.delete();
@@ -64,8 +69,13 @@ const handler: AsyncMessage = {
   ): Promise<ArrayBuffer> {
     const { readUnlink } = await lokPromise;
     const tmpFile = `/${Date.now()}.${format}`;
-    byRef(ref)?.saveAs(`file://${tmpFile}`, format);
-    return readUnlink(tmpFile);
+    // Optional arguments as emscripten can be undefined,
+    // but the number of parameters must match the binding signature
+    // so for optional parameters, we have to pass undefined
+    // https://github.com/emscripten-core/emscripten/pull/21076/files
+    byRef(ref)?.saveAs(`file://${tmpFile}`, format, undefined);
+    // only buffer is transferable
+    return readUnlink(tmpFile).buffer;
   },
 
   parts: async function (ref: DocumentRef): Promise<number> {

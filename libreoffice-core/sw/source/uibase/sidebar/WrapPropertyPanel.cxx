@@ -26,6 +26,7 @@
 #include <sfx2/dispatch.hxx>
 #include <editeng/lrspitem.hxx>
 #include <editeng/ulspitem.hxx>
+#include <svl/itemset.hxx>
 #include <hintids.hxx>
 #include <strings.hrc>
 #include <uitool.hxx>
@@ -119,7 +120,7 @@ IMPL_LINK(WrapPropertyPanel, SpacingLBHdl, weld::ComboBox&, rBox, void)
 {
     sal_uInt16 nVal = rBox.get_active_id().toUInt32();
 
-    SvxLRSpaceItem aLRItem(nVal, nVal, 0, 0, RES_LR_SPACE);
+    SvxLRSpaceItem aLRItem(nVal, nVal, 0, RES_LR_SPACE);
     SvxULSpaceItem aULItem(nVal, nVal, RES_UL_SPACE);
 
     m_nTop = m_nBottom = m_nLeft = m_nRight = nVal;

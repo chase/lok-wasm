@@ -124,11 +124,11 @@ namespace
 
 sal_Int16 getCurrentImageType()
 {
-    SvtMiscOptions aMiscOptions;
     sal_Int16 nImageType = css::ui::ImageType::SIZE_DEFAULT;
-    if (aMiscOptions.GetCurrentSymbolsSize() == SFX_SYMBOLS_SIZE_LARGE)
+    sal_Int16 nCurrentSymbolSize = SvtMiscOptions::GetCurrentSymbolsSize();
+    if (nCurrentSymbolSize == SFX_SYMBOLS_SIZE_LARGE)
         nImageType |= css::ui::ImageType::SIZE_LARGE;
-    else if (aMiscOptions.GetCurrentSymbolsSize() == SFX_SYMBOLS_SIZE_32)
+    else if (nCurrentSymbolSize == SFX_SYMBOLS_SIZE_32)
         nImageType |= css::ui::ImageType::SIZE_32;
     return nImageType;
 }
@@ -287,7 +287,7 @@ public:
         m_pToolBar->SetText( rName );
     }
 
-    virtual void SetHelpId(const OString& rHelpId) override
+    virtual void SetHelpId(const OUString& rHelpId) override
     {
         m_pToolBar->SetHelpId( rHelpId );
     }
@@ -383,8 +383,8 @@ IMPL_LINK_NOARG(VclToolBarManager, Click, ToolBox*, void)
 
 class WeldToolBarManager : public ToolBarManagerImpl
 {
-    DECL_LINK(Click, const OString&, void);
-    DECL_LINK(ToggleMenuHdl, const OString&, void);
+    DECL_LINK(Click, const OUString&, void);
+    DECL_LINK(ToggleMenuHdl, const OUString&, void);
 
 public:
     WeldToolBarManager(weld::Toolbar* pToolbar,
@@ -417,16 +417,15 @@ public:
                             const OUString& rLabel,
                             ToolBoxItemBits /*nItemBits*/) override
     {
-        OString sId = OUStringToOString(rCommandURL, RTL_TEXTENCODING_UTF8);
-        m_aCommandToId[sId] = nId;
-        m_aIdToCommand[nId] = sId;
-        m_aCommandOrder.push_back(sId);
+        m_aCommandToId[rCommandURL] = nId;
+        m_aIdToCommand[nId] = rCommandURL;
+        m_aCommandOrder.push_back(rCommandURL);
 
         m_pWeldedToolBar->insert_item(m_aCommandOrder.size(), rCommandURL);
-        m_pWeldedToolBar->set_item_tooltip_text(sId, rTooltip);
-        m_pWeldedToolBar->set_item_label( sId, rLabel );
-        m_pWeldedToolBar->set_item_sensitive( sId, true );
-        m_pWeldedToolBar->set_item_active( sId, false );
+        m_pWeldedToolBar->set_item_tooltip_text(rCommandURL, rTooltip);
+        m_pWeldedToolBar->set_item_label(rCommandURL, rLabel);
+        m_pWeldedToolBar->set_item_sensitive(rCommandURL, true);
+        m_pWeldedToolBar->set_item_active(rCommandURL, false);
     }
 
     virtual void InsertSeparator() override
@@ -450,7 +449,7 @@ public:
 
     virtual OUString GetItemCommand(ToolBoxItemId nId) override
     {
-        return OStringToOUString(m_aIdToCommand[nId], RTL_TEXTENCODING_UTF8);
+        return m_aIdToCommand[nId];
     }
 
     virtual sal_uInt16 GetItemCount() override
@@ -462,21 +461,19 @@ public:
 
     virtual void HideItem(ToolBoxItemId /*nId*/, const OUString& rCommandURL) override
     {
-        OString sId = OUStringToOString(rCommandURL, RTL_TEXTENCODING_UTF8);
-        m_pWeldedToolBar->set_item_visible(sId, false);
+        m_pWeldedToolBar->set_item_visible(rCommandURL, false);
     }
 
     virtual bool IsItemVisible(ToolBoxItemId /*nId*/, const OUString& rCommandURL) override
     {
-        OString sId = OUStringToOString(rCommandURL, RTL_TEXTENCODING_UTF8);
-        return m_pWeldedToolBar->get_item_visible(sId);
+        return m_pWeldedToolBar->get_item_visible(rCommandURL);
     }
 
     virtual void Clear() override {}
 
     virtual void SetName(const OUString& /*rName*/) override {}
 
-    virtual void SetHelpId(const OString& /*rHelpId*/) override {}
+    virtual void SetHelpId(const OUString& /*rHelpId*/) override {}
 
     virtual bool WillUsePopupMode() override { return true; }
 
@@ -501,8 +498,7 @@ public:
                               const OUString& rCommandURL,
                               const Image& rImage) override
     {
-        OString sId = OUStringToOString(rCommandURL, RTL_TEXTENCODING_UTF8);
-        m_pWeldedToolBar->set_item_image(sId, Graphic(rImage).GetXGraphic());
+        m_pWeldedToolBar->set_item_image(rCommandURL, Graphic(rImage).GetXGraphic());
     }
 
     virtual void UpdateSize() override {}
@@ -514,18 +510,18 @@ private:
     weld::Builder* m_pBuilder;
     ToolBarManager* m_pManager;
     ToolBoxItemId m_nCurrentId;
-    std::map<const OString, ToolBoxItemId> m_aCommandToId;
-    std::map<ToolBoxItemId, OString> m_aIdToCommand;
-    std::vector<OString> m_aCommandOrder;
+    std::map<const OUString, ToolBoxItemId> m_aCommandToId;
+    std::map<ToolBoxItemId, OUString> m_aIdToCommand;
+    std::vector<OUString> m_aCommandOrder;
 };
 
-IMPL_LINK(WeldToolBarManager, Click, const OString&, rCommand, void)
+IMPL_LINK(WeldToolBarManager, Click, const OUString&, rCommand, void)
 {
     m_nCurrentId = m_aCommandToId[rCommand];
     m_pManager->OnClick(true);
 }
 
-IMPL_LINK(WeldToolBarManager, ToggleMenuHdl, const OString&, rCommand, void)
+IMPL_LINK(WeldToolBarManager, ToggleMenuHdl, const OUString&, rCommand, void)
 {
     m_nCurrentId = m_aCommandToId[rCommand];
     m_pManager->OnDropdownClick(false);
@@ -542,7 +538,7 @@ ToolBarManager::ToolBarManager( const Reference< XComponentContext >& rxContext,
     m_bDisposed( false ),
     m_bFrameActionRegistered( false ),
     m_bUpdateControllers( false ),
-    m_eSymbolSize(SvtMiscOptions().GetCurrentSymbolsSize()),
+    m_eSymbolSize(SvtMiscOptions::GetCurrentSymbolsSize()),
     m_nContextMinPos(0),
     m_pImpl( new VclToolBarManager( pToolBar ) ),
     m_pToolBar( pToolBar ),
@@ -551,7 +547,7 @@ ToolBarManager::ToolBarManager( const Reference< XComponentContext >& rxContext,
     m_xFrame( rFrame ),
     m_xContext( rxContext ),
     m_aAsyncUpdateControllersTimer( "framework::ToolBarManager m_aAsyncUpdateControllersTimer" ),
-    m_sIconTheme( SvtMiscOptions().GetIconTheme() )
+    m_sIconTheme( SvtMiscOptions::GetIconTheme() )
 {
     Init();
 }
@@ -564,7 +560,7 @@ ToolBarManager::ToolBarManager( const Reference< XComponentContext >& rxContext,
     m_bDisposed( false ),
     m_bFrameActionRegistered( false ),
     m_bUpdateControllers( false ),
-    m_eSymbolSize( SvtMiscOptions().GetCurrentSymbolsSize() ),
+    m_eSymbolSize( SvtMiscOptions::GetCurrentSymbolsSize() ),
     m_nContextMinPos(0),
     m_pImpl( new WeldToolBarManager( pToolBar, pBuilder ) ),
     m_pWeldedToolBar( pToolBar ),
@@ -572,7 +568,7 @@ ToolBarManager::ToolBarManager( const Reference< XComponentContext >& rxContext,
     m_xFrame( rFrame ),
     m_xContext( rxContext ),
     m_aAsyncUpdateControllersTimer( "framework::ToolBarManager m_aAsyncUpdateControllersTimer" ),
-    m_sIconTheme( SvtMiscOptions().GetIconTheme() )
+    m_sIconTheme( SvtMiscOptions::GetIconTheme() )
 {
     Init();
 }
@@ -598,7 +594,7 @@ void ToolBarManager::Init()
     // enables a menu for clipped items and customization
     SvtCommandOptions aCmdOptions;
     ToolBoxMenuType nMenuType = ToolBoxMenuType::ClippedItems;
-    if ( !aCmdOptions.Lookup( SvtCommandOptions::CMDOPTION_DISABLED, "CreateDialog"))
+    if ( !aCmdOptions.LookupDisabled( "CreateDialog"))
          nMenuType |= ToolBoxMenuType::Customize;
 
     m_pImpl->SetMenuType( nMenuType );
@@ -607,7 +603,7 @@ void ToolBarManager::Init()
     sal_Int32 idx = m_aResourceName.lastIndexOf('/');
     idx++; // will become 0 if '/' not found: use full string
     std::u16string_view aToolbarName = m_aResourceName.subView( idx );
-    OString aHelpIdAsString = ".HelpId:" + OUStringToOString( aToolbarName, RTL_TEXTENCODING_UTF8 );
+    OUString aHelpIdAsString = ".HelpId:" + OUString::Concat(aToolbarName);
     m_pImpl->SetHelpId( aHelpIdAsString );
 
     m_aAsyncUpdateControllersTimer.SetTimeout( 50 );
@@ -640,8 +636,7 @@ void ToolBarManager::CheckAndUpdateImages()
     SolarMutexGuard g;
     bool bRefreshImages = false;
 
-    SvtMiscOptions aMiscOptions;
-    sal_Int16 eNewSymbolSize = aMiscOptions.GetCurrentSymbolsSize();
+    sal_Int16 eNewSymbolSize = SvtMiscOptions::GetCurrentSymbolsSize();
 
     if (m_eSymbolSize != eNewSymbolSize )
     {
@@ -649,7 +644,7 @@ void ToolBarManager::CheckAndUpdateImages()
         m_eSymbolSize = eNewSymbolSize;
     }
 
-    const OUString& sCurrentIconTheme = aMiscOptions.GetIconTheme();
+    const OUString& sCurrentIconTheme = SvtMiscOptions::GetIconTheme();
     if ( m_sIconTheme != sCurrentIconTheme )
     {
         bRefreshImages = true;
@@ -1036,7 +1031,7 @@ void ToolBarManager::CreateControllers()
     Reference< XWindow > xToolbarWindow = m_pImpl->GetInterface();
 
     css::util::URL      aURL;
-    bool                bHasDisabledEntries = SvtCommandOptions().HasEntries( SvtCommandOptions::CMDOPTION_DISABLED );
+    bool                bHasDisabledEntries = SvtCommandOptions().HasEntriesDisabled();
     SvtCommandOptions   aCmdOptions;
 
     for ( ToolBox::ImplToolItems::size_type i = 0; i < m_pImpl->GetItemCount(); i++ )
@@ -1060,7 +1055,7 @@ void ToolBarManager::CreateControllers()
         {
             aURL.Complete = aCommandURL;
             m_xURLTransformer->parseStrict( aURL );
-            if ( aCmdOptions.Lookup( SvtCommandOptions::CMDOPTION_DISABLED, aURL.Path ))
+            if ( aCmdOptions.LookupDisabled( aURL.Path ))
             {
                 m_aControllerMap[ nId ] = xController;
                 m_pImpl->HideItem( nId, aCommandURL );
@@ -1126,14 +1121,14 @@ void ToolBarManager::CreateControllers()
                         xController.set( new GenericToolbarController( m_xContext, m_xFrame, m_pToolBar, nId, aCommandURL ));
                     else
                         xController.set( new GenericToolbarController( m_xContext, m_xFrame, *m_pWeldedToolBar, aCommandURL ));
-
-                    // Accessibility support: Set toggle button role for specific commands
-                    sal_Int32 nProps = vcl::CommandInfoProvider::GetPropertiesForCommand(aCommandURL, m_aModuleIdentifier);
-                    if ( nProps & UICOMMANDDESCRIPTION_PROPERTIES_TOGGLEBUTTON )
-                        m_pImpl->SetItemCheckable( nId );
                 }
             }
         }
+
+        // Accessibility support: Set toggle button role for specific commands
+        const sal_Int32 nProps = vcl::CommandInfoProvider::GetPropertiesForCommand(aCommandURL, m_aModuleIdentifier);
+        if (nProps & UICOMMANDDESCRIPTION_PROPERTIES_TOGGLEBUTTON)
+            m_pImpl->SetItemCheckable(nId);
 
         // Associate ID and controller to be able to retrieve
         // the controller from the ID later.
@@ -1634,8 +1629,6 @@ void ToolBarManager::RequestImages()
     Sequence< Reference< XGraphic > > aDocGraphicSeq;
     Sequence< Reference< XGraphic > > aModGraphicSeq;
 
-    SvtMiscOptions aMiscOptions;
-
     sal_Int16 nImageType = getCurrentImageType();
 
     if ( m_xDocImageManager.is() )
@@ -1656,7 +1649,7 @@ void ToolBarManager::RequestImages()
             // Try also to query for add-on images before giving up and use an
             // empty image.
             if ( !aImage )
-                aImage = Image(framework::AddonsOptions().GetImageFromURL(aCmdURLSeq[i], aMiscOptions.AreCurrentSymbolsLarge()));
+                aImage = Image(framework::AddonsOptions().GetImageFromURL(aCmdURLSeq[i], SvtMiscOptions::AreCurrentSymbolsLarge()));
 
             pIter->second.nImageInfo = 1; // mark image as module based
         }

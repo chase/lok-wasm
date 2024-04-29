@@ -22,6 +22,7 @@
 #include <sfx2/styledlg.hxx>
 
 class SfxStyleSheetBase;
+class SdrView;
 
 class ScStyleDlg : public SfxStyleDialogController
 {
@@ -31,11 +32,26 @@ public:
                bool bPage);
 
 protected:
-    virtual void PageCreated(const OString& rPageId, SfxTabPage& rTabPage) override;
+    virtual void PageCreated(const OUString& rPageId, SfxTabPage& rTabPage) override;
     virtual void RefreshInputSet() override;
 
 private:
     bool m_bPage;
+};
+
+class ScDrawStyleDlg : public SfxStyleDialogController
+{
+public:
+    ScDrawStyleDlg(weld::Window* pParent,
+                   SfxStyleSheetBase& rStyleBase,
+                   SdrView* pView);
+
+protected:
+    virtual void PageCreated(const OUString& rPageId, SfxTabPage& rTabPage) override;
+    virtual void RefreshInputSet() override;
+
+private:
+    SdrView* mpView;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -49,6 +49,7 @@
 #include <com/sun/star/view/XSelectionSupplier.hpp>
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/implbase.hxx>
+#include <osl/diagnose.h>
 
 #include <algorithm>
 
@@ -315,7 +316,7 @@ SwMailMergeDlg::SwMailMergeDlg(weld::Window* pParent, SwWrtShell& rShell,
                                 + OUString::number(static_cast<sal_Int32>(SfxFilterFlags::NOTINFILEDLG))
                                 + ":default_first");
         uno::Reference< container::XEnumeration > xList = xQuery->createSubSetEnumerationByQuery(sCommand);
-        static const OUStringLiteral sName(u"Name");
+        static constexpr OUStringLiteral sName(u"Name");
         sal_Int32 nODT = -1;
         while(xList->hasMoreElements()) {
             comphelper::SequenceAsHashMap aFilter(xList->nextElement());

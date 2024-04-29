@@ -16,11 +16,36 @@ $(eval $(call gb_CppunitTest_use_external,sw_apitests,boost_headers))
 $(eval $(call gb_CppunitTest_use_common_precompiled_header,sw_apitests))
 
 $(eval $(call gb_CppunitTest_add_exception_objects,sw_apitests, \
+    sw/qa/api/SwXAutoTextContainer \
+    sw/qa/api/SwXBodyText \
+    sw/qa/api/SwXBookmark \
+    sw/qa/api/SwXBookmarks \
+    sw/qa/api/SwXChapterNumbering \
     sw/qa/api/SwXDocumentIndex \
+    sw/qa/api/SwXDocumentIndexes \
+    sw/qa/api/SwXDocumentIndexMark \
     sw/qa/api/SwXDocumentSettings \
-	sw/qa/api/SwXTextFrame \
+    sw/qa/api/SwXFieldEnumeration \
+    sw/qa/api/SwXFrames \
+    sw/qa/api/SwXFootnote \
+    sw/qa/api/SwXFootnoteProperties \
+    sw/qa/api/SwXFootnoteText \
+    sw/qa/api/SwXFootnotes \
+    sw/qa/api/SwXHeadFootText \
+    sw/qa/api/SwXNumberingRules \
+    sw/qa/api/SwXParagraphEnumeration \
+    sw/qa/api/SwXReferenceMark \
+    sw/qa/api/SwXStyleFamilies \
+    sw/qa/api/SwXReferenceMarks \
+    sw/qa/api/SwXTableCellText \
+    sw/qa/api/SwXTextEmbeddedObjects \
+    sw/qa/api/SwXTextFrame \
     sw/qa/api/SwXTextField \
+    sw/qa/api/SwXTextFieldMasters \
+    sw/qa/api/SwXTextFieldTypes \
+    sw/qa/api/SwXTextSections \
     sw/qa/api/SwXTextTable \
+    sw/qa/api/SwXTextTables \
 ))
 
 $(eval $(call gb_CppunitTest_use_libraries,sw_apitests, \
@@ -77,7 +102,10 @@ $(eval $(call gb_CppunitTest_use_configuration,sw_apitests))
 $(eval $(call gb_CppunitTest_use_rdb,sw_apitests,services))
 
 $(eval $(call gb_CppunitTest_use_uiconfigs,sw_apitests, \
+    svt \
     svx \
 ))
+
+$(call gb_CppunitTest_get_target,sw_apitests): $(call gb_AllLangPackage_get_target,autotextshare)
 
 # vim: set noet sw=4 ts=4:

@@ -65,7 +65,7 @@ constexpr OUStringLiteral PROPERTY_TITLE = u"BubbleHeading";
 constexpr OUStringLiteral PROPERTY_TEXT = u"BubbleText";
 constexpr OUStringLiteral PROPERTY_SHOW_BUBBLE = u"BubbleVisible";
 constexpr OUStringLiteral PROPERTY_CLICK_HDL = u"MenuClickHDL";
-constexpr OUStringLiteral PROPERTY_SHOW_MENUICON = u"MenuIconVisible";
+constexpr OUString PROPERTY_SHOW_MENUICON = u"MenuIconVisible"_ustr;
 
 // Returns the URL of the release note for the given position
 OUString getReleaseNote(const UpdateInfo& rInfo, sal_uInt8 pos, bool autoDownloadEnabled)
@@ -94,16 +94,6 @@ OUString getBuildId()
     rtl::Bootstrap::expandMacros(aPathVal);
     return aPathVal;
 }
-
-
-#if (defined LINUX || defined __sun)
-OUString getBaseInstallation()
-{
-    OUString aPathVal("$BRAND_BASE_DIR");
-    rtl::Bootstrap::expandMacros(aPathVal);
-    return aPathVal;
-}
-#endif
 
 
 bool isObsoleteUpdateInfo(std::u16string_view rBuildId)
@@ -325,22 +315,6 @@ private:
 };
 
 
-class ShutdownThread :  public osl::Thread
-{
-public:
-    explicit ShutdownThread(const uno::Reference<uno::XComponentContext>& xContext);
-
-    virtual void SAL_CALL run() override;
-    virtual void SAL_CALL onTerminated() override;
-
-protected:
-    virtual ~ShutdownThread() override;
-
-private:
-    osl::Condition m_aCondition;
-    const uno::Reference<uno::XComponentContext> m_xContext;
-};
-
 
 UpdateCheckThread::UpdateCheckThread( osl::Condition& rCondition,
                                       const uno::Reference<uno::XComponentContext>& xContext,
@@ -542,7 +516,7 @@ UpdateCheckThread::run()
                 // Increase next by 15, 60, .. minutes
                 static const sal_Int32 nRetryInterval[] = { 900, 3600, 14400, 86400 };
 
-                if( n < SAL_N_ELEMENTS(nRetryInterval) )
+                if( n < std::size(nRetryInterval) )
                     ++n;
 
                 tv.Seconds = nRetryInterval[n-1];
@@ -650,15 +624,14 @@ DownloadThread::run()
         if( ! m_aDownload.start(m_aURL, aLocalFile, aDownloadDest ) )
         {
             // retry every 15s unless the dialog is not visible
-            TimeValue tv;
-            tv.Seconds = 15;
+            TimeValue tv(15, 0);
 
             if( ! UpdateCheck::get()->isDialogShowing() )
             {
                 // Increase next by 1, 5, 15, 60, .. minutes
                 static const sal_Int16 nRetryInterval[] = { 60, 300, 900, 3600 };
 
-                if( n < SAL_N_ELEMENTS(nRetryInterval) )
+                if( n < std::size(nRetryInterval) )
                     ++n;
 
                 tv.Seconds = nRetryInterval[n-1];
@@ -695,45 +668,6 @@ void SAL_CALL DownloadThread::suspend()
 
 
 void SAL_CALL DownloadThread::onTerminated()
-{
-    delete this;
-}
-
-
-ShutdownThread::ShutdownThread( const uno::Reference<uno::XComponentContext>& xContext) :
-    m_xContext( xContext )
-{
-    create();
-}
-
-
-ShutdownThread::~ShutdownThread()
-{
-}
-
-
-void SAL_CALL
-ShutdownThread::run()
-{
-    osl_setThreadName("ShutdownThread");
-
-    TimeValue tv = { 0, 250 };
-
-    m_aCondition.wait(&tv);
-
-    // Tell QuickStarter not to veto ..
-    uno::Reference< css::beans::XFastPropertySet > xQuickStarter = css::office::Quickstart::createDefault(m_xContext);
-
-    xQuickStarter->setFastPropertyValue(0, uno::Any(false));
-
-    // Shutdown the office
-    uno::Reference< frame::XDesktop2 > xDesktop = frame::Desktop::create(m_xContext);
-
-    xDesktop->terminate();
-}
-
-
-void SAL_CALL ShutdownThread::onTerminated()
 {
     delete this;
 }
@@ -904,50 +838,6 @@ UpdateCheck::download()
     else
     {
         showReleaseNote(aInfo.Sources[0].URL); // Display in browser
-    }
-}
-
-
-void
-UpdateCheck::install()
-{
-    std::scoped_lock aGuard(m_aMutex);
-
-    const uno::Reference< c3s::XSystemShellExecute > xShellExecute = c3s::SystemShellExecute::create( m_xContext );
-
-    try {
-        // Construct install command ??
-
-        // Store release note for position 3 and 4
-        OUString aURL(getReleaseNote(m_aUpdateInfo, 3));
-        storeReleaseNote(1, aURL);
-
-        aURL = getReleaseNote(m_aUpdateInfo, 4);
-        storeReleaseNote(2, aURL);
-
-        OUString aInstallImage(m_aImageName);
-        osl::FileBase::getSystemPathFromFileURL(aInstallImage, aInstallImage);
-
-        sal_Int32 nFlags;
-#if (defined LINUX || defined __sun)
-        nFlags = 42;
-        OUString aParameter = getBaseInstallation();
-        if( !aParameter.isEmpty() )
-            osl::FileBase::getSystemPathFromFileURL(aParameter, aParameter);
-
-        aParameter += " &";
-#else
-        nFlags = c3s::SystemShellExecuteFlags::DEFAULTS;
-        OUString const aParameter;
-#endif
-
-        rtl::Reference< UpdateCheckConfig > rModel = UpdateCheckConfig::get( m_xContext );
-        rModel->clearLocalFileName();
-
-        xShellExecute->execute(aInstallImage, aParameter, nFlags);
-        new ShutdownThread( m_xContext );
-    } catch(const uno::Exception&) {
-        m_aUpdateHandler->setErrorMessage( m_aUpdateHandler->getDefaultInstErrMsg() );
     }
 }
 
@@ -1517,7 +1407,7 @@ UpdateCheck::storeReleaseNote(sal_Int8 nNum, const OUString &rURL)
     rc = aFile.open( osl_File_OpenFlag_Write | osl_File_OpenFlag_Create );
     if ( rc != osl::FileBase::E_None ) return false;
 
-    OString aLineBuf("[InternetShortcut]\r\n");
+    OString aLineBuf("[InternetShortcut]\r\n"_ostr);
     sal_uInt64 nWritten = 0;
 
     OUString aURL( rURL );

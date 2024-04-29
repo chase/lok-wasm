@@ -28,14 +28,14 @@
 using namespace com::sun::star::beans;
 using namespace com::sun::star::uno;
 
-constexpr OUStringLiteral ROOT_NODE = u"OptionsDialogGroups";
-constexpr OUStringLiteral PAGES_NODE = u"Pages";
-constexpr OUStringLiteral OPTIONS_NODE = u"Options";
+constexpr OUString ROOT_NODE = u"OptionsDialogGroups"_ustr;
+constexpr OUString PAGES_NODE = u"Pages"_ustr;
+constexpr OUString OPTIONS_NODE = u"Options"_ustr;
 
 namespace {
     enum NodeType{ NT_Group, NT_Page, NT_Option };
 }
-constexpr OUStringLiteral g_sPathDelimiter = u"/";
+constexpr OUString g_sPathDelimiter = u"/"_ustr;
 static void ReadNode(
         const Reference<css::container::XHierarchicalNameAccess>& xHierarchyAccess,
         SvtOptionsDialogOptions::OptionNodeList & aOptionNodeList,
@@ -45,7 +45,7 @@ static void ReadNode(
 SvtOptionsDialogOptions::SvtOptionsDialogOptions()
 {
     Reference<css::container::XHierarchicalNameAccess> xHierarchyAccess = utl::ConfigManager::acquireTree(u"Office.OptionsDialog");
-    const Sequence< OUString > aNodeSeq = utl::ConfigItem::GetNodeNames( xHierarchyAccess, ROOT_NODE, utl::ConfigNameFormat::LocalPath);
+    const Sequence< OUString > aNodeSeq = utl::ConfigItem::GetNodeNames( xHierarchyAccess, ROOT_NODE, utl::ConfigNameFormat::LocalNode);
     OUString sNode( ROOT_NODE + g_sPathDelimiter );
     for ( const auto& rNode : aNodeSeq )
     {
@@ -102,7 +102,7 @@ static void ReadNode(
     if ( _eType != NT_Option )
     {
         OUString sNodes( sNode + sSet );
-        const Sequence< OUString > aNodes = utl::ConfigItem::GetNodeNames( xHierarchyAccess, sNodes, utl::ConfigNameFormat::LocalPath );
+        const Sequence< OUString > aNodes = utl::ConfigItem::GetNodeNames( xHierarchyAccess, sNodes, utl::ConfigNameFormat::LocalNode );
         for ( const auto& rNode : aNodes )
         {
             OUString sSubNodeName( sNodes + g_sPathDelimiter + rNode );

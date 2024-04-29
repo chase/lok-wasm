@@ -22,6 +22,7 @@
 #include <functional>
 #include <memory>
 #include <com/sun/star/uno/Sequence.hxx>
+#include <com/sun/star/frame/XModel.hpp>
 #include <editeng/forbiddencharacterstable.hxx>
 #include <editeng/outliner.hxx>
 #include <rtl/ustring.hxx>
@@ -179,7 +180,6 @@ protected:
     std::vector<rtl::Reference<SdrPage>> maPages;
     std::function<void(std::unique_ptr<SdrUndoAction>)> m_aUndoLink;  // link to a NotifyUndo-Handler
     Size           m_aMaxObjSize; // e.g. for auto-growing text
-    Fraction       m_aObjUnit;   // description of the coordinate units for ClipBoard, Drag&Drop, ...
     MapUnit        m_eObjUnit;   // see above
     FieldUnit      m_eUIUnit;      // unit, scale (e.g. 1/1000) for the UI (status bar) is set by ImpSetUIUnit()
     Fraction       m_aUIScale;     // see above
@@ -253,7 +253,8 @@ public:
         tools::Long nLower = 0);
 
 protected:
-    virtual css::uno::Reference< css::uno::XInterface > createUnoModel();
+    void implDtorClearModel();
+    virtual css::uno::Reference< css::frame::XModel > createUnoModel();
 
 private:
     SdrModel(const SdrModel& rSrcModel) = delete;
@@ -267,7 +268,7 @@ private:
     SVX_DLLPRIVATE void ImpCreateTables(bool bDisablePropertyFiles);
 
     // this is a weak reference to a possible living api wrapper for this model
-    css::uno::Reference< css::uno::XInterface > mxUnoModel;
+    css::uno::Reference< css::frame::XModel > mxUnoModel;
 
     // used to disable unique name checking during page move
     bool mbMakePageObjectsNamesUnique = true;
@@ -376,10 +377,6 @@ public:
     // with the correct sizes.
     MapUnit          GetScaleUnit() const                       { return m_eObjUnit; }
     void             SetScaleUnit(MapUnit eMap);
-    const Fraction&  GetScaleFraction() const                   { return m_aObjUnit; }
-    void             SetScaleFraction(const Fraction& rFrac);
-    // Setting both simultaneously performs a little better
-    void             SetScaleUnit(MapUnit eMap, const Fraction& rFrac);
 
     // maximal size e.g. for auto growing texts
     const Size&      GetMaxObjSize() const                      { return m_aMaxObjSize; }
@@ -557,8 +554,8 @@ public:
     bool GetDisableTextEditUsesCommonUndoManager() const { return mbDisableTextEditUsesCommonUndoManager; }
     void SetDisableTextEditUsesCommonUndoManager(bool bNew) { mbDisableTextEditUsesCommonUndoManager = bNew; }
 
-    css::uno::Reference< css::uno::XInterface > const & getUnoModel();
-    void setUnoModel( const css::uno::Reference< css::uno::XInterface >& xModel );
+    css::uno::Reference< css::frame::XModel > const & getUnoModel();
+    void setUnoModel( const css::uno::Reference< css::frame::XModel >& xModel );
 
     // these functions are used by the api to disable repaints during a
     // set of api calls.

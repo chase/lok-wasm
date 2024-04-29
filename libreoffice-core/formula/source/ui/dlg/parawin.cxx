@@ -322,7 +322,7 @@ void ParaWin::SetFunctionDesc(const IFunctionDescription* pFDesc)
         pFuncDesc->fillVisibleArgumentMapping(aVisibleArgMapping);
         m_xSlider->set_vpolicy(VclPolicyType::NEVER);
         m_xSlider->set_size_request(-1, -1);
-        OString sHelpId = pFuncDesc->getHelpId();
+        OUString sHelpId = pFuncDesc->getHelpId();
         m_xContainer->set_help_id(sHelpId);
         m_xEdArg1->GetWidget()->set_help_id(sHelpId);
         m_xEdArg2->GetWidget()->set_help_id(sHelpId);
@@ -496,7 +496,7 @@ IMPL_LINK( ParaWin, GetFxHdl, ArgInput&, rPtr, void )
 {
     sal_uInt16 nOffset = GetSliderPos();
     nEdFocus=NOT_FOUND;
-    for (size_t nPos=0; nPos < SAL_N_ELEMENTS(aArgInput); ++nPos)
+    for (size_t nPos=0; nPos < std::size(aArgInput); ++nPos)
     {
         if(&rPtr == &aArgInput[nPos])
         {

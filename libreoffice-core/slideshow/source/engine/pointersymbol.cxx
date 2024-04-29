@@ -23,6 +23,7 @@
 #include <cppcanvas/customsprite.hxx>
 
 #include <basegfx/point/b2dpoint.hxx>
+#include <basegfx/vector/b2dsize.hxx>
 #include <basegfx/vector/b2dvector.hxx>
 
 #include <com/sun/star/rendering/XCanvas.hpp>
@@ -133,13 +134,11 @@ void PointerSymbol::viewAdded( const UnoViewSharedPtr& rView )
 
 void PointerSymbol::viewRemoved( const UnoViewSharedPtr& rView )
 {
-    maViews.erase(
-        std::remove_if(
-            maViews.begin(), maViews.end(),
+    std::erase_if(
+            maViews,
             [&rView]
             ( const ViewsVecT::value_type& cp )
-            { return rView == cp.first; } ),
-        maViews.end() );
+            { return rView == cp.first; } );
 }
 
 void PointerSymbol::viewChanged( const UnoViewSharedPtr& rView )

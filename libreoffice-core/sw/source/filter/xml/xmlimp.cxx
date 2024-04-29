@@ -23,8 +23,10 @@
 #include <cassert>
 
 #include <com/sun/star/document/PrinterIndependentLayout.hpp>
+#include <com/sun/star/document/XExporter.hpp>
 #include <com/sun/star/drawing/XDrawPage.hpp>
 #include <com/sun/star/drawing/XDrawPageSupplier.hpp>
+#include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/text/XTextDocument.hpp>
 #include <com/sun/star/text/XTextRange.hpp>
 
@@ -60,8 +62,12 @@
 #include <svx/xmlgrhlp.hxx>
 #include <svx/xmleohlp.hxx>
 #include <sfx2/printer.hxx>
+#include <sfx2/sfxmodelfactory.hxx>
 #include <xmloff/xmluconv.hxx>
+#include <unotools/fcm.hxx>
+#include <unotools/mediadescriptor.hxx>
 #include <unotools/streamwrap.hxx>
+#include <unotools/tempfile.hxx>
 #include <tools/UnitConversion.hxx>
 #include <comphelper/diagnose_ex.hxx>
 
@@ -88,7 +94,6 @@ using namespace ::com::sun::star::i18n;
 using namespace ::com::sun::star::drawing;
 using namespace ::com::sun::star::xforms;
 using namespace ::xmloff::token;
-using namespace ::std;
 
 namespace {
 
@@ -362,21 +367,9 @@ void SwXMLImport::setStyleInsertMode( SfxStyleFamily nFamilies,
     m_bLoadDoc = false;
 }
 
-const Sequence< sal_Int8 > & SwXMLImport::getUnoTunnelId() noexcept
-{
-    static const comphelper::UnoIdInit theSwXMLImportUnoTunnelId;
-    return theSwXMLImportUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL SwXMLImport::getSomething( const Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this,
-                                        comphelper::FallbackToGetSomethingOf<SvXMLImport>{});
-}
-
 static OTextCursorHelper *lcl_xml_GetSwXTextCursor( const Reference < XTextCursor >& rTextCursor )
 {
-    OTextCursorHelper* pTextCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(rTextCursor);
+    OTextCursorHelper* pTextCursor = dynamic_cast<OTextCursorHelper*>(rTextCursor.get());
     OSL_ENSURE( pTextCursor, "SwXTextCursor missing" );
     return pTextCursor;
 }
@@ -424,7 +417,7 @@ void SwXMLImport::startDocument()
                 }
 
                 bool bOverwrite = false;
-                static const OUStringLiteral sStyleInsertModeOverwrite(u"StyleInsertModeOverwrite");
+                static constexpr OUString sStyleInsertModeOverwrite(u"StyleInsertModeOverwrite"_ustr);
                 if( xPropertySetInfo->hasPropertyByName(sStyleInsertModeOverwrite) )
                 {
                     aAny = xImportInfo->getPropertyValue(sStyleInsertModeOverwrite);
@@ -440,7 +433,7 @@ void SwXMLImport::startDocument()
         }
 
         // text insert mode?
-        static const OUStringLiteral sTextInsertModeRange(u"TextInsertModeRange");
+        static constexpr OUString sTextInsertModeRange(u"TextInsertModeRange"_ustr);
         if( xPropertySetInfo->hasPropertyByName(sTextInsertModeRange) )
         {
             aAny = xImportInfo->getPropertyValue(sTextInsertModeRange);
@@ -450,7 +443,7 @@ void SwXMLImport::startDocument()
         }
 
         // auto text mode
-        static const OUStringLiteral sAutoTextMode(u"AutoTextMode");
+        static constexpr OUString sAutoTextMode(u"AutoTextMode"_ustr);
         if( xPropertySetInfo->hasPropertyByName(sAutoTextMode) )
         {
             aAny = xImportInfo->getPropertyValue(sAutoTextMode);
@@ -462,7 +455,7 @@ void SwXMLImport::startDocument()
         }
 
         // organizer mode
-        static const OUStringLiteral sOrganizerMode(u"OrganizerMode");
+        static constexpr OUString sOrganizerMode(u"OrganizerMode"_ustr);
         if( xPropertySetInfo->hasPropertyByName(sOrganizerMode) )
         {
             aAny = xImportInfo->getPropertyValue(sOrganizerMode);
@@ -474,7 +467,7 @@ void SwXMLImport::startDocument()
         }
 
         // default document properties
-        static const OUStringLiteral sDefSettings(u"DefaultDocumentSettings");
+        static constexpr OUString sDefSettings(u"DefaultDocumentSettings"_ustr);
         if (xPropertySetInfo->hasPropertyByName(sDefSettings))
         {
             aAny = xImportInfo->getPropertyValue(sDefSettings);
@@ -642,10 +635,10 @@ void SwXMLImport::endDocument()
     SwDoc *pDoc = nullptr;
     if( (getImportFlags() & SvXMLImportFlags::CONTENT) && !IsStylesOnlyMode() )
     {
-        Reference<XUnoTunnel> xCursorTunnel( GetTextImport()->GetCursor(),
+        Reference<XInterface> xCursorTunnel( GetTextImport()->GetCursor(),
                                               UNO_QUERY);
         assert(xCursorTunnel.is() && "missing XUnoTunnel for Cursor");
-        OTextCursorHelper* pTextCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xCursorTunnel);
+        OTextCursorHelper* pTextCursor = dynamic_cast<OTextCursorHelper*>(xCursorTunnel.get());
         assert(pTextCursor && "SwXTextCursor missing");
         SwPaM *pPaM = pTextCursor->GetPaM();
         if( IsInsertMode() && m_oSttNdIdx->GetIndex() )
@@ -1276,7 +1269,8 @@ void SwXMLImport::SetConfigurationSettings(const Sequence < PropertyValue > & aC
         "ProtectForm",
         "MsWordCompTrailingBlanks",
         "SubtractFlysAnchoredAtFlys",
-        "EmptyDbFieldHidesPara"
+        "EmptyDbFieldHidesPara",
+        "UseVariableWidthNBSP",
     };
 
     bool bAreUserSettingsFromDocument = officecfg::Office::Common::Load::UserDefinedSettings::get();
@@ -1308,6 +1302,7 @@ void SwXMLImport::SetConfigurationSettings(const Sequence < PropertyValue > & aC
     bool bCollapseEmptyCellPara = false;
     bool bAutoFirstLineIndentDisregardLineSpace = false;
     bool bHyphenateURLs = false;
+    bool bApplyTextAttrToEmptyLineAtEndOfParagraph = false;
     bool bDoNotBreakWrappedTables = false;
     bool bAllowTextAfterFloatingTableBreak = false;
     bool bDropCapPunctuation = false;
@@ -1407,6 +1402,10 @@ void SwXMLImport::SetConfigurationSettings(const Sequence < PropertyValue > & aC
                 else if (rValue.Name == "HyphenateURLs")
                 {
                     bHyphenateURLs = true;
+                }
+                else if (rValue.Name == "ApplyTextAttrToEmptyLineAtEndOfParagraph")
+                {
+                    bApplyTextAttrToEmptyLineAtEndOfParagraph = true;
                 }
                 else if (rValue.Name == "DoNotBreakWrappedTables")
                 {
@@ -1585,6 +1584,11 @@ void SwXMLImport::SetConfigurationSettings(const Sequence < PropertyValue > & aC
         xProps->setPropertyValue("HyphenateURLs", Any(true));
     }
 
+    if (!bApplyTextAttrToEmptyLineAtEndOfParagraph)
+    {
+        xProps->setPropertyValue("ApplyTextAttrToEmptyLineAtEndOfParagraph", Any(false));
+    }
+
     if (bDoNotBreakWrappedTables)
     {
         xProps->setPropertyValue("DoNotBreakWrappedTables", Any(true));
@@ -1689,9 +1693,7 @@ SwDoc* SwXMLImport::getDoc()
         return m_pDoc;
     Reference < XTextDocument > xTextDoc( GetModel(), UNO_QUERY );
     Reference < XText > xText = xTextDoc->getText();
-    Reference<XUnoTunnel> xTextTunnel( xText, UNO_QUERY);
-    assert( xTextTunnel.is());
-    SwXText* pText = comphelper::getFromUnoTunnel<SwXText>(xTextTunnel);
+    SwXText* pText = dynamic_cast<SwXText*>(xText.get());
     assert( pText != nullptr );
     m_pDoc = pText->GetDoc();
     assert( m_pDoc != nullptr );
@@ -1797,6 +1799,93 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportFODT(SvStream &rStream)
     xDocSh->SetLoading(SfxLoadedFlags::ALL);
 
     xDocSh->DoClose();
+
+    return ret;
+}
+
+extern "C" SAL_DLLPUBLIC_EXPORT bool TestPDFExportFODT(SvStream &rStream)
+{
+    // do the same sort of check as FilterDetect::detect
+    OString const str(read_uInt8s_ToOString(rStream, 4000));
+    rStream.Seek(STREAM_SEEK_TO_BEGIN);
+    OUString resultString(str.getStr(), str.getLength(), RTL_TEXTENCODING_ASCII_US,
+                          RTL_TEXTTOUNICODE_FLAGS_UNDEFINED_DEFAULT|RTL_TEXTTOUNICODE_FLAGS_MBUNDEFINED_DEFAULT|RTL_TEXTTOUNICODE_FLAGS_INVALID_DEFAULT);
+    if (!resultString.startsWith("<?xml") || resultString.indexOf("office:mimetype=\"application/vnd.oasis.opendocument.text\"") == -1)
+        return false;
+
+    Reference<css::frame::XDesktop2> xDesktop = css::frame::Desktop::create(comphelper::getProcessComponentContext());
+    Reference<css::frame::XFrame> xTargetFrame = xDesktop->findFrame("_blank", 0);
+
+    Reference<uno::XComponentContext> xContext(comphelper::getProcessComponentContext());
+    Reference<css::frame::XModel2> xModel(xContext->getServiceManager()->createInstanceWithContext(
+                "com.sun.star.text.TextDocument", xContext), UNO_QUERY_THROW);
+
+    Reference<css::frame::XLoadable> xModelLoad(xModel, UNO_QUERY_THROW);
+    xModelLoad->initNew();
+
+    uno::Reference<lang::XMultiServiceFactory> xMultiServiceFactory(comphelper::getProcessServiceFactory());
+    uno::Reference<io::XInputStream> xStream(new utl::OSeekableInputStreamWrapper(rStream));
+    uno::Reference<uno::XInterface> xInterface(xMultiServiceFactory->createInstance("com.sun.star.comp.Writer.XmlFilterAdaptor"), uno::UNO_SET_THROW);
+
+    css::uno::Sequence<OUString> aUserData
+    {
+        "com.sun.star.comp.filter.OdfFlatXml",
+        "",
+        "com.sun.star.comp.Writer.XMLOasisImporter",
+        "com.sun.star.comp.Writer.XMLOasisExporter",
+        "",
+        "",
+        "true"
+    };
+    uno::Sequence<beans::PropertyValue> aAdaptorArgs(comphelper::InitPropertySequence(
+    {
+        { "UserData", uno::Any(aUserData) },
+    }));
+    css::uno::Sequence<uno::Any> aOuterArgs{ uno::Any(aAdaptorArgs) };
+
+    uno::Reference<lang::XInitialization> xInit(xInterface, uno::UNO_QUERY_THROW);
+    xInit->initialize(aOuterArgs);
+
+    uno::Reference<document::XImporter> xImporter(xInterface, uno::UNO_QUERY_THROW);
+    uno::Sequence<beans::PropertyValue> aArgs(comphelper::InitPropertySequence(
+    {
+        { "InputStream", uno::Any(xStream) },
+        { "URL", uno::Any(OUString("private:stream")) },
+    }));
+    xImporter->setTargetDocument(xModel);
+
+    uno::Reference<document::XFilter> xFODTFilter(xInterface, uno::UNO_QUERY_THROW);
+    bool ret = xFODTFilter->filter(aArgs);
+
+    if (ret)
+    {
+        css::uno::Reference<css::frame::XController2> xController(xModel->createDefaultViewController(xTargetFrame), UNO_SET_THROW);
+        utl::ConnectFrameControllerModel(xTargetFrame, xController, xModel);
+
+        utl::TempFileFast aTempFile;
+
+        uno::Reference<document::XFilter> xPDFFilter(
+            xMultiServiceFactory->createInstance("com.sun.star.document.PDFFilter"), uno::UNO_QUERY);
+        uno::Reference<document::XExporter> xExporter(xPDFFilter, uno::UNO_QUERY);
+        xExporter->setSourceDocument(xModel);
+
+        uno::Reference<io::XOutputStream> xOutputStream(new utl::OStreamWrapper(*aTempFile.GetStream(StreamMode::READWRITE)));
+
+        // ofz#60533 fuzzer learned to use fo:font-size="842pt" which generate timeouts trying
+        // to export thousands of pages from minimal input size
+        uno::Sequence<beans::PropertyValue> aFilterData(comphelper::InitPropertySequence({
+            { "PageRange", uno::Any(OUString("1-100")) }
+        }));
+        uno::Sequence<beans::PropertyValue> aDescriptor(comphelper::InitPropertySequence({
+            { "FilterName", uno::Any(OUString("writer_pdf_Export")) },
+            { "OutputStream", uno::Any(xOutputStream) },
+            { "FilterData", uno::Any(aFilterData) }
+        }));
+        xPDFFilter->filter(aDescriptor);
+    }
+
+    css::uno::Reference<css::util::XCloseable> xClose(xModel, css::uno::UNO_QUERY);
+    xClose->close(false);
 
     return ret;
 }

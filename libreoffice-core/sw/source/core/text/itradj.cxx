@@ -290,6 +290,8 @@ void SwTextAdjuster::CalcNewBlock( SwLineLayout *pCurrent,
     bool bDoNotJustifyTab = false;
 
     SwLinePortion *pPos = pCurrent->GetNextPortion();
+    // calculate real text width for shrinking
+    tools::Long nBreakWidth = 0;
 
     while( pPos )
     {
@@ -367,6 +369,11 @@ void SwTextAdjuster::CalcNewBlock( SwLineLayout *pCurrent,
                 if( nGluePortion )
                 {
                     tools::Long nSpaceAdd = nGluePortionWidth / sal_Int32(nGluePortion);
+                    // shrink, if portions exceed the line width
+                    tools::Long nSpaceSub = ( nBreakWidth > pCurrent->Width() )
+                        ? (nBreakWidth - pCurrent->Width()) * SPACING_PRECISION_FACTOR /
+                                sal_Int32(nGluePortion) + LONG_MAX/2
+                        : 0;
 
                     // i60594
                     if( rSI.CountKashida() && !bSkipKashida )
@@ -382,7 +389,7 @@ void SwTextAdjuster::CalcNewBlock( SwLineLayout *pCurrent,
                         }
                     }
 
-                    pCurrent->SetLLSpaceAdd( nSpaceAdd , nSpaceIdx );
+                    pCurrent->SetLLSpaceAdd( nSpaceSub ? nSpaceSub : nSpaceAdd, nSpaceIdx );
                     pPos->Width( static_cast<SwGluePortion*>(pPos)->GetFixWidth() );
                 }
                 else if (IsOneBlock() && nCharCnt > TextFrameIndex(1))
@@ -398,6 +405,10 @@ void SwTextAdjuster::CalcNewBlock( SwLineLayout *pCurrent,
             }
             else
                 ++nGluePortion;
+        }
+        else
+        {
+            nBreakWidth += pPos->Width();
         }
         GetInfo().SetIdx( GetInfo().GetIdx() + pPos->GetLen() );
         if ( pPos == pStopAt )
@@ -747,7 +758,7 @@ void SwTextAdjuster::CalcDropAdjust()
     OSL_ENSURE( 1<GetDropLines() && SvxAdjust::Left!=GetAdjust() && SvxAdjust::Block!=GetAdjust(),
             "CalcDropAdjust: No reason for DropAdjustment." );
 
-    const sal_uInt16 nLineNumber = GetLineNr();
+    const sal_Int32 nLineNumber = GetLineNr();
 
     // 1) Skip dummies
     Top();
@@ -780,7 +791,7 @@ void SwTextAdjuster::CalcDropAdjust()
                 const auto nDropLineStart =
                     GetLineStart() + pLeft->Width() + pDropPor->Width();
                 auto nMinLeft = nDropLineStart;
-                for( sal_uInt16 i = 1; i < GetDropLines(); ++i )
+                for( sal_Int32 i = 1; i < GetDropLines(); ++i )
                 {
                     if( NextLine() )
                     {
@@ -831,7 +842,7 @@ void SwTextAdjuster::CalcDropRepaint()
     SwRepaint &rRepaint = GetInfo().GetParaPortion()->GetRepaint();
     if( rRepaint.Top() > Y() )
         rRepaint.Top( Y() );
-    for( sal_uInt16 i = 1; i < GetDropLines(); ++i )
+    for( sal_Int32 i = 1; i < GetDropLines(); ++i )
         NextLine();
     const SwTwips nBottom = Y() + GetLineHeight() - 1;
     if( rRepaint.Bottom() < nBottom )

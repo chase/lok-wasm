@@ -24,6 +24,7 @@
 #include <sal/log.hxx>
 #include <o3tl/safeint.hxx>
 #include <osl/diagnose.h>
+#include <unotools/configmgr.hxx>
 #include <unotools/fontdefs.hxx>
 #include <unotools/intlwrapper.hxx>
 #include <unotools/syslocale.hxx>
@@ -101,9 +102,9 @@ SfxPoolItem* SvxKerningItem::CreateDefault() {return new SvxKerningItem(0, 0);}
 SfxPoolItem* SvxCaseMapItem::CreateDefault() {return new SvxCaseMapItem(SvxCaseMap::NotMapped, 0);}
 SfxPoolItem* SvxEscapementItem::CreateDefault() {return new SvxEscapementItem(0);}
 SfxPoolItem* SvxLanguageItem::CreateDefault() {return new SvxLanguageItem(LANGUAGE_GERMAN, 0);}
-SfxPoolItem* SvxEmphasisMarkItem::CreateDefault() {return new SvxEmphasisMarkItem(FontEmphasisMark::NONE, 0);}
-SfxPoolItem* SvxCharRotateItem::CreateDefault() {return new SvxCharRotateItem(0_deg10, false, 0);}
-SfxPoolItem* SvxCharScaleWidthItem::CreateDefault() {return new SvxCharScaleWidthItem(100, 0);}
+SfxPoolItem* SvxEmphasisMarkItem::CreateDefault() {return new SvxEmphasisMarkItem(FontEmphasisMark::NONE, TypedWhichId<SvxEmphasisMarkItem>(0));}
+SfxPoolItem* SvxCharRotateItem::CreateDefault() {return new SvxCharRotateItem(0_deg10, false, TypedWhichId<SvxCharRotateItem>(0));}
+SfxPoolItem* SvxCharScaleWidthItem::CreateDefault() {return new SvxCharScaleWidthItem(100, TypedWhichId<SvxCharScaleWidthItem>(0));}
 SfxPoolItem* SvxCharReliefItem::CreateDefault() {return new SvxCharReliefItem(FontRelief::NONE, 0);}
 
 
@@ -157,24 +158,6 @@ bool SvxFontListItem::GetPresentation
 }
 
 // class SvxFontItem -----------------------------------------------------
-
-namespace
-{
-sal_Int32 CompareTo(sal_Int32 nA, sal_Int32 nB)
-{
-    if (nA < nB)
-    {
-        return -1;
-    }
-
-    if (nA > nB)
-    {
-        return 1;
-    }
-
-    return 0;
-}
-}
 
 SvxFontItem::SvxFontItem( const sal_uInt16 nId ) :
     SfxPoolItem( nId )
@@ -311,36 +294,6 @@ bool SvxFontItem::operator==( const SfxPoolItem& rAttr ) const
         }
     }
     return bRet;
-}
-
-bool SvxFontItem::operator<(const SfxPoolItem& rCmp) const
-{
-    const auto& rOther = static_cast<const SvxFontItem&>(rCmp);
-    sal_Int32 nRet = GetFamilyName().compareTo(rOther.GetFamilyName());
-    if (nRet != 0)
-    {
-        return nRet < 0;
-    }
-
-    nRet = GetStyleName().compareTo(rOther.GetStyleName());
-    if (nRet != 0)
-    {
-        return nRet < 0;
-    }
-
-    nRet = CompareTo(GetFamily(), rOther.GetFamily());
-    if (nRet != 0)
-    {
-        return nRet < 0;
-    }
-
-    nRet = CompareTo(GetPitch(), rOther.GetPitch());
-    if (nRet != 0)
-    {
-        return nRet < 0;
-    }
-
-    return GetCharSet() < rOther.GetCharSet();
 }
 
 SvxFontItem* SvxFontItem::Clone( SfxItemPool * ) const
@@ -551,7 +504,7 @@ OUString SvxWeightItem::GetValueTextByPos( sal_uInt16 nPos )
         RID_SVXITEMS_WEIGHT_BLACK
     };
 
-    static_assert(SAL_N_ELEMENTS(RID_SVXITEMS_WEIGHTS) - 1 == WEIGHT_BLACK, "must match");
+    static_assert(std::size(RID_SVXITEMS_WEIGHTS) - 1 == WEIGHT_BLACK, "must match");
     assert(nPos <= sal_uInt16(WEIGHT_BLACK) && "enum overflow!" );
     return EditResId(RID_SVXITEMS_WEIGHTS[nPos]);
 }
@@ -808,8 +761,15 @@ bool SvxFontHeightItem::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
                     return false;
                 fPoint = static_cast<float>(nValue);
             }
-            if(fPoint < 0. || fPoint > 10000.)
-                    return false;
+
+            if (fPoint < 0. || fPoint > 10000.)
+                return false;
+            static bool bFuzzing = utl::ConfigManager::IsFuzzing();
+            if (bFuzzing && fPoint > 240)
+            {
+                SAL_WARN("editeng.items", "SvxFontHeightItem ignoring font size of " << fPoint << " for performance");
+                return false;
+            }
 
             nHeight = static_cast<tools::Long>( fPoint * 20.0 + 0.5 );        // Twips
             if (!bConvert)
@@ -1115,7 +1075,7 @@ OUString SvxUnderlineItem::GetValueTextByPos( sal_uInt16 nPos ) const
         RID_SVXITEMS_UL_BOLDDASHDOTDOT,
         RID_SVXITEMS_UL_BOLDWAVE
     };
-    static_assert(SAL_N_ELEMENTS(RID_SVXITEMS_UL) - 1 == LINESTYLE_BOLDWAVE, "must match");
+    static_assert(std::size(RID_SVXITEMS_UL) - 1 == LINESTYLE_BOLDWAVE, "must match");
     assert(nPos <= sal_uInt16(LINESTYLE_BOLDWAVE) && "enum overflow!");
     return EditResId(RID_SVXITEMS_UL[nPos]);
 }
@@ -1156,7 +1116,7 @@ OUString SvxOverlineItem::GetValueTextByPos( sal_uInt16 nPos ) const
         RID_SVXITEMS_OL_BOLDDASHDOTDOT,
         RID_SVXITEMS_OL_BOLDWAVE
     };
-    static_assert(SAL_N_ELEMENTS(RID_SVXITEMS_OL) - 1 == LINESTYLE_BOLDWAVE, "must match");
+    static_assert(std::size(RID_SVXITEMS_OL) - 1 == LINESTYLE_BOLDWAVE, "must match");
     assert(nPos <= sal_uInt16(LINESTYLE_BOLDWAVE) && "enum overflow!");
     return EditResId(RID_SVXITEMS_OL[nPos]);
 }
@@ -1221,7 +1181,7 @@ OUString SvxCrossedOutItem::GetValueTextByPos( sal_uInt16 nPos )
         RID_SVXITEMS_STRIKEOUT_SLASH,
         RID_SVXITEMS_STRIKEOUT_X
     };
-    static_assert(SAL_N_ELEMENTS(RID_SVXITEMS_STRIKEOUT) - 1 == STRIKEOUT_X, "must match");
+    static_assert(std::size(RID_SVXITEMS_STRIKEOUT) - 1 == STRIKEOUT_X, "must match");
     assert(nPos <= sal_uInt16(STRIKEOUT_X) && "enum overflow!");
     return EditResId(RID_SVXITEMS_STRIKEOUT[nPos]);
 }
@@ -1753,7 +1713,7 @@ OUString SvxCaseMapItem::GetValueTextByPos( sal_uInt16 nPos )
         RID_SVXITEMS_CASEMAP_SMALLCAPS
     };
 
-    static_assert(SAL_N_ELEMENTS(RID_SVXITEMS_CASEMAP) == size_t(SvxCaseMap::End), "must match");
+    static_assert(std::size(RID_SVXITEMS_CASEMAP) == size_t(SvxCaseMap::End), "must match");
     assert(nPos < sal_uInt16(SvxCaseMap::End) && "enum overflow!");
     return EditResId(RID_SVXITEMS_CASEMAP[nPos]);
 }
@@ -1873,7 +1833,7 @@ OUString SvxEscapementItem::GetValueTextByPos( sal_uInt16 nPos )
         RID_SVXITEMS_ESCAPEMENT_SUB
     };
 
-    static_assert(SAL_N_ELEMENTS(RID_SVXITEMS_ESCAPEMENT) == size_t(SvxEscapement::End), "must match");
+    static_assert(std::size(RID_SVXITEMS_ESCAPEMENT) == size_t(SvxEscapement::End), "must match");
     assert(nPos < sal_uInt16(SvxEscapement::End) && "enum overflow!");
     return EditResId(RID_SVXITEMS_ESCAPEMENT[nPos]);
 }
@@ -2094,7 +2054,7 @@ bool SvxBlinkItem::GetPresentation
 // class SvxEmphaisMarkItem ---------------------------------------------------
 
 SvxEmphasisMarkItem::SvxEmphasisMarkItem( const FontEmphasisMark nValue,
-                                        const sal_uInt16 nId )
+                                        TypedWhichId<SvxEmphasisMarkItem> nId )
     : SfxUInt16Item( nId, static_cast<sal_uInt16>(nValue) )
 {
 }
@@ -2305,7 +2265,7 @@ bool SvxTwoLinesItem::GetPresentation( SfxItemPresentation /*ePres*/,
 |*    class SvxTextRotateItem
 *************************************************************************/
 
-SvxTextRotateItem::SvxTextRotateItem(Degree10 nValue, const sal_uInt16 nW)
+SvxTextRotateItem::SvxTextRotateItem(Degree10 nValue, TypedWhichId<SvxTextRotateItem> nW)
     : SfxUInt16Item(nW, nValue.get())
 {
 }
@@ -2384,7 +2344,7 @@ void SvxTextRotateItem::dumpAsXml(xmlTextWriterPtr pWriter) const
 
 SvxCharRotateItem::SvxCharRotateItem( Degree10 nValue,
                                        bool bFitIntoLine,
-                                       const sal_uInt16 nW )
+                                       TypedWhichId<SvxCharRotateItem> nW )
     : SvxTextRotateItem(nValue, nW), bFitToLine( bFitIntoLine )
 {
 }
@@ -2473,7 +2433,7 @@ void SvxCharRotateItem::dumpAsXml(xmlTextWriterPtr pWriter) const
 *************************************************************************/
 
 SvxCharScaleWidthItem::SvxCharScaleWidthItem( sal_uInt16 nValue,
-                                               const sal_uInt16 nW )
+                                               TypedWhichId<SvxCharScaleWidthItem> nW )
     : SfxUInt16Item( nW, nValue )
 {
 }
@@ -2546,13 +2506,13 @@ static TranslateId RID_SVXITEMS_RELIEF[] =
 
 OUString SvxCharReliefItem::GetValueTextByPos(sal_uInt16 nPos)
 {
-    assert(nPos < SAL_N_ELEMENTS(RID_SVXITEMS_RELIEF) && "enum overflow");
+    assert(nPos < std::size(RID_SVXITEMS_RELIEF) && "enum overflow");
     return EditResId(RID_SVXITEMS_RELIEF[nPos]);
 }
 
 sal_uInt16 SvxCharReliefItem::GetValueCount() const
 {
-    return SAL_N_ELEMENTS(RID_SVXITEMS_RELIEF) - 1;
+    return std::size(RID_SVXITEMS_RELIEF) - 1;
 }
 
 bool SvxCharReliefItem::GetPresentation

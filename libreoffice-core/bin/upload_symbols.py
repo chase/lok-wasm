@@ -22,7 +22,7 @@ def main():
     group.add_argument('--platform', choices=('Windows', 'Linux'))
     args = parser.parse_args()
 
-    base_url = "https://crashreport.collaboraoffice.com/"
+    base_url = "https://crashreport.libreoffice.org/"
     upload_url = base_url + "upload/"
     login_url = base_url + "accounts/login/"
 
@@ -48,7 +48,11 @@ def main():
 
     data['csrfmiddlewaretoken'] = csrftoken
 
-    session.post(upload_url, headers=headers, files=files, data=data)
+    response = session.post(upload_url, headers=headers, files=files, data=data)
+    if response.ok:
+        print("Symbols uploaded successfully")
+    else:
+        print(response.text)
 
 
 if __name__ == "__main__":

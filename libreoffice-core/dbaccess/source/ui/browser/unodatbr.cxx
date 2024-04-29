@@ -193,8 +193,8 @@ Any SAL_CALL SbaTableQueryBrowser::queryInterface(const Type& _rType)
 {
     if ( _rType.equals( cppu::UnoType<XScriptInvocationContext>::get() ) )
     {
-        OSL_PRECOND( !!m_aDocScriptSupport, "SbaTableQueryBrowser::queryInterface: did not initialize this, yet!" );
-        if ( !!m_aDocScriptSupport && *m_aDocScriptSupport )
+        OSL_PRECOND( m_aDocScriptSupport.has_value(), "SbaTableQueryBrowser::queryInterface: did not initialize this, yet!" );
+        if ( m_aDocScriptSupport.has_value() && *m_aDocScriptSupport )
             return Any( Reference< XScriptInvocationContext >( this ) );
         return Any();
     }
@@ -212,8 +212,8 @@ Sequence< Type > SAL_CALL SbaTableQueryBrowser::getTypes(  )
         SbaTableQueryBrowser_Base::getTypes()
     ) );
 
-    OSL_PRECOND( !!m_aDocScriptSupport, "SbaTableQueryBrowser::getTypes: did not initialize this, yet!" );
-    if ( !m_aDocScriptSupport || !*m_aDocScriptSupport )
+    OSL_PRECOND( m_aDocScriptSupport.has_value(), "SbaTableQueryBrowser::getTypes: did not initialize this, yet!" );
+    if ( !m_aDocScriptSupport.has_value() || !*m_aDocScriptSupport )
     {
         auto [begin, end] = asNonConstRange(aTypes);
         auto newEnd = std::remove_if( begin, end,
@@ -480,10 +480,10 @@ bool SbaTableQueryBrowser::InitializeForm( const Reference< XPropertySet > & i_f
 
         const OUString aTransferProperties[] =
         {
-            OUString(PROPERTY_APPLYFILTER),
-            OUString(PROPERTY_FILTER),
-            OUString(PROPERTY_HAVING_CLAUSE),
-            OUString(PROPERTY_ORDER)
+            PROPERTY_APPLYFILTER,
+            PROPERTY_FILTER,
+            PROPERTY_HAVING_CLAUSE,
+            PROPERTY_ORDER
         };
         for (const auto & aTransferProperty : aTransferProperties)
         {
@@ -2541,8 +2541,7 @@ bool SbaTableQueryBrowser::implSelect(const weld::TreeIter* pEntry)
         {
             while (rTreeView.iter_compare(*xNextTemp, *xConnection) != 0)
             {
-                sNameBuffer.insert(0,'/');
-                sNameBuffer.insert(0, rTreeView.get_text(*xTemp));
+                sNameBuffer.insert(0, rTreeView.get_text(*xTemp) + "/");
                 rTreeView.copy_iterator(*xNextTemp, *xTemp);
                 if (!rTreeView.iter_parent(*xNextTemp))
                     break;

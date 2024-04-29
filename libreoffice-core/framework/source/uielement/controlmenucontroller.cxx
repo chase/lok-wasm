@@ -31,6 +31,7 @@
 #include <vcl/settings.hxx>
 #include <vcl/image.hxx>
 #include <svtools/popupmenucontrollerbase.hxx>
+#include <toolkit/awt/vclxmenu.hxx>
 #include <osl/mutex.hxx>
 #include <unordered_map>
 
@@ -86,7 +87,7 @@ static TranslateId aLabels[] =
     RID_STR_PROPTITLE_NAVBAR
 };
 
-const rtl::OUStringConstExpr aImgIds[]
+constexpr OUString aImgIds[]
 {
     RID_SVXBMP_EDITBOX,
     RID_SVXBMP_BUTTON,
@@ -144,9 +145,6 @@ public:
     // XPopupMenuController
     virtual void SAL_CALL updatePopupMenu() override;
 
-    // XInitialization
-    virtual void SAL_CALL initialize( const uno::Sequence< uno::Any >& aArguments ) override;
-
     // XStatusListener
     virtual void SAL_CALL statusChanged( const frame::FeatureStateEvent& Event ) override;
 
@@ -157,6 +155,9 @@ public:
     virtual void SAL_CALL disposing( const lang::EventObject& Source ) override;
 
 private:
+    // XInitialization
+    virtual void initializeImpl( std::unique_lock<std::mutex>& rGuard, const uno::Sequence< uno::Any >& aArguments ) override;
+
     class UrlToDispatchMap : public std::unordered_map< OUString,
                                                         uno::Reference< frame::XDispatch > >
     {
@@ -187,12 +188,12 @@ void ControlMenuController::updateImagesPopupMenu(Reference<awt::XPopupMenu> con
 {
     if (!rPopupMenu)
         return;
-    for (size_t i=0; i < SAL_N_ELEMENTS(aCommands); ++i)
+    for (size_t i=0; i < std::size(aCommands); ++i)
     {
         sal_Int16 nItemId = i + 1;
         if (m_bShowMenuImages)
         {
-            Image aImage(StockImage::Yes, OUString(aImgIds[i]));
+            Image aImage(StockImage::Yes, aImgIds[i]);
             Graphic aGraphic(aImage);
             rPopupMenu->setItemImage(nItemId, aGraphic.GetXGraphic(), false);
         }
@@ -227,7 +228,7 @@ void SAL_CALL ControlMenuController::disposing( const EventObject& )
 {
     Reference< css::awt::XMenuListener > xHolder(this);
 
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     m_xFrame.clear();
     m_xDispatch.clear();
 
@@ -239,7 +240,7 @@ void SAL_CALL ControlMenuController::disposing( const EventObject& )
 // XStatusListener
 void SAL_CALL ControlMenuController::statusChanged( const FeatureStateEvent& Event )
 {
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
 
     if (!m_xPopupMenu)
         return;
@@ -263,7 +264,7 @@ void SAL_CALL ControlMenuController::statusChanged( const FeatureStateEvent& Eve
 // XMenuListener
 void SAL_CALL ControlMenuController::itemActivated( const css::awt::MenuEvent& )
 {
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
 
     SolarMutexGuard aSolarMutexGuard;
 
@@ -281,9 +282,9 @@ void SAL_CALL ControlMenuController::itemActivated( const css::awt::MenuEvent& )
 // XPopupMenuController
 void SAL_CALL ControlMenuController::updatePopupMenu()
 {
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
 
-    throwIfDisposed();
+    throwIfDisposed(aLock);
 
     if ( !(m_xFrame.is() && m_xPopupMenu.is()) )
         return;
@@ -301,18 +302,19 @@ void SAL_CALL ControlMenuController::updatePopupMenu()
         Reference< XDispatch > xDispatch = xDispatchProvider->queryDispatch( aTargetURL, OUString(), 0 );
         if ( xDispatch.is() )
         {
+            aLock.unlock(); // the addStatusListener will call back into ::statusChanged
             xDispatch->addStatusListener( static_cast< XStatusListener* >(this), aTargetURL );
             xDispatch->removeStatusListener( static_cast< XStatusListener* >(this), aTargetURL );
+            aLock.lock();
             m_aURLToDispatchMap.emplace( aTargetURL.Complete, xDispatch );
         }
     }
 }
 
 // XInitialization
-void SAL_CALL ControlMenuController::initialize( const Sequence< Any >& aArguments )
+void ControlMenuController::initializeImpl( std::unique_lock<std::mutex>& rGuard, const Sequence< Any >& aArguments )
 {
-    osl::MutexGuard aLock( m_aMutex );
-    svt::PopupMenuControllerBase::initialize(aArguments);
+    svt::PopupMenuControllerBase::initializeImpl(rGuard, aArguments);
     m_aBaseURL.clear();
 }
 

@@ -17,12 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifdef AIX
-#define _LINUX_SOURCE_COMPAT
-#include <sys/timer.h>
-#undef _LINUX_SOURCE_COMPAT
-#endif
-
 #include <com/sun/star/accessibility/TextSegment.hpp>
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
@@ -169,39 +163,89 @@ void AtkListener::updateChildList(
 
 void AtkListener::handleChildAdded(
     const uno::Reference< accessibility::XAccessibleContext >& rxParent,
-    const uno::Reference< accessibility::XAccessible>& rxAccessible)
+    const uno::Reference< accessibility::XAccessible>& rxAccessible,
+    sal_Int32 nIndexHint)
 {
     AtkObject * pChild = rxAccessible.is() ? atk_object_wrapper_ref( rxAccessible ) : nullptr;
 
-    if( pChild )
+    if( !pChild )
+        return;
+
+    if (nIndexHint != -1 && (nIndexHint < 0 || nIndexHint >= static_cast<sal_Int32>(m_aChildList.size())))
     {
+        SAL_WARN("vcl", "index hint out of range, ignoring");
+        nIndexHint = -1;
+    }
+
+    bool bNeedToFullFullChildList = true;
+    if (nIndexHint != -1)
+    {
+        bNeedToFullFullChildList = false;
+        sal_Int64 nStateSet = rxParent->getAccessibleStateSet();
+        if( !(nStateSet & accessibility::AccessibleStateType::DEFUNC)
+              || (nStateSet & accessibility::AccessibleStateType::MANAGES_DESCENDANTS) )
+        {
+            m_aChildList.insert(m_aChildList.begin() + nIndexHint, rxAccessible);
+            if (m_aChildList[nIndexHint] != rxParent->getAccessibleChild(nIndexHint))
+            {
+                SAL_WARN("vcl", "wrong index hint, falling back to updating full child list");
+                bNeedToFullFullChildList = true;
+            }
+        }
+    }
+    if (bNeedToFullFullChildList)
         updateChildList(rxParent);
 
-        atk_object_wrapper_add_child( mpWrapper, pChild,
-            atk_object_get_index_in_parent( pChild ));
+    atk_object_wrapper_add_child( mpWrapper, pChild,
+        atk_object_get_index_in_parent( pChild ));
 
-        g_object_unref( pChild );
-    }
+    g_object_unref( pChild );
 }
 
 /*****************************************************************************/
 
 void AtkListener::handleChildRemoved(
     const uno::Reference< accessibility::XAccessibleContext >& rxParent,
-    const uno::Reference< accessibility::XAccessible>& rxChild)
+    const uno::Reference< accessibility::XAccessible>& rxChild,
+    sal_Int32 nChildIndexHint)
 {
-    sal_Int32 nIndex = -1;
-
-    // Locate the child in the children list
-    size_t n, nmax = m_aChildList.size();
-    for( n = 0; n < nmax; ++n )
+    sal_Int32 nIndex = nChildIndexHint;
+    if (nIndex != -1 && (nIndex < 0 || nIndex >= static_cast<sal_Int32>(m_aChildList.size())))
     {
-        if( rxChild == m_aChildList[n] )
-        {
-            nIndex = n;
-            break;
-        }
+        SAL_WARN("vcl", "index hint out of range, ignoring");
+        nIndex = -1;
     }
+    if (nIndex != -1 && rxChild != m_aChildList[nIndex])
+    {
+        SAL_WARN("vcl", "index hint points to wrong child, somebody forgot to send accessibility update event");
+        nIndex = -1;
+    }
+
+    // if the hint did not work, search
+    const size_t nmax = m_aChildList.size();
+    if (nIndex == -1)
+        // Locate the child in the children list
+        for( size_t n = 0; n < nmax; ++n )
+        {
+            // Comparing via uno::Reference::operator== is expensive
+            // with lots of objects, so assume we can find it the cheap way
+            // first, which works most of the time.
+            if( rxChild.get() == m_aChildList[n].get() )
+            {
+                nIndex = n;
+                break;
+            }
+        }
+    // The cheap way failed, find it via the more expensive path
+    if (nIndex == -1)
+        for( size_t n = 0; n < nmax; ++n )
+        {
+            if( rxChild == m_aChildList[n] )
+            {
+                nIndex = n;
+                break;
+            }
+        }
 
     // FIXME: two problems here:
     // a) we get child-removed events for objects that are no real children
@@ -224,7 +268,13 @@ void AtkListener::handleChildRemoved(
         xBroadcaster->removeAccessibleEventListener(xListener);
     }
 
-    updateChildList(rxParent);
+    // update child list
+    sal_Int64 nStateSet = rxParent->getAccessibleStateSet();
+    if(!( (nStateSet & accessibility::AccessibleStateType::DEFUNC)
+        || (nStateSet & accessibility::AccessibleStateType::MANAGES_DESCENDANTS) ))
+    {
+        m_aChildList.erase(m_aChildList.begin() + nIndex);
+    }
 
     AtkObject * pChild = atk_object_wrapper_ref( rxChild, false );
     if( pChild )
@@ -435,10 +485,10 @@ void AtkListener::notifyEvent( const accessibility::AccessibleEventObject& aEven
             g_return_if_fail( xParent.is() );
 
             if( aEvent.OldValue >>= xChild )
-                handleChildRemoved(xParent, xChild);
+                handleChildRemoved(xParent, xChild, aEvent.IndexHint);
 
             if( aEvent.NewValue >>= xChild )
-                handleChildAdded(xParent, xChild);
+                handleChildAdded(xParent, xChild, aEvent.IndexHint);
             break;
         }
 
@@ -709,7 +759,7 @@ void AtkListener::notifyEvent( const accessibility::AccessibleEventObject& aEven
         case accessibility::AccessibleEventId::ROLE_CHANGED:
         {
             uno::Reference< accessibility::XAccessibleContext > xContext = getAccessibleContextFromSource( aEvent.Source );
-            atk_object_wrapper_set_role( mpWrapper, xContext->getAccessibleRole() );
+            atk_object_wrapper_set_role(mpWrapper, xContext->getAccessibleRole(), xContext->getAccessibleStateSet());
             break;
         }
 

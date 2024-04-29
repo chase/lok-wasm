@@ -23,7 +23,6 @@
 #include <sfx2/dllapi.h>
 #include <sal/types.h>
 #include <svl/itemset.hxx>
-#include <svl/hint.hxx>
 
 #include <memory>
 
@@ -40,7 +39,7 @@ namespace com::sun::star::frame { class XDispatchRecorder; }
 namespace com::sun::star::uno { template <class E> class Sequence; }
 namespace weld { class Window; }
 
-class SFX2_DLLPUBLIC SfxRequest final : public SfxHint
+class SFX2_DLLPUBLIC SfxRequest final
 {
 friend struct SfxRequest_Impl;
 
@@ -56,14 +55,14 @@ private:
     SAL_DLLPRIVATE void Done_Impl( const SfxItemSet *pSet );
 
 public:
-                        SfxRequest( SfxViewFrame*, sal_uInt16 nSlotId );
+                        SfxRequest( SfxViewFrame&, sal_uInt16 nSlotId );
                         SfxRequest( sal_uInt16 nSlot, SfxCallMode nCallMode, SfxItemPool &rPool );
                         SfxRequest( const SfxSlot* pSlot, const css::uno::Sequence < css::beans::PropertyValue >& rArgs,
                                             SfxCallMode nCallMode, SfxItemPool &rPool );
                         SfxRequest(sal_uInt16 nSlot, SfxCallMode nCallMode, const SfxAllItemSet& rSfxArgs);
                         SfxRequest( sal_uInt16 nSlot, SfxCallMode nCallMode, const SfxAllItemSet& rSfxArgs, const SfxAllItemSet& rSfxInternalArgs );
                         SfxRequest( const SfxRequest& rOrig );
-                        virtual ~SfxRequest() override;
+                        ~SfxRequest();
 
     sal_uInt16              GetSlot() const { return nSlot; }
     void                SetSlot(sal_uInt16 nNewSlot) { nSlot = nNewSlot; }
@@ -96,10 +95,10 @@ public:
 
     void                ReleaseArgs();
     void                SetReturnValue(const SfxPoolItem &);
-    const SfxPoolItem*  GetReturnValue() const;
+    const SfxPoolItemHolder& GetReturnValue() const;
 
-    static css::uno::Reference< css::frame::XDispatchRecorder > GetMacroRecorder( SfxViewFrame const * pFrame );
-    static bool         HasMacroRecorder( SfxViewFrame const * pFrame );
+    static css::uno::Reference< css::frame::XDispatchRecorder > GetMacroRecorder(const SfxViewFrame& rFrame);
+    static bool         HasMacroRecorder(const SfxViewFrame& rFrame);
     SfxCallMode         GetCallMode() const;
     void                AllowRecording( bool );
     bool                AllowsRecording() const;

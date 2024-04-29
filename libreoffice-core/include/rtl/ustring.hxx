@@ -35,10 +35,12 @@
 #include <utility>
 
 #if defined LIBO_INTERNAL_ONLY
+#include <algorithm>
 #include <string_view>
 #include <type_traits>
 #endif
 
+#include "rtl/math.h"
 #include "rtl/ustring.h"
 #include "rtl/string.hxx"
 #include "rtl/stringutils.hxx"
@@ -46,6 +48,7 @@
 
 #ifdef LIBO_INTERNAL_ONLY // "RTL_FAST_STRING"
 #include "config_global.h"
+#include "o3tl/safeint.hxx"
 #include "rtl/stringconcat.hxx"
 #endif
 
@@ -83,8 +86,6 @@ This class is not part of public API and is meant to be used only in LibreOffice
 template<std::size_t N> class SAL_WARN_UNUSED OUStringLiteral {
     static_assert(N != 0);
     static_assert(N - 1 <= std::numeric_limits<sal_Int32>::max(), "literal too long");
-    friend class OUString;
-    friend class OUStringConstExpr;
 
 public:
 #if HAVE_CPP_CONSTEVAL
@@ -95,10 +96,7 @@ public:
     OUStringLiteral(char16_t const (&literal)[N]) {
         assertLayout();
         assert(literal[N - 1] == '\0');
-        //TODO: Use C++20 constexpr std::copy_n (P0202R3):
-        for (std::size_t i = 0; i != N; ++i) {
-            more.buffer[i] = literal[i];
-        }
+        std::copy_n(literal, N, more.buffer);
     }
 
     constexpr sal_Int32 getLength() const { return more.length; }
@@ -122,9 +120,12 @@ private:
 
         oslInterlockedCount refCount = 0x40000000; // SAL_STRING_STATIC_FLAG (sal/rtl/strimp.hxx)
         sal_Int32 length = N - 1;
-        sal_Unicode buffer[N] = {}; //TODO: drop initialization for C++20 (P1331R2)
+        sal_Unicode buffer[N];
     };
 
+public:
+    // (Data members must be public so that OUStringLiteral is a structural type that can be used as
+    // a non-type template parameter type for operator ""_ustr:)
     union {
         rtl_uString str;
         Data more = {};
@@ -137,39 +138,6 @@ template<std::size_t N> struct ExceptConstCharArrayDetector<OUStringLiteral<N>> 
 template<std::size_t N> struct ExceptCharArrayDetector<OUStringLiteral<N>> {};
 }
 #endif
-
-/**
-  This is intended to be used when declaring compile-time-constant structs or arrays
-  that can be initialised from named OUStringLiteral e.g.
-
-    constexpr OUStringLiteral AAA = u"aaa";
-    constexpr OUStringLiteral BBB = u"bbb";
-    constexpr OUStringConstExpr FOO[] { AAA, BBB };
-*/
-class OUString;
-class OUStringConstExpr
-{
-public:
-    template<std::size_t N> constexpr OUStringConstExpr(OUStringLiteral<N> const & literal):
-        pData(const_cast<rtl_uString *>(&literal.str)) {}
-
-    // prevent mis-use
-    template<std::size_t N> constexpr OUStringConstExpr(OUStringLiteral<N> && literal)
-        = delete;
-
-    // no destructor necessary because we know we are pointing at a compile-time
-    // constant OUStringLiteral, which bypasses ref-counting.
-
-    /**
-      make it easier to pass to OUStringBuffer and similar without casting/converting
-    */
-    constexpr std::u16string_view asView() const { return std::u16string_view(pData->buffer, pData->length); }
-
-    inline operator const OUString&() const;
-
-private:
-    rtl_uString* pData;
-};
 
 /// @endcond
 #endif
@@ -220,10 +188,23 @@ public:
 
       @param    str         an OUString.
     */
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+    constexpr
+#endif
     OUString( const OUString & str )
     {
         pData = str.pData;
-        rtl_uString_acquire( pData );
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+        if (std::is_constant_evaluated()) {
+            //TODO: We would want to
+            //
+            //   assert(SAL_STRING_IS_STATIC(pData));
+            //
+            // here, but that wouldn't work because read of member `str` of OUStringLiteral's
+            // anonymous union with active member `more` is not allowed in a constant expression.
+        } else
+#endif
+            rtl_uString_acquire( pData );
     }
 
 #if defined LIBO_INTERNAL_ONLY
@@ -233,9 +214,23 @@ public:
       @param    str         an OUString.
       @since LibreOffice 5.2
     */
+#if !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+    constexpr
+#endif
     OUString( OUString && str ) noexcept
     {
         pData = str.pData;
+#if !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+        if (std::is_constant_evaluated()) {
+            //TODO: We would want to
+            //
+            //   assert(SAL_STRING_IS_STATIC(pData));
+            //
+            // here, but that wouldn't work because read of member `str` of OUStringLiteral's
+            // anonymous union with active member `more` is not allowed in a constant expression.
+            return;
+        }
+#endif
         str.pData = nullptr;
         rtl_uString_new( &str.pData );
     }
@@ -251,6 +246,13 @@ public:
         pData = str;
         rtl_uString_acquire( pData );
     }
+
+#if defined LIBO_INTERNAL_ONLY
+    /// @cond INTERNAL
+    // Catch inadvertent conversions to the above ctor:
+    OUString(std::nullptr_t) = delete;
+    /// @endcond
+#endif
 
     /** New OUString from OUString data without acquiring it.  Takeover of ownership.
 
@@ -367,26 +369,15 @@ public:
     }
 
 #if defined LIBO_INTERNAL_ONLY
-    /** @overload @since LibreOffice 5.3 */
+    // Rather use a u""_ustr literal (but don't remove this entirely, to avoid implicit support for
+    // it via std::u16string_view from kicking in):
     template<typename T> OUString(
-        T & literal,
+        T &,
         typename libreoffice_internal::ConstCharArrayDetector<
             T, libreoffice_internal::Dummy>::TypeUtf16
-                = libreoffice_internal::Dummy()):
-        pData(nullptr)
-    {
-        assert(
-            libreoffice_internal::ConstCharArrayDetector<T>::isValid(literal));
-        if (libreoffice_internal::ConstCharArrayDetector<T>::length == 0) {
-            rtl_uString_new(&pData);
-        } else {
-            rtl_uString_newFromStr_WithLength(
-                &pData,
-                libreoffice_internal::ConstCharArrayDetector<T>::toPointer(
-                    literal),
-                libreoffice_internal::ConstCharArrayDetector<T>::length);
-        }
-    }
+                = libreoffice_internal::Dummy()) = delete;
+
+    OUString(OUStringChar c): pData(nullptr) { rtl_uString_newFromStr_WithLength(&pData, &c.c, 1); }
 #endif
 
 #if defined LIBO_INTERNAL_ONLY && defined RTL_STRING_UNITTEST
@@ -427,6 +418,19 @@ public:
         pData(const_cast<rtl_uString *>(&literal.str)) {}
     template<std::size_t N> OUString(OUStringLiteral<N> &&) = delete;
     /// @endcond
+#endif
+
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+    // For operator ""_tstr:
+    template<OStringLiteral L> OUString(detail::OStringHolder<L> const & holder) {
+        pData = nullptr;
+        if (holder.literal.getLength() == 0) {
+            rtl_uString_new(&pData);
+        } else {
+            rtl_uString_newFromLiteral(
+                &pData, holder.literal.getStr(), holder.literal.getLength(), 0);
+        }
+    }
 #endif
 
     /**
@@ -502,8 +506,8 @@ public:
      @overload
      @internal
     */
-    template< typename T, std::size_t N >
-    OUString( StringNumberBase< sal_Unicode, T, N >&& n )
+    template< std::size_t N >
+    OUString( OUStringNumber< N >&& n )
         : OUString( n.buf, n.length )
     {}
 #endif
@@ -521,9 +525,22 @@ public:
     /**
       Release the string data.
     */
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+    constexpr
+#endif
     ~OUString()
     {
-        rtl_uString_release( pData );
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+        if (std::is_constant_evaluated()) {
+           //TODO: We would want to
+           //
+           //   assert(SAL_STRING_IS_STATIC(pData));
+           //
+           // here, but that wouldn't work because read of member `str` of OUStringLiteral's
+           // anonymous union with active member `more` is not allowed in a constant expression.
+        } else
+#endif
+            rtl_uString_release( pData );
     }
 
     /** Provides an OUString const & passing a storage pointer of an
@@ -611,20 +628,15 @@ public:
     }
 
 #if defined LIBO_INTERNAL_ONLY
-    /** @overload @since LibreOffice 5.3 */
+    // Rather assign from a u""_ustr literal (but don't remove this entirely, to avoid implicit
+    // support for it via std::u16string_view from kicking in):
     template<typename T>
     typename
         libreoffice_internal::ConstCharArrayDetector<T, OUString &>::TypeUtf16
-    operator =(T & literal) {
-        if (libreoffice_internal::ConstCharArrayDetector<T>::length == 0) {
-            rtl_uString_new(&pData);
-        } else {
-            rtl_uString_newFromStr_WithLength(
-                &pData,
-                libreoffice_internal::ConstCharArrayDetector<T>::toPointer(
-                    literal),
-                libreoffice_internal::ConstCharArrayDetector<T>::length);
-        }
+    operator =(T &) = delete;
+
+    OUString & operator =(OUStringChar c) {
+        rtl_uString_newFromStr_WithLength(&pData, &c.c, 1);
         return *this;
     }
 
@@ -636,8 +648,8 @@ public:
     }
     template<std::size_t N> OUString & operator =(OUStringLiteral<N> &&) = delete;
 
-    template <typename T, std::size_t N>
-    OUString & operator =(StringNumberBase<sal_Unicode, T, N> && n) {
+    template <std::size_t N>
+    OUString & operator =(OUStringNumber<N> && n) {
         // n.length should never be zero, so no need to add an optimization for that case
         rtl_uString_newFromStr_WithLength(&pData, n.buf, n.length);
         return *this;
@@ -768,8 +780,8 @@ public:
      @overload
      @internal
     */
-    template< typename T, std::size_t N >
-    OUString& operator+=( StringNumberBase< sal_Unicode, T, N >&& n ) & {
+    template< std::size_t N >
+    OUString& operator+=( OUStringNumber< N >&& n ) & {
         sal_Int32 l = n.length;
         if( l == 0 )
             return *this;
@@ -780,8 +792,8 @@ public:
         pData->length = l;
         return *this;
     }
-    template<typename T, std::size_t N> void operator +=(
-        StringNumberBase<sal_Unicode, T, N> &&) && = delete;
+    template<std::size_t N> void operator +=(
+        OUStringNumber<N> &&) && = delete;
 #endif
 
     /**
@@ -1286,6 +1298,15 @@ public:
         return rtl_ustr_ascii_compareIgnoreAsciiCase_WithLength( pData->buffer, pData->length, asciiStr ) == 0;
     }
 
+#if defined LIBO_INTERNAL_ONLY
+    bool equalsIgnoreAsciiCaseAscii( std::string_view asciiStr ) const
+    {
+        return o3tl::make_unsigned(pData->length) == asciiStr.length()
+               && rtl_ustr_ascii_compareIgnoreAsciiCase_WithLengths(
+                      pData->buffer, pData->length, asciiStr.data(), asciiStr.length()) == 0;
+    }
+#endif
+
     /**
       Compares two ASCII strings ignoring case
 
@@ -1308,6 +1329,18 @@ public:
     {
         return rtl_ustr_ascii_compareIgnoreAsciiCase_WithLength( pData->buffer, pData->length, asciiStr );
     }
+
+#if defined LIBO_INTERNAL_ONLY
+    sal_Int32 compareToIgnoreAsciiCaseAscii( std::string_view asciiStr ) const
+    {
+        sal_Int32 nMax = std::min<size_t>(asciiStr.length(), std::numeric_limits<sal_Int32>::max());
+        sal_Int32 result = rtl_ustr_ascii_compareIgnoreAsciiCase_WithLengths(
+            pData->buffer, pData->length, asciiStr.data(), nMax);
+        if (result == 0 && o3tl::make_unsigned(pData->length) < asciiStr.length())
+            result = -1;
+        return result;
+    }
+#endif
 
     /**
       Perform an ASCII lowercase comparison of two strings.
@@ -3038,37 +3071,29 @@ public:
 
 #ifdef LIBO_INTERNAL_ONLY // "RTL_FAST_STRING"
 
-    static OUStringNumber< int > number( int i, sal_Int16 radix = 10 )
+    static auto number( int i, sal_Int16 radix = 10 )
     {
-        return OUStringNumber< int >( i, radix );
+        return OUStringNumber<RTL_USTR_MAX_VALUEOFINT32>(rtl_ustr_valueOfInt32, i, radix);
     }
-    static OUStringNumber< long long > number( long long ll, sal_Int16 radix = 10 )
+    static auto number( long long ll, sal_Int16 radix = 10 )
     {
-        return OUStringNumber< long long >( ll, radix );
+        return OUStringNumber<RTL_USTR_MAX_VALUEOFINT64>(rtl_ustr_valueOfInt64, ll, radix);
     }
-    static OUStringNumber< unsigned long long > number( unsigned long long ll, sal_Int16 radix = 10 )
+    static auto number( unsigned long long ll, sal_Int16 radix = 10 )
     {
-        return OUStringNumber< unsigned long long >( ll, radix );
+        return OUStringNumber<RTL_USTR_MAX_VALUEOFUINT64>(rtl_ustr_valueOfUInt64, ll, radix);
     }
-    static OUStringNumber< unsigned long long > number( unsigned int i, sal_Int16 radix = 10 )
+    static auto number( unsigned int i, sal_Int16 radix = 10 )
     {
         return number( static_cast< unsigned long long >( i ), radix );
     }
-    static OUStringNumber< long long > number( long i, sal_Int16 radix = 10)
+    static auto number( long i, sal_Int16 radix = 10)
     {
         return number( static_cast< long long >( i ), radix );
     }
-    static OUStringNumber< unsigned long long > number( unsigned long i, sal_Int16 radix = 10 )
+    static auto number( unsigned long i, sal_Int16 radix = 10 )
     {
         return number( static_cast< unsigned long long >( i ), radix );
-    }
-    static OUStringNumber< float > number( float f )
-    {
-        return OUStringNumber< float >( f );
-    }
-    static OUStringNumber< double > number( double d )
-    {
-        return OUStringNumber< double >( d );
     }
 #else
     /**
@@ -3118,6 +3143,7 @@ public:
         sal_Unicode aBuf[RTL_USTR_MAX_VALUEOFUINT64];
         return OUString(aBuf, rtl_ustr_valueOfUInt64(aBuf, ll, radix));
     }
+#endif
 
     /**
       Returns the string representation of the float argument.
@@ -3130,8 +3156,15 @@ public:
     */
     static OUString number( float f )
     {
-        sal_Unicode aBuf[RTL_USTR_MAX_VALUEOFFLOAT];
-        return OUString(aBuf, rtl_ustr_valueOfFloat(aBuf, f));
+        rtl_uString* pNew = NULL;
+        // Same as rtl::str::valueOfFP, used for rtl_ustr_valueOfFloat
+        rtl_math_doubleToUString(&pNew, NULL, 0, f, rtl_math_StringFormat_G,
+                                 RTL_USTR_MAX_VALUEOFFLOAT - SAL_N_ELEMENTS("-x.E-xxx") + 1, '.',
+                                 NULL, 0, true);
+        if (pNew == NULL)
+            throw std::bad_alloc();
+
+        return OUString(pNew, SAL_NO_ACQUIRE);
     }
 
     /**
@@ -3145,11 +3178,23 @@ public:
     */
     static OUString number( double d )
     {
-        sal_Unicode aBuf[RTL_USTR_MAX_VALUEOFDOUBLE];
-        return OUString(aBuf, rtl_ustr_valueOfDouble(aBuf, d));
-    }
-#endif
+        rtl_uString* pNew = NULL;
+        // Same as rtl::str::valueOfFP, used for rtl_ustr_valueOfDouble
+        rtl_math_doubleToUString(&pNew, NULL, 0, d, rtl_math_StringFormat_G,
+                                 RTL_USTR_MAX_VALUEOFDOUBLE - SAL_N_ELEMENTS("-x.E-xxx") + 1, '.',
+                                 NULL, 0, true);
+        if (pNew == NULL)
+            throw std::bad_alloc();
 
+        return OUString(pNew, SAL_NO_ACQUIRE);
+    }
+
+#ifdef LIBO_INTERNAL_ONLY // "RTL_FAST_STRING"
+    static auto boolean(bool b)
+    {
+        return OUStringNumber<RTL_USTR_MAX_VALUEOFBOOLEAN>(rtl_ustr_valueOfBoolean, b);
+    }
+#else
     /**
       Returns the string representation of the sal_Bool argument.
 
@@ -3182,6 +3227,7 @@ public:
         sal_Unicode aBuf[RTL_USTR_MAX_VALUEOFBOOLEAN];
         return OUString(aBuf, rtl_ustr_valueOfBoolean(aBuf, b));
     }
+#endif
 
     /**
       Returns the string representation of the char argument.
@@ -3300,14 +3346,14 @@ public:
     // would not compile):
     template<typename T> [[nodiscard]] static
     OUStringConcat<OUStringConcatMarker, T>
-    Concat(T const & value) { return OUStringConcat<OUStringConcatMarker, T>({}, value); }
+    Concat(T const & value) { return OUStringConcat<OUStringConcatMarker, T>(value); }
 
     // This overload is needed so that an argument of type 'char const[N]' ends up as
     // 'OUStringConcat<rtl::OUStringConcatMarker, char const[N]>' rather than as
     // 'OUStringConcat<rtl::OUStringConcatMarker, char[N]>':
     template<typename T, std::size_t N> [[nodiscard]] static
     OUStringConcat<OUStringConcatMarker, T[N]>
-    Concat(T (& value)[N]) { return OUStringConcat<OUStringConcatMarker, T[N]>({}, value); }
+    Concat(T (& value)[N]) { return OUStringConcat<OUStringConcatMarker, T[N]>(value); }
 #endif
 
 private:
@@ -3324,11 +3370,6 @@ private:
     }
 
 };
-
-#if defined LIBO_INTERNAL_ONLY
-// Can only define this after we define OUString
-inline OUStringConstExpr::operator const OUString &() const { return OUString::unacquired(&pData); }
-#endif
 
 #if defined LIBO_INTERNAL_ONLY
 // Prevent the operator ==/!= overloads with 'sal_Unicode const *' parameter from
@@ -3519,6 +3560,22 @@ using ::rtl::OUStringChar;
 using ::rtl::Concat2View;
 #endif
 
+#if defined LIBO_INTERNAL_ONLY && !(defined _MSC_VER && _MSC_VER <= 1929 && defined _MANAGED)
+
+template<
+#if defined RTL_STRING_UNITTEST
+    rtlunittest::
+#endif
+    OUStringLiteral L>
+constexpr
+#if defined RTL_STRING_UNITTEST
+    rtlunittest::
+#endif
+    OUString
+operator ""_ustr() { return L; }
+
+#endif
+
 /// @cond INTERNAL
 /**
   Make OUString hashable by default for use in STL containers.
@@ -3536,9 +3593,9 @@ struct hash<::rtl::OUString>
         if constexpr (sizeof(std::size_t) == 8)
         {
             // return a hash that uses the full 64-bit range instead of a 32-bit value
-            size_t n = 0;
+            size_t n = s.getLength();
             for (sal_Int32 i = 0, len = s.getLength(); i < len; ++i)
-                n = 31 * n + s[i];
+                n = 37 * n + s[i];
             return n;
         }
         else

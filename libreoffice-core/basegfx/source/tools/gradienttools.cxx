@@ -441,6 +441,7 @@ namespace basegfx
                     {
                         const double fColorOff(aCurrColor->getStopOffset());
                         aNewAlpha.emplace_back(fColorOff, rAlphaStops.getInterpolatedBColor(fColorOff, 0, aAlphaStopRange));
+                        aNewColor.emplace_back(fColorOff, aCurrColor->getStopColor());
                         bRealChange = true;
                         aCurrColor++;
                     }
@@ -448,6 +449,7 @@ namespace basegfx
                     {
                         const double fAlphaOff(aCurrAlpha->getStopOffset());
                         aNewColor.emplace_back(fAlphaOff, rColorStops.getInterpolatedBColor(fAlphaOff, 0, aColorStopRange));
+                        aNewAlpha.emplace_back(fAlphaOff, aCurrAlpha->getStopColor());
                         bRealChange = true;
                         aCurrAlpha++;
                     }
@@ -651,7 +653,7 @@ namespace basegfx
             // MCGR: Similar to getRectangularGradientAlpha (please
             // see there) we need to use aspect ratio here. Due to
             // initEllipticalGradientInfo using M_SQRT2 to make this
-            // gradient look 'nicer' this correciton seems not 100%
+            // gradient look 'nicer' this correction seems not 100%
             // correct, but is close enough for now
             if(fAspectRatio > 1.0)
             {
@@ -702,7 +704,7 @@ namespace basegfx
                 return 0.0;
             }
 
-            // MCGR: Visualiations using the texturing method for
+            // MCGR: Visualizations using the texturing method for
             // displaying gradients (getBackTextureTransform is
             // involved) show wrong results for GradientElliptical
             // and GradientRect, this can be best seen when using

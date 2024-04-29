@@ -33,6 +33,7 @@
 #include <unicode/uchar.h>
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <com/sun/star/i18n/CharacterIteratorMode.hpp>
+#include <com/sun/star/i18n/UnicodeType.hpp>
 #include <com/sun/star/i18n/WordType.hpp>
 #include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <paratr.hxx>
@@ -75,12 +76,12 @@
 #include <com/sun/star/rdf/XLiteral.hpp>
 #include <com/sun/star/text/XTextContent.hpp>
 
-using namespace ::com::sun::star;
-using namespace i18n::ScriptType;
-
 #include <unicode/ubidi.h>
 #include <i18nutil/scripttypedetector.hxx>
 #include <i18nutil/unicode.hxx>
+
+using namespace ::com::sun::star;
+using namespace i18n::ScriptType;
 
 /*
    https://www.khtt.net/en/page/1821/the-big-kashida-secret
@@ -114,20 +115,12 @@ using namespace i18n::ScriptType;
 #define isAinChar(c)        IS_JOINING_GROUP((c), AIN)
 #define isAlefChar(c)       IS_JOINING_GROUP((c), ALEF)
 #define isDalChar(c)        IS_JOINING_GROUP((c), DAL)
-#if U_ICU_VERSION_MAJOR_NUM >= 58
 #define isFehChar(c)       (IS_JOINING_GROUP((c), FEH) || IS_JOINING_GROUP((c), AFRICAN_FEH))
-#else
-#define isFehChar(c)        IS_JOINING_GROUP((c), FEH)
-#endif
 #define isGafChar(c)        IS_JOINING_GROUP((c), GAF)
 #define isHehChar(c)        IS_JOINING_GROUP((c), HEH)
 #define isKafChar(c)        IS_JOINING_GROUP((c), KAF)
 #define isLamChar(c)        IS_JOINING_GROUP((c), LAM)
-#if U_ICU_VERSION_MAJOR_NUM >= 58
 #define isQafChar(c)       (IS_JOINING_GROUP((c), QAF) || IS_JOINING_GROUP((c), AFRICAN_QAF))
-#else
-#define isQafChar(c)        IS_JOINING_GROUP((c), QAF)
-#endif
 #define isRehChar(c)        IS_JOINING_GROUP((c), REH)
 #define isTahChar(c)        IS_JOINING_GROUP((c), TAH)
 #define isTehMarbutaChar(c) IS_JOINING_GROUP((c), TEH_MARBUTA)
@@ -142,9 +135,7 @@ static bool isBehChar(sal_Unicode cCh)
     {
     case U_JG_BEH:
     case U_JG_NOON:
-#if U_ICU_VERSION_MAJOR_NUM >= 58
     case U_JG_AFRICAN_NOON:
-#endif
     case U_JG_NYA:
     case U_JG_YEH:
     case U_JG_FARSI_YEH:
@@ -757,7 +748,7 @@ void SwLineLayout::CalcLine( SwTextFormatter &rLine, SwTextFormatInfo &rInf )
                     {
                         bool bDeleted = false;
                         size_t nAuthor = std::string::npos;
-                        const SwFormatAnchor& rAnchor = pAnchoredObj->GetFrameFormat().GetAnchor();
+                        const SwFormatAnchor& rAnchor = pAnchoredObj->GetFrameFormat()->GetAnchor();
                         if ( rAnchor.GetAnchorId() == RndStdIds::FLY_AT_CHAR )
                         {
                             SwPosition aAnchor = *rAnchor.GetContentAnchor();
@@ -931,9 +922,9 @@ static Color getBookmarkColor(const SwTextNode& rNode, const sw::mark::IBookmark
     try
     {
         SwDoc& rDoc = const_cast<SwDoc&>(rNode.GetDoc());
-        const uno::Reference< text::XTextContent > xRef = SwXBookmark::CreateXBookmark(rDoc,
+        const rtl::Reference< SwXBookmark > xRef = SwXBookmark::CreateXBookmark(rDoc,
                 const_cast<sw::mark::IMark*>(static_cast<const sw::mark::IMark*>(pBookmark)));
-        const css::uno::Reference<css::rdf::XResource> xSubject(xRef, uno::UNO_QUERY);
+        const css::uno::Reference<css::rdf::XResource> xSubject(xRef);
         uno::Reference<frame::XModel> xModel = rDoc.GetDocShell()->GetBaseModel();
 
         static uno::Reference< uno::XComponentContext > xContext(
@@ -1463,25 +1454,26 @@ void SwScriptInfo::InitScriptInfo(const SwTextNode& rNode,
 
         // special case for dotted circle since it can be used with complex
         // before a mark, so we want it associated with the mark's script
-        if (nChg < TextFrameIndex(rText.getLength()) && nChg > TextFrameIndex(0)
-            && (i18n::ScriptType::WEAK ==
-                g_pBreakIt->GetBreakIter()->getScriptType(rText, sal_Int32(nChg) - 1)))
+        // tdf#112594: another special case for NNBSP followed by a Mongolian
+        // character, since NNBSP has special uses in Mongolian (tdf#112594)
+        auto nPos = sal_Int32(nChg);
+        auto nPrevPos = nPos;
+        auto nPrevChar = rText.iterateCodePoints(&nPrevPos, -1);
+        if (nChg < TextFrameIndex(rText.getLength()) && nChg > TextFrameIndex(0) &&
+            i18n::ScriptType::WEAK == g_pBreakIt->GetBreakIter()->getScriptType(rText, nPrevPos))
         {
-            int8_t nType = u_charType(rText[sal_Int32(nChg)]);
-            if (nType == U_NON_SPACING_MARK || nType == U_ENCLOSING_MARK ||
-                nType == U_COMBINING_SPACING_MARK )
+            auto nChar = rText.iterateCodePoints(&nPos, 0);
+            auto nType = unicode::getUnicodeType(nChar);
+            if (nType == css::i18n::UnicodeType::NON_SPACING_MARK ||
+                nType == css::i18n::UnicodeType::ENCLOSING_MARK ||
+                nType == css::i18n::UnicodeType::COMBINING_SPACING_MARK ||
+                (nPrevChar == CHAR_NNBSP &&
+                 u_getIntPropertyValue(nChar, UCHAR_SCRIPT) == USCRIPT_MONGOLIAN))
             {
-                m_ScriptChanges.emplace_back(nChg-TextFrameIndex(1), nScript);
-            }
-            else
-            {
-                m_ScriptChanges.emplace_back(nChg, nScript);
+                nPos = nPrevPos;
             }
         }
-        else
-        {
-            m_ScriptChanges.emplace_back(nChg, nScript);
-        }
+        m_ScriptChanges.emplace_back(TextFrameIndex(nPos), nScript);
         ++nCnt;
 
         // if current script is asian, we search for compressible characters
@@ -1504,6 +1496,7 @@ void SwScriptInfo::InitScriptInfo(const SwTextNode& rNode,
                 case 0x3008: case 0x300A: case 0x300C: case 0x300E:
                 case 0x3010: case 0x3014: case 0x3016: case 0x3018:
                 case 0x301A: case 0x301D:
+                case 0xFF08: case 0xFF3B: case 0xFF5B:
                     eState = SPECIAL_LEFT;
                     break;
                 // Right punctuation found
@@ -1511,9 +1504,11 @@ void SwScriptInfo::InitScriptInfo(const SwTextNode& rNode,
                 case 0x300D: case 0x300F: case 0x3011: case 0x3015:
                 case 0x3017: case 0x3019: case 0x301B: case 0x301E:
                 case 0x301F:
+                case 0xFF09: case 0xFF3D: case 0xFF5D:
                     eState = SPECIAL_RIGHT;
                     break;
                 case 0x3001: case 0x3002:   // Fullstop or comma
+                case 0xFF0C: case 0xFF0E: case 0xFF1A: case 0xFF1B:
                     eState = SPECIAL_MIDDLE ;
                     break;
                 default:
@@ -2672,6 +2667,40 @@ TextFrameIndex SwParaPortion::GetParLen() const
         pLay = pLay->GetNext();
     }
     return nLen;
+}
+
+bool SwParaPortion::HasNumberingPortion(FootnoteOrNot const eFootnote) const
+{
+    SwLinePortion const* pPortion(nullptr);
+    // the first line may contain only fly portion...
+    for (SwLineLayout const* pLine = this; pLine && !pPortion; pLine = pLine->GetNext())
+    {
+        pPortion = pLine->GetFirstPortion();
+        while (pPortion && (pPortion->InGlueGrp() || pPortion->IsKernPortion() || pPortion->IsFlyPortion()))
+        {   // skip margins and fly spacers - numbering should be first then
+            pPortion = pPortion->GetNextPortion();
+        }
+    }
+    if (pPortion && pPortion->InHyphGrp())
+    {   // weird special case, bullet with soft hyphen
+        pPortion = pPortion->GetNextPortion();
+    }
+    return pPortion && pPortion->InNumberGrp()
+        && (eFootnote == SwParaPortion::FootnoteToo || !pPortion->IsFootnoteNumPortion());
+}
+
+bool SwParaPortion::HasContentPortions() const
+{
+    SwLinePortion const* pPortion(nullptr);
+    for (SwLineLayout const* pLine = this; pLine && !pPortion; pLine = pLine->GetNext())
+    {
+        pPortion = pLine->GetFirstPortion();
+        while (pPortion && (pPortion->InGlueGrp() || pPortion->IsKernPortion() || pPortion->IsFlyPortion()))
+        {   // skip margins and fly spacers
+            pPortion = pPortion->GetNextPortion();
+        }
+    }
+    return pPortion != nullptr;
 }
 
 const SwDropPortion *SwParaPortion::FindDropPortion() const

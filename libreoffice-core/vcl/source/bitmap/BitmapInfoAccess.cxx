@@ -23,7 +23,12 @@
 #include <svdata.hxx>
 #include <salinst.hxx>
 
-BitmapInfoAccess::BitmapInfoAccess(Bitmap& rBitmap, BitmapAccessMode nMode)
+BitmapInfoAccess::BitmapInfoAccess(const AlphaMask& rBitmap, BitmapAccessMode nMode)
+    : BitmapInfoAccess(rBitmap.GetBitmap(), nMode)
+{
+}
+
+BitmapInfoAccess::BitmapInfoAccess(const Bitmap& rBitmap, BitmapAccessMode nMode)
     : mpBuffer(nullptr)
     , mnAccessMode(nMode)
 {
@@ -39,7 +44,7 @@ BitmapInfoAccess::BitmapInfoAccess(Bitmap& rBitmap, BitmapAccessMode nMode)
         if (xImpBmp.use_count() > 2)
         {
             xImpBmp.reset();
-            rBitmap.ImplMakeUnique();
+            const_cast<Bitmap&>(rBitmap).ImplMakeUnique();
             xImpBmp = rBitmap.ImplGetSalBitmap();
         }
     }
@@ -52,7 +57,7 @@ BitmapInfoAccess::BitmapInfoAccess(Bitmap& rBitmap, BitmapAccessMode nMode)
         if (xNewImpBmp->Create(*xImpBmp, rBitmap.getPixelFormat()))
         {
             xImpBmp = xNewImpBmp;
-            rBitmap.ImplSetSalBitmap(xImpBmp);
+            const_cast<Bitmap&>(rBitmap).ImplSetSalBitmap(xImpBmp);
             mpBuffer = xImpBmp->AcquireBuffer(mnAccessMode);
         }
     }
@@ -75,6 +80,12 @@ sal_uInt16 BitmapInfoAccess::GetBestPaletteIndex(const BitmapColor& rBitmapColor
     const BitmapBuffer* pBuffer = mpBuffer;
 
     return (HasPalette() ? pBuffer->maPalette.GetBestIndex(rBitmapColor) : 0);
+}
+
+sal_uInt16 BitmapInfoAccess::GetMatchingPaletteIndex(const BitmapColor& rBitmapColor) const
+{
+    assert(HasPalette());
+    return mpBuffer->maPalette.GetMatchingIndex(rBitmapColor);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -32,10 +32,16 @@ class SvxGeneralTabPage : public SfxTabPage
 private:
     // the "Use data for document properties" checkbox
     std::unique_ptr<weld::CheckButton> m_xUseDataCB;
+    std::unique_ptr<weld::Widget> m_xUseDataImg;
     std::unique_ptr<weld::Widget> m_xCryptoFrame;
     std::unique_ptr<weld::ComboBox> m_xSigningKeyLB;
+    std::unique_ptr<weld::Label> m_xSigningKeyFT;
+    std::unique_ptr<weld::Widget> m_xSigningKeyImg;
     std::unique_ptr<weld::ComboBox> m_xEncryptionKeyLB;
+    std::unique_ptr<weld::Label> m_xEncryptionKeyFT;
+    std::unique_ptr<weld::Widget> m_xEncryptionKeyImg;
     std::unique_ptr<weld::CheckButton> m_xEncryptToSelfCB;
+    std::unique_ptr<weld::Widget> m_xEncryptToSelfImg;
     // rows
     struct Row;
     std::vector<std::shared_ptr<Row> > vRows;
@@ -63,6 +69,8 @@ public:
     virtual ~SvxGeneralTabPage() override;
 
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet );
+
+    virtual OUString GetAllStrings() override;
 
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;

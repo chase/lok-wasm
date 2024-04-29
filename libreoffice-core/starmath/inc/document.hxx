@@ -42,7 +42,7 @@ class SmCursor;
 namespace oox::formulaimport { class XmlStream; }
 
 #define STAROFFICE_XML  "StarOffice XML (Math)"
-inline constexpr OUStringLiteral MATHML_XML = u"MathML XML (Math)";
+inline constexpr OUString MATHML_XML = u"MathML XML (Math)"_ustr;
 
 /* Access to printer should happen through this class only
  * ==========================================================================
@@ -61,6 +61,7 @@ inline constexpr OUStringLiteral MATHML_XML = u"MathML XML (Math)";
 class SmDocShell;
 class EditEngine;
 class SmEditEngine;
+class SmPrintUIOptions;
 
 class SmPrinterAccess
 {
@@ -91,7 +92,7 @@ class SM_DLLPUBLIC SmDocShell final : public SfxObjectShell, public SfxListener
     VclPtr<Printer>     mpTmpPrinter;    //ditto
     sal_uInt16          mnModifyCount;
     bool                mbFormulaArranged;
-    sal_uInt16          mnSmSyntaxVersion;
+    sal_Int16           mnSmSyntaxVersion;
     std::unique_ptr<AbstractSmParser> maParser;
     std::unique_ptr<SmCursor> mpCursor;
     std::set< OUString >    maUsedSymbols;   // to export used symbols only when saving
@@ -175,8 +176,8 @@ public:
     AbstractSmParser* GetParser() { return maParser.get(); }
     const SmTableNode *GetFormulaTree() const  { return mpTree.get(); }
     void            SetFormulaTree(SmTableNode *pTree) { mpTree.reset(pTree); }
-    sal_uInt16      GetSmSyntaxVersion() const { return mnSmSyntaxVersion; }
-    void            SetSmSyntaxVersion(sal_uInt16 nSmSyntaxVersion);
+    sal_Int16       GetSmSyntaxVersion() const { return mnSmSyntaxVersion; }
+    void            SetSmSyntaxVersion(sal_Int16 nSmSyntaxVersion);
 
     const std::set< OUString > &    GetUsedSymbols() const  { return maUsedSymbols; }
 
@@ -222,6 +223,11 @@ public:
         mathml::SmMlIteratorFree(m_pMlElementTree);
         m_pMlElementTree = pMlElementTree;
     }
+
+    void SetRightToLeft(bool bRTL);
+
+    void Impl_Print(OutputDevice& rOutDev, const SmPrintUIOptions& rPrintUIOptions,
+                    tools::Rectangle aOutRect);
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

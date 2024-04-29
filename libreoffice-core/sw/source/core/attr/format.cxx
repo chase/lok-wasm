@@ -46,7 +46,7 @@ SwFormat::SwFormat( SwAttrPool& rPool, const char* pFormatNm,
     m_nPoolHelpId( USHRT_MAX ),
     m_nPoolHlpFileId( UCHAR_MAX )
 {
-    m_bAutoUpdateFormat = false; // LAYER_IMPL
+    m_bAutoUpdateOnDirectFormat = false; // LAYER_IMPL
     m_bAutoFormat = true;
     m_bFormatInDTOR = m_bHidden = false;
 
@@ -67,7 +67,7 @@ SwFormat::SwFormat( SwAttrPool& rPool, OUString aFormatNm,
     m_nPoolHelpId( USHRT_MAX ),
     m_nPoolHlpFileId( UCHAR_MAX )
 {
-    m_bAutoUpdateFormat = false; // LAYER_IMPL
+    m_bAutoUpdateOnDirectFormat = false; // LAYER_IMPL
     m_bAutoFormat = true;
     m_bFormatInDTOR = m_bHidden = false;
 
@@ -90,7 +90,7 @@ SwFormat::SwFormat( const SwFormat& rFormat ) :
     m_bFormatInDTOR = false; // LAYER_IMPL
     m_bAutoFormat = rFormat.m_bAutoFormat;
     m_bHidden = rFormat.m_bHidden;
-    m_bAutoUpdateFormat = rFormat.m_bAutoUpdateFormat;
+    m_bAutoUpdateOnDirectFormat = rFormat.m_bAutoUpdateOnDirectFormat;
 
     if( auto pDerived = rFormat.DerivedFrom() )
     {
@@ -138,7 +138,7 @@ SwFormat &SwFormat::operator=(const SwFormat& rFormat)
 
     m_bAutoFormat = rFormat.m_bAutoFormat;
     m_bHidden = rFormat.m_bHidden;
-    m_bAutoUpdateFormat = rFormat.m_bAutoUpdateFormat;
+    m_bAutoUpdateOnDirectFormat = rFormat.m_bAutoUpdateOnDirectFormat;
     return *this;
 }
 
@@ -208,7 +208,7 @@ SwFormat::~SwFormat()
         return;
 
     m_bFormatInDTOR = true;
-    
+
     if(!DerivedFrom())
     {
         SwFormat::ResetFormatAttr(RES_PAGEDESC);
@@ -688,7 +688,7 @@ void SwFormat::DelDiffs( const SfxItemSet& rSet )
 void SwFormat::SetPageFormatToDefault()
 {
     const sal_Int32 nSize = o3tl::convert(2, o3tl::Length::cm, o3tl::Length::twip);
-    SetFormatAttr(SvxLRSpaceItem(nSize, nSize, nSize, 0, RES_LR_SPACE));
+    SetFormatAttr(SvxLRSpaceItem(nSize, nSize, 0, RES_LR_SPACE));
     SetFormatAttr(SvxULSpaceItem(nSize, nSize, RES_UL_SPACE));
 }
 
@@ -758,6 +758,17 @@ void SwFormat::RemoveAllUnos()
 {
     SwPtrMsgPoolItem aMsgHint(RES_REMOVE_UNO_OBJECT, this);
     SwClientNotify(*this, sw::LegacyModifyHint(&aMsgHint, &aMsgHint));
+}
+
+bool SwFormat::IsUsed() const
+{
+    auto pDoc = GetDoc();
+    if(!pDoc)
+        return false;
+    bool isUsed = false;
+    sw::AutoFormatUsedHint aHint(isUsed, pDoc->GetNodes());
+    CallSwClientNotify(aHint);
+    return isUsed;
 }
 
 SwFormatsBase::~SwFormatsBase()

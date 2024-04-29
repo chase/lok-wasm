@@ -28,6 +28,7 @@
 #include <editeng/postitem.hxx>
 #include <editeng/wghtitem.hxx>
 #include <editeng/crossedoutitem.hxx>
+#include <editeng/editund2.hxx>
 #include <svx/svxids.hrc>
 #include <unotools/useroptions.hxx>
 
@@ -297,7 +298,7 @@ void AnnotationWindow::InitControls()
     mxTextControl->GrabFocus();
 }
 
-IMPL_LINK(AnnotationWindow, MenuItemSelectedHdl, const OString&, rIdent, void)
+IMPL_LINK(AnnotationWindow, MenuItemSelectedHdl, const OUString&, rIdent, void)
 {
     SfxDispatcher* pDispatcher = mpDocShell->GetViewShell()->GetViewFrame()->GetDispatcher();
     if (!pDispatcher)
@@ -550,10 +551,7 @@ void AnnotationWindow::SetColor()
         maColorLight = AnnotationManagerImpl::GetColorLight( nAuthorIdx );
     }
 
-    {
-        SvtAccessibilityOptions aOptions;
-        mpOutliner->ForceAutoColor( bHighContrast || aOptions.GetIsAutomaticFontColor() );
-    }
+    mpOutliner->ForceAutoColor( bHighContrast || SvtAccessibilityOptions::GetIsAutomaticFontColor() );
 
     mxPopover->set_background(maColor);
     mxMenuButton->set_background(maColor);

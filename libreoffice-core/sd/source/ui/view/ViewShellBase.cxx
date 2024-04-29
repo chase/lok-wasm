@@ -19,6 +19,8 @@
 
 #include <comphelper/processfactory.hxx>
 
+#include <boost/property_tree/json_parser.hpp>
+
 #include <ViewShellBase.hxx>
 #include <algorithm>
 #include <EventMultiplexer.hxx>
@@ -222,20 +224,20 @@ void ViewShellBase::InitInterface_Impl()
 }
 
 ViewShellBase::ViewShellBase (
-    SfxViewFrame* _pFrame,
+    SfxViewFrame& _rFrame,
     SfxViewShell*)
-    : SfxViewShell (_pFrame, SfxViewShellFlags::HAS_PRINTOPTIONS),
+    : SfxViewShell(_rFrame, SfxViewShellFlags::HAS_PRINTOPTIONS),
       mpDocShell (nullptr),
       mpDocument (nullptr)
 {
     mpImpl.reset(new Implementation(*this));
-    mpImpl->mpViewWindow = VclPtr<FocusForwardingWindow>::Create(_pFrame->GetWindow(),*this);
+    mpImpl->mpViewWindow = VclPtr<FocusForwardingWindow>::Create(_rFrame.GetWindow(),*this);
     mpImpl->mpViewWindow->SetBackground(Wallpaper());
 
-    _pFrame->GetWindow().SetBackground(Application::GetSettings().GetStyleSettings().GetLightColor());
+    _rFrame.GetWindow().SetBackground(Application::GetSettings().GetStyleSettings().GetLightColor());
 
     // Set up the members in the correct order.
-    if (auto pDrawDocShell = dynamic_cast< DrawDocShell *>( GetViewFrame()->GetObjectShell() ))
+    if (auto pDrawDocShell = dynamic_cast< DrawDocShell *>( GetViewFrame().GetObjectShell() ))
         mpDocShell = pDrawDocShell;
     if (mpDocShell != nullptr)
         mpDocument = mpDocShell->GetDoc();
@@ -244,7 +246,7 @@ ViewShellBase::ViewShellBase (
     SetWindow(mpImpl->mpViewWindow.get());
 
     // Hide the window to avoid complaints from Sfx...SwitchViewShell...
-    _pFrame->GetWindow().Hide();
+    _rFrame.GetWindow().Hide();
 }
 
 /** In this destructor the order in which some of the members are destroyed
@@ -254,9 +256,9 @@ ViewShellBase::ViewShellBase (
 ViewShellBase::~ViewShellBase()
 {
     // Notify other LOK views that we are going away.
-    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_VIEW_CURSOR_VISIBLE, "visible", "false");
-    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", "");
-    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_GRAPHIC_VIEW_SELECTION, "selection", "EMPTY");
+    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_VIEW_CURSOR_VISIBLE, "visible", "false"_ostr);
+    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", ""_ostr);
+    SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_GRAPHIC_VIEW_SELECTION, "selection", "EMPTY"_ostr);
 
     sfx2::SfxNotebookBar::CloseMethod(GetFrame()->GetBindings());
 
@@ -282,7 +284,7 @@ ViewShellBase::~ViewShellBase()
     mpImpl->mpToolBarManager->Shutdown();
     mpImpl->mpViewShellManager->Shutdown();
 
-    EndListening(*GetViewFrame());
+    EndListening(GetViewFrame());
     EndListening(*GetDocShell());
 
     SetWindow(nullptr);
@@ -292,7 +294,7 @@ ViewShellBase::~ViewShellBase()
 
 void ViewShellBase::LateInit (const OUString& rsDefaultView)
 {
-    StartListening(*GetViewFrame(), DuplicateHandling::Prevent);
+    StartListening(GetViewFrame(), DuplicateHandling::Prevent);
     StartListening(*GetDocShell(), DuplicateHandling::Prevent);
     mpImpl->LateInit();
     InitializeFramework();
@@ -308,9 +310,10 @@ void ViewShellBase::LateInit (const OUString& rsDefaultView)
 
     try
     {
-        Reference<XControllerManager> xControllerManager (GetDrawController(), UNO_QUERY_THROW);
-        Reference<XConfigurationController> xConfigurationController (
-            xControllerManager->getConfigurationController());
+        rtl::Reference<::sd::DrawController> xControllerManager (GetDrawController());
+        Reference<XConfigurationController> xConfigurationController;
+        if (xControllerManager)
+            xConfigurationController = xControllerManager->getConfigurationController();
         if (xConfigurationController.is())
         {
             OUString sView (rsDefaultView);
@@ -411,11 +414,8 @@ void ViewShellBase::Notify(SfxBroadcaster& rBC, const SfxHint& rHint)
             case SfxEventHintId::OpenDoc:
                 if( GetDocument() && GetDocument()->IsStartWithPresentation() )
                 {
-                    if( GetViewFrame() )
-                    {
-                        GetViewFrame()->GetDispatcher()->Execute(
-                            SID_PRESENTATION, SfxCallMode::ASYNCHRON );
-                    }
+                    GetViewFrame().GetDispatcher()->Execute(
+                        SID_PRESENTATION, SfxCallMode::ASYNCHRON );
                 }
                 break;
 
@@ -429,7 +429,7 @@ void ViewShellBase::Notify(SfxBroadcaster& rBC, const SfxHint& rHint)
         {
             case SfxHintId::LanguageChanged:
             {
-                GetViewFrame()->GetBindings().Invalidate(SID_LANGUAGE_STATUS);
+                GetViewFrame().GetBindings().Invalidate(SID_LANGUAGE_STATUS);
             }
             break;
 
@@ -488,8 +488,6 @@ void ViewShellBase::OuterResizePixel (const Point& rOrigin, const Size &rSize)
 
 void ViewShellBase::Rearrange()
 {
-    OSL_ASSERT(GetViewFrame()!=nullptr);
-
     // There is a bug in the communication between embedded objects and the
     // framework::LayoutManager that leads to missing resize updates.  The
     // following workaround enforces such an update by cycling the border to
@@ -504,7 +502,7 @@ void ViewShellBase::Rearrange()
         SAL_WARN("sd.view", "Rearrange: window missing");
     }
 
-    GetViewFrame()->Resize(true);
+    GetViewFrame().Resize(true);
 }
 
 ErrCode ViewShellBase::DoVerb(sal_Int32 nVerb)
@@ -678,7 +676,7 @@ void ViewShellBase::GetState (SfxItemSet& rSet)
 {
     mpImpl->GetSlotState(rSet);
 
-    FuBullet::GetSlotState( rSet, nullptr, GetViewFrame() );
+    FuBullet::GetSlotState( rSet, nullptr, &GetViewFrame() );
 }
 
 void ViewShellBase::WriteUserDataSequence (
@@ -939,11 +937,11 @@ std::shared_ptr<FormShellManager> const & ViewShellBase::GetFormShellManager() c
     return mpImpl->mpFormShellManager;
 }
 
-DrawController& ViewShellBase::GetDrawController() const
+DrawController* ViewShellBase::GetDrawController() const
 {
     OSL_ASSERT(mpImpl != nullptr);
 
-    return *mpImpl->mpController;
+    return mpImpl->mpController.get();
 }
 
 void ViewShellBase::SetViewTabBar (const ::rtl::Reference<ViewTabBar>& rViewTabBar)
@@ -1026,6 +1024,17 @@ void ViewShellBase::afterCallbackRegistered()
         std::shared_ptr<model::ColorSet> pThemeColors = pDocShell->GetThemeColors();
         std::set<Color> aDocumentColors = pDocShell->GetDocColors();
         svx::theme::notifyLOK(pThemeColors, aDocumentColors);
+    }
+
+    if (mpDocument && mpDocument->IsStartWithPresentation())
+    {
+        // Be consistent with SidebarController, emit JSON.
+        boost::property_tree::ptree aTree;
+        aTree.put("commandName", ".uno:StartWithPresentation");
+        aTree.put("state", "true");
+        std::stringstream aStream;
+        boost::property_tree::write_json(aStream, aTree);
+        libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, OString(aStream.str()));
     }
 }
 

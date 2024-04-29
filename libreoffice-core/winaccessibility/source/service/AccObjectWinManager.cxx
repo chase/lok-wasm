@@ -48,21 +48,8 @@
 using namespace com::sun::star::accessibility;
 using namespace com::sun::star::uno;
 
-/**
-   * constructor
-   * @param   Agent The agent kept in all listeners,it's the sole interface by which
-   *                listener communicate with windows manager.
-   *          pEventAccObj The present event accobject.
-   *          oldFocus     Last focused object.
-   *          isSelectionChanged flag that identifies if there is selection changed.
-   *          selectionChildObj  Selected object.
-   *          dChildID  Chile resource ID.
-   *          hAcc TopWindowHWND
-   * @return
-   */
-AccObjectWinManager::AccObjectWinManager( AccObjectManagerAgent* Agent ):
-        oldFocus( nullptr ),
-        pAgent( Agent )
+AccObjectWinManager::AccObjectWinManager():
+        oldFocus(nullptr)
 {
 }
 
@@ -73,8 +60,12 @@ AccObjectWinManager::AccObjectWinManager( AccObjectManagerAgent* Agent ):
    */
 AccObjectWinManager::~AccObjectWinManager()
 {
-    XIdAccList.clear();
-    HwndXAcc.clear();
+    {
+        std::scoped_lock l(m_Mutex);
+
+        XIdAccList.clear();
+        HwndXAcc.clear();
+    }
     XResIdAccList.clear();
     XHWNDDocList.clear();
 }
@@ -87,27 +78,22 @@ AccObjectWinManager::~AccObjectWinManager()
    * @return Com interface with event.
    */
 
-LRESULT
-AccObjectWinManager::Get_ToATInterface(HWND hWnd, long lParam, WPARAM wParam)
+sal_Int64
+AccObjectWinManager::Get_ToATInterface(sal_Int64 nHWnd, long lParam, WPARAM wParam)
 {
     IMAccessible* pRetIMAcc = nullptr;
 
     if(lParam == OBJID_CLIENT )
     {
-        AccObject* topWindowAccObj = GetTopWindowAccObj(hWnd);
-        if(topWindowAccObj)
-        {
-            pRetIMAcc = topWindowAccObj->GetIMAccessible();
-            if(pRetIMAcc)
-                pRetIMAcc->AddRef();//increase COM reference count
-        }
+        HWND hWnd = reinterpret_cast<HWND>(nHWnd);
+        pRetIMAcc = GetTopWindowIMAccessible(hWnd);
     }
 
     if ( pRetIMAcc && lParam == OBJID_CLIENT )
     {
         LRESULT result = LresultFromObject(IID_IAccessible, wParam, pRetIMAcc);
         pRetIMAcc->Release();
-        return result;
+        return static_cast<sal_Int64>(result);
     }
     return 0;
 }
@@ -122,6 +108,8 @@ AccObject* AccObjectWinManager::GetAccObjByXAcc( XAccessible* pXAcc)
     if( pXAcc == nullptr)
         return nullptr;
 
+    std::scoped_lock l(m_Mutex);
+
     XIdToAccObjHash::iterator pIndTemp = XIdAccList.find( pXAcc );
     if ( pIndTemp == XIdAccList.end() )
         return nullptr;
@@ -134,13 +122,26 @@ AccObject* AccObjectWinManager::GetAccObjByXAcc( XAccessible* pXAcc)
    * @param hWnd, top window handle
    * @return pointer to AccObject
    */
-AccObject* AccObjectWinManager::GetTopWindowAccObj(HWND hWnd)
+IMAccessible * AccObjectWinManager::GetTopWindowIMAccessible(HWND hWnd)
 {
+    std::scoped_lock l(m_Mutex); // tdf#155794 for HwndXAcc and XIdAccList
+
     XHWNDToXAccHash::iterator iterResult =HwndXAcc.find(hWnd);
     if(iterResult == HwndXAcc.end())
         return nullptr;
     XAccessible* pXAcc = iterResult->second;
-    return GetAccObjByXAcc(pXAcc);
+    AccObject *const pAccObject(GetAccObjByXAcc(pXAcc));
+    if (!pAccObject)
+    {
+        return nullptr;
+    }
+    IMAccessible *const pRet(pAccObject->GetIMAccessible());
+    if (!pRet)
+    {
+        return nullptr;
+    }
+    pRet->AddRef();
+    return pRet;
 }
 
 /**
@@ -391,6 +392,8 @@ void AccObjectWinManager::DeleteAccChildNode( AccObject* pObj )
    */
 void AccObjectWinManager::DeleteFromHwndXAcc(XAccessible const * pXAcc )
 {
+    std::scoped_lock l(m_Mutex);
+
     auto iter = std::find_if(HwndXAcc.begin(), HwndXAcc.end(),
         [&pXAcc](XHWNDToXAccHash::value_type& rEntry) { return rEntry.second == pXAcc; });
     if (iter != HwndXAcc.end())
@@ -433,35 +436,47 @@ void AccObjectWinManager::DeleteAccObj( XAccessible* pXAcc )
 {
     if( pXAcc == nullptr )
         return;
-    XIdToAccObjHash::iterator temp = XIdAccList.find(pXAcc);
-    if( temp != XIdAccList.end() )
-    {
-        ResIdGen.SetSub( temp->second.GetResID() );
-    }
-    else
-    {
-        return;
-    }
 
-    AccObject& accObj = temp->second;
-    DeleteAccChildNode( &accObj );
-    DeleteAccListener( &accObj );
-    if( accObj.GetIMAccessible() )
+    rtl::Reference<AccEventListener> pListener;
+
     {
-        accObj.GetIMAccessible()->Release();
+        std::scoped_lock l(m_Mutex);
+
+        XIdToAccObjHash::iterator temp = XIdAccList.find(pXAcc);
+        if( temp != XIdAccList.end() )
+        {
+            ResIdGen.SetSub( temp->second.GetResID() );
+        }
+        else
+        {
+            return;
+        }
+
+        AccObject& accObj = temp->second;
+        DeleteAccChildNode( &accObj );
+        pListener = DeleteAccListener(&accObj);
+        accObj.NotifyDestroy();
+        if( accObj.GetIMAccessible() )
+        {
+            accObj.GetIMAccessible()->Release();
+        }
+        size_t i = XResIdAccList.erase(accObj.GetResID());
+        assert(i != 0);
+        (void) i;
+        DeleteFromHwndXAcc(pXAcc);
+        if (accObj.GetRole() == AccessibleRole::DOCUMENT ||
+            accObj.GetRole() == AccessibleRole::DOCUMENT_PRESENTATION ||
+            accObj.GetRole() == AccessibleRole::DOCUMENT_SPREADSHEET ||
+            accObj.GetRole() == AccessibleRole::DOCUMENT_TEXT)
+        {
+            XHWNDDocList.erase(accObj.GetParentHWND());
+        }
+        XIdAccList.erase(pXAcc); // note: this invalidates accObj so do it last!
     }
-    size_t i = XResIdAccList.erase(accObj.GetResID());
-    assert(i != 0);
-    (void) i;
-    DeleteFromHwndXAcc(pXAcc);
-    if (accObj.GetRole() == AccessibleRole::DOCUMENT ||
-        accObj.GetRole() == AccessibleRole::DOCUMENT_PRESENTATION ||
-        accObj.GetRole() == AccessibleRole::DOCUMENT_SPREADSHEET ||
-        accObj.GetRole() == AccessibleRole::DOCUMENT_TEXT)
+    if (pListener)
     {
-        XHWNDDocList.erase(accObj.GetParentHWND());
+        pListener->RemoveMeFromBroadcaster(false);
     }
-    XIdAccList.erase(pXAcc); // note: this invalidates accObj so do it last!
 }
 
 /**
@@ -469,13 +484,9 @@ void AccObjectWinManager::DeleteAccObj( XAccessible* pXAcc )
    * @param pAccObj Accobject pointer.
    * @return
    */
-void AccObjectWinManager::DeleteAccListener( AccObject*  pAccObj )
+rtl::Reference<AccEventListener> AccObjectWinManager::DeleteAccListener( AccObject*  pAccObj )
 {
-    AccEventListener* listener = pAccObj->getListener();
-    if( listener==nullptr )
-        return;
-    listener->RemoveMeFromBroadcaster();
-    pAccObj->SetListener(nullptr);
+    return pAccObj->SetListener(nullptr);
 }
 
 /**
@@ -568,29 +579,6 @@ void AccObjectWinManager::InsertAccChildNode( AccObject* pCurObj, AccObject* pPa
    */
 bool AccObjectWinManager::InsertAccObj( XAccessible* pXAcc,XAccessible* pParentXAcc,HWND pWnd )
 {
-    XIdToAccObjHash::iterator itXacc = XIdAccList.find( pXAcc );
-    if (itXacc != XIdAccList.end() )
-    {
-        short nCurRole =GetRole(pXAcc);
-        if (AccessibleRole::SHAPE == nCurRole)
-        {
-            AccObject &objXacc = itXacc->second;
-            AccObject *pObjParent = objXacc.GetParentObj();
-            if (pObjParent &&
-                    pObjParent->GetXAccessible().is() &&
-                    pObjParent->GetXAccessible().get() != pParentXAcc)
-            {
-                XIdToAccObjHash::iterator itXaccParent  = XIdAccList.find( pParentXAcc );
-                if(itXaccParent != XIdAccList.end())
-                {
-                    objXacc.SetParentObj(&(itXaccParent->second));
-                }
-            }
-        }
-        return false;
-    }
-
-
     Reference< XAccessibleContext > pRContext;
 
     if( pXAcc == nullptr)
@@ -599,6 +587,33 @@ bool AccObjectWinManager::InsertAccObj( XAccessible* pXAcc,XAccessible* pParentX
     pRContext = pXAcc->getAccessibleContext();
     if( !pRContext.is() )
         return false;
+
+    {
+        short nCurRole = GetRole(pXAcc);
+
+        std::scoped_lock l(m_Mutex);
+
+        XIdToAccObjHash::iterator itXacc = XIdAccList.find( pXAcc );
+        if (itXacc != XIdAccList.end() )
+        {
+            if (AccessibleRole::SHAPE == nCurRole)
+            {
+                AccObject &objXacc = itXacc->second;
+                AccObject *pObjParent = objXacc.GetParentObj();
+                if (pObjParent &&
+                        pObjParent->GetXAccessible().is() &&
+                        pObjParent->GetXAccessible().get() != pParentXAcc)
+                {
+                    XIdToAccObjHash::iterator itXaccParent  = XIdAccList.find( pParentXAcc );
+                    if(itXaccParent != XIdAccList.end())
+                    {
+                        objXacc.SetParentObj(&(itXaccParent->second));
+                    }
+                }
+            }
+            return false;
+        }
+    }
 
     if( pWnd == nullptr )
     {
@@ -612,7 +627,7 @@ bool AccObjectWinManager::InsertAccObj( XAccessible* pXAcc,XAccessible* pParentX
             return false;
     }
 
-    AccObject pObj( pXAcc,pAgent );
+    AccObject pObj(pXAcc, this);
     if( pObj.GetIMAccessible() == nullptr )
         return false;
     pObj.SetResID( this->ImpleGenerateResID());
@@ -647,9 +662,13 @@ bool AccObjectWinManager::InsertAccObj( XAccessible* pXAcc,XAccessible* pParentX
     else
         return false;
 
-    XIdAccList.emplace(pXAcc, pObj);
-    XIdToAccObjHash::iterator pIndTemp = XIdAccList.find( pXAcc );
-    XResIdAccList.emplace(pObj.GetResID(),&(pIndTemp->second));
+    {
+        std::scoped_lock l(m_Mutex);
+
+        XIdAccList.emplace(pXAcc, pObj);
+        XIdToAccObjHash::iterator pIndTemp = XIdAccList.find( pXAcc );
+        XResIdAccList.emplace(pObj.GetResID(),&(pIndTemp->second));
+    }
 
     AccObject* pCurObj = GetAccObjByXAcc(pXAcc);
     if( pCurObj )
@@ -673,6 +692,8 @@ bool AccObjectWinManager::InsertAccObj( XAccessible* pXAcc,XAccessible* pParentX
    */
 void AccObjectWinManager::SaveTopWindowHandle(HWND hWnd, css::accessibility::XAccessible* pXAcc)
 {
+    std::scoped_lock l(m_Mutex);
+
     HwndXAcc.emplace(hWnd,pXAcc);
 }
 
@@ -690,16 +711,16 @@ AccObjectWinManager::CreateAccEventListener(XAccessible* pXAcc)
         switch( xContext->getAccessibleRole() )
         {
         case AccessibleRole::DIALOG:
-            pRet = new AccDialogEventListener(pXAcc,pAgent);
+            pRet = new AccDialogEventListener(pXAcc, this);
             break;
         case AccessibleRole::FRAME:
-            pRet = new AccFrameEventListener(pXAcc,pAgent);
+            pRet = new AccFrameEventListener(pXAcc, this);
             break;
         case AccessibleRole::WINDOW:
-            pRet = new AccWindowEventListener(pXAcc,pAgent);
+            pRet = new AccWindowEventListener(pXAcc, this);
             break;
         case AccessibleRole::ROOT_PANE:
-            pRet = new AccFrameEventListener(pXAcc,pAgent);
+            pRet = new AccFrameEventListener(pXAcc, this);
             break;
             //Container
         case AccessibleRole::CANVAS:
@@ -726,11 +747,12 @@ AccObjectWinManager::CreateAccEventListener(XAccessible* pXAcc)
         case AccessibleRole::TABLE_CELL:
         case AccessibleRole::TOOL_BAR:
         case AccessibleRole::VIEW_PORT:
-            pRet = new AccContainerEventListener(pXAcc,pAgent);
+            pRet = new AccContainerEventListener(pXAcc, this);
             break;
+        case AccessibleRole::BLOCK_QUOTE:
         case AccessibleRole::PARAGRAPH:
         case AccessibleRole::HEADING:
-            pRet = new AccParagraphEventListener(pXAcc,pAgent);
+            pRet = new AccParagraphEventListener(pXAcc, this);
             break;
             //Component
         case AccessibleRole::CHECK_BOX:
@@ -750,15 +772,15 @@ AccObjectWinManager::CreateAccEventListener(XAccessible* pXAcc)
         case AccessibleRole::TOOL_TIP:
         case AccessibleRole::SPIN_BOX:
         case AccessibleRole::DATE_EDITOR:
-            pRet = new AccComponentEventListener(pXAcc,pAgent);
+            pRet = new AccComponentEventListener(pXAcc, this);
             break;
             //text component
         case AccessibleRole::TEXT:
-            pRet = new AccTextComponentEventListener(pXAcc,pAgent);
+            pRet = new AccTextComponentEventListener(pXAcc, this);
             break;
             //menu
         case AccessibleRole::MENU:
-            pRet = new AccMenuEventListener(pXAcc,pAgent);
+            pRet = new AccMenuEventListener(pXAcc, this);
             break;
             //object container
         case AccessibleRole::SHAPE:
@@ -766,22 +788,22 @@ AccObjectWinManager::CreateAccEventListener(XAccessible* pXAcc)
         case AccessibleRole::EMBEDDED_OBJECT:
         case AccessibleRole::GRAPHIC:
         case AccessibleRole::TEXT_FRAME:
-            pRet = new AccObjectContainerEventListener(pXAcc,pAgent);
+            pRet = new AccObjectContainerEventListener(pXAcc, this);
             break;
             //descendmanager
         case AccessibleRole::LIST:
-            pRet = new AccListEventListener(pXAcc,pAgent);
+            pRet = new AccListEventListener(pXAcc, this);
             break;
         case AccessibleRole::TREE:
-            pRet = new AccTreeEventListener(pXAcc,pAgent);
+            pRet = new AccTreeEventListener(pXAcc, this);
             break;
             //special
         case AccessibleRole::COLUMN_HEADER:
         case AccessibleRole::TABLE:
-            pRet = new AccTableEventListener(pXAcc,pAgent);
+            pRet = new AccTableEventListener(pXAcc, this);
             break;
         default:
-            pRet = new AccContainerEventListener(pXAcc,pAgent);
+            pRet = new AccContainerEventListener(pXAcc, this);
             break;
         }
     }
@@ -977,17 +999,13 @@ bool AccObjectWinManager::IsStateManageDescendant(XAccessible* pAccessible)
    * @param pXAcc XAccessible interface.
    * @return Com accobject interface.
    */
-IMAccessible* AccObjectWinManager::GetIMAccByXAcc(XAccessible* pXAcc)
+IMAccessible* AccObjectWinManager::GetIAccessibleFromXAccessible(XAccessible* pXAcc)
 {
     AccObject* pAccObj = GetAccObjByXAcc(pXAcc);
-    if(pAccObj)
-    {
+    if (pAccObj)
         return pAccObj->GetIMAccessible();
-    }
-    else
-    {
-        return nullptr;
-    }
+
+    return nullptr;
 }
 
 /**

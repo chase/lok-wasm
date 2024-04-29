@@ -23,6 +23,7 @@
 #include <ChartTypeHelper.hxx>
 #include <DiagramHelper.hxx>
 #include <DataSeries.hxx>
+#include <DataSeriesProperties.hxx>
 #include <LinePropertiesHelper.hxx>
 #include <FillProperties.hxx>
 #include <CharacterProperties.hxx>
@@ -59,6 +60,7 @@
 
 using namespace ::com::sun::star;
 using namespace ::chart::wrapper;
+using namespace ::chart::DataSeriesProperties;
 
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
@@ -247,30 +249,16 @@ uno::Sequence< Property > lcl_GetPropertySequence( DataSeriesPointWrapper::eType
     return comphelper::containerToSequence( aProperties );
 }
 
-struct StaticSeriesWrapperPropertyArray_Initializer
+const Sequence< Property >& StaticSeriesWrapperPropertyArray()
 {
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence( DataSeriesPointWrapper::DATA_SERIES ) );
-        return &aPropSeq;
-    }
+    static Sequence< Property > aPropSeq( lcl_GetPropertySequence( DataSeriesPointWrapper::DATA_SERIES ) );
+    return aPropSeq;
 };
 
-struct StaticSeriesWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticSeriesWrapperPropertyArray_Initializer >
+const Sequence< Property >& StaticPointWrapperPropertyArray()
 {
-};
-
-struct StaticPointWrapperPropertyArray_Initializer
-{
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence( DataSeriesPointWrapper::DATA_POINT ) );
-        return &aPropSeq;
-    }
-};
-
-struct StaticPointWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticPointWrapperPropertyArray_Initializer >
-{
+    static Sequence< Property > aPropSeq( lcl_GetPropertySequence( DataSeriesPointWrapper::DATA_POINT ) );
+    return aPropSeq;
 };
 
 //PROP_SERIES_ATTACHED_AXIS
@@ -307,7 +295,7 @@ Any WrappedAttachedAxisProperty::getPropertyValue( const Reference< beans::XProp
 {
     Any aRet;
 
-    uno::Reference< chart2::XDataSeries > xDataSeries( xInnerPropertySet, uno::UNO_QUERY );
+    rtl::Reference< ::chart::DataSeries > xDataSeries( dynamic_cast<::chart::DataSeries*>(xInnerPropertySet.get()) );
     bool bAttachedToMainAxis = ::chart::DiagramHelper::isSeriesAttachedToMainAxis( xDataSeries );
     if( bAttachedToMainAxis )
         aRet <<= css::chart::ChartAxisAssign::PRIMARY_Y;
@@ -318,7 +306,7 @@ Any WrappedAttachedAxisProperty::getPropertyValue( const Reference< beans::XProp
 
 void WrappedAttachedAxisProperty::setPropertyValue( const Any& rOuterValue, const Reference< beans::XPropertySet >& xInnerPropertySet ) const
 {
-    uno::Reference< chart2::XDataSeries > xDataSeries( xInnerPropertySet, uno::UNO_QUERY );
+    rtl::Reference< ::chart::DataSeries > xDataSeries( dynamic_cast<::chart::DataSeries*>(xInnerPropertySet.get()) );
 
     sal_Int32 nChartAxisAssign = css::chart::ChartAxisAssign::PRIMARY_Y;
     if( ! (rOuterValue >>= nChartAxisAssign) )
@@ -331,7 +319,7 @@ void WrappedAttachedAxisProperty::setPropertyValue( const Any& rOuterValue, cons
     {
         rtl::Reference< ::chart::Diagram > xDiagram( m_spChart2ModelContact->getDiagram() );
         if( xDiagram.is() )
-            ::chart::DiagramHelper::attachSeriesToAxis( bNewAttachedToMainAxis, xDataSeries, xDiagram, m_spChart2ModelContact->m_xContext, false );
+            xDiagram->attachSeriesToAxis( bNewAttachedToMainAxis, xDataSeries, m_spChart2ModelContact->m_xContext, false );
     }
 }
 
@@ -460,7 +448,6 @@ namespace chart::wrapper
 
 DataSeriesPointWrapper::DataSeriesPointWrapper( std::shared_ptr<Chart2ModelContact> spChart2ModelContact)
     : m_spChart2ModelContact( std::move(spChart2ModelContact) )
-    , m_aEventListenerContainer( m_aMutex )
     , m_eType( DATA_SERIES )
     , m_nSeriesIndexInNewAPI( -1 )
     , m_nPointIndex( -1 )
@@ -503,7 +490,6 @@ DataSeriesPointWrapper::DataSeriesPointWrapper(eType _eType,
                                                sal_Int32 nPointIndex, //ignored for series
                                                std::shared_ptr<Chart2ModelContact> spChart2ModelContact)
     : m_spChart2ModelContact( std::move(spChart2ModelContact) )
-    , m_aEventListenerContainer( m_aMutex )
     , m_eType( _eType )
     , m_nSeriesIndexInNewAPI( nSeriesIndexInNewAPI )
     , m_nPointIndex( (_eType == DATA_POINT) ? nPointIndex : -1 )
@@ -518,8 +504,9 @@ DataSeriesPointWrapper::~DataSeriesPointWrapper()
 // ____ XComponent ____
 void SAL_CALL DataSeriesPointWrapper::dispose()
 {
+    std::unique_lock g(m_aMutex);
     uno::Reference< uno::XInterface > xSource( static_cast< ::cppu::OWeakObject* >( this ) );
-    m_aEventListenerContainer.disposeAndClear( lang::EventObject( xSource ) );
+    m_aEventListenerContainer.disposeAndClear( g, lang::EventObject( xSource ) );
 
     m_xDataSeries.clear();
     clearWrappedPropertySet();
@@ -528,13 +515,15 @@ void SAL_CALL DataSeriesPointWrapper::dispose()
 void SAL_CALL DataSeriesPointWrapper::addEventListener(
     const uno::Reference< lang::XEventListener >& xListener )
 {
-    m_aEventListenerContainer.addInterface( xListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.addInterface( g, xListener );
 }
 
 void SAL_CALL DataSeriesPointWrapper::removeEventListener(
     const uno::Reference< lang::XEventListener >& aListener )
 {
-    m_aEventListenerContainer.removeInterface( aListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.removeInterface( g, aListener );
 }
 
 // ____ XEventListener ____
@@ -546,8 +535,8 @@ bool DataSeriesPointWrapper::isSupportingAreaProperties()
 {
     rtl::Reference< DataSeries > xSeries( getDataSeries() );
     rtl::Reference< ::chart::Diagram > xDiagram( m_spChart2ModelContact->getDiagram() );
-    rtl::Reference< ::chart::ChartType > xChartType( DiagramHelper::getChartTypeOfSeries( xDiagram, xSeries ) );
-    sal_Int32 nDimensionCount = DiagramHelper::getDimension( xDiagram );
+    rtl::Reference< ::chart::ChartType > xChartType( xDiagram->getChartTypeOfSeries( xSeries ) );
+    sal_Int32 nDimensionCount = xDiagram->getDimension();
 
     return ChartTypeHelper::isSupportingAreaProperties( xChartType, nDimensionCount );
 }
@@ -559,7 +548,7 @@ rtl::Reference< DataSeries > DataSeriesPointWrapper::getDataSeries()
     {
         rtl::Reference< ::chart::Diagram > xDiagram( m_spChart2ModelContact->getDiagram() );
         std::vector< rtl::Reference< DataSeries > > aSeriesList =
-            ::chart::DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+            xDiagram->getDataSeries();
 
         if( m_nSeriesIndexInNewAPI >= 0 && o3tl::make_unsigned(m_nSeriesIndexInNewAPI) < aSeriesList.size() )
             xSeries = aSeriesList[m_nSeriesIndexInNewAPI];
@@ -630,9 +619,10 @@ beans::PropertyState SAL_CALL DataSeriesPointWrapper::getPropertyState( const OU
         {
             if( rPropertyName == "FillColor")
             {
-                rtl::Reference< DataSeries > xSeriesProp = getDataSeries();
+                rtl::Reference< DataSeries > xSeries = getDataSeries();
                 bool bVaryColorsByPoint = false;
-                if( xSeriesProp.is() && (xSeriesProp->getPropertyValue("VaryColorsByPoint") >>= bVaryColorsByPoint)
+                // "VaryColorsByPoint"
+                if( xSeries.is() && (xSeries->getFastPropertyValue(PROP_DATASERIES_VARY_COLORS_BY_POINT) >>= bVaryColorsByPoint)
                     && bVaryColorsByPoint )
                     return beans::PropertyState_DIRECT_VALUE;
             }
@@ -719,9 +709,9 @@ Reference< beans::XPropertySet > DataSeriesPointWrapper::getInnerPropertySet()
 const Sequence< beans::Property >& DataSeriesPointWrapper::getPropertySequence()
 {
     if( m_eType == DATA_SERIES )
-        return *StaticSeriesWrapperPropertyArray::get();
+        return StaticSeriesWrapperPropertyArray();
     else
-        return *StaticPointWrapperPropertyArray::get();
+        return StaticPointWrapperPropertyArray();
 }
 
 std::vector< std::unique_ptr<WrappedProperty> > DataSeriesPointWrapper::createWrappedProperties()
@@ -849,9 +839,10 @@ Any SAL_CALL DataSeriesPointWrapper::getPropertyValue( const OUString& rProperty
     {
         if( rPropertyName == "FillColor" )
         {
-            rtl::Reference< DataSeries > xSeriesProp = getDataSeries();
+            rtl::Reference< DataSeries > xSeries = getDataSeries();
             bool bVaryColorsByPoint = false;
-            if( xSeriesProp.is() && (xSeriesProp->getPropertyValue("VaryColorsByPoint") >>= bVaryColorsByPoint)
+            // "VaryColorsByPoint"
+            if( xSeries.is() && (xSeries->getFastPropertyValue(PROP_DATASERIES_VARY_COLORS_BY_POINT) >>= bVaryColorsByPoint)
                 && bVaryColorsByPoint )
             {
                 uno::Reference< beans::XPropertyState > xPointState( DataSeriesPointWrapper::getDataPointProperties(), uno::UNO_QUERY );

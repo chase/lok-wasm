@@ -18,14 +18,12 @@
  */
 
 #include <memory>
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <sal/types.h>
 
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
-#include <cppunit/plugin/TestPlugIn.h>
 
 #include <rtl/ustring.hxx>
 #include <rtl/string.hxx>
@@ -69,9 +67,9 @@ public:
     void getAppCommandArg_001()
     {
 #if defined(_WIN32)
-        static const OUStringLiteral EXECUTABLE_NAME(u"child_process.exe");
+        static constexpr OUString EXECUTABLE_NAME(u"child_process.exe"_ustr);
 #else
-        static const OUStringLiteral EXECUTABLE_NAME(u"child_process");
+        static constexpr OUString EXECUTABLE_NAME(u"child_process"_ustr);
 #endif
         OUString suCWD = getModulePath();
         // OUString suCWD2 = getExecutableDirectory();
@@ -198,9 +196,9 @@ public:
     void getGlobalProcessId_002()
     {
 #if defined(_WIN32)
-        static const OUStringLiteral EXEC_NAME(u"child_process_id.exe");
+        static constexpr OUString EXEC_NAME(u"child_process_id.exe"_ustr);
 #else
-        static const OUStringLiteral EXEC_NAME(u"child_process_id");
+        static constexpr OUString EXEC_NAME(u"child_process_id"_ustr);
 #endif
         sal_uInt8 pTargetUUID1[16];
         rtl_getGlobalProcessId( pTargetUUID1 );

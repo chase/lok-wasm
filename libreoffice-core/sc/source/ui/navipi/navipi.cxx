@@ -188,7 +188,7 @@ IMPL_LINK(ScNavigatorDlg, DocumentSelectHdl, weld::ComboBox&, rListBox, void)
     m_xLbEntries->SelectDoc(aDocName);
 }
 
-IMPL_LINK(ScNavigatorDlg, ToolBoxSelectHdl, const OString&, rSelId, void)
+IMPL_LINK(ScNavigatorDlg, ToolBoxSelectHdl, const OUString&, rSelId, void)
 {
     //  Switch the mode?
     if (rSelId == "contents" || rSelId == "scenarios")
@@ -231,7 +231,7 @@ IMPL_LINK(ScNavigatorDlg, ToolBoxSelectHdl, const OString&, rSelId, void)
     }
 }
 
-IMPL_LINK(ScNavigatorDlg, ToolBoxDropdownClickHdl, const OString&, rCommand, void)
+IMPL_LINK(ScNavigatorDlg, ToolBoxDropdownClickHdl, const OUString&, rCommand, void)
 {
     if (!m_xTbxCmd2->get_menu_item_active(rCommand))
         return;
@@ -255,13 +255,13 @@ IMPL_LINK(ScNavigatorDlg, ToolBoxDropdownClickHdl, const OString&, rCommand, voi
     }
 }
 
-IMPL_LINK(ScNavigatorDlg, MenuSelectHdl, const OString&, rIdent, void)
+IMPL_LINK(ScNavigatorDlg, MenuSelectHdl, const OUString&, rIdent, void)
 {
-    if (rIdent == "hyperlink")
+    if (rIdent == u"hyperlink")
         SetDropMode(0);
-    else if (rIdent == "link")
+    else if (rIdent == u"link")
         SetDropMode(1);
-    else if (rIdent == "copy")
+    else if (rIdent == u"copy")
         SetDropMode(2);
 }
 
@@ -382,7 +382,6 @@ ScNavigatorDlg::ScNavigatorDlg(SfxBindings* pB, weld::Widget* pParent, SfxNaviga
     m_xLbDocuments->connect_changed(LINK(this, ScNavigatorDlg, DocumentSelectHdl));
     aStrActive    = " (" + ScResId(SCSTR_ACTIVE) + ")";     // " (active)"
     aStrNotActive = " (" + ScResId(SCSTR_NOTACTIVE) + ")";  // " (not active)"
-    aStrHidden    = " (" + ScResId(SCSTR_HIDDEN) + ")";     // " (hidden)"
 
     rBindings.ENTERREGISTRATIONS();
 
@@ -470,7 +469,7 @@ ScNavigatorDlg::~ScNavigatorDlg()
 
     for (auto & p : mvBoundItems)
         p.reset();
-    pMarkArea.reset();
+    moMarkArea.reset();
 
     EndListening( *(SfxGetpApp()) );
     EndListening( rBindings );
@@ -541,6 +540,7 @@ void ScNavigatorDlg::Notify( SfxBroadcaster&, const SfxHint& rHint )
                     m_xLbEntries->Refresh( ScContentId::GRAPHIC );
                     m_xLbEntries->Refresh( ScContentId::OLEOBJECT );
                     m_xLbEntries->Refresh( ScContentId::DRAWING );
+                    m_xLbEntries->Refresh( ScContentId::NOTE );
                     break;
 
                 case SfxHintId::ScAreaLinksChanged:
@@ -823,7 +823,7 @@ void ScNavigatorDlg::SetListMode(NavListMode eMode)
         }
     }
 
-    if (pMarkArea)
+    if (moMarkArea)
         UnmarkDataArea();
 }
 
@@ -884,16 +884,6 @@ void ScNavigatorDlg::GetDocNames( const OUString* pManualSel )
 
     m_xLbDocuments->append_text(aStrActiveWin);
 
-    OUString aHidden =  m_xLbEntries->GetHiddenTitle();
-    if (!aHidden.isEmpty())
-    {
-        OUString aEntry = aHidden + aStrHidden;
-        m_xLbDocuments->append_text(aEntry);
-
-        if ( pManualSel && aHidden == *pManualSel )
-            aSelEntry = aEntry;
-    }
-
     m_xLbDocuments->thaw();
 
     m_xLbDocuments->set_active_text(aSelEntry);
@@ -906,16 +896,16 @@ void ScNavigatorDlg::MarkDataArea()
     if ( !pViewSh )
         return;
 
-    if ( !pMarkArea )
-        pMarkArea.reset( new ScArea );
+    if ( !moMarkArea )
+        moMarkArea.emplace();
 
     pViewSh->MarkDataArea();
     const ScRange& aMarkRange = pViewSh->GetViewData().GetMarkData().GetMarkArea();
-    pMarkArea->nColStart = aMarkRange.aStart.Col();
-    pMarkArea->nRowStart = aMarkRange.aStart.Row();
-    pMarkArea->nColEnd = aMarkRange.aEnd.Col();
-    pMarkArea->nRowEnd = aMarkRange.aEnd.Row();
-    pMarkArea->nTab = aMarkRange.aStart.Tab();
+    moMarkArea->nColStart = aMarkRange.aStart.Col();
+    moMarkArea->nRowStart = aMarkRange.aStart.Row();
+    moMarkArea->nColEnd = aMarkRange.aEnd.Col();
+    moMarkArea->nRowEnd = aMarkRange.aEnd.Row();
+    moMarkArea->nTab = aMarkRange.aStart.Tab();
 }
 
 void ScNavigatorDlg::UnmarkDataArea()
@@ -925,7 +915,7 @@ void ScNavigatorDlg::UnmarkDataArea()
     if ( pViewSh )
     {
         pViewSh->Unmark();
-        pMarkArea.reset();
+        moMarkArea.reset();
     }
 }
 

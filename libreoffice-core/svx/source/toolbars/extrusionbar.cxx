@@ -56,7 +56,7 @@ using namespace ::com::sun::star::uno;
 // we enter something which never occurs here (hopefully).)
 static SfxSlot aExtrusionBarSlots_Impl[] =
 {
-    { 0, SfxGroupId::NONE, SfxSlotMode::NONE, 0, 0, nullptr, nullptr, nullptr, nullptr, nullptr, 0, SfxDisableFlags::NONE, nullptr }
+    { 0, SfxGroupId::NONE, SfxSlotMode::NONE, 0, 0, nullptr, nullptr, nullptr, nullptr, nullptr, 0, SfxDisableFlags::NONE, "" }
 };
 
 SFX_IMPL_INTERFACE(ExtrusionBar, SfxShell)
@@ -117,8 +117,8 @@ static void getLightingDirectionDefaults( const Direction3D **pLighting1Defaults
 
 static void impl_execute( SfxRequest const & rReq, SdrCustomShapeGeometryItem& rGeometryItem, SdrObject* pObj )
 {
-    static constexpr OUStringLiteral sExtrusion = u"Extrusion";
-    static constexpr OUStringLiteral sRotateAngle = u"RotateAngle";
+    static constexpr OUString sExtrusion = u"Extrusion"_ustr;
+    static constexpr OUString sRotateAngle = u"RotateAngle"_ustr;
 
     sal_uInt16 nSID = rReq.GetSlot();
     switch( nSID )
@@ -152,11 +152,11 @@ static void impl_execute( SfxRequest const & rReq, SdrCustomShapeGeometryItem& r
         // the extrusion off and on.
         if (bOn)
         {
-            pAny = rGeometryItem.GetPropertyValueByName(sExtrusion, u"Diffusion");
+            pAny = rGeometryItem.GetPropertyValueByName(sExtrusion, u"Diffusion"_ustr);
             if (!pAny)
             {
                 css::beans::PropertyValue aPropValue;
-                aPropValue.Name = u"Diffusion";
+                aPropValue.Name = u"Diffusion"_ustr;
                 aPropValue.Value <<= 100.0;
                 rGeometryItem.SetPropertyValue( sExtrusion,  aPropValue );
             }
@@ -345,7 +345,7 @@ static void impl_execute( SfxRequest const & rReq, SdrCustomShapeGeometryItem& r
 
             // Set ShadeMode only when changing from or to wireframe, otherwise keep existing value.
             ShadeMode eOldShadeMode(ShadeMode_FLAT);
-            css::uno::Any* pAny = rGeometryItem.GetPropertyValueByName(sExtrusion, u"ShadeMode");
+            css::uno::Any* pAny = rGeometryItem.GetPropertyValueByName(sExtrusion, u"ShadeMode"_ustr);
             if (pAny)
                 *pAny >>= eOldShadeMode;
             ShadeMode eShadeMode(eOldShadeMode);
@@ -367,7 +367,7 @@ static void impl_execute( SfxRequest const & rReq, SdrCustomShapeGeometryItem& r
             // c3DSpecularAmt to distinguish between 'matte' (=0) and 'plastic'.
             // We do the same.
             double fOldSpecularity = 0.0;
-            pAny = rGeometryItem.GetPropertyValueByName(sExtrusion, u"Specularity");
+            pAny = rGeometryItem.GetPropertyValueByName(sExtrusion, u"Specularity"_ustr);
             if (pAny)
                 *pAny >>= fOldSpecularity;
             double fSpecularity = fOldSpecularity;
@@ -393,7 +393,7 @@ static void impl_execute( SfxRequest const & rReq, SdrCustomShapeGeometryItem& r
             // We toggle between 100 and 43712.0 / 655.36 here, to get better ODF -> MSO binary.
             // We keep other values, those might be set outside regular UI, e.g by macro.
             double fOldDiffusion = 100.0;
-            pAny = rGeometryItem.GetPropertyValueByName(sExtrusion, u"Diffusion");
+            pAny = rGeometryItem.GetPropertyValueByName(sExtrusion, u"Diffusion"_ustr);
             if (pAny)
                 *pAny >>= fOldDiffusion;
             double fDiffusion = fOldDiffusion;
@@ -616,7 +616,7 @@ void ExtrusionBar::execute( SdrView* pSdrView, SfxRequest const & rReq, SfxBindi
                         {
                             OUString aStr( SvxResId( pStrResId ) );
                             pSdrView->BegUndo( aStr );
-                            pSdrView->AddUndo( pSdrView->GetModel()->GetSdrUndoFactory().CreateUndoAttrObject( *pObj ) );
+                            pSdrView->AddUndo( pSdrView->GetModel().GetSdrUndoFactory().CreateUndoAttrObject( *pObj ) );
                         }
                         SdrCustomShapeGeometryItem aGeometryItem( pObj->GetMergedItem( SDRATTR_CUSTOMSHAPE_GEOMETRY ) );
                         impl_execute( rReq, aGeometryItem, pObj );
@@ -686,7 +686,7 @@ static void getExtrusionDirectionState( SdrView const * pSdrView, SfxItemSet& rS
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
 
-    static constexpr OUStringLiteral sExtrusion = u"Extrusion";
+    static constexpr OUString sExtrusion = u"Extrusion"_ustr;
 
     const css::uno::Any* pAny;
 
@@ -833,7 +833,7 @@ static void getExtrusionProjectionState( SdrView const * pSdrView, SfxItemSet& r
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
 
-    static constexpr OUStringLiteral sExtrusion = u"Extrusion";
+    static constexpr OUString sExtrusion = u"Extrusion"_ustr;
 
     const css::uno::Any* pAny;
 
@@ -888,7 +888,7 @@ static void getExtrusionSurfaceState( SdrView const * pSdrView, SfxItemSet& rSet
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
 
-    static constexpr OUStringLiteral sExtrusion = u"Extrusion";
+    static constexpr OUString sExtrusion = u"Extrusion"_ustr;
 
     const css::uno::Any* pAny;
 
@@ -916,14 +916,14 @@ static void getExtrusionSurfaceState( SdrView const * pSdrView, SfxItemSet& rSet
             sal_Int32 nSurface = 0; // wire frame
 
             ShadeMode eShadeMode( ShadeMode_FLAT );
-            pAny = rGeometryItem.GetPropertyValueByName( sExtrusion, u"ShadeMode" );
+            pAny = rGeometryItem.GetPropertyValueByName( sExtrusion, u"ShadeMode"_ustr );
             if( pAny )
                 *pAny >>= eShadeMode;
 
             if (eShadeMode != ShadeMode_DRAFT)
             {
                 bool bMetal = false;
-                pAny = rGeometryItem.GetPropertyValueByName( sExtrusion, u"Metal" );
+                pAny = rGeometryItem.GetPropertyValueByName( sExtrusion, u"Metal"_ustr );
                 if( pAny )
                     *pAny >>= bMetal;
 
@@ -931,7 +931,7 @@ static void getExtrusionSurfaceState( SdrView const * pSdrView, SfxItemSet& rSet
                 {
                     nSurface = 3; // metal ODF
                     sal_Int16 eMetalType = EnhancedCustomShapeMetalType::MetalODF;
-                    pAny = rGeometryItem.GetPropertyValueByName( sExtrusion, u"MetalType" );
+                    pAny = rGeometryItem.GetPropertyValueByName( sExtrusion, u"MetalType"_ustr );
                     if (pAny)
                     {
                         *pAny >>= eMetalType;
@@ -942,7 +942,7 @@ static void getExtrusionSurfaceState( SdrView const * pSdrView, SfxItemSet& rSet
                 else
                 {
                     double fSpecularity = 0;
-                    pAny = rGeometryItem.GetPropertyValueByName( sExtrusion, u"Specularity" );
+                    pAny = rGeometryItem.GetPropertyValueByName( sExtrusion, u"Specularity"_ustr );
                     if( pAny )
                         *pAny >>= fSpecularity;
 
@@ -981,7 +981,7 @@ static void getExtrusionDepthState( SdrView const * pSdrView, SfxItemSet& rSet )
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
 
-    static constexpr OUStringLiteral sExtrusion = u"Extrusion";
+    static constexpr OUString sExtrusion = u"Extrusion"_ustr;
 
     const css::uno::Any* pAny;
 
@@ -1027,11 +1027,9 @@ static void getExtrusionDepthState( SdrView const * pSdrView, SfxItemSet& rSet )
         }
     }
 
-    if( pSdrView->GetModel() )
-    {
-        FieldUnit eUnit = pSdrView->GetModel()->GetUIUnit();
-        rSet.Put( SfxUInt16Item( SID_ATTR_METRIC, static_cast<sal_uInt16>(eUnit) ) );
-    }
+
+    FieldUnit eUnit = pSdrView->GetModel().GetUIUnit();
+    rSet.Put( SfxUInt16Item( SID_ATTR_METRIC, static_cast<sal_uInt16>(eUnit) ) );
 
     if( bHasCustomShape )
         rSet.Put( SvxDoubleItem( fFinalDepth, SID_EXTRUSION_DEPTH ) );
@@ -1060,7 +1058,7 @@ static void getExtrusionLightingDirectionState( SdrView const * pSdrView, SfxIte
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
 
-    static constexpr OUStringLiteral sExtrusion = u"Extrusion";
+    static constexpr OUString sExtrusion = u"Extrusion"_ustr;
 
     const Direction3D * pLighting1Defaults;
     const Direction3D * pLighting2Defaults;
@@ -1139,7 +1137,7 @@ static void getExtrusionLightingIntensityState( SdrView const * pSdrView, SfxIte
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
 
-    static constexpr OUStringLiteral sExtrusion = u"Extrusion";
+    static constexpr OUString sExtrusion = u"Extrusion"_ustr;
 
     const css::uno::Any* pAny;
 
@@ -1206,7 +1204,7 @@ static void getExtrusionColorState( SdrView const * pSdrView, SfxItemSet& rSet )
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
 
-    static constexpr OUStringLiteral sExtrusion = u"Extrusion";
+    static constexpr OUString sExtrusion = u"Extrusion"_ustr;
 
     const css::uno::Any* pAny;
 
@@ -1275,7 +1273,7 @@ static void getExtrusionColorState( SdrView const * pSdrView, SfxItemSet& rSet )
 namespace svx {
 bool checkForSelectedCustomShapes( SdrView const * pSdrView, bool bOnlyExtruded )
 {
-    static constexpr OUStringLiteral sExtrusion = u"Extrusion";
+    static constexpr OUString sExtrusion = u"Extrusion"_ustr;
 
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();

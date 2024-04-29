@@ -92,7 +92,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTempFilePath)
 
 CPPUNIT_TEST_FIXTURE(Test, testSetDocumentPropertiesUpdate)
 {
-    // Given a document with 3 custom props, 2 Zotero ones and an other:
+    // Given a document with 3 custom props, 2 Zotero ones and one other:
     mxComponent = loadFromDesktop("private:factory/swriter");
     auto pBaseModel = dynamic_cast<SfxBaseModel*>(mxComponent.get());
     CPPUNIT_ASSERT(pBaseModel);
@@ -126,7 +126,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSetDocumentPropertiesUpdate)
         }
     }
 }
-)json");
+)json"_ostr);
     uno::Sequence<beans::PropertyValue> aArgs = comphelper::containerToSequence(aArgsVec);
     dispatchCommand(mxComponent, ".uno:SetDocumentProperties", aArgs);
 

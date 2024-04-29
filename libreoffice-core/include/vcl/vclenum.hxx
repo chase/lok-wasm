@@ -162,7 +162,6 @@ typedef sal_uInt32 sal_UCS4;    // TODO: this should be moved to rtl
 enum class OutDevSupportType
 {
     TransparentRect,
-    B2DDraw,
     TransparentText     // if alpha in TextColor can be honored
 };
 
@@ -271,6 +270,15 @@ enum class ToolBoxButtonSize
     Size32,
 };
 
+// available button sizes for navigation bar
+enum class NavbarButtonSize
+{
+    Auto,
+    Small,
+    Large,
+    XLarge,
+};
+
 namespace vcl
 {
     // The exact sizes of the icons in each size grouping are not necessarily
@@ -334,11 +342,10 @@ enum class FloatWinPopupFlags
     NoMouseUpClose       = 0x000200,
     GrabFocus            = 0x000400,
     NoHorzPlacement      = 0x000800,
-    MakeClientWindowVisibleBeforePopup  = 0x001000,
 };
 namespace o3tl
 {
-    template<> struct typed_flags<FloatWinPopupFlags> : is_typed_flags<FloatWinPopupFlags, 0x1fff> {};
+    template<> struct typed_flags<FloatWinPopupFlags> : is_typed_flags<FloatWinPopupFlags, 0x0fff> {};
 }
 
 // Flags for Window::Show()

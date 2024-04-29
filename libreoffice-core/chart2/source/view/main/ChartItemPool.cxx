@@ -19,6 +19,10 @@
 
 #include "ChartItemPool.hxx"
 #include <chartview/ChartSfxItemIds.hxx>
+#include <DataSeries.hxx>
+#include <FormattedString.hxx>
+#include <Legend.hxx>
+#include <Axis.hxx>
 #include <svx/chrtitem.hxx>
 #include <svx/sdangitm.hxx>
 #include <svx/svdpool.hxx>
@@ -186,8 +190,10 @@ ChartItemPool::ChartItemPool():
     const sal_uInt16 nMax = SCHATTR_END - SCHATTR_START + 1;
     for( sal_uInt16 i = 0; i < nMax; i++ )
     {
+        // _nSID, _bNeedsPoolRegistration, _bShareable
         pItemInfos[i]._nSID = 0;
-        pItemInfos[i]._bPoolable = true;
+        pItemInfos[i]._bNeedsPoolRegistration = false;
+        pItemInfos[i]._bShareable = true;
     }
 
     // slot ids differing from which ids
@@ -223,6 +229,19 @@ MapUnit ChartItemPool::GetMetric(sal_uInt16 /* nWhich */) const
 
 rtl::Reference<SfxItemPool> ChartItemPool::CreateChartItemPool()
 {
+    // There are various default values which want to call
+    // OutputDevice::GetDefaultFont. Unfortunately, when processing
+    // UNO methods which may get called from out of process, this
+    // happens on a thread that does not take the SolarMutex, which
+    // causes trouble in ImplFontCache.
+    // Trying to take the SolarMutex when initialising these default
+    // leads to ABBA deadlocks.
+    // So rather just trigger the initialisation of these things here.
+    StaticDataSeriesDefaults();
+    StaticAxisDefaults();
+    StaticLegendDefaults();
+    StaticFormattedStringDefaults();
+
     return new ChartItemPool();
 }
 

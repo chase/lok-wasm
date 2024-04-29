@@ -34,41 +34,8 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
 
 using ::com::sun::star::beans::Property;
-using ::osl::MutexGuard;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
-
-namespace
-{
-
-struct StaticWallFloorWrapperPropertyArray_Initializer
-{
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence() );
-        return &aPropSeq;
-    }
-
-private:
-    static Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< css::beans::Property > aProperties;
-        ::chart::FillProperties::AddPropertiesToVector( aProperties );
-        ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
-        ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
-
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
-};
-
-struct StaticWallFloorWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticWallFloorWrapperPropertyArray_Initializer >
-{
-};
-
-} // anonymous namespace
 
 namespace chart::wrapper
 {
@@ -76,7 +43,6 @@ namespace chart::wrapper
 WallFloorWrapper::WallFloorWrapper( bool bWall,
     std::shared_ptr<Chart2ModelContact> spChart2ModelContact ) :
         m_spChart2ModelContact(std::move( spChart2ModelContact )),
-        m_aEventListenerContainer( m_aMutex ),
         m_bWall( bWall )
 
 {
@@ -89,23 +55,25 @@ WallFloorWrapper::~WallFloorWrapper()
 // ____ XComponent ____
 void SAL_CALL WallFloorWrapper::dispose()
 {
+    std::unique_lock g(m_aMutex);
     Reference< uno::XInterface > xSource( static_cast< ::cppu::OWeakObject* >( this ) );
-    m_aEventListenerContainer.disposeAndClear( lang::EventObject( xSource ) );
+    m_aEventListenerContainer.disposeAndClear( g, lang::EventObject( xSource ) );
 
-    MutexGuard aGuard( m_aMutex);
     clearWrappedPropertySet();
 }
 
 void SAL_CALL WallFloorWrapper::addEventListener(
     const Reference< lang::XEventListener >& xListener )
 {
-    m_aEventListenerContainer.addInterface( xListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.addInterface( g, xListener );
 }
 
 void SAL_CALL WallFloorWrapper::removeEventListener(
     const Reference< lang::XEventListener >& aListener )
 {
-    m_aEventListenerContainer.removeInterface( aListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.removeInterface( g, aListener );
 }
 
 // WrappedPropertySet
@@ -127,7 +95,19 @@ Reference< beans::XPropertySet > WallFloorWrapper::getInnerPropertySet()
 
 const Sequence< beans::Property >& WallFloorWrapper::getPropertySequence()
 {
-    return *StaticWallFloorWrapperPropertyArray::get();
+    static Sequence< Property > aPropSeq = []()
+        {
+            std::vector< css::beans::Property > aProperties;
+            ::chart::FillProperties::AddPropertiesToVector( aProperties );
+            ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
+            ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
+
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
+
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropSeq;
 }
 
 std::vector< std::unique_ptr<WrappedProperty> > WallFloorWrapper::createWrappedProperties()

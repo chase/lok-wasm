@@ -181,11 +181,14 @@ public:
 
     void testFindFirstURLInText();
 
+    void testFindFirstDOIInText();
+
     void testResolveIdnaHost();
 
     CPPUNIT_TEST_SUITE(Test);
     CPPUNIT_TEST(testNormalizedMakeRelative);
     CPPUNIT_TEST(testFindFirstURLInText);
+    CPPUNIT_TEST(testFindFirstDOIInText);
     CPPUNIT_TEST(testResolveIdnaHost);
     CPPUNIT_TEST(finish);
     CPPUNIT_TEST_SUITE_END();
@@ -244,38 +247,36 @@ void Test::testNormalizedMakeRelative() {
           "nonex3/nonex4" }
 #endif
     };
-    for (std::size_t i = 0; i < SAL_N_ELEMENTS(tests); ++i) {
-        css::uno::Reference< css::uri::XUriReference > ref(
-            URIHelper::normalizedMakeRelative(
-                m_context, OUString::createFromAscii(tests[i].base),
-                OUString::createFromAscii(tests[i].absolute)));
-        bool ok = tests[i].relative == nullptr
-            ? !ref.is()
-            : ref.is() && ref->getUriReference().equalsAscii(tests[i].relative);
+    for (auto const[base, absolute, relative] : tests)
+    {
+        css::uno::Reference< css::uri::XUriReference > ref(URIHelper::normalizedMakeRelative(
+                m_context, OUString::createFromAscii(base), OUString::createFromAscii(absolute)));
+        bool ok = relative == nullptr ? !ref.is()
+                                      : ref.is() && ref->getUriReference().equalsAscii(relative);
         OString msg;
-        if (!ok) {
-            OStringBuffer buf;
-            buf.append('<');
-            buf.append(tests[i].base);
-            buf.append(">, <");
-            buf.append(tests[i].absolute);
-            buf.append(">: ");
-            if (ref.is()) {
+        if (!ok)
+        {
+            OStringBuffer buf(OString::Concat("<") + base + ">, <" + absolute + ">: ");
+            if (ref.is())
+            {
                 buf.append('<');
                 buf.append(
                     OUStringToOString(
                         ref->getUriReference(), RTL_TEXTENCODING_UTF8));
                 buf.append('>');
-            } else {
+            }
+            else
+            {
                 buf.append("none");
             }
             buf.append(" instead of ");
-            if (tests[i].relative == nullptr) {
+            if (relative == nullptr)
+            {
                 buf.append("none");
-            } else {
-                buf.append('<');
-                buf.append(tests[i].relative);
-                buf.append('>');
+            }
+            else
+            {
+                buf.append(OString::Concat("<") + relative + ">");
             }
             msg = buf.makeStringAndClear();
         }
@@ -369,36 +370,78 @@ void Test::testFindFirstURLInText() {
         { "wfs:", nullptr, 0, 0 }
     };
     CharClass charClass( m_context, LanguageTag( css::lang::Locale("en", "US", "")));
-    for (std::size_t i = 0; i < SAL_N_ELEMENTS(tests); ++i) {
-        OUString input(OUString::createFromAscii(tests[i].input));
+    for (auto const[pInput, pResult, nBegin, nEnd] : tests)
+    {
+        OUString input(OUString::createFromAscii(pInput));
+        sal_Int32 begin = 0;
+        sal_Int32 end = input.getLength();
+        OUString result(URIHelper::FindFirstURLInText(input, begin, end, charClass));
+        bool ok = pResult == nullptr
+                  ? (result.getLength() == 0 && begin == input.getLength()
+                  && end == input.getLength())
+                  : (result.equalsAscii(pResult) && begin == nBegin && end == nEnd);
+        OString msg;
+        if (!ok)
+        {
+            OStringBuffer buf;
+            buf.append(OString::Concat("\"") + pInput + "\" -> ");
+            buf.append(pResult == nullptr ? "none" : pResult);
+            buf.append(" (" + OString::number(nBegin) + ", " + OString::number(nEnd)
+                + ")"
+                " != "
+                + OUStringToOString(result, RTL_TEXTENCODING_UTF8) + " ("
+                + OString::number(begin) + ", " + OString::number(end) +")");
+            msg = buf.makeStringAndClear();
+        }
+        CPPUNIT_ASSERT_MESSAGE(msg.getStr(), ok);
+    }
+}
+
+void Test::testFindFirstDOIInText() {
+    struct Data {
+        char const * input;
+        char const * result;
+        sal_Int32 begin;
+        sal_Int32 end;
+    };
+    static Data const tests[] = {
+        { "doi:10.1000/182", "https://doi.org/10.1000/182", 0, 15 }, // valid doi suffix with only digits
+        { "Doi:10.1000/182", "https://doi.org/10.1000/182", 0, 15 }, // valid doi suffix with some of the first three characters being capitalized
+        { "DoI:10.1000/182", "https://doi.org/10.1000/182", 0, 15 }, // valid doi suffix with some of the first three characters being capitalized
+        { "DOI:10.1000/182", "https://doi.org/10.1000/182", 0, 15 }, // valid doi suffix with some of the first three characters being capitalized
+        { "dOI:10.1000/182", "https://doi.org/10.1000/182", 0, 15 }, // valid doi suffix with some of the first three characters being capitalized
+        { "dOi:10.1000/182", "https://doi.org/10.1000/182", 0, 15 }, // valid doi suffix with some of the first three characters being capitalized
+        { "doi:10.1038/nature03001", "https://doi.org/10.1038/nature03001", 0, 23 }, // valid doi suffix with alphanumeric characters
+        { "doi:10.1093/ajae/aaq063", "https://doi.org/10.1093/ajae/aaq063", 0, 23 }, // valid doi suffix with multiple slash
+        { "doi:10.1016/S0735-1097(98)00347-7", "https://doi.org/10.1016/S0735-1097(98)00347-7", 0, 33 }, // valid doi suffix with characters apart from alphanumeric
+        { "doi:10.109/ajae/aaq063", nullptr, 0, 0 }, // # of digits after doi;10. is not between 4 and 9
+        { "doi:10.1234567890/ajae/aaq063", nullptr, 0, 0 }, // # of digits after doi;10. is not between 4 and 9
+        { "doi:10.1093/ajae/aaq063/", nullptr, 0, 0 }, // nothing after slash
+        { "doi:10.1093", nullptr, 0, 0 }, // no slash
+        { "doi:11.1093/ajae/aaq063", nullptr, 0, 0 }, // doesn't begin with doi:10.
+    };
+    CharClass charClass( m_context, LanguageTag( css::lang::Locale("en", "US", "")));
+    for (auto const[pInput, pResult, nBegin, nEnd] : tests)
+    {
+        OUString input(OUString::createFromAscii(pInput));
         sal_Int32 begin = 0;
         sal_Int32 end = input.getLength();
         OUString result(
-            URIHelper::FindFirstURLInText(input, begin, end, charClass));
-        bool ok = tests[i].result == nullptr
-            ? (result.getLength() == 0 && begin == input.getLength()
-               && end == input.getLength())
-            : (result.equalsAscii(tests[i].result) && begin == tests[i].begin
-               && end == tests[i].end);
+            URIHelper::FindFirstDOIInText(input, begin, end, charClass));
+        bool ok = pResult == nullptr
+                  ? (result.getLength() == 0 && begin == input.getLength() && end == input.getLength())
+                  : (result.equalsAscii(pResult) && begin == nBegin && end == nEnd);
         OString msg;
-        if (!ok) {
+        if (!ok)
+        {
             OStringBuffer buf;
-            buf.append('"');
-            buf.append(tests[i].input);
-            buf.append("\" -> ");
-            buf.append(tests[i].result == nullptr ? "none" : tests[i].result);
-            buf.append(" (");
-            buf.append(tests[i].begin);
-            buf.append(", ");
-            buf.append(tests[i].end);
-            buf.append(')');
-            buf.append(" != ");
-            buf.append(OUStringToOString(result, RTL_TEXTENCODING_UTF8));
-            buf.append(" (");
-            buf.append(begin);
-            buf.append(", ");
-            buf.append(end);
-            buf.append(')');
+            buf.append(OString::Concat("\"") + pInput + "\" -> ");
+            buf.append(pResult == nullptr ? "none" : pResult);
+            buf.append(" (" + OString::number(nBegin) + ", " + OString::number(nEnd)
+                + ")"
+                " != "
+                + OUStringToOString(result, RTL_TEXTENCODING_UTF8) + " ("
+                + OString::number(begin) + ", " + OString::number(end) +")");
             msg = buf.makeStringAndClear();
         }
         CPPUNIT_ASSERT_MESSAGE(msg.getStr(), ok);
@@ -411,67 +454,67 @@ void Test::testResolveIdnaHost() {
     input.clear();
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
-    input = u"Foo.M\u00FCnchen.de";
+    input = u"Foo.M\u00FCnchen.de"_ustr;
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
     input = "foo://Muenchen.de";
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
-    input = u"foo://-M\u00FCnchen.de";
+    input = u"foo://-M\u00FCnchen.de"_ustr;
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
-    input = u"foo://M\u00FCnchen-.de";
+    input = u"foo://M\u00FCnchen-.de"_ustr;
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
-    input = u"foo://xn--M\u00FCnchen.de";
+    input = u"foo://xn--M\u00FCnchen.de"_ustr;
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
-    input = u"foo://xy--M\u00FCnchen.de";
+    input = u"foo://xy--M\u00FCnchen.de"_ustr;
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
-    input = u"foo://.M\u00FCnchen.de";
+    input = u"foo://.M\u00FCnchen.de"_ustr;
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
-    input = u"foo://-bar.M\u00FCnchen.de";
+    input = u"foo://-bar.M\u00FCnchen.de"_ustr;
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
-    input = u"foo://bar-.M\u00FCnchen.de";
+    input = u"foo://bar-.M\u00FCnchen.de"_ustr;
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
-    input = u"foo://xn--bar.M\u00FCnchen.de";
+    input = u"foo://xn--bar.M\u00FCnchen.de"_ustr;
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
-    input = u"foo://xy--bar.M\u00FCnchen.de";
+    input = u"foo://xy--bar.M\u00FCnchen.de"_ustr;
     CPPUNIT_ASSERT_EQUAL(input, URIHelper::resolveIdnaHost(input));
 
     CPPUNIT_ASSERT_EQUAL(
-        OUString(u"foo://M\u00FCnchen@xn--mnchen-3ya.de"),
-        URIHelper::resolveIdnaHost(u"foo://M\u00FCnchen@M\u00FCnchen.de"));
+        u"foo://M\u00FCnchen@xn--mnchen-3ya.de"_ustr,
+        URIHelper::resolveIdnaHost(u"foo://M\u00FCnchen@M\u00FCnchen.de"_ustr));
 
     CPPUNIT_ASSERT_EQUAL(
         OUString("foo://xn--mnchen-3ya.de."),
-        URIHelper::resolveIdnaHost(u"foo://M\u00FCnchen.de."));
+        URIHelper::resolveIdnaHost(u"foo://M\u00FCnchen.de."_ustr));
 
     CPPUNIT_ASSERT_EQUAL(
         OUString("Foo://bar@xn--mnchen-3ya.de:123/?bar#baz"),
-        URIHelper::resolveIdnaHost(u"Foo://bar@M\u00FCnchen.de:123/?bar#baz"));
+        URIHelper::resolveIdnaHost(u"Foo://bar@M\u00FCnchen.de:123/?bar#baz"_ustr));
 
     CPPUNIT_ASSERT_EQUAL(
         OUString("foo://xn--mnchen-3ya.de"),
-        URIHelper::resolveIdnaHost(u"foo://Mu\u0308nchen.de"));
+        URIHelper::resolveIdnaHost(u"foo://Mu\u0308nchen.de"_ustr));
 
     CPPUNIT_ASSERT_EQUAL(
-        OUString("foo://example.xn--m-eha"), URIHelper::resolveIdnaHost(u"foo://example.mü"));
+        OUString("foo://example.xn--m-eha"), URIHelper::resolveIdnaHost(u"foo://example.mü"_ustr));
 
     CPPUNIT_ASSERT_EQUAL(
-        OUString("foo://example.xn--m-eha:0"), URIHelper::resolveIdnaHost(u"foo://example.mü:0"));
+        OUString("foo://example.xn--m-eha:0"), URIHelper::resolveIdnaHost(u"foo://example.mü:0"_ustr));
 
     CPPUNIT_ASSERT_EQUAL(
-        OUString("foo://xn--e1afmkfd.xn--p1ai"), URIHelper::resolveIdnaHost(u"foo://пример.рф"));
+        OUString("foo://xn--e1afmkfd.xn--p1ai"), URIHelper::resolveIdnaHost(u"foo://пример.рф"_ustr));
 
     CPPUNIT_ASSERT_EQUAL(
         OUString("foo://xn--e1afmkfd.xn--p1ai:0"),
-        URIHelper::resolveIdnaHost(u"foo://пример.рф:0"));
+        URIHelper::resolveIdnaHost(u"foo://пример.рф:0"_ustr));
 }
 
 css::uno::Reference< css::uno::XComponentContext > Test::m_context;

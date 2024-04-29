@@ -397,14 +397,14 @@ bool CopyFromClipContext::isCloneSparklines() const
 
 bool CopyFromClipContext::isDateCell( const ScColumn& rCol, SCROW nRow ) const
 {
-    sal_uLong nNumIndex = rCol.GetAttr(nRow, ATTR_VALUE_FORMAT).GetValue();
+    sal_uInt32 nNumIndex = rCol.GetAttr(nRow, ATTR_VALUE_FORMAT).GetValue();
     SvNumFormatType nType = mpClipDoc->GetFormatTable()->GetType(nNumIndex);
     return (nType == SvNumFormatType::DATE) || (nType == SvNumFormatType::TIME) || (nType == SvNumFormatType::DATETIME);
 }
 
 CopyToClipContext::CopyToClipContext(
-    ScDocument& rDoc, bool bKeepScenarioFlags) :
-    ClipContextBase(rDoc), mbKeepScenarioFlags(bKeepScenarioFlags) {}
+    ScDocument& rDoc, bool bKeepScenarioFlags, bool bCopyChartRanges) :
+    ClipContextBase(rDoc), mbKeepScenarioFlags(bKeepScenarioFlags), mbCopyChartRanges(bCopyChartRanges) {}
 
 CopyToClipContext::~CopyToClipContext() {}
 

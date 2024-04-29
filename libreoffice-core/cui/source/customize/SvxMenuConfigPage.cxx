@@ -20,6 +20,7 @@
 #include <sal/config.h>
 #include <sal/log.hxx>
 
+#include <dlgname.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/commandevent.hxx>
@@ -33,8 +34,6 @@
 #include <dialmgr.hxx>
 
 #include <comphelper/processfactory.hxx>
-
-#include <dlgname.hxx>
 
 SvxMenuConfigPage::SvxMenuConfigPage(weld::Container* pPage, weld::DialogController* pController,
                                      const SfxItemSet& rSet, bool bIsMenuBar)
@@ -275,7 +274,7 @@ void SvxMenuConfigPage::SelectElement()
     UpdateButtonStates();
 }
 
-IMPL_LINK(SvxMenuConfigPage, GearHdl, const OString&, rIdent, void)
+IMPL_LINK(SvxMenuConfigPage, GearHdl, const OUString&, rIdent, void)
 {
     if (rIdent == "menu_gear_add")
     {
@@ -371,7 +370,7 @@ IMPL_LINK_NOARG(SvxMenuConfigPage, RemoveCommandHdl, weld::Button&, void)
     }
 }
 
-IMPL_LINK(SvxMenuConfigPage, InsertHdl, const OString&, rIdent, void)
+IMPL_LINK(SvxMenuConfigPage, InsertHdl, const OUString&, rIdent, void)
 {
     weld::TreeView& rTreeView = m_xContentsListBox->get_widget();
     if (rIdent == "insertseparator")
@@ -423,7 +422,7 @@ IMPL_LINK(SvxMenuConfigPage, InsertHdl, const OString&, rIdent, void)
     }
 }
 
-IMPL_LINK(SvxMenuConfigPage, ModifyItemHdl, const OString&, rIdent, void)
+IMPL_LINK(SvxMenuConfigPage, ModifyItemHdl, const OUString&, rIdent, void)
 {
     if (rIdent == "renameItem")
     {
@@ -541,7 +540,7 @@ IMPL_LINK(SvxMenuConfigPage, ContentContextMenuHdl, const CommandEvent&, rCEvt, 
     xContextMenu->set_visible("changeIcon", false);
     xContextMenu->set_visible("resetIcon", false);
     xContextMenu->set_visible("restoreDefault", false);
-    OString sCommand(xContextMenu->popup_at_rect(
+    OUString sCommand(xContextMenu->popup_at_rect(
         &rTreeView, tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1, 1))));
 
     if (sCommand == "remove")
@@ -580,7 +579,7 @@ IMPL_LINK(SvxMenuConfigPage, FunctionContextMenuHdl, const CommandEvent&, rCEvt,
     xContextMenu->set_visible("changeIcon", false);
     xContextMenu->set_visible("resetIcon", false);
     xContextMenu->set_visible("restoreDefault", false);
-    OString sCommand(xContextMenu->popup_at_rect(
+    OUString sCommand(xContextMenu->popup_at_rect(
         &rTreeView, tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1, 1))));
 
     if (sCommand == "add")

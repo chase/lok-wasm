@@ -181,7 +181,7 @@ Reference< XAccessible > SAL_CALL SvxGraphCtrlAccessibleContext::getAccessibleAt
 
     if(mpView && mpView->GetSdrPageView())
     {
-        pObj = SdrObjListPrimitiveHit(*mpPage, aPnt, 1, *mpView->GetSdrPageView(), nullptr, false);
+        pObj = SdrObjListPrimitiveHit(*mpPage, aPnt, {1, 1}, *mpView->GetSdrPageView(), nullptr, false);
     }
 
     if( pObj )
@@ -302,10 +302,10 @@ void SvxGraphCtrlAccessibleContext::CommitChange (
     const uno::Any& rOldValue)
 {
     AccessibleEventObject aEvent (
-        static_cast<uno::XWeak*>(this),
+        getXWeak(),
         nEventId,
         rNewValue,
-        rOldValue);
+        rOldValue, -1);
 
     if (mnClientId)
         comphelper::AccessibleEventNotifier::addEvent( mnClientId, aEvent );
@@ -712,7 +712,7 @@ void SvxGraphCtrlAccessibleContext::Notify( SfxBroadcaster& /*rBC*/, const SfxHi
                         rtl::Reference<AccessibleShape> pShape((*iter).second);
 
                         if( pShape.is() )
-                            pShape->CommitChange( AccessibleEventId::VISIBLE_DATA_CHANGED, uno::Any(), uno::Any() );
+                            pShape->CommitChange( AccessibleEventId::VISIBLE_DATA_CHANGED, uno::Any(), uno::Any(), -1 );
                     }
                 }
                 break;

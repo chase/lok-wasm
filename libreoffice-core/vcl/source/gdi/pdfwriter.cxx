@@ -82,7 +82,7 @@ void PDFWriter::DrawTextArray(
                               const Point& rStartPt,
                               const OUString& rStr,
                               KernArraySpan pDXAry,
-                              o3tl::span<const sal_Bool> pKashidaAry,
+                              std::span<const sal_Bool> pKashidaAry,
                               sal_Int32 nIndex,
                               sal_Int32 nLen )
 {
@@ -91,7 +91,7 @@ void PDFWriter::DrawTextArray(
 
 void PDFWriter::DrawStretchText(
                                 const Point& rStartPt,
-                                sal_uLong nWidth,
+                                sal_Int32 nWidth,
                                 const OUString& rStr,
                                 sal_Int32 nIndex,
                                 sal_Int32 nLen )
@@ -132,7 +132,7 @@ void PDFWriter::DrawRect( const tools::Rectangle& rRect )
     xImplementation->drawRectangle( rRect );
 }
 
-void PDFWriter::DrawRect( const tools::Rectangle& rRect, sal_uLong nHorzRound, sal_uLong nVertRound )
+void PDFWriter::DrawRect( const tools::Rectangle& rRect, sal_uInt32 nHorzRound, sal_uInt32 nVertRound )
 {
     xImplementation->drawRectangle( rRect, nHorzRound, nVertRound );
 }
@@ -335,9 +335,9 @@ sal_Int32 PDFWriter::CreateLink(const tools::Rectangle& rRect, sal_Int32 nPageNr
     return xImplementation->createLink(rRect, nPageNr, rAltText);
 }
 
-sal_Int32 PDFWriter::CreateScreen(const tools::Rectangle& rRect, sal_Int32 nPageNr, OUString const& rAltText)
+sal_Int32 PDFWriter::CreateScreen(const tools::Rectangle& rRect, sal_Int32 nPageNr, OUString const& rAltText, OUString const& rMimeType)
 {
-    return xImplementation->createScreen(rRect, nPageNr, rAltText);
+    return xImplementation->createScreen(rRect, nPageNr, rAltText, rMimeType);
 }
 
 sal_Int32 PDFWriter::RegisterDestReference( sal_Int32 nDestId, const tools::Rectangle& rRect, sal_Int32 nPageNr, DestAreaType eType )
@@ -389,9 +389,20 @@ void PDFWriter::CreateNote( const tools::Rectangle& rRect, const PDFNote& rNote,
     xImplementation->createNote( rRect, rNote, nPageNr );
 }
 
-sal_Int32 PDFWriter::BeginStructureElement( PDFWriter::StructElement eType, std::u16string_view rAlias )
+sal_Int32 PDFWriter::EnsureStructureElement()
 {
-    return xImplementation->beginStructureElement( eType, rAlias );
+    return xImplementation->ensureStructureElement();
+}
+
+void PDFWriter::InitStructureElement(sal_Int32 const id,
+        PDFWriter::StructElement const eType, std::u16string_view const rAlias)
+{
+    return xImplementation->initStructureElement(id, eType, rAlias);
+}
+
+void PDFWriter::BeginStructureElement(sal_Int32 const id)
+{
+    return xImplementation->beginStructureElement(id);
 }
 
 void PDFWriter::EndStructureElement()
@@ -448,9 +459,9 @@ PDFOutputStream::~PDFOutputStream()
 {
 }
 
-void PDFWriter::AddStream( const OUString& rMimeType, PDFOutputStream* pStream )
+void PDFWriter::AddAttachedFile(OUString const& rFileName, OUString const& rMimeType, OUString const& rDescription, std::unique_ptr<PDFOutputStream> pStream)
 {
-    xImplementation->addStream( rMimeType, pStream );
+    xImplementation->addDocumentAttachedFile(rFileName, rMimeType, rDescription, std::move(pStream));
 }
 
 std::set< PDFWriter::ErrorCode > const & PDFWriter::GetErrors() const

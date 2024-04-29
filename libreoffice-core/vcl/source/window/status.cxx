@@ -41,6 +41,8 @@
 #define STATUSBAR_PRGS_COUNT    100
 #define STATUSBAR_PRGS_MIN      5
 
+#define STATUSBAR_MIN_HEIGHT    16 // icons height, tdf#153344
+
 class StatusBar::ImplData
 {
 public:
@@ -65,7 +67,7 @@ struct ImplStatusItem
     OUString                            maText;
     OUString                            maHelpText;
     OUString                            maQuickHelpText;
-    OString                             maHelpId;
+    OUString                            maHelpId;
     void*                               mpUserData;
     bool                                mbVisible;
     OUString                            maAccessibleName;
@@ -472,9 +474,9 @@ void StatusBar::ImplDrawItem(vcl::RenderContext& rRenderContext, bool bOffScreen
 void DrawProgress(vcl::Window* pWindow, vcl::RenderContext& rRenderContext, const Point& rPos,
                   tools::Long nOffset, tools::Long nPrgsWidth, tools::Long nPrgsHeight,
                   sal_uInt16 nPercent1, sal_uInt16 nPercent2, sal_uInt16 nPercentCount,
-                  const tools::Rectangle& rFramePosSize)
+                  const tools::Rectangle& rFramePosSize, ControlType eControlType)
 {
-    if (rRenderContext.IsNativeControlSupported(ControlType::Progress, ControlPart::Entire))
+    if (rRenderContext.IsNativeControlSupported(eControlType, ControlPart::Entire))
     {
         bool bNeedErase = ImplGetSVData()->maNWFData.mbProgressNeedsErase;
 
@@ -500,8 +502,8 @@ void DrawProgress(vcl::Window* pWindow, vcl::RenderContext& rRenderContext, cons
             else
             {
                 // restore transparent background
-                Point aTL(pWindow->OutputToAbsoluteScreenPixel(rFramePosSize.TopLeft()));
-                aTL = pEraseWindow->AbsoluteScreenToOutputPixel(aTL);
+                AbsoluteScreenPixelPoint aTL1(pWindow->OutputToAbsoluteScreenPixel(rFramePosSize.TopLeft()));
+                Point aTL = pEraseWindow->AbsoluteScreenToOutputPixel(aTL1);
                 tools::Rectangle aRect(aTL, rFramePosSize.GetSize());
                 pEraseWindow->Invalidate(aRect, InvalidateFlags::NoChildren     |
                                                 InvalidateFlags::NoClipChildren |
@@ -512,12 +514,24 @@ void DrawProgress(vcl::Window* pWindow, vcl::RenderContext& rRenderContext, cons
             rRenderContext.IntersectClipRegion(rFramePosSize);
         }
 
-        bool bNativeOK = rRenderContext.DrawNativeControl(ControlType::Progress, ControlPart::Entire, aControlRegion,
+        bool bNativeOK = rRenderContext.DrawNativeControl(eControlType, ControlPart::Entire, aControlRegion,
                                                           ControlState::ENABLED, aValue, OUString());
         if (bNeedErase)
             rRenderContext.Pop();
         if (bNativeOK)
             return;
+    }
+
+    if (eControlType == ControlType::LevelBar)
+    {
+        if (nPercent2 < 2500)
+            rRenderContext.SetFillColor({ 0xFF0000 });
+        else if (nPercent2 < 5000)
+            rRenderContext.SetFillColor({ 0xFFFF00 });
+        else if (nPercent2 < 7500)
+            rRenderContext.SetFillColor({ 0x0000FF });
+        else
+            rRenderContext.SetFillColor({ 0x00FF00 });
     }
 
     // precompute values
@@ -568,7 +582,7 @@ void DrawProgress(vcl::Window* pWindow, vcl::RenderContext& rRenderContext, cons
         while (nPerc1 < nPerc2);
 
         // if greater than 100%, set rectangle to blink
-        if (nPercent2 > 10000)
+        if (nPercent2 > 10000 && eControlType == ControlType::Progress)
         {
             // define on/off status
             if (((nPercent2 / nPercentCount) & 0x01) == (nPercentCount & 0x01))
@@ -601,7 +615,7 @@ void StatusBar::ImplDrawProgress(vcl::RenderContext& rRenderContext, sal_uInt16 
         nPrgsHeight = maPrgsFrameRect.GetHeight();
     }
     DrawProgress(this, rRenderContext, aPos, mnPrgsSize / 2, mnPrgsSize, nPrgsHeight,
-                 0, nPercent2 * 100, mnPercentCount, maPrgsFrameRect);
+                 0, nPercent2 * 100, mnPercentCount, maPrgsFrameRect, ControlType::Progress);
 }
 
 void StatusBar::ImplCalcProgressRect()
@@ -1292,7 +1306,7 @@ const OUString& StatusBar::GetHelpText( sal_uInt16 nItemId ) const
             if ( !pItem->maCommand.isEmpty() )
                 pItem->maHelpText = pHelp->GetHelpText( pItem->maCommand, this );
             if ( pItem->maHelpText.isEmpty() && !pItem->maHelpId.isEmpty() )
-                pItem->maHelpText = pHelp->GetHelpText( OStringToOUString( pItem->maHelpId, RTL_TEXTENCODING_UTF8 ), this );
+                pItem->maHelpText = pHelp->GetHelpText( pItem->maHelpId, this );
         }
     }
 
@@ -1317,7 +1331,7 @@ const OUString& StatusBar::GetQuickHelpText( sal_uInt16 nItemId ) const
     return pItem->maQuickHelpText;
 }
 
-void StatusBar::SetHelpId( sal_uInt16 nItemId, const OString& rHelpId )
+void StatusBar::SetHelpId( sal_uInt16 nItemId, const OUString& rHelpId )
 {
     sal_uInt16 nPos = GetItemPos( nItemId );
 
@@ -1428,7 +1442,7 @@ Size StatusBar::CalcWindowSizePixel() const
         i++;
     }
 
-    tools::Long nMinHeight = GetTextHeight();
+    tools::Long nMinHeight = std::max( static_cast<int>(GetTextHeight()), STATUSBAR_MIN_HEIGHT);
     const tools::Long nBarTextOffset = STATUSBAR_OFFSET_TEXTY*2;
     tools::Long nProgressHeight = nMinHeight + nBarTextOffset;
 

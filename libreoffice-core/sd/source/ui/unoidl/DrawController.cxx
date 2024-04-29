@@ -25,6 +25,8 @@
 #include <ViewShellManager.hxx>
 #include <FormShellManager.hxx>
 #include <Window.hxx>
+#include <framework/ConfigurationController.hxx>
+#include <framework/ModuleController.hxx>
 
 #include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
@@ -33,8 +35,6 @@
 #include <cppuhelper/typeprovider.hxx>
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
-#include <com/sun/star/drawing/framework/ConfigurationController.hpp>
-#include <com/sun/star/drawing/framework/ModuleController.hpp>
 #include <com/sun/star/drawing/XDrawSubController.hpp>
 #include <com/sun/star/drawing/XLayer.hpp>
 
@@ -49,7 +49,6 @@
 
 #include <memory>
 
-using namespace ::std;
 using namespace ::cppu;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -200,7 +199,7 @@ OUString SAL_CALL DrawController::getImplementationName(  )
     return "DrawController" ;
 }
 
-constexpr OUStringLiteral ssServiceName = u"com.sun.star.drawing.DrawingDocumentDrawView";
+constexpr OUString ssServiceName = u"com.sun.star.drawing.DrawingDocumentDrawView"_ustr;
 
 sal_Bool SAL_CALL DrawController::supportsService (const OUString& rsServiceName)
 {
@@ -551,19 +550,6 @@ Reference<XModuleController> SAL_CALL
     return mxModuleController;
 }
 
-//===== XUnoTunnel ============================================================
-
-const Sequence<sal_Int8>& DrawController::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theDrawControllerUnoTunnelId;
-    return theDrawControllerUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL DrawController::getSomething (const Sequence<sal_Int8>& rId)
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
 //===== Properties ============================================================
 
 void DrawController::FillPropertyTable (
@@ -771,15 +757,8 @@ void DrawController::ProvideFrameworkControllers()
     SolarMutexGuard aGuard;
     try
     {
-        Reference<XController> xController (this);
-        const Reference<XComponentContext> xContext (
-            ::comphelper::getProcessComponentContext() );
-        mxConfigurationController = ConfigurationController::create(
-            xContext,
-            xController);
-        mxModuleController = ModuleController::create(
-            xContext,
-            xController);
+        mxConfigurationController = new sd::framework::ConfigurationController(this);
+        mxModuleController = new sd::framework::ModuleController(this);
     }
     catch (const RuntimeException&)
     {
@@ -790,20 +769,18 @@ void DrawController::ProvideFrameworkControllers()
 
 void DrawController::DisposeFrameworkControllers()
 {
-    Reference<XComponent> xComponent (mxModuleController, UNO_QUERY);
-    if (xComponent.is())
-        xComponent->dispose();
+    if (mxModuleController.is())
+        mxModuleController->dispose();
 
-    xComponent.set(mxConfigurationController, UNO_QUERY);
-    if (xComponent.is())
-        xComponent->dispose();
+    if (mxConfigurationController.is())
+        mxConfigurationController->dispose();
 }
 
 void DrawController::ThrowIfDisposed() const
 {
     if (rBHelper.bDisposed || rBHelper.bInDispose || mbDisposing)
     {
-        SAL_WARN("sd", "Calling disposed DrawController object. Throwing exception:");
+        SAL_WARN("sd", "Calling disposed DrawController object. Throwing exception.");
         throw lang::DisposedException (
             "DrawController object has already been disposed",
             const_cast<uno::XWeak*>(static_cast<const uno::XWeak*>(this)));

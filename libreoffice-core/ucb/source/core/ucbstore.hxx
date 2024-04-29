@@ -32,8 +32,8 @@
 #include <com/sun/star/beans/XPropertyAccess.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
-#include <comphelper/interfacecontainer3.hxx>
-#include <comphelper/multiinterfacecontainer3.hxx>
+#include <comphelper/interfacecontainer4.hxx>
+#include <comphelper/multiinterfacecontainer4.hxx>
 #include <comphelper/compbase.hxx>
 #include <rtl/ref.hxx>
 #include <unordered_map>
@@ -87,15 +87,15 @@ class PropertySetRegistry : public cppu::WeakImplHelper <
     css::uno::Reference< css::lang::XMultiServiceFactory > m_xConfigProvider;
     css::uno::Reference< css::uno::XInterface >           m_xRootReadAccess;
     css::uno::Reference< css::uno::XInterface >           m_xRootWriteAccess;
-    osl::Mutex                        m_aMutex;
+    std::mutex                        m_aMutex;
     bool                              m_bTriedToGetRootReadAccess;
     bool                              m_bTriedToGetRootWriteAccess;
 
 private:
     css::uno::Reference< css::lang::XMultiServiceFactory >
-    getConfigProvider();
+    getConfigProvider(std::unique_lock<std::mutex>& l);
 
-    void add   ( PersistentPropertySet* pSet );
+    void add   ( std::unique_lock<std::mutex>& rCreatorGuard, PersistentPropertySet* pSet );
     void remove( PersistentPropertySet* pSet );
 
     void renamePropertySet( const OUString& rOldKey,
@@ -138,11 +138,16 @@ public:
     getRootConfigReadAccess();
     css::uno::Reference< css::uno::XInterface >
     getConfigWriteAccess( const OUString& rPath );
+private:
+    css::uno::Reference< css::uno::XInterface >
+    getRootConfigReadAccessImpl(std::unique_lock<std::mutex>& l);
+    css::uno::Reference< css::uno::XInterface >
+    getConfigWriteAccessImpl( std::unique_lock<std::mutex>& l, const OUString& rPath );
 };
 
 
 class PropertySetInfo_Impl;
-typedef comphelper::OMultiTypeInterfaceContainerHelperVar3<css::beans::XPropertyChangeListener, OUString> PropertyListeners_Impl;
+typedef comphelper::OMultiTypeInterfaceContainerHelperVar4<OUString, css::beans::XPropertyChangeListener> PropertyListeners_Impl;
 
 class PersistentPropertySet : public cppu::WeakImplHelper <
     css::lang::XServiceInfo,
@@ -157,19 +162,22 @@ class PersistentPropertySet : public cppu::WeakImplHelper <
     rtl::Reference<PropertySetInfo_Impl> m_pInfo;
     OUString                    m_aKey;
     OUString                    m_aFullKey;
-    osl::Mutex                  m_aMutex;
-    std::unique_ptr<comphelper::OInterfaceContainerHelper3<css::lang::XEventListener>>  m_pDisposeEventListeners;
-    std::unique_ptr<comphelper::OInterfaceContainerHelper3<css::beans::XPropertySetInfoChangeListener>>  m_pPropSetChangeListeners;
-    std::unique_ptr<PropertyListeners_Impl>      m_pPropertyChangeListeners;
+    mutable std::mutex          m_aMutex;
+    comphelper::OInterfaceContainerHelper4<css::lang::XEventListener>  m_aDisposeEventListeners;
+    comphelper::OInterfaceContainerHelper4<css::beans::XPropertySetInfoChangeListener>  m_aPropSetChangeListeners;
+    PropertyListeners_Impl      m_aPropertyChangeListeners;
 
 private:
     void notifyPropertyChangeEvent(
+        std::unique_lock<std::mutex>& rGuard,
         const css::beans::PropertyChangeEvent& rEvent ) const;
     void notifyPropertySetInfoChange(
+        std::unique_lock<std::mutex>& rGuard,
         const css::beans::PropertySetInfoChangeEvent& evt ) const;
 
 public:
     PersistentPropertySet(
+        std::unique_lock<std::mutex>& rCreatorGuard,
         PropertySetRegistry& rCreator,
         OUString aKey );
     virtual ~PersistentPropertySet() override;
@@ -242,7 +250,9 @@ public:
 
     // Non-interface methods.
     PropertySetRegistry& getPropertySetRegistry();
-    const OUString& getFullKey();
+    OUString getFullKey();
+private:
+    const OUString& getFullKeyImpl(std::unique_lock<std::mutex>&);
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -46,8 +46,8 @@ else
 	    UserInstallation=$(call gb_Helper_make_url,$(call gb_CustomTarget_get_workdir,$(1))/user) \
 	$(foreach my_dir,$(2), \
 	    && (cd $(INSTDIR)/$(SDKDIRNAME)/examples/$(my_dir) \
-		&& printf 'yes\n' | LC_ALL=C make -j1 \
-			CC="$(CXX)" LINK="$(CXX)" LIB="$(CXX)" \
+		&& printf 'yes\n' | LANGUAGE= LC_ALL=C make -j1 \
+			CC="$(CXX) $(gb_CXX03FLAGS)" LINK="$(CXX)" LIB="$(CXX)" \
 		    $(if $(MACOSX_SHELL_HACK), SHELL="$$$$ODK_BUILD_SHELL", ))) \
 	$(if $(MACOSX_SHELL_HACK),&& rm -f "$$$$ODK_BUILD_SHELL")) \
 	    >$(call gb_CustomTarget_get_workdir,$(1))/log 2>&1 \

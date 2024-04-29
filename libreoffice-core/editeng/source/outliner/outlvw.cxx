@@ -189,6 +189,13 @@ bool OutlinerView::PostKeyEvent( const KeyEvent& rKEvt, vcl::Window const * pFra
 
                     if( !aKeyCode.IsShift() )
                     {
+                        // Don't let insert empty paragraph with numbering. Instead end numbering.
+                        if (pPara->GetDepth() > -1 &&
+                            pOwner->pEditEngine->GetTextLen( aSel.nEndPara ) == 0)
+                        {
+                            ToggleBullets();
+                            return true;
+                        }
                         // ImpGetCursor again???
                         if( !bSelection &&
                                 aSel.nEndPos == pOwner->pEditEngine->GetTextLen( aSel.nEndPara ) )
@@ -713,6 +720,18 @@ void OutlinerView::CreateSelectionList (std::vector<Paragraph*> &aSelList)
         Paragraph* pPara = pOwner->pParaList->GetParagraph( nPara );
         aSelList.push_back(pPara);
     }
+}
+
+void OutlinerView::SetStyleSheet(const OUString& rStyleName)
+{
+    ParaRange aParas = ImpGetSelectedParagraphs(false);
+
+    auto pStyle = pOwner->GetStyleSheetPool()->Find(rStyleName, SfxStyleFamily::Para);
+    if (!pStyle)
+        return;
+
+    for (sal_Int32 nPara = aParas.nStartPara; nPara <= aParas.nEndPara; nPara++)
+        pOwner->SetStyleSheet(nPara, static_cast<SfxStyleSheet*>(pStyle));
 }
 
 const SfxStyleSheet* OutlinerView::GetStyleSheet() const
@@ -1328,14 +1347,9 @@ const SvxFieldItem* OutlinerView::GetFieldUnderMousePointer() const
     return pEditView->GetFieldUnderMousePointer();
 }
 
-const SvxFieldItem* OutlinerView::GetFieldAtSelection() const
+const SvxFieldItem* OutlinerView::GetFieldAtSelection(bool bAlsoCheckBeforeCursor) const
 {
-    return pEditView->GetFieldAtSelection();
-}
-
-const SvxFieldData* OutlinerView::GetFieldAtCursor() const
-{
-    return pEditView->GetFieldAtCursor();
+    return pEditView->GetFieldAtSelection(bAlsoCheckBeforeCursor);
 }
 
 void OutlinerView::SelectFieldAtCursor()

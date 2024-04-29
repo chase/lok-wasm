@@ -117,13 +117,9 @@ OUString SwBasicEscherEx::GetBasePath() const
     SfxMedium * pMedium = mrWrt.GetWriter().GetMedia();
     if (pMedium)
     {
-        const SfxItemSet* pPItemSet = pMedium->GetItemSet();
-        if( pPItemSet )
-        {
-            const SfxStringItem* pPItem = pPItemSet->GetItem( SID_FILE_NAME );
-            if ( pPItem )
-                sDocUrl = pPItem->GetValue();
-        }
+        const SfxStringItem* pPItem = pMedium->GetItemSet().GetItem( SID_FILE_NAME );
+        if ( pPItem )
+            sDocUrl = pPItem->GetValue();
     }
 
     return sDocUrl.copy(0, sDocUrl.lastIndexOf('/') + 1);
@@ -953,7 +949,7 @@ sal_uInt32 WW8Export::GetSdrOrdNum( const SwFrameFormat& rFormat ) const
         // no Layout for this format, then recalc the ordnum
         SwFrameFormat* pFormat = const_cast<SwFrameFormat*>(&rFormat);
         nOrdNum = std::distance(m_rDoc.GetSpzFrameFormats()->begin(),
-                                m_rDoc.GetSpzFrameFormats()->find( pFormat ) );
+                                m_rDoc.GetSpzFrameFormats()->find(static_cast<sw::SpzFrameFormat*>(pFormat)));
 
         const SwDrawModel* pModel = m_rDoc.getIDocumentDrawModelAccess().GetDrawModel();
         if( pModel )
@@ -1488,7 +1484,7 @@ void SwEscherEx::WritePictures()
     if( SvStream* pPicStrm = static_cast< SwEscherExGlobal& >( *mxGlobal ).GetPictureStream() )
     {
         // set the blip - entries to the correct stream pos
-        sal_Int32 nEndPos = mrWrt.Strm().Tell();
+        sal_uInt64 nEndPos = mrWrt.Strm().Tell();
         mxGlobal->SetNewBlipStreamOffset( nEndPos );
 
         pPicStrm->Seek( 0 );
@@ -1853,8 +1849,9 @@ void SwBasicEscherEx::WriteBrushAttr(const SvxBrushItem &rBrush,
         nOpaque = 255 - pGraphicObject->GetAttr().GetAlpha();
         if (0 != nOpaque)
             bSetOpacity = true;
-
-        rPropOpt.AddOpt( ESCHER_Prop_fillType, ESCHER_FillPicture );
+        const ESCHER_FillStyle eFillType
+            = rBrush.GetGraphicPos() == GPOS_TILED ? ESCHER_FillTexture : ESCHER_FillPicture;
+        rPropOpt.AddOpt(ESCHER_Prop_fillType, eFillType);
         rPropOpt.AddOpt( ESCHER_Prop_fNoFillHitTest, 0x140014 );
         rPropOpt.AddOpt( ESCHER_Prop_fillBackColor, 0 );
     }
@@ -2166,7 +2163,7 @@ void SwBasicEscherEx::WritePictures()
     if( SvStream* pPicStrm = static_cast< SwEscherExGlobal& >( *mxGlobal ).GetPictureStream() )
     {
         // set the blip - entries to the correct stream pos
-        sal_Int32 nEndPos = pPicStrm->Tell();
+        sal_uInt64 nEndPos = pPicStrm->Tell();
         mxGlobal->WriteBlibStoreEntry(*mpEscherStrm, 1, nEndPos);
 
         pPicStrm->Seek(0);

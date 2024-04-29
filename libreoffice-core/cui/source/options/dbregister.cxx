@@ -131,6 +131,16 @@ std::unique_ptr<SfxTabPage> DbRegistrationOptionsPage::Create( weld::Container* 
     return std::make_unique<DbRegistrationOptionsPage>(pPage, pController, *rAttrSet);
 }
 
+OUString DbRegistrationOptionsPage::GetAllStrings()
+{
+    OUString sAllStrings;
+
+    if (const auto& pString = m_xBuilder->weld_label("label1"))
+        sAllStrings += pString->get_label() + " ";
+
+    return sAllStrings.replaceAll("_", "");
+}
+
 bool DbRegistrationOptionsPage::FillItemSet( SfxItemSet* rCoreSet )
 {
     // the settings for the single drivers
@@ -280,7 +290,10 @@ void DbRegistrationOptionsPage::openLinkDialog(const OUString& sOldName, const O
     ODocumentLinkDialog aDlg(GetFrameWeld(), nEntry == -1);
 
     aDlg.setLink(sOldName, sOldLocation);
-    aDlg.setNameValidator(LINK( this, DbRegistrationOptionsPage, NameValidator ) );
+
+    // tdf#149195: control the name (ie check duplicate) only if new entry case
+    if (nEntry == -1)
+        aDlg.setNameValidator(LINK( this, DbRegistrationOptionsPage, NameValidator ) );
 
     if (aDlg.run() != RET_OK)
         return;

@@ -22,7 +22,6 @@
 #include <rtl/ustring.hxx>
 #include <svl/itempool.hxx>
 #include "scdllapi.h"
-#include <mutex>
 
 class ScStyleSheet;
 class ScDocument;
@@ -33,9 +32,6 @@ class SC_DLLPUBLIC ScDocumentPool final : public SfxItemPool
     sal_uInt64 mnCurrentMaxKey;
 
 public:
-    // used when doing loading in parallel to prevent concurrent mutation of the pool
-    std::mutex maPoolMutex;
-
             ScDocumentPool();
 private:
             virtual ~ScDocumentPool() override;
@@ -51,7 +47,8 @@ public:
                                   OUString&           rText,
                                   const IntlWrapper& rIntl ) const override;
 private:
-    virtual const SfxPoolItem&  PutImpl( const SfxPoolItem&, sal_uInt16 nWhich = 0, bool bPassingOwnership = false ) override;
+    virtual void newItem_Callback(const SfxPoolItem& rItem) const override;
+    virtual bool newItem_UseDirect(const SfxPoolItem& rItem) const override;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -58,7 +58,7 @@ public:
     virtual OUString SAL_CALL getPresentation( const css::util::URL& aURL, sal_Bool bWithPassword ) override;
 };
 
-void lcl_ParserHelper(INetURLObject& _rParser, css::util::URL& _rURL,bool _bUseIntern)
+void lcl_ParserHelper(INetURLObject& _rParser, css::util::URL& _rURL)
 {
     // Get all information about this URL.
     _rURL.Protocol  = INetURLObject::GetScheme( _rParser.GetProtocol() );
@@ -76,8 +76,8 @@ void lcl_ParserHelper(INetURLObject& _rParser, css::util::URL& _rURL,bool _bUseI
         OUStringBuffer aPath(128);
         for ( sal_Int32 nIndex = 0; nIndex < nCount; nIndex++ )
         {
-            aPath.append( '/');
-            aPath.append( _rParser.getName( nIndex, false, INetURLObject::DecodeMechanism::NONE ));
+            aPath.append( "/"
+                + _rParser.getName( nIndex, false, INetURLObject::DecodeMechanism::NONE ));
         }
 
         if ( nCount > 0 )
@@ -98,8 +98,6 @@ void lcl_ParserHelper(INetURLObject& _rParser, css::util::URL& _rURL,bool _bUseI
     // INetURLObject supports only an intelligent method of parsing URL's. So write
     // back Complete to have a valid encoded URL in all cases!
     _rURL.Complete  = _rParser.GetMainURL( INetURLObject::DecodeMechanism::NONE           );
-    if ( _bUseIntern )
-        _rURL.Complete   = _rURL.Complete.intern();
 
     _rParser.SetMark( u"" );
     _rParser.SetParam( u"" );
@@ -136,7 +134,7 @@ sal_Bool SAL_CALL URLTransformer::parseStrict( css::util::URL& aURL )
         }
         else if ( !aParser.HasError() )
         {
-            lcl_ParserHelper(aParser,aURL,false);
+            lcl_ParserHelper(aParser,aURL);
             // Return "URL is parsed".
             return true;
         }
@@ -174,7 +172,7 @@ sal_Bool SAL_CALL URLTransformer::parseSmart( css::util::URL& aURL,
     bool bOk = aParser.SetSmartURL( aURL.Complete );
     if ( bOk )
     {
-        lcl_ParserHelper(aParser,aURL,true);
+        lcl_ParserHelper(aParser,aURL);
         // Return "URL is parsed".
         return true;
     }
@@ -227,8 +225,7 @@ sal_Bool SAL_CALL URLTransformer::assemble( css::util::URL& aURL )
                 aCompletePath.append( aURL.Name );
             else
             {
-                aCompletePath.append( '/' );
-                aCompletePath.append( aURL.Name );
+                aCompletePath.append( "/" + aURL.Name );
             }
         }
 

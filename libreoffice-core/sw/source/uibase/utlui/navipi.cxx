@@ -195,7 +195,7 @@ void SwNavigationPI::UsePage()
 }
 
 // Select handler of the toolboxes
-IMPL_LINK(SwNavigationPI, ToolBoxSelectHdl, const OString&, rCommand, void)
+IMPL_LINK(SwNavigationPI, ToolBoxSelectHdl, const OUString&, rCommand, void)
 {
     SwView *pView = GetCreateView();
     if (!pView)
@@ -284,7 +284,7 @@ IMPL_LINK(SwNavigationPI, ToolBoxSelectHdl, const OString&, rCommand, void)
     }
     else if (rCommand == "reminder")
     {
-        rSh.GetView().GetViewFrame()->GetDispatcher()->Execute(FN_SET_REMINDER, SfxCallMode::ASYNCHRON);
+        rSh.GetView().GetViewFrame().GetDispatcher()->Execute(FN_SET_REMINDER, SfxCallMode::ASYNCHRON);
     }
     else if (rCommand == "chapterdown" ||
              rCommand == "movedown" ||
@@ -334,7 +334,7 @@ IMPL_LINK(SwNavigationPI, ToolBoxSelectHdl, const OString&, rCommand, void)
 }
 
 // Click handler of the toolboxes
-IMPL_LINK(SwNavigationPI, ToolBoxClickHdl, const OString&, rCommand, void)
+IMPL_LINK(SwNavigationPI, ToolBoxClickHdl, const OUString&, rCommand, void)
 {
     if (!m_xGlobalToolBox->get_menu_item_active(rCommand))
         return;
@@ -345,7 +345,7 @@ IMPL_LINK(SwNavigationPI, ToolBoxClickHdl, const OString&, rCommand, void)
         m_xGlobalTree->TbxMenuHdl(rCommand, *m_xInsertMenu);
 }
 
-IMPL_LINK(SwNavigationPI, ToolBox6DropdownClickHdl, const OString&, rCommand, void)
+IMPL_LINK(SwNavigationPI, ToolBox6DropdownClickHdl, const OUString&, rCommand, void)
 {
     if (!m_xContent6ToolBox->get_menu_item_active(rCommand))
         return;
@@ -367,7 +367,7 @@ IMPL_LINK(SwNavigationPI, ToolBox6DropdownClickHdl, const OString&, rCommand, vo
     }
 }
 
-IMPL_LINK(SwNavigationPI, DropModeMenuSelectHdl, const OString&, rIdent, void)
+IMPL_LINK(SwNavigationPI, DropModeMenuSelectHdl, const OUString&, rIdent, void)
 {
     if (rIdent == "hyperlink")
         SetRegionDropMode(RegionMode::NONE);
@@ -377,18 +377,18 @@ IMPL_LINK(SwNavigationPI, DropModeMenuSelectHdl, const OString&, rIdent, void)
         SetRegionDropMode(RegionMode::EMBEDDED);
 }
 
-IMPL_LINK(SwNavigationPI, GlobalMenuSelectHdl, const OString&, rIdent, void)
+IMPL_LINK(SwNavigationPI, GlobalMenuSelectHdl, const OUString&, rIdent, void)
 {
     m_xGlobalTree->ExecuteContextMenuAction(rIdent);
 }
 
-IMPL_LINK(SwNavigationPI, ToolBox5DropdownClickHdl, const OString&, rCommand, void)
+IMPL_LINK(SwNavigationPI, ToolBox5DropdownClickHdl, const OUString&, rCommand, void)
 {
     if (!m_xContent5ToolBox->get_menu_item_active(rCommand))
         return;
 
     if (rCommand == "headings")
-        m_xHeadingsMenu->set_active(OString::number(m_xContentTree->GetOutlineLevel()), true);
+        m_xHeadingsMenu->set_active(OUString::number(m_xContentTree->GetOutlineLevel()), true);
 }
 
 // Action-Handler Edit:
@@ -406,11 +406,20 @@ bool SwNavigationPI::EditAction()
     if (pView->GetEditWin().HasFocus())
         return false;
 
-    SwWrtShell &rSh = m_pCreateView->GetWrtShell();
-    sal_uInt16 nNewPage = m_xEdit->get_value();
+    if (m_xEdit->get_text().isEmpty())
+        return false;
+    sal_Int64 nNewPage = m_xEdit->get_text().toInt32();
+    SwWrtShell& rSh = m_pCreateView->GetWrtShell();
+    sal_Int64 max = rSh.GetPageCnt();
+    if (nNewPage <= 0)
+        nNewPage = 1;
+    else if (nNewPage > max)
+        nNewPage = max;
+    m_xEdit->set_value(nNewPage);
+    m_xEdit->set_position(-1);
 
     rSh.GotoPage(nNewPage, true);
-    m_pCreateView->GetViewFrame()->GetBindings().Invalidate(FN_STAT_PAGE);
+    m_pCreateView->GetViewFrame().GetBindings().Invalidate(FN_STAT_PAGE);
 
     return true;
 }
@@ -500,6 +509,25 @@ std::unique_ptr<PanelLayout> SwNavigationPI::Create(weld::Widget* pParent,
     if( pBindings == nullptr )
         throw css::lang::IllegalArgumentException("no SfxBindings given to SwNavigationPI::Create", nullptr, 0);
     return std::make_unique<SwNavigationPI>(pParent, rxFrame, pBindings, nullptr);
+}
+
+IMPL_LINK_NOARG(SwNavigationPI, PageModifiedHdl, weld::Entry&, void)
+{
+    SwView* pView = GetCreateView();
+    if (!pView)
+        return;
+    if (m_xEdit->get_text().isEmpty())
+        return;
+    sal_Int64 page_value = m_xEdit->get_text().toInt32();
+    SwWrtShell& rSh = m_pCreateView->GetWrtShell();
+    sal_Int64 max = rSh.GetPageCnt();
+    if (page_value <= 0)
+        m_xEdit->set_value(1);
+    else if (page_value > max)
+        m_xEdit->set_value(max);
+    else
+        m_xEdit->set_value(page_value);
+    m_xEdit->set_position(-1);
 }
 
 SwNavigationPI::SwNavigationPI(weld::Widget* pParent,
@@ -601,6 +629,7 @@ SwNavigationPI::SwNavigationPI(weld::Widget* pParent,
     m_xEdit->set_width_chars(3);
     m_xEdit->connect_activate(LINK(this, SwNavigationPI, EditActionHdl));
     m_xEdit->connect_value_changed(LINK(this, SwNavigationPI, PageEditModifyHdl));
+    m_xEdit->connect_changed(LINK(this, SwNavigationPI, PageModifiedHdl));
     m_xEdit->set_help_id("modules/swriter/ui/navigatorpanel/numericfield");
 
     if (!IsGlobalDoc())
@@ -644,7 +673,7 @@ SwNavigationPI::SwNavigationPI(weld::Widget* pParent,
     m_xGlobalTree->set_selection_mode(SelectionMode::Multiple);
 
 //  Handler
-    Link<const OString&, void> aLk = LINK(this, SwNavigationPI, ToolBoxSelectHdl);
+    Link<const OUString&, void> aLk = LINK(this, SwNavigationPI, ToolBoxSelectHdl);
     m_xContent1ToolBox->connect_clicked(aLk);
     m_xContent3ToolBox->connect_clicked(aLk);
     m_xContent5ToolBox->connect_clicked(aLk);
@@ -735,11 +764,11 @@ SwNavigationPI::~SwNavigationPI()
 
     EndListening(*SfxGetpApp());
 
-    if (m_pxObjectShell)
+    if (m_oObjectShell)
     {
-        if (m_pxObjectShell->Is())
-            (*m_pxObjectShell)->DoClose();
-        m_pxObjectShell.reset();
+        if (m_oObjectShell->Is())
+            (*m_oObjectShell)->DoClose();
+        m_oObjectShell.reset();
     }
 
     m_xDocListBox.reset();
@@ -868,7 +897,7 @@ void SwNavigationPI::Notify( SfxBroadcaster& rBrdc, const SfxHint& rHint )
     }
 }
 
-IMPL_LINK( SwNavigationPI, HeadingsMenuSelectHdl, const OString&, rMenuId, void )
+IMPL_LINK( SwNavigationPI, HeadingsMenuSelectHdl, const OUString&, rMenuId, void )
 {
     if (!rMenuId.isEmpty())
         m_xContentTree->SetOutlineLevel(rMenuId.toUInt32());
@@ -962,7 +991,7 @@ IMPL_LINK(SwNavigationPI, DoneLink, SfxPoolItem const *, pItem, void)
             m_pContentWrtShell = m_pContentView->GetWrtShellPtr();
         else
             m_pContentWrtShell = nullptr;
-        m_pxObjectShell.reset( new SfxObjectShellLock(pFrame->GetObjectShell()) );
+        m_oObjectShell.emplace( pFrame->GetObjectShell() );
         FillBox();
     }
 }
@@ -1039,18 +1068,18 @@ sal_Int8 SwNavigationPI::ExecuteDrop( const ExecuteDropEvent& rEvt )
         nRet = rEvt.mnAction;
         sFileName = comphelper::string::stripEnd(sFileName, 0);
         m_sContentFileName = sFileName;
-        if(m_pxObjectShell)
+        if(m_oObjectShell)
         {
             m_xContentTree->SetHiddenShell( nullptr );
-            (*m_pxObjectShell)->DoClose();
-            m_pxObjectShell.reset();
+            (*m_oObjectShell)->DoClose();
+            m_oObjectShell.reset();
         }
         SfxStringItem aFileItem(SID_FILE_NAME, sFileName );
         SfxStringItem aOptionsItem( SID_OPTIONS, "HRC" );
         SfxLinkItem aLink( SID_DONELINK,
                             LINK( this, SwNavigationPI, DoneLink ) );
         if (SwView* pView = GetActiveView())
-            pView->GetViewFrame()->GetDispatcher()->ExecuteList(
+            pView->GetViewFrame().GetDispatcher()->ExecuteList(
                         SID_OPENDOC, SfxCallMode::ASYNCHRON,
                         { &aFileItem, &aOptionsItem, &aLink });
     }
@@ -1183,7 +1212,7 @@ SwView*  SwNavigationPI::GetCreateView() const
         SwView* pView = SwModule::GetFirstView();
         while (pView)
         {
-            if(&pView->GetViewFrame()->GetBindings() == &m_rBindings)
+            if(&pView->GetViewFrame().GetBindings() == &m_rBindings)
             {
                 const_cast<SwNavigationPI*>(this)->m_pCreateView = pView;
                 const_cast<SwNavigationPI*>(this)->StartListening(*m_pCreateView);

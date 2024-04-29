@@ -55,7 +55,7 @@ static sal_Int32 makeEnumComboBox(weld::ComboBox& rNameBox,
 void FontFeaturesDialog::initialize()
 {
     ScopedVclPtrInstance<VirtualDevice> aVDev(*Application::GetDefaultDevice(),
-                                              DeviceFormat::DEFAULT, DeviceFormat::DEFAULT);
+                                              DeviceFormat::WITH_ALPHA);
     std::vector<vcl::font::Feature> rFontFeatures = getFontFeatureList(m_sFontName, *aVDev);
 
     std::unordered_set<sal_uInt32> aDoneFeatures;
@@ -248,9 +248,8 @@ OUString FontFeaturesDialog::createFontNameWithFeatures()
                 else
                     bFirst = false;
 
-                sNameSuffix.append(vcl::font::featureCodeAsString(rItem.m_aFeatureCode));
-                sNameSuffix.append("=");
-                sNameSuffix.append(OUString::number(nSelection));
+                sNameSuffix.append(vcl::font::featureCodeAsString(rItem.m_aFeatureCode) + "="
+                                   + OUString::number(nSelection));
             }
         }
     }

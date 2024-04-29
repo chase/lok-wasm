@@ -30,8 +30,13 @@
 class SwTextRefMark;
 class SwXReferenceMark;
 
-// ATT_REFMARK
-
+/// SfxPoolItem subclass that represents a reference mark (a position in the document with a name,
+/// which has a start and may or may not have an end).
+///
+/// This can be used as a character format in the hints array of a text node, it's owned by an
+/// SwTextRefMark.
+///
+/// It's Insert -> Cross-reference -> Cross-references -> set reference on the UI.
 class SAL_DLLPUBLIC_RTTI SwFormatRefMark final
     : public SfxPoolItem
     , public sw::BroadcastingModify
@@ -66,6 +71,7 @@ public:
     unotools::WeakReference<SwXReferenceMark> const& GetXRefMark() const
         { return m_wXReferenceMark; }
     void SetXRefMark(rtl::Reference<SwXReferenceMark> const& xMark);
+    void dumpAsXml(xmlTextWriterPtr pWriter) const override;
 };
 
 #endif

@@ -36,6 +36,7 @@
 
 #include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
+#include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/utils/canvastools.hxx>
 
 #include <sal/log.hxx>
@@ -44,10 +45,11 @@
 #include <com/sun/star/util/XUpdatable.hpp>
 #include <com/sun/star/awt/SystemPointer.hpp>
 #include <com/sun/star/presentation/XSlideShow.hpp>
-#include <com/sun/star/presentation/XSlideShowListener.hpp>
+#include <com/sun/star/presentation/XSlideShowNavigationListener.hpp>
 #include <com/sun/star/lang/NoSupportException.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
+#include <com/sun/star/drawing/LineCap.hpp>
 #include <com/sun/star/drawing/PointSequenceSequence.hpp>
 #include <com/sun/star/drawing/PointSequence.hpp>
 #include <com/sun/star/drawing/XLayer.hpp>
@@ -80,8 +82,10 @@
 #include "effectrewinder.hxx"
 #include <framerate.hxx>
 #include "pointersymbol.hxx"
+#include "slideoverlaybutton.hxx"
 
 #include <map>
+#include <thread>
 #include <utility>
 #include <vector>
 #include <algorithm>
@@ -436,6 +440,11 @@ private:
     std::shared_ptr<RehearseTimingsActivity> mpRehearseTimingsActivity;
     std::shared_ptr<WaitSymbol>           mpWaitSymbol;
 
+    // navigation buttons
+    std::shared_ptr<SlideOverlayButton>  mpNavigationPrev;
+    std::shared_ptr<SlideOverlayButton>  mpNavigationMenu;
+    std::shared_ptr<SlideOverlayButton>  mpNavigationNext;
+
     std::shared_ptr<PointerSymbol>        mpPointerSymbol;
 
     /// the current slide transition sound object:
@@ -669,7 +678,7 @@ void SlideShowImpl::disposing()
 
     // send all listeners a disposing() that we are going down:
     maListenerContainer.disposeAndClear(
-        lang::EventObject( static_cast<cppu::OWeakObject *>(this) ) );
+        lang::EventObject( getXWeak() ) );
 
     maViewContainer.dispose();
 
@@ -876,7 +885,7 @@ ActivitySharedPtr SlideShowImpl::createSlideTransition(
                 0.0,
                 0.0,
                 ShapeSharedPtr(),
-                basegfx::B2DVector( rEnteringSlide->getSlideSize() ) ),
+                basegfx::B2DVector(rEnteringSlide->getSlideSize().getWidth(), rEnteringSlide->getSlideSize().getHeight()) ),
             pTransition,
             true ));
 }
@@ -1271,8 +1280,6 @@ void SlideShowImpl::rewindEffectToPreviousSlide()
 sal_Bool SlideShowImpl::startShapeActivity(
     uno::Reference<drawing::XShape> const& /*xShape*/ )
 {
-    osl::MutexGuard const guard( m_aMutex );
-
     // precondition: must only be called from the main thread!
     DBG_TESTSOLARMUTEX();
 
@@ -1284,8 +1291,6 @@ sal_Bool SlideShowImpl::startShapeActivity(
 sal_Bool SlideShowImpl::stopShapeActivity(
     uno::Reference<drawing::XShape> const& /*xShape*/ )
 {
-    osl::MutexGuard const guard( m_aMutex );
-
     // precondition: must only be called from the main thread!
     DBG_TESTSOLARMUTEX();
 
@@ -1361,8 +1366,7 @@ sal_Bool SlideShowImpl::addView(
     {
         // set view transformation
         const basegfx::B2ISize slideSize = mpCurrentSlide->getSlideSize();
-        pView->setViewSize( basegfx::B2DSize( slideSize.getX(),
-                                              slideSize.getY() ) );
+        pView->setViewSize( basegfx::B2DSize(slideSize) );
     }
 
     // clear view area (since it's newly added,
@@ -1398,6 +1402,61 @@ sal_Bool SlideShowImpl::removeView(
     pView->_dispose();
 
     return true;
+}
+
+drawing::PointSequenceSequence
+lcl_createPointSequenceSequenceFromB2DPolygon(const basegfx::B2DPolygon& rPoly)
+{
+    drawing::PointSequenceSequence aRetval;
+    //Create only one sequence for one pen drawing.
+    aRetval.realloc(1);
+    // Retrieve the sequence of points from aRetval
+    drawing::PointSequence* pOuterSequence = aRetval.getArray();
+    // Create points in this sequence from rPoly
+    pOuterSequence->realloc(rPoly.count());
+    // Get these points which are in an array
+    awt::Point* pInnerSequence = pOuterSequence->getArray();
+    for( sal_uInt32 n = 0; n < rPoly.count(); n++ )
+    {
+        //Create a point from the polygon
+        *pInnerSequence++ = awt::Point(basegfx::fround(rPoly.getB2DPoint(n).getX()),
+                                       basegfx::fround(rPoly.getB2DPoint(n).getY()));
+    }
+    return aRetval;
+}
+
+void lcl_setPropertiesToShape(const drawing::PointSequenceSequence& rPoints,
+                              const cppcanvas::PolyPolygonSharedPtr pCanvasPolyPoly,
+                              uno::Reference< drawing::XShape >& rPolyShape)
+{
+    uno::Reference< beans::XPropertySet > aXPropSet(rPolyShape, uno::UNO_QUERY);
+    //Give the built PointSequenceSequence.
+    uno::Any aParam;
+    aParam <<= rPoints;
+    aXPropSet->setPropertyValue("PolyPolygon", aParam);
+
+    //LineStyle : SOLID by default
+    drawing::LineStyle eLS;
+    eLS = drawing::LineStyle_SOLID;
+    aXPropSet->setPropertyValue("LineStyle", uno::Any(eLS));
+
+    //LineCap : ROUND by default, same as in show mode
+    drawing::LineCap eLC;
+    eLC = drawing::LineCap_ROUND;
+    aXPropSet->setPropertyValue("LineCap", uno::Any(eLC));
+
+    //LineColor
+    sal_uInt32 nLineColor = 0;
+    if (pCanvasPolyPoly)
+        nLineColor = pCanvasPolyPoly->getRGBALineColor();
+    //Transform polygon color from RRGGBBAA to AARRGGBB
+    aXPropSet->setPropertyValue("LineColor", uno::Any(RGBAColor2UnoColor(nLineColor)));
+
+    //LineWidth
+    double  fLineWidth = 0;
+    if (pCanvasPolyPoly)
+        fLineWidth = pCanvasPolyPoly->getStrokeWidth();
+    aXPropSet->setPropertyValue("LineWidth", uno::Any(static_cast<sal_Int32>(fLineWidth)));
 }
 
 void SlideShowImpl::registerUserPaintPolygons( const uno::Reference< lang::XMultiServiceFactory >& xDocFactory )
@@ -1441,78 +1500,93 @@ void SlideShowImpl::registerUserPaintPolygons( const uno::Reference< lang::XMult
     xDrawnInSlideshow->setPropertyValue("IsLocked", aPropLayer);
 
     //Register polygons for each slide
-    for( const auto& rPoly : maPolygons )
+    // The polygons are simplified using the Ramer-Douglas-Peucker algorithm.
+    // This is the therefore needed tolerance. Ideally the value should be user defined.
+    // For now a suitable value is found experimental.
+    constexpr double fTolerance(12);
+    for (const auto& rPoly : maPolygons)
     {
         PolyPolygonVector aPolygons = rPoly.second;
+        if (aPolygons.empty())
+            continue;
         //Get shapes for the slide
-        css::uno::Reference< css::drawing::XShapes > Shapes = rPoly.first;
+        css::uno::Reference<css::drawing::XShapes> Shapes = rPoly.first;
+
         //Retrieve polygons for one slide
-        for( const auto& pPolyPoly : aPolygons )
+        // #tdf112687 A pen drawing in slideshow is actually a chain of individual line shapes, where
+        // the end point of one line shape equals the start point of the next line shape.
+        // We collect these points into one B2DPolygon and use that to generate the shape on the
+        // slide.
+        ::basegfx::B2DPolygon aDrawingPoints;
+        cppcanvas::PolyPolygonSharedPtr pFirstPolyPoly = aPolygons.front(); // for style properties
+        for (const auto& pPolyPoly : aPolygons)
         {
-            ::basegfx::B2DPolyPolygon b2DPolyPoly = ::basegfx::unotools::b2DPolyPolygonFromXPolyPolygon2D(pPolyPoly->getUNOPolyPolygon());
+            // Actually, each item in aPolygons has two points, but wrapped in a cppcanvas::PopyPolygon.
+            ::basegfx::B2DPolyPolygon b2DPolyPoly
+                = ::basegfx::unotools::b2DPolyPolygonFromXPolyPolygon2D(
+                    pPolyPoly->getUNOPolyPolygon());
 
             //Normally there is only one polygon
-            for(sal_uInt32 i=0; i< b2DPolyPoly.count();i++)
+            for (sal_uInt32 i = 0; i < b2DPolyPoly.count(); i++)
             {
-                const ::basegfx::B2DPolygon& aPoly =  b2DPolyPoly.getB2DPolygon(i);
-                sal_uInt32 nPoints = aPoly.count();
+                const ::basegfx::B2DPolygon& aPoly = b2DPolyPoly.getB2DPolygon(i);
 
-                if( nPoints > 1)
+                if (aPoly.count() > 1) // otherwise skip it, count should be 2
                 {
-                    //create the PolyLineShape
-                    uno::Reference< uno::XInterface > polyshape(xDocFactory->createInstance(
-                                                                    "com.sun.star.drawing.PolyLineShape" ) );
-                    uno::Reference< drawing::XShape > rPolyShape(polyshape, uno::UNO_QUERY);
-
-                    //Add the shape to the slide
-                    Shapes->add(rPolyShape);
-
-                    //Retrieve shape properties
-                    uno::Reference< beans::XPropertySet > aXPropSet( rPolyShape, uno::UNO_QUERY );
-                    //Construct a sequence of points sequence
-                    drawing::PointSequenceSequence aRetval;
-                    //Create only one sequence for one polygon
-                    aRetval.realloc( 1 );
-                    // Retrieve the sequence of points from aRetval
-                    drawing::PointSequence* pOuterSequence = aRetval.getArray();
-                    // Create 2 points in this sequence
-                    pOuterSequence->realloc(nPoints);
-                    // Get these points which are in an array
-                    awt::Point* pInnerSequence = pOuterSequence->getArray();
-                    for( sal_uInt32 n = 0; n < nPoints; n++ )
+                    if (aDrawingPoints.count() == 0)
                     {
-                        //Create a point from the polygon
-                        *pInnerSequence++ = awt::Point(
-                            basegfx::fround(aPoly.getB2DPoint(n).getX()),
-                            basegfx::fround(aPoly.getB2DPoint(n).getY()));
+                        aDrawingPoints.append(aPoly);
+                        pFirstPolyPoly = pPolyPoly;
+                        continue;
+                    }
+                    basegfx::B2DPoint aLast
+                        = aDrawingPoints.getB2DPoint(aDrawingPoints.count() - 1);
+                    if (aPoly.getB2DPoint(0).equal(aLast))
+                    {
+                        aDrawingPoints.append(aPoly, 1);
+                        continue;
                     }
 
+                    // Put what we have collected to the slide and then start a new pen drawing object
+                    //create the PolyLineShape. The points will be in its PolyPolygon property.
+                    uno::Reference<uno::XInterface> polyshape(
+                        xDocFactory->createInstance("com.sun.star.drawing.PolyLineShape"));
+                    uno::Reference<drawing::XShape> rPolyShape(polyshape, uno::UNO_QUERY);
+                    //Add the shape to the slide
+                    Shapes->add(rPolyShape);
+                    //Construct a sequence of points sequence
+                    aDrawingPoints
+                        = basegfx::utils::createSimplifiedPolygon(aDrawingPoints, fTolerance);
+                    const drawing::PointSequenceSequence aRetval
+                        = lcl_createPointSequenceSequenceFromB2DPolygon(aDrawingPoints);
                     //Fill the properties
-                    //Give the built PointSequenceSequence.
-                    uno::Any aParam;
-                    aParam <<= aRetval;
-                    aXPropSet->setPropertyValue("PolyPolygon", aParam );
-
-                    //LineStyle : SOLID by default
-                    drawing::LineStyle  eLS;
-                    eLS = drawing::LineStyle_SOLID;
-                    aXPropSet->setPropertyValue("LineStyle", uno::Any(eLS) );
-
-                    //LineColor
-                    sal_uInt32          nLineColor;
-                    nLineColor = pPolyPoly->getRGBALineColor();
-                    //Transform polygon color from RRGGBBAA to AARRGGBB
-                    aXPropSet->setPropertyValue("LineColor", uno::Any(RGBAColor2UnoColor(nLineColor)) );
-
-                    //LineWidth
-                    double              fLineWidth;
-                    fLineWidth = pPolyPoly->getStrokeWidth();
-                    aXPropSet->setPropertyValue("LineWidth", uno::Any(static_cast<sal_Int32>(fLineWidth)) );
-
+                    lcl_setPropertiesToShape(aRetval, pFirstPolyPoly, rPolyShape);
                     // make polygons special
                     xLayerManager->attachShapeToLayer(rPolyShape, xDrawnInSlideshow);
+                    // Start next pen drawing object
+                    aDrawingPoints.clear();
+                    aDrawingPoints.append(aPoly);
+                    pFirstPolyPoly = pPolyPoly;
                 }
             }
+        }
+        // Bring remaining points to slide
+        if (aDrawingPoints.count() > 1)
+        {
+            //create the PolyLineShape. The points will be in its PolyPolygon property.
+            uno::Reference<uno::XInterface> polyshape(
+                xDocFactory->createInstance("com.sun.star.drawing.PolyLineShape"));
+            uno::Reference<drawing::XShape> rPolyShape(polyshape, uno::UNO_QUERY);
+            //Add the shape to the slide
+            Shapes->add(rPolyShape);
+            //Construct a sequence of points sequence
+            aDrawingPoints = basegfx::utils::createSimplifiedPolygon(aDrawingPoints, fTolerance);
+            drawing::PointSequenceSequence aRetval
+                = lcl_createPointSequenceSequenceFromB2DPolygon(aDrawingPoints);
+            //Fill the properties
+            lcl_setPropertiesToShape(aRetval, aPolygons.back(), rPolyShape);
+            // make polygons special
+            xLayerManager->attachShapeToLayer(rPolyShape, xDrawnInSlideshow);
         }
     }
 }
@@ -1730,6 +1804,56 @@ sal_Bool SlideShowImpl::setProperty( beans::PropertyValue const& rProperty )
                                            maScreenUpdater,
                                            maEventMultiplexer,
                                            maViewContainer );
+
+        return true;
+    }
+
+    if (rProperty.Name == "NavigationSlidePrev")
+    {
+        uno::Reference<rendering::XBitmap> xBitmap;
+        if (!(rProperty.Value >>= xBitmap))
+            return false;
+
+        mpNavigationPrev = SlideOverlayButton::create(
+            xBitmap, { 20, 10 }, [this](basegfx::B2DPoint) { notifySlideEnded(true); },
+            maScreenUpdater, maEventMultiplexer, maViewContainer);
+
+        return true;
+    }
+
+    if (rProperty.Name == "NavigationSlideMenu")
+    {
+        uno::Reference<rendering::XBitmap> xBitmap;
+        if (!(rProperty.Value >>= xBitmap))
+            return false;
+
+        mpNavigationMenu = SlideOverlayButton::create(
+            xBitmap, { xBitmap->getSize().Width + 48, 10 },
+            [this](basegfx::B2DPoint pos) {
+                maListenerContainer.forEach(
+                    [pos](const uno::Reference<presentation::XSlideShowListener>& xListener) {
+                        uno::Reference<presentation::XSlideShowNavigationListener> xNavListener(
+                            xListener, uno::UNO_QUERY);
+                        if (xNavListener.is())
+                            xNavListener->contextMenuShow(
+                                css::awt::Point(static_cast<sal_Int32>(floor(pos.getX())),
+                                                static_cast<sal_Int32>(floor(pos.getY()))));
+                    });
+            },
+            maScreenUpdater, maEventMultiplexer, maViewContainer);
+
+        return true;
+    }
+
+    if (rProperty.Name == "NavigationSlideNext")
+    {
+        uno::Reference<rendering::XBitmap> xBitmap;
+        if (!(rProperty.Value >>= xBitmap))
+            return false;
+
+        mpNavigationNext = SlideOverlayButton::create(
+            xBitmap, { 2 * xBitmap->getSize().Width + 76, 10 }, [this](basegfx::B2DPoint) { notifySlideEnded(false); },
+            maScreenUpdater, maEventMultiplexer, maViewContainer);
 
         return true;
     }
@@ -2421,7 +2545,7 @@ void FrameSynchronization::Synchronize()
             // Try to sleep most of it.
             int remainingMilliseconds = remainingTime * 1000;
             if(remainingMilliseconds > 2)
-                osl::Thread::wait(std::chrono::milliseconds(remainingMilliseconds - 2));
+                std::this_thread::sleep_for(std::chrono::milliseconds(remainingMilliseconds - 2));
         }
     }
 

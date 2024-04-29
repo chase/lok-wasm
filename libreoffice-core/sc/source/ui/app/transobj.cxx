@@ -198,7 +198,7 @@ ScTransferObj::~ScTransferObj()
 
 ScTransferObj* ScTransferObj::GetOwnClipboard(const uno::Reference<datatransfer::XTransferable2>& xTransferable)
 {
-    return comphelper::getFromUnoTunnel<ScTransferObj>(xTransferable);
+    return dynamic_cast<ScTransferObj*>(xTransferable.get());
 }
 
 void ScTransferObj::AddSupportedFormats()
@@ -312,28 +312,34 @@ bool ScTransferObj::GetData( const datatransfer::DataFlavor& rFlavor, const OUSt
             ScAddress aPos(nCol, nRow, nTab);
 
             const ScPatternAttr* pPattern = m_pDoc->GetPattern( nCol, nRow, nTab );
-            ScTabEditEngine aEngine( *pPattern, m_pDoc->GetEditPool(), m_pDoc.get() );
-            ScRefCellValue aCell(*m_pDoc, aPos);
-            if (aCell.getType() == CELLTYPE_EDIT)
+            if (pPattern)
             {
-                const EditTextObject* pObj = aCell.getEditText();
-                aEngine.SetTextCurrentDefaults(*pObj);
-            }
-            else
-            {
-                SvNumberFormatter* pFormatter = m_pDoc->GetFormatTable();
-                sal_uInt32 nNumFmt = pPattern->GetNumberFormat(pFormatter);
-                const Color* pColor;
-                OUString aText = ScCellFormat::GetString(aCell, nNumFmt, &pColor, *pFormatter, *m_pDoc);
-                if (!aText.isEmpty())
-                    aEngine.SetTextCurrentDefaults(aText);
-            }
+                ScTabEditEngine aEngine(*pPattern, m_pDoc->GetEditPool(), m_pDoc.get());
+                ScRefCellValue aCell(*m_pDoc, aPos);
+                if (aCell.getType() == CELLTYPE_EDIT)
+                {
+                    const EditTextObject* pObj = aCell.getEditText();
+                    aEngine.SetTextCurrentDefaults(*pObj);
+                }
+                else
+                {
+                    SvNumberFormatter* pFormatter = m_pDoc->GetFormatTable();
+                    sal_uInt32 nNumFmt = pPattern->GetNumberFormat(pFormatter);
+                    const Color* pColor;
+                    OUString aText
+                        = ScCellFormat::GetString(aCell, nNumFmt, &pColor, *pFormatter, *m_pDoc);
+                    if (!aText.isEmpty())
+                        aEngine.SetTextCurrentDefaults(aText);
+                }
 
-            bOK = SetObject( &aEngine,
-                    ((nFormat == SotClipboardFormatId::RTF) ? SCTRANS_TYPE_EDIT_RTF :
-                     ((nFormat == SotClipboardFormatId::EDITENGINE_ODF_TEXT_FLAT) ?
-                      SCTRANS_TYPE_EDIT_ODF_TEXT_FLAT : SCTRANS_TYPE_EDIT_BIN)),
-                    rFlavor );
+                bOK = SetObject(&aEngine,
+                                ((nFormat == SotClipboardFormatId::RTF)
+                                     ? SCTRANS_TYPE_EDIT_RTF
+                                     : ((nFormat == SotClipboardFormatId::EDITENGINE_ODF_TEXT_FLAT)
+                                            ? SCTRANS_TYPE_EDIT_ODF_TEXT_FLAT
+                                            : SCTRANS_TYPE_EDIT_BIN)),
+                                rFlavor);
+            }
         }
         else if ( ScImportExport::IsFormatSupported( nFormat ) || nFormat == SotClipboardFormatId::RTF
             || nFormat == SotClipboardFormatId::RICHTEXT )
@@ -635,9 +641,8 @@ ScDocument* ScTransferObj::GetSourceDocument()
 
 ScDocShell* ScTransferObj::GetSourceDocShell()
 {
-    ScCellRangesBase* pRangesObj = comphelper::getFromUnoTunnel<ScCellRangesBase>( m_xDragSourceRanges );
-    if (pRangesObj)
-        return pRangesObj->GetDocShell();
+    if (m_xDragSourceRanges)
+        return m_xDragSourceRanges->GetDocShell();
 
     return nullptr;    // none set
 }
@@ -645,10 +650,9 @@ ScDocShell* ScTransferObj::GetSourceDocShell()
 ScMarkData ScTransferObj::GetSourceMarkData() const
 {
     ScMarkData aMarkData(m_pDoc->GetSheetLimits());
-    ScCellRangesBase* pRangesObj = comphelper::getFromUnoTunnel<ScCellRangesBase>( m_xDragSourceRanges );
-    if (pRangesObj)
+    if (m_xDragSourceRanges)
     {
-        const ScRangeList& rRanges = pRangesObj->GetRangeList();
+        const ScRangeList& rRanges = m_xDragSourceRanges->GetRangeList();
         aMarkData.MarkFromRangeList( rRanges, false );
     }
     return aMarkData;
@@ -678,6 +682,8 @@ void ScTransferObj::InitDocShell(bool bLimitToPageSize)
     OUString aTabName;
     m_pDoc->GetName( m_aBlock.aStart.Tab(), aTabName );
     rDestDoc.RenameTab( 0, aTabName );
+
+    pDocSh->MakeDrawLayer();
 
     rDestDoc.CopyStdStylesFrom(*m_pDoc);
 
@@ -717,9 +723,6 @@ void ScTransferObj::InitDocShell(bool bLimitToPageSize)
             rDestDoc.SetManualHeight(nRow, nRow, 0, bManual);
         }
     }
-
-    if (m_pDoc->GetDrawLayer() || m_pDoc->HasNotes())
-        pDocSh->MakeDrawLayer();
 
     //  cell range is copied to the original position, but on the first sheet
     //  -> bCutMode must be set
@@ -901,18 +904,6 @@ void ScTransferObj::StripRefs( ScDocument& rDoc,
             }
         }
     }
-}
-
-const css::uno::Sequence< sal_Int8 >& ScTransferObj::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theScTransferUnoTunnelId;
-    return theScTransferUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL ScTransferObj::getSomething( const css::uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(
-        rId, this, comphelper::FallbackToGetSomethingOf<TransferDataContainer>{});
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

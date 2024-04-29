@@ -71,12 +71,6 @@ public:
 
     virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes() override;
 
-    //  XAggregation
-
-    css::uno::Any SAL_CALL queryAggregation(
-        const css::uno::Type& aType
-    ) override;
-
     OUString SAL_CALL getImplementationName() override;
 
     css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override;
@@ -160,8 +154,6 @@ private:
     void impl_createFrame(  const css::uno::Reference< css::awt::XWindowPeer >&       xPeer           ,
                             const OUString&                                         sURL            ,
                             const css::uno::Sequence< css::beans::PropertyValue >&    seqArguments    );
-
-    void impl_deleteFrame();
 
     css::uno::Reference< css::frame::XFrame2 >              m_xFrame;
     OUString                                                m_sComponentURL;

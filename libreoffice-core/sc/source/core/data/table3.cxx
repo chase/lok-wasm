@@ -48,7 +48,6 @@
 #include <queryentry.hxx>
 #include <subtotalparam.hxx>
 #include <docpool.hxx>
-#include <cellvalue.hxx>
 #include <tokenarray.hxx>
 #include <mtvcellfunc.hxx>
 #include <columnspanset.hxx>
@@ -217,180 +216,6 @@ static short Compare( const OUString &sInput1, const OUString &sInput2,
 }
 
 }
-
-namespace {
-
-struct ScSortInfo final
-{
-    ScRefCellValue maCell;
-    SCCOLROW        nOrg;
-};
-
-}
-
-class ScSortInfoArray
-{
-public:
-
-    struct Cell
-    {
-        ScRefCellValue maCell;
-        const sc::CellTextAttr* mpAttr;
-        const ScPostIt* mpNote;
-        std::vector<SdrObject*> maDrawObjects;
-        const ScPatternAttr* mpPattern;
-
-        Cell() : mpAttr(nullptr), mpNote(nullptr),  mpPattern(nullptr) {}
-    };
-
-    struct Row
-    {
-        std::vector<Cell> maCells;
-
-        bool mbHidden:1;
-        bool mbFiltered:1;
-
-        explicit Row( size_t nColSize ) : maCells(nColSize, Cell()), mbHidden(false), mbFiltered(false) {}
-    };
-
-    typedef std::vector<Row> RowsType;
-
-private:
-    std::unique_ptr<RowsType> mpRows; /// row-wise data table for sort by row operation.
-
-    std::vector<std::unique_ptr<ScSortInfo[]>> mvppInfo;
-    SCCOLROW        nStart;
-    SCCOLROW        mnLastIndex; /// index of last non-empty cell position.
-
-    std::vector<SCCOLROW> maOrderIndices;
-    bool mbKeepQuery;
-    bool mbUpdateRefs;
-
-public:
-    ScSortInfoArray(const ScSortInfoArray&) = delete;
-    const ScSortInfoArray& operator=(const ScSortInfoArray&) = delete;
-
-    ScSortInfoArray( sal_uInt16 nSorts, SCCOLROW nInd1, SCCOLROW nInd2 ) :
-        mvppInfo(nSorts),
-        nStart( nInd1 ),
-        mnLastIndex(nInd2),
-        mbKeepQuery(false),
-        mbUpdateRefs(false)
-    {
-        SCSIZE nCount( nInd2 - nInd1 + 1 );
-        if (nSorts)
-        {
-            for ( sal_uInt16 nSort = 0; nSort < nSorts; nSort++ )
-            {
-                mvppInfo[nSort].reset(new ScSortInfo[nCount]);
-            }
-        }
-
-        for (size_t i = 0; i < nCount; ++i)
-            maOrderIndices.push_back(i+nStart);
-    }
-
-    void SetKeepQuery( bool b ) { mbKeepQuery = b; }
-
-    bool IsKeepQuery() const { return mbKeepQuery; }
-
-    void SetUpdateRefs( bool b ) { mbUpdateRefs = b; }
-
-    bool IsUpdateRefs() const { return mbUpdateRefs; }
-
-    /**
-     * Call this only during normal sorting, not from reordering.
-     */
-    std::unique_ptr<ScSortInfo[]> const & GetFirstArray() const
-    {
-        return mvppInfo[0];
-    }
-
-    /**
-     * Call this only during normal sorting, not from reordering.
-     */
-    ScSortInfo & Get( sal_uInt16 nSort, SCCOLROW nInd )
-    {
-        return mvppInfo[nSort][ nInd - nStart ];
-    }
-
-    /**
-     * Call this only during normal sorting, not from reordering.
-     */
-    void Swap( SCCOLROW nInd1, SCCOLROW nInd2 )
-    {
-        if (nInd1 == nInd2) // avoid self-move-assign
-            return;
-        SCSIZE n1 = static_cast<SCSIZE>(nInd1 - nStart);
-        SCSIZE n2 = static_cast<SCSIZE>(nInd2 - nStart);
-        for ( sal_uInt16 nSort = 0; nSort < static_cast<sal_uInt16>(mvppInfo.size()); nSort++ )
-        {
-            auto & ppInfo = mvppInfo[nSort];
-            std::swap(ppInfo[n1], ppInfo[n2]);
-        }
-
-        std::swap(maOrderIndices[n1], maOrderIndices[n2]);
-
-        if (mpRows)
-        {
-            // Swap rows in data table.
-            RowsType& rRows = *mpRows;
-            std::swap(rRows[n1], rRows[n2]);
-        }
-    }
-
-    void SetOrderIndices( std::vector<SCCOLROW>&& rIndices )
-    {
-        maOrderIndices = std::move(rIndices);
-    }
-
-    /**
-     * @param rIndices indices are actual row positions on the sheet, not an
-     *                 offset from the top row.
-     */
-    void ReorderByRow( const std::vector<SCCOLROW>& rIndices )
-    {
-        if (!mpRows)
-            return;
-
-        RowsType& rRows = *mpRows;
-
-        std::vector<SCCOLROW> aOrderIndices2;
-        aOrderIndices2.reserve(rIndices.size());
-
-        RowsType aRows2;
-        aRows2.reserve(rRows.size());
-
-        for (const auto& rIndex : rIndices)
-        {
-            size_t nPos = rIndex - nStart; // switch to an offset to top row.
-            aRows2.push_back(rRows[nPos]);
-            aOrderIndices2.push_back(maOrderIndices[nPos]);
-        }
-
-        rRows.swap(aRows2);
-        maOrderIndices.swap(aOrderIndices2);
-    }
-
-    sal_uInt16      GetUsedSorts() const { return mvppInfo.size(); }
-
-    SCCOLROW    GetStart() const { return nStart; }
-    SCCOLROW GetLast() const { return mnLastIndex; }
-
-    const std::vector<SCCOLROW>& GetOrderIndices() const { return maOrderIndices; }
-
-    RowsType& InitDataRows( size_t nRowSize, size_t nColSize )
-    {
-        mpRows.reset(new RowsType);
-        mpRows->resize(nRowSize, Row(nColSize));
-        return *mpRows;
-    }
-
-    RowsType* GetDataRows()
-    {
-        return mpRows.get();
-    }
-};
 
 // Assume that we can handle 512MB, which with a ~100 bytes
 // ScSortInfoArray::Cell element for 500MB are about 5 million cells plus
@@ -1043,8 +868,10 @@ void ScTable::SortReorderByColumn(
         // once.
         std::sort(aListeners.begin(), aListeners.end());
         aListeners.erase(std::unique(aListeners.begin(), aListeners.end()), aListeners.end());
-        ReorderNotifier<sc::RefColReorderHint, sc::ColRowReorderMapType, SCCOL> aFunc(aColMap, nTab, nRow1, nRow2);
-        std::for_each(aListeners.begin(), aListeners.end(), aFunc);
+        {
+            ReorderNotifier<sc::RefColReorderHint, sc::ColRowReorderMapType, SCCOL> aFunc(aColMap, nTab, nRow1, nRow2);
+            std::for_each(aListeners.begin(), aListeners.end(), std::move(aFunc));
+        }
 
         // Re-start area listeners on the reordered columns.
         {
@@ -1192,13 +1019,13 @@ void ScTable::SortReorderByRow( ScSortInfoArray* pArray, SCCOL nCol1, SCCOL nCol
             for (const auto& rSpan : aSpans)
             {
                 assert(rSpan.mpPattern); // should never be NULL.
-                rDocument.GetPool()->Put(*rSpan.mpPattern);
+                rDocument.GetPool()->DirectPutItemInPool(*rSpan.mpPattern);
             }
 
             for (const auto& rSpan : aSpans)
             {
                 aCol[nThisCol].SetPatternArea(rSpan.mnRow1, rSpan.mnRow2, *rSpan.mpPattern);
-                rDocument.GetPool()->Remove(*rSpan.mpPattern);
+                rDocument.GetPool()->DirectRemoveItemFromPool(*rSpan.mpPattern);
             }
         }
 
@@ -1393,13 +1220,13 @@ void ScTable::SortReorderByRowRefUpdate(
             for (const auto& rSpan : aSpans)
             {
                 assert(rSpan.mpPattern); // should never be NULL.
-                rDocument.GetPool()->Put(*rSpan.mpPattern);
+                rDocument.GetPool()->DirectPutItemInPool(*rSpan.mpPattern);
             }
 
             for (const auto& rSpan : aSpans)
             {
                 aCol[nThisCol].SetPatternArea(rSpan.mnRow1, rSpan.mnRow2, *rSpan.mpPattern);
-                rDocument.GetPool()->Remove(*rSpan.mpPattern);
+                rDocument.GetPool()->DirectRemoveItemFromPool(*rSpan.mpPattern);
             }
         }
 
@@ -1488,8 +1315,10 @@ void ScTable::SortReorderByRowRefUpdate(
     }
 
     // Notify the listeners to update their references.
-    ReorderNotifier<sc::RefRowReorderHint, sc::ColRowReorderMapType, SCROW> aFunc(aRowMap, nTab, nCol1, nCol2);
-    std::for_each(aListeners.begin(), aListeners.end(), aFunc);
+    {
+        ReorderNotifier<sc::RefRowReorderHint, sc::ColRowReorderMapType, SCROW> aFunc(aRowMap, nTab, nCol1, nCol2);
+        std::for_each(aListeners.begin(), aListeners.end(), std::move(aFunc));
+    }
 
     // Re-group formulas in affected columns.
     for (const auto& [rTab, rCols] : rGroupTabs)
@@ -1530,6 +1359,37 @@ short ScTable::CompareCell(
     short nRes = 0;
 
     CellType eType1 = rCell1.getType(), eType2 = rCell2.getType();
+
+    // tdf#95520 Sort by color - selected color goes on top, everything else according to compare function
+    if (aSortParam.maKeyState[nSort].aColorSortMode == ScColorSortMode::TextColor
+        || aSortParam.maKeyState[nSort].aColorSortMode == ScColorSortMode::BackgroundColor)
+    {
+        ScAddress aPos1(nCell1Col, nCell1Row, GetTab());
+        ScAddress aPos2(nCell2Col, nCell2Row, GetTab());
+        Color aTheChosenColor = aSortParam.maKeyState[nSort].aColorSortColor;
+        Color aColor1;
+        Color aColor2;
+        if (aSortParam.maKeyState[nSort].aColorSortMode == ScColorSortMode::TextColor)
+        {
+            aColor1 = GetCellTextColor(aPos1);
+            aColor2 = GetCellTextColor(aPos2);
+        }
+        else
+        {
+            aColor1 = GetCellBackgroundColor(aPos1);
+            aColor2 = GetCellBackgroundColor(aPos2);
+        }
+        if (aTheChosenColor == aColor1)
+            return -1;
+        if (aTheChosenColor == aColor2)
+            return 1;
+        if (aColor1 == aColor2)
+            return 0;
+        if (aColor1 > aColor2)
+            return 1;
+        if (aColor1 < aColor2)
+            return -1;
+    }
 
     if (!rCell1.isEmpty())
     {
@@ -2058,6 +1918,30 @@ static TranslateId lcl_GetSubTotalStrId(int id)
     }
 }
 
+// Gets the string used for "Grand" results
+static TranslateId lcl_GetGrandSubTotalStrId(int id)
+{
+    switch ( id )
+    {
+        case SUBTOTAL_FUNC_AVE:     return STR_TABLE_GRAND_AVG;
+        case SUBTOTAL_FUNC_CNT:
+        case SUBTOTAL_FUNC_CNT2:    return STR_TABLE_GRAND_COUNT;
+        case SUBTOTAL_FUNC_MAX:     return STR_TABLE_GRAND_MAX;
+        case SUBTOTAL_FUNC_MIN:     return STR_TABLE_GRAND_MIN;
+        case SUBTOTAL_FUNC_PROD:    return STR_TABLE_GRAND_PRODUCT;
+        case SUBTOTAL_FUNC_STD:
+        case SUBTOTAL_FUNC_STDP:    return STR_TABLE_GRAND_STDDEV;
+        case SUBTOTAL_FUNC_SUM:     return STR_TABLE_GRAND_SUM;
+        case SUBTOTAL_FUNC_VAR:
+        case SUBTOTAL_FUNC_VARP:    return STR_TABLE_GRAND_VAR;
+        default:
+        {
+             return STR_EMPTYDATA;
+            // added to avoid warnings
+        }
+    }
+}
+
 //      new intermediate results
 //      rParam.nRow2 is changed!
 
@@ -2264,7 +2148,7 @@ bool ScTable::DoSubTotals( ScSubTotalParam& rParam )
                 DBShowRow(aRowEntry.nDestRow, true);
 
                 // insert label
-                OUString label = ScResId(STR_TABLE_GRAND) + " " + ScResId(lcl_GetSubTotalStrId(pResFunc[0]));
+                OUString label = ScResId(lcl_GetGrandSubTotalStrId(pResFunc[0]));
                 SetString(nGroupCol[aRowEntry.nGroupNo], aRowEntry.nDestRow, nTab, label);
                 ApplyStyle(nGroupCol[aRowEntry.nGroupNo], aRowEntry.nDestRow, pStyle);
             }
@@ -2706,7 +2590,7 @@ bool ScTable::CreateExcelQuery(SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow
     }
     if (bValid)
     {
-        sal_uLong nVisible = 0;
+        SCSIZE nVisible = 0;
         for ( nCol=nCol1; nCol<=ClampToAllocatedColumns(nCol2); nCol++ )
             nVisible += aCol[nCol].VisibleCount( nRow1+1, nRow2 );
 

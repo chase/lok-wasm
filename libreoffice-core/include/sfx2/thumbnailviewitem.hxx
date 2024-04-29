@@ -27,6 +27,7 @@
 
 namespace com::sun::star::accessibility { class XAccessible; }
 namespace drawinglayer::primitive2d { class Primitive2DContainer; }
+class ThumbnailViewItemAcc;
 
 #define THUMBNAILVIEW_ITEM_NONEITEM      0xFFFE
 
@@ -55,8 +56,6 @@ struct ThumbnailItemAttributes
     basegfx::BColor aTextColor;
     basegfx::BColor aHighlightColor;
     basegfx::BColor aHighlightTextColor;
-    basegfx::BColor aSelectHighlightColor;
-    basegfx::BColor aSelectHighlightTextColor;
     double fHighlightTransparence;
     basegfx::B2DVector aFontSize;
     drawinglayer::attribute::FontAttribute aFontAttr;
@@ -75,11 +74,14 @@ public:
     BitmapEx maPreview1;
     OUString maTitle;
     OUString maHelpText;
-    css::uno::Reference< css::accessibility::XAccessible > mxAcc;
+    rtl::Reference< ThumbnailViewItemAcc > mxAcc;
 
     ThumbnailViewItem(ThumbnailView& rView, sal_uInt16 nId);
 
     virtual ~ThumbnailViewItem ();
+
+    ThumbnailViewItem& operator=( ThumbnailViewItem const & ) = delete; // MSVC workaround
+    ThumbnailViewItem( ThumbnailViewItem const & ) = delete; // MSVC workaround
 
     bool isVisible () const { return mbVisible; }
 
@@ -108,7 +110,7 @@ public:
 
     void setTitle (const OUString& rTitle);
 
-    css::uno::Reference< css::accessibility::XAccessible > const &
+    rtl::Reference< ThumbnailViewItemAcc > const &
                         GetAccessible( bool bIsTransientChildrenDisabled );
 
     void setDrawArea (const tools::Rectangle &area);
@@ -132,6 +134,7 @@ protected:
 
     Point maTextPos;
     Point maPrev1Pos;
+    Point maPinPos;
     tools::Rectangle maDrawArea;
 };
 

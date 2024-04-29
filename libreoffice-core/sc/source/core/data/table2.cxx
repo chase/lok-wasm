@@ -60,7 +60,7 @@
 #include <o3tl/unit_conversion.hxx>
 #include <osl/diagnose.h>
 #include <sal/log.hxx>
-#include <svl/poolcach.hxx>
+#include <poolcach.hxx>
 #include <unotools/charclass.hxx>
 #include <math.h>
 
@@ -479,7 +479,7 @@ void ScTable::DeleteSelection( InsertDeleteFlags nDelFlag, const ScMarkData& rMa
         ScDocumentPool* pPool = rDocument.GetPool();
         SfxItemSetFixed<ATTR_PATTERN_START, ATTR_PATTERN_END> aSet( *pPool );
         aSet.Put( ScProtectionAttr( false ) );
-        SfxItemPoolCache aCache( pPool, &aSet );
+        ScItemPoolCache aCache( pPool, &aSet );
         ApplySelectionCache( &aCache, rMark );
     }
 
@@ -503,6 +503,7 @@ void ScTable::CopyToClip(
 
     nCol2 = ClampToAllocatedColumns(nCol2);
 
+    pTable->CreateColumnIfNotExists(nCol2);  // prevent repeated resizing
     for ( SCCOL i = nCol1; i <= nCol2; i++)
         aCol[i].CopyToClip(rCxt, nRow1, nRow2, pTable->CreateColumnIfNotExists(i));  // notes are handled at column level
 
@@ -638,6 +639,9 @@ void ScTable::CopyConditionalFormat( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCRO
 {
     ScRange aOldRange( nCol1 - nDx, nRow1 - nDy, pTable->nTab, nCol2 - nDx, nRow2 - nDy, pTable->nTab);
     ScRange aNewRange( nCol1, nRow1, nTab, nCol2, nRow2, nTab );
+    // Don't deduplicate when undoing or creating an Undo document! It would disallow correct undo
+    bool bUndoContext = rDocument.IsUndo() || pTable->rDocument.IsUndo();
+    // Note that Undo documents use same pool as the original document
     bool bSameDoc = rDocument.GetStyleSheetPool() == pTable->rDocument.GetStyleSheetPool();
 
     for(const auto& rxCondFormat : *pTable->mpCondFormatList)
@@ -658,17 +662,17 @@ void ScTable::CopyConditionalFormat( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCRO
         aRefCxt.mnTabDelta = nTab - pTable->nTab;
         pNewFormat->UpdateReference(aRefCxt, true);
 
-        if (bSameDoc && pTable->nTab == nTab && CheckAndDeduplicateCondFormat(rDocument, mpCondFormatList->GetFormat(rxCondFormat->GetKey()), pNewFormat.get(), nTab))
+        if (!bUndoContext && bSameDoc && pTable->nTab == nTab && CheckAndDeduplicateCondFormat(rDocument, mpCondFormatList->GetFormat(rxCondFormat->GetKey()), pNewFormat.get(), nTab))
         {
             continue;
         }
-        sal_uLong nMax = 0;
+        sal_uInt32 nMax = 0;
         bool bDuplicate = false;
         for(const auto& rxCond : *mpCondFormatList)
         {
             // Check if there is the same format in the destination
             // If there is, then simply expand its range
-            if (CheckAndDeduplicateCondFormat(rDocument, rxCond.get(), pNewFormat.get(), nTab))
+            if (!bUndoContext && CheckAndDeduplicateCondFormat(rDocument, rxCond.get(), pNewFormat.get(), nTab))
             {
                 bDuplicate = true;
                 break;
@@ -701,13 +705,8 @@ void ScTable::CopyConditionalFormat( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCRO
                     aStyleName = static_cast<const ScCondDateFormatEntry*>(pEntry)->GetStyleName();
 
                 if(!aStyleName.isEmpty())
-                {
-                    if(rDocument.GetStyleSheetPool()->Find(aStyleName, SfxStyleFamily::Para))
-                        continue;
-
                     rDocument.GetStyleSheetPool()->CopyStyleFrom(
-                            pTable->rDocument.GetStyleSheetPool(), aStyleName, SfxStyleFamily::Para );
-                }
+                            pTable->rDocument.GetStyleSheetPool(), aStyleName, SfxStyleFamily::Para, true );
             }
         }
 
@@ -791,8 +790,8 @@ void ScTable::MixData(
     sc::MixDocContext& rCxt, SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2,
     ScPasteFunc nFunction, bool bSkipEmpty, const ScTable* pSrcTab )
 {
-    for (SCCOL i=nCol1; i<=nCol2; i++)
-        aCol[i].MixData(rCxt, nRow1, nRow2, nFunction, bSkipEmpty, pSrcTab->aCol[i]);
+    for (SCCOL nCol : pSrcTab->GetAllocatedColumnsRange(nCol1, nCol2))
+        aCol[nCol].MixData(rCxt, nRow1, nRow2, nFunction, bSkipEmpty, pSrcTab->aCol[nCol]);
 }
 
 // Selection form this document
@@ -1339,7 +1338,7 @@ void ScTable::CopyToTable(
         pDestTab->SetRangeName( std::unique_ptr<ScRangeName>( new ScRangeName( *GetRangeName())));
         if (!pDestTab->rDocument.IsClipOrUndo())
         {
-            ScDocShell* pDocSh = static_cast<ScDocShell*>(pDestTab->rDocument.GetDocumentShell());
+            ScDocShell* pDocSh = pDestTab->rDocument.GetDocumentShell();
             if (pDocSh)
                 pDocSh->SetAreasChangedNeedBroadcast();
         }
@@ -1353,6 +1352,7 @@ void ScTable::CopyToTable(
         // can lead to repetitive splitting and rejoining of the same formula group, which can get
         // quadratically expensive with large groups. So do the grouping just once at the end.
         sc::DelayFormulaGroupingSwitch delayGrouping( pDestTab->rDocument, true );
+        pDestTab->CreateColumnIfNotExists(ClampToAllocatedColumns(nCol2)); // avoid repeated resizing
         for (SCCOL i = nCol1; i <= ClampToAllocatedColumns(nCol2); i++)
             aCol[i].CopyToColumn(rCxt, nRow1, nRow2, bToUndoDoc ? nFlags : nTempFlags, bMarked,
                                  pDestTab->CreateColumnIfNotExists(i), pMarkData, bAsLink, bGlobalNamesToLocal);
@@ -1535,7 +1535,7 @@ void ScTable::UndoToTable(
         pDestTab->SetRangeName( std::unique_ptr<ScRangeName>( new ScRangeName( *GetRangeName())));
         if (!pDestTab->rDocument.IsClipOrUndo())
         {
-            ScDocShell* pDocSh = static_cast<ScDocShell*>(pDestTab->rDocument.GetDocumentShell());
+            ScDocShell* pDocSh = pDestTab->rDocument.GetDocumentShell();
             if (pDocSh)
                 pDocSh->SetAreasChangedNeedBroadcast();
         }
@@ -2942,7 +2942,7 @@ namespace
         std::vector<ScAttrEntry> aData(rOrigData);
         for (size_t nIdx = 0; nIdx < aData.size(); ++nIdx)
         {
-            aData[nIdx].pPattern = &rDocument.GetPool()->Put(*aData[nIdx].pPattern);
+            aData[nIdx].pPattern = &rDocument.GetPool()->DirectPutItemInPool(*aData[nIdx].pPattern);
         }
         return aData;
     }
@@ -3241,7 +3241,7 @@ void ScTable::ApplyAttr( SCCOL nCol, SCROW nRow, const SfxPoolItem& rAttr )
         CreateColumnIfNotExists(nCol).ApplyAttr( nRow, rAttr );
 }
 
-void ScTable::ApplySelectionCache( SfxItemPoolCache* pCache, const ScMarkData& rMark,
+void ScTable::ApplySelectionCache( ScItemPoolCache* pCache, const ScMarkData& rMark,
                                    ScEditDataArray* pDataArray, bool* const pIsChanged )
 {
     ApplyWithAllocation(
@@ -3303,7 +3303,7 @@ void ScTable::SetRowHeight( SCROW nRow, sal_uInt16 nNewHeight )
         if (!nNewHeight)
         {
             OSL_FAIL("SetRowHeight: Row height zero");
-            nNewHeight = ScGlobal::nStdRowHeight;
+            nNewHeight = GetOptimalMinRowHeight();
         }
 
         sal_uInt16 nOldHeight = mpRowHeights->getValue(nRow);
@@ -3366,7 +3366,7 @@ bool ScTable::SetRowHeightRange( SCROW nStartRow, SCROW nEndRow, sal_uInt16 nNew
         if (!nNewHeight)
         {
             OSL_FAIL("SetRowHeight: Row height zero");
-            nNewHeight = ScGlobal::nStdRowHeight;
+            nNewHeight = GetOptimalMinRowHeight();
         }
 
         bool bSingle = false;   // true = process every row for its own
@@ -3419,7 +3419,7 @@ void ScTable::SetRowHeightOnly( SCROW nStartRow, SCROW nEndRow, sal_uInt16 nNewH
         return;
 
     if (!nNewHeight)
-        nNewHeight = ScGlobal::nStdRowHeight;
+        nNewHeight = GetOptimalMinRowHeight();
 
     mpRowHeights->setValue(nStartRow, nEndRow, nNewHeight);
 }
@@ -3575,7 +3575,7 @@ sal_uInt16 ScTable::GetRowHeight( SCROW nRow, SCROW* pStartRow, SCROW* pEndRow, 
             *pStartRow = nRow;
         if (pEndRow)
             *pEndRow = nRow;
-        return ScGlobal::nStdRowHeight;
+        return GetOptimalMinRowHeight();
     }
 }
 
@@ -3601,7 +3601,7 @@ tools::Long ScTable::GetRowHeight( SCROW nStartRow, SCROW nEndRow, bool bHiddenA
         return nHeight;
     }
     else
-        return (nEndRow - nStartRow + 1) * static_cast<tools::Long>(ScGlobal::nStdRowHeight);
+        return (nEndRow - nStartRow + 1) * static_cast<tools::Long>(GetOptimalMinRowHeight());
 }
 
 tools::Long ScTable::GetScaledRowHeight( SCROW nStartRow, SCROW nEndRow, double fScale ) const
@@ -3642,7 +3642,7 @@ tools::Long ScTable::GetScaledRowHeight( SCROW nStartRow, SCROW nEndRow, double 
         return nHeight;
     }
     else
-        return static_cast<tools::Long>((nEndRow - nStartRow + 1) * ScGlobal::nStdRowHeight * fScale);
+        return static_cast<tools::Long>((nEndRow - nStartRow + 1) * GetOptimalMinRowHeight() * fScale);
 }
 
 sal_uInt16 ScTable::GetOriginalHeight( SCROW nRow ) const       // non-0 even if hidden
@@ -3652,7 +3652,7 @@ sal_uInt16 ScTable::GetOriginalHeight( SCROW nRow ) const       // non-0 even if
     if (ValidRow(nRow) && mpRowHeights)
         return mpRowHeights->getValue(nRow);
     else
-        return ScGlobal::nStdRowHeight;
+        return GetOptimalMinRowHeight();
 }
 
 //  Column/Row -Flags
@@ -3928,7 +3928,7 @@ SCROW ScTable::GetLastChangedRowFlagsWidth() const
     // Find the last row position where the height is NOT the standard row
     // height.
     // KOHEI: Test this to make sure it does what it's supposed to.
-    SCROW nLastHeight = mpRowHeights->findLastTrue(ScGlobal::nStdRowHeight);
+    SCROW nLastHeight = mpRowHeights->findLastTrue(GetOptimalMinRowHeight());
     if (!ValidRow(nLastHeight))
         nLastHeight = 0;
 

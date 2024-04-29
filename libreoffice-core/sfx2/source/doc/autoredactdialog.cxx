@@ -196,7 +196,7 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, Save, weld::Button&, void)
 IMPL_LINK_NOARG(SfxAutoRedactDialog, AddHdl, weld::Button&, void)
 {
     // Open the Add Target dialog, create a new target and insert into the targets vector and the listbox
-    SfxAddTargetDialog aAddTargetDialog(getDialog(), m_xTargetsBox->GetNameProposal());
+    SfxAddTargetDialog aAddTargetDialog(getDialog(), m_aTargetsBox.GetNameProposal());
 
     bool bIncomplete;
     do
@@ -216,7 +216,7 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, AddHdl, weld::Button&, void)
                 SfxResId(STR_REDACTION_FIELDS_REQUIRED)));
             xBox->run();
         }
-        else if (m_xTargetsBox->GetTargetByName(aAddTargetDialog.getName()))
+        else if (m_aTargetsBox.GetTargetByName(aAddTargetDialog.getName()))
         {
             bIncomplete = true;
             std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(
@@ -233,10 +233,10 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, AddHdl, weld::Button&, void)
           aAddTargetDialog.isCaseSensitive(), aAddTargetDialog.isWholeWords(), 0 });
 
     // Only the visual/display part
-    m_xTargetsBox->InsertTarget(redactiontarget);
+    m_aTargetsBox.InsertTarget(redactiontarget);
 
     // Actually add to the targets vector
-    if (m_xTargetsBox->GetTargetByName(redactiontarget->sName))
+    if (m_aTargetsBox.GetTargetByName(redactiontarget->sName))
         m_aTableTargets.emplace_back(redactiontarget, redactiontarget->sName);
     else
     {
@@ -250,14 +250,14 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, AddHdl, weld::Button&, void)
 
 IMPL_LINK_NOARG(SfxAutoRedactDialog, EditHdl, weld::Button&, void)
 {
-    sal_Int32 nSelectedRow = m_xTargetsBox->get_selected_index();
+    sal_Int32 nSelectedRow = m_aTargetsBox.get_selected_index();
 
     // No selection, nothing to edit
     if (nSelectedRow < 0)
         return;
 
     // Only one entry should be selected for editing
-    if (m_xTargetsBox->get_selected_rows().size() > 1)
+    if (m_aTargetsBox.get_selected_rows().size() > 1)
     {
         //Warn the user about multiple selections
         std::unique_ptr<weld::MessageDialog> xBox(
@@ -268,7 +268,7 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, EditHdl, weld::Button&, void)
     }
 
     // Get the redaction target to be edited
-    RedactionTarget* pTarget = weld::fromId<RedactionTarget*>(m_xTargetsBox->get_id(nSelectedRow));
+    RedactionTarget* pTarget = weld::fromId<RedactionTarget*>(m_aTargetsBox.get_id(nSelectedRow));
 
     // Construct and run the edit target dialog
     SfxAddTargetDialog aEditTargetDialog(getDialog(), pTarget->sName, pTarget->sType,
@@ -294,7 +294,7 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, EditHdl, weld::Button&, void)
             xBox->run();
         }
         else if (aEditTargetDialog.getName() != pTarget->sName
-                 && m_xTargetsBox->GetTargetByName(aEditTargetDialog.getName()))
+                 && m_aTargetsBox.GetTargetByName(aEditTargetDialog.getName()))
         {
             bIncomplete = true;
             std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(
@@ -313,7 +313,7 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, EditHdl, weld::Button&, void)
     pTarget->bWholeWords = aEditTargetDialog.isWholeWords();
 
     // And sync the targets box row with the actual target data
-    m_xTargetsBox->setRowData(nSelectedRow, pTarget);
+    m_aTargetsBox.setRowData(nSelectedRow, pTarget);
 }
 IMPL_LINK_NOARG(SfxAutoRedactDialog, DoubleClickEditHdl, weld::TreeView&, bool)
 {
@@ -323,7 +323,7 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, DoubleClickEditHdl, weld::TreeView&, bool)
 }
 IMPL_LINK_NOARG(SfxAutoRedactDialog, DeleteHdl, weld::Button&, void)
 {
-    std::vector<int> aSelectedRows = m_xTargetsBox->get_selected_rows();
+    std::vector<int> aSelectedRows = m_aTargetsBox.get_selected_rows();
 
     //No selection, so nothing to delete
     if (aSelectedRows.empty())
@@ -345,7 +345,7 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, DeleteHdl, weld::Button&, void)
     for (const auto& i : aSelectedRows)
     {
         m_aTableTargets.erase(m_aTableTargets.begin() + (i - delta));
-        m_xTargetsBox->remove(i - delta++);
+        m_aTargetsBox.remove(i - delta++);
     }
 }
 
@@ -367,14 +367,14 @@ boost::property_tree::ptree redactionTargetToJSON(const RedactionTarget* pTarget
 std::unique_ptr<RedactionTarget>
 JSONtoRedactionTarget(const boost::property_tree::ptree::value_type& rValue)
 {
-    OUString sName = OUString::fromUtf8(rValue.second.get<std::string>("sName").c_str());
+    OUString sName = OUString::fromUtf8(rValue.second.get<std::string>("sName"));
     RedactionTargetType eType
         = static_cast<RedactionTargetType>(atoi(rValue.second.get<std::string>("eType").c_str()));
-    OUString sContent = OUString::fromUtf8(rValue.second.get<std::string>("sContent").c_str());
+    OUString sContent = OUString::fromUtf8(rValue.second.get<std::string>("sContent"));
     bool bCaseSensitive
-        = OUString::fromUtf8(rValue.second.get<std::string>("bCaseSensitive").c_str()).toBoolean();
+        = OUString::fromUtf8(rValue.second.get<std::string>("bCaseSensitive")).toBoolean();
     bool bWholeWords
-        = OUString::fromUtf8(rValue.second.get<std::string>("bWholeWords").c_str()).toBoolean();
+        = OUString::fromUtf8(rValue.second.get<std::string>("bWholeWords")).toBoolean();
     sal_uInt32 nID = atoi(rValue.second.get<std::string>("nID").c_str());
 
     return std::unique_ptr<RedactionTarget>(
@@ -402,7 +402,7 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, LoadHdl, sfx2::FileDialogHelper*, void)
     try
     {
         // Create path string, and read JSON from file
-        std::string sPathStr(OUStringToOString(sTargetsFile, RTL_TEXTENCODING_UTF8).getStr());
+        std::string sPathStr(OUStringToOString(sTargetsFile, RTL_TEXTENCODING_UTF8));
 
         boost::property_tree::ptree aTargetsJSON;
 
@@ -459,7 +459,7 @@ IMPL_LINK_NOARG(SfxAutoRedactDialog, SaveHdl, sfx2::FileDialogHelper*, void)
         aTargetsTree.add_child("RedactionTargets", aTargetsArray);
 
         // Create path string, and write JSON to file
-        std::string sPathStr(OUStringToOString(sTargetsFile, RTL_TEXTENCODING_UTF8).getStr());
+        std::string sPathStr(OUStringToOString(sTargetsFile, RTL_TEXTENCODING_UTF8));
 
         boost::property_tree::write_json(sPathStr, aTargetsTree);
     }
@@ -497,11 +497,11 @@ void SfxAutoRedactDialog::StartFileDialog(StartFileDialogType nType, const OUStr
 void SfxAutoRedactDialog::addTarget(std::unique_ptr<RedactionTarget> pTarget)
 {
     // Only the visual/display part
-    m_xTargetsBox->InsertTarget(pTarget.get());
+    m_aTargetsBox.InsertTarget(pTarget.get());
 
     // Actually add to the targets vector
     auto name = pTarget->sName;
-    if (m_xTargetsBox->GetTargetByName(name))
+    if (m_aTargetsBox.GetTargetByName(name))
         m_aTableTargets.emplace_back(std::move(pTarget), name);
     else
     {
@@ -515,7 +515,7 @@ void SfxAutoRedactDialog::addTarget(std::unique_ptr<RedactionTarget> pTarget)
 void SfxAutoRedactDialog::clearTargets()
 {
     // Clear the targets box
-    m_xTargetsBox->clear();
+    m_aTargetsBox.clear();
 
     // Clear the targets vector
     m_aTableTargets.clear();
@@ -525,7 +525,7 @@ SfxAutoRedactDialog::SfxAutoRedactDialog(weld::Window* pParent)
     : SfxDialogController(pParent, "sfx/ui/autoredactdialog.ui", "AutoRedactDialog")
     , m_bIsValidState(true)
     , m_bTargetsCopied(false)
-    , m_xTargetsBox(new TargetsTable(m_xBuilder->weld_tree_view("targets")))
+    , m_aTargetsBox(m_xBuilder->weld_tree_view("targets"))
     , m_xLoadBtn(m_xBuilder->weld_button("btnLoadTargets"))
     , m_xSaveBtn(m_xBuilder->weld_button("btnSaveTargets"))
     , m_xAddBtn(m_xBuilder->weld_button("add"))
@@ -534,8 +534,7 @@ SfxAutoRedactDialog::SfxAutoRedactDialog(weld::Window* pParent)
 {
     // Can be used to remember the last set of redaction targets?
     OUString sExtraData;
-    SvtViewOptions aDlgOpt(EViewType::Dialog,
-                           OStringToOUString(m_xDialog->get_help_id(), RTL_TEXTENCODING_UTF8));
+    SvtViewOptions aDlgOpt(EViewType::Dialog, m_xDialog->get_help_id());
 
     if (aDlgOpt.Exists())
     {
@@ -578,7 +577,7 @@ SfxAutoRedactDialog::SfxAutoRedactDialog(weld::Window* pParent)
     m_xAddBtn->connect_clicked(LINK(this, SfxAutoRedactDialog, AddHdl));
     m_xEditBtn->connect_clicked(LINK(this, SfxAutoRedactDialog, EditHdl));
     m_xDeleteBtn->connect_clicked(LINK(this, SfxAutoRedactDialog, DeleteHdl));
-    m_xTargetsBox->connect_row_activated(LINK(this, SfxAutoRedactDialog, DoubleClickEditHdl));
+    m_aTargetsBox.connect_row_activated(LINK(this, SfxAutoRedactDialog, DoubleClickEditHdl));
 }
 
 SfxAutoRedactDialog::~SfxAutoRedactDialog()
@@ -586,8 +585,7 @@ SfxAutoRedactDialog::~SfxAutoRedactDialog()
     if (m_aTableTargets.empty())
     {
         // Clear the dialog data
-        SvtViewOptions aDlgOpt(EViewType::Dialog,
-                               OStringToOUString(m_xDialog->get_help_id(), RTL_TEXTENCODING_UTF8));
+        SvtViewOptions aDlgOpt(EViewType::Dialog, m_xDialog->get_help_id());
         aDlgOpt.Delete();
         return;
     }
@@ -609,11 +607,10 @@ SfxAutoRedactDialog::~SfxAutoRedactDialog()
 
         boost::property_tree::write_json(aStream, aTargetsTree, false);
 
-        OUString sUserDataStr(OUString::fromUtf8(aStream.str().c_str()));
+        OUString sUserDataStr(OUString::fromUtf8(aStream.str()));
 
         // Store the dialog data
-        SvtViewOptions aDlgOpt(EViewType::Dialog,
-                               OStringToOUString(m_xDialog->get_help_id(), RTL_TEXTENCODING_UTF8));
+        SvtViewOptions aDlgOpt(EViewType::Dialog, m_xDialog->get_help_id());
         aDlgOpt.SetUserItem("UserItem", css::uno::Any(sUserDataStr));
 
         if (!m_bTargetsCopied)

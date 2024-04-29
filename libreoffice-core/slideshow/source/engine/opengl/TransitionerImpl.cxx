@@ -385,7 +385,7 @@ void OGLTransitionerImpl::setSlides( const uno::Reference< rendering::XBitmap >&
         xEnteringFastPropertySet->getFastPropertyValue(1) >>= aEnteringBitmap;
         xLeavingFastPropertySet->getFastPropertyValue(1) >>= aLeavingBitmap;
     }
-    if (aEnteringBitmap.getLength() == 3 && aLeavingBitmap.getLength() == 3)
+    if (aEnteringBitmap.getLength() == 2 && aLeavingBitmap.getLength() == 2)
         pChildWindow->SetLeaveEnterBackgrounds(aLeavingBitmap, aEnteringBitmap);
 }
 
@@ -788,18 +788,11 @@ public:
     }
 };
 
-struct OGLColorSpaceHolder : public rtl::StaticWithInit<uno::Reference<rendering::XIntegerBitmapColorSpace>, OGLColorSpaceHolder>
-{
-    uno::Reference<rendering::XIntegerBitmapColorSpace> operator()()
-    {
-        return new OGLColorSpace();
-    }
-};
-
 uno::Reference<rendering::XIntegerBitmapColorSpace> const &
 getOGLColorSpace()
 {
-    return OGLColorSpaceHolder::get();
+    static uno::Reference<rendering::XIntegerBitmapColorSpace> theSpace = new OGLColorSpace();
+    return theSpace;
 }
 
 void buildMipmaps(

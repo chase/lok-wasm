@@ -175,6 +175,16 @@ constexpr sal_Int32 ARCDIRECTION_CLOCKWISE = 0x00000002;
 namespace
 {
 
+/* [MS-EMF] - v20210625 - page 41 */
+/* 2.1.26 Point Enumeration */
+enum EMFPointTypes
+{
+    PT_CLOSEFIGURE = 0x01,
+    PT_LINETO = 0x02,
+    PT_BEZIERTO = 0x04,
+    PT_MOVETO = 0x06
+};
+
 const char *
 record_type_name(sal_uInt32 nRecType)
 {
@@ -932,6 +942,92 @@ namespace emfio
                         DrawPolyLine(ReadPolygonWithSkip<sal_Int32>(true, nNextPos), true, mbRecordPath);
                     break;
 
+                    case EMR_POLYDRAW:
+                    {
+                        sal_uInt32 nPointsCount(0), nBezierCount(0);
+                        std::vector<Point> aPoints;
+                        bool wrongFile = false;
+                        std::vector<unsigned char> aPointTypes;
+                        mpInputStream->ReadInt32(nX32)
+                            .ReadInt32(nY32)
+                            .ReadInt32(nx32)
+                            .ReadInt32(ny32)
+                            .ReadUInt32(nPointsCount);
+
+                        aPoints.reserve(std::min<size_t>(nPointsCount, mpInputStream->remainingSize() / (sizeof(sal_Int32) * 2)));
+                        for (sal_uInt32 i = 0; i < nPointsCount && mpInputStream->good(); i++)
+                        {
+                            sal_Int32 nX, nY;
+                            *mpInputStream >> nX >> nY;
+                            aPoints.push_back(Point(nX, nY));
+                        }
+                        aPointTypes.reserve(std::min<size_t>(nPointsCount, mpInputStream->remainingSize()));
+                        for (sal_uInt32 i = 0; i < nPointsCount && mpInputStream->good(); i++)
+                        {
+                            unsigned char nPointType(0);
+                            mpInputStream->ReadUChar(nPointType);
+                            aPointTypes.push_back(nPointType);
+                        }
+                        nPointsCount = std::min(aPoints.size(), aPointTypes.size());
+                        for (sal_uInt32 i = 0; i < nPointsCount; i++)
+                        {
+                            SAL_INFO_IF(aPointTypes[i] == PT_MOVETO, "emfio",
+                                        "\t\t" << i << "/" << nPointsCount - 1 << " PT_MOVETO, "
+                                               << aPoints[i].getX() << ", " << aPoints[i].getY());
+                            SAL_INFO_IF((aPointTypes[i] != PT_MOVETO) && (aPointTypes[i] & PT_LINETO), "emfio",
+                                        "\t\t" << i << "/" << nPointsCount - 1 << " PT_LINETO, "
+                                               << aPoints[i].getX() << ", " << aPoints[i].getY());
+                            SAL_INFO_IF((aPointTypes[i] != PT_MOVETO) && (aPointTypes[i] & PT_CLOSEFIGURE), "emfio",
+                                        "\t\t" << i << "/" << nPointsCount - 1 << " PT_CLOSEFIGURE, "
+                                               << aPoints[i].getX() << ", " << aPoints[i].getY());
+                            SAL_INFO_IF((aPointTypes[i] != PT_MOVETO) && (aPointTypes[i] & PT_BEZIERTO), "emfio",
+                                        "\t\t" << i << "/" << nPointsCount - 1 << " PT_BEZIERTO, "
+                                               << aPoints[i].getX() << ", " << aPoints[i].getY());
+
+                            if ((aPointTypes[i] != PT_MOVETO) && (aPointTypes[i] & PT_BEZIERTO))
+                                nBezierCount++;
+                            else if (nBezierCount % 3 == 0)
+                                nBezierCount = 0;
+                            else
+                            {
+                                SAL_WARN(
+                                    "emfio",
+                                    "EMF file error: Number of Bezier points is not set of three.");
+                                wrongFile = true;
+                            }
+                        }
+                        if (wrongFile) break;
+                        for (sal_uInt32 i = 0; i < nPointsCount; i++)
+                        {
+                            if (aPointTypes[i] == PT_MOVETO)
+                                MoveTo(aPoints[i], true);
+                            else if (aPointTypes[i] & PT_LINETO)
+                            {
+                                LineTo(aPoints[i], true);
+                                if (aPointTypes[i] & PT_CLOSEFIGURE)
+                                    ClosePath();
+                            }
+                            else if (aPointTypes[i] & PT_BEZIERTO)
+                            {
+                                if (nPointsCount - i < 3)
+                                {
+                                    SAL_WARN("emfio", "EMF file error: Not enough Bezier points.");
+                                    break;
+                                }
+                                tools::Polygon aPolygon(4);
+                                aPolygon[0] = maActPos;
+                                aPolygon[1] = aPoints[i++];
+                                aPolygon[2] = aPoints[i++];
+                                aPolygon[3] = aPoints[i];
+                                DrawPolyBezier(std::move(aPolygon), true, true);
+                                if (aPointTypes[i] & PT_CLOSEFIGURE)
+                                    ClosePath();
+                            }
+                        }
+                        StrokeAndFillPath(true, false);
+                    }
+                    break;
+
                     case EMR_POLYLINE :
                         DrawPolyLine(ReadPolygonWithSkip<sal_Int32>(false, nNextPos), false, mbRecordPath);
                     break;
@@ -1178,19 +1274,21 @@ namespace emfio
                             sal_Int32 elpHatch;
                             mpInputStream->ReadUInt32(offBmi).ReadUInt32(cbBmi).ReadUInt32(offBits).ReadUInt32(cbBits);
                             mpInputStream->ReadUInt32(nPenStyle).ReadUInt32(nWidth).ReadUInt32(nBrushStyle);
-                            SAL_INFO("emfio", "\t\tStyle: 0x" << std::hex << nPenStyle << std::dec);
-                            if ((nPenStyle & PS_STYLE_MASK) > PS_INSIDEFRAME)
-                                nPenStyle = PS_COSMETIC;
-                            if ((nPenStyle & PS_GEOMETRIC) == 0)
-                                nWidth = 0;
-                            SAL_INFO("emfio", "\t\tWidth: " << nWidth);
                             Color aColorRef = ReadColor();
                             mpInputStream->ReadInt32(elpHatch).ReadUInt32(elpNumEntries);
 
                             if (!mpInputStream->good())
                                 bStatus = false;
                             else
+                            {
+                                SAL_INFO("emfio", "\t\tStyle: 0x" << std::hex << nPenStyle << std::dec);
+                                if ((nPenStyle & PS_STYLE_MASK) > PS_INSIDEFRAME)
+                                    nPenStyle = PS_COSMETIC;
+                                if ((nPenStyle & PS_GEOMETRIC) == 0)
+                                    nWidth = 0;
+                                SAL_INFO("emfio", "\t\tWidth: " << nWidth);
                                 CreateObjectIndexed(nIndex, std::make_unique<WinMtfLineStyle>(aColorRef, nPenStyle, nWidth));
+                            }
                         }
                     }
                     break;
@@ -1377,7 +1475,7 @@ namespace emfio
                         sal_uInt32 BkColorSrc(0), iUsageSrc(0), offBmiSrc(0);
                         sal_uInt32 cbBmiSrc(0), offBitsSrc(0), cbBitsSrc(0);
 
-                        sal_uInt32   nStart = mpInputStream->Tell() - 8;
+                        sal_uInt64   nStart = mpInputStream->Tell() - 8;
                         mpInputStream->SeekRel( 0x10 );
 
                         mpInputStream->ReadInt32( xDest ).ReadInt32( yDest ).ReadInt32( cxDest ).ReadInt32( cyDest );
@@ -1538,7 +1636,7 @@ namespace emfio
                         sal_uInt32  dwRop, iUsageSrc, offBmiSrc, cbBmiSrc, offBitsSrc, cbBitsSrc;
                         XForm   xformSrc;
 
-                        sal_uInt32  nStart = mpInputStream->Tell() - 8;
+                        sal_uInt64  nStart = mpInputStream->Tell() - 8;
 
                         mpInputStream->SeekRel( 0x10 );
                         mpInputStream->ReadInt32( xDest ).ReadInt32( yDest ).ReadInt32( cxDest ).ReadInt32( cyDest ).ReadUInt32( dwRop ).ReadInt32( xSrc ).ReadInt32( ySrc )
@@ -1614,7 +1712,7 @@ namespace emfio
                     {
                         sal_Int32   xDest, yDest, xSrc, ySrc, cxSrc, cySrc, cxDest, cyDest;
                         sal_uInt32  offBmiSrc, cbBmiSrc, offBitsSrc, cbBitsSrc, iUsageSrc, dwRop;
-                        sal_uInt32  nStart = mpInputStream->Tell() - 8;
+                        sal_uInt64  nStart = mpInputStream->Tell() - 8;
 
                         mpInputStream->SeekRel( 0x10 );
                         mpInputStream->ReadInt32( xDest )
@@ -1977,7 +2075,7 @@ namespace emfio
 
                     case EMR_CREATEDIBPATTERNBRUSHPT :
                     {
-                        sal_uInt32  nStart = mpInputStream->Tell() - 8;
+                        sal_uInt64  nStart = mpInputStream->Tell() - 8;
                         Bitmap aBitmap;
 
                         mpInputStream->ReadUInt32( nIndex );
@@ -2045,7 +2143,6 @@ namespace emfio
                     case EMR_INVERTRGN :
                     case EMR_FLATTENPATH :
                     case EMR_WIDENPATH :
-                    case EMR_POLYDRAW :
                     case EMR_SETPALETTEENTRIES :
                     case EMR_RESIZEPALETTE :
                     case EMR_EXTFLOODFILL :
@@ -2159,8 +2256,8 @@ namespace emfio
         SAL_INFO("emfio", "\tMetafile size: " << mnEndPos);
         mnEndPos += mnStartPos;
 
-        sal_uInt32 nStrmPos = mpInputStream->Tell(); // checking if mnEndPos is valid
-        sal_uInt32 nActualFileSize = nStrmPos + mpInputStream->remainingSize();
+        sal_uInt64 nStrmPos = mpInputStream->Tell(); // checking if mnEndPos is valid
+        sal_uInt64 nActualFileSize = nStrmPos + mpInputStream->remainingSize();
 
         if ( nActualFileSize < mnEndPos )
         {

@@ -348,7 +348,7 @@ void testSuspiciousReinterpretCast() {
 
 void testDynamicCast() {
 
-    struct S1 { virtual ~S1(); };
+    struct S1 { virtual ~S1() {} };
     struct S2 final: S1 {};
     struct S3: S1 {};
 
@@ -471,6 +471,18 @@ void testSalIntTypes() {
     (void) static_cast<short>(n); // doesn't warn, even if 'sal_Int16' is 'short'
     using Other = sal_Int16;
     (void) static_cast<Other>(n); // doesn't warn either
+}
+
+void testFunctionalCast2() {
+    struct S1 { S1(int, int, int, int) {} };
+
+    // expected-error@+1 {{redundant functional cast [loplugin:redundantcast]}}
+    S1 aTitleBarBox(S1(0, 0, 0, 0));
+    (void)aTitleBarBox;
+
+    // no warning expected
+#define S1_COL S1(0,0,0,0)
+    S1 aTest2(S1_COL);
 }
 
 int main() {

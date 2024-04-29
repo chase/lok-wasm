@@ -349,12 +349,11 @@ void RehearseTimingsActivity::viewAdded( const UnoViewSharedPtr& rView )
 
 void RehearseTimingsActivity::viewRemoved( const UnoViewSharedPtr& rView )
 {
-    maViews.erase(
-        std::remove_if( maViews.begin(), maViews.end(),
+    std::erase_if(
+        maViews,
             [&rView]
             ( const ViewsVecT::value_type& cp )
-            { return rView == cp.first; } ),
-        maViews.end() );
+            { return rView == cp.first; } );
 }
 
 void RehearseTimingsActivity::viewChanged( const UnoViewSharedPtr& rView )
@@ -416,13 +415,11 @@ void RehearseTimingsActivity::paint( cppcanvas::CanvasSharedPtr const & canvas )
     sal_Int32 n = nTimeSecs / 3600;
     if (n < 10)
         buf.append( '0' );
-    buf.append( n );
-    buf.append( ':' );
+    buf.append( OUString::number(n) + ":" );
     n = ((nTimeSecs % 3600) / 60);
     if (n < 10)
         buf.append( '0' );
-    buf.append( n );
-    buf.append( ':' );
+    buf.append( OUString::number(n) + ":" );
     n = (nTimeSecs % 60);
     if (n < 10)
         buf.append( '0' );

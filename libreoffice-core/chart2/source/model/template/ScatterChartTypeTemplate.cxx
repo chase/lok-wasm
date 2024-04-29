@@ -209,7 +209,7 @@ bool ScatterChartTypeTemplate::matchesTemplate2(
         bool bLineFound = false;
 
         std::vector< rtl::Reference< DataSeries > > aSeriesVec =
-            DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+            xDiagram->getDataSeries();
 
         for (auto const& series : aSeriesVec)
         {
@@ -265,7 +265,7 @@ bool ScatterChartTypeTemplate::matchesTemplate2(
         try
         {
             rtl::Reference< ChartType > xChartTypeProp =
-                DiagramHelper::getChartTypeByIndex( xDiagram, 0 );
+                xDiagram->getChartTypeByIndex(0);
             setFastPropertyValue_NoBroadcast( PROP_SCATTERCHARTTYPE_TEMPLATE_CURVE_STYLE, xChartTypeProp->getPropertyValue(CHART_UNONAME_CURVE_STYLE) );
             setFastPropertyValue_NoBroadcast( PROP_SCATTERCHARTTYPE_TEMPLATE_CURVE_RESOLUTION, xChartTypeProp->getPropertyValue(CHART_UNONAME_CURVE_RESOLUTION) );
             setFastPropertyValue_NoBroadcast( PROP_SCATTERCHARTTYPE_TEMPLATE_SPLINE_ORDER, xChartTypeProp->getPropertyValue(CHART_UNONAME_SPLINE_ORDER) );

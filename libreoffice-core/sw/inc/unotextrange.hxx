@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SW_INC_UNOTEXTRANGE_HXX
 #define INCLUDED_SW_INC_UNOTEXTRANGE_HXX
 
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
@@ -38,6 +37,7 @@
 class SwDoc;
 class SwUnoCursor;
 class SwFrameFormat;
+class SwXText;
 
 class SW_DLLPUBLIC SwUnoInternalPaM final
     : public SwPaM
@@ -67,7 +67,7 @@ namespace sw {
             const css::uno::Reference<css::text::XTextRange> & xTextRange,
             TextRangeMode eMode = TextRangeMode::RequireTextNode);
 
-    css::uno::Reference< css::text::XText >
+    css::uno::Reference< SwXText >
         CreateParentXText(SwDoc & rDoc, const SwPosition& rPos);
 
     bool GetDefaultTextContentValue(css::uno::Any& rAny,
@@ -76,8 +76,7 @@ namespace sw {
 } // namespace sw
 
 typedef ::cppu::WeakImplHelper
-<   css::lang::XUnoTunnel
-,   css::lang::XServiceInfo
+<   css::lang::XServiceInfo
 ,   css::beans::XPropertySet
 ,   css::beans::XPropertyState
 ,   css::container::XEnumerationAccess
@@ -132,12 +131,6 @@ public:
     static rtl::Reference< SwXTextRange > CreateXTextRange(
             SwDoc & rDoc,
             const SwPosition& rPos, const SwPosition *const pMark);
-
-    static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
-
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething(
-            const css::uno::Sequence< sal_Int8 >& rIdentifier) override;
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
@@ -210,8 +203,7 @@ public:
 };
 
 typedef ::cppu::WeakImplHelper
-<   css::lang::XUnoTunnel
-,   css::lang::XServiceInfo
+<   css::lang::XServiceInfo
 ,   css::container::XIndexAccess
 > SwXTextRanges_Base;
 
@@ -219,7 +211,6 @@ struct SwXTextRanges : public SwXTextRanges_Base
 {
     virtual SwUnoCursor* GetCursor() =0;
     static rtl::Reference<SwXTextRanges> Create(SwPaM* const pCursor);
-    static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
 };
 
 #endif // INCLUDED_SW_INC_UNOTEXTRANGE_HXX

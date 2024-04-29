@@ -345,7 +345,7 @@ uno::Reference<XAccessible> SAL_CALL
     else
         throw lang::IndexOutOfBoundsException (
             "shape has no child with index " + OUString::number(nIndex),
-            static_cast<uno::XWeak*>(this));
+            getXWeak());
 
     return xChild;
 }
@@ -473,8 +473,8 @@ awt::Rectangle SAL_CALL AccessibleShape::getBounds()
     if ( mxShape.is() )
     {
 
-        static constexpr OUStringLiteral sBoundRectName = u"BoundRect";
-        static constexpr OUStringLiteral sAnchorPositionName = u"AnchorPosition";
+        static constexpr OUString sBoundRectName = u"BoundRect"_ustr;
+        static constexpr OUString sAnchorPositionName = u"AnchorPosition"_ustr;
 
         // Get the shape's bounding box in internal coordinates (in 100th of
         // mm).  Use the property BoundRect.  Only if that is not supported ask
@@ -534,7 +534,7 @@ awt::Rectangle SAL_CALL AccessibleShape::getBounds()
         if (maShapeTreeInfo.GetViewForwarder() == nullptr)
             throw uno::RuntimeException (
                 "AccessibleShape has no valid view forwarder",
-                static_cast<uno::XWeak*>(this));
+                getXWeak());
         ::Size aPixelSize = maShapeTreeInfo.GetViewForwarder()->LogicToPixel (
             ::Size (aBoundingBox.Width, aBoundingBox.Height));
         ::Point aPixelPosition = maShapeTreeInfo.GetViewForwarder()->LogicToPixel (
@@ -887,6 +887,10 @@ void AccessibleShape::disposing (const lang::EventObject& aEvent)
     {
         TOOLS_WARN_EXCEPTION("svx", "caught exception while disposing");
     }
+    mpChildrenManager.reset();
+    mxShape.clear();
+    maShapeTreeInfo.dispose();
+    mpText.reset();
 }
 
 // document::XShapeEventListener
@@ -906,7 +910,7 @@ void SAL_CALL
     CommitChange (
         AccessibleEventId::VISIBLE_DATA_CHANGED,
         uno::Any(),
-        uno::Any());
+        uno::Any(), -1);
 
     // Name and Description may have changed.  Update the local
     // values accordingly.
@@ -923,7 +927,7 @@ void AccessibleShape::ViewForwarderChanged()
     // and/or position) of the shape has changed.
     CommitChange (AccessibleEventId::VISIBLE_DATA_CHANGED,
         uno::Any(),
-        uno::Any());
+        uno::Any(), -1);
 
     // Tell children manager of the modified view forwarder.
     if (mpChildrenManager != nullptr)
@@ -976,7 +980,7 @@ OUString AccessibleShape::GetFullAccessibleName (AccessibleShape *shape)
         CommitChange(
             AccessibleEventId::NAME_CHANGED,
             aNewValue,
-            aOldValue);
+            aOldValue, -1);
     }
     aAccName = sName;
     return sName;
@@ -1014,7 +1018,7 @@ void AccessibleShape::disposing()
     maShapeTreeInfo.dispose();
 
     // Call base classes.
-    AccessibleContextBase::dispose ();
+    AccessibleContextBase::disposing();
 }
 
 sal_Int64 SAL_CALL

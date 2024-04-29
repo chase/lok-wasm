@@ -22,7 +22,6 @@
 
 #include <vcl/dllapi.h>
 #include <rtl/ustring.hxx>
-#include <sal/log.hxx>
 #include <tools/fontenum.hxx>
 
 
@@ -60,12 +59,10 @@ public:
 
     // Device dependent functions
     int                 GetQuality() const                          { return mnQuality; }
-    const OUString&     GetMapNames() const                         { return maMapNames; }
 
 
     void                SetQuality( int nQuality )                  { mnQuality = nQuality; }
     void                IncreaseQualityBy( int nQualityAmount )     { mnQuality += nQualityAmount; }
-    void                AddMapName( std::u16string_view );
 
 private:
     // device independent variables
@@ -79,7 +76,6 @@ private:
     bool                mbMicrosoftSymbolEncoded;   // Is font microsoft symbol encoded?
 
     // device dependent variables
-    OUString            maMapNames;                 // List of family name aliases separated with ';'
     int                 mnQuality;                  // Quality (used when similar fonts compete)
 
 };
@@ -87,22 +83,6 @@ private:
 inline void FontAttributes::SetMicrosoftSymbolEncoded(const bool bMicrosoftSymbolEncoded)
 {
     mbMicrosoftSymbolEncoded = bMicrosoftSymbolEncoded;
-}
-
-inline void FontAttributes::AddMapName( std::u16string_view aMapName )
-{
-    if( maMapNames.getLength() > 0 )
-    {
-        maMapNames += ";";
-    }
-
-    if (aMapName.size() == 0)
-    {
-        SAL_WARN("vcl.fonts", "New map name is empty");
-        return;
-    }
-
-    maMapNames += aMapName;
 }
 
 #endif // INCLUDED_VCL_INC_FONTATTRIBUTES_HXX

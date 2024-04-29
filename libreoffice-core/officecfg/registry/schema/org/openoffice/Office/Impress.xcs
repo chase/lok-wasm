@@ -142,6 +142,36 @@
           </info>
           <value>true</value>
         </prop>
+        <prop oor:name="NavigationBtnScale" oor:type="xs:int" oor:nillable="false">
+          <!-- UIHints: Tools - Options - Impress - View - [Section] Navigation -->
+          <info>
+            <desc>Specifies which size of the icons is used for the
+            navigation bar.</desc>
+          </info>
+          <constraints>
+            <enumeration oor:value="0">
+              <info>
+                <desc>automatic (small) icons</desc>
+              </info>
+            </enumeration>
+            <enumeration oor:value="1">
+              <info>
+                <desc>small icons</desc>
+              </info>
+            </enumeration>
+            <enumeration oor:value="2">
+              <info>
+                <desc>large icons</desc>
+              </info>
+            </enumeration>
+            <enumeration oor:value="3">
+              <info>
+                <desc>extralarge icons</desc>
+              </info>
+            </enumeration>
+          </constraints>
+          <value>0</value>
+        </prop>
       </group>
       <group oor:name="Other">
         <info>
@@ -509,6 +539,13 @@
         </info>
         <value>false</value>
       </prop>
+      <prop oor:name="DragThresholdPixels" oor:type="xs:int" oor:nillable="false">
+        <info>
+          <desc>Defines number of pixels the cursor can move before dragging.</desc>
+          <label>Drag Threshold</label>
+        </info>
+        <value>6</value>
+      </prop>
       <group oor:name="TextObject">
         <info>
           <desc>Contains text editing related configuration items.</desc>
@@ -577,6 +614,13 @@
          </info>
          <value>true</value>
        </prop>
+       <prop oor:name="ShowNavigationPanel" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+         <desc>Indicates whether to show navigation panel for presentations.</desc>
+         <label>Show navigation panel</label>
+       </info>
+       <value>false</value>
+     </prop>
       </group>
       <group oor:name="Compatibility">
         <info>
@@ -883,50 +927,6 @@
           </info>
           <value>true</value>
         </prop>
-        <group oor:name="XAxis">
-          <!-- UIHints: Tools - Options - Impress - Grid - [Section] Snap grid -->
-          <!-- Notice: Default-nonmetrical value: 1270 1/100 mm. -->
-          <info>
-            <desc>Defines the horizontal distance between adjacent points of the snap grid.</desc>
-            <label>X axis</label>
-          </info>
-          <prop oor:name="Metric" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>Defines the horizontal distance between adjacent points of the snap grid in 1/100 mm, used when the metric system is selected.</desc>
-              <label/>
-            </info>
-            <value>100</value>
-          </prop>
-          <prop oor:name="NonMetric" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>Defines the horizontal distance between adjacent points of the snap grid in 1/100 mm, used when the non-metric system is selected.</desc>
-              <label/>
-            </info>
-            <value>1270</value>
-          </prop>
-        </group>
-        <group oor:name="YAxis">
-          <!-- UIHints: Tools - Options - Impress - Grid - [Section] Snap grid -->
-          <!-- Notice: Default-Default-nonmetrical value: 1270 1/100 mm. -->
-          <info>
-            <desc>Defines the vertical distance between adjacent points of the snap grid.</desc>
-            <label>Y axis</label>
-          </info>
-          <prop oor:name="Metric" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>Defines the vertical distance between adjacent points of the snap grid in 1/100 mm, used when the metric system is selected.</desc>
-              <label/>
-            </info>
-            <value>100</value>
-          </prop>
-          <prop oor:name="NonMetric" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>Defines the vertical distance between adjacent points of the snap grid in 1/100 mm, used when the non-metric system is selected.</desc>
-              <label/>
-            </info>
-            <value>1270</value>
-          </prop>
-        </group>
       </group>
     </group>
     <group oor:name="Print">
@@ -1308,27 +1308,6 @@
           </info>
         </set>
       </group>
-      <group oor:name="Framework">
-        <info>
-          <desc>Options that control the multi pane framework.</desc>
-          <label>Multi Pane Framework Options</label>
-        </info>
-        <set oor:name="ResourceFactories" oor:node-type="ResourceFactory">
-          <info>
-            <desc>Set of factories and the resources created by them.</desc>
-            <label>Multi Pane Framework Resource Factories</label>
-          </info>
-        </set>
-        <set oor:name="StartupServices" oor:node-type="StartupService">
-          <info>
-            <desc>
-              Set of services that are instantiated every time the
-              framework of a Draw or Impress document is initialized.
-            </desc>
-            <label>Multi Pane Framework Startup Services</label>
-          </info>
-        </set>
-      </group>
       <group oor:name="SlideSorterBar">
         <info>
           <desc>Values related to the slide sorter.</desc>
@@ -1454,36 +1433,6 @@
               </enumeration>
             </constraints>
             <value>ResolutionReduction</value>
-          </prop>
-          <prop oor:name="TimeBetweenHighPriorityRequests" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>
-                Time in milliseconds to wait between processing
-                preview creation requests with high priority.
-              </desc>
-              <label>Time Between High Priority Requests</label>
-            </info>
-            <value>10</value>
-          </prop>
-          <prop oor:name="TimeBetweenLowPriorityRequests" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>
-                Time in milliseconds to wait between processing
-                preview creation requests with low priority.
-              </desc>
-              <label>Time Between Low Priority Requests</label>
-            </info>
-            <value>100</value>
-          </prop>
-          <prop oor:name="TimeBetweenRequestsDuringShow" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>
-                Time in milliseconds to wait between processing
-                preview creation requests when show is running.
-              </desc>
-              <label>Time Between Requests During Show</label>
-            </info>
-            <value>1000</value>
           </prop>
         </group>
       </group>

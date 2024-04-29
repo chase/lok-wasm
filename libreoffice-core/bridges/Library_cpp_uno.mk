@@ -77,10 +77,6 @@ bridges_SELECTED_BRIDGE := gcc3_linux_intel
 bridge_asm_objects := call
 bridge_exception_objects := cpp2uno except uno2cpp
 bridge_noncallexception_objects := callvirtualmethod
-else ifeq ($(OS),SOLARIS)
-bridges_SELECTED_BRIDGE := gcc3_solaris_intel
-bridge_exception_objects := cpp2uno except uno2cpp
-bridge_noncallexception_objects := callvirtualmethod
 else ifeq ($(COM),MSC)
 bridges_SELECTED_BRIDGE := msvc_win32_intel
 bridge_exception_objects := cpp2uno uno2cpp
@@ -138,10 +134,6 @@ ifneq ($(filter DRAGONFLY FREEBSD LINUX NETBSD OPENBSD,$(OS)),)
 bridges_SELECTED_BRIDGE := gcc3_linux_powerpc
 bridge_noopt_objects := uno2cpp
 bridge_exception_objects := cpp2uno except
-else ifeq ($(OS),AIX)
-bridges_SELECTED_BRIDGE := gcc3_aix_powerpc
-bridge_exception_objects := except
-bridge_cxx_objects := cpp2uno uno2cpp
 endif
 
 else ifeq ($(CPUNAME),POWERPC64)
@@ -150,13 +142,6 @@ ifneq ($(filter DRAGONFLY FREEBSD LINUX NETBSD OPENBSD,$(OS)),)
 bridges_SELECTED_BRIDGE := gcc3_linux_powerpc64
 bridge_noopt_objects := cpp2uno uno2cpp
 bridge_exception_objects := except
-endif
-
-else ifeq ($(CPUNAME),S390)
-
-ifneq ($(filter DRAGONFLY FREEBSD LINUX NETBSD OPENBSD,$(OS)),)
-bridges_SELECTED_BRIDGE := gcc3_linux_s390
-bridge_exception_objects := cpp2uno except uno2cpp
 endif
 
 else ifeq ($(CPUNAME),S390X)
@@ -173,10 +158,6 @@ bridges_SELECTED_BRIDGE := gcc3_linux_sparc
 bridge_asm_objects := call
 bridge_noopt_objects := except
 bridge_exception_objects := cpp2uno uno2cpp
-else ifeq ($(OS),SOLARIS)
-bridges_SELECTED_BRIDGE := gcc3_solaris_sparc
-bridge_noopt_objects := cpp2uno uno2cpp
-bridge_exception_objects := except
 endif
 
 else ifeq ($(OS)-$(CPUNAME),LINUX-SPARC64)
@@ -236,7 +217,6 @@ endif
 # it off.
 ifeq ($(COM),GCC)
 $(eval $(call gb_Library_add_cxxflags,gcc3_uno,\
-	$(if $(filter armeabi-v7a,$(ANDROID_APP_ABI)),-I$(ANDROID_BINUTILS_PREBUILT_ROOT)/lib/gcc/arm-linux-androideabi/4.9.x/include) \
 	-fno-omit-frame-pointer \
 	-fno-strict-aliasing \
 	-fno-lto \

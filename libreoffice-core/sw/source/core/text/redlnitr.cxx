@@ -46,6 +46,7 @@
 #include <ftnfrm.hxx>
 #include <vcl/svapp.hxx>
 #include "redlnitr.hxx"
+#include "tools/fontenum.hxx" // MACRO:
 #include <extinput.hxx>
 #include <fmtpdsc.hxx>
 #include <editeng/charhiddenitem.hxx>
@@ -153,7 +154,7 @@ public:
                 sw::mark::IFieldmark const*const pFieldmark(
                         m_eFieldmarkMode == sw::FieldmarkMode::ShowResult
                             ? m_rIDMA.getFieldmarkAt(*m_oNextFieldmarkHide)
-                            : m_rIDMA.getFieldmarkFor(*m_oNextFieldmarkHide));
+                            : m_rIDMA.getInnerFieldmarkFor(*m_oNextFieldmarkHide));
                 assert(pFieldmark);
                 m_Fieldmark.first = pFieldmark;
                 // for cursor travelling, there should be 2 visible chars;
@@ -792,9 +793,8 @@ short SwRedlineItr::Seek(SwFont& rFnt,
                         m_pSet = std::make_unique<SfxItemSetFixed<RES_CHRATR_BEGIN, RES_CHRATR_END-1>>(rPool);
                     }
 
-                    if( 1 < pRed->GetStackCount() )
-                        FillHints( pRed->GetAuthor( 1 ), pRed->GetType( 1 ) );
-                    FillHints( pRed->GetAuthor(), pRed->GetType() );
+                    // MACRO:
+                    FillHints( pRed->GetType() );
 
                     SfxWhichIter aIter( *m_pSet );
 
@@ -806,7 +806,12 @@ short SwRedlineItr::Seek(SwFont& rFnt,
                             m_pSet->Put(SvxCrossedOutItem( STRIKEOUT_DOUBLE, RES_CHRATR_CROSSEDOUT ));
                         else
                             m_pSet->Put(SvxUnderlineItem( LINESTYLE_DOUBLE, RES_CHRATR_UNDERLINE ));
+                    // MACRO: make insertion underlined single {
+                    }else if (pRed->GetType() == RedlineType::Insert)
+                    {
+                        m_pSet->Put(SvxUnderlineItem(LINESTYLE_SINGLE, RES_CHRATR_UNDERLINE));
                     }
+                    // MACRO: }
 
                     sal_uInt16 nWhich = aIter.FirstWhich();
                     while( nWhich )
@@ -866,24 +871,26 @@ short SwRedlineItr::Seek(SwFont& rFnt,
     return nRet + EnterExtend(rFnt, nNode, nNew);
 }
 
-void SwRedlineItr::FillHints( std::size_t nAuthor, RedlineType eType )
+// MACRO: always red/blue track changes author irrespective {
+void SwRedlineItr::FillHints(RedlineType eType )
 {
     switch ( eType )
     {
         case RedlineType::Insert:
-            SW_MOD()->GetInsertAuthorAttr(nAuthor, *m_pSet);
+            SW_MOD()->GetInsertAuthorAttr(*m_pSet);
             break;
         case RedlineType::Delete:
-            SW_MOD()->GetDeletedAuthorAttr(nAuthor, *m_pSet);
+            SW_MOD()->GetDeletedAuthorAttr(*m_pSet);
             break;
         case RedlineType::Format:
         case RedlineType::FmtColl:
-            SW_MOD()->GetFormatAuthorAttr(nAuthor, *m_pSet);
+            SW_MOD()->GetFormatAuthorAttr(*m_pSet);
             break;
         default:
             break;
     }
 }
+// MACRO: }
 
 void SwRedlineItr::ChangeTextAttr( SwFont* pFnt, SwTextAttr const &rHt, bool bChg )
 {

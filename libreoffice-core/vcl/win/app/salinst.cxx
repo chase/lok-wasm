@@ -257,13 +257,11 @@ SalData::SalData()
     mpDitherHigh = nullptr;     // Dither mapping table
     mhSalObjMsgHook = nullptr;  // hook to get interesting msg for SalObject
     mhWantLeaveMsg = nullptr;   // window handle, that want a MOUSELEAVE message
-    mpMouseLeaveTimer = nullptr; // Timer for MouseLeave Test
     mpInstance = nullptr;  // pointer of first instance
     mpFirstFrame = nullptr;     // pointer of first frame
     mpFirstObject = nullptr;    // pointer of first object window
     mpFirstVD = nullptr;        // first VirDev
     mpFirstPrinter = nullptr;   // first printing printer
-    mpHDCCache = nullptr;       // Cache for three DC's
     mh50Bmp = nullptr;          // 50% Bitmap
     mh50Brush = nullptr;        // 50% Brush
     int i;

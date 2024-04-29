@@ -49,11 +49,11 @@ namespace framework
 {
 
 // Property names of a menu/menu item ItemDescriptor
-constexpr OUStringLiteral ITEM_DESCRIPTOR_COMMANDURL = u"CommandURL";
-constexpr OUStringLiteral ITEM_DESCRIPTOR_LABEL = u"Label";
-constexpr OUStringLiteral ITEM_DESCRIPTOR_TYPE = u"Type";
-constexpr OUStringLiteral ITEM_DESCRIPTOR_STYLE = u"Style";
-constexpr OUStringLiteral ITEM_DESCRIPTOR_VISIBLE = u"IsVisible";
+constexpr OUString ITEM_DESCRIPTOR_COMMANDURL = u"CommandURL"_ustr;
+constexpr OUString ITEM_DESCRIPTOR_LABEL = u"Label"_ustr;
+constexpr OUString ITEM_DESCRIPTOR_TYPE = u"Type"_ustr;
+constexpr OUString ITEM_DESCRIPTOR_STYLE = u"Style"_ustr;
+constexpr OUString ITEM_DESCRIPTOR_VISIBLE = u"IsVisible"_ustr;
 
 static void ExtractToolbarParameters( const Sequence< PropertyValue >& rProp,
                                       OUString&                        rCommandURL,
@@ -65,10 +65,7 @@ static void ExtractToolbarParameters( const Sequence< PropertyValue >& rProp,
     for ( const PropertyValue& rEntry : rProp )
     {
         if ( rEntry.Name == ITEM_DESCRIPTOR_COMMANDURL )
-        {
             rEntry.Value >>= rCommandURL;
-            rCommandURL = rCommandURL.intern();
-        }
         else if ( rEntry.Name == ITEM_DESCRIPTOR_LABEL )
             rEntry.Value >>= rLabel;
         else if ( rEntry.Name == ITEM_DESCRIPTOR_TYPE )
@@ -85,7 +82,7 @@ namespace {
 struct ToolboxStyleItem
 {
     sal_Int16 nBit;
-    rtl::OUStringConstExpr attrName;
+    OUString attrName;
 };
 
 }
@@ -151,16 +148,6 @@ OReadToolBoxDocumentHandler::OReadToolBoxDocumentHandler( const Reference< XInde
             m_aToolBoxMap.emplace( temp, static_cast<ToolBox_XML_Entry>(i) );
         }
     }
-
-    // pre-calculate a hash code for all style strings to speed up xml read process
-    m_nHashCode_Style_Radio         = OUString( ATTRIBUTE_ITEMSTYLE_RADIO ).hashCode();
-    m_nHashCode_Style_Left          = OUString( ATTRIBUTE_ITEMSTYLE_LEFT ).hashCode();
-    m_nHashCode_Style_AutoSize      = OUString( ATTRIBUTE_ITEMSTYLE_AUTOSIZE ).hashCode();
-    m_nHashCode_Style_DropDown      = OUString( ATTRIBUTE_ITEMSTYLE_DROPDOWN ).hashCode();
-    m_nHashCode_Style_Repeat        = OUString( ATTRIBUTE_ITEMSTYLE_REPEAT ).hashCode();
-    m_nHashCode_Style_DropDownOnly  = OUString( ATTRIBUTE_ITEMSTYLE_DROPDOWNONLY ).hashCode();
-    m_nHashCode_Style_Text          = OUString( ATTRIBUTE_ITEMSTYLE_TEXT ).hashCode();
-    m_nHashCode_Style_Image         = OUString( ATTRIBUTE_ITEMSTYLE_IMAGE ).hashCode();
 
     m_bToolBarStartFound            = false;
     m_bToolBarItemStartFound        = false;
@@ -284,7 +271,7 @@ void SAL_CALL OReadToolBoxDocumentHandler::startElement(
                         case TB_ATTRIBUTE_URL:
                         {
                             bAttributeURL   = true;
-                            aCommandURL     = xAttribs->getValueByIndex( n ).intern();
+                            aCommandURL     = xAttribs->getValueByIndex( n );
                         }
                         break;
 
@@ -313,22 +300,21 @@ void SAL_CALL OReadToolBoxDocumentHandler::startElement(
                                 OUString aToken  = aTemp.getToken( 0, ' ', nIndex );
                                 if ( !aToken.isEmpty() )
                                 {
-                                    sal_Int32 nHashCode = aToken.hashCode();
-                                    if ( nHashCode == m_nHashCode_Style_Radio )
+                                    if ( aToken == ATTRIBUTE_ITEMSTYLE_RADIO )
                                         nItemBits |= css::ui::ItemStyle::RADIO_CHECK;
-                                    else if ( nHashCode == m_nHashCode_Style_Left )
+                                    else if ( aToken == ATTRIBUTE_ITEMSTYLE_LEFT )
                                         nItemBits |= css::ui::ItemStyle::ALIGN_LEFT;
-                                    else if ( nHashCode == m_nHashCode_Style_AutoSize )
+                                    else if ( aToken == ATTRIBUTE_ITEMSTYLE_AUTOSIZE )
                                         nItemBits |= css::ui::ItemStyle::AUTO_SIZE;
-                                    else if ( nHashCode == m_nHashCode_Style_Repeat )
+                                    else if ( aToken == ATTRIBUTE_ITEMSTYLE_REPEAT )
                                         nItemBits |= css::ui::ItemStyle::REPEAT;
-                                    else if ( nHashCode == m_nHashCode_Style_DropDownOnly )
+                                    else if ( aToken == ATTRIBUTE_ITEMSTYLE_DROPDOWNONLY )
                                         nItemBits |= css::ui::ItemStyle::DROPDOWN_ONLY;
-                                    else if ( nHashCode == m_nHashCode_Style_DropDown )
+                                    else if ( aToken == ATTRIBUTE_ITEMSTYLE_DROPDOWN )
                                         nItemBits |= css::ui::ItemStyle::DROP_DOWN;
-                                    else if ( nHashCode == m_nHashCode_Style_Text )
+                                    else if ( aToken == ATTRIBUTE_ITEMSTYLE_TEXT )
                                         nItemBits |= css::ui::ItemStyle::TEXT;
-                                    else if ( nHashCode == m_nHashCode_Style_Image )
+                                    else if ( aToken == ATTRIBUTE_ITEMSTYLE_IMAGE )
                                         nItemBits |= css::ui::ItemStyle::ICON;
                                 }
                             }
@@ -563,7 +549,6 @@ OWriteToolBoxDocumentHandler::OWriteToolBoxDocumentHandler(
     m_rItemAccess( rItemAccess )
 {
     m_xEmptyList = new ::comphelper::AttributeList;
-    m_aAttributeType    = ATTRIBUTE_TYPE_CDATA;
     m_aXMLXlinkNS       = XMLNS_XLINK_PREFIX;
     m_aXMLToolbarNS     = XMLNS_TOOLBAR_PREFIX;
 }
@@ -600,16 +585,13 @@ void OWriteToolBoxDocumentHandler::WriteToolBoxDocument()
     rtl::Reference<::comphelper::AttributeList> pList = new ::comphelper::AttributeList;
 
     pList->AddAttribute( ATTRIBUTE_XMLNS_TOOLBAR,
-                         m_aAttributeType,
                          XMLNS_TOOLBAR );
 
     pList->AddAttribute( ATTRIBUTE_XMLNS_XLINK,
-                         m_aAttributeType,
                          XMLNS_XLINK );
 
     if ( !aUIName.isEmpty() )
         pList->AddAttribute( m_aXMLToolbarNS + ATTRIBUTE_UINAME,
-                             m_aAttributeType,
                              aUIName );
 
     m_xWriteDocumentHandler->startElement( ELEMENT_NS_TOOLBAR, pList );
@@ -664,19 +646,17 @@ void OWriteToolBoxDocumentHandler::WriteToolBoxItem(
     }
 
     // save required attribute (URL)
-    pList->AddAttribute( m_aAttributeURL, m_aAttributeType, rCommandURL );
+    pList->AddAttribute( m_aAttributeURL, rCommandURL );
 
     if ( !rLabel.isEmpty() )
     {
         pList->AddAttribute( m_aXMLToolbarNS + ATTRIBUTE_TEXT,
-                             m_aAttributeType,
                              rLabel );
     }
 
     if ( !bVisible )
     {
         pList->AddAttribute( m_aXMLToolbarNS + ATTRIBUTE_VISIBLE,
-                             m_aAttributeType,
                              ATTRIBUTE_BOOLEAN_FALSE );
     }
 
@@ -691,11 +671,10 @@ void OWriteToolBoxDocumentHandler::WriteToolBoxItem(
             {
                 if ( !aValue.isEmpty() )
                     aValue.append(" ");
-                aValue.append( OUString(pStyle->attrName) );
+                aValue.append( pStyle->attrName );
             }
         }
         pList->AddAttribute( m_aXMLToolbarNS + ATTRIBUTE_ITEMSTYLE,
-                             m_aAttributeType,
                              aValue.makeStringAndClear() );
     }
 

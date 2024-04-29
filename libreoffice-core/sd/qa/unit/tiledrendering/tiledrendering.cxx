@@ -54,6 +54,7 @@
 #include <vcl/BitmapReadAccess.hxx>
 #include <vcl/virdev.hxx>
 #include <o3tl/string_view.hxx>
+#include <sfx2/sidebar/Sidebar.hxx>
 
 #include <chrono>
 #include <cstdlib>
@@ -74,129 +75,7 @@ public:
     virtual void setUp() override;
     virtual void tearDown() override;
 
-    void testCreateDestroy();
-    void testCreateView();
-    void testRegisterCallback();
-    void testPostKeyEvent();
-    void testPostMouseEvent();
-    void testSetTextSelection();
-    void testGetTextSelection();
-    void testSetGraphicSelection();
-    void testUndoShells();
-    void testResetSelection();
-    void testInsertDeletePage();
-    void testInsertTable();
-    void testPartHash();
-    void testResizeTable();
-    void testResizeTableColumn();
-    void testViewCursors();
-    void testViewCursorParts();
-    void testCursorViews();
-    void testCursorVisibility_SingleClick();
-    void testCursorVisibility_DoubleClick();
-    void testCursorVisibility_MultiView();
-    void testCursorVisibility_Escape();
-    void testViewLock();
-    void testUndoLimiting();
-    void testCreateViewGraphicSelection();
-    void testCreateViewTextCursor();
-    void testTdf102223();
-    void testTdf118354();
-    void testPostKeyEventInvalidation();
-    void testTdf103083();
-    void testTdf104405();
-    void testTdf81754();
-    void testTdf105502();
-    void testCommentCallbacks();
-    void testCommentChangeImpress();
-    void testCommentChangeDraw();
-    void testMultiViewInsertDeletePage();
-    void testMultiViewInsertDeletePage2();
-    void testDisableUndoRepair();
-    void testDocumentRepair();
-    void testLanguageStatus();
-    void testDefaultView();
-    void testIMESupport();
-    void testTdf115783();
-    void testPasteTextOnSlide();
-    void testTdf115873();
-    void testTdf115873Group();
-    void testCutSelectionChange();
-    void testThemeViewSeparation();
-    void testRegenerateDiagram();
-    void testLanguageAllText();
-    void testInsertDeletePageInvalidation();
-    void testSpellOnlineRenderParameter();
-    void testSlideDuplicateUndo();
-    void testMoveShapeHandle();
-    void testDeleteTable();
-    void testPasteUndo();
-    void testShapeEditInMultipleViews();
-    void testGetViewRenderState();
-
-    CPPUNIT_TEST_SUITE(SdTiledRenderingTest);
-    CPPUNIT_TEST(testCreateDestroy);
-    CPPUNIT_TEST(testCreateView);
-    CPPUNIT_TEST(testRegisterCallback);
-    CPPUNIT_TEST(testPostKeyEvent);
-    CPPUNIT_TEST(testPostMouseEvent);
-    CPPUNIT_TEST(testSetTextSelection);
-    CPPUNIT_TEST(testGetTextSelection);
-    CPPUNIT_TEST(testSetGraphicSelection);
-    CPPUNIT_TEST(testUndoShells);
-    CPPUNIT_TEST(testResetSelection);
-    CPPUNIT_TEST(testInsertDeletePage);
-    CPPUNIT_TEST(testInsertTable);
-    CPPUNIT_TEST(testPartHash);
-    CPPUNIT_TEST(testResizeTable);
-    CPPUNIT_TEST(testResizeTableColumn);
-    CPPUNIT_TEST(testViewCursors);
-    CPPUNIT_TEST(testViewCursorParts);
-    CPPUNIT_TEST(testCursorViews);
-    CPPUNIT_TEST(testCursorVisibility_SingleClick);
-    CPPUNIT_TEST(testCursorVisibility_DoubleClick);
-    CPPUNIT_TEST(testCursorVisibility_MultiView);
-    CPPUNIT_TEST(testCursorVisibility_Escape);
-    CPPUNIT_TEST(testViewLock);
-    CPPUNIT_TEST(testUndoLimiting);
-    CPPUNIT_TEST(testCreateViewGraphicSelection);
-    CPPUNIT_TEST(testCreateViewTextCursor);
-    CPPUNIT_TEST(testTdf102223);
-    CPPUNIT_TEST(testTdf118354);
-    CPPUNIT_TEST(testPostKeyEventInvalidation);
-    CPPUNIT_TEST(testTdf103083);
-    CPPUNIT_TEST(testTdf104405);
-    CPPUNIT_TEST(testTdf81754);
-    CPPUNIT_TEST(testTdf105502);
-    CPPUNIT_TEST(testCommentCallbacks);
-    CPPUNIT_TEST(testCommentChangeImpress);
-    CPPUNIT_TEST(testCommentChangeDraw);
-    CPPUNIT_TEST(testMultiViewInsertDeletePage);
-    CPPUNIT_TEST(testMultiViewInsertDeletePage2);
-    CPPUNIT_TEST(testDisableUndoRepair);
-    CPPUNIT_TEST(testDocumentRepair);
-    CPPUNIT_TEST(testLanguageStatus);
-    CPPUNIT_TEST(testDefaultView);
-    CPPUNIT_TEST(testIMESupport);
-    CPPUNIT_TEST(testTdf115783);
-    CPPUNIT_TEST(testPasteTextOnSlide);
-    CPPUNIT_TEST(testTdf115873);
-    CPPUNIT_TEST(testTdf115873Group);
-    CPPUNIT_TEST(testCutSelectionChange);
-    CPPUNIT_TEST(testThemeViewSeparation);
-    CPPUNIT_TEST(testRegenerateDiagram);
-    CPPUNIT_TEST(testLanguageAllText);
-    CPPUNIT_TEST(testInsertDeletePageInvalidation);
-    CPPUNIT_TEST(testSpellOnlineRenderParameter);
-    CPPUNIT_TEST(testSlideDuplicateUndo);
-    CPPUNIT_TEST(testMoveShapeHandle);
-    CPPUNIT_TEST(testDeleteTable);
-    CPPUNIT_TEST(testPasteUndo);
-    CPPUNIT_TEST(testShapeEditInMultipleViews);
-    CPPUNIT_TEST(testGetViewRenderState);
-    CPPUNIT_TEST_SUITE_END();
-
-private:
+protected:
     SdXImpressDocument* createDoc(const char* pName, const uno::Sequence<beans::PropertyValue>& rArguments = uno::Sequence<beans::PropertyValue>());
     void setupLibreOfficeKitViewCallback(SfxViewShell& pViewShell);
     static void callback(int nType, const char* pPayload, void* pData);
@@ -257,7 +136,7 @@ void SdTiledRenderingTest::tearDown()
 
 SdXImpressDocument* SdTiledRenderingTest::createDoc(const char* pName, const uno::Sequence<beans::PropertyValue>& rArguments)
 {
-    loadFromURL(OUString::createFromAscii(pName));
+    loadFromFile(OUString::createFromAscii(pName));
     SdXImpressDocument* pImpressDocument = dynamic_cast<SdXImpressDocument*>(mxComponent.get());
     CPPUNIT_ASSERT(pImpressDocument);
     pImpressDocument->initializeForTiledRendering(rArguments);
@@ -390,20 +269,20 @@ xmlDocUniquePtr SdTiledRenderingTest::parseXmlDump()
     return xmlDocUniquePtr(xmlParseDoc(pCharBuffer));
 }
 
-void SdTiledRenderingTest::testCreateDestroy()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCreateDestroy)
 {
     createDoc("dummy.odp");
     // Nothing to do, the tearDown call should cleanup.
 }
 
-void SdTiledRenderingTest::testCreateView()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCreateView)
 {
     createDoc("dummy.odp");
 
     SfxLokHelper::createView();
 }
 
-void SdTiledRenderingTest::testRegisterCallback()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testRegisterCallback)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
     sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
@@ -422,7 +301,7 @@ void SdTiledRenderingTest::testRegisterCallback()
     CPPUNIT_ASSERT(m_aInvalidation.Overlaps(aTopLeft));
 }
 
-void SdTiledRenderingTest::testPostKeyEvent()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testPostKeyEvent)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
     sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
@@ -450,7 +329,7 @@ void SdTiledRenderingTest::testPostKeyEvent()
     CPPUNIT_ASSERT_EQUAL(OUString("xx"), rEditView.GetSelected());
 }
 
-void SdTiledRenderingTest::testPostMouseEvent()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testPostMouseEvent)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
     sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
@@ -483,7 +362,7 @@ void SdTiledRenderingTest::testPostMouseEvent()
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), rEditView.GetSelection().nStartPos);
 }
 
-void SdTiledRenderingTest::testSetTextSelection()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSetTextSelection)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
     uno::Reference<container::XIndexAccess> xDrawPage(pXImpressDocument->getDrawPages()->getByIndex(0), uno::UNO_QUERY);
@@ -511,7 +390,7 @@ void SdTiledRenderingTest::testSetTextSelection()
     CPPUNIT_ASSERT_EQUAL(OUString("bbb."), rEditView.GetSelected());
 }
 
-void SdTiledRenderingTest::testGetTextSelection()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testGetTextSelection)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
     uno::Reference<container::XIndexAccess> xDrawPage(pXImpressDocument->getDrawPages()->getByIndex(0), uno::UNO_QUERY);
@@ -528,13 +407,13 @@ void SdTiledRenderingTest::testGetTextSelection()
     ESelection aWordSelection(0, 0, 0, 5);
     rEditView.SetSelection(aWordSelection);
     // Did we indeed manage to copy the selected text?
-    CPPUNIT_ASSERT_EQUAL(OString("Shape"), apitest::helper::transferable::getTextSelection(pXImpressDocument->getSelection(), "text/plain;charset=utf-8"));
+    CPPUNIT_ASSERT_EQUAL("Shape"_ostr, apitest::helper::transferable::getTextSelection(pXImpressDocument->getSelection(), "text/plain;charset=utf-8"_ostr));
 
     // Make sure returned RTF is not empty.
-    CPPUNIT_ASSERT(!apitest::helper::transferable::getTextSelection(pXImpressDocument->getSelection(), "text/rtf").isEmpty());
+    CPPUNIT_ASSERT(!apitest::helper::transferable::getTextSelection(pXImpressDocument->getSelection(), "text/rtf"_ostr).isEmpty());
 }
 
-void SdTiledRenderingTest::testSetGraphicSelection()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSetGraphicSelection)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("shape.odp");
     sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
@@ -569,7 +448,7 @@ void SdTiledRenderingTest::testSetGraphicSelection()
     CPPUNIT_ASSERT(aShapeBefore.getOpenHeight() < aShapeAfter.getOpenHeight());
 }
 
-void SdTiledRenderingTest::testUndoShells()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testUndoShells)
 {
     // Load a document and set the page size.
     SdXImpressDocument* pXImpressDocument = createDoc("shape.odp");
@@ -579,7 +458,6 @@ void SdTiledRenderingTest::testUndoShells()
         {"AttributePageSize.Height", uno::Any(static_cast<sal_Int32>(10000))},
     }));
     dispatchCommand(mxComponent, ".uno:AttributePageSize", aPropertyValues);
-    Scheduler::ProcessEventsToIdle();
 
     // Assert that view shell ID tracking works for SdUndoAction subclasses.
     SdDrawDocument* pDocument = pXImpressDocument->GetDoc();
@@ -590,7 +468,7 @@ void SdTiledRenderingTest::testUndoShells()
     CPPUNIT_ASSERT_EQUAL(ViewShellId(nView1), pUndoManager->GetUndoAction()->GetViewShellId());
 }
 
-void SdTiledRenderingTest::testResetSelection()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testResetSelection)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
     uno::Reference<container::XIndexAccess> xDrawPage(pXImpressDocument->getDrawPages()->getByIndex(0), uno::UNO_QUERY);
@@ -633,7 +511,7 @@ std::vector<OUString> getCurrentParts(SdXImpressDocument* pDocument)
 
 }
 
-void SdTiledRenderingTest::testInsertDeletePage()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testInsertDeletePage)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("insert-delete.odp");
     sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
@@ -727,7 +605,7 @@ void SdTiledRenderingTest::testInsertDeletePage()
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(1), pDoc->GetSdPageCount(PageKind::Standard));
 }
 
-void SdTiledRenderingTest::testInsertTable()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testInsertTable)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
 
@@ -738,7 +616,6 @@ void SdTiledRenderingTest::testInsertTable()
     }));
 
     dispatchCommand(mxComponent, ".uno:InsertTable", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // get the table
     sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
@@ -753,7 +630,7 @@ void SdTiledRenderingTest::testInsertTable()
     CPPUNIT_ASSERT(aPos.Y() != 0);
 }
 
-void SdTiledRenderingTest::testDeleteTable()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testDeleteTable)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
 
@@ -764,7 +641,6 @@ void SdTiledRenderingTest::testDeleteTable()
     }));
 
     dispatchCommand(mxComponent, ".uno:InsertTable", aArgs);
-    Scheduler::ProcessEventsToIdle();
     sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
     SdrView* pSdrView = pViewShell->GetView();
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
@@ -777,7 +653,7 @@ void SdTiledRenderingTest::testDeleteTable()
     CPPUNIT_ASSERT(!rMarkList.GetMarkCount());
 }
 
-void SdTiledRenderingTest::testPartHash()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testPartHash)
 {
     SdXImpressDocument* pDoc = createDoc("dummy.odp");
 
@@ -791,7 +667,7 @@ void SdTiledRenderingTest::testPartHash()
     CPPUNIT_ASSERT(pDoc->getPartHash(100).isEmpty());
 }
 
-void SdTiledRenderingTest::testResizeTable()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testResizeTable)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("table.odp");
@@ -837,7 +713,7 @@ void SdTiledRenderingTest::testResizeTable()
     CPPUNIT_ASSERT_EQUAL(nExpectedRow2, nActualRow2);
 }
 
-void SdTiledRenderingTest::testResizeTableColumn()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testResizeTableColumn)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("table-column.odp");
@@ -855,9 +731,9 @@ void SdTiledRenderingTest::testResizeTableColumn()
 
     // Remember the original cell widths.
     xmlDocUniquePtr pXmlDoc = parseXmlDump();
-    OString aPrefix = "/SdDrawDocument/SdrModel/maPages/SdPage/SdrPage/SdrObjList/SdrTableObj/SdrTableObjImpl/TableLayouter/columns/";
-    sal_Int32 nExpectedColumn1 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[1]", "size").toInt32();
-    sal_Int32 nExpectedColumn2 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[2]", "size").toInt32();
+    OString aPrefix = "/SdDrawDocument/SdrModel/maPages/SdPage/SdrPage/SdrObjList/SdrTableObj/SdrTableObjImpl/TableLayouter/columns/"_ostr;
+    sal_Int32 nExpectedColumn1 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[1]", "size"_ostr).toInt32();
+    sal_Int32 nExpectedColumn2 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[2]", "size"_ostr).toInt32();
     pXmlDoc = nullptr;
 
     // Resize the left column, decrease its width by 1 cm.
@@ -867,9 +743,9 @@ void SdTiledRenderingTest::testResizeTableColumn()
 
     // Remember the resized column widths.
     pXmlDoc = parseXmlDump();
-    sal_Int32 nResizedColumn1 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[1]", "size").toInt32();
+    sal_Int32 nResizedColumn1 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[1]", "size"_ostr).toInt32();
     CPPUNIT_ASSERT(nResizedColumn1 < nExpectedColumn1);
-    sal_Int32 nResizedColumn2 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[2]", "size").toInt32();
+    sal_Int32 nResizedColumn2 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[2]", "size"_ostr).toInt32();
     CPPUNIT_ASSERT(nResizedColumn2 > nExpectedColumn2);
     pXmlDoc = nullptr;
 
@@ -878,10 +754,10 @@ void SdTiledRenderingTest::testResizeTableColumn()
 
     // Check the undo result.
     pXmlDoc = parseXmlDump();
-    sal_Int32 nActualColumn1 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[1]", "size").toInt32();
+    sal_Int32 nActualColumn1 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[1]", "size"_ostr).toInt32();
     // Expected was 7049, actual was 6048, i.e. the first column width after undo was 1cm smaller than expected.
     CPPUNIT_ASSERT_EQUAL(nExpectedColumn1, nActualColumn1);
-    sal_Int32 nActualColumn2 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[2]", "size").toInt32();
+    sal_Int32 nActualColumn2 = getXPath(pXmlDoc, aPrefix + "TableLayouter_Layout[2]", "size"_ostr).toInt32();
     CPPUNIT_ASSERT_EQUAL(nExpectedColumn2, nActualColumn2);
     pXmlDoc = nullptr;
 }
@@ -903,11 +779,13 @@ public:
     bool m_bViewLock;
     bool m_bTilesInvalidated;
     std::vector<tools::Rectangle> m_aInvalidations;
+    std::vector<std::string> m_aStateChanged;
     std::map<int, bool> m_aViewCursorInvalidations;
     std::map<int, bool> m_aViewCursorVisibilities;
     bool m_bViewSelectionSet;
     boost::property_tree::ptree m_aCommentCallbackResult;
     OString m_ShapeSelection;
+    std::map<std::string, boost::property_tree::ptree> m_aStateChanges;
     TestLokCallbackWrapper m_callbackWrapper;
 
     ViewCallback()
@@ -1020,13 +898,35 @@ public:
             m_aCommentCallbackResult = m_aCommentCallbackResult.get_child("comment");
         }
         break;
+        case LOK_CALLBACK_STATE_CHANGED:
+        {
+            std::stringstream aStream(pPayload);
+
+            if (!aStream.str().starts_with("{"))
+            {
+                m_aStateChanged.push_back(aStream.str());
+                break;
+            }
+
+            boost::property_tree::ptree aTree;
+            boost::property_tree::read_json(aStream, aTree);
+            auto it = aTree.find("commandName");
+            if (it == aTree.not_found())
+            {
+                break;
+            }
+
+            std::string aCommandName = it->second.get_value<std::string>();
+            m_aStateChanges[aCommandName] = aTree;
+        }
+        break;
         }
     }
 };
 
 }
 
-void SdTiledRenderingTest::testViewCursors()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testViewCursors)
 {
     // Create two views.
     SdXImpressDocument* pXImpressDocument = createDoc("shape.odp");
@@ -1048,7 +948,7 @@ void SdTiledRenderingTest::testViewCursors()
     CPPUNIT_ASSERT(aView2.m_bGraphicSelectionInvalidated);
 }
 
-void SdTiledRenderingTest::testViewCursorParts()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testViewCursorParts)
 {
     // Create two views.
     SdXImpressDocument* pXImpressDocument = createDoc("shape.odp");
@@ -1081,7 +981,7 @@ void SdTiledRenderingTest::testViewCursorParts()
     CPPUNIT_ASSERT(!aView1.m_bGraphicViewSelectionInvalidated);
 }
 
-void SdTiledRenderingTest::testCursorViews()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCursorViews)
 {
     // Create the first view.
     SdXImpressDocument* pXImpressDocument = createDoc("title-shape.odp");
@@ -1122,7 +1022,7 @@ void SdTiledRenderingTest::testCursorViews()
     CPPUNIT_ASSERT(aView2.m_bTilesInvalidated);
 }
 
-void SdTiledRenderingTest::testCursorVisibility_SingleClick()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCursorVisibility_SingleClick)
 {
     // Single-clicking in a text box enters editing only
     // when it's on the text, even if it's the default text.
@@ -1172,7 +1072,7 @@ void SdTiledRenderingTest::testCursorVisibility_SingleClick()
 }
 
 
-void SdTiledRenderingTest::testCursorVisibility_DoubleClick()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCursorVisibility_DoubleClick)
 {
     // Double-clicking anywhere in the TextBox should start editing.
 
@@ -1205,7 +1105,7 @@ void SdTiledRenderingTest::testCursorVisibility_DoubleClick()
     CPPUNIT_ASSERT(aView1.m_bCursorVisible);
 }
 
-void SdTiledRenderingTest::testCursorVisibility_MultiView()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCursorVisibility_MultiView)
 {
     // Create the first view.
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
@@ -1254,7 +1154,7 @@ void SdTiledRenderingTest::testCursorVisibility_MultiView()
     CPPUNIT_ASSERT_EQUAL(false, aView2.m_aViewCursorVisibilities[nView2]);
 }
 
-void SdTiledRenderingTest::testCursorVisibility_Escape()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCursorVisibility_Escape)
 {
     // Load doc.
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
@@ -1294,7 +1194,7 @@ void SdTiledRenderingTest::testCursorVisibility_Escape()
     CPPUNIT_ASSERT_EQUAL(false, aView1.m_bCursorVisible);
 }
 
-void SdTiledRenderingTest::testViewLock()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testViewLock)
 {
     // Load a document that has a shape and create two views.
     SdXImpressDocument* pXImpressDocument = createDoc("shape.odp");
@@ -1318,7 +1218,7 @@ void SdTiledRenderingTest::testViewLock()
     CPPUNIT_ASSERT(!aView1.m_bViewLock);
 }
 
-void SdTiledRenderingTest::testUndoLimiting()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testUndoLimiting)
 {
     // Create the first view.
     SdXImpressDocument* pXImpressDocument = createDoc("title-shape.odp");
@@ -1342,7 +1242,7 @@ void SdTiledRenderingTest::testUndoLimiting()
         SfxRequest aReq2(SID_UNDO, SfxCallMode::SLOT, pXImpressDocument->GetDocShell()->GetDoc()->GetPool());
         aReq2.AppendItem(SfxUInt16Item(SID_UNDO, 1));
         pViewShell2->ExecuteSlot(aReq2);
-        const auto* pReturnValue = aReq2.GetReturnValue();
+        const auto* pReturnValue = aReq2.GetReturnValue().getItem();
         CPPUNIT_ASSERT(!pReturnValue);
     }
 
@@ -1374,7 +1274,7 @@ void SdTiledRenderingTest::testUndoLimiting()
         SfxRequest aReq2(SID_UNDO, SfxCallMode::SLOT, pXImpressDocument->GetDocShell()->GetDoc()->GetPool());
         aReq2.AppendItem(SfxUInt16Item(SID_UNDO, 1));
         pViewShell2->ExecuteSlot(aReq2);
-        const SfxUInt32Item* pUInt32Item = dynamic_cast<const SfxUInt32Item*>(aReq2.GetReturnValue());
+        const SfxUInt32Item* pUInt32Item = dynamic_cast<const SfxUInt32Item*>(aReq2.GetReturnValue().getItem());
         CPPUNIT_ASSERT(pUInt32Item);
         CPPUNIT_ASSERT_EQUAL(static_cast< sal_uInt32 >(SID_REPAIRPACKAGE), pUInt32Item->GetValue());
     }
@@ -1388,7 +1288,7 @@ void SdTiledRenderingTest::testUndoLimiting()
     }
 }
 
-void SdTiledRenderingTest::testCreateViewGraphicSelection()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCreateViewGraphicSelection)
 {
     // Load a document and register a callback.
     SdXImpressDocument* pXImpressDocument = createDoc("shape.odp");
@@ -1419,7 +1319,7 @@ void SdTiledRenderingTest::testCreateViewGraphicSelection()
     CPPUNIT_ASSERT(aView2.m_bGraphicViewSelectionInvalidated);
 }
 
-void SdTiledRenderingTest::testCreateViewTextCursor()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCreateViewTextCursor)
 {
     // Load a document and register a callback.
     SdXImpressDocument* pXImpressDocument = createDoc("title-shape.odp");
@@ -1467,7 +1367,7 @@ void SdTiledRenderingTest::testCreateViewTextCursor()
     CPPUNIT_ASSERT(aView2.m_bViewSelectionSet);
 }
 
-void SdTiledRenderingTest::testTdf102223()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testTdf102223)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("tdf102223.odp");
@@ -1507,7 +1407,7 @@ void SdTiledRenderingTest::testTdf102223()
         int(1411), static_cast<int>(rEditView2.GetAttribs().Get(EE_CHAR_FONTHEIGHT).GetHeight()));
 }
 
-void SdTiledRenderingTest::testTdf118354()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testTdf118354)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("tdf118354.odp");
@@ -1535,7 +1435,7 @@ void SdTiledRenderingTest::testTdf118354()
     CPPUNIT_ASSERT_EQUAL(pMarkedObj, pTableObject);
 }
 
-void SdTiledRenderingTest::testPostKeyEventInvalidation()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testPostKeyEventInvalidation)
 {
     // Load a document and begin text edit on the first slide.
     SdXImpressDocument* pXImpressDocument = createDoc("2slides.odp");
@@ -1577,7 +1477,7 @@ void SdTiledRenderingTest::testPostKeyEventInvalidation()
 /**
  * tests a cut/paste bug around bullet items in a list
  */
-void SdTiledRenderingTest::testTdf103083()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testTdf103083)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("tdf103083.fodp");
@@ -1647,7 +1547,7 @@ void SdTiledRenderingTest::testTdf103083()
 /**
  * tests a clone-formatting bug around table cell attributes
  */
-void SdTiledRenderingTest::testTdf104405()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testTdf104405)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("tdf104405.fodp");
@@ -1668,8 +1568,6 @@ void SdTiledRenderingTest::testTdf104405()
     // trigger the clone-formatting/paintbrush command to copy formatting contents of cell
     uno::Sequence aArgs{ comphelper::makePropertyValue("PersistentCopy", true) };
     dispatchCommand(mxComponent, ".uno:FormatPaintbrush", aArgs);
-
-    Scheduler::ProcessEventsToIdle();
 
     // now click on the table
     pView->MarkObj(pTableObject, pView->GetSdrPageView());
@@ -1696,11 +1594,11 @@ void SdTiledRenderingTest::testTdf104405()
         getXPath(
             pXmlDoc,
             "/SdDrawDocument/SdrModel/maPages/SdPage/SdrPage/SdrObjList/SdrTableObj/SdrTableObjImpl"
-                "/TableModel/Cell[1]/DefaultProperties/SfxItemSet/SdrTextVertAdjustItem",
-            "value"));
+                "/TableModel/Cell[1]/DefaultProperties/SfxItemSet/SdrTextVertAdjustItem"_ostr,
+            "value"_ostr));
 }
 
-void SdTiledRenderingTest::testTdf81754()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testTdf81754)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("tdf81754.pptx");
     sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
@@ -1725,10 +1623,10 @@ void SdTiledRenderingTest::testTdf81754()
     uno::Reference<drawing::XDrawPage> xPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
                                              uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xShape(xPage->getByIndex(1), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"Somethingxx"), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u"Somethingxx"_ustr, xShape->getString());
 }
 
-void SdTiledRenderingTest::testTdf105502()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testTdf105502)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("tdf105502.odp");
@@ -1746,7 +1644,7 @@ void SdTiledRenderingTest::testTdf105502()
     pView->SdrBeginTextEdit(pObject);
     rtl::Reference<sdr::SelectionController> xSelectionController(pView->getSelectionController());
     CPPUNIT_ASSERT(xSelectionController.is());
-    SfxRequest aRequest(pViewShell->GetViewFrame(), SID_TABLE_SELECT_ROW);
+    SfxRequest aRequest(*pViewShell->GetViewFrame(), SID_TABLE_SELECT_ROW);
     xSelectionController->Execute(aRequest);
 
     // Assert that the A1:B1 selection succeeded.
@@ -1761,13 +1659,12 @@ void SdTiledRenderingTest::testTdf105502()
 
     // Grow font size for the selection.
     dispatchCommand(mxComponent, ".uno:Grow", {});
-    Scheduler::ProcessEventsToIdle();
 
     // Assert that the selected A1 has now a larger font than the unselected
     // A2.
     xmlDocUniquePtr pXmlDoc = parseXmlDump();
-    sal_Int32 nA1Height = getXPath(pXmlDoc, "//Cell[1]/SdrText/OutlinerParaObject/EditTextObject/ContentInfo/SfxItemSet/SvxFontHeightItem[1]", "height").toInt32();
-    sal_Int32 nA2Height = getXPath(pXmlDoc, "//Cell[3]/SdrText/OutlinerParaObject/EditTextObject/ContentInfo/attribs[1]/SvxFontHeightItem", "height").toInt32();
+    sal_Int32 nA1Height = getXPath(pXmlDoc, "//Cell[1]/SdrText/OutlinerParaObject/EditTextObject/ContentInfo/SfxItemSet/SvxFontHeightItem[1]"_ostr, "height"_ostr).toInt32();
+    sal_Int32 nA2Height = getXPath(pXmlDoc, "//Cell[3]/SdrText/OutlinerParaObject/EditTextObject/ContentInfo/attribs[1]/SvxFontHeightItem"_ostr, "height"_ostr).toInt32();
     // This failed when FuText::ChangeFontSize() never did "continue" in the
     // text loop, instead of doing so depending on what IsInSelection() returns.
     CPPUNIT_ASSERT(nA1Height > nA2Height);
@@ -1781,7 +1678,7 @@ void SdTiledRenderingTest::testTdf105502()
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), aLastCell.mnRow);
 }
 
-void SdTiledRenderingTest::testCommentCallbacks()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCommentCallbacks)
 {
     // Load the document.
     // Set the tiled annotations off
@@ -1811,7 +1708,6 @@ void SdTiledRenderingTest::testCommentCallbacks()
         {"Text", uno::Any(OUString("Comment"))},
     });
     dispatchCommand(mxComponent, ".uno:InsertAnnotation", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // We received a LOK_CALLBACK_COMMENT callback with comment 'Add' action
     CPPUNIT_ASSERT_EQUAL(std::string("Add"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
@@ -1819,7 +1715,7 @@ void SdTiledRenderingTest::testCommentCallbacks()
     int nComment1 = aView1.m_aCommentCallbackResult.get<int>("id");
     CPPUNIT_ASSERT_EQUAL(nComment1, aView2.m_aCommentCallbackResult.get<int>("id"));
     css::util::DateTime aDateTime;
-    OUString aDateTimeString = OUString::createFromAscii(aView1.m_aCommentCallbackResult.get<std::string>("dateTime").c_str());
+    OUString aDateTimeString = OUString::createFromAscii(aView1.m_aCommentCallbackResult.get<std::string>("dateTime"));
     CPPUNIT_ASSERT(utl::ISO8601parseDateTime(aDateTimeString, aDateTime));
     CPPUNIT_ASSERT_EQUAL(std::string("LOK User1"), aView1.m_aCommentCallbackResult.get<std::string>("author"));
     CPPUNIT_ASSERT_EQUAL(std::string("LOK User1"), aView2.m_aCommentCallbackResult.get<std::string>("author"));
@@ -1836,7 +1732,6 @@ void SdTiledRenderingTest::testCommentCallbacks()
         {"Text", uno::Any(OUString("Reply to comment"))},
     });
     dispatchCommand(mxComponent, ".uno:ReplyToAnnotation", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // We received a LOK_CALLBACK_COMMENT callback with comment 'Modify' action
     CPPUNIT_ASSERT_EQUAL(std::string("Modify"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
@@ -1845,8 +1740,8 @@ void SdTiledRenderingTest::testCommentCallbacks()
     CPPUNIT_ASSERT_EQUAL(nComment1, aView2.m_aCommentCallbackResult.get<int>("id"));
     CPPUNIT_ASSERT_EQUAL(std::string("LOK User2"), aView1.m_aCommentCallbackResult.get<std::string>("author"));
     CPPUNIT_ASSERT_EQUAL(std::string("LOK User2"), aView2.m_aCommentCallbackResult.get<std::string>("author"));
-    OUString aReplyTextView1 = OUString::createFromAscii(aView1.m_aCommentCallbackResult.get<std::string>("text").c_str());
-    OUString aReplyTextView2 = OUString::createFromAscii(aView2.m_aCommentCallbackResult.get<std::string>("text").c_str());
+    OUString aReplyTextView1 = OUString::createFromAscii(aView1.m_aCommentCallbackResult.get<std::string>("text"));
+    OUString aReplyTextView2 = OUString::createFromAscii(aView2.m_aCommentCallbackResult.get<std::string>("text"));
     CPPUNIT_ASSERT(aReplyTextView1.startsWith("Reply to LOK User1"));
     CPPUNIT_ASSERT(aReplyTextView1.endsWith("Reply to comment"));
     CPPUNIT_ASSERT(aReplyTextView2.startsWith("Reply to LOK User1"));
@@ -1861,7 +1756,6 @@ void SdTiledRenderingTest::testCommentCallbacks()
         {"Text", uno::Any(OUString("Edited comment"))},
     });
     dispatchCommand(mxComponent, ".uno:EditAnnotation", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // We received a LOK_CALLBACK_COMMENT callback with comment 'Modify' action
     CPPUNIT_ASSERT_EQUAL(std::string("Modify"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
@@ -1879,7 +1773,6 @@ void SdTiledRenderingTest::testCommentCallbacks()
         {"Id", uno::Any(OUString::number(nComment1))},
     });
     dispatchCommand(mxComponent, ".uno:DeleteAnnotation", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // We received a LOK_CALLBACK_COMMENT callback with comment 'Remove' action
     CPPUNIT_ASSERT_EQUAL(std::string("Remove"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
@@ -1890,7 +1783,7 @@ void SdTiledRenderingTest::testCommentCallbacks()
     comphelper::LibreOfficeKit::setTiledAnnotations(true);
 }
 
-void SdTiledRenderingTest::testCommentChangeImpress()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCommentChangeImpress)
 {
     uno::Sequence<beans::PropertyValue> aArgs;
 
@@ -1911,7 +1804,6 @@ void SdTiledRenderingTest::testCommentChangeImpress()
         {"Text", uno::Any(OUString("Comment"))},
     });
     dispatchCommand(mxComponent, ".uno:InsertAnnotation", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(std::string("Add"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
 
@@ -1929,7 +1821,6 @@ void SdTiledRenderingTest::testCommentChangeImpress()
         {"PositionY", uno::Any(sal_Int32(20))}
     });
     dispatchCommand(mxComponent, ".uno:EditAnnotation", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(std::string("Modify"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
     CPPUNIT_ASSERT_EQUAL(std::string("Comment"), aView1.m_aCommentCallbackResult.get<std::string>("text"));
@@ -1938,7 +1829,7 @@ void SdTiledRenderingTest::testCommentChangeImpress()
     comphelper::LibreOfficeKit::setTiledAnnotations(true);
 }
 
-void SdTiledRenderingTest::testCommentChangeDraw()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCommentChangeDraw)
 {
     uno::Sequence<beans::PropertyValue> aArgs;
 
@@ -1959,7 +1850,6 @@ void SdTiledRenderingTest::testCommentChangeDraw()
         {"Text", uno::Any(OUString("Comment"))},
     });
     dispatchCommand(mxComponent, ".uno:InsertAnnotation", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(std::string("Add"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
 
@@ -1977,7 +1867,6 @@ void SdTiledRenderingTest::testCommentChangeDraw()
         {"PositionY", uno::Any(sal_Int32(20))}
     });
     dispatchCommand(mxComponent, ".uno:EditAnnotation", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(std::string("Modify"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
     CPPUNIT_ASSERT_EQUAL(std::string("Comment"), aView1.m_aCommentCallbackResult.get<std::string>("text"));
@@ -1986,7 +1875,7 @@ void SdTiledRenderingTest::testCommentChangeDraw()
     comphelper::LibreOfficeKit::setTiledAnnotations(true);
 }
 
-void SdTiledRenderingTest::testMultiViewInsertDeletePage()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testMultiViewInsertDeletePage)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
@@ -2010,7 +1899,6 @@ void SdTiledRenderingTest::testMultiViewInsertDeletePage()
     // Insert slide in 1st view
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:InsertPage", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // See if the current slide number changed in 2nd view too
     SfxLokHelper::setView(nView2);
@@ -2019,14 +1907,13 @@ void SdTiledRenderingTest::testMultiViewInsertDeletePage()
     // Delete the page in 1st view now
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:DeletePage", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // See if current slide number changed in 2nd view too
     SfxLokHelper::setView(nView2);
     CPPUNIT_ASSERT_EQUAL(4, pXImpressDocument->getPart());
 }
 
-void SdTiledRenderingTest::testMultiViewInsertDeletePage2()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testMultiViewInsertDeletePage2)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
@@ -2073,7 +1960,6 @@ void SdTiledRenderingTest::testMultiViewInsertDeletePage2()
     // Insert slide in 1st view
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:InsertPage", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // See if the current slide number changed in 2nd view too
     SfxLokHelper::setView(nView2);
@@ -2082,7 +1968,6 @@ void SdTiledRenderingTest::testMultiViewInsertDeletePage2()
     // Delete the page in 1st view now
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:DeletePage", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // See if current slide number changed in 2nd view too
     SfxLokHelper::setView(nView2);
@@ -2092,7 +1977,7 @@ void SdTiledRenderingTest::testMultiViewInsertDeletePage2()
     CPPUNIT_ASSERT(pViewShell->GetView()->IsTextEdit());
 }
 
-void SdTiledRenderingTest::testDisableUndoRepair()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testDisableUndoRepair)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
@@ -2112,8 +1997,8 @@ void SdTiledRenderingTest::testDisableUndoRepair()
     {
         std::unique_ptr<SfxPoolItem> pItem1;
         std::unique_ptr<SfxPoolItem> pItem2;
-        CPPUNIT_ASSERT_EQUAL(SfxItemState::DISABLED, pView1->GetViewFrame()->GetBindings().QueryState(SID_UNDO, pItem1));
-        CPPUNIT_ASSERT_EQUAL(SfxItemState::DISABLED, pView2->GetViewFrame()->GetBindings().QueryState(SID_UNDO, pItem2));
+        CPPUNIT_ASSERT_EQUAL(SfxItemState::DISABLED, pView1->GetViewFrame().GetBindings().QueryState(SID_UNDO, pItem1));
+        CPPUNIT_ASSERT_EQUAL(SfxItemState::DISABLED, pView2->GetViewFrame().GetBindings().QueryState(SID_UNDO, pItem2));
     }
 
     // Insert a character in the first view.
@@ -2132,12 +2017,12 @@ void SdTiledRenderingTest::testDisableUndoRepair()
     // Check
     {
         std::unique_ptr<SfxPoolItem> xItem1;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_UNDO, xItem1);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_UNDO, xItem1);
         const auto* pUInt32Item1 = dynamic_cast<const SfxUInt32Item*>(xItem1.get());
         CPPUNIT_ASSERT(!pUInt32Item1);
 
         std::unique_ptr<SfxPoolItem> xItem2;
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_UNDO, xItem2);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_UNDO, xItem2);
         const auto* pUInt32Item2 = dynamic_cast<const SfxUInt32Item*>(xItem2.get());
         CPPUNIT_ASSERT(pUInt32Item2);
         CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt32>(SID_REPAIRPACKAGE), pUInt32Item2->GetValue());
@@ -2160,18 +2045,18 @@ void SdTiledRenderingTest::testDisableUndoRepair()
     // Check
     {
         std::unique_ptr<SfxPoolItem> xItem1;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_UNDO, xItem1);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_UNDO, xItem1);
         const SfxUInt32Item* pUInt32Item = dynamic_cast<const SfxUInt32Item*>(xItem1.get());
         CPPUNIT_ASSERT(pUInt32Item);
         CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt32>(SID_REPAIRPACKAGE), pUInt32Item->GetValue());
 
         std::unique_ptr<SfxPoolItem> xItem2;
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_UNDO, xItem2);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_UNDO, xItem2);
         CPPUNIT_ASSERT(!dynamic_cast< const SfxUInt32Item* >(xItem2.get()));
     }
 }
 
-void SdTiledRenderingTest::testDocumentRepair()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testDocumentRepair)
 {
     // Create two views.
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
@@ -2189,12 +2074,12 @@ void SdTiledRenderingTest::testDocumentRepair()
     CPPUNIT_ASSERT(pView1 != pView2);
     {
         std::unique_ptr<SfxBoolItem> pItem1;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
         CPPUNIT_ASSERT(pItem1);
         CPPUNIT_ASSERT_EQUAL(false, pItem1->GetValue());
 
         std::unique_ptr<SfxBoolItem> pItem2;
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
         CPPUNIT_ASSERT(pItem2);
         CPPUNIT_ASSERT_EQUAL(false, pItem2->GetValue());
     }
@@ -2215,18 +2100,18 @@ void SdTiledRenderingTest::testDocumentRepair()
 
     {
         std::unique_ptr<SfxBoolItem> pItem1;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
         CPPUNIT_ASSERT(pItem1);
         CPPUNIT_ASSERT_EQUAL(true, pItem1->GetValue());
 
         std::unique_ptr<SfxBoolItem> pItem2;
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
         CPPUNIT_ASSERT(pItem2);
         CPPUNIT_ASSERT_EQUAL(true, pItem2->GetValue());
     }
 }
 
-void SdTiledRenderingTest::testLanguageStatus()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testLanguageStatus)
 {
     // Load the document.
     createDoc("dummy.odp");
@@ -2236,8 +2121,8 @@ void SdTiledRenderingTest::testLanguageStatus()
     {
         std::unique_ptr<SfxPoolItem> xItem1;
         std::unique_ptr<SfxPoolItem> xItem2;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem1);
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem2);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem1);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_LANGUAGE_STATUS, xItem2);
         auto pStringItem = dynamic_cast<const SfxStringItem*>(xItem1.get());
         CPPUNIT_ASSERT(pStringItem);
 
@@ -2247,7 +2132,7 @@ void SdTiledRenderingTest::testLanguageStatus()
     }
 }
 
-void SdTiledRenderingTest::testLanguageAllText()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testLanguageAllText)
 {
     // Load the document, which has a single shape, with Hungarian text.
     createDoc("language-all-text.odp");
@@ -2257,7 +2142,6 @@ void SdTiledRenderingTest::testLanguageAllText()
         { "Language", uno::Any(OUString("Default_English (USA)")) },
     });
     dispatchCommand(mxComponent, ".uno:LanguageStatus", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // Assert that the shape text language was changed.
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -2272,7 +2156,7 @@ void SdTiledRenderingTest::testLanguageAllText()
     CPPUNIT_ASSERT_EQUAL(OUString("en"), aLocale.Language);
 }
 
-void SdTiledRenderingTest::testDefaultView()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testDefaultView)
 {
     // Load the document with notes view.
     SdXImpressDocument* pXImpressDocument = createDoc("notes-view.odp");
@@ -2289,7 +2173,7 @@ void SdTiledRenderingTest::testDefaultView()
     }
 }
 
-void SdTiledRenderingTest::testIMESupport()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testIMESupport)
 {
     // Load the document with notes view.
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
@@ -2304,7 +2188,7 @@ void SdTiledRenderingTest::testIMESupport()
                                                              SfxCallMode::SYNCHRON, { &aInputString });
 
     // sequence of chinese IME compositions when 'nihao' is typed in an IME
-    const std::vector<OString> aUtf8Inputs{ "年", "你", "你好", "你哈", "你好", "你好" };
+    const std::vector<OString> aUtf8Inputs{ "年"_ostr, "你"_ostr, "你好"_ostr, "你哈"_ostr, "你好"_ostr, "你好"_ostr };
     std::vector<OUString> aInputs;
     std::transform(aUtf8Inputs.begin(), aUtf8Inputs.end(),
                    std::back_inserter(aInputs), [](OString aInput) {
@@ -2326,7 +2210,7 @@ void SdTiledRenderingTest::testIMESupport()
     CPPUNIT_ASSERT_EQUAL(OUString("x" + aInputs[aInputs.size() - 1]), rEditView.GetSelected());
 }
 
-void SdTiledRenderingTest::testTdf115783()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testTdf115783)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("tdf115783.fodp");
@@ -2350,7 +2234,6 @@ void SdTiledRenderingTest::testTdf115783()
         { "FontHeight.Height", uno::Any(static_cast<float>(12)) },
     });
     dispatchCommand(mxComponent, ".uno:FontHeight", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // Create a text selection on the B1 cell.
     pTableObject->setActiveCell(sdr::table::CellPos(1, 0));
@@ -2363,11 +2246,9 @@ void SdTiledRenderingTest::testTdf115783()
     // Copy selection, paste at the start of the cell.
     aArgs = {};
     dispatchCommand(mxComponent, ".uno:Copy", aArgs);
-    Scheduler::ProcessEventsToIdle();
     rEditView.SetSelection(ESelection(0, 0, 0, 0));
     aArgs = {};
     dispatchCommand(mxComponent, ".uno:Paste", aArgs);
-    Scheduler::ProcessEventsToIdle();
     pView->SdrEndTextEdit();
 
     // And now verify that the cell has the correct font size.
@@ -2392,7 +2273,7 @@ void SdTiledRenderingTest::testTdf115783()
     CPPUNIT_ASSERT_EQUAL(12, nHeight);
 }
 
-void SdTiledRenderingTest::testPasteTextOnSlide()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testPasteTextOnSlide)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("paste_text_onslide.odp");
@@ -2427,7 +2308,6 @@ void SdTiledRenderingTest::testPasteTextOnSlide()
 
     // Copy some text
     dispatchCommand(mxComponent, ".uno:Copy", uno::Sequence<beans::PropertyValue>());
-    Scheduler::ProcessEventsToIdle();
 
     pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::ESCAPE);
     pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::ESCAPE);
@@ -2435,7 +2315,6 @@ void SdTiledRenderingTest::testPasteTextOnSlide()
 
     // Paste onto the slide
     dispatchCommand(mxComponent, ".uno:Paste", uno::Sequence<beans::PropertyValue>());
-    Scheduler::ProcessEventsToIdle();
 
     pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::ESCAPE);
     pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::ESCAPE);
@@ -2454,13 +2333,13 @@ void SdTiledRenderingTest::testPasteTextOnSlide()
     CPPUNIT_ASSERT_EQUAL(static_cast<tools::Long>(0), aPos.getY());
 }
 
-void SdTiledRenderingTest::testTdf115873()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testTdf115873)
 {
     // Initialize the navigator.
     SdXImpressDocument* pXImpressDocument = createDoc("tdf115873.fodp");
     SfxViewShell* pViewShell = SfxViewShell::Current();
     CPPUNIT_ASSERT(pViewShell);
-    SfxBindings& rBindings = pViewShell->GetViewFrame()->GetBindings();
+    SfxBindings& rBindings = pViewShell->GetViewFrame().GetBindings();
     auto xNavigator = std::make_unique<SdNavigatorWin>(nullptr, &rBindings, nullptr);
     xNavigator->InitTreeLB(pXImpressDocument->GetDoc());
     SdPageObjsTLV& rObjects = xNavigator->GetObjects();
@@ -2487,13 +2366,13 @@ void SdTiledRenderingTest::testTdf115873()
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), rMarkList.GetMarkCount());
 }
 
-void SdTiledRenderingTest::testTdf115873Group()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testTdf115873Group)
 {
     // Initialize the navigator.
     SdXImpressDocument* pXImpressDocument = createDoc("tdf115873-group.fodp");
     SfxViewShell* pViewShell = SfxViewShell::Current();
     CPPUNIT_ASSERT(pViewShell);
-    SfxBindings& rBindings = pViewShell->GetViewFrame()->GetBindings();
+    SfxBindings& rBindings = pViewShell->GetViewFrame().GetBindings();
     auto xNavigator = std::make_unique<SdNavigatorWin>(nullptr, &rBindings, nullptr);
     xNavigator->InitTreeLB(pXImpressDocument->GetDoc());
     SdPageObjsTLV& rObjects = xNavigator->GetObjects();
@@ -2502,7 +2381,7 @@ void SdTiledRenderingTest::testTdf115873Group()
     CPPUNIT_ASSERT(rObjects.IsEqualToDoc(pXImpressDocument->GetDoc()));
 }
 
-void SdTiledRenderingTest::testCutSelectionChange()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCutSelectionChange)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("cut_selection_change.odp");
@@ -2534,21 +2413,21 @@ void SdTiledRenderingTest::testCutSelectionChange()
 
     // Cut the selected text
     dispatchCommand(mxComponent, ".uno:Cut", uno::Sequence<beans::PropertyValue>());
-    Scheduler::ProcessEventsToIdle();
 
     // Selection is removed
     CPPUNIT_ASSERT_EQUAL(static_cast<std::size_t>(0), m_aSelection.size());
 }
 
-void SdTiledRenderingTest::testGetViewRenderState()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testGetViewRenderState)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
     int nFirstViewId = SfxLokHelper::getView();
     ViewCallback aView1;
-    CPPUNIT_ASSERT_EQUAL(OString(";Default"), pXImpressDocument->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("S;Default"_ostr, pXImpressDocument->getViewRenderState());
     // Create a second view
     SfxLokHelper::createView();
-    CPPUNIT_ASSERT_EQUAL(OString(";Default"), pXImpressDocument->getViewRenderState());
+    ViewCallback aView2;
+    CPPUNIT_ASSERT_EQUAL("S;Default"_ostr, pXImpressDocument->getViewRenderState());
     // Set to dark scheme
     {
         uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
@@ -2558,10 +2437,10 @@ void SdTiledRenderingTest::testGetViewRenderState()
         );
         dispatchCommand(mxComponent, ".uno:ChangeTheme", aPropertyValues);
     }
-    CPPUNIT_ASSERT_EQUAL(OString(";Dark"), pXImpressDocument->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("S;Dark"_ostr, pXImpressDocument->getViewRenderState());
     // Switch back to the first view, and check that the options string is the same
     SfxLokHelper::setView(nFirstViewId);
-    CPPUNIT_ASSERT_EQUAL(OString(";Default"), pXImpressDocument->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("S;Default"_ostr, pXImpressDocument->getViewRenderState());
 }
 
 // Helper function to get a tile to a bitmap and check the pixel color
@@ -2570,20 +2449,20 @@ static void assertTilePixelColor(SdXImpressDocument* pXImpressDocument, int nPix
     size_t nCanvasSize = 1024;
     size_t nTileSize = 256;
     std::vector<unsigned char> aPixmap(nCanvasSize * nCanvasSize * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasSize, nCanvasSize),
             Fraction(1.0), Point(), aPixmap.data());
     pXImpressDocument->paintTile(*pDevice, nCanvasSize, nCanvasSize, 0, 0, 15360, 7680);
     pDevice->EnableMapMode(false);
     Bitmap aBitmap = pDevice->GetBitmap(Point(0, 0), Size(nTileSize, nTileSize));
-    Bitmap::ScopedReadAccess pAccess(aBitmap);
+    BitmapScopedReadAccess pAccess(aBitmap);
     Color aActualColor(pAccess->GetPixel(nPixelX, nPixelY));
     CPPUNIT_ASSERT_EQUAL(aColor, aActualColor);
 }
 
 // Test that changing the theme in one view doesn't change it in the other view
-void SdTiledRenderingTest::testThemeViewSeparation()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testThemeViewSeparation)
 {
     Color aDarkColor(0x1c, 0x1c, 0x1c);
     // Add a minimal dark scheme
@@ -2593,7 +2472,7 @@ void SdTiledRenderingTest::testThemeViewSeparation()
         aValue.bIsVisible = true;
         aValue.nColor = aDarkColor;
         aColorConfig.SetColorValue(svtools::DOCCOLOR, aValue);
-        aColorConfig.AddScheme(u"Dark");
+        aColorConfig.AddScheme(u"Dark"_ustr);
     }
     // Add a minimal light scheme
     {
@@ -2602,7 +2481,7 @@ void SdTiledRenderingTest::testThemeViewSeparation()
         aValue.bIsVisible = true;
         aValue.nColor = COL_WHITE;
         aColorConfig.SetColorValue(svtools::DOCCOLOR, aValue);
-        aColorConfig.AddScheme(u"Light");
+        aColorConfig.AddScheme(u"Light"_ustr);
     }
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
     int nFirstViewId = SfxLokHelper::getView();
@@ -2637,7 +2516,7 @@ void SdTiledRenderingTest::testThemeViewSeparation()
     assertTilePixelColor(pXImpressDocument, 255, 255, COL_WHITE);
     // Second view still in dark scheme
     SfxLokHelper::setView(nSecondViewId);
-    assertTilePixelColor(pXImpressDocument, 255, 255, aDarkColor);
+    assertTilePixelColor(pXImpressDocument, 255, 255, Color(0x1c, 0x1c, 0x1c));
     // Switch second view back to light scheme
     {
         uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
@@ -2651,7 +2530,7 @@ void SdTiledRenderingTest::testThemeViewSeparation()
     assertTilePixelColor(pXImpressDocument, 255, 255, COL_WHITE);
 }
 
-void SdTiledRenderingTest::testRegenerateDiagram()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testRegenerateDiagram)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("regenerate-diagram.pptx");
@@ -2675,13 +2554,12 @@ void SdTiledRenderingTest::testRegenerateDiagram()
 
     // regenerate diagram
     dispatchCommand(mxComponent, ".uno:RegenerateDiagram", uno::Sequence<beans::PropertyValue>());
-    Scheduler::ProcessEventsToIdle();
 
     // diagram content (child shape count) should be the same as in the beginning
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(4), pActualPage->GetObj(0)->GetSubList()->GetObjCount());
 }
 
-void SdTiledRenderingTest::testInsertDeletePageInvalidation()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testInsertDeletePageInvalidation)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
@@ -2692,7 +2570,6 @@ void SdTiledRenderingTest::testInsertDeletePageInvalidation()
     aView1.m_bTilesInvalidated = false;
     aView1.m_aInvalidations.clear();
     dispatchCommand(mxComponent, ".uno:InsertPage", uno::Sequence<beans::PropertyValue>());
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView1.m_bTilesInvalidated);
     CPPUNIT_ASSERT_EQUAL(9, pXImpressDocument->getParts());
     CPPUNIT_ASSERT_EQUAL(size_t(9), aView1.m_aInvalidations.size());
@@ -2701,13 +2578,12 @@ void SdTiledRenderingTest::testInsertDeletePageInvalidation()
     aView1.m_bTilesInvalidated = false;
     aView1.m_aInvalidations.clear();
     dispatchCommand(mxComponent, ".uno:DeletePage", uno::Sequence<beans::PropertyValue>());
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(aView1.m_bTilesInvalidated);
     CPPUNIT_ASSERT_EQUAL(8, pXImpressDocument->getParts());
     CPPUNIT_ASSERT_EQUAL(size_t(8), aView1.m_aInvalidations.size());
 }
 
-void SdTiledRenderingTest::testSpellOnlineRenderParameter()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSpellOnlineRenderParameter)
 {
     // Load the document.
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
@@ -2721,7 +2597,7 @@ void SdTiledRenderingTest::testSpellOnlineRenderParameter()
     CPPUNIT_ASSERT_EQUAL(!bSet, pXImpressDocument->GetDoc()->GetOnlineSpell());
 }
 
-void SdTiledRenderingTest::testSlideDuplicateUndo()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSlideDuplicateUndo)
 {
     // Create two views.
     SdXImpressDocument* pXImpressDocument = createDoc("duplicate-undo.odp");
@@ -2750,7 +2626,6 @@ void SdTiledRenderingTest::testSlideDuplicateUndo()
     // Duplicate the first slide on view 1 and undo it.
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:DuplicatePage", {});
-    Scheduler::ProcessEventsToIdle();
     pXImpressDocument->setPart(0, /*bAllowChangeFocus=*/false);
     pXImpressDocument->setPart(1, /*bAllowChangeFocus=*/false);
     SfxLokHelper::setView(nView0);
@@ -2775,7 +2650,7 @@ namespace
 void lcl_extractHandleParameters(std::string_view selection, sal_uInt32& id, sal_uInt32& x, sal_uInt32& y)
 {
     OString extraInfo( selection.substr(selection.find("{")) );
-    std::stringstream aStream(extraInfo.getStr());
+    std::stringstream aStream((std::string(extraInfo)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     boost::property_tree::ptree
@@ -2792,7 +2667,7 @@ void lcl_extractHandleParameters(std::string_view selection, sal_uInt32& id, sal
 
 }
 
-void SdTiledRenderingTest::testMoveShapeHandle()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testMoveShapeHandle)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("shape.odp");
     ViewCallback aView1;
@@ -2816,7 +2691,6 @@ void SdTiledRenderingTest::testMoveShapeHandle()
             {"NewPosY", uno::Any(y+1)}
         }));
         dispatchCommand(mxComponent, ".uno:MoveShapeHandle", aPropertyValues);
-        Scheduler::ProcessEventsToIdle();
         CPPUNIT_ASSERT(!aView1.m_ShapeSelection.isEmpty());
         lcl_extractHandleParameters(aView1.m_ShapeSelection, id, x ,y);
         CPPUNIT_ASSERT_EQUAL(x-1, oldX);
@@ -2824,7 +2698,7 @@ void SdTiledRenderingTest::testMoveShapeHandle()
     }
 }
 
-void SdTiledRenderingTest::testPasteUndo()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testPasteUndo)
 {
     // Given a document with a textbox, containing "world":
     SdXImpressDocument* pXImpressDocument = createDoc("paste-undo.fodp");
@@ -2840,13 +2714,10 @@ void SdTiledRenderingTest::testPasteUndo()
     ESelection aWordSelection(0, 0, 0, 1); // "w" of "world"
     rEditView.SetSelection(aWordSelection);
     dispatchCommand(mxComponent, ".uno:Cut", {});
-    Scheduler::ProcessEventsToIdle();
 
     // When undoing a paste:
     dispatchCommand(mxComponent, ".uno:Paste", {});
-    Scheduler::ProcessEventsToIdle();
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     // Then make sure the cursor position is still at the beginning:
     ESelection aSelection = rEditView.GetSelection();
@@ -2858,7 +2729,7 @@ void SdTiledRenderingTest::testPasteUndo()
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), aSelection.nStartPos);
 }
 
-void SdTiledRenderingTest::testShapeEditInMultipleViews()
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testShapeEditInMultipleViews)
 {
     SdXImpressDocument* pXImpressDocument = createDoc("TextBoxAndRect.odg");
     pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
@@ -3096,7 +2967,63 @@ void SdTiledRenderingTest::testShapeEditInMultipleViews()
     }
 }
 
-CPPUNIT_TEST_SUITE_REGISTRATION(SdTiledRenderingTest);
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testStartPresentation)
+{
+    SdXImpressDocument* pXImpressDocument = createDoc("test.ppsx");
+    ViewCallback aView;
+    CPPUNIT_ASSERT(pXImpressDocument->GetDoc()->IsStartWithPresentation());
+    Scheduler::ProcessEventsToIdle();
+
+    const auto it = aView.m_aStateChanges.find(".uno:StartWithPresentation");
+    CPPUNIT_ASSERT(it != aView.m_aStateChanges.end());
+
+    const auto value = it->second;
+    CPPUNIT_ASSERT(value.get_child_optional("state").has_value());
+    CPPUNIT_ASSERT_EQUAL(std::string("true"), value.get_child("state").get_value<std::string>());
+}
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSidebarHide)
+{
+    // Given an impress document, with a visible sidebar:
+    createDoc("dummy.odp");
+    ViewCallback aView;
+    sfx2::sidebar::Sidebar::Setup(u"");
+    Scheduler::ProcessEventsToIdle();
+    aView.m_aStateChanges.clear();
+
+    // When hiding the slide layout deck:
+    dispatchCommand(mxComponent, ".uno:ModifyPage", {});
+
+    // Then make sure we get a state change for this, in JSON format:
+    auto it = aView.m_aStateChanges.find(".uno:ModifyPage");
+    // Without the accompanying fix in place, this test would have failed, we got the state change
+    // in plain text, which was inconsistent (show was JSON, hide was plain text).
+    CPPUNIT_ASSERT(it != aView.m_aStateChanges.end());
+}
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSidebarSwitchDeck)
+{
+    // Given an impress document, with a visible sidebar (ModifyPage deck):
+    createDoc("dummy.odp");
+    ViewCallback aView;
+    sfx2::sidebar::Sidebar::Setup(u"");
+    Scheduler::ProcessEventsToIdle();
+    aView.m_aStateChanges.clear();
+
+    // When switching to the MasterSlidesPanel deck:
+    dispatchCommand(mxComponent, ".uno:MasterSlidesPanel", {});
+
+    // Then make sure notifications are sent for both the old and the new decks:
+    auto it = aView.m_aStateChanges.find(".uno:ModifyPage");
+    // Without the accompanying fix in place, this test would have failed, the notification for the
+    // old deck was missing.
+    CPPUNIT_ASSERT(it != aView.m_aStateChanges.end());
+    boost::property_tree::ptree aTree = it->second;
+    CPPUNIT_ASSERT(aTree.get_child_optional("state").has_value());
+    CPPUNIT_ASSERT_EQUAL(std::string("false"), aTree.get_child("state").get_value<std::string>());
+    it = aView.m_aStateChanges.find(".uno:MasterSlidesPanel");
+    CPPUNIT_ASSERT(it != aView.m_aStateChanges.end());
+}
 
 CPPUNIT_PLUGIN_IMPLEMENT();
 

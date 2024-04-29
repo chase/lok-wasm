@@ -76,20 +76,19 @@ StatusIndicator::~StatusIndicator() {}
 
 Any SAL_CALL StatusIndicator::queryInterface( const Type& rType )
 {
-    // Attention:
-    //  Don't use mutex or guard in this method!!! Is a method of XInterface.
-    Any aReturn;
-    css::uno::Reference< XInterface > xDel = BaseContainerControl::impl_getDelegator();
-    if ( xDel.is() )
+    // Ask for my own supported interfaces ...
+    // Attention: XTypeProvider and XInterface are supported by WeakComponentImplHelper!
+    Any aReturn ( ::cppu::queryInterface( rType                                     ,
+                                          static_cast< XLayoutConstrains*   > ( this )  ,
+                                          static_cast< XStatusIndicator*    > ( this )
+                                        )
+                );
+
+    // If searched interface not supported by this class ...
+    if ( !aReturn.hasValue() )
     {
-        // If a delegator exists, forward question to its queryInterface.
-        // Delegator will ask its own queryAggregation!
-        aReturn = xDel->queryInterface( rType );
-    }
-    else
-    {
-        // If a delegator is unknown, forward question to own queryAggregation.
-        aReturn = queryAggregation( rType );
+        // ... ask baseclasses.
+        aReturn = BaseControl::queryInterface( rType );
     }
 
     return aReturn;
@@ -129,28 +128,6 @@ Sequence< Type > SAL_CALL StatusIndicator::getTypes()
     return ourTypeCollection.getTypes();
 }
 
-//  XAggregation
-
-Any SAL_CALL StatusIndicator::queryAggregation( const Type& aType )
-{
-    // Ask for my own supported interfaces ...
-    // Attention: XTypeProvider and XInterface are supported by OComponentHelper!
-    Any aReturn ( ::cppu::queryInterface( aType                                     ,
-                                          static_cast< XLayoutConstrains*   > ( this )  ,
-                                          static_cast< XStatusIndicator*    > ( this )
-                                        )
-                );
-
-    // If searched interface not supported by this class ...
-    if ( !aReturn.hasValue() )
-    {
-        // ... ask baseclasses.
-        aReturn = BaseControl::queryAggregation( aType );
-    }
-
-    return aReturn;
-}
-
 //  XStatusIndicator
 
 void SAL_CALL StatusIndicator::start( const OUString& sText, sal_Int32 nRange )
@@ -162,7 +139,7 @@ void SAL_CALL StatusIndicator::start( const OUString& sText, sal_Int32 nRange )
     m_xText->setText( sText );
     m_xProgressBar->setRange( 0, nRange );
     // force repaint ... fixedtext has changed !
-    impl_recalcLayout ( WindowEvent(static_cast< OWeakObject* >(this),0,0,impl_getWidth(),impl_getHeight(),0,0,0,0) );
+    impl_recalcLayout ( WindowEvent(getXWeak(),0,0,impl_getWidth(),impl_getHeight(),0,0,0,0) );
 }
 
 //  XStatusIndicator
@@ -311,6 +288,8 @@ void SAL_CALL StatusIndicator::dispose ()
     // when other hold a reference at this object !!!
     xTextControl->dispose();
     m_xProgressBar->dispose();
+    m_xProgressBar.clear();
+    m_xText.clear();
     BaseContainerControl::dispose();
 }
 
@@ -334,7 +313,7 @@ void SAL_CALL StatusIndicator::setPosSize (
        )
     {
         // calc new layout for controls
-        impl_recalcLayout ( WindowEvent(static_cast< OWeakObject* >(this),0,0,nWidth,nHeight,0,0,0,0) );
+        impl_recalcLayout ( WindowEvent(getXWeak(),0,0,nWidth,nHeight,0,0,0,0) );
         // clear background (!)
         // [Children were repainted in "recalcLayout" by setPosSize() automatically!]
         getPeer()->invalidate(2);

@@ -9,19 +9,12 @@
 
 #include <comphelper/lok.hxx>
 
-#include <com/sun/star/text/XTextRange.hpp>
-#include <com/sun/star/container/XEnumerationAccess.hpp>
-#include <com/sun/star/container/XEnumeration.hpp>
-#include <com/sun/star/beans/XPropertySet.hpp>
-#include <com/sun/star/util/XComplexColor.hpp>
-
-#include <docmodel/uno/UnoComplexColor.hxx>
 #include <docmodel/theme/ColorSet.hxx>
 
+#include <editeng/colritem.hxx>
 #include <editeng/editeng.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/section.hxx>
-#include <editeng/unoprnms.hxx>
 
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 
@@ -38,6 +31,7 @@
 #include <svx/xdef.hxx>
 #include <svx/xlnclit.hxx>
 #include <svx/xflclit.hxx>
+#include <tools/json_writer.hxx>
 
 using namespace css;
 
@@ -185,17 +179,14 @@ void notifyLOK(std::shared_ptr<model::ColorSet> const& pColorSet,
     if (comphelper::LibreOfficeKit::isActive())
     {
         svx::ThemeColorPaletteManager aManager(pColorSet);
-        std::stringstream aStream;
-        boost::property_tree::ptree aTree;
+        tools::JsonWriter aTree;
 
         if (pColorSet)
             aManager.generateJSON(aTree);
         if (rDocumentColors.size())
             PaletteManager::generateJSON(aTree, rDocumentColors);
 
-        boost::property_tree::write_json(aStream, aTree);
-
-        SfxLokHelper::notifyAllViews(LOK_CALLBACK_COLOR_PALETTES, OString(aStream.str()));
+        SfxLokHelper::notifyAllViews(LOK_CALLBACK_COLOR_PALETTES, aTree.finishAndGetAsOString());
     }
 }
 

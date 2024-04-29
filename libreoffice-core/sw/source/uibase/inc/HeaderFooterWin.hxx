@@ -34,7 +34,7 @@ class SwHeaderFooterWin;
     This control is showing the header / footer style name and provides
     a few useful actions to the user.
   */
-class SwHeaderFooterDashedLine : public SwDashedLine, public ISwFrameControl
+class SwHeaderFooterDashedLine final : public SwDashedLine, public ISwFrameControl
 {
 private:
     VclPtr<SwHeaderFooterWin> m_pWin;
@@ -86,12 +86,12 @@ public:
 
     bool IsEmptyHeaderFooter( ) const;
 
-    void ExecuteCommand(std::string_view rIdent);
+    void ExecuteCommand(std::u16string_view rIdent);
 
 private:
     DECL_LINK(FadeHandler, Timer *, void);
     DECL_LINK(ClickHdl, weld::Button&, void);
-    DECL_LINK(SelectHdl, const OString&, void);
+    DECL_LINK(SelectHdl, const OUString&, void);
     void PaintButton();
 };
 

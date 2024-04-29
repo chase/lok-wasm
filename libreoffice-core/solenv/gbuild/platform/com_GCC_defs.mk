@@ -38,7 +38,9 @@ endif
 gb_COMPILER_SETUP :=
 
 ifeq ($(strip $(gb_COMPILEROPTFLAGS)),)
-gb_COMPILEROPTFLAGS := -O2
+gb_COMPILEROPTFLAGS := \
+	-O3 \
+	$(if $(HARDENING_OPT_CFLAGS),$(HARDENING_OPT_CFLAGS))
 endif
 
 gb_AFLAGS := $(AFLAGS)
@@ -75,6 +77,7 @@ gb_CFLAGS_COMMON := \
 	-fmessage-length=0 \
 	-fno-common \
 	-pipe \
+	$(if $(ENABLE_HARDENING_FLAGS),$(HARDENING_CFLAGS)) \
 	$(if $(filter EMSCRIPTEN,$(OS)),-fno-stack-protector,-fstack-protector-strong) \
 
 gb_CXXFLAGS_COMMON := \
@@ -91,6 +94,7 @@ gb_CXXFLAGS_COMMON := \
 	-fmessage-length=0 \
 	-fno-common \
 	-pipe \
+	$(if $(ENABLE_HARDENING_FLAGS),$(HARDENING_CFLAGS)) \
 	$(if $(filter EMSCRIPTEN,$(OS)),-fno-stack-protector,-fstack-protector-strong) \
 
 ifeq ($(HAVE_WDEPRECATED_COPY_DTOR),TRUE)
@@ -198,7 +202,7 @@ gb_LTOPLUGINFLAGS := --plugin $(if $(LD_PLUGIN),$(LD_PLUGIN),LLVMgold.so)
 endif
 else
 # use parallelism based on make's job handling
-gb_LTOFLAGS := -flto=jobserver -fuse-linker-plugin -O2
+gb_LTOFLAGS := -flto=jobserver -fuse-linker-plugin -O3
 # clang does not support -flto=<number>
 gb_CLANG_LTOFLAGS := -flto=thin
 endif
@@ -260,20 +264,20 @@ gb_LinkTarget_INCLUDE :=\
 
 ifeq ($(COM_IS_CLANG),TRUE)
 gb_COMPILER_TEST_FLAGS := -Xclang -plugin-arg-loplugin -Xclang --unit-test-mode
-ifeq ($(COMPILER_PLUGIN_TOOL),)
 gb_COMPILER_PLUGINS := -Xclang -load -Xclang $(BUILDDIR)/compilerplugins/clang/plugin.so -Xclang -add-plugin -Xclang loplugin
 ifneq ($(COMPILER_PLUGIN_WARNINGS_ONLY),)
 gb_COMPILER_PLUGINS += -Xclang -plugin-arg-loplugin -Xclang \
     --warnings-only='$(COMPILER_PLUGIN_WARNINGS_ONLY)'
 endif
-else
-gb_COMPILER_PLUGINS := -Xclang -load -Xclang $(BUILDDIR)/compilerplugins/clang/plugin.so -Xclang -plugin -Xclang loplugin $(foreach plugin,$(COMPILER_PLUGIN_TOOL), -Xclang -plugin-arg-loplugin -Xclang $(plugin))
-ifneq ($(UPDATE_FILES),)
-gb_COMPILER_PLUGINS += -Xclang -plugin-arg-loplugin -Xclang --scope=$(UPDATE_FILES)
-endif
-endif
 ifeq ($(COMPILER_PLUGINS_DEBUG),TRUE)
 gb_COMPILER_PLUGINS += -Xclang -plugin-arg-loplugin -Xclang --debug
+endif
+gb_COMPILER_PLUGINS_TOOL := -Xclang -load -Xclang $(BUILDDIR)/compilerplugins/clang/plugin.so -Xclang -plugin -Xclang loplugin $(foreach plugin,$(COMPILER_PLUGIN_TOOL), -Xclang -plugin-arg-loplugin -Xclang $(plugin))
+ifneq ($(UPDATE_FILES),)
+gb_COMPILER_PLUGINS_TOOL += -Xclang -plugin-arg-loplugin -Xclang --scope=$(UPDATE_FILES)
+endif
+ifeq ($(COMPILER_PLUGINS_DEBUG),TRUE)
+gb_COMPILER_PLUGINS_TOOL += -Xclang -plugin-arg-loplugin -Xclang --debug
 endif
 
 # Set CCACHE_CPP2=1 to prevent Clang generating spurious warnings.
@@ -296,6 +300,7 @@ gb_COMPILER_SETUP += CCACHE_CPP2=1
 endif
 gb_COMPILER_TEST_FLAGS :=
 gb_COMPILER_PLUGINS :=
+gb_COMPILER_PLUGINS_TOOL :=
 gb_COMPILER_PLUGINS_SETUP :=
 gb_COMPILER_PLUGINS_WARNINGS_AS_ERRORS :=
 endif
@@ -308,8 +313,6 @@ gb_Executable_EXT_for_build :=
 
 ifeq ($(OS_FOR_BUILD),MACOSX)
 gb_Helper_LIBRARY_PATH_VAR := DYLD_LIBRARY_PATH
-else ifeq ($(OS_FOR_BUILD),AIX)
-gb_Helper_LIBRARY_PATH_VAR := LIBPATH
 else ifeq ($(OS_FOR_BUILD),WNT)
 # In theory possible if cross-compiling to some Unix from Windows,
 # in practice strongly discouraged to even try that

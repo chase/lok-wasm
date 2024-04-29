@@ -450,7 +450,7 @@ void SdStyleSheetPool::CreateLayoutStyleSheets(std::u16string_view rLayoutName, 
         rNotesSet.Put( SvxCharReliefItem(FontRelief::NONE, EE_CHAR_RELIEF) );
         rNotesSet.Put( SvxColorItem( COL_AUTO, EE_CHAR_COLOR ) );
         rNotesSet.Put( SvxColorItem( COL_AUTO, EE_CHAR_BKGCOLOR ) );
-        rNotesSet.Put( SvxLRSpaceItem( 0, 0, 600, -600, EE_PARA_LRSPACE  ) );
+        rNotesSet.Put( SvxLRSpaceItem( 0, 0, -600, EE_PARA_LRSPACE  ) );
         // #i16874# enable kerning by default but only for new documents
         rNotesSet.Put( SvxAutoKernItem( true, EE_CHAR_PAIRKERNING ) );
 
@@ -1369,15 +1369,16 @@ SdStyleSheetVector SdStyleSheetPool::CreateChildList( SdStyleSheet const * pShee
 {
     SdStyleSheetVector aResult;
 
-    const size_t nListenerCount = pSheet->GetSizeOfVector();
-    for (size_t n = 0; n < nListenerCount; ++n)
-    {
-        SdStyleSheet* pChild = dynamic_cast< SdStyleSheet* >( pSheet->GetListener(n) );
-        if(pChild && pChild->GetParent() == pSheet->GetName())
+    pSheet->ForAllListeners(
+        [&pSheet, &aResult] (SfxListener* pListener)
         {
-            aResult.emplace_back( pChild );
-        }
-    }
+            SdStyleSheet* pChild = dynamic_cast< SdStyleSheet* >( pListener );
+            if(pChild && pChild->GetParent() == pSheet->GetName())
+            {
+                aResult.emplace_back( pChild );
+            }
+            return false;
+        });
 
     return aResult;
 }

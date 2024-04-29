@@ -20,6 +20,7 @@
 #include <osl/mutex.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <tools/urlobj.hxx>
+#include <rtl/uri.hxx>
 #include <rtl/ustring.hxx>
 #include <sal/log.hxx>
 #include <utility>
@@ -91,25 +92,25 @@
 constexpr OUStringLiteral SERVICENAME_TYPEDETECTION = u"com.sun.star.document.TypeDetection";
 
 constexpr OUStringLiteral TEMPLATE_ROOT_URL = u"vnd.sun.star.hier:/templates";
-constexpr OUStringLiteral TITLE = u"Title";
-constexpr OUStringLiteral IS_FOLDER = u"IsFolder";
-constexpr OUStringLiteral IS_DOCUMENT = u"IsDocument";
-constexpr OUStringLiteral TARGET_URL = u"TargetURL";
+constexpr OUString TITLE = u"Title"_ustr;
+constexpr OUString IS_FOLDER = u"IsFolder"_ustr;
+constexpr OUString IS_DOCUMENT = u"IsDocument"_ustr;
+constexpr OUString TARGET_URL = u"TargetURL"_ustr;
 constexpr OUStringLiteral TEMPLATE_VERSION = u"TemplateComponentVersion";
 constexpr OUStringLiteral TEMPLATE_VERSION_VALUE = u"2";
 constexpr OUStringLiteral TYPE_FOLDER = u"application/vnd.sun.star.hier-folder";
 constexpr OUStringLiteral TYPE_LINK = u"application/vnd.sun.star.hier-link";
-constexpr OUStringLiteral TYPE_FSYS_FOLDER = u"application/vnd.sun.staroffice.fsys-folder";
+constexpr OUString TYPE_FSYS_FOLDER = u"application/vnd.sun.staroffice.fsys-folder"_ustr;
 constexpr OUStringLiteral TYPE_FSYS_FILE = u"application/vnd.sun.staroffice.fsys-file";
 
-constexpr OUStringLiteral PROPERTY_DIRLIST = u"DirectoryList";
-constexpr OUStringLiteral PROPERTY_NEEDSUPDATE = u"NeedsUpdate";
-constexpr OUStringLiteral PROPERTY_TYPE = u"TypeDescription";
+constexpr OUString PROPERTY_DIRLIST = u"DirectoryList"_ustr;
+constexpr OUString PROPERTY_NEEDSUPDATE = u"NeedsUpdate"_ustr;
+constexpr OUString PROPERTY_TYPE = u"TypeDescription"_ustr;
 
-constexpr OUStringLiteral TARGET_DIR_URL = u"TargetDirURL";
+constexpr OUString TARGET_DIR_URL = u"TargetDirURL"_ustr;
 constexpr OUStringLiteral COMMAND_DELETE = u"delete";
 
-constexpr OUStringLiteral STANDARD_FOLDER = u"standard";
+constexpr OUString STANDARD_FOLDER = u"standard"_ustr;
 
 #define C_DELIM                 ';'
 
@@ -176,8 +177,57 @@ public:
     { return uno::Reference<ucb::XProgressHandler>(); }
 };
 
-class SfxDocTplService_Impl
+class SfxDocTplService : public ::cppu::WeakImplHelper< css::lang::XLocalizable, css::frame::XDocumentTemplates, css::lang::XServiceInfo >
 {
+public:
+    explicit SfxDocTplService( const css::uno::Reference < uno::XComponentContext >& xContext );
+    virtual ~SfxDocTplService() override;
+
+    virtual OUString SAL_CALL getImplementationName() override
+    {
+        return "com.sun.star.comp.sfx2.DocumentTemplates";
+    }
+
+    virtual sal_Bool SAL_CALL supportsService(OUString const & ServiceName) override
+    {
+        return cppu::supportsService(this, ServiceName);
+    }
+
+    virtual css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override
+    {
+        css::uno::Sequence< OUString > aSeq { "com.sun.star.frame.DocumentTemplates" };
+        return aSeq;
+    }
+
+
+    // --- XLocalizable ---
+    void SAL_CALL                   setLocale( const css::lang::Locale & eLocale ) override;
+    css::lang::Locale SAL_CALL              getLocale() override;
+
+    // --- XDocumentTemplates ---
+    css::uno::Reference< css::ucb::XContent > SAL_CALL  getContent() override;
+    sal_Bool SAL_CALL               storeTemplate( const OUString& GroupName,
+                                                   const OUString& TemplateName,
+                                                   const css::uno::Reference< css::frame::XStorable >& Storable ) override;
+    sal_Bool SAL_CALL               addTemplate( const OUString& GroupName,
+                                                 const OUString& TemplateName,
+                                                 const OUString& SourceURL ) override;
+    sal_Bool SAL_CALL               removeTemplate( const OUString& GroupName,
+                                                    const OUString& TemplateName ) override;
+    sal_Bool SAL_CALL               renameTemplate( const OUString& GroupName,
+                                                    const OUString& OldTemplateName,
+                                                    const OUString& NewTemplateName ) override;
+    sal_Bool SAL_CALL               addGroup( const OUString& GroupName ) override;
+    sal_Bool SAL_CALL               removeGroup( const OUString& GroupName ) override;
+    sal_Bool SAL_CALL               renameGroup( const OUString& OldGroupName,
+                                                 const OUString& NewGroupName ) override;
+    void SAL_CALL                   update() override;
+
+private:
+    bool                        init() { if ( !mbIsInitialized ) init_Impl(); return mbIsInitialized; }
+
+    void                        doUpdate();
+
     uno::Reference< XComponentContext >              mxContext;
     uno::Reference< XCommandEnvironment >            maCmdEnv;
     uno::Reference< XDocumentProperties>             m_xDocProps;
@@ -221,7 +271,7 @@ class SfxDocTplService_Impl
                                                                 Content& aNewFolder );
     static OUString         CreateNewUniqueFileWithPrefix( std::u16string_view aPath,
                                                                 const OUString& aPrefix,
-                                                                const OUString& aExt );
+                                                                std::u16string_view aExt );
 
     std::vector< beans::StringPair > ReadUINamesForTemplateDir_Impl( std::u16string_view aUserPath );
     bool                    UpdateUINamesForTemplateDir_Impl( std::u16string_view aUserPath,
@@ -277,36 +327,6 @@ class SfxDocTplService_Impl
     //return true if rURL is a path (or subpath of) a dir which is not a user path
     //which implies neither it or its contents can be removed
     bool                        isInternalTemplateDir(const OUString& rURL) const;
-public:
-    explicit                    SfxDocTplService_Impl( const uno::Reference< XComponentContext > & xContext );
-                                ~SfxDocTplService_Impl();
-
-    bool                        init() { if ( !mbIsInitialized ) init_Impl(); return mbIsInitialized; }
-    const Content&              getContent() const { return maRootContent; }
-
-    void                        setLocale( const lang::Locale & rLocale );
-    lang::Locale                getLocale();
-
-    bool                        storeTemplate( const OUString& rGroupName,
-                                               const OUString& rTemplateName,
-                                               const uno::Reference< frame::XStorable >& rStorable );
-
-    bool                        addTemplate( const OUString& rGroupName,
-                                             const OUString& rTemplateName,
-                                             const OUString& rSourceURL );
-    bool                        removeTemplate( std::u16string_view rGroupName,
-                                                std::u16string_view rTemplateName );
-    bool                        renameTemplate( std::u16string_view rGroupName,
-                                                std::u16string_view rOldName,
-                                                const OUString& rNewName );
-
-    bool                        addGroup( const OUString& rGroupName );
-    bool                        removeGroup( std::u16string_view rGroupName );
-    bool                        renameGroup( std::u16string_view rOldName,
-                                             const OUString& rNewName );
-
-    void                        update();
-    void                        doUpdate();
 };
 
 
@@ -380,7 +400,7 @@ public:
 
 // private SfxDocTplService_Impl
 
-void SfxDocTplService_Impl::init_Impl()
+void SfxDocTplService::init_Impl()
 {
     uno::Reference< uno::XComponentContext > xContext = ::comphelper::getProcessComponentContext();
     uno::Reference < task::XInteractionHandler > xInteractionHandler(
@@ -448,7 +468,7 @@ void SfxDocTplService_Impl::init_Impl()
             aSolarGuard.clear();
             {
                 osl::MutexGuard anotherGuard(maMutex);
-                update();
+                doUpdate();
             }
             SolarMutexGuard aSecondSolarGuard;
 
@@ -456,7 +476,7 @@ void SfxDocTplService_Impl::init_Impl()
         }
         else if ( needsUpdate() )
             // the UI should be shown only on the first update
-            update();
+            doUpdate();
     }
     else
     {
@@ -467,7 +487,7 @@ void SfxDocTplService_Impl::init_Impl()
 }
 
 
-void SfxDocTplService_Impl::getDefaultLocale()
+void SfxDocTplService::getDefaultLocale()
 {
     if ( !mbLocaleSet )
     {
@@ -492,7 +512,7 @@ const char* TEMPLATE_SHORT_NAMES_ARY[] =
     "l10n",
 };
 
-void SfxDocTplService_Impl::readFolderList()
+void SfxDocTplService::readFolderList()
 {
     SolarMutexGuard aGuard;
 
@@ -509,7 +529,7 @@ void SfxDocTplService_Impl::readFolderList()
 }
 
 
-OUString SfxDocTplService_Impl::getLongName( const OUString& rShortName )
+OUString SfxDocTplService::getLongName( const OUString& rShortName )
 {
     OUString         aRet;
 
@@ -529,7 +549,7 @@ OUString SfxDocTplService_Impl::getLongName( const OUString& rShortName )
 }
 
 
-void SfxDocTplService_Impl::getDirList()
+void SfxDocTplService::getDirList()
 {
     Any      aValue;
 
@@ -542,8 +562,6 @@ void SfxDocTplService_Impl::getDirList()
     maTemplateDirs = Sequence< OUString >( nCount );
 
     uno::Reference< util::XMacroExpander > xExpander = util::theMacroExpander::get(mxContext);
-    static const OUStringLiteral aPrefix(
-        u"vnd.sun.star.expand:"  );
 
     sal_Int32 nIdx{ 0 };
     for (auto& rTemplateDir : asNonConstRange(maTemplateDirs))
@@ -552,13 +570,10 @@ void SfxDocTplService_Impl::getDirList()
         aURL.SetURL( o3tl::getToken(aDirs, 0, C_DELIM, nIdx ) );
         rTemplateDir = aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE );
 
-        if ( xExpander.is() )
+        if (xExpander && rTemplateDir.startsWithIgnoreAsciiCase("vnd.sun.star.expand:", &rTemplateDir))
         {
-            const sal_Int32 nIndex{ rTemplateDir.indexOf( aPrefix ) };
-            if (nIndex<0)
-                continue;
-
-            rTemplateDir = rTemplateDir.replaceAt(nIndex, aPrefix.getLength(), u"");
+            rTemplateDir
+                = rtl::Uri::decode(rTemplateDir, rtl_UriDecodeStrict, RTL_TEXTENCODING_UTF8);
             rTemplateDir = xExpander->expandMacros( rTemplateDir );
         }
     }
@@ -585,7 +600,7 @@ void SfxDocTplService_Impl::getDirList()
 }
 
 
-bool SfxDocTplService_Impl::needsUpdate()
+bool SfxDocTplService::needsUpdate()
 {
     bool bNeedsUpdate = true;
     Any      aValue;
@@ -609,7 +624,7 @@ bool SfxDocTplService_Impl::needsUpdate()
 }
 
 
-bool SfxDocTplService_Impl::setTitleForURL( const OUString& rURL, const OUString& aTitle )
+bool SfxDocTplService::setTitleForURL( const OUString& rURL, const OUString& aTitle )
 {
     if (m_xDocProps.is())
     {
@@ -637,7 +652,7 @@ bool SfxDocTplService_Impl::setTitleForURL( const OUString& rURL, const OUString
 }
 
 
-void SfxDocTplService_Impl::getTitleFromURL( const OUString& rURL, OUString& aTitle, OUString& aType, bool& bDocHasTitle )
+void SfxDocTplService::getTitleFromURL( const OUString& rURL, OUString& aTitle, OUString& aType, bool& bDocHasTitle )
 {
     bDocHasTitle = false;
 
@@ -681,7 +696,7 @@ void SfxDocTplService_Impl::getTitleFromURL( const OUString& rURL, OUString& aTi
 }
 
 
-bool SfxDocTplService_Impl::addEntry( Content& rParentFolder,
+bool SfxDocTplService::addEntry( Content& rParentFolder,
                                           const OUString& rTitle,
                                           const OUString& rTargetURL,
                                           const OUString& rType )
@@ -713,7 +728,7 @@ bool SfxDocTplService_Impl::addEntry( Content& rParentFolder,
 }
 
 
-bool SfxDocTplService_Impl::createFolder( const OUString& rNewFolderURL,
+bool SfxDocTplService::createFolder( const OUString& rNewFolderURL,
                                               bool  bCreateParent,
                                               bool  bFsysFolder,
                                               Content   &rNewFolder )
@@ -771,7 +786,7 @@ bool SfxDocTplService_Impl::createFolder( const OUString& rNewFolderURL,
 }
 
 
-bool SfxDocTplService_Impl::CreateNewUniqueFolderWithPrefix( std::u16string_view aPath,
+bool SfxDocTplService::CreateNewUniqueFolderWithPrefix( std::u16string_view aPath,
                                                                 const OUString& aPrefix,
                                                                 OUString& aNewFolderName,
                                                                 OUString& aNewFolderURL,
@@ -824,9 +839,9 @@ bool SfxDocTplService_Impl::CreateNewUniqueFolderWithPrefix( std::u16string_view
 }
 
 
-OUString SfxDocTplService_Impl::CreateNewUniqueFileWithPrefix( std::u16string_view aPath,
+OUString SfxDocTplService::CreateNewUniqueFileWithPrefix( std::u16string_view aPath,
                                                                         const OUString& aPrefix,
-                                                                        const OUString& aExt )
+                                                                        std::u16string_view aExt )
 {
     OUString aNewFileURL;
     INetURLObject aDirPath( aPath );
@@ -843,7 +858,7 @@ OUString SfxDocTplService_Impl::CreateNewUniqueFileWithPrefix( std::u16string_vi
             OUString aTryName = aPrefix;
             if ( nInd )
                 aTryName += OUString::number( nInd );
-            if ( aExt.toChar() != '.' )
+            if ( aExt.empty() || aExt[0] != '.' )
                 aTryName += ".";
             aTryName += aExt;
 
@@ -880,7 +895,7 @@ OUString SfxDocTplService_Impl::CreateNewUniqueFileWithPrefix( std::u16string_vi
 }
 
 
-bool SfxDocTplService_Impl::removeContent( Content& rContent )
+bool SfxDocTplService::removeContent( Content& rContent )
 {
     bool bRemoved = false;
     try
@@ -897,7 +912,7 @@ bool SfxDocTplService_Impl::removeContent( Content& rContent )
 }
 
 
-bool SfxDocTplService_Impl::removeContent( const OUString& rContentURL )
+bool SfxDocTplService::removeContent( const OUString& rContentURL )
 {
     Content aContent;
 
@@ -907,7 +922,7 @@ bool SfxDocTplService_Impl::removeContent( const OUString& rContentURL )
 }
 
 
-bool SfxDocTplService_Impl::setProperty( Content& rContent,
+bool SfxDocTplService::setProperty( Content& rContent,
                                              const OUString& rPropName,
                                              const Any& rPropValue )
 {
@@ -979,7 +994,7 @@ bool SfxDocTplService_Impl::setProperty( Content& rContent,
 }
 
 
-bool SfxDocTplService_Impl::getProperty(Content& rContent, const OUString& rPropName, Any& rPropValue)
+bool SfxDocTplService::getProperty(Content& rContent, const OUString& rPropName, Any& rPropValue)
 {
     bool bGotProperty = false;
 
@@ -1034,20 +1049,20 @@ bool SfxDocTplService_Impl::getProperty(Content& rContent, const OUString& rProp
     return bGotProperty;
 }
 
-SfxDocTplService_Impl::SfxDocTplService_Impl( const uno::Reference< XComponentContext > & xContext )
+SfxDocTplService::SfxDocTplService( const uno::Reference< XComponentContext > & xContext )
     : mxContext(xContext), mbIsInitialized(false), mbLocaleSet(false), maRelocator(xContext)
 {
 }
 
 
-SfxDocTplService_Impl::~SfxDocTplService_Impl()
+SfxDocTplService::~SfxDocTplService()
 {
     ::osl::MutexGuard aGuard( maMutex );
     maNames.clear();
 }
 
 
-lang::Locale SfxDocTplService_Impl::getLocale()
+lang::Locale SfxDocTplService::getLocale()
 {
     ::osl::MutexGuard aGuard( maMutex );
 
@@ -1058,7 +1073,7 @@ lang::Locale SfxDocTplService_Impl::getLocale()
 }
 
 
-void SfxDocTplService_Impl::setLocale( const lang::Locale &rLocale )
+void SfxDocTplService::setLocale( const lang::Locale &rLocale )
 {
     ::osl::MutexGuard aGuard( maMutex );
 
@@ -1073,15 +1088,16 @@ void SfxDocTplService_Impl::setLocale( const lang::Locale &rLocale )
 }
 
 
-void SfxDocTplService_Impl::update()
+void SfxDocTplService::update()
 {
-    ::osl::MutexGuard aGuard( maMutex );
+    if (!init())
+        return;
 
     doUpdate();
 }
 
 
-void SfxDocTplService_Impl::doUpdate()
+void SfxDocTplService::doUpdate()
 {
     ::osl::MutexGuard aGuard( maMutex );
 
@@ -1164,7 +1180,7 @@ void SfxDocTplService_Impl::doUpdate()
 }
 
 
-std::vector< beans::StringPair > SfxDocTplService_Impl::ReadUINamesForTemplateDir_Impl( std::u16string_view aUserPath )
+std::vector< beans::StringPair > SfxDocTplService::ReadUINamesForTemplateDir_Impl( std::u16string_view aUserPath )
 {
     INetURLObject aLocObj( aUserPath );
     aLocObj.insertName( u"groupuinames.xml", false,
@@ -1190,7 +1206,7 @@ std::vector< beans::StringPair > SfxDocTplService_Impl::ReadUINamesForTemplateDi
 }
 
 
-bool SfxDocTplService_Impl::UpdateUINamesForTemplateDir_Impl( std::u16string_view aUserPath,
+bool SfxDocTplService::UpdateUINamesForTemplateDir_Impl( std::u16string_view aUserPath,
                                                                   const OUString& aGroupName,
                                                                   const OUString& aNewFolderName )
 {
@@ -1210,7 +1226,7 @@ bool SfxDocTplService_Impl::UpdateUINamesForTemplateDir_Impl( std::u16string_vie
 }
 
 
-bool SfxDocTplService_Impl::ReplaceUINamesForTemplateDir_Impl( std::u16string_view aUserPath,
+bool SfxDocTplService::ReplaceUINamesForTemplateDir_Impl( std::u16string_view aUserPath,
                                                                   const OUString& aDefaultFsysGroupName,
                                                                   std::u16string_view aOldGroupName,
                                                                   const OUString& aNewGroupName )
@@ -1236,7 +1252,7 @@ bool SfxDocTplService_Impl::ReplaceUINamesForTemplateDir_Impl( std::u16string_vi
 }
 
 
-void SfxDocTplService_Impl::RemoveUINamesForTemplateDir_Impl( std::u16string_view aUserPath,
+void SfxDocTplService::RemoveUINamesForTemplateDir_Impl( std::u16string_view aUserPath,
                                                                   std::u16string_view aGroupName )
 {
     std::vector< beans::StringPair > aUINames = ReadUINamesForTemplateDir_Impl( aUserPath );
@@ -1262,7 +1278,7 @@ void SfxDocTplService_Impl::RemoveUINamesForTemplateDir_Impl( std::u16string_vie
 }
 
 
-bool SfxDocTplService_Impl::WriteUINamesForTemplateDir_Impl( std::u16string_view aUserPath,
+bool SfxDocTplService::WriteUINamesForTemplateDir_Impl( std::u16string_view aUserPath,
                                                              const std::vector< beans::StringPair >& aUINames )
 {
     bool bResult = false;
@@ -1301,7 +1317,7 @@ bool SfxDocTplService_Impl::WriteUINamesForTemplateDir_Impl( std::u16string_view
 }
 
 
-OUString SfxDocTplService_Impl::CreateNewGroupFsys( const OUString& rGroupName, Content& aGroup )
+OUString SfxDocTplService::CreateNewGroupFsys( const OUString& rGroupName, Content& aGroup )
 {
     OUString aResultURL;
 
@@ -1349,8 +1365,11 @@ OUString SfxDocTplService_Impl::CreateNewGroupFsys( const OUString& rGroupName, 
 }
 
 
-bool SfxDocTplService_Impl::addGroup( const OUString& rGroupName )
+sal_Bool SfxDocTplService::addGroup( const OUString& rGroupName )
 {
+    if (!init())
+        return false;
+
     ::osl::MutexGuard aGuard( maMutex );
 
     // Check, whether or not there is a group with this name
@@ -1431,10 +1450,13 @@ bool SfxDocTplService_Impl::addGroup( const OUString& rGroupName )
 }
 
 
-bool SfxDocTplService_Impl::removeGroup( std::u16string_view rGroupName )
+sal_Bool SfxDocTplService::removeGroup( const OUString& rGroupName )
 {
     // remove all the elements that have the prefix aTargetURL
     // if the group does not have other elements remove it
+
+    if (!init())
+        return false;
 
     ::osl::MutexGuard aGuard( maMutex );
 
@@ -1537,9 +1559,15 @@ bool SfxDocTplService_Impl::removeGroup( std::u16string_view rGroupName )
 }
 
 
-bool SfxDocTplService_Impl::renameGroup( std::u16string_view rOldName,
-                                             const OUString& rNewName )
+sal_Bool SfxDocTplService::renameGroup( const OUString& rOldName,
+                                    const OUString& rNewName )
 {
+    if ( rOldName == rNewName )
+        return true;
+
+    if (!init())
+        return false;
+
     ::osl::MutexGuard aGuard( maMutex );
 
     // create the group url
@@ -1633,10 +1661,13 @@ bool SfxDocTplService_Impl::renameGroup( std::u16string_view rOldName,
 }
 
 
-bool SfxDocTplService_Impl::storeTemplate( const OUString& rGroupName,
+sal_Bool SfxDocTplService::storeTemplate( const OUString& rGroupName,
                                                const OUString& rTemplateName,
                                                const uno::Reference< frame::XStorable >& rStorable )
 {
+    if (!init())
+        return false;
+
     ::osl::MutexGuard aGuard( maMutex );
 
     // Check, whether or not there is a group with this name
@@ -1810,10 +1841,13 @@ bool SfxDocTplService_Impl::storeTemplate( const OUString& rGroupName,
 }
 
 
-bool SfxDocTplService_Impl::addTemplate( const OUString& rGroupName,
+sal_Bool SfxDocTplService::addTemplate( const OUString& rGroupName,
                                              const OUString& rTemplateName,
                                              const OUString& rSourceURL )
 {
+    if (!init())
+        return false;
+
     ::osl::MutexGuard aGuard( maMutex );
 
     // Check, whether or not there is a group with this name
@@ -1916,7 +1950,7 @@ bool SfxDocTplService_Impl::addTemplate( const OUString& rGroupName,
         Content aResultContent;
         if ( Content::create( aNewTemplateTargetURL, xEnv, comphelper::getProcessComponentContext(), aResultContent ) )
         {
-            static const OUStringLiteral aPropertyName( u"IsReadOnly" );
+            static constexpr OUString aPropertyName( u"IsReadOnly"_ustr );
             uno::Any aProperty;
             bool bReadOnly = false;
             if ( getProperty( aResultContent, aPropertyName, aProperty ) && ( aProperty >>= bReadOnly ) && bReadOnly )
@@ -1956,13 +1990,13 @@ bool SfxDocTplService_Impl::addTemplate( const OUString& rGroupName,
     return false;
 }
 
-bool SfxDocTplService_Impl::isInternalTemplateDir(const OUString& rURL) const
+bool SfxDocTplService::isInternalTemplateDir(const OUString& rURL) const
 {
     return std::any_of(maInternalTemplateDirs.begin(), maInternalTemplateDirs.end(),
         [&rURL](const OUString& rDir) { return ::utl::UCBContentHelper::IsSubPath(rDir, rURL); });
 }
 
-OUString SfxDocTplService_Impl::findParentTemplateDir(const OUString& rURL) const
+OUString SfxDocTplService::findParentTemplateDir(const OUString& rURL) const
 {
     const OUString* pDirs = std::find_if(maTemplateDirs.begin(), maTemplateDirs.end(),
         [&rURL](const OUString& rDir) { return ::utl::UCBContentHelper::IsSubPath(rDir, rURL); });
@@ -1971,9 +2005,11 @@ OUString SfxDocTplService_Impl::findParentTemplateDir(const OUString& rURL) cons
     return OUString();
 }
 
-bool SfxDocTplService_Impl::removeTemplate( std::u16string_view rGroupName,
-                                                std::u16string_view rTemplateName )
+sal_Bool SfxDocTplService::removeTemplate( const OUString& rGroupName,
+                                       const OUString& rTemplateName )
 {
+    if (!init())
+        return false;
     ::osl::MutexGuard aGuard( maMutex );
 
     // Check, whether or not there is a group with this name
@@ -2020,10 +2056,15 @@ bool SfxDocTplService_Impl::removeTemplate( std::u16string_view rGroupName,
 }
 
 
-bool SfxDocTplService_Impl::renameTemplate( std::u16string_view rGroupName,
-                                                std::u16string_view rOldName,
-                                                const OUString& rNewName )
+sal_Bool SfxDocTplService::renameTemplate( const OUString& rGroupName,
+                                           const OUString& rOldName,
+                                           const OUString& rNewName )
 {
+    if ( rOldName == rNewName )
+        return true;
+    if (!init())
+        return false;
+
     ::osl::MutexGuard aGuard( maMutex );
 
     // Check, whether or not there is a group with this name
@@ -2077,148 +2118,16 @@ bool SfxDocTplService_Impl::renameTemplate( std::u16string_view rGroupName,
 }
 
 
-class SfxDocTplService: public ::cppu::WeakImplHelper< css::lang::XLocalizable, css::frame::XDocumentTemplates, css::lang::XServiceInfo >
-{
-    std::unique_ptr<SfxDocTplService_Impl>      pImp;
-
-public:
-    explicit SfxDocTplService( const css::uno::Reference < uno::XComponentContext >& xContext );
-
-    virtual OUString SAL_CALL getImplementationName() override
-    {
-        return "com.sun.star.comp.sfx2.DocumentTemplates";
-    }
-
-    virtual sal_Bool SAL_CALL supportsService(OUString const & ServiceName) override
-    {
-        return cppu::supportsService(this, ServiceName);
-    }
-
-    virtual css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override
-    {
-        css::uno::Sequence< OUString > aSeq { "com.sun.star.frame.DocumentTemplates" };
-        return aSeq;
-    }
-
-
-    // --- XLocalizable ---
-    void SAL_CALL                   setLocale( const css::lang::Locale & eLocale ) override;
-    css::lang::Locale SAL_CALL              getLocale() override;
-
-    // --- XDocumentTemplates ---
-    css::uno::Reference< css::ucb::XContent > SAL_CALL  getContent() override;
-    sal_Bool SAL_CALL               storeTemplate( const OUString& GroupName,
-                                                   const OUString& TemplateName,
-                                                   const css::uno::Reference< css::frame::XStorable >& Storable ) override;
-    sal_Bool SAL_CALL               addTemplate( const OUString& GroupName,
-                                                 const OUString& TemplateName,
-                                                 const OUString& SourceURL ) override;
-    sal_Bool SAL_CALL               removeTemplate( const OUString& GroupName,
-                                                    const OUString& TemplateName ) override;
-    sal_Bool SAL_CALL               renameTemplate( const OUString& GroupName,
-                                                    const OUString& OldTemplateName,
-                                                    const OUString& NewTemplateName ) override;
-    sal_Bool SAL_CALL               addGroup( const OUString& GroupName ) override;
-    sal_Bool SAL_CALL               removeGroup( const OUString& GroupName ) override;
-    sal_Bool SAL_CALL               renameGroup( const OUString& OldGroupName,
-                                                 const OUString& NewGroupName ) override;
-    void SAL_CALL                   update() override;
-};
-
-
-SfxDocTplService::SfxDocTplService( const uno::Reference< XComponentContext >& xContext )
-{
-    pImp.reset( new SfxDocTplService_Impl(xContext) );
-}
-
-
-
-//--- XLocalizable ---
-
-
-lang::Locale SAL_CALL SfxDocTplService::getLocale()
-{
-    return pImp->getLocale();
-}
-
-
-void SAL_CALL SfxDocTplService::setLocale( const lang::Locale & rLocale )
-{
-    pImp->setLocale( rLocale );
-}
-
 
 //--- XDocumentTemplates ---
 
 uno::Reference< ucb::XContent > SAL_CALL SfxDocTplService::getContent()
 {
-    if ( pImp->init() )
-        return pImp->getContent().get();
+    if ( init() )
+        return maRootContent.get();
     return nullptr;
 }
 
-
-sal_Bool SAL_CALL SfxDocTplService::storeTemplate( const OUString& GroupName,
-                                                   const OUString& TemplateName,
-                                                   const uno::Reference< frame::XStorable >& Storable )
-{
-    return pImp->init() && pImp->storeTemplate( GroupName, TemplateName, Storable );
-}
-
-
-sal_Bool SAL_CALL SfxDocTplService::addTemplate( const OUString& rGroupName,
-                                                 const OUString& rTemplateName,
-                                                 const OUString& rSourceURL )
-{
-    return pImp->init() && pImp->addTemplate( rGroupName, rTemplateName, rSourceURL );
-}
-
-
-sal_Bool SAL_CALL SfxDocTplService::removeTemplate( const OUString& rGroupName,
-                                                    const OUString& rTemplateName )
-{
-    return pImp->init() && pImp->removeTemplate( rGroupName, rTemplateName );
-}
-
-
-sal_Bool SAL_CALL SfxDocTplService::renameTemplate( const OUString& rGroupName,
-                                                    const OUString& rOldName,
-                                                    const OUString& rNewName )
-{
-    if ( rOldName == rNewName )
-        return true;
-
-    return pImp->init() && pImp->renameTemplate( rGroupName, rOldName, rNewName );
-}
-
-
-sal_Bool SAL_CALL SfxDocTplService::addGroup( const OUString& rGroupName )
-{
-    return pImp->init() && pImp->addGroup( rGroupName );
-}
-
-
-sal_Bool SAL_CALL SfxDocTplService::removeGroup( const OUString& rGroupName )
-{
-    return pImp->init() && pImp->removeGroup( rGroupName );
-}
-
-
-sal_Bool SAL_CALL SfxDocTplService::renameGroup( const OUString& rOldName,
-                                                 const OUString& rNewName )
-{
-    if ( rOldName == rNewName )
-        return true;
-
-    return pImp->init() && pImp->renameGroup( rOldName, rNewName );
-}
-
-
-void SAL_CALL SfxDocTplService::update()
-{
-    if ( pImp->init() )
-        pImp->update();
-}
 
 WaitWindow_Impl::WaitWindow_Impl() : WorkWindow(nullptr, WB_BORDER | WB_3DLOOK)
 {
@@ -2254,7 +2163,7 @@ void WaitWindow_Impl::Paint(vcl::RenderContext& rRenderContext, const tools::Rec
     rRenderContext.DrawText(maRect, maText, gnTextStyle);
 }
 
-void SfxDocTplService_Impl::addHierGroup( GroupList_Impl& rList,
+void SfxDocTplService::addHierGroup( GroupList_Impl& rList,
                                           const OUString& rTitle,
                                           const OUString& rOwnURL )
 {
@@ -2315,7 +2224,7 @@ void SfxDocTplService_Impl::addHierGroup( GroupList_Impl& rList,
 }
 
 
-void SfxDocTplService_Impl::addFsysGroup( GroupList_Impl& rList,
+void SfxDocTplService::addFsysGroup( GroupList_Impl& rList,
                                           const OUString& rTitle,
                                           const OUString& rUITitle,
                                           const OUString& rOwnURL,
@@ -2402,7 +2311,7 @@ void SfxDocTplService_Impl::addFsysGroup( GroupList_Impl& rList,
 }
 
 
-void SfxDocTplService_Impl::createFromContent( GroupList_Impl& rList,
+void SfxDocTplService::createFromContent( GroupList_Impl& rList,
                                                Content &rContent,
                                                bool bHierarchy,
                                                bool bWriteableContent )
@@ -2467,7 +2376,7 @@ void SfxDocTplService_Impl::createFromContent( GroupList_Impl& rList,
 }
 
 
-void SfxDocTplService_Impl::removeFromHierarchy( DocTemplates_EntryData_Impl const *pData )
+void SfxDocTplService::removeFromHierarchy( DocTemplates_EntryData_Impl const *pData )
 {
     Content aTemplate;
 
@@ -2478,7 +2387,7 @@ void SfxDocTplService_Impl::removeFromHierarchy( DocTemplates_EntryData_Impl con
 }
 
 
-void SfxDocTplService_Impl::addToHierarchy( GroupData_Impl const *pGroup,
+void SfxDocTplService::addToHierarchy( GroupData_Impl const *pGroup,
                                             DocTemplates_EntryData_Impl const *pData )
 {
     Content aGroup, aTemplate;
@@ -2505,7 +2414,7 @@ void SfxDocTplService_Impl::addToHierarchy( GroupData_Impl const *pGroup,
 }
 
 
-void SfxDocTplService_Impl::updateData( DocTemplates_EntryData_Impl const *pData )
+void SfxDocTplService::updateData( DocTemplates_EntryData_Impl const *pData )
 {
     Content aTemplate;
 
@@ -2524,7 +2433,7 @@ void SfxDocTplService_Impl::updateData( DocTemplates_EntryData_Impl const *pData
 }
 
 
-void SfxDocTplService_Impl::addGroupToHierarchy( GroupData_Impl *pGroup )
+void SfxDocTplService::addGroupToHierarchy( GroupData_Impl *pGroup )
 {
     Content aGroup;
 
@@ -2550,7 +2459,7 @@ void SfxDocTplService_Impl::addGroupToHierarchy( GroupData_Impl *pGroup )
 }
 
 
-void SfxDocTplService_Impl::removeFromHierarchy( GroupData_Impl const *pGroup )
+void SfxDocTplService::removeFromHierarchy( GroupData_Impl const *pGroup )
 {
     Content aGroup;
 

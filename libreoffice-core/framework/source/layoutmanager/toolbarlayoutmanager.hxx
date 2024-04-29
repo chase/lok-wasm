@@ -67,7 +67,7 @@ class ToolbarLayoutManager : public ::cppu::WeakImplHelper< css::awt::XDockableW
                      const css::uno::Reference< css::ui::XUIConfigurationManager >& xDocCfgMgr,
                      const css::uno::Reference< css::container::XNameAccess >& xPersistentWindowState );
 
-        void setParentWindow( const css::uno::Reference< css::awt::XWindowPeer >& xParentWindow );
+        void setParentWindow( const css::uno::Reference< css::awt::XVclWindowPeer >& xParentWindow );
         void setDockingAreaOffsets(const ::tools::Rectangle& rOffsets);
 
         void resetDockingArea();
@@ -114,6 +114,8 @@ class ToolbarLayoutManager : public ::cppu::WeakImplHelper< css::awt::XDockableW
         css::awt::Size getToolbarSize( std::u16string_view rResourceURL );
         css::uno::Reference< css::ui::XUIElement > getToolbar( std::u16string_view aName );
         css::uno::Sequence< css::uno::Reference< css::ui::XUIElement > > getToolbars();
+
+        void updateToolbarsTips();
 
         // child window notifications
         void childWindowEvent( VclSimpleEvent const * pEvent );

@@ -20,8 +20,8 @@
 #pragma once
 
 #include <sal/config.h>
-#include <config_options.h>
 
+#include <o3tl/sorted_vector.hxx>
 #include <tools/fontenum.hxx>
 #include <vcl/dllapi.h>
 #include <vcl/timer.hxx>
@@ -30,9 +30,6 @@
 
 #include <font/PhysicalFontFace.hxx>
 
-#include <glyphid.hxx>
-
-#include <map>
 #include <set>
 #include <memory>
 #include <string_view>
@@ -58,32 +55,6 @@ class PPDParser;
 
 typedef int fontID;
 
-struct FastPrintFontInfo
-{
-    fontID                         m_nID; // FontID
-
-    // font attributes
-    OUString                       m_aFamilyName;
-    OUString                       m_aStyleName;
-    std::vector< OUString >        m_aAliases;
-    FontFamily                     m_eFamilyStyle;
-    FontItalic                     m_eItalic;
-    FontWidth                      m_eWidth;
-    FontWeight                     m_eWeight;
-    FontPitch                      m_ePitch;
-    rtl_TextEncoding               m_aEncoding;
-
-    FastPrintFontInfo()
-        : m_nID(0)
-        , m_eFamilyStyle(FAMILY_DONTKNOW)
-        , m_eItalic(ITALIC_DONTKNOW)
-        , m_eWidth(WIDTH_DONTKNOW)
-        , m_eWeight(WEIGHT_DONTKNOW)
-        , m_ePitch(PITCH_DONTKNOW)
-        , m_aEncoding(RTL_TEXTENCODING_DONTKNOW)
-    {}
-};
-
 // a class to manage printable fonts
 
 class VCL_PLUGIN_PUBLIC PrintFontManager
@@ -93,20 +64,7 @@ class VCL_PLUGIN_PUBLIC PrintFontManager
 
     struct VCL_DLLPRIVATE PrintFont
     {
-        // font attributes
-        OUString          m_aFamilyName;
-        std::vector<OUString> m_aAliases;
-        OUString          m_aPSName;
-        OUString          m_aStyleName;
-        FontFamily        m_eFamilyStyle;
-        FontItalic        m_eItalic;
-        FontWidth         m_eWidth;
-        FontWeight        m_eWeight;
-        FontPitch         m_ePitch;
-        rtl_TextEncoding  m_aEncoding;
-        int               m_nAscend;
-        int               m_nDescend;
-        int               m_nLeading;
+        FontAttributes    m_aFontAttributes;
 
         int               m_nDirectory;       // atom containing system dependent path
         OString           m_aFontFile;        // relative to directory
@@ -119,7 +77,7 @@ class VCL_PLUGIN_PUBLIC PrintFontManager
     fontID                                      m_nNextFontID;
     std::unordered_map< fontID, PrintFont >     m_aFonts;
     // for speeding up findFontFileID
-    std::unordered_map< OString, std::set< fontID > >
+    std::unordered_map< OString, o3tl::sorted_vector< fontID > >
                                                 m_aFontFileToFontID;
 
     std::unordered_map< OString, int >
@@ -130,8 +88,6 @@ class VCL_PLUGIN_PUBLIC PrintFontManager
     OString getFontFile(const PrintFont& rFont) const;
 
     std::vector<PrintFont> analyzeFontFile(int nDirID, const OString& rFileName, const char *pFormat=nullptr) const;
-    static OUString convertSfntName( const vcl::NameRecord& rNameRecord ); // format font subsetting code
-    static void analyzeSfntFamilyName( void const * pTTFont, std::vector< OUString >& rnames ); // actually a TrueTypeFont* from font subsetting code
     bool analyzeSfntFile(PrintFont& rFont) const;
     // finds the font id for the nFaceIndex face in this font file
     // There may be multiple font ids for font collections
@@ -141,18 +97,6 @@ class VCL_PLUGIN_PUBLIC PrintFontManager
     std::vector<fontID> findFontFileIDs( int nDirID, const OString& rFile ) const;
 
     static FontFamily matchFamilyName( std::u16string_view rFamily );
-
-    const PrintFont* getFont( fontID nID ) const
-    {
-        auto it = m_aFonts.find( nID );
-        return it == m_aFonts.end() ? nullptr : &it->second;
-    }
-    PrintFont* getFont( fontID nID )
-    {
-        auto it = m_aFonts.find( nID );
-        return it == m_aFonts.end() ? nullptr : &it->second;
-    }
-    static void fillPrintFontInfo(const PrintFont& rFont, FastPrintFontInfo& rInfo);
 
     OString getDirectory( int nAtom ) const;
     int getDirectoryAtom( const OString& rDirectory );
@@ -175,6 +119,9 @@ class VCL_PLUGIN_PUBLIC PrintFontManager
     */
     static void addFontconfigDir(const OString& rDirectory);
 
+    /* register an application specific font file for libfontconfig */
+    static void addFontconfigFile(const OString& rFile);
+
     std::set<OString> m_aPreviousLangSupportRequests;
     std::vector<OUString> m_aCurrentRequests;
     Timer m_aFontInstallerTimer;
@@ -191,16 +138,16 @@ public:
 
     void initialize();
 
+    const PrintFont* getFont( fontID nID ) const
+    {
+        auto it = m_aFonts.find( nID );
+        return it == m_aFonts.end() ? nullptr : &it->second;
+    }
+
     // returns the ids of all managed fonts.
     void getFontList( std::vector< fontID >& rFontIDs );
 
-    // get fast font info for a specific font
-    bool getFontFastInfo( fontID nFontID, FastPrintFontInfo& rInfo ) const;
-
     // routines to get font info in small pieces
-
-    // get a specific fonts PSName name
-    OUString getPSName( fontID nFontID );
 
     // get a specific fonts system dependent filename
     OString getFontFileSysPath( fontID nFontID ) const
@@ -214,12 +161,6 @@ public:
     // get the ttc face variation
     int getFontFaceVariation( fontID nFontID ) const;
 
-    // get a specific fonts ascend
-    int getFontAscend( fontID nFontID );
-
-    // get a specific fonts descent
-    int getFontDescend( fontID nFontID );
-
     // font administration functions
 
     /*  system dependent font matching
@@ -227,16 +168,15 @@ public:
     <p>
     <code>matchFont</code> matches a pattern of font characteristics
     and returns the closest match if possible. If a match was found
-    the <code>FastPrintFontInfo</code> passed in as parameter
-    will be update to the found matching font.
+    it will update rDFA to the found matching font.
     </p>
     <p>
     implementation note: currently the function is only implemented
     for fontconfig.
     </p>
 
-    @param rInfo
-    out of the FastPrintFontInfo structure the following
+    @param rDFA
+    out of the FontAttributes structure the following
     fields will be used for the match:
     <ul>
     <li>family name</li>
@@ -251,7 +191,7 @@ public:
     locale will be used for font matching also; e.g. "Sans" can result
     in different fonts in e.g. english and japanese
      */
-    void matchFont( FastPrintFontInfo& rInfo, const css::lang::Locale& rLocale );
+    bool matchFont(FontAttributes& rDFA, const css::lang::Locale& rLocale);
 
     static std::unique_ptr<FontConfigFontOptions> getFontOptions(const FontAttributes& rFontAttributes, int nSize);
 

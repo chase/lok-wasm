@@ -20,11 +20,11 @@
 #pragma once
 
 #include <cppuhelper/implbase.hxx>
-#include <cppuhelper/basemutex.hxx>
 
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/util/XOfficeInstallationDirectories.hpp>
 
+#include <mutex>
 #include <optional>
 
 namespace com::sun::star::uno { class XComponentContext; }
@@ -35,9 +35,9 @@ namespace comphelper {
 
 typedef cppu::WeakImplHelper<
             css::util::XOfficeInstallationDirectories,
-            css::lang::XServiceInfo > UnoImplBase;
+            css::lang::XServiceInfo > OfficeInstallationDirectories_Base;
 
-class OfficeInstallationDirectories : public cppu::BaseMutex, public UnoImplBase
+class OfficeInstallationDirectories : public OfficeInstallationDirectories_Base
 {
 public:
     explicit OfficeInstallationDirectories(
@@ -65,6 +65,7 @@ public:
 private:
     void initDirs();
 
+    std::mutex m_aMutex;
     css::uno::Reference< css::uno::XComponentContext >    m_xCtx;
     std::optional<OUString>                  m_xOfficeBrandDir;
     std::optional<OUString>                  m_xUserDir;

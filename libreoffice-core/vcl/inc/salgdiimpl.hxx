@@ -43,7 +43,7 @@ Implementation class for SalGraphics.
 
 This class allows having an implementation of drawing calls that is separate from SalGraphics,
 and SalGraphics can forward all such calls to SalGraphicsImpl. For example X11SalGraphics
-may internally use either Xlib-based X11SalGraphicsImpl or Skia-based SkiaSalGraphicsImpl,
+may internally use either Cairo-based X11CairoSalGraphicsImpl or Skia-based SkiaSalGraphicsImpl,
 and the latter may be used also by other SalGraphics implementations. All the functions
 here should be implementations of the relevant SalGraphics functions.
 */
@@ -80,7 +80,7 @@ public:
 
     virtual OUString getRenderBackendName() const = 0;
 
-    virtual bool setClipRegion( const vcl::Region& ) = 0;
+    virtual void setClipRegion( const vcl::Region& ) = 0;
 
     virtual sal_uInt16 GetBitCount() const = 0;
 
@@ -115,7 +115,7 @@ public:
 
     virtual void drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32* pPoints, const Point** pPtAry ) = 0;
 
-    virtual bool drawPolyPolygon(
+    virtual void drawPolyPolygon(
         const basegfx::B2DHomMatrix& rObjectToDevice,
         const basegfx::B2DPolyPolygon&,
         double fTransparency) = 0;

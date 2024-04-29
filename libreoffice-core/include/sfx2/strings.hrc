@@ -20,7 +20,7 @@
 #ifndef INCLUDED_SFX2_INC_STRINGS_HRC
 #define INCLUDED_SFX2_INC_STRINGS_HRC
 
-#define NC_(Context, String) TranslateId(Context, reinterpret_cast<char const *>(u8##String))
+#define NC_(Context, String) TranslateId(Context, u8##String)
 
 #define STR_TEMPLATE_FILTER                     NC_("STR_TEMPLATE_FILTER", "Templates")
 #define STR_SAVEDOC                             NC_("STR_SAVEDOC", "~Save")
@@ -46,10 +46,6 @@
 #define STR_HIDDENINFO_RECORDCHANGES            NC_("STR_HIDDENINFO_RECORDCHANGES", "Recorded changes")
 #define STR_HIDDENINFO_NOTES                    NC_("STR_HIDDENINFO_NOTES", "Notes")
 #define STR_HIDDENINFO_DOCVERSIONS              NC_("STR_HIDDENINFO_DOCVERSIONS", "Document versions")
-#define STR_HIDDENINFO_CONTINUE_SAVING          NC_("STR_HIDDENINFO_CONTINUE_SAVING", "Do you want to continue saving the document?")
-#define STR_HIDDENINFO_CONTINUE_PRINTING        NC_("STR_HIDDENINFO_CONTINUE_PRINTING", "Do you want to continue printing the document?")
-#define STR_HIDDENINFO_CONTINUE_SIGNING         NC_("STR_HIDDENINFO_CONTINUE_SIGNING", "Do you want to continue signing the document?")
-#define STR_HIDDENINFO_CONTINUE_CREATEPDF       NC_("STR_HIDDENINFO_CONTINUE_CREATEPDF", "Do you want to continue creating a PDF file?")
 #define STR_NEW_FILENAME_SAVE                   NC_("STR_NEW_FILENAME_SAVE", "If you do not want to overwrite the original document, you should save your work under a new filename.")
 // Used in the title of a shared document.
 #define STR_SHARED                              NC_("STR_SHARED", " (shared)")
@@ -74,9 +70,6 @@
 #define STR_QMSG_SEL_FOLDER_DELETE              NC_("STR_QMSG_SEL_FOLDER_DELETE", "Do you want to delete the selected category?")
 #define STR_QMSG_TEMPLATE_OVERWRITE             NC_("STR_QMSG_TEMPLATE_OVERWRITE", "A template named $1 already exists in $2. Do you want to overwrite it?")
 #define STR_QMSG_SEL_TEMPLATE_DELETE            NC_("STR_QMSG_SEL_TEMPLATE_DELETE", "Do you want to delete the selected templates?")
-#define STR_QMSG_ERROR_OPENING_FILE             NC_("STR_QMSG_ERROR_OPENING_FILE", "An error occurred during opening the file. This may be caused by incorrect file contents.\n")
-#define STR_QMSG_ERROR_OPENING_FILE_DETAILS     NC_("STR_QMSG_ERROR_OPENING_FILE_DETAILS", "The error details are:\n")
-#define STR_QMSG_ERROR_OPENING_FILE_CONTINUE    NC_("STR_QMSG_ERROR_OPENING_FILE_CONTINUE", "\nProceeding with import may cause data loss or corruption, and application may become unstable or crash.\n\nDo you want to ignore the error and attempt to continue loading the file?")
 
 #define STR_HELP_WINDOW_TITLE                   NC_("STR_HELP_WINDOW_TITLE", "%PRODUCTNAME Help")
 #define STR_HELP_BUTTON_INDEX_ON                NC_("STR_HELP_BUTTON_INDEX_ON", "Show Navigation Pane")
@@ -136,7 +129,7 @@
 #define STR_QUICKSTART_EXIT                     NC_("STR_QUICKSTART_EXIT", "Exit Quickstarter")
 #define STR_QUICKSTART_TIP                      NC_("STR_QUICKSTART_TIP", "%PRODUCTNAME %PRODUCTVERSION Quickstarter")
 #define STR_QUICKSTART_FILEOPEN                 NC_("STR_QUICKSTART_FILEOPEN", "Open Document...")
-#define STR_QUICKSTART_FROMTEMPLATE             NC_("STR_QUICKSTART_FROMTEMPLATE", "From Template...")
+#define STR_QUICKSTART_FROMTEMPLATE             NC_("STR_QUICKSTART_FROMTEMPLATE", "Template Manager...")
 #define STR_QUICKSTART_PRELAUNCH                NC_("STR_QUICKSTART_PRELAUNCH", "Load %PRODUCTNAME During System Start-Up")
 #define STR_QUICKSTART_LNKNAME                  NC_("STR_QUICKSTART_LNKNAME", "%PRODUCTNAME %PRODUCTVERSION")
 #define STR_QUICKSTART_FILE                     NC_("STR_QUICKSTART_FILE", "File")
@@ -149,6 +142,7 @@
 #define RID_SVXSTR_XMLSEC_QUERY_LOSINGSIGNATURE NC_("RID_SVXSTR_XMLSEC_QUERY_LOSINGSIGNATURE", "Saving will remove all existing signatures.\nDo you want to continue saving the document?")
 #define RID_SVXSTR_XMLSEC_QUERY_SAVEBEFORESIGN  NC_("RID_SVXSTR_XMLSEC_QUERY_SAVEBEFORESIGN", "The document has to be saved before it can be signed.\nDo you want to save the document?")
 #define STR_QUERY_CANCELCHECKOUT                NC_("STR_QUERY_CANCELCHECKOUT", "This will discard all changes on the server since check-out.\nDo you want to proceed?")
+#define STR_QUERY_REMEMBERSIGNATURE             NC_("STR_QUERY_REMEMBERSIGNATURE", "Do you want to remember that signature for each save?")
 #define STR_INFO_WRONGDOCFORMAT                 NC_("STR_INFO_WRONGDOCFORMAT", "This document must be saved in OpenDocument file format before it can be digitally signed.")
 #define RID_XMLSEC_DOCUMENTSIGNED               NC_("RID_XMLSEC_DOCUMENTSIGNED", " (Signed)")
 #define STR_EMBEDDED_TITLE                      NC_("STR_EMBEDDED_TITLE", " (Embedded document)")
@@ -292,9 +286,13 @@
 #define STR_HYPHENATION_BUTTON                  NC_("STR_HYPHENATION_BUTTON", "Learn more")
 #define STR_REFRESH_MASTER_PASSWORD             NC_("STR_REFRESH_MASTER_PASSWORD", "The master password is stored in an outdated format, you should refresh it")
 #define STR_REFRESH_PASSWORD                    NC_("STR_REFRESH_PASSWORD", "Refresh Password")
-#define STR_CONTAINS_MACROS                     NC_("STR_CONTAINS_MACROS", "The document contains macros.")
-#define STR_MACROS                              NC_("STR_MACROS", "Macros")
-#define STR_EVENTS                              NC_("STR_EVENTS", "Events")
+#define STR_MACROS_DISABLED_TITLE               NC_("STR_MACROS_DISABLED_TITLE", "Macros disabled")
+#define STR_CONTAINS_MACROS                     NC_("STR_CONTAINS_MACROS", "Macros in this document are disabled due to the Macro Security settings.")
+#define STR_MACROS_DISABLED                     NC_("STR_MACROS_DISABLED", "Macros are disabled due to the Macro Security settings.")
+#define STR_MACROS_DISABLED_CONTENT_UNSIGNED    NC_("STR_MACROS_DISABLED_CONTENT_UNSIGNED", "Macros are signed, but the document (containing document events) is not signed.")
+#define STR_MACROS                              NC_("STR_MACROS", "Show Macros")
+#define STR_SECURITY_OPTIONS                    NC_("STR_MACROS", "Show Security Options")
+#define STR_EVENTS                              NC_("STR_EVENTS", "Show Events")
 
 // Translators: default Impress template names
 #define STR_TEMPLATE_NAME1                      NC_("STR_TEMPLATE_NAME1", "Grey Elegant")
@@ -331,6 +329,7 @@
 #define STR_TEMPLATE_NAME31                     NC_("STR_TEMPLATE_NAME31", "Simple")
 #define STR_TEMPLATE_NAME32                     NC_("STR_TEMPLATE_NAME32", "BPMN")
 #define STR_TEMPLATE_NAME33                     NC_("STR_TEMPLATE_NAME33", "Simplified Chinese Normal")
+#define STR_TEMPLATE_NAME34                     NC_("STR_TEMPLATE_NAME34", "Japanese Normal")
 
 #define STR_CLEAR_CHAR                          NC_("STR_CLEAR_CHAR", "Remove")
 #define STR_CLEAR_ALL_CHAR                      NC_("STR_CLEAR_ALL_CHAR", "Clear All")

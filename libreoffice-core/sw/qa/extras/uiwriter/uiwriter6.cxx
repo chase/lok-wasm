@@ -44,6 +44,9 @@
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
+#include <comphelper/scopeguard.hxx>
+#include <editeng/swafopt.hxx>
+#include <editeng/unolingu.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <vcl/scheduler.hxx>
 #include <config_fonts.h>
@@ -57,6 +60,8 @@
 #include <com/sun/star/linguistic2/XLinguProperties.hpp>
 #include <com/sun/star/linguistic2/XSpellChecker1.hpp>
 #include <linguistic/misc.hxx>
+
+#include <workctrl.hxx>
 
 using namespace osl;
 using namespace com::sun::star;
@@ -81,16 +86,6 @@ sal_Int32 lcl_getAttributeIDFromHints(const SwpHints& hints)
         }
     }
     return -1;
-}
-
-void emulateTyping(SwXTextDocument& rTextDoc, const std::u16string_view& rStr)
-{
-    for (const char16_t c : rStr)
-    {
-        rTextDoc.postKeyEvent(LOK_KEYEVENT_KEYINPUT, c, 0);
-        rTextDoc.postKeyEvent(LOK_KEYEVENT_KEYUP, c, 0);
-        Scheduler::ProcessEventsToIdle();
-    }
 }
 
 uno::Reference<XLinguServiceManager2> GetLngSvcMgr_Impl()
@@ -118,7 +113,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf116640)
         comphelper::InitPropertySequence({ { "Columns", uno::Any(sal_Int32(2)) } }));
 
     dispatchCommand(mxComponent, ".uno:InsertSection", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     uno::Reference<text::XTextSectionsSupplier> xTextSectionsSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xSections(xTextSectionsSupplier->getTextSections(),
@@ -132,17 +126,14 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf116640)
     CPPUNIT_ASSERT_EQUAL(sal_Int16(2), xTextColumns->getColumnCount());
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xSections->getCount());
 
     dispatchCommand(mxComponent, ".uno:Redo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xSections->getCount());
 }
@@ -152,12 +143,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf108524)
     createSwDoc("tdf108524.odt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
     // In total we expect two cells containing a section.
-    assertXPath(pXmlDoc, "/root/page/body/tab/row/cell/section", 2);
+    assertXPath(pXmlDoc, "/root/page/body/tab/row/cell/section"_ostr, 2);
 
-    assertXPath(pXmlDoc, "/root/page[1]/body/tab/row/cell/section", 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/tab/row/cell/section"_ostr, 1);
     // This was 0, section wasn't split, instead it was only on the first page
     // and it was cut off.
-    assertXPath(pXmlDoc, "/root/page[2]/body/tab/row/cell/section", 1);
+    assertXPath(pXmlDoc, "/root/page[2]/body/tab/row/cell/section"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testLinesInSectionInTable)
@@ -168,12 +159,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testLinesInSectionInTable)
     createSwDoc("lines-in-section-in-table.odt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
     // In total we expect two cells containing a section.
-    assertXPath(pXmlDoc, "/root/page/body/tab/row/cell/section", 2);
+    assertXPath(pXmlDoc, "/root/page/body/tab/row/cell/section"_ostr, 2);
 
-    assertXPath(pXmlDoc, "/root/page[1]/body/tab/row/cell/section", 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/tab/row/cell/section"_ostr, 1);
     // This was 0, section wasn't split, instead it was only on the first page
     // and it was cut off.
-    assertXPath(pXmlDoc, "/root/page[2]/body/tab/row/cell/section", 1);
+    assertXPath(pXmlDoc, "/root/page[2]/body/tab/row/cell/section"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testLinesMoveBackwardsInSectionInTable)
@@ -183,14 +174,16 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testLinesMoveBackwardsInSectionInTable)
     createSwDoc("lines-in-section-in-table.odt");
     SwDoc* pDoc = getSwDoc();
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page", 2);
-    SwNodeOffset nPara4Node(
-        getXPath(pXmlDoc, "/root/page[1]/body/tab/row/cell[1]/section/txt[last()]", "txtNodeIndex")
-            .toUInt32());
+    assertXPath(pXmlDoc, "/root/page"_ostr, 2);
+    SwNodeOffset nPara4Node(getXPath(pXmlDoc,
+                                     "/root/page[1]/body/tab/row/cell[1]/section/txt[last()]"_ostr,
+                                     "txtNodeIndex"_ostr)
+                                .toUInt32());
     CPPUNIT_ASSERT_EQUAL(OUString("4"), pDoc->GetNodes()[nPara4Node]->GetTextNode()->GetText());
-    SwNodeOffset nPara5Node(
-        getXPath(pXmlDoc, "/root/page[2]/body/tab/row/cell[1]/section/txt[1]", "txtNodeIndex")
-            .toUInt32());
+    SwNodeOffset nPara5Node(getXPath(pXmlDoc,
+                                     "/root/page[2]/body/tab/row/cell[1]/section/txt[1]"_ostr,
+                                     "txtNodeIndex"_ostr)
+                                .toUInt32());
     CPPUNIT_ASSERT_EQUAL(OUString("5"), pDoc->GetNodes()[nPara5Node]->GetTextNode()->GetText());
 
     // Remove paragraph "4".
@@ -205,7 +198,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testLinesMoveBackwardsInSectionInTable)
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
     SwNodeOffset nPage1LastNode(
-        getXPath(pXmlDoc, "/root/page[1]/body/tab/row/cell[1]/section/txt[last()]", "txtNodeIndex")
+        getXPath(pXmlDoc, "/root/page[1]/body/tab/row/cell[1]/section/txt[last()]"_ostr,
+                 "txtNodeIndex"_ostr)
             .toUInt32());
     // This was "3", paragraph "4" was deleted, but "5" was not moved backwards from page 2.
     CPPUNIT_ASSERT_EQUAL(OUString("5"), pDoc->GetNodes()[nPage1LastNode]->GetTextNode()->GetText());
@@ -219,11 +213,11 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTableInSection)
     createSwDoc("table-in-sect.odt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
     // In total we expect 4 cells.
-    assertXPath(pXmlDoc, "/root/page/body/section/tab/row/cell", 4);
+    assertXPath(pXmlDoc, "/root/page/body/section/tab/row/cell"_ostr, 4);
 
     // Assert that on both pages the section contains 2 cells.
-    assertXPath(pXmlDoc, "/root/page[1]/body/section/tab/row/cell", 2);
-    assertXPath(pXmlDoc, "/root/page[2]/body/section/tab/row/cell", 2);
+    assertXPath(pXmlDoc, "/root/page[1]/body/section/tab/row/cell"_ostr, 2);
+    assertXPath(pXmlDoc, "/root/page[2]/body/section/tab/row/cell"_ostr, 2);
 #endif
 }
 
@@ -235,8 +229,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTableInNestedSection)
     createSwDoc("rhbz739252-3.odt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
     // Make sure the table is inside a section and spans over 2 pages.
-    assertXPath(pXmlDoc, "//page[1]//section/tab", 1);
-    assertXPath(pXmlDoc, "//page[2]//section/tab", 1);
+    assertXPath(pXmlDoc, "//page[1]//section/tab"_ostr, 1);
+    assertXPath(pXmlDoc, "//page[2]//section/tab"_ostr, 1);
 #endif
 }
 
@@ -246,12 +240,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf112741)
     createSwDoc("tdf112741.fodt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
     // This was 5 pages.
-    assertXPath(pXmlDoc, "//page", 4);
-    assertXPath(pXmlDoc, "//page[1]/body/tab/row/cell/tab/row/cell/section", 1);
-    assertXPath(pXmlDoc, "//page[2]/body/tab/row/cell/tab/row/cell/section", 1);
+    assertXPath(pXmlDoc, "//page"_ostr, 4);
+    assertXPath(pXmlDoc, "//page[1]/body/tab/row/cell/tab/row/cell/section"_ostr, 1);
+    assertXPath(pXmlDoc, "//page[2]/body/tab/row/cell/tab/row/cell/section"_ostr, 1);
     // This failed, 3rd page contained no sections.
-    assertXPath(pXmlDoc, "//page[3]/body/tab/row/cell/tab/row/cell/section", 1);
-    assertXPath(pXmlDoc, "//page[4]/body/tab/row/cell/tab/row/cell/section", 1);
+    assertXPath(pXmlDoc, "//page[3]/body/tab/row/cell/tab/row/cell/section"_ostr, 1);
+    assertXPath(pXmlDoc, "//page[4]/body/tab/row/cell/tab/row/cell/section"_ostr, 1);
 #endif
 }
 
@@ -270,11 +264,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf113287)
 #if HAVE_MORE_FONTS
     createSwDoc("tdf113287.fodt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page", 2);
+    assertXPath(pXmlDoc, "//page"_ostr, 2);
     sal_uInt32 nCellTop
-        = getXPath(pXmlDoc, "//page[2]/body/tab/row/cell[1]/infos/bounds", "top").toUInt32();
+        = getXPath(pXmlDoc, "//page[2]/body/tab/row/cell[1]/infos/bounds"_ostr, "top"_ostr)
+              .toUInt32();
     sal_uInt32 nSectionTop
-        = getXPath(pXmlDoc, "//page[2]/body/tab/row/cell[1]/section/infos/bounds", "top")
+        = getXPath(pXmlDoc, "//page[2]/body/tab/row/cell[1]/section/infos/bounds"_ostr, "top"_ostr)
               .toUInt32();
     // Make sure section frame is inside the cell frame.
     // Expected greater than 4593, was only 3714.
@@ -294,9 +289,11 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf113445)
     calcLayout();
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page", 2);
-    sal_uInt32 nPage1Left = getXPath(pXmlDoc, "//page[1]/infos/bounds", "left").toUInt32();
-    sal_uInt32 nPage2Left = getXPath(pXmlDoc, "//page[2]/infos/bounds", "left").toUInt32();
+    assertXPath(pXmlDoc, "//page"_ostr, 2);
+    sal_uInt32 nPage1Left
+        = getXPath(pXmlDoc, "//page[1]/infos/bounds"_ostr, "left"_ostr).toUInt32();
+    sal_uInt32 nPage2Left
+        = getXPath(pXmlDoc, "//page[2]/infos/bounds"_ostr, "left"_ostr).toUInt32();
     // Make sure that page 2 is on the right hand side of page 1, not below it.
     CPPUNIT_ASSERT_GREATER(nPage1Left, nPage2Left);
 
@@ -309,19 +306,23 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf113445)
 
     // Make sure that Table2:C5 and Table2:D5 has its section frame inside the cell frame.
     sal_uInt32 nCell3Top
-        = getXPath(pXmlDoc, "//page[2]/body/tab/row/cell/tab/row[4]/cell[3]/infos/bounds", "top")
+        = getXPath(pXmlDoc, "//page[2]/body/tab/row/cell/tab/row[4]/cell[3]/infos/bounds"_ostr,
+                   "top"_ostr)
               .toUInt32();
     sal_uInt32 nSection3Top
-        = getXPath(pXmlDoc, "//page[2]/body/tab/row/cell/tab/row[4]/cell[3]/section/infos/bounds",
-                   "top")
+        = getXPath(pXmlDoc,
+                   "//page[2]/body/tab/row/cell/tab/row[4]/cell[3]/section/infos/bounds"_ostr,
+                   "top"_ostr)
               .toUInt32();
     CPPUNIT_ASSERT_GREATER(nCell3Top, nSection3Top);
     sal_uInt32 nCell4Top
-        = getXPath(pXmlDoc, "//page[2]/body/tab/row/cell/tab/row[4]/cell[4]/infos/bounds", "top")
+        = getXPath(pXmlDoc, "//page[2]/body/tab/row/cell/tab/row[4]/cell[4]/infos/bounds"_ostr,
+                   "top"_ostr)
               .toUInt32();
     sal_uInt32 nSection4Top
-        = getXPath(pXmlDoc, "//page[2]/body/tab/row/cell/tab/row[4]/cell[4]/section/infos/bounds",
-                   "top")
+        = getXPath(pXmlDoc,
+                   "//page[2]/body/tab/row/cell/tab/row[4]/cell[4]/section/infos/bounds"_ostr,
+                   "top"_ostr)
               .toUInt32();
     CPPUNIT_ASSERT_GREATER(nCell4Top, nSection4Top);
     // Also check if the two cells in the same row have the same top position.
@@ -336,16 +337,17 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf113686)
     createSwDoc("tdf113686.fodt");
     SwDoc* pDoc = getSwDoc();
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page", 2);
+    assertXPath(pXmlDoc, "/root/page"_ostr, 2);
     SwNodeOffset nPage1LastNode(
-        getXPath(pXmlDoc, "/root/page[1]/body/tab/row/cell[1]/tab/row/cell[1]/txt[last()]",
-                 "txtNodeIndex")
+        getXPath(pXmlDoc, "/root/page[1]/body/tab/row/cell[1]/tab/row/cell[1]/txt[last()]"_ostr,
+                 "txtNodeIndex"_ostr)
             .toUInt32());
     CPPUNIT_ASSERT_EQUAL(OUString("Table2:A1-P10"),
                          pDoc->GetNodes()[nPage1LastNode]->GetTextNode()->GetText());
-    SwNodeOffset nPage2FirstNode(
-        getXPath(pXmlDoc, "/root/page[2]/body/tab/row/cell[1]/section/txt[1]", "txtNodeIndex")
-            .toUInt32());
+    SwNodeOffset nPage2FirstNode(getXPath(pXmlDoc,
+                                          "/root/page[2]/body/tab/row/cell[1]/section/txt[1]"_ostr,
+                                          "txtNodeIndex"_ostr)
+                                     .toUInt32());
     CPPUNIT_ASSERT_EQUAL(OUString("Table1:A1"),
                          pDoc->GetNodes()[nPage2FirstNode]->GetTextNode()->GetText());
 
@@ -362,7 +364,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf113686)
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
     // This was still 2, content from 2nd page was not moved.
-    assertXPath(pXmlDoc, "/root/page", 1);
+    assertXPath(pXmlDoc, "/root/page"_ostr, 1);
 #endif
 }
 
@@ -392,15 +394,18 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testSectionInTableInTable2)
     createSwDoc("split-section-in-nested-table.fodt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
     sal_uInt32 nSection1
-        = getXPath(pXmlDoc, "//page[1]//body/tab/row/cell/tab/row/cell/section", "id").toUInt32();
+        = getXPath(pXmlDoc, "//page[1]//body/tab/row/cell/tab/row/cell/section"_ostr, "id"_ostr)
+              .toUInt32();
     sal_uInt32 nSection1Follow
-        = getXPath(pXmlDoc, "//page[1]//body/tab/row/cell/tab/row/cell/section", "follow")
+        = getXPath(pXmlDoc, "//page[1]//body/tab/row/cell/tab/row/cell/section"_ostr, "follow"_ostr)
               .toUInt32();
     // This failed, the section wasn't split inside a nested table.
     sal_uInt32 nSection2
-        = getXPath(pXmlDoc, "//page[2]//body/tab/row/cell/tab/row/cell/section", "id").toUInt32();
+        = getXPath(pXmlDoc, "//page[2]//body/tab/row/cell/tab/row/cell/section"_ostr, "id"_ostr)
+              .toUInt32();
     sal_uInt32 nSection2Precede
-        = getXPath(pXmlDoc, "//page[2]//body/tab/row/cell/tab/row/cell/section", "precede")
+        = getXPath(pXmlDoc, "//page[2]//body/tab/row/cell/tab/row/cell/section"_ostr,
+                   "precede"_ostr)
               .toUInt32();
 
     // Make sure that the first's follow and the second's precede is correct.
@@ -428,13 +433,17 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testSectionInTableInTable3)
     calcLayout();
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    sal_uInt32 nTable1 = getXPath(pXmlDoc, "//page[1]//body/tab", "id").toUInt32();
-    sal_uInt32 nTable1Follow = getXPath(pXmlDoc, "//page[1]//body/tab", "follow").toUInt32();
-    sal_uInt32 nTable2 = getXPath(pXmlDoc, "//page[2]//body/tab", "id").toUInt32();
-    sal_uInt32 nTable2Precede = getXPath(pXmlDoc, "//page[2]//body/tab", "precede").toUInt32();
-    sal_uInt32 nTable2Follow = getXPath(pXmlDoc, "//page[2]//body/tab", "follow").toUInt32();
-    sal_uInt32 nTable3 = getXPath(pXmlDoc, "//page[3]//body/tab", "id").toUInt32();
-    sal_uInt32 nTable3Precede = getXPath(pXmlDoc, "//page[3]//body/tab", "precede").toUInt32();
+    sal_uInt32 nTable1 = getXPath(pXmlDoc, "//page[1]//body/tab"_ostr, "id"_ostr).toUInt32();
+    sal_uInt32 nTable1Follow
+        = getXPath(pXmlDoc, "//page[1]//body/tab"_ostr, "follow"_ostr).toUInt32();
+    sal_uInt32 nTable2 = getXPath(pXmlDoc, "//page[2]//body/tab"_ostr, "id"_ostr).toUInt32();
+    sal_uInt32 nTable2Precede
+        = getXPath(pXmlDoc, "//page[2]//body/tab"_ostr, "precede"_ostr).toUInt32();
+    sal_uInt32 nTable2Follow
+        = getXPath(pXmlDoc, "//page[2]//body/tab"_ostr, "follow"_ostr).toUInt32();
+    sal_uInt32 nTable3 = getXPath(pXmlDoc, "//page[3]//body/tab"_ostr, "id"_ostr).toUInt32();
+    sal_uInt32 nTable3Precede
+        = getXPath(pXmlDoc, "//page[3]//body/tab"_ostr, "precede"_ostr).toUInt32();
 
     // Make sure the outer table frames are linked together properly.
     CPPUNIT_ASSERT_EQUAL(nTable2, nTable1Follow);
@@ -450,16 +459,17 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testSectionInTableInTable4)
     createSwDoc("tdf113520.fodt");
     SwDoc* pDoc = getSwDoc();
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page", 3);
+    assertXPath(pXmlDoc, "/root/page"_ostr, 3);
     SwNodeOffset nPage1LastNode(
-        getXPath(pXmlDoc, "/root/page[1]/body/tab/row/cell[1]/tab/row/cell[1]/section/txt[last()]",
-                 "txtNodeIndex")
+        getXPath(pXmlDoc,
+                 "/root/page[1]/body/tab/row/cell[1]/tab/row/cell[1]/section/txt[last()]"_ostr,
+                 "txtNodeIndex"_ostr)
             .toUInt32());
     CPPUNIT_ASSERT_EQUAL(OUString("Section1:P10"),
                          pDoc->GetNodes()[nPage1LastNode]->GetTextNode()->GetText());
     SwNodeOffset nPage3FirstNode(
-        getXPath(pXmlDoc, "/root/page[3]/body/tab/row/cell[1]/tab/row/cell[1]/section/txt[1]",
-                 "txtNodeIndex")
+        getXPath(pXmlDoc, "/root/page[3]/body/tab/row/cell[1]/tab/row/cell[1]/section/txt[1]"_ostr,
+                 "txtNodeIndex"_ostr)
             .toUInt32());
     CPPUNIT_ASSERT_EQUAL(OUString("Section1:P23"),
                          pDoc->GetNodes()[nPage3FirstNode]->GetTextNode()->GetText());
@@ -478,13 +488,15 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testSectionInTableInTable4)
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
     // This was 3, page 2 was emptied, but it wasn't removed.
-    assertXPath(pXmlDoc, "/root/page", 2);
+    assertXPath(pXmlDoc, "/root/page"_ostr, 2);
 
     // Make sure the outer table frames are linked together properly.
-    sal_uInt32 nTable1 = getXPath(pXmlDoc, "//page[1]//body/tab", "id").toUInt32();
-    sal_uInt32 nTable1Follow = getXPath(pXmlDoc, "//page[1]//body/tab", "follow").toUInt32();
-    sal_uInt32 nTable2 = getXPath(pXmlDoc, "//page[2]//body/tab", "id").toUInt32();
-    sal_uInt32 nTable2Precede = getXPath(pXmlDoc, "//page[2]//body/tab", "precede").toUInt32();
+    sal_uInt32 nTable1 = getXPath(pXmlDoc, "//page[1]//body/tab"_ostr, "id"_ostr).toUInt32();
+    sal_uInt32 nTable1Follow
+        = getXPath(pXmlDoc, "//page[1]//body/tab"_ostr, "follow"_ostr).toUInt32();
+    sal_uInt32 nTable2 = getXPath(pXmlDoc, "//page[2]//body/tab"_ostr, "id"_ostr).toUInt32();
+    sal_uInt32 nTable2Precede
+        = getXPath(pXmlDoc, "//page[2]//body/tab"_ostr, "precede"_ostr).toUInt32();
     CPPUNIT_ASSERT_EQUAL(nTable2, nTable1Follow);
     CPPUNIT_ASSERT_EQUAL(nTable1, nTable2Precede);
 #endif
@@ -497,10 +509,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf112160)
     createSwDoc("tdf112160.fodt");
     SwDoc* pDoc = getSwDoc();
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    SwNodeOffset nA2CellNode(getXPath(pXmlDoc,
-                                      "/root/page[1]/body/tab/row[2]/cell[1]/section/txt[last()]",
-                                      "txtNodeIndex")
-                                 .toUInt32());
+    SwNodeOffset nA2CellNode(
+        getXPath(pXmlDoc, "/root/page[1]/body/tab/row[2]/cell[1]/section/txt[last()]"_ostr,
+                 "txtNodeIndex"_ostr)
+            .toUInt32());
     CPPUNIT_ASSERT_EQUAL(OUString("Table1.A2"),
                          pDoc->GetNodes()[nA2CellNode]->GetTextNode()->GetText());
 
@@ -515,8 +527,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf112160)
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
     sal_uInt32 nD2CellNode
-        = getXPath(pXmlDoc, "/root/page[1]/body/tab/row[2]/cell[last()]/section/txt[last()]",
-                   "txtNodeIndex")
+        = getXPath(pXmlDoc, "/root/page[1]/body/tab/row[2]/cell[last()]/section/txt[last()]"_ostr,
+                   "txtNodeIndex"_ostr)
               .toUInt32();
     // This was Table1.C2, Table1.D2 was moved to the next page, unexpected.
     CPPUNIT_ASSERT_EQUAL(OUString("Table1.D2"),
@@ -645,7 +657,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf112448)
 
     // check actual number of line breaks in the paragraph
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout", 2);
+    assertXPath(pXmlDoc, "/root/page/body/txt/SwParaPortion/SwLineLayout"_ostr, 2);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf113790)
@@ -668,8 +680,202 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf113790)
     pWrtShell->Paste(aClipboard);
 
     // Save it as DOCX & load it again
-    reload("Office Open XML Text", "tdf113790.docx");
+    saveAndReload("Office Open XML Text");
     CPPUNIT_ASSERT(dynamic_cast<SwXTextDocument*>(mxComponent.get()));
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf157937)
+{
+    createSwDoc("tdf130088.docx");
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+
+    // select paragraph
+    pWrtShell->SelPara(nullptr);
+
+    // enable redlining
+    dispatchCommand(mxComponent, ".uno:TrackChanges", {});
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    // show changes
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // cycle case with change tracking
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    // This resulted freezing
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf157988)
+{
+    createSwDoc("tdf130088.docx");
+    SwDoc* pDoc = getSwDoc();
+
+    // select the second word
+    dispatchCommand(mxComponent, ".uno:GoToNextWord", {});
+    dispatchCommand(mxComponent, ".uno:SelectWord", {});
+
+    // enable redlining
+    dispatchCommand(mxComponent, ".uno:TrackChanges", {});
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    // show changes
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // cycle case with change tracking
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodalesSodales"));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    // This was false (missing revert of the tracked change)
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodales tincidunt"));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodalesSODALES"));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodales tincidunt"));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodalesSodales"));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodales tincidunt"));
+
+    // tdf#141198 cycle case without selection: the word under the cursor
+
+    dispatchCommand(mxComponent, ".uno:Escape", {});
+
+    dispatchCommand(mxComponent, ".uno:GoRight", {});
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodalesSODALES"));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodales tincidunt"));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodalesSodales"));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodales tincidunt"));
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf157667)
+{
+    createSwDoc("tdf130088.docx");
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+
+    // select the first three words
+    pWrtShell->Right(SwCursorSkipMode::Chars, /*bSelect=*/true, 25, /*bBasicCall=*/false);
+
+    // enable redlining
+    dispatchCommand(mxComponent, ".uno:TrackChanges", {});
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    // show changes
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // cycle case with change tracking
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith(
+        "Integer sodalesSodales tinciduntTincidunt tristique."));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    // This was false (missing revert of the tracked change)
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodales tincidunt tristique."));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith(
+        "Integer sodalesINTEGER SODALES tincidunt tristique."));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodales tincidunt tristique."));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith(
+        "Integer sodalesSodales tinciduntTincidunt tristique."));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodales tincidunt tristique."));
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf158039)
+{
+    createSwDoc("tdf130088.docx");
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+
+    // select the first sentence
+    pWrtShell->Right(SwCursorSkipMode::Chars, /*bSelect=*/true, 26, /*bBasicCall=*/false);
+
+    // enable redlining
+    dispatchCommand(mxComponent, ".uno:TrackChanges", {});
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    // show changes
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // cycle case with change tracking
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith(
+        "Integer sodalesSodales tinciduntTincidunt tristique."));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    // This was false (missing revert of the tracked change)
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodales tincidunt tristique."));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith(
+        "Integer sodalesINTEGER SODALES tincidunt tristique."));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith(
+        "Integer sodalesSodales tinciduntTincidunt tristique."));
+
+    dispatchCommand(mxComponent, ".uno:ChangeCaseRotateCase", {});
+
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("Integer sodales tincidunt tristique."));
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf108048)
@@ -705,31 +911,27 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf113481)
     const uno::Reference<text::XTextRange> xPara1 = getParagraph(1);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xPara1->getString().getLength());
 
-    // In case that weak script is treated as CJK script, remove one character.
+    // Also variation sequence of weak characters that are treated as CJK script
     pWrtShell->Down(false);
     pWrtShell->EndPara();
     // Before: U+4E2D U+2205 U+FE00. After: U+4E2D U+2205
-    if (pWrtShell->GetScriptType() == SvtScriptType::ASIAN)
-    {
-        pWrtShell->DelLeft();
-        const uno::Reference<text::XTextRange> xPara2 = getParagraph(2);
-        CPPUNIT_ASSERT_EQUAL(sal_Int32(2), xPara2->getString().getLength());
-        CPPUNIT_ASSERT_EQUAL(u'\x2205', xPara2->getString()[1]);
-    }
+    pWrtShell->DelLeft();
+    const uno::Reference<text::XTextRange> xPara2 = getParagraph(2);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xPara2->getString().getLength());
+    CPPUNIT_ASSERT_EQUAL(u'\x4E2D', xPara2->getString()[0]);
 
-    // Characters of other scripts, remove one character.
+    // Also variation sequence of other scripts
     pWrtShell->Down(false);
     pWrtShell->EndPara();
     // Before: U+1820 U+180B. After: U+1820
     pWrtShell->DelLeft();
     const uno::Reference<text::XTextRange> xPara3 = getParagraph(3);
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xPara3->getString().getLength());
-    CPPUNIT_ASSERT_EQUAL(u'\x1820', xPara3->getString()[0]);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xPara3->getString().getLength());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf115013)
 {
-    const OUString sColumnName("Name with spaces, \"quotes\" and \\backslashes");
+    constexpr OUString sColumnName(u"Name with spaces, \"quotes\" and \\backslashes"_ustr);
 
     utl::TempFileNamed aTempDir(nullptr, true);
     aTempDir.EnableKillingFile();
@@ -760,7 +962,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf115013)
         pWrtShell->InsertField2(aField);
     }
     // Save it as DOCX & load it again
-    reload("Office Open XML Text", "mm-field.docx");
+    saveAndReload("Office Open XML Text");
     pDoc = getSwDoc();
     CPPUNIT_ASSERT(pDoc);
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
@@ -917,7 +1119,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf147181_TrackedMovingOfMultipleTable
 
     // accept changes results 1 table (removing moved table)
     dispatchCommand(mxComponent, ".uno:AcceptAllTrackedChanges", {});
-    Scheduler::ProcessEventsToIdle();
     uno::Reference<container::XIndexAccess> xTables2(xTablesSupplier->getTextTables(),
                                                      uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables2->getCount());
@@ -941,6 +1142,85 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf147181_TrackedMovingOfMultipleTable
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTable2b->getRows()->getCount());
 }
 
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf157492_TrackedMovingRow)
+{
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    CPPUNIT_ASSERT(pDoc);
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    CPPUNIT_ASSERT(pWrtShell);
+
+    // Create a table
+    SwInsertTableOptions TableOpt(SwInsertTableFlags::DefaultBorder, 0);
+    (void)&pWrtShell->InsertTable(TableOpt, 4, 3);
+
+    uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XNameAccess> xTableNames = xTablesSupplier->getTextTables();
+    CPPUNIT_ASSERT(xTableNames->hasByName("Table1"));
+    uno::Reference<text::XTextTable> xTable1(xTableNames->getByName("Table1"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), xTable1->getRows()->getCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xTable1->getColumns()->getCount());
+
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+
+    // fill table with data
+    for (int i = 0; i < 3; ++i)
+    {
+        pWrtShell->Insert("x");
+        pTextDoc->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_RIGHT);
+    }
+
+    Scheduler::ProcessEventsToIdle();
+
+    uno::Reference<text::XTextRange> xCellA1(xTable1->getCellByName("A1"), uno::UNO_QUERY);
+    xCellA1->setString("A1");
+    uno::Reference<text::XTextRange> xCellB1(xTable1->getCellByName("B1"), uno::UNO_QUERY);
+    xCellB1->setString("B1");
+    uno::Reference<text::XTextRange> xCellC1(xTable1->getCellByName("C1"), uno::UNO_QUERY);
+    xCellC1->setString("C1");
+
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    assertXPathContent(pXmlDoc, "/root/page/body/tab/row[1]/cell[1]/txt"_ostr, "A1");
+    assertXPathContent(pXmlDoc, "/root/page/body/tab/row[1]/cell[2]/txt"_ostr, "B1");
+    assertXPathContent(pXmlDoc, "/root/page/body/tab/row[1]/cell[3]/txt"_ostr, "C1");
+
+    // enable redlining
+    dispatchCommand(mxComponent, ".uno:TrackChanges", {});
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    // Move first column of the table before the third column by drag & drop
+    SwRootFrame* pLayout = pDoc->getIDocumentLayoutAccess().GetCurrentLayout();
+    SwFrame* pPage = pLayout->Lower();
+    SwFrame* pBody = pPage->GetLower();
+    SwFrame* pTable = pBody->GetLower();
+    SwFrame* pRow1 = pTable->GetLower();
+    SwFrame* pCellA1 = pRow1->GetLower();
+    SwFrame* pRow3 = pRow1->GetNext()->GetNext();
+    SwFrame* pCellA3 = pRow3->GetLower();
+    const SwRect& rCellA1Rect = pCellA1->getFrameArea();
+    const SwRect& rCellA3Rect = pCellA3->getFrameArea();
+    Point ptTo(rCellA3Rect.Left() + rCellA3Rect.Width() / 2,
+               rCellA3Rect.Top() + rCellA3Rect.Height() / 2);
+    // select first table row by using the middle point of the left border of row 1
+    Point ptRow(rCellA1Rect.Left() - 5, rCellA1Rect.Top() + rCellA1Rect.Height() / 2);
+    pWrtShell->SelectTableRowCol(ptRow);
+
+    rtl::Reference<SwTransferable> xTransfer = new SwTransferable(*pWrtShell);
+
+    xTransfer->PrivateDrop(*pWrtShell, ptTo, /*bMove=*/true, /*bXSelection=*/true);
+
+    // reject changes results 4 rows again, not 5
+    dispatchCommand(mxComponent, ".uno:RejectAllTrackedChanges", {});
+
+    xTableNames = xTablesSupplier->getTextTables();
+    CPPUNIT_ASSERT(xTableNames->hasByName("Table1"));
+    uno::Reference<text::XTextTable> xTable2(xTableNames->getByName("Table1"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xTable2->getColumns()->getCount());
+    // This was 5 (moving row without change tracking)
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), xTable2->getRows()->getCount());
+}
+
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf154599_MovingColumn)
 {
     createSwDoc();
@@ -949,13 +1229,11 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf154599_MovingColumn)
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
     CPPUNIT_ASSERT(pWrtShell);
 
-    // Create a table with less columns, than row
+    // Create a table with less columns than rows
     SwInsertTableOptions TableOpt(SwInsertTableFlags::DefaultBorder, 0);
     (void)&pWrtShell->InsertTable(TableOpt, 4, 3);
 
     uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
-    uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables(),
-                                                    uno::UNO_QUERY);
     uno::Reference<container::XNameAccess> xTableNames = xTablesSupplier->getTextTables();
     CPPUNIT_ASSERT(xTableNames->hasByName("Table1"));
     uno::Reference<text::XTextTable> xTable1(xTableNames->getByName("Table1"), uno::UNO_QUERY);
@@ -992,6 +1270,88 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf154599_MovingColumn)
     CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xTable1->getColumns()->getCount());
 }
 
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf155846_MovingColumn)
+{
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    CPPUNIT_ASSERT(pDoc);
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    CPPUNIT_ASSERT(pWrtShell);
+
+    // Create a table
+    SwInsertTableOptions TableOpt(SwInsertTableFlags::DefaultBorder, 0);
+    (void)&pWrtShell->InsertTable(TableOpt, 4, 3);
+
+    uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XNameAccess> xTableNames = xTablesSupplier->getTextTables();
+    CPPUNIT_ASSERT(xTableNames->hasByName("Table1"));
+    uno::Reference<text::XTextTable> xTable1(xTableNames->getByName("Table1"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), xTable1->getRows()->getCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xTable1->getColumns()->getCount());
+
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+
+    // fill table with data
+    for (int i = 0; i < 4; ++i)
+    {
+        pWrtShell->Insert("x");
+        pTextDoc->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_DOWN);
+    }
+
+    Scheduler::ProcessEventsToIdle();
+
+    uno::Reference<text::XTextRange> xCellA1(xTable1->getCellByName("A1"), uno::UNO_QUERY);
+    xCellA1->setString("A1");
+    uno::Reference<text::XTextRange> xCellA2(xTable1->getCellByName("A2"), uno::UNO_QUERY);
+    xCellA2->setString("A2");
+    uno::Reference<text::XTextRange> xCellA3(xTable1->getCellByName("A3"), uno::UNO_QUERY);
+    xCellA3->setString("A3");
+    uno::Reference<text::XTextRange> xCellA4(xTable1->getCellByName("A4"), uno::UNO_QUERY);
+    xCellA4->setString("A4");
+
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    assertXPathContent(pXmlDoc, "/root/page/body/tab/row[1]/cell[1]/txt"_ostr, "A1");
+    assertXPathContent(pXmlDoc, "/root/page/body/tab/row[2]/cell[1]/txt"_ostr, "A2");
+    assertXPathContent(pXmlDoc, "/root/page/body/tab/row[3]/cell[1]/txt"_ostr, "A3");
+    assertXPathContent(pXmlDoc, "/root/page/body/tab/row[4]/cell[1]/txt"_ostr, "A4");
+
+    // enable redlining
+    dispatchCommand(mxComponent, ".uno:TrackChanges", {});
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    // Move first column of the table before the third column by drag & drop
+    SwRootFrame* pLayout = pDoc->getIDocumentLayoutAccess().GetCurrentLayout();
+    SwFrame* pPage = pLayout->Lower();
+    SwFrame* pBody = pPage->GetLower();
+    SwFrame* pTable = pBody->GetLower();
+    SwFrame* pRow1 = pTable->GetLower();
+    SwFrame* pCellA1 = pRow1->GetLower();
+    SwFrame* pCellC1 = pCellA1->GetNext()->GetNext();
+    const SwRect& rCellA1Rect = pCellA1->getFrameArea();
+    const SwRect& rCellC1Rect = pCellC1->getFrameArea();
+    Point ptTo(rCellC1Rect.Left() + rCellC1Rect.Width() / 2,
+               rCellC1Rect.Top() + rCellC1Rect.Height() / 2);
+    // select first table column by using the middle point of the top border of column A
+    Point ptColumn(rCellA1Rect.Left() + rCellA1Rect.Width() / 2, rCellA1Rect.Top() - 5);
+    pWrtShell->SelectTableRowCol(ptColumn);
+
+    // This crashed here before the fix.
+    rtl::Reference<SwTransferable> xTransfer = new SwTransferable(*pWrtShell);
+
+    xTransfer->PrivateDrop(*pWrtShell, ptTo, /*bMove=*/true, /*bXSelection=*/true);
+
+    // reject changes results 3 columns again, not 4
+    dispatchCommand(mxComponent, ".uno:RejectAllTrackedChanges", {});
+
+    xTableNames = xTablesSupplier->getTextTables();
+    CPPUNIT_ASSERT(xTableNames->hasByName("Table1"));
+    uno::Reference<text::XTextTable> xTable2(xTableNames->getByName("Table1"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), xTable2->getRows()->getCount());
+    // This was 4 (moving column without change tracking)
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xTable2->getColumns()->getCount());
+}
+
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf154771_MovingMultipleColumns)
 {
     createSwDoc();
@@ -1005,8 +1365,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf154771_MovingMultipleColumns)
     (void)&pWrtShell->InsertTable(TableOpt, 5, 4);
 
     uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
-    uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables(),
-                                                    uno::UNO_QUERY);
     uno::Reference<container::XNameAccess> xTableNames = xTablesSupplier->getTextTables();
     CPPUNIT_ASSERT(xTableNames->hasByName("Table1"));
     uno::Reference<text::XTextTable> xTable1(xTableNames->getByName("Table1"), uno::UNO_QUERY);
@@ -1174,7 +1532,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testHtmlCopyImages)
     CPPUNIT_ASSERT(pHtmlDoc);
 
     // This failed, image was lost during HTML copy.
-    OUString aImage = getXPath(pHtmlDoc, "/html/body/p/img", "src");
+    OUString aImage = getXPath(pHtmlDoc, "/html/body/p/img"_ostr, "src"_ostr);
     // Also make sure that the image is not embedded (e.g. Word doesn't handle
     // embedded images).
     CPPUNIT_ASSERT(aImage.startsWith("file:///"));
@@ -1230,8 +1588,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testFontEmbedding)
 #if HAVE_MORE_FONTS && !defined(MACOSX)
     createSwDoc("testFontEmbedding.odt");
 
-    OString aContentBaseXpath("/office:document-content/office:font-face-decls");
-    OString aSettingsBaseXpath("/office:document-settings/office:settings/config:config-item-set");
+    OString aContentBaseXpath("/office:document-content/office:font-face-decls"_ostr);
+    OString aSettingsBaseXpath(
+        "/office:document-settings/office:settings/config:config-item-set"_ostr);
 
     xmlDocUniquePtr pXmlDoc;
 
@@ -1459,7 +1818,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testInconsistentBookmark)
 
         // load only content.xml
         xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
-        const OString aPath("/office:document-content/office:body/office:text/text:p");
+        static constexpr OString aPath(
+            "/office:document-content/office:body/office:text/text:p"_ostr);
 
         const int pos1 = getXPathPosition(pXmlDoc, aPath, "bookmark-start");
         const int pos2 = getXPathPosition(pXmlDoc, aPath, "control");
@@ -1544,9 +1904,97 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf124603)
     }
 }
 
+#if !defined(MACOSX)
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf45949)
+{
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    const SwViewOption* pOpt = pWrtShell->GetViewOptions();
+    uno::Sequence<beans::PropertyValue> params
+        = comphelper::InitPropertySequence({ { "Enable", uno::Any(true) } });
+    dispatchCommand(mxComponent, ".uno:SpellOnline", params);
+
+    // Automatic Spell Checking is enabled
+    CPPUNIT_ASSERT(pOpt->IsOnlineSpell());
+
+    // check available en_US dictionary and test spelling with it
+    uno::Reference<XLinguServiceManager2> xLngSvcMgr(GetLngSvcMgr_Impl());
+    uno::Reference<XSpellChecker1> xSpell;
+    xSpell.set(xLngSvcMgr->getSpellChecker(), UNO_QUERY);
+    LanguageType eLang = LanguageTag::convertToLanguageType(lang::Locale("en", "US", OUString()));
+    if (xSpell.is() && xSpell->hasLanguage(static_cast<sal_uInt16>(eLang)))
+    {
+        SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+        emulateTyping(*pTextDoc, u"baaad http://www.baaad.org baaad");
+        SwCursorShell* pShell(pDoc->GetEditShell());
+        SwTextNode* pNode = pShell->GetCursor()->GetPointNode().GetTextNode();
+
+        // tdf#152492: Without the fix in place, this test would have failed with
+        // - Expected: 1
+        // - Actual  : 3
+        CPPUNIT_ASSERT_EQUAL(sal_uInt16(1), pNode->GetWrong()->Count());
+
+        pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/false, 10, /*bBasicCall=*/false);
+        emulateTyping(*pTextDoc, u" ");
+
+        CPPUNIT_ASSERT_EQUAL(sal_uInt16(2), pNode->GetWrong()->Count());
+
+        pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/false, 6, /*bBasicCall=*/false);
+        emulateTyping(*pTextDoc, u" ");
+
+        // Move down to trigger spell checking
+        pWrtShell->Down(/*bSelect=*/false, 1);
+
+        // Without the fix in place, this test would have failed with
+        // - Expected: 3
+        // - Actual  : 2
+        CPPUNIT_ASSERT_EQUAL(sal_uInt16(3), pNode->GetWrong()->Count());
+    }
+}
+#endif
+
+#if !defined(MACOSX)
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf157442)
+{
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    const SwViewOption* pOpt = pWrtShell->GetViewOptions();
+    uno::Sequence<beans::PropertyValue> params
+        = comphelper::InitPropertySequence({ { "Enable", uno::Any(true) } });
+    dispatchCommand(mxComponent, ".uno:SpellOnline", params);
+
+    // Automatic Spell Checking is enabled
+    CPPUNIT_ASSERT(pOpt->IsOnlineSpell());
+
+    // check available en_US dictionary and test spelling with it
+    uno::Reference<XLinguServiceManager2> xLngSvcMgr(GetLngSvcMgr_Impl());
+    uno::Reference<XSpellChecker1> xSpell;
+    xSpell.set(xLngSvcMgr->getSpellChecker(), UNO_QUERY);
+    LanguageType eLang = LanguageTag::convertToLanguageType(lang::Locale("en", "US", OUString()));
+    if (xSpell.is() && xSpell->hasLanguage(static_cast<sal_uInt16>(eLang)))
+    {
+        uno::Reference<linguistic2::XLinguProperties> xLinguProperties(
+            LinguMgr::GetLinguPropertySet());
+
+        // Spell with digits is disabled by default
+        CPPUNIT_ASSERT_EQUAL(sal_False, xLinguProperties->getIsSpellWithDigits());
+
+        SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+        emulateTyping(*pTextDoc, u"ErrorError Treee2 ");
+        SwCursorShell* pShell(pDoc->GetEditShell());
+        SwTextNode* pNode = pShell->GetCursor()->GetPointNode().GetTextNode();
+
+        // Without the fix in place, this test would have crashed because GetWrong() returns nullptr
+        CPPUNIT_ASSERT_EQUAL(sal_uInt16(1), pNode->GetWrong()->Count());
+    }
+}
+#endif
+
+#if !defined(MACOSX)
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf65535)
 {
-#if !defined(MACOSX)
     createSwDoc("tdf65535.fodt");
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     SwWrtShell* pWrtShell = pTextDoc->GetDocShell()->GetWrtShell();
@@ -1585,9 +2033,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf65535)
 
         SfxViewShell* pViewShell = SfxViewShell::Current();
         {
-            static const OUStringLiteral sApplyRule(u"Spelling_Baaed");
+            static constexpr OUStringLiteral sApplyRule(u"Spelling_Baaed");
             SfxStringItem aApplyItem(FN_PARAM_1, sApplyRule);
-            pViewShell->GetViewFrame()->GetDispatcher()->ExecuteList(
+            pViewShell->GetViewFrame().GetDispatcher()->ExecuteList(
                 SID_SPELLCHECK_APPLY_SUGGESTION, SfxCallMode::SYNCHRON, { &aApplyItem });
         }
 
@@ -1600,21 +2048,20 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf65535)
 
     tools::JsonWriter aJsonWriter;
     pTextDoc->getPostIts(aJsonWriter);
-    char* pChar = aJsonWriter.extractData();
-    std::stringstream aStream(pChar);
-    free(pChar);
+    OString pChar = aJsonWriter.finishAndGetAsOString();
+    std::stringstream aStream((std::string(pChar)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     OString sCommentText;
     for (const boost::property_tree::ptree::value_type& rValue : aTree.get_child("comments"))
     {
         const boost::property_tree::ptree& rComment = rValue.second;
-        sCommentText = OString(rComment.get<std::string>("text").c_str());
+        sCommentText = OString(rComment.get<std::string>("text"));
     }
     // This was false (lost comment with spelling replacement)
-    CPPUNIT_ASSERT_EQUAL(OString("with comment"), sCommentText);
-#endif
+    CPPUNIT_ASSERT_EQUAL("with comment"_ostr, sCommentText);
 }
+#endif
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testRedlineAutoCorrect)
 {
@@ -1713,7 +2160,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testRedlineAutoCorrect2)
 
     // Continue it:
     emulateTyping(*pTextDoc, u"Lorem,... ");
-    sReplaced = u"Lorem,... Lorem,… ";
+    sReplaced = u"Lorem,... Lorem,… "_ustr;
     CPPUNIT_ASSERT_EQUAL(sReplaced, getParagraph(1)->getString());
 }
 
@@ -1730,7 +2177,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testEmojiAutoCorrect)
     // without change tracking
     CPPUNIT_ASSERT(!(pWrtShell->GetRedlineFlags() & RedlineFlags::On));
     emulateTyping(*pTextDoc, u":snowman:");
-    OUString sReplaced = u"☃Lorem,";
+    OUString sReplaced = u"☃Lorem,"_ustr;
     CPPUNIT_ASSERT_EQUAL(sReplaced, getParagraph(1)->getString());
 
     // with change tracking (showing redlines)
@@ -1741,7 +2188,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testEmojiAutoCorrect)
     CPPUNIT_ASSERT(nMode & RedlineFlags::ShowDelete);
 
     emulateTyping(*pTextDoc, u":snowman:");
-    sReplaced = u"☃☃Lorem,";
+    sReplaced = u"☃☃Lorem,"_ustr;
 
     // tdf#140674 This was ":snowman:" instead of autocorrect
     CPPUNIT_ASSERT_EQUAL(sReplaced, getParagraph(1)->getString());
@@ -1757,11 +2204,34 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf108423)
     // testing autocorrect of i' -> I' on start of first paragraph
     emulateTyping(*pTextDoc, u"i'");
     // The word "i" should be capitalized due to autocorrect, followed by a typographical apostrophe
-    OUString sIApostrophe(u"I\u2019");
+    OUString sIApostrophe(u"I\u2019"_ustr);
     CPPUNIT_ASSERT_EQUAL(sIApostrophe, getParagraph(1)->getString());
     emulateTyping(*pTextDoc, u" i'");
     OUString sText(sIApostrophe + u" " + sIApostrophe);
     CPPUNIT_ASSERT_EQUAL(sText, getParagraph(1)->getString());
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf153423)
+{
+    createSwDoc();
+    SvxSwAutoFormatFlags flags(*SwEditShell::GetAutoFormatFlags());
+    comphelper::ScopeGuard const g([=]() { SwEditShell::SetAutoFormatFlags(&flags); });
+    flags.bSetNumRule = true;
+    SwEditShell::SetAutoFormatFlags(&flags);
+
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    emulateTyping(*pTextDoc, u"1. Item 1");
+
+    SwXTextDocument* pXTextDocument = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    CPPUNIT_ASSERT(pXTextDocument);
+    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_RETURN);
+    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_RETURN);
+    Scheduler::ProcessEventsToIdle();
+
+    // Without the fix in place, this test would have failed with
+    // - Expected: 1.
+    // - Actual  : 10.
+    CPPUNIT_ASSERT_EQUAL(OUString("1."), getProperty<OUString>(getParagraph(1), "ListLabelString"));
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf106164)
@@ -1773,7 +2243,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf106164)
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     // testing autocorrect of we're -> We're on start of first paragraph
     emulateTyping(*pTextDoc, u"we're ");
-    CPPUNIT_ASSERT_EQUAL(OUString(u"We\u2019re "), getParagraph(1)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"We\u2019re "_ustr, getParagraph(1)->getString());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf54409)
@@ -1785,7 +2255,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf54409)
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     // testing autocorrect of "tset -> "test with typographical double quotation mark U+201C
     emulateTyping(*pTextDoc, u"\"test ");
-    OUString sReplaced(u"\u201Ctest ");
+    OUString sReplaced(u"\u201Ctest "_ustr);
     CPPUNIT_ASSERT_EQUAL(sReplaced, getParagraph(1)->getString());
     // testing autocorrect of test" -> test" with typographical double quotation mark U+201D
     emulateTyping(*pTextDoc, u"and tset\" ");
@@ -1806,7 +2276,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf38394)
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     // testing autocorrect of French l'" -> l'« (instead of l'»)
     emulateTyping(*pTextDoc, u"l'\"");
-    OUString sReplaced(u"l\u2019« ");
+    OUString sReplaced(u"l\u2019« "_ustr);
     CPPUNIT_ASSERT_EQUAL(sReplaced, getParagraph(1)->getString());
     // tdf#132301 autocorrect of qu'«
     emulateTyping(*pTextDoc, u" qu'\"");
@@ -1823,7 +2293,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf59666)
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     // testing missing autocorrect of single Greek letters
     emulateTyping(*pTextDoc, u"π ");
-    CPPUNIT_ASSERT_EQUAL(OUString(u"\u03C0 "), getParagraph(1)->getString());
+    CPPUNIT_ASSERT_EQUAL(u"\u03C0 "_ustr, getParagraph(1)->getString());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf133524)
@@ -1836,7 +2306,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf133524)
     // 1. Testing autocorrect of >> and <<
     // Example: »word«
     emulateTyping(*pTextDoc, u">>");
-    OUString sReplaced(u"»");
+    OUString sReplaced(u"»"_ustr);
     CPPUNIT_ASSERT_EQUAL(sReplaced, getParagraph(1)->getString());
     // <<
     emulateTyping(*pTextDoc, u"word<<");
@@ -1896,7 +2366,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf133524_Romanian)
     // Example: „Sentence and «word».”
     // opening primary level quote
     emulateTyping(*pTextDoc, u"\"");
-    OUString sReplaced(u"„");
+    OUString sReplaced(u"„"_ustr);
     CPPUNIT_ASSERT_EQUAL(sReplaced, getParagraph(1)->getString());
     // opening second level quote
     emulateTyping(*pTextDoc, u"Sentence and \"");
@@ -1929,7 +2399,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf128860)
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     // Second level ending quote: ‚word' -> ,word‘
     emulateTyping(*pTextDoc, u",word'");
-    OUString sReplaced(u",word\u2019");
+    OUString sReplaced(u",word\u2019"_ustr);
     CPPUNIT_ASSERT_EQUAL(sReplaced, getParagraph(1)->getString());
     // Us apostrophe without preceding starting quote: word' -> word’
     emulateTyping(*pTextDoc, u" word'");
@@ -1958,7 +2428,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf123786)
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     // Second level ending quote: „word' -> „word“
     emulateTyping(*pTextDoc, u"„слово'");
-    OUString sReplaced(u"„слово“");
+    OUString sReplaced(u"„слово“"_ustr);
     CPPUNIT_ASSERT_EQUAL(sReplaced, getParagraph(1)->getString());
     // Us apostrophe without preceding starting quote: word' -> word’
     emulateTyping(*pTextDoc, u" слово'");
@@ -1980,7 +2450,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf133589)
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     // translitere words to Old Hungarian
     emulateTyping(*pTextDoc, u"székely ");
-    OUString sReplaced(u"𐳥𐳋𐳓𐳉𐳗 ");
+    OUString sReplaced(u"𐳥𐳋𐳓𐳉𐳗 "_ustr);
     CPPUNIT_ASSERT_EQUAL(sReplaced, getParagraph(1)->getString());
     // disambiguate consonants: asszony -> asz|szony
     emulateTyping(*pTextDoc, u"asszony ");
@@ -2218,11 +2688,11 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf143176)
     dispatchCommand(mxComponent, ".uno:AutoFormatApply", {});
 
     // This was the original "Lorem ipsum..."
-    CPPUNIT_ASSERT_EQUAL(OUString(u"𐲖𐳛𐳢𐳉𐳘 𐳐𐳠𐳤𐳪𐳘 𐳇𐳛𐳖𐳛𐳢 "
-                                  u"𐳤𐳐𐳦 𐳀𐳘𐳉𐳦⹁"),
+    CPPUNIT_ASSERT_EQUAL(u"𐲖𐳛𐳢𐳉𐳘 𐳐𐳠𐳤𐳪𐳘 𐳇𐳛𐳖𐳛𐳢 "
+                         u"𐳤𐳐𐳦 𐳀𐳘𐳉𐳦⹁"_ustr,
                          getParagraph(1)->getString());
-    CPPUNIT_ASSERT_EQUAL(OUString(u"𐳄𐳛𐳙𐳤𐳉𐳄𐳦𐳉𐳦𐳪𐳢 "
-                                  u"𐳀𐳇𐳐𐳠𐳐𐳤𐳄𐳐𐳙𐳍 𐳉𐳖𐳐𐳦."),
+    CPPUNIT_ASSERT_EQUAL(u"𐳄𐳛𐳙𐳤𐳉𐳄𐳦𐳉𐳦𐳪𐳢 "
+                         u"𐳀𐳇𐳐𐳠𐳐𐳤𐳄𐳐𐳙𐳍 𐳉𐳖𐳐𐳦."_ustr,
                          getParagraph(2)->getString());
 }
 
@@ -2278,7 +2748,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testInsertPdf)
     dispatchCommand(mxComponent, ".uno:InsertGraphic", aArgs);
 
     // Save and load cycle
-    reload("writer8", "testInsertPdf.odt");
+    saveAndReload("writer8");
 
     uno::Reference<drawing::XShape> xShape = getShape(1);
     // Assert that we have a replacement graphics
@@ -2314,7 +2784,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf143760WrapContourToOff)
     CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(getShape(1), "SurroundContour"));
 
     // Without fix this had failed, because the shape was written to file with contour.
-    reload("Office Open XML Text", "tdf143760_ContourToWrapOff.docx");
+    saveAndReload("Office Open XML Text");
     CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(getShape(1), "SurroundContour"));
 }
 
@@ -2338,7 +2808,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testHatchFill)
     xDrawPage->add(xShape);
 
     // Save it as DOCX and load it again.
-    reload("Office Open XML Text", "hatchFill.docx");
+    saveAndReload("Office Open XML Text");
     CPPUNIT_ASSERT_EQUAL(1, getShapes());
 
     // tdf#127989 Without fix this had failed, because the background of the hatch was not set as 'no background'.
@@ -2353,21 +2823,18 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testNestedGroupTextBoxCopyCrash)
     createSwDoc("tdf149550.docx");
 
     dispatchCommand(mxComponent, ".uno:SelectAll", {});
-    Scheduler::ProcessEventsToIdle();
     dispatchCommand(mxComponent, ".uno:Copy", {});
-    Scheduler::ProcessEventsToIdle();
     // This crashed here before the fix.
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     pTextDoc->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_ESCAPE);
     Scheduler::ProcessEventsToIdle();
     dispatchCommand(mxComponent, ".uno:Paste", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_MESSAGE("Where is the doc, it crashed, isn't it?!", mxComponent);
 
     auto pLayout = parseLayoutDump();
     // There must be 2 textboxes!
-    assertXPath(pLayout, "/root/page/body/txt/anchored/fly[2]");
+    assertXPath(pLayout, "/root/page/body/txt/anchored/fly[2]"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testCrashOnExit)
@@ -2387,18 +2854,16 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testCrashOnExit)
 
     // Remove the textbox
     dispatchCommand(mxComponent, ".uno:RemoveTextBox", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(false, xProperties->getPropertyValue("TextBox").get<bool>());
 
     // Readd the textbox (to run the textboxhelper::create() method)
     dispatchCommand(mxComponent, ".uno:AddTextBox", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(true, xProperties->getPropertyValue("TextBox").get<bool>());
 
     // save and reload
-    reload("writer8", "tdf142715_.odt");
+    saveAndReload("writer8");
 
     // Before the fix this crashed here and could not reopen.
     CPPUNIT_ASSERT_MESSAGE("Crash on exit, isn't it?", mxComponent);
@@ -2419,7 +2884,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testCaptionShape)
     xDrawPage->add(xShape);
 
     // Save it as DOCX and load it again.
-    reload("Office Open XML Text", "captionshape.docx");
+    saveAndReload("Office Open XML Text");
 
     // Without fix in place, the shape was lost on export.
     CPPUNIT_ASSERT_EQUAL(1, getShapes());
@@ -2433,7 +2898,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf151828_Comment2)
     uno::Sequence<beans::PropertyValue> aArgs(
         comphelper::InitPropertySequence({ { "KeyModifier", uno::Any(KEY_MOD1) } }));
     dispatchCommand(mxComponent, ".uno:BasicShapes", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     auto xBasicShape = getShape(1);
     auto pObject = SdrObject::getSdrObjectFromXShape(xBasicShape);
@@ -2445,12 +2909,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf151828_Comment2)
 
     // cut and paste it
     dispatchCommand(mxComponent, ".uno:Cut", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(0, getShapes());
 
     dispatchCommand(mxComponent, ".uno:Paste", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(1, getShapes());
 
@@ -2483,11 +2945,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf151828)
 
     // cut and paste the table
     dispatchCommand(mxComponent, ".uno:SelectTable", {});
-    Scheduler::ProcessEventsToIdle();
     dispatchCommand(mxComponent, ".uno:Cut", {});
-    Scheduler::ProcessEventsToIdle();
     dispatchCommand(mxComponent, ".uno:Paste", {});
-    Scheduler::ProcessEventsToIdle();
 
     // move cursor into the pasted table
     CPPUNIT_ASSERT(pWrtShell->MoveTable(GotoPrevTable, fnTableStart));
@@ -2497,6 +2956,56 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf151828)
 
     // Before the fix the pasted table name was 'Table1'.
     CPPUNIT_ASSERT_EQUAL(OUString("MyTableName"), pFormat->GetName());
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf146178)
+{
+    createSwDoc();
+
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    SwPaM* pCursor = pDoc->GetEditShell()->GetCursor();
+
+    // insert two fields
+    dispatchCommand(mxComponent, ".uno:InsertTimeField", {});
+    dispatchCommand(mxComponent, ".uno:InsertDateField", {});
+
+    // navigate by field
+    SwView::SetMoveType(NID_FIELD);
+
+    // set cursor to the start of the document
+    pWrtShell->SttEndDoc(false);
+    // navigate to the previous field
+    dispatchCommand(mxComponent, ".uno:ScrollToPrevious", {});
+    // Before the fix the position would be 0, navigation did not wrap to end of document
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pCursor->GetPoint()->GetContentIndex());
+
+    // set cursor to the end of the document
+    pWrtShell->SttEndDoc(false);
+    // navigate to the next field
+    dispatchCommand(mxComponent, ".uno:ScrollToNext", {});
+    // Before the fix the position would be 1, navigation did not wrap to start of document
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), pCursor->GetPoint()->GetContentIndex());
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf106663HeaderTextFrameGoToNextPlacemarker)
+{
+    createSwDoc("testTdf106663.odt");
+
+    SwDoc* pDoc = getSwDoc();
+    SwPaM* pCursor = pDoc->GetEditShell()->GetCursor();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+
+    // Move the cursor into the fly frame of the document's header
+    pWrtShell->GotoFly("FrameInHeader", FLYCNTTYPE_FRM, false);
+
+    // Check that GoToNextPlacemarker highlights the first field instead of the second one
+    dispatchCommand(mxComponent, ".uno:GoToNextPlacemarker", {});
+    // Without the fix in place, this test would have failed with
+    // - Expected: Heading
+    // - Actual  : Some other marker
+    // i.e. the GoToNextPlacemarker command skipped the first field
+    CPPUNIT_ASSERT(pCursor->GetPoint()->GetNode().GetTextNode()->GetText().startsWith("Heading"));
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf155407)
@@ -2509,7 +3018,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf155407)
         // Without the fix in place, this would fail with
         // - Expected: Foo – 11’—’22
         // - Actual  : Foo – 11’--’22
-        CPPUNIT_ASSERT_EQUAL(OUString(u"Foo – 11’—’22 "), getParagraph(1)->getString());
+        CPPUNIT_ASSERT_EQUAL(u"Foo – 11’—’22 "_ustr, getParagraph(1)->getString());
     }
 
     dispatchCommand(mxComponent, ".uno:SelectAll", {}); // start again
@@ -2519,7 +3028,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest6, testTdf155407)
         // Without the fix in place, this would fail with
         // - Expected: Bar – 111–222
         // - Actual  : Bar – 111-–22
-        CPPUNIT_ASSERT_EQUAL(OUString(u"Bar – 111–222 "), getParagraph(1)->getString());
+        CPPUNIT_ASSERT_EQUAL(u"Bar – 111–222 "_ustr, getParagraph(1)->getString());
     }
 }
 

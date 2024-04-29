@@ -34,6 +34,7 @@
 #include <vcl/print.hxx>
 #include <vcl/settings.hxx>
 #include <svtools/ctrltool.hxx>
+#include <toolkit/awt/vclxmenu.hxx>
 #include <osl/mutex.hxx>
 #include <memory>
 #include <cppuhelper/supportsservice.hxx>
@@ -154,7 +155,7 @@ void FontSizeMenuController::fillPopupMenu( Reference< css::awt::XPopupMenu > co
     m_aHeightArray.clear();
 
     sal_uInt16 nPos = 0; // Id is nPos+1
-    static const OUStringLiteral aFontHeightCommand( u".uno:FontHeight?FontHeight.Height:float=" );
+    static constexpr OUString aFontHeightCommand( u".uno:FontHeight?FontHeight.Height:float="_ustr );
 
     // first insert font size names (for simplified/traditional chinese)
     FontSizeNames   aFontSizeNames( Application::GetSettings().GetUILanguageTag().getLanguageType() );
@@ -207,7 +208,7 @@ void SAL_CALL FontSizeMenuController::disposing( const EventObject& )
 {
     Reference< css::awt::XMenuListener > xHolder(this);
 
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     m_xFrame.clear();
     m_xDispatch.clear();
     m_xCurrentFontDispatch.clear();
@@ -224,14 +225,14 @@ void SAL_CALL FontSizeMenuController::statusChanged( const FeatureStateEvent& Ev
 
     if ( Event.State >>= aFontDescriptor )
     {
-        osl::MutexGuard aLock( m_aMutex );
+        std::unique_lock aLock( m_aMutex );
 
         if ( m_xPopupMenu.is() )
             fillPopupMenu( m_xPopupMenu );
     }
     else if ( Event.State >>= aFontHeight )
     {
-        osl::MutexGuard aLock( m_aMutex );
+        std::unique_lock aLock( m_aMutex );
         m_aFontHeight = aFontHeight;
 
         if ( m_xPopupMenu.is() )
@@ -255,15 +256,15 @@ void FontSizeMenuController::impl_setPopupMenu()
 
 void SAL_CALL FontSizeMenuController::updatePopupMenu()
 {
-    osl::ClearableMutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
 
-    throwIfDisposed();
+    throwIfDisposed(aLock);
 
     Reference< XDispatch > xDispatch( m_xCurrentFontDispatch );
     css::util::URL aTargetURL;
     aTargetURL.Complete = ".uno:CharFontName";
     m_xURLTransformer->parseStrict( aTargetURL );
-    aLock.clear();
+    aLock.unlock();
 
     if ( xDispatch.is() )
     {

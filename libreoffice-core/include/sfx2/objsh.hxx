@@ -47,6 +47,7 @@
 
 namespace weld {class Button; }
 namespace model {class ColorSet; }
+struct NamedColor;
 class SbxValue;
 class SbxArray;
 class BasicManager;
@@ -191,6 +192,7 @@ private:
                                                   // sal_False := new object
     bool                        bIsInGenerateThumbnail; //optimize thumbnail generate and store procedure to improve odt saving performance, i120030
     bool                        mbAvoidRecentDocs; ///< Avoid adding to the recent documents list, if not necessary.
+    bool                        bRememberSignature; // Do we want to remember the signature.
 
     enum TriState               {undefined, yes, no};
     TriState                    mbContinueImportOnFilterExceptions = undefined; // try to import as much as possible
@@ -199,6 +201,8 @@ private:
 
     SAL_DLLPRIVATE void UpdateTime_Impl(const css::uno::Reference<
         css::document::XDocumentProperties> & i_xDocProps);
+
+    css::uno::Sequence< css::security::DocumentSignatureInformation > rSignatureInfosRemembered;
 
     SAL_DLLPRIVATE bool SaveTo_Impl(SfxMedium &rMedium, const SfxItemSet* pSet );
 
@@ -235,6 +239,7 @@ private:
 
 public:
     static const css::uno::Sequence<sal_Int8>& getUnoTunnelId();
+
     /* Stampit disable/enable cancel button for print jobs
        default = true = enable! */
     void                        Stamp_SetPrintCancelState(bool bState);
@@ -243,12 +248,12 @@ public:
     static OUString CreateShellID( const SfxObjectShell* pShell );
 
     // Document-Shell Iterator
-    static SfxObjectShell*      GetFirst( const std::function<bool ( const SfxObjectShell* )>& isObjectShell = nullptr,
+    SAL_WARN_UNUSED_RESULT static SfxObjectShell* GetFirst( const std::function<bool ( const SfxObjectShell* )>& isObjectShell = nullptr,
                                           bool bOnlyVisible = true );
-    static SfxObjectShell*      GetNext( const SfxObjectShell& rPrev,
+    SAL_WARN_UNUSED_RESULT static SfxObjectShell* GetNext( const SfxObjectShell& rPrev,
                                          const std::function<bool ( const SfxObjectShell* )>& isObjectShell = nullptr,
                                          bool bOnlyVisible = true );
-    static SfxObjectShell*      Current();
+    SAL_WARN_UNUSED_RESULT static SfxObjectShell* Current();
     static css::uno::Reference< css::uno::XInterface >
                                 GetCurrentComponent();
     static void                 SetCurrentComponent( const css::uno::Reference< css::uno::XInterface >& _rxComponent );
@@ -290,9 +295,9 @@ public:
     SAL_DLLPRIVATE void         SetMacroMode_Impl(bool bModal=true);
 
     void                        ResetError();
-    ErrCode                     GetError() const;
-    ErrCode                     GetErrorCode() const;
-    void                        SetError(ErrCode rErr);
+    ErrCodeMsg                  GetErrorIgnoreWarning() const;
+    ErrCodeMsg                  GetErrorCode() const;
+    void                        SetError(const ErrCodeMsg& rErr);
 
     /**
      * Initialize bare minimum just enough for unit test runs.
@@ -354,13 +359,14 @@ public:
     void AfterSigning(bool bSignSuccess, bool bSignScriptingContent);
     bool HasValidSignatures() const;
     SignatureState              GetDocumentSignatureState();
-    void                        SignDocumentContent(weld::Window* pDialogParent);
+    bool                        SignDocumentContent(weld::Window* pDialogParent);
     css::uno::Sequence<css::security::DocumentSignatureInformation> GetDocumentSignatureInformation(
         bool bScriptingContent,
         const css::uno::Reference<css::security::XDocumentDigitalSignatures>& xSigner
         = css::uno::Reference<css::security::XDocumentDigitalSignatures>());
 
     bool SignDocumentContentUsingCertificate(const css::uno::Reference<css::security::XCertificate>& xCertificate);
+    bool ResignDocument(css::uno::Sequence< css::security::DocumentSignatureInformation >& rSignaturesInfo);
 
     void SignSignatureLine(weld::Window* pDialogParent, const OUString& aSignatureLineId,
                            const css::uno::Reference<css::security::XCertificate>& xCert,
@@ -368,7 +374,7 @@ public:
                            const css::uno::Reference<css::graphic::XGraphic>& xInvalidGraphic,
                            const OUString& aComment);
     SignatureState              GetScriptingSignatureState();
-    void                        SignScriptingContent(weld::Window* pDialogParent);
+    bool                        SignScriptingContent(weld::Window* pDialogParent);
     DECL_DLLPRIVATE_LINK(SignDocumentHandler, weld::Button&, void);
 
     virtual std::shared_ptr<SfxDocumentInfoDialog> CreateDocumentInfoDialog(weld::Window* pParent, const SfxItemSet& rItemSet);
@@ -423,7 +429,7 @@ public:
     void                        SetUseThumbnailSave( bool _bNew );
     void                        SetLoadReadonly( bool _bReadonly );
     void                        SetSaveVersionOnClose( bool bSet );
-    void                        ResetFromTemplate( const OUString& rTemplateName, const OUString& rFileName );
+    void                        ResetFromTemplate( const OUString& rTemplateName, std::u16string_view rFileName );
 
     // TODO/LATER: the following two methods should be replaced by Get/SetModifPasswordInfo in future
     sal_uInt32                  GetModifyPasswordHash() const;
@@ -442,7 +448,7 @@ public:
 
     virtual bool                PrepareClose(bool bUI = true);
     virtual HiddenInformation   GetHiddenInformationState( HiddenInformation nStates );
-    sal_Int16                   QueryHiddenInformation( HiddenWarningFact eFact, weld::Window* pParent );
+    void                        QueryHiddenInformation( HiddenWarningFact eFact );
     bool                        IsSecurityOptOpenReadOnly() const;
     void                        SetSecurityOptOpenReadOnly( bool bOpenReadOnly );
 
@@ -465,11 +471,13 @@ public:
     /// Don't add to the recent documents - it's an expensive operation, sometimes it is not wanted.
     bool                        IsAvoidRecentDocs() const { return mbAvoidRecentDocs; }
 
+    bool                        IsRememberingSignature() const { return bRememberSignature; }
+
     /// Don't add to the recent documents - it's an expensive operation, sometimes it is not wanted.
     void                        AvoidRecentDocs(bool bAvoid) { mbAvoidRecentDocs = bAvoid; }
 
     /// On first error ask user if import should continue; return saved answer.
-    bool                        IsContinueImportOnFilterExceptions(std::u16string_view aErrMessage);
+    bool                        IsContinueImportOnFilterExceptions();
 
     // Transfer IFace
     bool                        IsAbortingImport() const;
@@ -564,6 +572,9 @@ public:
     css::uno::Reference< css::script::XLibraryContainer >
                                 GetDialogContainer();
     StarBASIC*                  GetBasic() const;
+
+    std::optional<NamedColor> GetRecentColor(sal_uInt16 nSlotId);
+    void SetRecentColor(sal_uInt16 nSlotId, const NamedColor& rColor);
 
     virtual std::shared_ptr<sfx::IDocumentModelAccessor> GetDocumentModelAccessor() const;
     virtual std::set<Color> GetDocColors();
@@ -689,6 +700,9 @@ public:
                                 bool bShowCloseButton = true);
     std::vector<InfobarData>& getPendingInfobars();
 
+    // Destruction of storages and streams
+    void InternalCloseAndRemoveFiles();
+
     SAL_DLLPRIVATE bool CreatePreview_Impl(bool bFullContent, VirtualDevice* pDevice, GDIMetaFile* pFile) const;
 
     SAL_DLLPRIVATE static bool IsPackageStorageFormat_Impl(const SfxMedium &);
@@ -717,7 +731,7 @@ public:
 
     SAL_DLLPRIVATE static bool UseInteractionToHandleError(
                     const css::uno::Reference< css::task::XInteractionHandler >& xHandler,
-                    ErrCode nError );
+                    const ErrCodeMsg& nError );
     SAL_DLLPRIVATE const SfxObjectShell_Impl* Get_Impl() const { return pImpl.get(); }
 
     SAL_DLLPRIVATE void SetCreateMode_Impl( SfxObjectCreateMode nMode );

@@ -51,10 +51,10 @@
 #include <unotools/syslocale.hxx>
 #include <unotools/syslocaleoptions.hxx>
 
-using namespace ::com::sun::star;
-
 #include <salframe.hxx>
 #include <svdata.hxx>
+
+using namespace ::com::sun::star;
 
 struct ImplMouseData
 {
@@ -112,6 +112,7 @@ struct ImplStyleData
     Color                           maGroupTextColor;
     Color                           maHelpColor;
     Color                           maHelpTextColor;
+    Color                           maAccentColor;
     Color                           maHighlightColor;
     Color                           maHighlightTextColor;
     Color                           maLabelTextColor;
@@ -536,6 +537,7 @@ ImplStyleData::ImplStyleData( const ImplStyleData& rData ) :
     maGroupTextColor( rData.maGroupTextColor ),
     maHelpColor( rData.maHelpColor ),
     maHelpTextColor( rData.maHelpTextColor ),
+    maAccentColor( rData.maAccentColor ),
     maHighlightColor( rData.maHighlightColor ),
     maHighlightTextColor( rData.maHighlightTextColor ),
     maLabelTextColor( rData.maLabelTextColor ),
@@ -708,6 +710,7 @@ void ImplStyleData::SetStandardStyles()
     maMenuBarHighlightTextColor = COL_WHITE;
     maMenuHighlightColor        = COL_BLUE;
     maMenuHighlightTextColor    = COL_WHITE;
+    maAccentColor               = COL_RED;
     maHighlightColor            = COL_BLUE;
     maHighlightTextColor        = COL_WHITE;
     // make active like highlight, except with a small contrast
@@ -1251,6 +1254,19 @@ const Color&
 StyleSettings::GetDeactiveBorderColor() const
 {
     return mxData->maDeactiveBorderColor;
+}
+
+void
+StyleSettings::SetAccentColor( const Color& rColor )
+{
+    CopyData();
+    mxData->maAccentColor = rColor;
+}
+
+const Color&
+StyleSettings::GetAccentColor() const
+{
+    return mxData->maAccentColor;
 }
 
 void
@@ -2274,13 +2290,10 @@ void StyleSettings::Set3DColors( const Color& rColor )
             mxData->maDarkShadowColor.IncreaseLuminance(100);
         }
 
-        sal_uLong   nRed    = mxData->maLightColor.GetRed();
-        sal_uLong   nGreen  = mxData->maLightColor.GetGreen();
-        sal_uLong   nBlue   = mxData->maLightColor.GetBlue();
-        nRed   += static_cast<sal_uLong>(mxData->maShadowColor.GetRed());
-        nGreen += static_cast<sal_uLong>(mxData->maShadowColor.GetGreen());
-        nBlue  += static_cast<sal_uLong>(mxData->maShadowColor.GetBlue());
-        mxData->maCheckedColor = Color( static_cast<sal_uInt8>(nRed/2), static_cast<sal_uInt8>(nGreen/2), static_cast<sal_uInt8>(nBlue/2) );
+        sal_uInt8 nRed = (mxData->maLightColor.GetRed() + mxData->maShadowColor.GetRed()) / 2;
+        sal_uInt8 nGreen = (mxData->maLightColor.GetGreen() + mxData->maShadowColor.GetGreen()) / 2;
+        sal_uInt8 nBlue = (mxData->maLightColor.GetBlue() + mxData->maShadowColor.GetBlue()) / 2;
+        mxData->maCheckedColor = Color(nRed, nGreen, nBlue);
     }
     else
     {
@@ -2542,6 +2555,7 @@ bool StyleSettings::operator ==( const StyleSettings& rSet ) const
          (mxData->maMenuBarRolloverTextColor == rSet.mxData->maMenuBarRolloverTextColor) &&
          (mxData->maMenuHighlightColor      == rSet.mxData->maMenuHighlightColor)       &&
          (mxData->maMenuHighlightTextColor  == rSet.mxData->maMenuHighlightTextColor)   &&
+         (mxData->maAccentColor             == rSet.mxData->maAccentColor)              &&
          (mxData->maHighlightColor          == rSet.mxData->maHighlightColor)           &&
          (mxData->maHighlightTextColor      == rSet.mxData->maHighlightTextColor)       &&
          (mxData->maTabTextColor            == rSet.mxData->maTabTextColor)             &&
@@ -2707,6 +2721,11 @@ void MiscSettings::SetEnableATToolSupport( bool bEnable )
         if( bEnable && !ImplInitAccessBridge() )
             return;
 
+        mxData->mnEnableATT = bEnable ? TRISTATE_TRUE : TRISTATE_FALSE;
+
+        if (getenv("LO_TESTNAME") != nullptr)
+            return; // No registry changing; no SettingsConfigItem modification
+
         HKEY hkey;
 
         // If the accessibility key in the Windows registry exists, change it synchronously
@@ -2747,7 +2766,6 @@ void MiscSettings::SetEnableATToolSupport( bool bEnable )
             setValue( "Accessibility",
                       "EnableATToolSupport",
                       bEnable ? OUString("true") : OUString("false" ) );
-        mxData->mnEnableATT = bEnable ? TRISTATE_TRUE : TRISTATE_FALSE;
     }
 }
 #endif
@@ -2786,8 +2804,18 @@ void MiscSettings::SetDarkMode(int nMode)
     }
 }
 
+bool MiscSettings::GetUseDarkMode()
+{
+    vcl::Window* pDefWindow = ImplGetDefaultWindow();
+    if (pDefWindow == nullptr)
+        return false;
+    return pDefWindow->ImplGetFrame()->GetUseDarkMode();
+}
+
 int MiscSettings::GetAppColorMode()
 {
+    if (utl::ConfigManager::IsFuzzing())
+        return 0;
     return officecfg::Office::Common::Misc::ApplicationAppearance::get();
 }
 
@@ -2796,6 +2824,14 @@ void MiscSettings::SetAppColorMode(int nMode)
     std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create());
     officecfg::Office::Common::Misc::ApplicationAppearance::set(nMode, batch);
     batch->commit();
+}
+
+bool MiscSettings::GetUseReducedAnimation()
+{
+    vcl::Window* pDefWindow = ImplGetDefaultWindow();
+    if (pDefWindow == nullptr)
+        return false;
+    return pDefWindow->ImplGetFrame()->GetUseReducedAnimation();
 }
 
 HelpSettings::HelpSettings()

@@ -53,6 +53,8 @@
 namespace
 {
 
+using FileType = codemaker::cppumaker::FileType;
+
 bool isBootstrapType(OUString const & name)
 {
     static char const * const names[] = {
@@ -150,6 +152,17 @@ bool isBootstrapType(OUString const & name)
     return std::any_of(std::begin(names), std::end(names), pred);
 }
 
+OString getFileExtension(FileType eFileType)
+{
+    switch(eFileType)
+    {
+        default:
+        case FileType::HDL: return ".hdl"_ostr;
+        case FileType::HPP: return ".hpp"_ostr;
+        case FileType::EMBIND_CXX: return "_embind.cxx"_ostr;
+    }
+}
+
 class CppuType
 {
 public:
@@ -163,7 +176,7 @@ public:
     void dump(CppuOptions const & options);
 
     void dumpFile(
-        std::u16string_view uri, std::u16string_view name, bool hpp,
+        std::u16string_view uri, std::u16string_view name, FileType eFileType,
         CppuOptions const & options);
 
     void dumpDependedTypes(
@@ -175,6 +188,8 @@ public:
     }
 
     virtual void dumpHppFile(FileStream& o, codemaker::cppumaker::Includes & includes) = 0;
+
+    virtual void dumpEmbindCppFile(FileStream& o);
 
     OUString dumpHeaderDefine(FileStream& o, std::u16string_view extension) const;
 
@@ -225,6 +240,8 @@ protected:
     virtual void dumpDeclaration(FileStream &) {
         assert(false);    // this cannot happen
     }
+
+    virtual void dumpEmbindDeclaration(FileStream &) {};
 
     virtual void dumpFiles(OUString const & uri, CppuOptions const & options);
 
@@ -305,8 +322,10 @@ const
 
 void CppuType::dumpFiles(OUString const & uri, CppuOptions const & options)
 {
-    dumpFile(uri, name_, false, options);
-    dumpFile(uri, name_, true, options);
+    dumpFile(uri, name_, FileType::HDL, options);
+    dumpFile(uri, name_, FileType::HPP, options);
+    if(options.isValid("-W"_ostr))
+        dumpFile(uri, name_, FileType::EMBIND_CXX, options);
 }
 
 void CppuType::addLightGetCppuTypeIncludes(
@@ -401,27 +420,27 @@ void CppuType::dump(CppuOptions const & options)
         // functions; since the introduction of cppu::UnoType this no longer is
         // meaningful (getCppuType is just a forward to cppu::UnoType::get now),
         // and -CS is handled the same way as -C now:
-        if (options.isValid("-L"))
+        if (options.isValid("-L"_ostr))
             m_cppuTypeLeak = true;
-        if (options.isValid("-C") || options.isValid("-CS"))
+        if (options.isValid("-C"_ostr) || options.isValid("-CS"_ostr))
             m_cppuTypeDynamic = false;
     }
     dumpFiles(
-        options.isValid("-O") ? b2u(options.getOption("-O")) : "", options);
+        options.isValid("-O"_ostr) ? b2u(options.getOption("-O"_ostr)) : "", options);
 }
 
 void CppuType::dumpFile(
-    std::u16string_view uri, std::u16string_view name, bool hpp,
+    std::u16string_view uri, std::u16string_view name, FileType eFileType,
     CppuOptions const & options)
 {
     OUString fileUri(
         b2u(createFileNameFromType(
-                u2b(uri), u2b(name), hpp ? ".hpp" : ".hdl")));
+                u2b(uri), u2b(name), getFileExtension(eFileType))));
     if (fileUri.isEmpty()) {
         throw CannotDumpException(OUString::Concat("empty target URI for entity ") + name);
     }
     bool exists = fileExists(u2b(fileUri));
-    if (exists && options.isValid("-G")) {
+    if (exists && options.isValid("-G"_ostr)) {
         return;
     }
     FileStream out;
@@ -430,13 +449,20 @@ void CppuType::dumpFile(
     if(!out.isValid()) {
         throw CannotDumpException("cannot open " + tmpUri + " for writing");
     }
-    codemaker::cppumaker::Includes includes(m_typeMgr, m_dependencies, hpp);
+    codemaker::cppumaker::Includes includes(m_typeMgr, m_dependencies, eFileType);
     try {
-        if (hpp) {
-            addGetCppuTypeIncludes(includes);
-            dumpHppFile(out, includes);
-        } else {
-            dumpHdlFile(out, includes);
+        switch(eFileType)
+        {
+            case FileType::HPP:
+                addGetCppuTypeIncludes(includes);
+                dumpHppFile(out, includes);
+                break;
+            case FileType::HDL:
+                dumpHdlFile(out, includes);
+                break;
+            case FileType::EMBIND_CXX:
+                dumpEmbindCppFile(out);
+                break;
         }
     } catch (...) {
         out.close();
@@ -450,13 +476,13 @@ void CppuType::dumpFile(
     }
     out.close();
     (void)makeValidTypeFile(
-               u2b(fileUri), u2b(tmpUri), exists && options.isValid("-Gc"));
+               u2b(fileUri), u2b(tmpUri), exists && options.isValid("-Gc"_ostr));
 }
 
 void CppuType::dumpDependedTypes(
     codemaker::GeneratedTypeSet & generated, CppuOptions const & options) const
 {
-    if (!options.isValid("-nD")) {
+    if (!options.isValid("-nD"_ostr)) {
         codemaker::cppumaker::Dependencies::Map const & map
             = m_dependencies.getMap();
         for (const auto& entry : map) {
@@ -580,6 +606,16 @@ void CppuType::dumpHFileContent(
     dumpType(out, name_, true);
     dumpTemplateParameters(out);
     out << " *);\n\n#endif\n";
+}
+
+void CppuType::dumpEmbindCppFile(FileStream &out)
+{
+    out << "#ifdef EMSCRIPTEN\n";
+    out << "#include <emscripten/bind.h>\n"
+           "#include <" << name_.replace('.', '/') << ".hpp>\n";
+    out << "using namespace emscripten;\n\n";
+    dumpEmbindDeclaration(out);
+    out << "#endif\n";
 }
 
 void CppuType::dumpGetCppuType(FileStream & out)
@@ -1103,10 +1139,14 @@ public:
         OUString const & name, rtl::Reference< TypeManager > const & typeMgr);
 
     virtual void dumpDeclaration(FileStream& o) override;
+    virtual void dumpEmbindDeclaration(FileStream& o) override;
     void dumpHppFile(FileStream& o, codemaker::cppumaker::Includes & includes) override;
 
     void        dumpAttributes(FileStream& o) const;
+    void        dumpEmbindAttributeBindings(FileStream& o) const;
     void        dumpMethods(FileStream& o) const;
+    void        dumpEmbindMethodBindings(FileStream& o, bool bDumpForReference=false) const;
+    void        dumpEmbindWrapperFunc(FileStream& o, const unoidl::InterfaceTypeEntity::Method& method, bool bDumpForReference=false) const;
     void        dumpNormalGetCppuType(FileStream& o) override;
     void        dumpComprehensiveGetCppuType(FileStream& o) override;
     void        dumpCppuAttributeRefs(FileStream& o, sal_uInt32& index);
@@ -1177,6 +1217,53 @@ void InterfaceType::dumpDeclaration(FileStream & out)
     out << "};\n\n";
 }
 
+void InterfaceType::dumpEmbindDeclaration(FileStream & out)
+{
+    // TODO: This is a temporary workaround that likely causes the Embind UNO
+    // bindings to leak memory. Reference counting and cloning mechanisms of
+    // Embind should be investigated to figure out what exactly we need here.
+    out << "namespace emscripten { namespace internal { \n"
+           "template<> void raw_destructor<" << codemaker::cpp::scopedCppName(u2b(name_))
+        << ">(" << codemaker::cpp::scopedCppName(u2b(name_)) << "*){}\n"
+           "}}\n";
+
+    out << "EMSCRIPTEN_BINDINGS(uno_bindings_";
+    codemaker::cppumaker::dumpTypeFullWithDecorator(out, name_, u"_");
+    codemaker::cppumaker::dumpTypeIdentifier(out, name_);
+    out << ") {\n";
+
+    out << "\nclass_<" << codemaker::cpp::scopedCppName(u2b(name_)) << ">(\"";
+    codemaker::cppumaker::dumpTypeFullWithDecorator(out, name_, u"$");
+    codemaker::cppumaker::dumpTypeIdentifier(out, name_);
+    out << "\")\n";
+
+    inc();
+    // dump bindings for attributes and methods.
+    dumpEmbindAttributeBindings(out);
+    dumpEmbindMethodBindings(out);
+    out << indent() << ";\n";
+    dec();
+
+    // dump reference bindings.
+    out << "\nclass_<::css::uno::Reference<" << codemaker::cpp::scopedCppName(u2b(name_)) << ">, base<::css::uno::BaseReference>>(\"";
+    codemaker::cppumaker::dumpTypeFullWithDecorator(out, name_, u"$");
+    codemaker::cppumaker::dumpTypeIdentifier(out, name_);
+    out << "Ref\")\n";
+    inc();
+    out << indent() << ".constructor<>()\n"
+        << indent() << ".constructor<::css::uno::BaseReference, ::css::uno::UnoReference_Query>()\n"
+        << indent() << ".function(\"is\", &::css::uno::Reference<" << codemaker::cpp::scopedCppName(u2b(name_)) << ">::is)\n"
+        << indent() << ".function(\"get\", &::css::uno::Reference<" << codemaker::cpp::scopedCppName(u2b(name_)) << ">::get, allow_raw_pointers())\n"
+        << indent() << ".function(\"set\", emscripten::select_overload<bool(const ::css::uno::Any&, com::sun::star::uno::UnoReference_Query)>(&::css::uno::Reference<" << codemaker::cpp::scopedCppName(u2b(name_)) << ">::set))\n";
+    dumpEmbindAttributeBindings(out);
+    dumpEmbindMethodBindings(out, true);
+    out << indent() << ";\n";
+    dec();
+
+    out << "}\n";
+}
+
+
 void InterfaceType::dumpHppFile(
     FileStream & out, codemaker::cppumaker::Includes & includes)
 {
@@ -1228,6 +1315,31 @@ void InterfaceType::dumpAttributes(FileStream & out) const
     }
 }
 
+void InterfaceType::dumpEmbindAttributeBindings(FileStream& out) const
+{
+    if (!entity_->getDirectAttributes().empty())
+    {
+        out << indent() << "// Bindings for attributes\n";
+    }
+    for (const unoidl::InterfaceTypeEntity::Attribute& attr : entity_->getDirectAttributes())
+    {
+        if (m_isDeprecated || isDeprecated(attr.annotations))
+            continue;
+
+        out << indent();
+        out << ".function(\"";
+        out << "get" << attr.name << "\", &" << codemaker::cpp::scopedCppName(u2b(name_)) << "::get"
+            << attr.name << ")\n";
+        if (!attr.readOnly)
+        {
+            out << indent();
+            out << ".function(\"";
+            out << "set" << attr.name << "\", &" << codemaker::cpp::scopedCppName(u2b(name_))
+                << "::set" << attr.name << ")\n";
+        }
+    }
+}
+
 void InterfaceType::dumpMethods(FileStream & out) const
 {
     if (!entity_->getDirectMethods().empty()) {
@@ -1267,6 +1379,115 @@ void InterfaceType::dumpMethods(FileStream & out) const
         out << ") = 0;\n";
     }
 }
+
+void InterfaceType::dumpEmbindWrapperFunc(FileStream& out,
+                                          const unoidl::InterfaceTypeEntity::Method& method,
+                                          bool bDumpForReference) const
+{
+    out << indent();
+    out << ".function(\"" << method.name << "\", ";
+    out << indent() << "+[](";
+    if (bDumpForReference)
+        out << "::css::uno::Reference<";
+    out << codemaker::cpp::scopedCppName(u2b(name_));
+    if (bDumpForReference)
+        out << ">";
+    out << "* self";
+    if(!method.parameters.empty())
+        out << ",";
+
+    auto dumpParameters = [&](bool bDumpType)
+    {
+        // dumpParams with references as pointers
+        if (!method.parameters.empty())
+        {
+            out << " ";
+            for (std::vector<unoidl::InterfaceTypeEntity::Method::Parameter>::const_iterator
+                     parameter(method.parameters.begin());
+                 parameter != method.parameters.end();)
+            {
+                bool isConst;
+                bool isRef;
+                if (parameter->direction
+                    == unoidl::InterfaceTypeEntity::Method::Parameter::DIRECTION_IN)
+                {
+                    isConst = passByReference(parameter->type);
+                    isRef = isConst;
+                }
+                else
+                {
+                    isConst = false;
+                    isRef = true;
+                }
+                // for the embind wrapper, we define a pointer instead of a reference.
+                if (bDumpType)
+                    dumpType(out, parameter->type, isConst, /*isRef=*/false);
+                if (isRef)
+                    out << "*";
+
+                out << " " << parameter->name;
+                ++parameter;
+                if (parameter != method.parameters.end())
+                {
+                    out << ", ";
+                }
+            }
+            out << " ";
+        }
+    };
+    dumpParameters(/*bDumpType=*/true);
+
+    if (bDumpForReference)
+    {
+        out << ") { return self->get()->" << method.name << "(";
+    }
+    else
+    {
+        out << ") { return self->" << method.name << "(";
+    }
+
+    dumpParameters(/*bDumpType=*/false);
+    out << "); }, allow_raw_pointers() )\n";
+}
+
+void InterfaceType::dumpEmbindMethodBindings(FileStream & out, bool bDumpForReference) const
+{
+    if (!entity_->getDirectMethods().empty()) {
+        out << indent() << "// Bindings for methods\n";
+    }
+    for (const unoidl::InterfaceTypeEntity::Method& method : entity_->getDirectMethods()) {
+        if( m_isDeprecated || isDeprecated(method.annotations) )
+            continue;
+
+        // if dumping the method binding for a reference implementation
+        // dump wrapper.
+        if(bDumpForReference)
+        {
+            dumpEmbindWrapperFunc(out, method, true);
+            continue;
+        }
+
+        bool bHasOutParams = std::any_of(
+            method.parameters.begin(), method.parameters.end(),
+            [](const auto& parameter) {
+                return parameter.direction
+                       != unoidl::InterfaceTypeEntity::Method::Parameter::DIRECTION_IN;
+            });
+
+        if (bHasOutParams)
+        {
+            dumpEmbindWrapperFunc(out, method, false);
+            continue;
+        }
+
+        out << indent();
+        out << ".function(\"" << method.name << "\", &"
+            << codemaker::cpp::scopedCppName(u2b(name_))
+            << "::" << method.name << ")\n";
+    }
+}
+
+
 
 void InterfaceType::dumpNormalGetCppuType(FileStream & out)
 {
@@ -1443,7 +1664,7 @@ void InterfaceType::addComprehensiveGetCppuTypeIncludes(
     includes.addCppuUnotypeHxx();
     includes.addRtlInstanceHxx(); // using rtl::StaticWithInit
     includes.addOslMutexHxx();
-    includes.add("com.sun.star.uno.RuntimeException");
+    includes.add("com.sun.star.uno.RuntimeException"_ostr);
 }
 
 void InterfaceType::dumpCppuAttributes(FileStream & out, sal_uInt32 & index)
@@ -2058,8 +2279,10 @@ void PlainStructType::dumpComprehensiveGetCppuType(FileStream & out)
     for (std::vector< unoidl::PlainStructTypeEntity::Member >::const_iterator i(
              entity_->getDirectMembers().begin());
          i != entity_->getDirectMembers().end();) {
+        const auto iter = types.find(i->type);
+        assert(iter != types.end());
         out << indent() << "{ { " << getTypeClass(i->type, true)
-            << ", the_tname" << types.find(i->type)->second
+            << ", the_tname" << iter->second
             << ".pData, the_name" << n++ << ".pData }, false }";
         ++i;
         out << (i == entity_->getDirectMembers().end() ? " };" : ",") << "\n";
@@ -2627,11 +2850,15 @@ void PolyStructType::dumpComprehensiveGetCppuType(FileStream & out)
          i != entity_->getMembers().end();) {
         out << indent() << "{ { ";
         if (i->parameterized) {
-            sal_uInt32 k = parameters.find(i->type)->second;
+            const auto iter = parameters.find(i->type);
+            assert(iter != parameters.end());
+            sal_uInt32 k = iter->second;
             out << "the_pclass" << k << ", the_pname" << k << ".pData";
         } else {
+            const auto iter = types.find(i->type);
+            assert(iter != types.end());
             out << getTypeClass(i->type, true) << ", the_tname"
-                << types.find(i->type)->second << ".pData";
+                << iter->second << ".pData";
         }
         out << ", the_name" << n++ << ".pData }, "
             << (i->parameterized ? "true" : "false") << " }";
@@ -2792,15 +3019,19 @@ void ExceptionType::dumpHdlFile(
 {
     if (name_ == "com.sun.star.uno.Exception")
     {
-        // LIBO_INTERNAL_ONLY implies GCC >= 7, which we need for this
-        // Merely checking __has_include is not enough because some systems have the header,
-        // but do not have a new enough Clang 9 supporting __builtin_FILE/LINE/FUNCTION as used by
-        // that libstdc++ header.
-        includes.addCustom("#if defined LIBO_INTERNAL_ONLY && ((defined __GNUC__ && !defined __clang__) || (defined __clang__ && __clang_major__ >= 9)) && __has_include(<experimental/source_location>)");
-        includes.addCustom("#define LIBO_USE_SOURCE_LOCATION");
+        includes.addCustom("#if defined(LIBO_INTERNAL_ONLY)");
+        includes.addCustom("#if __has_include(<version>)");
+        includes.addCustom("#include <version>");
+        includes.addCustom("#endif");
+        includes.addCustom("#if defined(__cpp_lib_source_location) && __cpp_lib_source_location >= 201907");
+        includes.addCustom("#include <source_location>");
+        includes.addCustom("#define LIBO_USE_SOURCE_LOCATION std");
+        includes.addCustom("#elif __has_include(<experimental/source_location>)");
+        includes.addCustom("#include <experimental/source_location>");
+        includes.addCustom("#define LIBO_USE_SOURCE_LOCATION std::experimental");
+        includes.addCustom("#endif");
         includes.addCustom("#endif");
         includes.addCustom("#if defined LIBO_USE_SOURCE_LOCATION");
-        includes.addCustom("#include <experimental/source_location>");
         includes.addCustom("#include <o3tl/runtimetooustring.hxx>");
         includes.addCustom("#endif");
     }
@@ -2840,7 +3071,7 @@ void ExceptionType::dumpHppFile(
     // default constructor
     out << "\ninline " << id_ << "::" << id_ << "(\n";
     out << "#if defined LIBO_USE_SOURCE_LOCATION\n";
-    out << "    std::experimental::source_location location\n";
+    out << "    LIBO_USE_SOURCE_LOCATION::source_location location\n";
     out << "#endif\n";
     out << "    )\n";
     inc();
@@ -2895,7 +3126,7 @@ void ExceptionType::dumpHppFile(
             bFirst = false;
         }
         out << "\n#if defined LIBO_USE_SOURCE_LOCATION\n";
-        out << "    " << (bFirst ? "" : ", ") << "std::experimental::source_location location\n";
+        out << "    " << (bFirst ? "" : ", ") << "LIBO_USE_SOURCE_LOCATION::source_location location\n";
         out << "#endif\n";
         out << ")\n";
         inc();
@@ -3156,7 +3387,7 @@ void ExceptionType::dumpDeclaration(FileStream & out)
     // default constructor
     out << indent() << "inline CPPU_GCC_DLLPRIVATE " << id_ << "(\n";
     out << "#if defined LIBO_USE_SOURCE_LOCATION\n";
-    out << "    std::experimental::source_location location = std::experimental::source_location::current()\n";
+    out << "    LIBO_USE_SOURCE_LOCATION::source_location location = LIBO_USE_SOURCE_LOCATION::source_location::current()\n";
     out << "#endif\n\n";
     out << "    );\n";
 
@@ -3174,7 +3405,7 @@ void ExceptionType::dumpDeclaration(FileStream & out)
             bFirst = false;
         }
         out << "\n#if defined LIBO_USE_SOURCE_LOCATION\n";
-        out << ", std::experimental::source_location location = std::experimental::source_location::current()\n";
+        out << ", LIBO_USE_SOURCE_LOCATION::source_location location = LIBO_USE_SOURCE_LOCATION::source_location::current()\n";
         out << "#endif\n";
         out << "    );\n\n";
     }
@@ -3515,7 +3746,9 @@ private:
     }
 
     virtual void dumpFiles(OUString const & uri, CppuOptions const & options) override {
-        dumpFile(uri, name_, true, options);
+        dumpFile(uri, name_, FileType::HPP, options);
+        if(options.isValid("-W"_ostr))
+            dumpFile(uri, name_, FileType::EMBIND_CXX, options);
     }
 };
 
@@ -3578,12 +3811,12 @@ void ServiceType::dumpHppFile(
         includes.addReference();
         includes.addRtlUstringH();
         includes.addRtlUstringHxx();
-        includes.add("com.sun.star.uno.DeploymentException");
-        includes.add("com.sun.star.uno.XComponentContext");
+        includes.add("com.sun.star.uno.DeploymentException"_ostr);
+        includes.add("com.sun.star.uno.XComponentContext"_ostr);
         for (const unoidl::SingleInterfaceBasedServiceEntity::Constructor& cons : entity_->getConstructors()) {
             if (cons.defaultConstructor) {
-                includes.add("com.sun.star.uno.Exception");
-                includes.add("com.sun.star.uno.RuntimeException");
+                includes.add("com.sun.star.uno.Exception"_ostr);
+                includes.add("com.sun.star.uno.RuntimeException"_ostr);
             } else {
                 if (!hasRestParameter(cons)) {
                     includes.addAny();
@@ -3604,8 +3837,8 @@ void ServiceType::dumpHppFile(
                     tree.add(u2b(ex), m_typeMgr);
                 }
                 if (!tree.getRoot().present) {
-                    includes.add("com.sun.star.uno.Exception");
-                    includes.add("com.sun.star.uno.RuntimeException");
+                    includes.add("com.sun.star.uno.Exception"_ostr);
+                    includes.add("com.sun.star.uno.RuntimeException"_ostr);
                     includeExceptions(includes, &tree.getRoot());
                 }
             }
@@ -3647,7 +3880,7 @@ void ServiceType::dumpHppFile(
                 o << indent() << "static ::css::uno::Reference< "
                   << scopedBaseName << " > "
                   << codemaker::cpp::translateUnoToCppIdentifier(
-                      "create", "method", codemaker::cpp::IdentifierTranslationMode::NonGlobal,
+                      "create"_ostr, "method", codemaker::cpp::IdentifierTranslationMode::NonGlobal,
                       &cppName)
                   << ("(::css::uno::Reference< ::css::uno::XComponentContext > const &"
                       " the_context) {\n");
@@ -3917,8 +4150,8 @@ void SingletonType::dumpHppFile(
     o << "\n";
     //TODO: Decide whether the types added to includes should rather be added to
     // m_dependencies (and thus be generated during dumpDependedTypes):
-    includes.add("com.sun.star.uno.DeploymentException");
-    includes.add("com.sun.star.uno.XComponentContext");
+    includes.add("com.sun.star.uno.DeploymentException"_ostr);
+    includes.add("com.sun.star.uno.XComponentContext"_ostr);
     includes.addCassert();
     includes.addAny();
     includes.addReference();
@@ -3946,7 +4179,7 @@ void SingletonType::dumpHppFile(
     o << indent() << "static ::css::uno::Reference< "
       << scopedBaseName << " > "
       << codemaker::cpp::translateUnoToCppIdentifier(
-          "get", "method", codemaker::cpp::IdentifierTranslationMode::NonGlobal, &cppName)
+          "get"_ostr, "method", codemaker::cpp::IdentifierTranslationMode::NonGlobal, &cppName)
       << ("(::css::uno::Reference<"
           " ::css::uno::XComponentContext > const & the_context)"
           " {\n");

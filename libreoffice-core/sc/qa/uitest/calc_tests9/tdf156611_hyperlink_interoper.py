@@ -21,12 +21,12 @@ class tdf156611(UITestCase):
         # but it does not need any data from the file, any xlsx or xls file can be opened for this test
         with self.ui_test.load_file(get_url_for_data_file("tdf126541_GridOff.xlsx")) as document:
 
-            # datas that we will check against when hyperlink is inserted
+            # data that we will check against when hyperlink is inserted
             urls =[["",""],["https://www.documentfoundation.org/",""]]
             texts =[["aaa bbb","bbb"],["cccc ddd","ddd"],["eeee","aaa cccc eeee"]]
 
-            # 1. run, we want hypelink inserton work like in MS excel (only 1 hyperlink/cell is allowed)
-            # 2. run, we want hypelink inserton work as it did in calc (more hyperlinks can be in 1 cell)
+            # 1. run, we want hyperlink insertion work like in MS excel (only 1 hyperlink/cell is allowed)
+            # 2. run, we want hyperlink insertion work as it did in calc (more hyperlinks can be in 1 cell)
             for i in range(2):
                 xCalcDoc = self.xUITest.getTopFocusWindow()
                 xGridWindow = xCalcDoc.getChild("grid_window")
@@ -111,8 +111,8 @@ class tdf156611(UITestCase):
                 # Check contents of the cell
                 xCell = get_cell_by_position(document, 0, 0, 0)
                 self.assertEqual(xCell.getString(), texts[2][i])
-                # 1. run: "eeee" last hyperlink insertion overwritten the whol cell text with "eeee"
-                # 2. run: "aaa cccc eeee" as every hypelink insertion only overwritten the actually selected text
+                # 1. run: "eeee" last hyperlink insertion overwritten the whole cell text with "eeee"
+                # 2. run: "aaa cccc eeee" as every hyperlink insertion only overwritten the actually selected text
                 xTextFields = xCell.getTextFields()
                 self.assertEqual(xTextFields.getCount(), i+1)
                 self.assertEqual(xTextFields.getByIndex(i).URL, "https://aWrongLink/")

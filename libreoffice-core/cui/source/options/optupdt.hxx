@@ -28,6 +28,9 @@
 class SvxOnlineUpdateTabPage : public SfxTabPage
 {
 private:
+    bool m_showTraditionalOnlineUpdate;
+    bool m_showMarOnlineUpdate;
+
     OUString       m_aNeverChecked;
     OUString       m_aLastCheckedTemplate;
 
@@ -36,18 +39,27 @@ private:
 
     std::unique_ptr<weld::Label> m_xNeverChecked;
     std::unique_ptr<weld::CheckButton> m_xAutoCheckCheckBox;
+    std::unique_ptr<weld::Widget> m_xAutoCheckImg;
     std::unique_ptr<weld::RadioButton> m_xEveryDayButton;
     std::unique_ptr<weld::RadioButton> m_xEveryWeekButton;
     std::unique_ptr<weld::RadioButton> m_xEveryMonthButton;
+    std::unique_ptr<weld::Widget> m_xCheckIntervalImg;
     std::unique_ptr<weld::Button> m_xCheckNowButton;
     std::unique_ptr<weld::CheckButton> m_xAutoDownloadCheckBox;
+    std::unique_ptr<weld::Widget> m_xAutoDownloadImg;
     std::unique_ptr<weld::Label> m_xDestPathLabel;
     std::unique_ptr<weld::Label> m_xDestPath;
     std::unique_ptr<weld::Button> m_xChangePathButton;
     std::unique_ptr<weld::Label> m_xLastChecked;
     std::unique_ptr<weld::CheckButton> m_xExtrasCheckBox;
+    std::unique_ptr<weld::Widget> m_xExtrasImg;
     std::unique_ptr<weld::Label> m_xUserAgentLabel;
     std::unique_ptr<weld::LinkButton> m_xPrivacyPolicyButton;
+    std::unique_ptr<weld::Box> m_xBox2;
+    std::unique_ptr<weld::Frame> m_xFrameDest;
+    std::unique_ptr<weld::Frame> m_xFrameAgent;
+    std::unique_ptr<weld::Frame> m_xMar;
+    std::unique_ptr<weld::CheckButton> m_xEnableMar;
 
     DECL_LINK(FileDialogHdl_Impl, weld::Button&, void);
     DECL_LINK(CheckNowHdl_Impl, weld::Button&, void);
@@ -62,9 +74,14 @@ public:
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rSet );
     virtual ~SvxOnlineUpdateTabPage() override;
 
+    virtual OUString GetAllStrings() override;
+
     virtual bool            FillItemSet( SfxItemSet* rSet ) override;
     virtual void            Reset( const SfxItemSet* rSet ) override;
     virtual void            FillUserData() override;
+
+    static bool isTraditionalOnlineUpdateAvailable();
+    static bool isMarOnlineUpdateAvailable();
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

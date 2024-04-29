@@ -26,6 +26,7 @@
 
 #include <salhelper/simplereferenceobject.hxx>
 #include <tools/gen.hxx>
+#include <rtl/ref.hxx>
 
 namespace com::sun::star {
     namespace accessibility {
@@ -87,12 +88,12 @@ namespace vcl
                 SvTreeListBox& _rListBox,
                 const css::uno::Reference< css::accessibility::XAccessible >& _xParent
             ) const = 0;
-        virtual vcl::IAccessibleBrowseBox*
+        virtual rtl::Reference<vcl::IAccessibleBrowseBox>
             createAccessibleBrowseBox(
                 const css::uno::Reference< css::accessibility::XAccessible >& _rxParent,
                 vcl::IAccessibleTableProvider& _rBrowseBox
             ) const = 0;
-        virtual table::IAccessibleTableControl*
+        virtual rtl::Reference<table::IAccessibleTableControl>
             createAccessibleTableControl(
                 const css::uno::Reference< css::accessibility::XAccessible >& _rxParent,
                 table::IAccessibleTable& _rTable

@@ -10,8 +10,10 @@
 
 #include <test/outputdevice.hxx>
 
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <salgdi.hxx>
+
+#include <map>
 
 namespace vcl::test {
 
@@ -352,9 +354,9 @@ OUString OutputDeviceTestCommon::getRenderBackendName() const
 void OutputDeviceTestCommon::initialSetup(tools::Long nWidth, tools::Long nHeight, Color aColor, bool bEnableAA, bool bAlphaVirtualDevice)
 {
     if (bAlphaVirtualDevice)
-        mpVirtualDevice = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT, DeviceFormat::DEFAULT);
+        mpVirtualDevice = VclPtr<VirtualDevice>::Create(DeviceFormat::WITH_ALPHA);
     else
-        mpVirtualDevice = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+        mpVirtualDevice = VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
 
     maVDRectangle = tools::Rectangle(Point(), Size (nWidth, nHeight));
     mpVirtualDevice->SetOutputSizePixel(maVDRectangle.GetSize());

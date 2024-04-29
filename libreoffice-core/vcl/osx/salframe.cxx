@@ -84,7 +84,6 @@ AquaSalFrame::AquaSalFrame( SalFrame* pParent, SalFrameStyleFlags salFrameStyle 
     mpMenu( nullptr ),
     mnExtStyle( 0 ),
     mePointerStyle( PointerStyle::Arrow ),
-    mnTrackingRectTag( 0 ),
     mrClippingPath( nullptr ),
     mnICOptions( InputContextFlags::NONE ),
     mnBlinkCursorDelay( nMinBlinkCursorDelay ),
@@ -157,7 +156,8 @@ AquaSalFrame::~AquaSalFrame()
         }
     }
     if ( mpNSView ) {
-        [AquaA11yFactory revokeView: mpNSView];
+        if ([mpNSView isKindOfClass:[SalFrameView class]])
+            [static_cast<SalFrameView*>(mpNSView) revokeWrapper];
         [mpNSView release];
     }
     if ( mpNSWindow )
@@ -236,14 +236,27 @@ void AquaSalFrame::initWindowAndView()
     if( mnStyle & SalFrameStyleFlags::TOOLTIP )
         [mpNSWindow setIgnoresMouseEvents: YES];
     else
-        [mpNSWindow setAcceptsMouseMovedEvents: YES];
+        // Related: tdf#155092 mouse events are now handled by tracking areas
+        [mpNSWindow setAcceptsMouseMovedEvents: NO];
     [mpNSWindow setHasShadow: YES];
 
     [mpNSWindow setDelegate: static_cast<id<NSWindowDelegate> >(mpNSWindow)];
 
     [mpNSWindow setRestorable:NO];
-    const NSRect aRect = { NSZeroPoint, NSMakeSize(maGeometry.width(), maGeometry.height()) };
-    mnTrackingRectTag = [mpNSView addTrackingRect: aRect owner: mpNSView userData: nil assumeInside: NO];
+
+    // tdf#155092 use tracking areas instead of tracking rectangles
+    // Apparently, the older, tracking rectangles selectors cause
+    // unexpected window resizing upon the first mouse down after the
+    // window has been manually resized so switch to the newer,
+    // tracking areas selectors. Also, the NSTrackingInVisibleRect
+    // option allows us to create one single tracking area that
+    // resizes itself automatically over the lifetime of the view.
+    // Note: for some unknown reason, both NSTrackingMouseMoved and
+    // NSTrackingAssumeInside are necessary options for this fix
+    // to work.
+    NSTrackingArea *pTrackingArea = [[NSTrackingArea alloc] initWithRect: [mpNSView bounds] options: ( NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved | NSTrackingActiveAlways | NSTrackingAssumeInside | NSTrackingInVisibleRect ) owner: mpNSView userInfo: nil];
+    [mpNSView addTrackingArea: pTrackingArea];
+    [pTrackingArea release];
 
     maSysData.mpNSView = mpNSView;
 
@@ -288,6 +301,7 @@ void AquaSalFrame::screenParametersChanged()
 {
     OSX_SALDATA_RUNINMAIN( screenParametersChanged() )
 
+    sal::aqua::resetTotalScreenBounds();
     sal::aqua::resetWindowScaling();
 
     UpdateFrameGeometry();
@@ -401,7 +415,7 @@ void AquaSalFrame::initShow()
     mbInitShow = false;
     if( ! mbPositioned && ! mbFullScreen )
     {
-        tools::Rectangle aScreenRect;
+        AbsoluteScreenPixelRectangle aScreenRect;
         GetWorkArea( aScreenRect );
         if( mpParent ) // center relative to parent
         {
@@ -430,7 +444,8 @@ void AquaSalFrame::initShow()
     }
 
     // make sure the view is present in the wrapper list before any children receive focus
-    [AquaA11yFactory registerView: mpNSView];
+    if (mpNSView && [mpNSView isKindOfClass:[SalFrameView class]])
+        [static_cast<SalFrameView*>(mpNSView) registerWrapper];
 }
 
 void AquaSalFrame::SendPaintEvent( const tools::Rectangle* pRect )
@@ -1020,7 +1035,11 @@ void AquaSalFrame::Flush()
     {
         mbForceFlush = false;
         mpGraphics->Flush();
-        [mpNSView display];
+        // Related: tdf#155266 skip redisplay of the view when forcing flush
+        // It appears that calling -[NSView display] overwhelms some Intel Macs
+        // so only flush the graphics and skip immediate redisplay of the view.
+        if( ImplGetSVData()->maAppData.mnDispatchLevel <= 0 )
+            [mpNSView display];
     }
 }
 
@@ -1042,7 +1061,11 @@ void AquaSalFrame::Flush( const tools::Rectangle& rRect )
     {
         mbForceFlush = false;
         mpGraphics->Flush( rRect );
-        [mpNSView display];
+        // Related: tdf#155266 skip redisplay of the view when forcing flush
+        // It appears that calling -[NSView display] overwhelms some Intel Macs
+        // so only flush the graphics and skip immediate redisplay of the view.
+        if( ImplGetSVData()->maAppData.mnDispatchLevel <= 0 )
+            [mpNSView display];
     }
 }
 
@@ -1317,6 +1340,25 @@ void AquaSalFrame::UpdateDarkMode()
     }
 }
 
+bool AquaSalFrame::GetUseDarkMode() const
+{
+    if (!mpNSView)
+        return false;
+    bool bUseDarkMode(false);
+    if (@available(macOS 10.14, iOS 13, *))
+    {
+        NSAppearanceName match = [mpNSView.effectiveAppearance bestMatchFromAppearancesWithNames: @[
+                                  NSAppearanceNameAqua, NSAppearanceNameDarkAqua]];
+        bUseDarkMode = [match isEqualToString: NSAppearanceNameDarkAqua];
+    }
+    return bUseDarkMode;
+}
+
+bool AquaSalFrame::GetUseReducedAnimation() const
+{
+    return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
+}
+
 // on OSX-Aqua the style settings are independent of the frame, so it does
 // not really belong here. Since the connection to the Appearance_Manager
 // is currently done in salnativewidgets.cxx this would be a good place.
@@ -1347,13 +1389,7 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
 
     StyleSettings aStyleSettings = rSettings.GetStyleSettings();
 
-    bool bUseDarkMode(false);
-    if (@available(macOS 10.14, iOS 13, *))
-    {
-        NSAppearanceName match = [mpNSView.effectiveAppearance bestMatchFromAppearancesWithNames: @[
-                                  NSAppearanceNameAqua, NSAppearanceNameDarkAqua]];
-        bUseDarkMode = [match isEqualToString: NSAppearanceNameDarkAqua];
-    }
+    bool bUseDarkMode(GetUseDarkMode());
     OUString sThemeName(!bUseDarkMode ? u"sukapura" : u"sukapura_dark");
     aStyleSettings.SetPreferredIconTheme(sThemeName, bUseDarkMode);
 
@@ -1400,6 +1436,10 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
 
     vcl::Font aTooltipFont(getFont([NSFont toolTipsFontOfSize: 0], nDPIY, aAppFont));
     aStyleSettings.SetHelpFont(aTooltipFont);
+
+    Color aAccentColor( getColor( [NSColor controlAccentColor],
+                                   aStyleSettings.GetAccentColor(), mpNSWindow ) );
+    aStyleSettings.SetAccentColor( aAccentColor );
 
     Color aHighlightColor( getColor( [NSColor selectedTextBackgroundColor],
                                       aStyleSettings.GetHighlightColor(), mpNSWindow ) );
@@ -1618,12 +1658,12 @@ void AquaSalFrame::SetPosSize(
     }
 }
 
-void AquaSalFrame::GetWorkArea( tools::Rectangle& rRect )
+void AquaSalFrame::GetWorkArea( AbsoluteScreenPixelRectangle& rRect )
 {
     if (!mpNSWindow)
     {
         if (Application::IsBitmapRendering())
-            rRect = tools::Rectangle(Point(0, 0), Size(1024, 768));
+            rRect = AbsoluteScreenPixelRectangle(AbsoluteScreenPixelPoint(0, 0), AbsoluteScreenPixelSize(1024, 768));
         return;
     }
 
@@ -1812,7 +1852,6 @@ void AquaSalFrame::SetParent( SalFrame* pNewParent )
 
 void AquaSalFrame::UpdateFrameGeometry()
 {
-    bool bFirstTime = (mnTrackingRectTag == 0);
     mbGeometryDidChange = false;
 
     if ( !mpNSWindow )
@@ -1828,7 +1867,7 @@ void AquaSalFrame::UpdateFrameGeometry()
     if( pScreen )
     {
         NSRect aNewScreenRect = [pScreen frame];
-        if (bFirstTime || !NSEqualRects(maScreenRect, aNewScreenRect))
+        if (!NSEqualRects(maScreenRect, aNewScreenRect))
         {
             mbGeometryDidChange = true;
             maScreenRect = aNewScreenRect;
@@ -1837,7 +1876,7 @@ void AquaSalFrame::UpdateFrameGeometry()
         if( pScreens )
         {
             unsigned int nNewDisplayScreenNumber = [pScreens indexOfObject: pScreen];
-            if (bFirstTime || maGeometry.screen() != nNewDisplayScreenNumber)
+            if (maGeometry.screen() != nNewDisplayScreenNumber)
             {
                 mbGeometryDidChange = true;
                 maGeometry.setScreen(nNewDisplayScreenNumber);
@@ -1850,22 +1889,17 @@ void AquaSalFrame::UpdateFrameGeometry()
 
     NSRect aTrackRect = { NSZeroPoint, aContentRect.size };
 
-    if (bFirstTime || !NSEqualRects(maTrackingRect, aTrackRect))
+    if (!NSEqualRects(maTrackingRect, aTrackRect))
     {
         mbGeometryDidChange = true;
         maTrackingRect = aTrackRect;
-
-        // release old track rect
-        [mpNSView removeTrackingRect: mnTrackingRectTag];
-        // install the new track rect
-        mnTrackingRectTag = [mpNSView addTrackingRect: aTrackRect owner: mpNSView userData: nil assumeInside: NO];
     }
 
     // convert to vcl convention
     CocoaToVCL( aFrameRect );
     CocoaToVCL( aContentRect );
 
-    if (bFirstTime || !NSEqualRects(maContentRect, aContentRect) || !NSEqualRects(maFrameRect, aFrameRect))
+    if (!NSEqualRects(maContentRect, aContentRect) || !NSEqualRects(maFrameRect, aFrameRect))
     {
         mbGeometryDidChange = true;
 

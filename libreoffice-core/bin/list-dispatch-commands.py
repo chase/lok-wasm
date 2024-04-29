@@ -22,7 +22,7 @@ import os
 srcdir = os.path.dirname(os.path.realpath(__file__)) + '/..' # go up from /bin
 builddir = os.getcwd()
 
-REPO = 'https://opengrok.libreoffice.org/xref/core/'
+REPO = 'https://opengrok.libreoffice.org/xref/core'
 
 BLACKLIST = ('_SwitchViewShell0', '_SwitchViewShell1', '_SwitchViewShell2', '_SwitchViewShell3', '_SwitchViewShell4')
 
@@ -101,6 +101,12 @@ def newcommand(unocommand):
            'arguments': ''}
     return cmd
 
+def get_uno(cmd):
+    if cmd.startswith('FocusToFindbar'):
+        cmd = 'vnd.sun.star.findbar:' + cmd
+    else:
+        cmd = '.uno:' + cmd
+    return cmd
 
 def analyze_xcu(all_commands):
     for filename in XCU_FILES:
@@ -115,13 +121,12 @@ def analyze_xcu(all_commands):
                 elif popups is True and line == '    </node>':
                     popups = False
                     continue
-                if '<node oor:name=".uno:' not in line:
+                if '<node oor:name=".uno:' not in line and '<node oor:name="vnd.' not in line:
                     continue
 
                 cmdln = ln
                 tmp = line.split('"')
                 command_name = tmp[1]
-                command_ok = True
 
                 while '</node>' not in line:
                     try:
@@ -139,10 +144,8 @@ def analyze_xcu(all_commands):
                         label = 'tooltiplabel'
                     elif '<value xml:lang="en-US">' in line:
                         labeltext = line.replace('<value xml:lang="en-US">', '').replace('</value>', '').strip()
-                    elif '<prop oor:name="TargetURL"' in line:
-                        command_ok = False
 
-                if command_ok is True and popups is False:
+                if popups is False:
                     if command_name not in all_commands:
                         all_commands[command_name] = newcommand(command_name)
                     #
@@ -196,7 +199,7 @@ def analyze_hxx(all_commands):
                     line = next(fh)
                 tmp = line.split('"')
                 try:
-                    command_name = '.uno:' + tmp[1]
+                    command_name = get_uno(tmp[1])
                 except IndexError:
                     print("Warning: expected \" in line '%s' from file %s" % (line.strip(), filename),
                             file=sys.stderr)
@@ -275,7 +278,7 @@ def analyze_sdi(all_commands):
                 elif comment is False and square is False and command is False and len(line) == 0:
                     pass
                 elif command is False:
-                    command_name = '.uno:' + line.split(' ')[1]
+                    command_name = get_uno(line.split(' ')[1])
                     if command_name not in all_commands:
                         all_commands[command_name] = newcommand(command_name)
                     all_commands[command_name]['sdifile'] = SDI_FILES.index(filename)
@@ -305,7 +308,7 @@ def analyze_sdi(all_commands):
 def categorize(all_commands):
     # Clean black listed commands
     for command in BLACKLIST:
-        cmd = '.uno:' + command
+        cmd = get_uno(command)
         if cmd in all_commands:
             del all_commands[cmd]
     # Set category based on the file name where the command was found first
@@ -344,9 +347,9 @@ def print_output(all_commands):
         xcufile, xculinenumber, hxxfile, hxxlinenumber, sdifile, sdilinenumber = 2, 3, 8, 10, 14, 16
         src = ''
         if cmd[xcufile] >= 0:
-            src += '[' + REPO + XCU_FILES[cmd[xcufile]] + '#' + str(cmd[xculinenumber]) + ' XCU]'
+            src += '[' + REPO + XCU_FILES[cmd[xcufile]].replace(srcdir, '') + '#' + str(cmd[xculinenumber]) + ' XCU]'
         if cmd[sdifile] >= 0:
-            src += ' [' + REPO + SDI_FILES[cmd[sdifile]] + '#' + str(cmd[sdilinenumber]) + ' SDI]'
+            src += ' [' + REPO + SDI_FILES[cmd[sdifile]].replace(srcdir, '') + '#' + str(cmd[sdilinenumber]) + ' SDI]'
         if cmd[hxxfile] >= 0:
             file = str(cmd[hxxfile] + 1 + len(XCU_FILES) + len(SDI_FILES))
             src += ' <span title="File (' + file + ') line ' + str(cmd[hxxlinenumber]) + '">[[#hxx' + file + '|HXX]]</span>'
@@ -398,15 +401,15 @@ def print_output(all_commands):
     fn = 0
     for i in range(len(XCU_FILES)):
         fn += 1
-        print(f'({fn}) {REPO}{XCU_FILES[i]}\n')
+        print(f'({fn}) {REPO}{XCU_FILES[i]}\n'.replace(srcdir, ''))
     print('\n')
     for i in range(len(SDI_FILES)):
         fn += 1
-        print(f'({fn}) {REPO}{SDI_FILES[i]}\n')
+        print(f'({fn}) {REPO}{SDI_FILES[i]}\n'.replace(srcdir, ''))
     print('\n')
     for i in range(len(HXX_FILES)):
         fn += 1
-        print(f'<span id="hxx{fn}">({fn}) {HXX_FILES[i][2:]}</span>\n')
+        print(f'<span id="hxx{fn}">({fn}) {HXX_FILES[i]}</span>\n'.replace(builddir, ''))
     print('</small>')
 
 

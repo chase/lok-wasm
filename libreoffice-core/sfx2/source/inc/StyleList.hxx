@@ -63,7 +63,7 @@ class StyleList final : public SfxListener
 public:
     // Constructor
     StyleList(weld::Builder* pBuilder, SfxBindings* pBindings, SfxCommonTemplateDialog_Impl* Parent,
-              weld::Container* pC, OString treeviewname, OString flatviewname);
+              weld::Container* pC, OUString treeviewname, OUString flatviewname);
 
     // Destructor
     ~StyleList();
@@ -113,8 +113,7 @@ public:
     void Enableshow(bool canshow) { m_bCanShow = canshow; }
     void Enablenew(bool cannew) { m_bCanNew = cannew; }
     void Enableedit(bool canedit) { m_bCanEdit = canedit; }
-    // Handles the enabling/Disabling of Preview
-    void EnablePreview(bool bCustomPreview);
+
     // Used in Dialog's Execute_Impl
     // It is a necessary condition to execute a style
     bool EnableExecute();
@@ -126,10 +125,16 @@ public:
     void connect_SaveSelection(const Link<StyleList&, SfxObjectShell*> rLink);
     void connect_UpdateFamily(const Link<StyleList&, void> rLink) { m_aUpdateFamily = rLink; }
 
-    void FamilySelect(sal_uInt16 nEntry);
+    void FamilySelect(sal_uInt16 nEntry, bool bRefresh = false);
     void FilterSelect(sal_uInt16 nActFilter, bool bsetFilter);
 
     DECL_LINK(NewMenuExecuteAction, void*, void);
+
+    bool HasStylesHighlighterFeature() { return m_bModuleHasStylesHighlighterFeature; }
+    void SetHighlightParaStyles(bool bSet) { m_bHighlightParaStyles = bSet; }
+    bool IsHighlightParaStyles() { return m_bHighlightParaStyles; }
+    void SetHighlightCharStyles(bool bSet) { m_bHighlightCharStyles = bSet; }
+    bool IsHighlightCharStyles() { return m_bHighlightCharStyles; }
 
 private:
     void FillTreeBox(SfxStyleFamily eFam);
@@ -144,7 +149,7 @@ private:
     sal_Int8 AcceptDrop(const AcceptDropEvent& rEvt, const DropTargetHelper& rHelper);
     void DropHdl(const OUString& rStyle, const OUString& rParent);
 
-    void MenuSelect(const OString& rIdent);
+    void MenuSelect(const OUString& rIdent);
     void PrepareMenu(const Point& rPos);
     void ShowMenu(const CommandEvent& rCEvt);
     void CreateContextMenu();
@@ -232,8 +237,12 @@ private:
 
     std::unique_ptr<Idle> pIdle;
 
-    OString sLastItemIdent;
+    OUString sLastItemIdent;
     SfxModule* m_Module;
     sal_uInt16 m_nModifier;
     weld::Container* m_pContainer;
+
+    bool m_bModuleHasStylesHighlighterFeature = false;
+    bool m_bHighlightParaStyles = false;
+    bool m_bHighlightCharStyles = false;
 };

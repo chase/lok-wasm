@@ -45,8 +45,6 @@ private:
 public:
     ScTableLink( ScDocShell* pDocSh, OUString aFile,
                     OUString aFilter, OUString aOpt, sal_Int32 nRefreshDelaySeconds );
-    ScTableLink( SfxObjectShell* pShell, OUString aFile,
-                    OUString aFilter, OUString aOpt, sal_Int32 nRefreshDelaySeconds );
     virtual ~ScTableLink() override;
     virtual void Closed() override;
     virtual ::sfx2::SvBaseLink::UpdateResult DataChanged(
@@ -65,7 +63,6 @@ public:
 
     bool    IsUsed() const;
 
-    DECL_LINK( RefreshHdl, Timer*, void );
     DECL_LINK( TableEndEditHdl, ::sfx2::SvBaseLink&, void );
 };
 
@@ -89,7 +86,6 @@ public:
     ScDocument*         GetDocument();
     ScDocShell*         GetDocShell()       { return pDocShell; }
     bool                IsError() const;
-    OUString       GetTitle() const;
 
     void                ReleaseDocRef();    // without calling DoClose
 

@@ -33,6 +33,7 @@ namespace comphelper { class IDocPasswordVerifier; }
 class DateTime;
 class SotStorage;
 class SotStorageStream;
+class ScDocShell;
 
 // Global data ================================================================
 
@@ -80,7 +81,7 @@ struct XclRootData
     OUString            maDocUrl;           /// Document URL of imported/exported file.
     OUString            maBasePath;         /// Base path of imported/exported file (path of maDocUrl).
     OUString            maUserName;         /// Current user name.
-    static constexpr OUStringLiteral gaDefPassword = u"VelvetSweatshop"; /// The default password used for stream encryption.
+    static constexpr OUString gaDefPassword = u"VelvetSweatshop"_ustr; /// The default password used for stream encryption.
     rtl_TextEncoding    meTextEnc;          /// Text encoding to import/export byte strings.
     LanguageType        meSysLang;          /// System language.
     LanguageType        meDocLang;          /// Document language (import: from file, export: from system).
@@ -200,7 +201,7 @@ public:
     ScDocument& GetDoc() const;
 
     /** Returns the object shell of the Calc document. May be 0 (i.e. import from clipboard). */
-    SfxObjectShell*     GetDocShell() const;
+    ScDocShell*         GetDocShell() const;
     /** Returns the object model of the Calc document. */
     ScModelObj*         GetDocModelObj() const;
     /** Returns pointer to the printer of the Calc document. */

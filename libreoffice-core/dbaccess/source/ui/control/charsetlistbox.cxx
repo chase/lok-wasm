@@ -34,7 +34,7 @@ namespace dbaui
         }
     }
 
-    void CharSetListBox::SelectEntryByIanaName( const OUString& _rIanaName )
+    void CharSetListBox::SelectEntryByIanaName( std::u16string_view _rIanaName )
     {
         OCharsetDisplay::const_iterator aFind = m_aCharSets.findIanaName( _rIanaName );
         if (aFind == m_aCharSets.end())
@@ -49,7 +49,7 @@ namespace dbaui
             m_xControl->set_active_text((*aFind).getDisplayName());
     }
 
-    bool CharSetListBox::StoreSelectedCharSet( SfxItemSet& _rSet, const sal_uInt16 _nItemId )
+    bool CharSetListBox::StoreSelectedCharSet( SfxItemSet& _rSet, TypedWhichId<SfxStringItem> _nItemId )
     {
         bool bChangedSomething = false;
         if (m_xControl->get_value_changed_from_saved())

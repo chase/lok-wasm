@@ -26,6 +26,8 @@
 #include <sfx2/basedlgs.hxx>
 #include <svtools/restartdialog.hxx>
 #include <utility>
+#include <i18nutil/searchopt.hxx>
+#include <vcl/timer.hxx>
 
 class SfxModule;
 class SfxShell;
@@ -114,6 +116,7 @@ struct Module;
 class ExtensionsTabPage;
 class SvxColorTabPage;
 struct OptionsGroupInfo;
+struct OptionsPageIdInfo;
 
 class OfaTreeOptionsDialog final: public SfxOkDialogController
 {
@@ -124,10 +127,37 @@ private:
 
     std::unique_ptr<weld::TreeView> xTreeLB;
     std::unique_ptr<weld::Container> xTabBox;
+    std::unique_ptr<weld::Entry> m_xSearchEdit;
 
     weld::Window*    m_pParent;
 
     std::unique_ptr<weld::TreeIter> xCurrentPageEntry;
+
+    // For search
+    Timer m_aUpdateDataTimer;
+    i18nutil::SearchOptions2 m_options;
+
+    bool bIsFirtsInitialize;
+    std::vector<OptionsPageIdInfo*> m_aTreePageIds;
+    typedef std::vector<std::pair<sal_uInt16, std::vector<sal_uInt16>>> VectorOfMatchedIds;
+
+    void generalOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_GENERAL_OPTIONS
+    void loadAndSaveOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_FILTER_DLG
+    void languageOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_LANGUAGE_OPTIONS
+    void writerOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_SW_EDITOPTIONS
+    void writerWebOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_SW_ONLINEOPTIONS
+    void calcOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_SC_EDITOPTIONS
+    void impressOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_SD_EDITOPTIONS
+    void drawOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_SD_GRAPHIC_OPTIONS
+    void mathOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_SM_EDITOPTIONS
+    void databaseOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_SB_STARBASEOPTIONS
+    void chartOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_SCH_EDITOPTIONS
+    void internetOptions(const std::vector<sal_uInt16>& vPageId = {}); // SID_INET_DLG
+
+    void clearOptionsDialog();
+    void selectFirstEntry();
+    void storeOptionsTree();
+    void showDialog(VectorOfMatchedIds& pSearchIds);
 
     OUString               sTitle;
 
@@ -142,14 +172,13 @@ private:
 
     css::uno::Reference < css::awt::XContainerWindowProvider >
                     m_xContainerWinProvider;
+    css::uno::Reference<css::frame::XFrame> m_xFrame;
 
     static LastPageSaver*   pLastPageSaver;
 
     std::optional<SfxItemSet> CreateItemSet( sal_uInt16 nId );
     static void     ApplyItemSet( sal_uInt16 nId, const SfxItemSet& rSet );
-    void            InitTreeAndHandler();
     void            Initialize( const css::uno::Reference< css::frame::XFrame >& _xFrame );
-    void            InitWidgets();
 
     void            LoadExtensionOptions( std::u16string_view rExtensionId );
     static OUString GetModuleIdentifier( const css::uno::Reference<
@@ -164,8 +193,13 @@ private:
     DECL_LINK(BackHdl_Impl, weld::Button&, void);
     DECL_LINK(ApplyHdl_Impl, weld::Button&, void);
     DECL_LINK(HelpHdl_Impl, weld::Widget&, bool);
+    DECL_LINK(SearchUpdateHdl, weld::Entry&, void);
+    DECL_LINK(ImplUpdateDataHdl, Timer*, void);
+    DECL_LINK(FocusOut_Impl, weld::Widget&, void);
     void ResetCurrentPageFromConfig();
     void SelectHdl_Impl();
+    void initializeCurrentDialog(OptionsPageInfo*& pPageInfo,
+                                 std::unique_ptr<weld::TreeIter>& xEntry);
 
     void InitItemSets(OptionsGroupInfo& rGroupInfo);
 
@@ -173,6 +207,11 @@ private:
 
     virtual weld::Button& GetOKButton() const override { return *xOkPB; }
     virtual const SfxItemSet* GetExampleSet() const override { return nullptr; }
+
+    int applySearchFilter(const OUString& rSearchTerm);
+
+    // Common initialization
+    OfaTreeOptionsDialog(weld::Window* pParent, bool fromExtensionManager);
 
 public:
     OfaTreeOptionsDialog(weld::Window* pParent,
@@ -190,8 +229,12 @@ public:
     void                ActivatePage( const OUString& rPageURL );
     void                ApplyItemSets();
 
-    // helper functions to call the language settings TabPage from the SpellDialog
+    // default value initializes all dialogs
+    void initializeFirstNDialog(sal_Int16 nNumberOfNode = -1);
+
+    // helper functions to call the Languages and Locales TabPage from the SpellDialog
     static void         ApplyLanguageOptions(const SfxItemSet& rSet);
+    static OUString     getCurrentFactory_Impl( const css::uno::Reference< css::frame::XFrame >& _xFrame );
 
     void                SetNeedsRestart( svtools::RestartReason eReason );
 };
@@ -234,6 +277,15 @@ public:
 
     void            ResetPage();
     void            SavePage();
+};
+
+// class TreeOptHelper ---------------------------------------------------
+
+class TreeOptHelper
+{
+public:
+    static void storeStringsOfDialog(sal_uInt16 nPageId, const OUString& sPageStrings);
+    static OUString getStringsFromDialog(sal_uInt16 nPageId);
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

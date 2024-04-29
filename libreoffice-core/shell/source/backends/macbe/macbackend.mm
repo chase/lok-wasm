@@ -17,6 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
+
+#include <memory>
 
 // For MAXHOSTNAMELEN constant
 #include <sys/param.h>
@@ -45,12 +48,11 @@ namespace
 typedef enum {
     sHTTP,
     sHTTPS,
-    sFTP
 } ServiceType;
 
 /*
  * Returns current proxy settings for selected service type (HTTP or
- * FTP) as a C string (in the buffer specified by host and hostSize)
+ * HTTPS) as a C string (in the buffer specified by host and hostSize)
  * and a port number.
  */
 
@@ -82,10 +84,6 @@ bool GetProxySetting(ServiceType sType, char *host, size_t hostSize, UInt16 *por
         case sHTTPS: proxiesEnable = kSCPropNetProxiesHTTPSEnable;
                      proxiesProxy = kSCPropNetProxiesHTTPSProxy;
                      proxiesPort = kSCPropNetProxiesHTTPSPort;
-            break;
-        default: proxiesEnable = kSCPropNetProxiesFTPEnable;
-                 proxiesProxy = kSCPropNetProxiesFTPProxy;
-                 proxiesPort = kSCPropNetProxiesFTPPort;
             break;
     }
     // Proxy enabled?
@@ -157,13 +155,13 @@ static OUString CFStringToOUString(const CFStringRef sOrig) {
     CFIndex nStringLen = CFStringGetLength(sOrig)+1;
 
     // Allocate a c string buffer
-    char sBuffer[nStringLen];
+    auto const sBuffer = std::make_unique<char[]>(nStringLen);
 
-    CFStringGetCString(sOrig, sBuffer, nStringLen, kCFStringEncodingASCII);
+    CFStringGetCString(sOrig, sBuffer.get(), nStringLen, kCFStringEncodingASCII);
 
     CFRelease(sOrig);
 
-    return OUString::createFromAscii(sBuffer);
+    return OUString::createFromAscii(sBuffer.get());
 }
 
 static OUString GetOUString( NSString* pStr )
@@ -186,7 +184,7 @@ void MacOSXBackend::setPropertyValue(
 {
     throw css::lang::IllegalArgumentException(
         "setPropertyValue not supported",
-        static_cast< cppu::OWeakObject * >(this), -1);
+        getXWeak(), -1);
 }
 
 css::uno::Any MacOSXBackend::getPropertyValue(
@@ -216,40 +214,6 @@ css::uno::Any MacOSXBackend::getPropertyValue(
         else
         {
             SAL_WARN("shell", "Got nil or empty list of user document directories" );
-        }
-        return css::uno::Any(css::beans::Optional< css::uno::Any >());
-    } else if ( PropertyName == "ooInetFTPProxyName" )
-    {
-        char host[MAXHOSTNAMELEN];
-        UInt16 port;
-        bool retVal;
-
-        retVal = GetProxySetting(sFTP, host, 100, &port);
-
-        if (retVal)
-        {
-            auto const Server = OUString::createFromAscii( host );
-            if( Server.getLength() > 0 )
-            {
-                return css::uno::Any(
-                    css::beans::Optional< css::uno::Any >(
-                        true, uno::Any( Server ) ) );
-            }
-        }
-        return css::uno::Any(css::beans::Optional< css::uno::Any >());
-    } else if ( PropertyName == "ooInetFTPProxyPort" )
-    {
-        char host[MAXHOSTNAMELEN];
-        UInt16 port;
-        bool retVal;
-
-        retVal = GetProxySetting(sFTP, host, 100, &port);
-
-        if (retVal && port > 0)
-        {
-            return css::uno::Any(
-                css::beans::Optional< css::uno::Any >(
-                    true, uno::Any( sal_Int32(port) ) ) );
         }
         return css::uno::Any(css::beans::Optional< css::uno::Any >());
     } else if ( PropertyName == "ooInetHTTPProxyName" )
@@ -365,7 +329,7 @@ css::uno::Any MacOSXBackend::getPropertyValue(
         return css::uno::Any(css::beans::Optional< css::uno::Any >());
     } else {
         throw css::beans::UnknownPropertyException(
-            PropertyName, static_cast< cppu::OWeakObject * >(this));
+            PropertyName, getXWeak());
     }
 }
 

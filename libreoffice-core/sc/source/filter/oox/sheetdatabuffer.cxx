@@ -50,6 +50,7 @@
 #include <formulabuffer.hxx>
 #include <numformat.hxx>
 #include <sax/tools/converter.hxx>
+#include <docuno.hxx>
 
 namespace oox::xls {
 
@@ -155,7 +156,7 @@ void SheetDataBuffer::setDateTimeCell( const CellModel& rModel, const css::util:
     // set number format
     try
     {
-        Reference< XNumberFormatsSupplier > xNumFmtsSupp( getDocument(), UNO_QUERY_THROW );
+        Reference< XNumberFormatsSupplier > xNumFmtsSupp( static_cast<cppu::OWeakObject*>(getDocument().get()), UNO_QUERY_THROW );
         Reference< XNumberFormatTypes > xNumFmtTypes( xNumFmtsSupp->getNumberFormats(), UNO_QUERY_THROW );
         sal_Int32 nIndex = xNumFmtTypes->getStandardFormat( nStdFmt, Locale() );
         PropertySet aPropSet( getCell( rModel.maCellAddr ) );
@@ -393,10 +394,17 @@ void SheetDataBuffer::addColXfStyleProcessRowRanges()
     for ( sal_Int32 nCol = 0; nCol <= nMaxCol; ++nCol )
     {
         RowStyles& rRowStyles = maStylesPerColumn[ nCol ];
-        for ( const auto& [nXfId, rRowRangeList] : maXfIdRowRangeList )
+        for ( auto& [nXfId, rRowRangeList] : maXfIdRowRangeList )
         {
             if ( nXfId == -1 ) // it's a dud skip it
                 continue;
+            // sort the row ranges, so we spend less time moving data around
+            // when we insert into aStyleRows
+            std::sort(rRowRangeList.begin(), rRowRangeList.end(),
+                [](const ValueRange& lhs, const ValueRange& rhs)
+                {
+                    return lhs.mnFirst < rhs.mnFirst;
+                });
             // get all row ranges for id
             for ( const auto& rRange : rRowRangeList )
             {
@@ -516,7 +524,7 @@ void SheetDataBuffer::finalizeImport()
             ScAttrEntry aEntry;
             aEntry.nEndRow = rDoc.MaxRow();
             aEntry.pPattern = pDefPattern;
-            rDoc.GetPool()->Put(*aEntry.pPattern);
+            rDoc.GetPool()->DirectPutItemInPool(*aEntry.pPattern);
             aAttrs.maAttrs.push_back(aEntry);
 
             if (!sc::NumFmtUtil::isLatinScript(*aEntry.pPattern, rDoc))

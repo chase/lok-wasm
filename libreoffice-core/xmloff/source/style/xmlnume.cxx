@@ -628,11 +628,11 @@ void SvxXMLNumRuleExport::exportLevelStyle( sal_Int32 nLevel,
 
 
 constexpr OUStringLiteral gsNumberingRules( u"NumberingRules" );
-constexpr OUStringLiteral gsIsPhysical( u"IsPhysical" );
-constexpr OUStringLiteral gsIsContinuousNumbering( u"IsContinuousNumbering" );
+constexpr OUString gsIsPhysical( u"IsPhysical"_ustr );
+constexpr OUString gsIsContinuousNumbering( u"IsContinuousNumbering"_ustr );
 
 SvxXMLNumRuleExport::SvxXMLNumRuleExport( SvXMLExport& rExp ) :
-    rExport( rExp ),
+    m_rExport( rExp ),
     // Let list style creation depend on Load/Save option "ODF format version" (#i89178#)
     mbExportPositionAndSpaceModeLabelAlignment( true )
 {
@@ -808,7 +808,7 @@ void SvxXMLNumRuleExport::exportStyles( bool bUsed, bool bExportChapterNumbering
     if( !xFamilies.is() )
         return;
 
-    static const OUStringLiteral aNumberStyleName( u"NumberingStyles" );
+    static constexpr OUString aNumberStyleName( u"NumberingStyles"_ustr );
 
     Reference< XIndexAccess > xStyles;
     if( !xFamilies->hasByName( aNumberStyleName ) )

@@ -34,6 +34,7 @@
 #include <calbck.hxx>
 #include <fmtsrnd.hxx>
 #include <fmtclds.hxx>
+#include <fmturl.hxx>
 #include <strings.hrc>
 #include <swmodule.hxx>
 #include <rootfrm.hxx>
@@ -120,6 +121,11 @@
 #include <svtools/optionsdrawinglayer.hxx>
 #include <vcl/GraphicLoader.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
+
+#include <svl/style.hxx>
+#include <ndtxt.hxx>
+#include <unotools/configmgr.hxx>
+#include <vcl/hatch.hxx>
 
 using namespace ::editeng;
 using namespace ::com::sun::star;
@@ -1749,7 +1755,7 @@ bool DrawFillAttributes(
             // This must probably be removed again when we will be able to get all Writer visualization
             // as primitives and Writer prepares all it's stuff in high precision coordinates (also
             // needs to avoid moving boundaries around to better show overlapping stuff...)
-            if(SvtOptionsDrawinglayer::IsAntiAliasing())
+            if (utl::ConfigManager::IsFuzzing() || SvtOptionsDrawinglayer::IsAntiAliasing())
             {
                 // if AAed in principle expand by 0.5 in all directions. Since painting edges of
                 // AAed regions does not add to no transparence (0.5 opacity covered by 0.5 opacity
@@ -2480,8 +2486,7 @@ void SwTabFramePainter::PaintLines(OutputDevice& rDev, const SwRect& rRect) cons
     ::SwAlignRect( aUpperAligned, gProp.pSGlobalShell, &rDev );
 
     // prepare SdrFrameBorderDataVector
-    std::shared_ptr<drawinglayer::primitive2d::SdrFrameBorderDataVector> aData(
-        std::make_shared<drawinglayer::primitive2d::SdrFrameBorderDataVector>());
+    drawinglayer::primitive2d::SdrFrameBorderDataVector aData;
 
     while ( true )
     {
@@ -2623,12 +2628,12 @@ void SwTabFramePainter::PaintLines(OutputDevice& rDev, const SwRect& rRect) cons
                     if(!aX.equalZero())
                     {
                         const basegfx::B2DVector aY(basegfx::getNormalizedPerpendicular(aX));
-                        aData->emplace_back(
+                        aData.emplace_back(
                             aOrigin,
                             aX,
                             aStyles[0],
                             pTmpColor);
-                        drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData->back());
+                        drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData.back());
 
                         rInstance.addSdrConnectStyleData(true, aStyles[1], -aY, true); // aLFromT
                         rInstance.addSdrConnectStyleData(true, aStyles[2], -aX, true); // aLFromL
@@ -2647,12 +2652,12 @@ void SwTabFramePainter::PaintLines(OutputDevice& rDev, const SwRect& rRect) cons
                     if(!aX.equalZero())
                     {
                         const basegfx::B2DVector aY(basegfx::getNormalizedPerpendicular(aX));
-                        aData->emplace_back(
+                        aData.emplace_back(
                             aOrigin,
                             aX,
                             aStyles[0],
                             pTmpColor);
-                        drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData->back());
+                        drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData.back());
 
                         rInstance.addSdrConnectStyleData(true, aStyles[3], -aY, false); // aTFromR
                         rInstance.addSdrConnectStyleData(true, aStyles[2], -aX, true); // aTFromT
@@ -2670,13 +2675,13 @@ void SwTabFramePainter::PaintLines(OutputDevice& rDev, const SwRect& rRect) cons
 
     // create instance of SdrFrameBorderPrimitive2D if
     // SdrFrameBorderDataVector is used
-    if(!aData->empty())
+    if(!aData.empty())
     {
         drawinglayer::primitive2d::Primitive2DContainer aSequence;
         aSequence.append(
             drawinglayer::primitive2d::Primitive2DReference(
                 new drawinglayer::primitive2d::SdrFrameBorderPrimitive2D(
-                    aData,
+                    std::move(aData),
                     true)));    // force visualization to minimal one discrete unit (pixel)
         // paint
         mrTabFrame.ProcessPrimitives(aSequence);
@@ -2770,7 +2775,7 @@ void SwTabFramePainter::FindStylesForLine( Point& rStartPoint,
     if ( bHori )
     {
         aMapIter = maVertLines.find( rEndPoint.X() );
-        OSL_ENSURE( aMapIter != maVertLines.end(), "FindStylesForLine: Error" );
+        assert(aMapIter != maVertLines.end() && "FindStylesForLine: Error");
         const SwLineEntrySet& rVertSet2 = (*aMapIter).second;
 
         for ( const SwLineEntry& rEntry : rVertSet2 )
@@ -2789,7 +2794,7 @@ void SwTabFramePainter::FindStylesForLine( Point& rStartPoint,
     else
     {
         aMapIter = maHoriLines.find( rEndPoint.Y() );
-        OSL_ENSURE( aMapIter != maHoriLines.end(), "FindStylesForLine: Error" );
+        assert(aMapIter != maHoriLines.end() && "FindStylesForLine: Error");
         const SwLineEntrySet& rHoriSet2 = (*aMapIter).second;
 
         for ( const SwLineEntry& rEntry : rHoriSet2 )
@@ -2831,6 +2836,29 @@ static bool lcl_IsFirstRowInFollowTableWithoutRepeatedHeadlines(
                     ->IsRowSpanLine())
         && !rBoxItem.GetTop()
         && rBoxItem.GetBottom());
+}
+
+/**
+ * Special case:
+ * last visible cell of a table row followed with a hidden deleted cell,
+ * and the right border of the visible cell was painted by its left border
+ */
+static bool lcl_IsLastVisibleCellBeforeHiddenCellAtTheEndOfRow(
+        SwFrame const& rFrame, SvxBoxItem const& rBoxItem)
+{
+    SwRowFrame const*const pThisRowFrame =
+        dynamic_cast<const SwRowFrame*>(rFrame.GetUpper());
+    const SwCellFrame* pThisCell = static_cast<const SwCellFrame*>(&rFrame);
+
+    return pThisRowFrame
+        // last visible cell
+        && !rFrame.GetNext()
+        // it has only left border
+        && !rBoxItem.GetRight()
+        && rBoxItem.GetLeft()
+        // last visible table cell isn't equal to the last cell:
+        // there are invisible deleted cells in Hide Changes mode
+        && pThisRowFrame->GetTabLine()->GetTabBoxes().back() != pThisCell->GetTabBox();
 }
 
 void SwTabFramePainter::InsertFollowTopBorder(const SwFrame& rFrame, const SvxBoxItem& rBoxItem,
@@ -2991,6 +3019,9 @@ void SwTabFramePainter::Insert(const SwFrame& rFrame, const SvxBoxItem& rBoxItem
 
     bool const bBottomAsTop(lcl_IsFirstRowInFollowTableWithoutRepeatedHeadlines(
                 mrTabFrame, rFrame, rBoxItem));
+    bool const bLeftAsRight(lcl_IsLastVisibleCellBeforeHiddenCellAtTheEndOfRow(
+                rFrame, rBoxItem));
+
     bool const bVert = mrTabFrame.IsVertical();
     bool const bR2L  = mrTabFrame.IsRightToLeft();
 
@@ -3052,7 +3083,7 @@ void SwTabFramePainter::Insert(const SwFrame& rFrame, const SvxBoxItem& rBoxItem
     }
 
     SwLineEntry aRight (nRight,  nTop,  nBottom, bRightIsOuter,
-            bVert ? (bBottomAsTop ? aB : aT) : (bR2L ? aL : aR));
+            bVert ? (bBottomAsTop ? aB : aT) : ((bR2L || bLeftAsRight) ? aL : aR));
     if (bWordTableCell && rBoxItem.GetRight())
     {
         aRight.LimitVerticalEndPos(rFrame, SwLineEntry::VerticalType::RIGHT);
@@ -3097,11 +3128,13 @@ void SwTabFramePainter::Insert( SwLineEntry& rNew, bool bHori )
         const IDocumentSettingAccess& rIDSA = pShell->GetDoc()->getIDocumentSettingAccess();
         bWordTableCell = rIDSA.get(DocumentSettingId::TABLE_ROW_KEEP);
     }
+    bool bR2L = mrTabFrame.IsRightToLeft();
     while ( aIter != pLineSet->end() && rNew.mnStartPos < rNew.mnEndPos )
     {
         const SwLineEntry& rOld = *aIter;
 
-        if (rOld.mnLimitedEndPos || (bWordTableCell && (rOld.mbOuter != rNew.mbOuter)))
+        // The bWordTableCell code only works for LTR at the moment, avoid it for RTL.
+        if (rOld.mnLimitedEndPos || (bWordTableCell && (rOld.mbOuter != rNew.mbOuter) && !bR2L))
         {
             // Don't merge with this line entry as it ends sooner than mnEndPos.
             ++aIter;
@@ -3486,7 +3519,10 @@ void SwRootFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect const&
                 // fdo#42750: delay painting these until after subsidiary lines
                 // fdo#45562: delay painting these until after hell layer
                 // fdo#47717: but do it before heaven layer
-                ProcessPrimitives(gProp.pBLines->GetBorderLines_Clear());
+                {
+                    SwTaggedPDFHelper tag(nullptr, nullptr, nullptr, rRenderContext);
+                    ProcessPrimitives(gProp.pBLines->GetBorderLines_Clear());
+                }
 
                 if ( pSh->Imp()->HasDrawView() )
                 {
@@ -3668,8 +3704,19 @@ SwShortCut::SwShortCut( const SwFrame& rFrame, const SwRect& rRect )
 void SwLayoutFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect const& rRect, SwPrintData const*const) const
 {
     // #i16816# tagged pdf support
-    Frame_Info aFrameInfo( *this );
+    Frame_Info aFrameInfo(*this, false);
     SwTaggedPDFHelper aTaggedPDFHelper( nullptr, &aFrameInfo, nullptr, rRenderContext );
+    ::std::optional<SwTaggedPDFHelper> oTaggedLink;
+    if (IsFlyFrame())
+    {
+        // tdf#154939 Link nested inside Figure
+        auto const pItem(GetFormat()->GetAttrSet().GetItemIfSet(RES_URL));
+        if (pItem && !pItem->GetURL().isEmpty())
+        {
+            Frame_Info linkInfo(*this, true);
+            oTaggedLink.emplace(nullptr, &linkInfo, nullptr, rRenderContext);
+        }
+    }
 
     const SwFrame *pFrame = Lower();
     if ( !pFrame )
@@ -4502,13 +4549,96 @@ void SwFlyFrame::PaintDecorators() const
     }
 }
 
+SwView* SwTextFrame::GetView()
+{
+    SwWrtShell* pWrtSh = dynamic_cast<SwWrtShell*>(gProp.pSGlobalShell);
+
+    if (!pWrtSh)
+        return nullptr;
+
+    return &pWrtSh->GetView();
+}
+
+void SwTextFrame::PaintParagraphStylesHighlighting() const
+{
+    // Maybe avoid the dynamic_cast and just use GetActiveWrtShell()
+    // NO! Multiple windows will not display the highlighting correctly if GetActiveWrtShell is used.
+    SwWrtShell* pWrtSh = dynamic_cast<SwWrtShell*>(gProp.pSGlobalShell);
+
+    if (!pWrtSh)
+        return;
+
+    vcl::RenderContext* pRenderContext = pWrtSh->GetOut();
+    if (!pRenderContext)
+        return;
+
+    StylesHighlighterColorMap& rParaStylesColorMap
+            = pWrtSh->GetView().GetStylesHighlighterParaColorMap();
+
+    if (rParaStylesColorMap.empty())
+        return;
+
+    //  draw styles highlighter
+    OUString sStyleName = GetTextNodeFirst()->GetTextColl()->GetName();
+    if (rParaStylesColorMap.find(sStyleName) != rParaStylesColorMap.end())
+    {
+        SwRect aFrameAreaRect(getFrameArea());
+
+        if (IsRightToLeft())
+        {
+            aFrameAreaRect.AddRight(75);
+            aFrameAreaRect.Left(aFrameAreaRect.Right() + 300);
+        }
+        else
+        {
+            aFrameAreaRect.AddLeft(-375);
+            aFrameAreaRect.Right(aFrameAreaRect.Left() + 300);
+        }
+
+        const tools::Rectangle& rRect = aFrameAreaRect.SVRect();
+
+        vcl::Font aFont(OutputDevice::GetDefaultFont(DefaultFontType::UI_SANS, GetAppLanguage(),
+                                                     GetDefaultFontFlags::OnlyOne, pRenderContext));
+        aFont.SetFontSize(Size(0, 140 * pRenderContext->GetDPIScaleFactor()));
+        aFont.SetUnderline(FontLineStyle::LINESTYLE_NONE);
+        aFont.SetTransparent(false);
+        aFont.SetWeight(WEIGHT_NORMAL);
+        aFont.SetFamily(FontFamily::FAMILY_MODERN);
+        aFont.SetColor(COL_BLACK);
+
+        pRenderContext->Push(vcl::PushFlags::ALL);
+
+        pRenderContext->SetFillColor(rParaStylesColorMap[sStyleName].first);
+        pRenderContext->SetLineColor(rParaStylesColorMap[sStyleName].first);
+
+        pRenderContext->DrawRect(rRect);
+
+        // draw hatch pattern if paragraph has direct formatting
+        if (SwDoc::HasParagraphDirectFormatting(SwPosition(*GetTextNodeForParaProps())))
+        {
+            Color aHatchColor(rParaStylesColorMap[sStyleName].first);
+            // make hatch line color 41% darker than the fill color
+            aHatchColor.ApplyTintOrShade(-4100);
+            Hatch aHatch(HatchStyle::Single, aHatchColor, 50, 450_deg10);
+            pRenderContext->DrawHatch(tools::PolyPolygon(rRect), aHatch);
+        }
+
+        pRenderContext->SetFont(aFont);
+        pRenderContext->SetLayoutMode(vcl::text::ComplexTextLayoutFlags::Default);
+        pRenderContext->SetTextFillColor(rParaStylesColorMap[sStyleName].first);
+        pRenderContext->DrawText(rRect, OUString::number(rParaStylesColorMap[sStyleName].second),
+                                 DrawTextFlags::Center | DrawTextFlags::VCenter);
+
+        pRenderContext->Pop();
+    }
+}
+
 void SwTextFrame::PaintOutlineContentVisibilityButton() const
 {
     SwWrtShell* pWrtSh = dynamic_cast<SwWrtShell*>(gProp.pSGlobalShell);
     if (pWrtSh && pWrtSh->GetViewOptions()->IsShowOutlineContentVisibilityButton())
         UpdateOutlineContentVisibilityButton(pWrtSh);
 }
-
 
 void SwTabFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect const& rRect, SwPrintData const*const) const
 {
@@ -4906,8 +5036,7 @@ namespace drawinglayer::primitive2d
             basegfx::B2DPoint aBottomRight(getB2DHomMatrix() * basegfx::B2DPoint(1.0, 1.0));
 
             // prepare SdrFrameBorderDataVector
-            std::shared_ptr<drawinglayer::primitive2d::SdrFrameBorderDataVector> aData(
-                std::make_shared<drawinglayer::primitive2d::SdrFrameBorderDataVector>());
+            drawinglayer::primitive2d::SdrFrameBorderDataVector aData;
 
             if(getStyleTop().IsUsed())
             {
@@ -4951,12 +5080,12 @@ namespace drawinglayer::primitive2d
             {
                 // create BorderPrimitive(s) for top border
                 const basegfx::B2DVector aVector(aTopRight - aTopLeft);
-                aData->emplace_back(
+                aData.emplace_back(
                     aTopLeft,
                     aVector,
                     getStyleTop(),
                     nullptr);
-                drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData->back());
+                drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData.back());
 
                 if(getStyleLeft().IsUsed())
                 {
@@ -4973,12 +5102,12 @@ namespace drawinglayer::primitive2d
             {
                 // create BorderPrimitive(s) for right border
                 const basegfx::B2DVector aVector(aBottomRight - aTopRight);
-                aData->emplace_back(
+                aData.emplace_back(
                     aTopRight,
                     aVector,
                     getStyleRight(),
                     nullptr);
-                drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData->back());
+                drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData.back());
 
                 if(getStyleTop().IsUsed())
                 {
@@ -4995,12 +5124,12 @@ namespace drawinglayer::primitive2d
             {
                 // create BorderPrimitive(s) for bottom border
                 const basegfx::B2DVector aVector(aBottomLeft - aBottomRight);
-                aData->emplace_back(
+                aData.emplace_back(
                     aBottomRight,
                     aVector,
                     getStyleBottom(),
                     nullptr);
-                drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData->back());
+                drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData.back());
 
                 if(getStyleRight().IsUsed())
                 {
@@ -5017,12 +5146,12 @@ namespace drawinglayer::primitive2d
             {
                 // create BorderPrimitive(s) for left border
                 const basegfx::B2DVector aVector(aTopLeft - aBottomLeft);
-                aData->emplace_back(
+                aData.emplace_back(
                     aBottomLeft,
                     aVector,
                     getStyleLeft(),
                     nullptr);
-                drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData->back());
+                drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData.back());
 
                 if(getStyleBottom().IsUsed())
                 {
@@ -5037,12 +5166,12 @@ namespace drawinglayer::primitive2d
 
             // create instance of SdrFrameBorderPrimitive2D if
             // SdrFrameBorderDataVector is used
-            if(!aData->empty())
+            if(!aData.empty())
             {
                 rContainer.append(
                     drawinglayer::primitive2d::Primitive2DReference(
                         new drawinglayer::primitive2d::SdrFrameBorderPrimitive2D(
-                            aData,
+                            std::move(aData),
                             true)));    // force visualization to minimal one discrete unit (pixel)
             }
         }
@@ -5672,6 +5801,19 @@ void SwFootnoteContFrame::PaintLine( const SwRect& rRect,
     if ( aLineRect.HasArea() && rInf.GetLineStyle() != SvxBorderLineStyle::NONE)
         PaintBorderLine( rRect, aLineRect , pPage, &rInf.GetLineColor(),
                 rInf.GetLineStyle() );
+}
+
+void SwFootnoteContFrame::dumpAsXml(xmlTextWriterPtr writer) const
+{
+    (void)xmlTextWriterStartElement(writer, reinterpret_cast<const xmlChar*>("ftncont"));
+    dumpAsXmlAttributes(writer);
+
+    (void)xmlTextWriterStartElement(writer, BAD_CAST("infos"));
+    dumpInfosAsXml(writer);
+    (void)xmlTextWriterEndElement(writer);
+    dumpChildrenAsXml(writer);
+
+    (void)xmlTextWriterEndElement(writer);
 }
 
 /// Paints the separator line for inside columns
@@ -6610,7 +6752,17 @@ void SwFrame::PaintSwFrameBackground( const SwRect &rRect, const SwPageFrame *pP
             bBack = true;
         }
     }
-    else if ( bBack && IsCellFrame() && !getRootFrame()->IsHideRedlines() &&
+    else if ( IsCellFrame() && !getRootFrame()->IsHideRedlines() )
+    {
+        RedlineType eType = static_cast<const SwCellFrame*>(this)->GetTabBox()->GetRedlineType();
+        if ( RedlineType::Delete == eType || RedlineType::Insert == eType )
+        {
+            pCol = RedlineType::Delete == eType ? COL_AUTHOR_TABLE_DEL : COL_AUTHOR_TABLE_INS;
+            bBack = true;
+        }
+    }
+
+    if ( bBack && IsCellFrame() && !getRootFrame()->IsHideRedlines() &&
         // skip cell background to show the row colored according to its tracked change
         RedlineType::None != static_cast<const SwRowFrame*>(GetUpper())->GetTabLine()->GetRedlineType() )
     {
@@ -6860,7 +7012,8 @@ void SwPageFrame::RefreshSubsidiary( const SwRect &rRect ) const
 void SwLayoutFrame::RefreshLaySubsidiary( const SwPageFrame *pPage,
                                         const SwRect &rRect ) const
 {
-    const bool bSubsOpt = isSubsidiaryLinesEnabled() || isSubsidiaryLinesForSectionsEnabled();
+    const bool bSubsOpt
+        = isSubsidiaryLinesEnabled() || (IsSctFrame() && isSubsidiaryLinesForSectionsEnabled());
     if ( bSubsOpt )
         PaintSubsidiaryLines( pPage, rRect );
 
@@ -7011,12 +7164,12 @@ static void lcl_RefreshLine( const SwLayoutFrame *pLay,
     }
 }
 
-static std::vector<basegfx::B2DPolygon> lcl_CreatePageAreaDelimiterPolygons(const SwRect& rRect)
+static std::vector<basegfx::B2DPolygon> lcl_CreatePageAreaDelimiterPolygons(const SwRect& rRect, bool bHeaderFooter)
 {
     std::vector<basegfx::B2DPolygon> aPolygons;
 
     // Hide text boundaries by default - cool#3491
-    if (comphelper::LibreOfficeKit::isActive())
+    if (!bHeaderFooter && comphelper::LibreOfficeKit::isActive())
         return aPolygons;
 
     double nLineLength = 200.0; // in Twips
@@ -7115,6 +7268,10 @@ std::vector<basegfx::B2DPolygon> SwPageFrame::GetSubsidiaryLinesPolygons(const S
     const SwFrame* pLay = Lower();
     const SwFrame* pFootnoteCont = nullptr;
     const SwFrame* pPageBody = nullptr;
+
+    if (!pLay)
+        return aPolygons;
+
     while ( pLay && !( pFootnoteCont && pPageBody ) )
     {
         if ( pLay->IsFootnoteContFrame( ) )
@@ -7135,7 +7292,7 @@ std::vector<basegfx::B2DPolygon> SwPageFrame::GetSubsidiaryLinesPolygons(const S
         return aPolygons;
 
     if (!rViewShell.GetViewOptions()->IsViewMetaChars())
-        aPolygons = lcl_CreatePageAreaDelimiterPolygons(aArea);
+        aPolygons = lcl_CreatePageAreaDelimiterPolygons(aArea, false /* body */);
     else
         aPolygons = lcl_CreateRectangleDelimiterPolygons(aArea);
 
@@ -7264,7 +7421,7 @@ std::vector<basegfx::B2DPolygon> SwHeadFootFrame::GetSubsidiaryLinesPolygons(con
     SwRect aArea( getFramePrintArea() );
     aArea.Pos() += getFrameArea().Pos();
     if (!rViewShell.GetViewOptions()->IsViewMetaChars( ))
-        aPolygons = lcl_CreatePageAreaDelimiterPolygons(aArea);
+        aPolygons = lcl_CreatePageAreaDelimiterPolygons(aArea, true /* header/footer*/);
     else
         aPolygons = lcl_CreateRectangleDelimiterPolygons(aArea);
 
@@ -7331,6 +7488,28 @@ void SwLayoutFrame::PaintSubsidiaryLines( const SwPageFrame *pPage,
     const bool bFlys = pPage->GetSortedObjs() != nullptr;
 
     const bool bCell = IsCellFrame();
+
+    if (!bCell && IsFlyFrame())
+    {
+        // particularly with images (but also plausible for any kind of frame),
+        // it is very disconcerting to see a fake border,
+        // so (just like the page boundary) only show fly "text boundaries"
+        // when "Show Formatting Marks" is turned on
+        if (!gProp.pSGlobalShell->GetViewOptions()->IsViewMetaChars())
+            return;
+
+        // if the frame is wrap none or wrap through, then text boundary lines have no meaning
+        // (unless the frame itself contains text)
+        const text::WrapTextMode aSurround = GetFormat()->GetSurround().GetSurround();
+        if (GetFormat()->GetAnchor().GetAnchorId() != RndStdIds::FLY_AS_CHAR
+            && (!Lower() || !Lower()->IsTextFrame())
+            && (aSurround == text::WrapTextMode::WrapTextMode_THROUGH
+                || aSurround == text::WrapTextMode::WrapTextMode_NONE))
+        {
+            return;
+        }
+    }
+
     //  #i3662# - use frame area for cells for section use also frame area
     const bool bUseFrameArea = bCell || IsSctFrame();
     SwRect aOriginal( bUseFrameArea ? getFrameArea() : getFramePrintArea() );
@@ -7672,7 +7851,7 @@ void SwFrame::Retouch( const SwPageFrame * pPage, const SwRect &rRect ) const
  * considered for - adjusted to the frame, from which the background brush is
  * taken.
  *
- * @parem bLowerMode
+ * @param bLowerMode
  * input parameter - boolean indicating, if background brush should *not* be
  * taken from parent.
  *
@@ -7981,7 +8160,7 @@ Graphic SwDrawFrameFormat::MakeGraphic( ImageMap*, const sal_uInt32 nMaximumQuad
     {
         SdrObject *pObj = FindSdrObject();
         SdrView aView( *pMod );
-        SdrPageView *pPgView = aView.ShowSdrPage(aView.GetModel()->GetPage(0));
+        SdrPageView *pPgView = aView.ShowSdrPage(aView.GetModel().GetPage(0));
         aView.MarkObj( pObj, pPgView );
         aRet = aView.GetMarkedObjBitmapEx(/*bNoVDevIfOneBmpMarked=*/false, nMaximumQuadraticPixels, rTargetDPI);
         aView.HideSdrPage();

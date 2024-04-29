@@ -820,6 +820,7 @@ void SlotManager::GetStatusBarState (SfxItemSet& rSet)
     // page view and layout
     SdPage* pPage      = nullptr;
     sal_uInt16 nSelectedPages = mrSlideSorter.GetController().GetPageSelector().GetSelectedPageCount();
+    View* pDrView = &mrSlideSorter.GetView();
 
     //Set number of slides
     if (nSelectedPages > 0)
@@ -836,7 +837,10 @@ void SlotManager::GetStatusBarState (SfxItemSet& rSet)
             sal_Int32 nPageCount = mrSlideSorter.GetModel().GetPageCount();
             sal_Int32 nActivePageCount = static_cast<sal_Int32>(mrSlideSorter.GetModel().GetDocument()->GetActiveSdPageCount());
 
-            aPageStr = (nPageCount == nActivePageCount) ? SdResId(STR_SD_PAGE_COUNT) : SdResId(STR_SD_PAGE_COUNT_CUSTOM);
+            if (pDrView->GetDoc().GetDocumentType() == DocumentType::Draw)
+                aPageStr = (nPageCount == nActivePageCount) ? SdResId(STR_SD_PAGE_COUNT_DRAW) : SdResId(STR_SD_PAGE_COUNT_CUSTOM_DRAW);
+            else
+                aPageStr = (nPageCount == nActivePageCount) ? SdResId(STR_SD_PAGE_COUNT) : SdResId(STR_SD_PAGE_COUNT_CUSTOM);
 
             aPageStr = aPageStr.replaceFirst("%1", OUString::number(nFirstPage));
             aPageStr = aPageStr.replaceFirst("%2", OUString::number(nPageCount));
@@ -884,11 +888,19 @@ void SlotManager::RenameSlide(const SfxRequest& rRequest)
     // master slides or normal ones
     OUString aTitle;
     if( rRequest.GetSlot() == SID_RENAME_MASTER_PAGE )
-        aTitle = SdResId( STR_TITLE_RENAMEMASTER );
-    else if (pDrView->GetDoc().GetDocumentType() == DocumentType::Draw)
-        aTitle = SdResId( STR_TITLE_RENAMEPAGE );
+    {
+        if (pDrView->GetDoc().GetDocumentType() == DocumentType::Draw)
+            aTitle = SdResId( STR_TITLE_RENAMEMASTERPAGE );
+        else
+            aTitle = SdResId( STR_TITLE_RENAMEMASTERSLIDE );
+    }
     else
-        aTitle = SdResId( STR_TITLE_RENAMESLIDE );
+    {
+        if (pDrView->GetDoc().GetDocumentType() == DocumentType::Draw)
+            aTitle = SdResId( STR_TITLE_RENAMEPAGE );
+        else
+            aTitle = SdResId( STR_TITLE_RENAMESLIDE );
+    }
 
     OUString aDescr( SdResId( STR_DESC_RENAMESLIDE ) );
     OUString aPageName = pSelectedPage->GetName();
@@ -910,7 +922,7 @@ void SlotManager::RenameSlide(const SfxRequest& rRequest)
         OUString aOldName;
         aNameDlg->GetName( aOldName );
         aNameDlg->SetText( aTitle );
-        aNameDlg->SetCheckNameHdl( LINK( this, SlotManager, RenameSlideHdl ), true );
+        aNameDlg->SetCheckNameHdl( LINK( this, SlotManager, RenameSlideHdl ) );
         aNameDlg->SetCheckNameTooltipHdl( LINK( this, SlotManager, RenameSlideTooltipHdl ) );
         aNameDlg->SetEditHelpId( HID_SD_NAMEDIALOG_PAGE );
 
@@ -1152,18 +1164,25 @@ void SlotManager::ChangeSlideExclusionState (
     const model::SharedPageDescriptor& rpDescriptor,
     const bool bExcludeSlide)
 {
+    SdDrawDocument* pDocument = mrSlideSorter.GetModel().GetDocument();
+    SfxUndoManager* pManager = pDocument->GetDocSh()->GetUndoManager();
     if (rpDescriptor)
     {
         mrSlideSorter.GetView().SetState(
             rpDescriptor,
             model::PageDescriptor::ST_Excluded,
             bExcludeSlide);
+        pManager->AddUndoAction(std::make_unique<ChangeSlideExclusionStateUndoAction>(
+            pDocument, rpDescriptor, model::PageDescriptor::ST_Excluded, !bExcludeSlide));
     }
     else
     {
         model::PageEnumeration aSelectedPages (
             model::PageEnumerationProvider::CreateSelectedPagesEnumeration(
                 mrSlideSorter.GetModel()));
+        std::unique_ptr<ChangeSlideExclusionStateUndoAction> pChangeSlideExclusionStateUndoAction(
+            new ChangeSlideExclusionStateUndoAction(pDocument, model::PageDescriptor::ST_Excluded,
+                                                    !bExcludeSlide));
         while (aSelectedPages.HasMoreElements())
         {
             model::SharedPageDescriptor pDescriptor (aSelectedPages.GetNextElement());
@@ -1171,7 +1190,9 @@ void SlotManager::ChangeSlideExclusionState (
                 pDescriptor,
                 model::PageDescriptor::ST_Excluded,
                 bExcludeSlide);
+            pChangeSlideExclusionStateUndoAction->AddPageDescriptor(pDescriptor);
         }
+        pManager->AddUndoAction(std::move(pChangeSlideExclusionStateUndoAction));
     }
 
     SfxBindings& rBindings (mrSlideSorter.GetViewShell()->GetViewFrame()->GetBindings());

@@ -52,7 +52,7 @@ using namespace svt;
 
 namespace {
 
-constexpr OUStringLiteral GREGORIAN = u"gregorian";
+constexpr OUString GREGORIAN = u"gregorian"_ustr;
 
 const sal_uInt16 UPPER_PRECISION = 300; // entirely arbitrary...
 const double EXP_LOWER_BOUND = 1.0E-4; // prefer scientific notation below this value.
@@ -709,7 +709,7 @@ OUString SvNumberformat::ImpObtainCalendarAndNumerals( OUStringBuffer& rString, 
     if ( nNumeralID >= 0x02 && nNumeralID <= 0x13 )
         nNatNum = 1;
     if ( nNatNum )
-        rString.insert( nPos, Concat2View("[NatNum"+OUString::number(nNatNum)+"]"));
+        rString.insert(nPos, "[NatNum" + OUString::number(nNatNum) + "]");
     return sCalendar;
 }
 
@@ -1101,11 +1101,8 @@ SvNumberformat::SvNumberformat(OUString& rString,
                         sBuff.remove(nPosOld, nPos - nPosOld);
                         if (!sStr.isEmpty())
                         {
-                            sBuff.insert(nPosOld, sStr);
-                            nPos = nPosOld + sStr.getLength();
-                            sBuff.insert(nPos, "]");
-                            sBuff.insert(nPosOld, "[");
-                            nPos += 2;
+                            sBuff.insert(nPosOld, "[" + sStr + "]");
+                            nPos = nPosOld + sStr.getLength() + 2;
                             nPosOld = nPos;     // position before string
                         }
                         else
@@ -1337,8 +1334,7 @@ SvNumberformat::SvNumberformat(OUString& rString,
                 {
                     NumFor[nIndex].Enlarge(nCnt);
                     pSc->CopyInfo( &(NumFor[nIndex].Info()), nCnt );
-                    sBuff.append(";");
-                    sBuff.append(aAdd);
+                    sBuff.append(";" + aAdd);
                 }
             }
         }
@@ -1355,8 +1351,7 @@ SvNumberformat::SvNumberformat(OUString& rString,
                 {
                     NumFor[nIndex].Enlarge(nCnt);
                     pSc->CopyInfo( &(NumFor[nIndex].Info()), nCnt );
-                    sBuff.append(";");
-                    sBuff.append(aAdd);
+                    sBuff.append(";" + aAdd);
                 }
             }
         }
@@ -1764,8 +1759,8 @@ short SvNumberformat::ImpNextSymbol(OUStringBuffer& rString,
                 break;
             default:
             {
-                static const OUStringLiteral aNatNum(u"NATNUM");
-                static const OUStringLiteral aDBNum(u"DBNUM");
+                static constexpr OUString aNatNum(u"NATNUM"_ustr);
+                static constexpr OUString aDBNum(u"DBNUM"_ustr);
                 const OUString aBufStr( rString.toString());
                 sal_Int32 nNatNumNum;
                 sal_Int32 nDBNum;
@@ -2757,11 +2752,10 @@ bool SvNumberformat::ImpGetScientificOutput(double fNumber,
     }
 
     sal_uInt16 j = nCnt-1;  // Last symbol
-    sal_Int32 k;  // Position in ExpStr
+    sal_Int32 k = ExpStr.getLength() - 1;  // Position in ExpStr
     sal_Int32 nZeros = 0; // Erase leading zeros
 
-    bRes |= ImpNumberFill(ExpStr, fNumber, k, j, nIx, NF_SYMBOLTYPE_EXP);
-
+    // erase all leading zeros except last one
     while (nZeros < k && ExpStr[nZeros] == '0')
     {
         ++nZeros;
@@ -2770,6 +2764,9 @@ bool SvNumberformat::ImpGetScientificOutput(double fNumber,
     {
         ExpStr.remove( 0, nZeros);
     }
+
+    // restore leading zeros or blanks according to format '0' or '?' tdf#156449
+    bRes |= ImpNumberFill(ExpStr, fNumber, k, j, nIx, NF_SYMBOLTYPE_EXP);
 
     bool bCont = true;
 
@@ -3233,7 +3230,7 @@ bool SvNumberformat::ImpGetTimeOutput(double fNumber,
         case NF_KEY_AMPM:               // AM/PM
             if ( !bCalendarSet )
             {
-                double fDiff = DateTime(rScan.GetNullDate()) - GetCal().getEpochStart();
+                double fDiff = DateTime::Sub( DateTime(rScan.GetNullDate()), GetCal().getEpochStart());
                 fDiff += fNumberOrig;
                 GetCal().setLocalDateTime( fDiff );
                 bCalendarSet = true;
@@ -3693,13 +3690,13 @@ static bool lcl_getValidDate( const DateTime& rNullDate, const DateTime& rEpochS
     static const DateTime aCE( Date(1,1,1));
     static const DateTime aMin( Date(1,1, SAL_MIN_INT16));
     static const DateTime aMax( Date(31,12, SAL_MAX_INT16), tools::Time(23,59,59, tools::Time::nanoSecPerSec - 1));
-    static const double fMin = aMin - aCE;
-    static const double fMax = aMax - aCE;
+    static const double fMin = DateTime::Sub( aMin, aCE);
+    static const double fMax = DateTime::Sub( aMax, aCE);
     // Value must be representable in our tools::Date proleptic Gregorian
     // calendar as well.
-    const double fOff = (rNullDate - aCE) + fNumber;
+    const double fOff = DateTime::Sub( rNullDate, aCE) + fNumber;
     // Add diff between epochs to serial date number.
-    const double fDiff = rNullDate - rEpochStart;
+    const double fDiff = DateTime::Sub( rNullDate, rEpochStart);
     fNumber += fDiff;
     return fMin <= fOff && fOff <= fMax;
 }
@@ -4410,6 +4407,8 @@ bool SvNumberformat::ImpGetNumberOutput(double fNumber,
         {
             nPrecExp = 0;
         }
+        // Make sure that Calc's ROUND and formatted output agree
+        fNumber = rtl_math_round(fNumber, rInfo.nCntPost, rtl_math_RoundingMode_Corrected);
         if (rInfo.nCntPost) // Decimal places
         {
             if ((rInfo.nCntPost + nPrecExp) > 15 && nPrecExp < 15)
@@ -4949,9 +4948,10 @@ void SvNumberformat::GetNumForInfo( sal_uInt16 nNumFor, SvNumFormatType& rScanne
                 {
                     p++;
                 }
-                while ( *p++ == '0' )
+                while ( *p == '0' || *p == '?' )
                 {
                     nLeadingCnt++;
+                    p++;
                 }
             }
             else if (nType == NF_SYMBOLTYPE_DECSEP
@@ -5211,18 +5211,16 @@ static void lcl_insertLCID( OUStringBuffer& rFormatStr, sal_uInt32 nLCID, sal_In
         // No format code, no locale.
         return;
 
-    OUStringBuffer aLCIDString = OUString::number( nLCID , 16 ).toAsciiUpperCase();
+    auto aLCIDString = OUString::number( nLCID , 16 ).toAsciiUpperCase();
     // Search for only last DBNum which is the last element before insertion position
     if ( bDBNumInserted && nPosInsertLCID >= 8
-        && aLCIDString.getLength() > 4
-        && rFormatStr.indexOf( "[DBNum", nPosInsertLCID-8) == nPosInsertLCID-8 )
+        && aLCIDString.length > 4
+        && OUString::unacquired(rFormatStr).match( "[DBNum", nPosInsertLCID-8) )
     {   // remove DBNumX code if long LCID
         nPosInsertLCID -= 8;
         rFormatStr.remove( nPosInsertLCID, 8 );
     }
-    aLCIDString.insert( 0, "[$-" );
-    aLCIDString.append( "]" );
-    rFormatStr.insert( nPosInsertLCID, aLCIDString );
+    rFormatStr.insert( nPosInsertLCID, "[$-" + aLCIDString + "]" );
 }
 
 /** Increment nAlphabetID for CJK numerals
@@ -5441,9 +5439,7 @@ OUString SvNumberformat::GetMappedFormatstring( const NfKeywordTable& rKeywords,
                         }
                         else
                         {
-                            aStr.append( '"' );
-                            aStr.append( rStrArray[j] );
-                            aStr.append( '"' );
+                            aStr.append( "\"" + rStrArray[j] + "\"" );
                         }
                         break;
                     case NF_SYMBOLTYPE_CALDEL :
@@ -5774,13 +5770,11 @@ OUString SvNumberformat::GetNatNumModifierString( sal_uInt16 nNumFor ) const
     const SvNumberNatNum& rNum = NumFor[nNumFor].GetNatNum();
     if ( !rNum.IsSet() )
         return "";
-    OUStringBuffer sNatNumModifier = "[NatNum";
     const sal_Int32 nNum = rNum.GetNatNum();
-    sNatNumModifier.append( nNum );
+    OUStringBuffer sNatNumModifier = "[NatNum" + OUString::number( nNum );
     if ( NatNumTakesParameters( nNum ) )
     {
-        sNatNumModifier.append( " " );
-        sNatNumModifier.append( rNum.GetParams() );
+        sNatNumModifier.append( " " + rNum.GetParams() );
     }
     sNatNumModifier.append( "]" );
 

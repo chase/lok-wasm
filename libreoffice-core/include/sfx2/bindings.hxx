@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <string_view>
 
 #include <o3tl/typed_flags_set.hxx>
 #include <sfx2/dllapi.h>
@@ -51,6 +52,7 @@ class Timer;
 class SfxWorkWindow;
 struct SfxFoundCache_Impl;
 class SfxFoundCacheArr_Impl;
+class SfxPoolItemHolder;
 
 enum class SfxCallMode : sal_uInt16
 {
@@ -98,7 +100,7 @@ friend class SfxBindings_Impl;
     sal_uInt16       nRegLevel;      // Lock-Level while Reconfig
 
 private:
-    SAL_DLLPRIVATE const SfxPoolItem*  Execute_Impl( sal_uInt16 nSlot, const SfxPoolItem **pArgs, sal_uInt16 nModi,
+    SAL_DLLPRIVATE SfxPoolItemHolder Execute_Impl( sal_uInt16 nSlot, const SfxPoolItem **pArgs, sal_uInt16 nModi,
                                     SfxCallMode nCall, const SfxPoolItem **pInternalArgs, bool bGlobalOnly=false);
     SAL_DLLPRIVATE void SetSubBindings_Impl( SfxBindings* );
     SAL_DLLPRIVATE void UpdateSlotServer_Impl(); // Update SlotServer
@@ -154,7 +156,7 @@ public:
 
     sal_uInt16       QuerySlotId( const css::util::URL& aURL );
 
-    const SfxPoolItem*  ExecuteSynchron( sal_uInt16 nSlot,
+    SfxPoolItemHolder ExecuteSynchron( sal_uInt16 nSlot,
                                  const SfxPoolItem **pArgs = nullptr);
     bool             Execute( sal_uInt16 nSlot,
                                  const SfxPoolItem **pArgs = nullptr,
@@ -164,8 +166,8 @@ public:
     void             SetActiveFrame( const css::uno::Reference< css::frame::XFrame > & rFrame );
     css::uno::Reference< css::frame::XFrame > GetActiveFrame() const;
                      // Reconfig
-    sal_uInt16       EnterRegistrations(const char *pFile = nullptr, int nLine = 0);
-    void             LeaveRegistrations( const char *pFile = nullptr, int nLine = 0 );
+    sal_uInt16       EnterRegistrations( std::string_view pFile = {}, int nLine = 0);
+    void             LeaveRegistrations( std::string_view pFile = {}, int nLine = 0 );
     void             Register( SfxControllerItem& rBinding );
     void             Release( SfxControllerItem& rBinding );
     SfxDispatcher*   GetDispatcher() const
@@ -193,9 +195,9 @@ public:
 #define ENTERREGISTRATIONS() EnterRegistrations(__FILE__, __LINE__)
 #define LEAVEREGISTRATIONS() LeaveRegistrations(__FILE__, __LINE__)
 #define DENTERREGISTRATIONS() \
-        EnterRegistrations( OStringBuffer(__FILE__).append('(').append(reinterpret_cast<sal_Int64>(this)).append(')').getStr(), __LINE__ )
+        EnterRegistrations( Concat2View(OString::Concat(__FILE__) + "(" + OString::number(reinterpret_cast<sal_Int64>(this)) + ")"), __LINE__ )
 #define DLEAVEREGISTRATIONS(  ) \
-        LeaveRegistrations( OStringBuffer(__FILE__).append('(').append(reinterpret_cast<sal_Int64>(this)).append(')').getStr(), __LINE__ )
+        LeaveRegistrations( Concat2View(OString::Concat(__FILE__) + "(" + OString::number(reinterpret_cast<sal_Int64>(this)) + ")"), __LINE__ )
 #else
 #define ENTERREGISTRATIONS() EnterRegistrations()
 #define LEAVEREGISTRATIONS() LeaveRegistrations()

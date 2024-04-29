@@ -21,7 +21,7 @@
 #include <vcl/skia/SkiaHelper.hxx>
 #include <vcl/BitmapMonochromeFilter.hxx>
 
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <bitmap/Octree.hxx>
 #include <salinst.hxx>
 #include <svdata.hxx>
@@ -90,19 +90,6 @@ void BitmapTest::testCreation()
         CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong pixel format", vcl::PixelFormat::INVALID,
                                      aBmp.getPixelFormat());
         CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong byte size", static_cast<sal_Int64>(0),
-                                     aBmp.GetSizeBytes());
-    }
-
-    {
-        Bitmap aBmp(Size(10, 10), vcl::PixelFormat::N1_BPP);
-        Size aSize = aBmp.GetSizePixel();
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong width", static_cast<tools::Long>(10), aSize.Width());
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong height", static_cast<tools::Long>(10), aSize.Height());
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong pref size", Size(), aBmp.GetPrefSize());
-        CPPUNIT_ASSERT_MESSAGE("Empty bitmap", !aBmp.IsEmpty());
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong pixel format", vcl::PixelFormat::N1_BPP,
-                                     aBmp.getPixelFormat());
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong byte size", static_cast<sal_Int64>(12),
                                      aBmp.GetSizeBytes());
     }
 
@@ -284,7 +271,7 @@ void BitmapTest::testConvert()
 
     CPPUNIT_ASSERT_EQUAL(vcl::PixelFormat::N8_BPP, aBitmap.getPixelFormat());
     {
-        Bitmap::ScopedReadAccess pReadAccess(aBitmap);
+        BitmapScopedReadAccess pReadAccess(aBitmap);
         CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(8), pReadAccess->GetBitCount());
 #if defined MACOSX || defined IOS
         if (SkiaHelper::isVCLSkiaEnabled())
@@ -306,7 +293,7 @@ void BitmapTest::testConvert()
 
     CPPUNIT_ASSERT_EQUAL(vcl::PixelFormat::N24_BPP, aBitmap.getPixelFormat());
     {
-        Bitmap::ScopedReadAccess pReadAccess(aBitmap);
+        BitmapScopedReadAccess pReadAccess(aBitmap);
         // 24 bit Bitmap on SVP backend can now use 24bit RGB everywhere.
         CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(24), pReadAccess->GetBitCount());
 
@@ -343,13 +330,9 @@ void checkAndInsert(CRCHash& rHash, sal_uInt64 nCRC, const char* pLocation)
     auto it = rHash.find(nCRC);
     if (it != rHash.end())
     {
-        OStringBuffer aBuf("CRC collision between ");
-        aBuf.append(pLocation);
-        aBuf.append(" and ");
-        aBuf.append(it->second);
-        aBuf.append(" hash is 0x");
-        aBuf.append(static_cast<sal_Int64>(nCRC), 16);
-        CPPUNIT_FAIL(aBuf.toString().getStr());
+        OString aBuf = OString::Concat("CRC collision between ") + pLocation + " and " + it->second
+                       + " hash is 0x" + OString::number(static_cast<sal_Int64>(nCRC), 16);
+        CPPUNIT_FAIL(aBuf.getStr());
     }
     rHash[nCRC] = pLocation;
 }
@@ -467,7 +450,7 @@ void BitmapTest::testCustom8BitPalette()
     }
 
     {
-        Bitmap::ScopedReadAccess pAccess(aBitmap);
+        BitmapScopedReadAccess pAccess(aBitmap);
         CPPUNIT_ASSERT_EQUAL(0, int(pAccess->GetPixelIndex(0, 0)));
         CPPUNIT_ASSERT_EQUAL(BitmapColor(0x00, 0xCC, 0x22), pAccess->GetColor(0, 0));
 
@@ -496,7 +479,7 @@ void BitmapTest::testErase()
         pWriteAccess->Erase(Color(0x11, 0x22, 0x33));
     }
     {
-        Bitmap::ScopedReadAccess pReadAccess(aBitmap);
+        BitmapScopedReadAccess pReadAccess(aBitmap);
         BitmapColor aColor(pReadAccess->GetPixel(0, 0));
         CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x11, 0x22, 0x33, 0x00), aColor);
     }
@@ -517,7 +500,7 @@ void BitmapTest::testBitmap32()
         pWriteAccess->SetPixel(2, 2, BitmapColor(ColorTransparency, 0x99, 0x77, 0x66, 0x55));
     }
     {
-        Bitmap::ScopedReadAccess pReadAccess(aBitmap);
+        BitmapScopedReadAccess pReadAccess(aBitmap);
         BitmapColor aColor = pReadAccess->GetPixel(0, 0);
         CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x00, 0xFF), aColor);
 
@@ -549,7 +532,7 @@ void BitmapTest::testOctree()
 
     {
         // Reduce to 1 color
-        Bitmap::ScopedReadAccess pAccess(aBitmap);
+        BitmapScopedReadAccess pAccess(aBitmap);
         Octree aOctree(*pAccess, 1);
         auto aBitmapPalette = aOctree.GetPalette();
         CPPUNIT_ASSERT_EQUAL(sal_uInt16(1), aBitmapPalette.GetEntryCount());
@@ -558,7 +541,7 @@ void BitmapTest::testOctree()
 
     {
         // Reduce to 4 color
-        Bitmap::ScopedReadAccess pAccess(aBitmap);
+        BitmapScopedReadAccess pAccess(aBitmap);
         Octree aOctree(*pAccess, 4);
         auto aBitmapPalette = aOctree.GetPalette();
         CPPUNIT_ASSERT_EQUAL(sal_uInt16(4), aBitmapPalette.GetEntryCount());
@@ -570,7 +553,7 @@ void BitmapTest::testOctree()
 
     {
         // Reduce to 256 color
-        Bitmap::ScopedReadAccess pAccess(aBitmap);
+        BitmapScopedReadAccess pAccess(aBitmap);
         Octree aOctree(*pAccess, 256);
         auto aBitmapPalette = aOctree.GetPalette();
         CPPUNIT_ASSERT_EQUAL(sal_uInt16(74), aBitmapPalette.GetEntryCount());

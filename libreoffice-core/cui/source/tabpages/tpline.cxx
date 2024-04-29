@@ -242,7 +242,7 @@ void SvxLineTabPage::FillListboxes()
 
 void SvxLineTabPage::ActivatePage( const SfxItemSet& rSet )
 {
-    const CntUInt16Item* pPageTypeItem = rSet.GetItem<CntUInt16Item>(SID_PAGE_TYPE, false);
+    const SfxUInt16Item* pPageTypeItem = rSet.GetItem<SfxUInt16Item>(SID_PAGE_TYPE, false);
     if (pPageTypeItem)
         SetPageType(static_cast<PageType>(pPageTypeItem->GetValue()));
     if( m_nDlgType == 0 && m_pDashList.is() )
@@ -1521,7 +1521,7 @@ IMPL_LINK_NOARG(SvxLineTabPage, MenuCreateHdl_Impl, weld::Toggleable&, void)
 
 // #58425# Symbols on a list (e.g. StarChart)
 // Handler for menu button
-IMPL_LINK(SvxLineTabPage, GraphicHdl_Impl, const OString&, rIdent, void)
+IMPL_LINK(SvxLineTabPage, GraphicHdl_Impl, const OUString&, rIdent, void)
 {
     const Graphic* pGraphic = nullptr;
     Graphic aGraphic;
@@ -1529,7 +1529,7 @@ IMPL_LINK(SvxLineTabPage, GraphicHdl_Impl, const OString&, rIdent, void)
     bool bEnable = true;
     tools::Long nPreviousSymbolType = m_nSymbolType;
 
-    OString sNumber;
+    OUString sNumber;
     if (rIdent.startsWith("gallery", &sNumber))
     {
         SvxBmpItemInfo* pInfo = m_aGalleryBrushItems[sNumber.toUInt32()].get();

@@ -60,13 +60,15 @@ public:
        @param rGuard
             this parameter only here to make that this container is accessed while locked
      */
-    OInterfaceIteratorHelper4(std::unique_lock<std::mutex>& /*rGuard*/,
+    OInterfaceIteratorHelper4(std::unique_lock<std::mutex>& rGuard,
                               OInterfaceContainerHelper4<ListenerT>& rCont_)
         : rCont(rCont_)
         , maData(rCont.maData)
         // const_cast so we don't trigger make_unique via o3tl::cow_wrapper::operator->
         , nRemain(std::as_const(maData)->size())
     {
+        assert(rGuard.owns_lock());
+        (void)rGuard;
     }
 
     /** Return true, if there are more elements in the iterator. */
@@ -200,7 +202,7 @@ public:
             this parameter only here to make that this container is accessed while locked
     */
     template <typename FuncT>
-    inline void forEach(std::unique_lock<std::mutex>& rGuard, FuncT const& func);
+    inline void forEach(std::unique_lock<std::mutex>& rGuard, FuncT const& func) const;
 
     /** Calls a UNO listener method for each contained listener.
 
@@ -227,7 +229,11 @@ public:
     template <typename EventT>
     inline void notifyEach(std::unique_lock<std::mutex>& rGuard,
                            void (SAL_CALL ListenerT::*NotificationMethod)(const EventT&),
-                           const EventT& Event);
+                           const EventT& Event) const;
+
+    // this is moveable, but not copyable
+    OInterfaceContainerHelper4(OInterfaceContainerHelper4&&) = default;
+    OInterfaceContainerHelper4& operator=(OInterfaceContainerHelper4&&) = default;
 
 private:
     friend class OInterfaceIteratorHelper4<ListenerT>;
@@ -279,14 +285,16 @@ inline OInterfaceContainerHelper4<T>::OInterfaceContainerHelper4()
 template <class T>
 template <typename FuncT>
 inline void OInterfaceContainerHelper4<T>::forEach(std::unique_lock<std::mutex>& rGuard,
-                                                   FuncT const& func)
+                                                   FuncT const& func) const
 {
-    if (std::as_const(maData)->size() == 0)
+    assert(rGuard.owns_lock());
+    if (std::as_const(maData)->empty())
     {
         return;
     }
-    maData.make_unique(); // so we can iterate over the data without holding the lock
-    OInterfaceIteratorHelper4<T> iter(rGuard, *this);
+    const_cast<OInterfaceContainerHelper4&>(*this)
+        .maData.make_unique(); // so we can iterate over the data without holding the lock
+    OInterfaceIteratorHelper4<T> iter(rGuard, const_cast<OInterfaceContainerHelper4&>(*this));
     rGuard.unlock();
     while (iter.hasMoreElements())
     {
@@ -312,7 +320,7 @@ template <class ListenerT>
 template <typename EventT>
 inline void OInterfaceContainerHelper4<ListenerT>::notifyEach(
     std::unique_lock<std::mutex>& rGuard,
-    void (SAL_CALL ListenerT::*NotificationMethod)(const EventT&), const EventT& Event)
+    void (SAL_CALL ListenerT::*NotificationMethod)(const EventT&), const EventT& Event) const
 {
     forEach<NotifySingleListener<EventT>>(rGuard,
                                           NotifySingleListener<EventT>(NotificationMethod, Event));
@@ -320,32 +328,40 @@ inline void OInterfaceContainerHelper4<ListenerT>::notifyEach(
 
 template <class ListenerT>
 sal_Int32
-OInterfaceContainerHelper4<ListenerT>::getLength(std::unique_lock<std::mutex>& /*rGuard*/) const
+OInterfaceContainerHelper4<ListenerT>::getLength(std::unique_lock<std::mutex>& rGuard) const
 {
+    assert(rGuard.owns_lock());
+    (void)rGuard;
     return maData->size();
 }
 
 template <class ListenerT>
 std::vector<css::uno::Reference<ListenerT>>
-OInterfaceContainerHelper4<ListenerT>::getElements(std::unique_lock<std::mutex>& /*rGuard*/) const
+OInterfaceContainerHelper4<ListenerT>::getElements(std::unique_lock<std::mutex>& rGuard) const
 {
+    assert(rGuard.owns_lock());
+    (void)rGuard;
     return *maData;
 }
 
 template <class ListenerT>
 sal_Int32
-OInterfaceContainerHelper4<ListenerT>::addInterface(std::unique_lock<std::mutex>& /*rGuard*/,
+OInterfaceContainerHelper4<ListenerT>::addInterface(std::unique_lock<std::mutex>& rGuard,
                                                     const css::uno::Reference<ListenerT>& rListener)
 {
+    assert(rGuard.owns_lock());
+    (void)rGuard;
     assert(rListener.is());
     maData->push_back(rListener);
-    return maData->size();
+    return std::as_const(maData)->size();
 }
 
 template <class ListenerT>
 sal_Int32 OInterfaceContainerHelper4<ListenerT>::removeInterface(
-    std::unique_lock<std::mutex>& /*rGuard*/, const css::uno::Reference<ListenerT>& rListener)
+    std::unique_lock<std::mutex>& rGuard, const css::uno::Reference<ListenerT>& rListener)
 {
+    assert(rGuard.owns_lock());
+    (void)rGuard;
     assert(rListener.is());
 
     // It is not valid to compare the pointer directly, but it's faster.
@@ -361,7 +377,7 @@ sal_Int32 OInterfaceContainerHelper4<ListenerT>::removeInterface(
     if (it != maData->end())
         maData->erase(it);
 
-    return maData->size();
+    return std::as_const(maData)->size();
 }
 
 template <class ListenerT>
@@ -394,8 +410,10 @@ void OInterfaceContainerHelper4<ListenerT>::disposeAndClear(std::unique_lock<std
 }
 
 template <class ListenerT>
-void OInterfaceContainerHelper4<ListenerT>::clear(::std::unique_lock<::std::mutex>& /*rGuard*/)
+void OInterfaceContainerHelper4<ListenerT>::clear(::std::unique_lock<::std::mutex>& rGuard)
 {
+    assert(rGuard.owns_lock());
+    (void)rGuard;
     maData->clear();
 }
 }

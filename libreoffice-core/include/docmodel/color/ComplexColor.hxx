@@ -16,6 +16,8 @@
 #include <docmodel/color/Transformation.hxx>
 #include <o3tl/hash_combine.hxx>
 
+#include <vector>
+
 namespace model
 {
 enum class ColorType
@@ -134,11 +136,9 @@ public:
 
     void removeTransformations(TransformationType eType)
     {
-        maTransformations.erase(std::remove_if(maTransformations.begin(), maTransformations.end(),
-                                               [eType](Transformation const& rTransform) {
-                                                   return rTransform.meType == eType;
-                                               }),
-                                maTransformations.end());
+        std::erase_if(maTransformations, [eType](Transformation const& rTransform) {
+            return rTransform.meType == eType;
+        });
     }
 
     void clearTransformations() { maTransformations.clear(); }
@@ -270,7 +270,7 @@ public:
     }
 };
 
-} // end of namespace svx
+} // end of namespace model
 
 namespace std
 {

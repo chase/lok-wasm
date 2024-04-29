@@ -89,9 +89,7 @@ sal_Int32 PDFObjectCopier::copyExternalResource(SvMemoryStream& rDocBuffer,
     SAL_INFO("vcl.pdfwriter", "PDFObjectCopier::copyExternalResource: " << rObject.GetObjectValue()
                                                                         << " -> " << nObject);
 
-    OStringBuffer aLine;
-    aLine.append(nObject);
-    aLine.append(" 0 obj\n");
+    OStringBuffer aLine = OString::number(nObject) + " 0 obj\n";
 
     if (rObject.GetDictionary())
     {
@@ -104,9 +102,7 @@ sal_Int32 PDFObjectCopier::copyExternalResource(SvMemoryStream& rDocBuffer,
             else
                 aLine.append(" ");
 
-            aLine.append("/");
-            aLine.append(rPair.first);
-            aLine.append(" ");
+            aLine.append("/" + rPair.first + " ");
             copyRecursively(aLine, *rPair.second, rDocBuffer, rCopiedResources);
         }
 
@@ -147,7 +143,7 @@ sal_Int32 PDFObjectCopier::copyExternalResource(SvMemoryStream& rDocBuffer,
     // We have the whole object, now write it to the output.
     if (!m_rContainer.updateObject(nObject))
         return -1;
-    if (!m_rContainer.writeBuffer(aLine.getStr(), aLine.getLength()))
+    if (!m_rContainer.writeBuffer(aLine))
         return -1;
     aLine.setLength(0);
 
@@ -156,19 +152,19 @@ sal_Int32 PDFObjectCopier::copyExternalResource(SvMemoryStream& rDocBuffer,
         SvMemoryStream& rStream = pStream->GetMemory();
         m_rContainer.checkAndEnableStreamEncryption(nObject);
         aLine.append(static_cast<const char*>(rStream.GetData()), rStream.GetSize());
-        if (!m_rContainer.writeBuffer(aLine.getStr(), aLine.getLength()))
+        if (!m_rContainer.writeBuffer(aLine))
             return -1;
         aLine.setLength(0);
         m_rContainer.disableStreamEncryption();
 
         aLine.append("\nendstream\n");
-        if (!m_rContainer.writeBuffer(aLine.getStr(), aLine.getLength()))
+        if (!m_rContainer.writeBuffer(aLine))
             return -1;
         aLine.setLength(0);
     }
 
     aLine.append("endobj\n\n");
-    if (!m_rContainer.writeBuffer(aLine.getStr(), aLine.getLength()))
+    if (!m_rContainer.writeBuffer(aLine))
         return -1;
 
     return nObject;
@@ -185,7 +181,8 @@ OString PDFObjectCopier::copyExternalResources(filter::PDFObjectElement& rPage,
     // Get the rKind subset of the resource dictionary.
     std::map<OString, filter::PDFElement*> aItems;
     filter::PDFObjectElement* pKindObject = nullptr;
-    if (auto pResources = dynamic_cast<filter::PDFDictionaryElement*>(rPage.Lookup("Resources")))
+    if (auto pResources
+        = dynamic_cast<filter::PDFDictionaryElement*>(rPage.Lookup("Resources"_ostr)))
     {
         // Resources is a direct dictionary.
         filter::PDFElement* pLookup = pResources->LookupElement(rKind);
@@ -207,7 +204,7 @@ OString PDFObjectCopier::copyExternalResources(filter::PDFObjectElement& rPage,
             aItems = pReferenced->GetDictionaryItems();
         }
     }
-    else if (filter::PDFObjectElement* pPageResources = rPage.LookupObject("Resources"))
+    else if (filter::PDFObjectElement* pPageResources = rPage.LookupObject("Resources"_ostr))
     {
         // Resources is an indirect object.
         filter::PDFElement* pValue = pPageResources->Lookup(rKind);
@@ -282,7 +279,8 @@ void PDFObjectCopier::copyPageResources(filter::PDFObjectElement* pPage, OString
 {
     rLine.append(" /Resources <<");
     static const std::initializer_list<OString> aKeys
-        = { "ColorSpace", "ExtGState", "Font", "XObject", "Shading", "Pattern" };
+        = { "ColorSpace"_ostr, "ExtGState"_ostr, "Font"_ostr,
+            "XObject"_ostr,    "Shading"_ostr,   "Pattern"_ostr };
     for (const auto& rKey : aKeys)
     {
         rLine.append(copyExternalResources(*pPage, rKey, rCopiedResources));
@@ -304,8 +302,8 @@ sal_Int32 PDFObjectCopier::copyPageStreams(std::vector<filter::PDFObjectElement*
 
         SvMemoryStream& rPageStream = pPageStream->GetMemory();
 
-        auto pFilter = dynamic_cast<filter::PDFNameElement*>(pContent->Lookup("Filter"));
-        auto pFilterArray = dynamic_cast<filter::PDFArrayElement*>(pContent->Lookup("Filter"));
+        auto pFilter = dynamic_cast<filter::PDFNameElement*>(pContent->Lookup("Filter"_ostr));
+        auto pFilterArray = dynamic_cast<filter::PDFArrayElement*>(pContent->Lookup("Filter"_ostr));
         if (!pFilter && pFilterArray)
         {
             auto& aElements = pFilterArray->GetElements();

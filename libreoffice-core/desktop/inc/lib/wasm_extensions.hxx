@@ -67,5 +67,8 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     std::vector<TileRendererData> tileRendererData_;
 
     TileRendererData& startTileRenderer(int32_t viewId, int32_t tileSize);
+
+    std::string getPageColor();
+    std::string getPageOrientation();
 };
 }

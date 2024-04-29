@@ -77,7 +77,7 @@ OutlineView::OutlineView( DrawDocShell& rDocSh, vcl::Window* pWindow, OutlineVie
 , mnPagesProcessed(0)
 , mbFirstPaint(true)
 , maDocColor( COL_WHITE )
-, maLRSpaceItem( 0, 0, 2000, 0, EE_PARA_OUTLLRSPACE )
+, maLRSpaceItem(2000, 0, 0, EE_PARA_OUTLLRSPACE)
 {
     bool bInitOutliner = false;
 
@@ -154,8 +154,7 @@ OutlineView::~OutlineView()
         EEControlBits nCntrl = mrOutliner.GetControlWord();
         mrOutliner.SetUpdateLayout(false); // otherwise there will be drawn on SetControlWord
         mrOutliner.SetControlWord(nCntrl & ~EEControlBits::NOCOLORS);
-        SvtAccessibilityOptions aOptions;
-        mrOutliner.ForceAutoColor( aOptions.GetIsAutomaticFontColor() );
+        mrOutliner.ForceAutoColor( SvtAccessibilityOptions::GetIsAutomaticFontColor() );
         mrOutliner.Clear();
     }
 }
@@ -761,9 +760,8 @@ IMPL_LINK( OutlineView, BeginMovingHdl, ::Outliner *, pOutliner, void )
     // list of selected title paragraphs
     mpOutlinerViews[0]->CreateSelectionList(maSelectedParas);
 
-    maSelectedParas.erase(std::remove_if(maSelectedParas.begin(), maSelectedParas.end(),
-        [](const Paragraph* pPara) { return !Outliner::HasParaFlag(pPara, ParaFlag::ISPAGE); }),
-        maSelectedParas.end());
+    std::erase_if(maSelectedParas,
+        [](const Paragraph* pPara) { return !Outliner::HasParaFlag(pPara, ParaFlag::ISPAGE); });
 
     // select the pages belonging to the paragraphs on level 0 to select
     sal_uInt16 nPos = 0;
@@ -858,16 +856,14 @@ IMPL_LINK( OutlineView, EndMovingHdl, ::Outliner *, pOutliner, void )
  */
 SdrTextObj* OutlineView::GetTitleTextObject(SdrPage const * pPage)
 {
-    const size_t nObjectCount = pPage->GetObjCount();
     SdrTextObj*     pResult      = nullptr;
 
-    for (size_t nObject = 0; nObject < nObjectCount; ++nObject)
+    for (const rtl::Reference<SdrObject>& pObject : *pPage)
     {
-        SdrObject* pObject = pPage->GetObj(nObject);
         if (pObject->GetObjInventor() == SdrInventor::Default &&
             pObject->GetObjIdentifier() == SdrObjKind::TitleText)
         {
-            pResult = static_cast<SdrTextObj*>(pObject);
+            pResult = static_cast<SdrTextObj*>(pObject.get());
             break;
         }
     }
@@ -879,16 +875,14 @@ SdrTextObj* OutlineView::GetTitleTextObject(SdrPage const * pPage)
  */
 SdrTextObj* OutlineView::GetOutlineTextObject(SdrPage const * pPage)
 {
-    const size_t nObjectCount = pPage->GetObjCount();
     SdrTextObj*     pResult      = nullptr;
 
-    for (size_t nObject = 0; nObject < nObjectCount; ++nObject)
+    for (const rtl::Reference<SdrObject>& pObject : *pPage)
     {
-        SdrObject* pObject = pPage->GetObj(nObject);
         if (pObject->GetObjInventor() == SdrInventor::Default &&
             pObject->GetObjIdentifier() == SdrObjKind::OutlineText)
         {
-            pResult = static_cast<SdrTextObj*>(pObject);
+            pResult = static_cast<SdrTextObj*>(pObject.get());
             break;
         }
     }
@@ -1205,7 +1199,7 @@ Paragraph* OutlineView::GetParagraphForPage( ::Outliner const & rOutl, SdPage co
 /** selects the paragraph for the given page at the outliner view*/
 void OutlineView::SetActualPage( SdPage const * pActual )
 {
-    if( pActual && dynamic_cast<SdOutliner&>(mrOutliner).GetIgnoreCurrentPageChangesLevel()==0 && !mbFirstPaint)
+    if( pActual && mrOutliner.GetIgnoreCurrentPageChangesLevel()==0 && !mbFirstPaint)
     {
         // if we found a paragraph, select its text at the outliner view
         Paragraph* pPara = GetParagraphForPage( mrOutliner, pActual );
@@ -1234,9 +1228,8 @@ void OutlineView::SetSelectedPages()
     std::vector<Paragraph*> aSelParas;
     mpOutlinerViews[0]->CreateSelectionList(aSelParas);
 
-    aSelParas.erase(std::remove_if(aSelParas.begin(), aSelParas.end(),
-        [](const Paragraph* pPara) { return !Outliner::HasParaFlag(pPara, ParaFlag::ISPAGE); }),
-        aSelParas.end());
+    std::erase_if(aSelParas,
+        [](const Paragraph* pPara) { return !Outliner::HasParaFlag(pPara, ParaFlag::ISPAGE); });
 
     // select the pages belonging to the paragraphs on level 0 to select
     sal_uInt16 nPos = 0;
@@ -1369,7 +1362,7 @@ IMPL_LINK(OutlineView, EventMultiplexerListener, ::sd::tools::EventMultiplexerEv
             break;
 
         case EventMultiplexerEventId::PageOrder:
-            if (dynamic_cast<SdOutliner&>(mrOutliner).GetIgnoreCurrentPageChangesLevel()==0)
+            if (mrOutliner.GetIgnoreCurrentPageChangesLevel()==0)
             {
                 if (((mrDoc.GetPageCount()-1)%2) == 0)
                 {
@@ -1389,9 +1382,9 @@ IMPL_LINK(OutlineView, EventMultiplexerListener, ::sd::tools::EventMultiplexerEv
 void OutlineView::IgnoreCurrentPageChanges (bool bIgnoreChanges)
 {
     if (bIgnoreChanges)
-        dynamic_cast<SdOutliner&>(mrOutliner).IncreIgnoreCurrentPageChangesLevel();
+        mrOutliner.IncreIgnoreCurrentPageChangesLevel();
     else
-        dynamic_cast<SdOutliner&>(mrOutliner).DecreIgnoreCurrentPageChangesLevel();
+        mrOutliner.DecreIgnoreCurrentPageChangesLevel();
 }
 
 /** call this method before you do anything that can modify the outliner

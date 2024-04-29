@@ -38,22 +38,15 @@ namespace svgio::svgreader
 
         const SvgStyleAttributes* SvgGNode::getSvgStyleAttributes() const
         {
-            if (SVGToken::Defs == getType())
-            {
-                // tdf#98599 attributes may be inherit by the children, therefore read them
-                return checkForCssStyle("defs", maSvgStyleAttributes);
-            }
-            else
-            {
-                // #i125258# for SVGToken::G take CssStyles into account
-                return checkForCssStyle("g", maSvgStyleAttributes);
-            }
+            // tdf#98599 attributes may be inherit by the children, therefore read them
+            // #i125258# for SVGToken::G take CssStyles into account
+            return checkForCssStyle(maSvgStyleAttributes);
         }
 
-        void SvgGNode::parseAttribute(const OUString& rTokenName, SVGToken aSVGToken, const OUString& aContent)
+        void SvgGNode::parseAttribute(SVGToken aSVGToken, const OUString& aContent)
         {
             // call parent
-            SvgNode::parseAttribute(rTokenName, aSVGToken, aContent);
+            SvgNode::parseAttribute(aSVGToken, aContent);
 
             // read style attributes
             maSvgStyleAttributes.parseStyleAttribute(aSVGToken, aContent);
@@ -97,19 +90,14 @@ namespace svgio::svgreader
 
                 if(pStyle)
                 {
-                    const double fOpacity(pStyle->getOpacity().getNumber());
+                    drawinglayer::primitive2d::Primitive2DContainer aContent;
 
-                    if(fOpacity > 0.0 && Display::None != getDisplay())
+                    // decompose children
+                    SvgNode::decomposeSvgNode(aContent, bReferenced);
+
+                    if(!aContent.empty())
                     {
-                        drawinglayer::primitive2d::Primitive2DContainer aContent;
-
-                        // decompose children
-                        SvgNode::decomposeSvgNode(aContent, bReferenced);
-
-                        if(!aContent.empty())
-                        {
-                            pStyle->add_postProcess(rTarget, std::move(aContent), getTransform());
-                        }
+                        pStyle->add_postProcess(rTarget, std::move(aContent), getTransform());
                     }
                 }
             }

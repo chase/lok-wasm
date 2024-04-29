@@ -34,7 +34,7 @@ class FrameView;
 
 class SdOptionsGeneric;
 
-class SD_DLLPUBLIC SdOptionsItem : public ::utl::ConfigItem
+class SD_DLLPUBLIC SdOptionsItem final : public ::utl::ConfigItem
 {
 
 private:
@@ -145,7 +145,7 @@ public:
     void    SetDefTab( sal_uInt16 nTab ) { if( nDefTab != nTab ) { OptionsChanged(); nDefTab = nTab; } }
 };
 
-class SD_DLLPUBLIC SdOptionsLayoutItem : public SfxPoolItem
+class SD_DLLPUBLIC SdOptionsLayoutItem final : public SfxPoolItem
 {
 public:
 
@@ -195,9 +195,6 @@ private:
     bool    bPickThrough                : 1;    // Misc/TextObject/Selectable
     bool    bDoubleClickTextEdit        : 1;    // Misc/DclickTextedit
     bool    bClickChangeRotation        : 1;    // Misc/RotateClick
-    bool    bEnableSdremote             : 1;    // Misc/Start/EnableSdremote
-    bool    bEnablePresenterScreen      : 1;    // Misc/Start/EnablePresenterScreen
-    bool    bPresenterScreenFullScreen  : 1;    // Misc/Start/PresenterScreenFullScreen
     bool    bSolidDragging              : 1;    // Misc/ModifyWithAttributes
     bool    bSummationOfParagraphs      : 1;    // misc/SummationOfParagraphs
     bool    bTabBarVisible              : 1;    // Misc/TabBarVisible
@@ -210,7 +207,6 @@ private:
     bool    bPreviewChangedEffects;
     bool    bPreviewTransitions;
 
-
     sal_Int32   mnDisplay;
 
     sal_Int32 mnPenColor;
@@ -222,6 +218,9 @@ private:
         the modules.
     */
     sal_uInt16  mnPrinterIndependentLayout;     // Misc/Compatibility/PrinterIndependentLayout
+
+    /// Minimum mouse move distance for it to register as a drag action
+    sal_Int32 mnDragThresholdPixels; // Misc/DragThresholdPixels
 // Misc
 
 protected:
@@ -246,9 +245,6 @@ public:
     bool    IsPickThrough() const { Init(); return bPickThrough; }
     bool    IsDoubleClickTextEdit() const { Init(); return bDoubleClickTextEdit; }
     bool    IsClickChangeRotation() const { Init(); return bClickChangeRotation; }
-    bool    IsEnableSdremote() const { Init(); return bEnableSdremote; }
-    bool    IsEnablePresenterScreen() const { Init(); return bEnablePresenterScreen; }
-    bool    IsPresenterScreenFullScreen() const { Init(); return bPresenterScreenFullScreen; }
     bool    IsSolidDragging() const { Init(); return bSolidDragging; }
     bool    IsSummationOfParagraphs() const { Init(); return bSummationOfParagraphs; };
     bool    IsTabBarVisible() const { Init(); return bTabBarVisible; };
@@ -277,6 +273,9 @@ public:
     double    GetPresentationPenWidth() const { Init(); return mnPenWidth; }
     void      SetPresentationPenWidth( double nPenWidth ) { if( mnPenWidth != nPenWidth ) { OptionsChanged(); mnPenWidth = nPenWidth; } }
 
+    sal_Int32 GetDragThresholdPixels() const;
+    void SetDragThreshold(sal_Int32 nDragThresholdPixels);
+
     void    SetStartWithTemplate( bool bOn ) { if( bStartWithTemplate != bOn ) { OptionsChanged(); bStartWithTemplate = bOn; } }
     void    SetMarkedHitMovesAlways( bool bOn ) { if( bMarkedHitMovesAlways != bOn ) { OptionsChanged(); bMarkedHitMovesAlways = bOn; } }
     void    SetMoveOnlyDragging( bool bOn ) { if( bMoveOnlyDragging != bOn ) { OptionsChanged(); bMoveOnlyDragging = bOn; } }
@@ -287,9 +286,6 @@ public:
     void    SetPickThrough( bool bOn ) { if( bPickThrough != bOn ) { OptionsChanged(); bPickThrough = bOn; } }
     void    SetDoubleClickTextEdit( bool bOn ) { if( bDoubleClickTextEdit != bOn ) { OptionsChanged(); bDoubleClickTextEdit = bOn; } }
     void    SetClickChangeRotation( bool bOn ) { if( bClickChangeRotation != bOn ) { OptionsChanged(); bClickChangeRotation = bOn; } }
-    void    SetEnableSdremote( bool bOn ) { if( bEnableSdremote != bOn ) { OptionsChanged(); bEnableSdremote = bOn; } }
-    void    SetEnablePresenterScreen( bool bOn ) { if( bEnablePresenterScreen != bOn ) { OptionsChanged(); bEnablePresenterScreen = bOn; } }
-    void    SetPresenterScreenFullScreen( bool bOn ) { if ( bPresenterScreenFullScreen != bOn) { OptionsChanged(); bPresenterScreenFullScreen = bOn; } }
     void    SetSummationOfParagraphs( bool bOn ){ if ( bOn != bSummationOfParagraphs ) { OptionsChanged(); bSummationOfParagraphs = bOn; } }
     void    SetTabBarVisible( bool bOn ){ if ( bOn != bTabBarVisible ) { OptionsChanged(); bTabBarVisible = bOn; } }
     /** Set the printer independent layout mode.
@@ -313,7 +309,7 @@ public:
     void    SetShowComments( bool bShow )  { if( bShowComments != bShow ) { OptionsChanged(); bShowComments = bShow; } }
 };
 
-class SD_DLLPUBLIC SdOptionsMiscItem : public SfxPoolItem
+class SD_DLLPUBLIC SdOptionsMiscItem final : public SfxPoolItem
 {
 public:
 
@@ -381,7 +377,7 @@ public:
     void    SetEliminatePolyPointLimitAngle( Degree100 nIn ) { if( nBezAngle != nIn ) { OptionsChanged(); nBezAngle = nIn; } }
 };
 
-class SD_DLLPUBLIC SdOptionsSnapItem : public SfxPoolItem
+class SD_DLLPUBLIC SdOptionsSnapItem final : public SfxPoolItem
 {
 public:
 
@@ -438,8 +434,6 @@ public:
     sal_uInt32  GetFieldDivisionX() const { Init(); return SvxOptionsGrid::GetFieldDivisionX(); }
     sal_uInt32  GetFieldDrawY() const { Init(); return SvxOptionsGrid::GetFieldDrawY(); }
     sal_uInt32  GetFieldDivisionY() const { Init(); return SvxOptionsGrid::GetFieldDivisionY(); }
-    sal_uInt32  GetFieldSnapX() const { Init(); return SvxOptionsGrid::GetFieldSnapX(); }
-    sal_uInt32  GetFieldSnapY() const { Init(); return SvxOptionsGrid::GetFieldSnapY(); }
     bool    IsUseGridSnap() const { Init(); return SvxOptionsGrid::GetUseGridSnap(); }
     bool    IsSynchronize() const { Init(); return SvxOptionsGrid::GetSynchronize(); }
     bool    IsGridVisible() const { Init(); return SvxOptionsGrid::GetGridVisible(); }
@@ -449,15 +443,13 @@ public:
     void    SetFieldDivisionX( sal_uInt32 nSet ) { if( nSet != SvxOptionsGrid::GetFieldDivisionX() ) { OptionsChanged(); SvxOptionsGrid::SetFieldDivisionX( nSet ); } }
     void    SetFieldDrawY( sal_uInt32 nSet ) { if( nSet != SvxOptionsGrid::GetFieldDrawY() ) { OptionsChanged(); SvxOptionsGrid::SetFieldDrawY( nSet ); } }
     void    SetFieldDivisionY( sal_uInt32 nSet ) { if( nSet != SvxOptionsGrid::GetFieldDivisionY() ) { OptionsChanged(); SvxOptionsGrid::SetFieldDivisionY( nSet ); } }
-    void    SetFieldSnapX( sal_uInt32 nSet ) { if( nSet != SvxOptionsGrid::GetFieldSnapX() ) { OptionsChanged(); SvxOptionsGrid::SetFieldSnapX( nSet ); } }
-    void    SetFieldSnapY( sal_uInt32 nSet ) { if( nSet != SvxOptionsGrid::GetFieldSnapY() ) { OptionsChanged(); SvxOptionsGrid::SetFieldSnapY( nSet ); } }
     void    SetUseGridSnap( bool bSet ) { if( bSet != SvxOptionsGrid::GetUseGridSnap() ) { OptionsChanged(); SvxOptionsGrid::SetUseGridSnap( bSet ); } }
     void    SetSynchronize( bool bSet ) { if( bSet != SvxOptionsGrid::GetSynchronize() ) { OptionsChanged(); SvxOptionsGrid::SetSynchronize( bSet ); } }
     void    SetGridVisible( bool bSet ) { if( bSet != SvxOptionsGrid::GetGridVisible() ) { OptionsChanged(); SvxOptionsGrid::SetGridVisible( bSet ); } }
     void    SetEqualGrid( bool bSet ) { if( bSet != SvxOptionsGrid::GetEqualGrid() ) { OptionsChanged(); SvxOptionsGrid::SetEqualGrid( bSet ); } }
 };
 
-class SdOptionsGridItem : public SvxGridItem
+class SdOptionsGridItem final : public SvxGridItem
 {
 
 public:
@@ -549,7 +541,7 @@ public:
     void    SetHandoutPages( sal_uInt16 nHandoutPages ) { if( nHandoutPages != mnHandoutPages ) { OptionsChanged(); mnHandoutPages = nHandoutPages; } }
 };
 
-class SD_DLLPUBLIC SdOptionsPrintItem : public SfxPoolItem
+class SD_DLLPUBLIC SdOptionsPrintItem final : public SfxPoolItem
 {
 public:
 
@@ -567,7 +559,7 @@ private:
     SdOptionsPrint  maOptionsPrint;
 };
 
-class SdOptions : public SdOptionsLayout, public SdOptionsContents,
+class SdOptions final : public SdOptionsLayout, public SdOptionsContents,
                   public SdOptionsMisc, public SdOptionsSnap,
                   public SdOptionsZoom, public SdOptionsGrid,
                   public SdOptionsPrint

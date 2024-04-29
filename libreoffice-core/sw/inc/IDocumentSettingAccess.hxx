@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_SW_INC_IDOCUMENTSETTINGACCESS_HXX
-#define INCLUDED_SW_INC_IDOCUMENTSETTINGACCESS_HXX
+#pragma once
 
 #include <sal/types.h>
 #include "fldupde.hxx"
@@ -97,6 +96,9 @@ enum class DocumentSettingId
     HYPHENATE_URLS, ///< tdf#152952
     DO_NOT_BREAK_WRAPPED_TABLES,
     ALLOW_TEXT_AFTER_FLOATING_TABLE_BREAK,
+    // tdf#119908 new paragraph justification
+    JUSTIFY_LINES_WITH_SHRINKING,
+    APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH,
     // COMPATIBILITY FLAGS END
     BROWSE_MODE,
     HTML_MODE,
@@ -107,7 +109,6 @@ enum class DocumentSettingId
     KERN_ASIAN_PUNCTUATION,
     MATH_BASELINE_ALIGNMENT,
     STYLES_NODEFAULT,
-    FLOATTABLE_NOMARGINS,
     EMBED_FONTS,
     EMBED_USED_FONTS,
     EMBED_LATIN_SCRIPT_FONTS,
@@ -128,7 +129,9 @@ enum class DocumentSettingId
     NO_NUMBERING_SHOW_FOLLOWBY,
     // drop cap punctuation: smaller dashes, bullet, asterisks, quotation marks etc.
     // by extending the rounding box of the glyph to the baseline
-    DROP_CAP_PUNCTUATION
+    DROP_CAP_PUNCTUATION,
+    // render NBSP as standard-space-width (prettier when justified)
+    USE_VARIABLE_WIDTH_NBSP,
 };
 
 /** Provides access to settings of a document
@@ -273,7 +276,5 @@ public:
 protected:
     virtual ~IDocumentSettingAccess(){};
 };
-
-#endif // INCLUDED_SW_INC_IDOCUMENTSETTINGACCESS_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

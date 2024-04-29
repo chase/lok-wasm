@@ -386,7 +386,7 @@ IMPL_LINK_NOARG(AnimationWindow, ClickRbtHdl, weld::Toggleable&, void)
 IMPL_LINK(AnimationWindow, ClickHelpHdl, weld::Button&, rButton, void)
 {
     if (Help* pHelp = Application::GetHelp())
-        pHelp->Start(OUString::fromUtf8(m_xContainer->get_help_id()), &rButton);
+        pHelp->Start(m_xContainer->get_help_id(), &rButton);
 }
 
 IMPL_LINK( AnimationWindow, ClickGetObjectHdl, weld::Button&, rBtn, void )
@@ -516,7 +516,7 @@ void AnimationWindow::UpdateControl(bool const bDisableCtrls)
             ScopedVclPtrInstance< VirtualDevice > pVD;
             ::tools::Rectangle       aObjRect( pObject->GetCurrentBoundRect() );
             Size            aObjSize( aObjRect.GetSize() );
-            Point           aOrigin( Point( -aObjRect.Left(), -aObjRect.Top() ) );
+            Point           aOrigin( -aObjRect.Left(), -aObjRect.Top() );
             MapMode         aMap( pVD->GetMapMode() );
             aMap.SetMapUnit( MapUnit::Map100thMM );
             aMap.SetOrigin( aOrigin );
@@ -759,9 +759,8 @@ void AnimationWindow::AddObj (::sd::View& rView )
             // several objects
             SdrObjList* pObjList = static_cast<SdrObjGroup*>(pObject)->GetSubList();
 
-            for( size_t nObject = 0; nObject < pObjList->GetObjCount(); ++nObject )
+            for (const rtl::Reference<SdrObject>& pSnapShot : *pObjList)
             {
-                SdrObject* pSnapShot(pObjList->GetObj(nObject));
                 BitmapEx aBitmapEx(SdrExchangeView::GetObjGraphic(*pSnapShot).GetBitmapEx());
                 size_t nIndex = m_nCurrentFrame + 1;
                 m_FrameList.insert(

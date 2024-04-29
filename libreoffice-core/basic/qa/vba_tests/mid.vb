@@ -22,6 +22,10 @@ Sub verify_testMid()
     TestUtil.AssertEqual(Mid("Mid Function Demo", 14, 4), "Demo",          "Mid(""Mid Function Demo"", 14, 4)")
     TestUtil.AssertEqual(Mid("Mid Function Demo", 5),     "Function Demo", "Mid(""Mid Function Demo"", 5)")
 
+    ' tdf#141474 keyword names need to match that of VBA
+    TestUtil.AssertEqual(Mid(start:=6, string:="LibreOffice" ),            "Office", "Mid() with 2 keyword names" )
+    TestUtil.AssertEqual(Mid(length:=5, start:=1, string:="LibreOffice" ), "Libre",  "Mid() with 3 keyword names" )
+
     Exit Sub
 errorHandler:
     TestUtil.ReportErrorHandler("verify_testMid", Err, Error$, Erl)

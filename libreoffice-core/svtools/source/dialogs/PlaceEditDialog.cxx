@@ -176,12 +176,12 @@ void PlaceEditDialog::InitDetails( )
     // Create CMIS controls for each server type
 
     // Load the ServerType entries
-    bool bSkipGDrive = OUString( GDRIVE_CLIENT_ID ).isEmpty() ||
-                       OUString( GDRIVE_CLIENT_SECRET ).isEmpty();
-    bool bSkipAlfresco = OUString( ALFRESCO_CLOUD_CLIENT_ID ).isEmpty() ||
-                       OUString( ALFRESCO_CLOUD_CLIENT_SECRET ).isEmpty();
-    bool bSkipOneDrive= OUString( ONEDRIVE_CLIENT_ID ).isEmpty() ||
-                       OUString( ONEDRIVE_CLIENT_SECRET ).isEmpty();
+    bool bSkipGDrive = std::string_view( GDRIVE_CLIENT_ID ).empty() ||
+                       std::string_view( GDRIVE_CLIENT_SECRET ).empty();
+    bool bSkipAlfresco = std::string_view( ALFRESCO_CLOUD_CLIENT_ID ).empty() ||
+                       std::string_view( ALFRESCO_CLOUD_CLIENT_SECRET ).empty();
+    bool bSkipOneDrive= std::string_view( ONEDRIVE_CLIENT_ID ).empty() ||
+                       std::string_view( ONEDRIVE_CLIENT_SECRET ).empty();
 
     Sequence< OUString > aTypesUrlsList( officecfg::Office::Common::Misc::CmisServersUrls::get() );
     Sequence< OUString > aTypesNamesList( officecfg::Office::Common::Misc::CmisServersNames::get() );
@@ -209,14 +209,10 @@ void PlaceEditDialog::InitDetails( )
         ++nPos;
     }
 
-    // Create WebDAV / FTP / SSH details control
+    // Create WebDAV / SSH details control
     std::shared_ptr<DetailsContainer> xDavDetails(std::make_shared<DavDetailsContainer>(this));
     xDavDetails->setChangeHdl( LINK( this, PlaceEditDialog, EditHdl ) );
     m_aDetailsContainers.push_back(xDavDetails);
-
-    std::shared_ptr<DetailsContainer> xFtpDetails(std::make_shared<HostDetailsContainer>(this, 21, "ftp"));
-    xFtpDetails->setChangeHdl( LINK( this, PlaceEditDialog, EditHdl ) );
-    m_aDetailsContainers.push_back(xFtpDetails);
 
     std::shared_ptr<DetailsContainer> xSshDetails(std::make_shared<HostDetailsContainer>(this, 22, "sftp"));
     xSshDetails->setChangeHdl( LINK( this, PlaceEditDialog, EditHdl ) );
@@ -226,7 +222,7 @@ void PlaceEditDialog::InitDetails( )
 #if defined(_WIN32)
     // nPos is the position of first item that is pre-defined in svtools/uiconfig/ui/placeedit.ui,
     // after other CMIS types were inserted
-    m_xLBServerType->remove(nPos + 3);
+    m_xLBServerType->remove(nPos + 2);
 #else
     // Create Windows Share control
     std::shared_ptr<DetailsContainer> xSmbDetails(std::make_shared<SmbDetailsContainer>(this));

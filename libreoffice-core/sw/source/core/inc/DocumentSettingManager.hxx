@@ -122,7 +122,6 @@ class DocumentSettingManager final :
                                                     // attribute 'WrapInfluenceOnObjPos'.
     bool mbMathBaselineAlignment            : 1;    // TL  2010-10-29 #i972#
     bool mbStylesNoDefault                  : 1;
-    bool mbFloattableNomargins              : 1; //< If paragraph margins next to a floating table should be ignored.
     bool mEmbedFonts                        : 1;  //< Whether to embed fonts when saving.
     bool mEmbedUsedFonts                    : 1;  //< Whether to embed fonts that are used by the document when saving.
     bool mEmbedLatinScriptFonts             : 1;  //< Whether to embed latin script fonts when saving.
@@ -133,7 +132,7 @@ class DocumentSettingManager final :
     // non-ui-compatibility flags:
     bool mbOldNumbering                             : 1;
     bool mbIgnoreFirstLineIndentInNumbering         : 1;   // #i47448#
-    bool mbNoGapAfterNoteNumber     : 1;   // tdf#159382
+    bool mbNoGapAfterNoteNumber     : 1 = false; // tdf#159382
     bool mbDoNotJustifyLinesWithManualBreak         : 1;   // #i49277#
     bool mbDoNotResetParaAttrsForNumFont            : 1;   // #i53199#
     bool mbTableRowKeep                             : 1;
@@ -178,9 +177,12 @@ class DocumentSettingManager final :
     bool mbHyphenateURLs = false;
     bool mbDoNotBreakWrappedTables = false;
     bool mbAllowTextAfterFloatingTableBreak = false;
+    bool mbJustifyLinesWithShrinking = false;
+    bool mbApplyTextAttrToEmptyLineAtEndOfParagraph = true;
     // If this is on as_char flys wrapping will be handled the same like in Word
     bool mbNoNumberingShowFollowBy;
     bool mbDropCapPunctuation; // tdf#150200, tdf#150438
+    bool mbUseVariableWidthNBSP : 1; // tdf#41652
 
 public:
 

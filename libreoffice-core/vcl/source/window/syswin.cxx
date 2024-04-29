@@ -35,7 +35,7 @@
 #include <vcl/tabpage.hxx>
 #include <vcl/virdev.hxx>
 
-#include <rtl/strbuf.hxx>
+#include <rtl/ustrbuf.hxx>
 #include <o3tl/string_view.hxx>
 
 #include <accel.hxx>
@@ -87,7 +87,7 @@ SystemWindow::SystemWindow(WindowType nType, const char* pIdleDebugName)
     maLayoutIdle.SetInvokeHandler( LINK( this, SystemWindow, ImplHandleLayoutTimerHdl ) );
 }
 
-void SystemWindow::loadUI(vcl::Window* pParent, const OString& rID, const OUString& rUIXMLDescription,
+void SystemWindow::loadUI(vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription,
     const css::uno::Reference<css::frame::XFrame> &rFrame)
 {
     mbIsDeferredInit = true;
@@ -399,13 +399,13 @@ const Size& SystemWindow::GetMaxOutputSizePixel() const
     return mpImplData->maMaxOutSize;
 }
 
-vcl::WindowData::WindowData(std::string_view rStr)
+vcl::WindowData::WindowData(std::u16string_view rStr)
 {
     vcl::WindowData& rData = *this;
     vcl::WindowDataMask nValidMask = vcl::WindowDataMask::NONE;
     sal_Int32 nIndex      = 0;
 
-    std::string_view aTokenStr = o3tl::getToken(rStr, 0, ',', nIndex);
+    std::u16string_view aTokenStr = o3tl::getToken(rStr, 0, ',', nIndex);
     if (!aTokenStr.empty())
     {
         rData.setX(o3tl::toInt32(aTokenStr));
@@ -520,13 +520,13 @@ vcl::WindowData::WindowData(std::string_view rStr)
     rData.setMask(nValidMask);
 }
 
-OString vcl::WindowData::toStr() const
+OUString vcl::WindowData::toStr() const
 {
     const vcl::WindowDataMask nValidMask = mask();
     if ( nValidMask == vcl::WindowDataMask::NONE )
-        return OString();
+        return {};
 
-    OStringBuffer rStrBuf(64);
+    OUStringBuffer rStrBuf(64);
 
     tools::Rectangle aRect = posSize();
 
@@ -567,15 +567,9 @@ OString vcl::WindowData::toStr() const
 
 void SystemWindow::ImplMoveToScreen( tools::Long& io_rX, tools::Long& io_rY, tools::Long i_nWidth, tools::Long i_nHeight, vcl::Window const * i_pConfigureWin )
 {
-    tools::Rectangle aScreenRect;
-    if( !Application::IsUnifiedDisplay() )
-        aScreenRect = Application::GetScreenPosSizePixel( GetScreenNumber() );
-    else
-    {
-        aScreenRect = Application::GetScreenPosSizePixel( 0 );
-        for( unsigned int i = 1; i < Application::GetScreenCount(); i++ )
-            aScreenRect.Union( Application::GetScreenPosSizePixel( i ) );
-    }
+    AbsoluteScreenPixelRectangle aScreenRect = Application::GetScreenPosSizePixel( 0 );
+    for( unsigned int i = 1; i < Application::GetScreenCount(); i++ )
+        aScreenRect.Union( Application::GetScreenPosSizePixel( i ) );
     // unfortunately most of the time width and height are not really known
     if( i_nWidth < 1 )
         i_nWidth = 50;
@@ -668,7 +662,7 @@ void SystemWindow::SetWindowState(const vcl::WindowData& rData)
         if( !((rData.mask() & vcl::WindowDataMask::State) && (nState & vcl::WindowState::Maximized)) )
             if (rData.mask() & vcl::WindowDataMask::PosSize)
             {
-                tools::Rectangle aDesktop = GetDesktopRectPixel();
+                AbsoluteScreenPixelRectangle aDesktop = GetDesktopRectPixel();
                 ImplSVData *pSVData = ImplGetSVData();
                 vcl::Window *pWin = pSVData->maFrameData.mpFirstFrame;
                 bool bWrapped = false;
@@ -831,14 +825,14 @@ void SystemWindow::GetWindowState(vcl::WindowData& rData) const
     }
 }
 
-void SystemWindow::SetWindowState(std::string_view rStr)
+void SystemWindow::SetWindowState(std::u16string_view rStr)
 {
     if (rStr.empty())
         return;
     SetWindowState(vcl::WindowData(rStr));
 }
 
-OString SystemWindow::GetWindowState(vcl::WindowDataMask nMask) const
+OUString SystemWindow::GetWindowState(vcl::WindowDataMask nMask) const
 {
     vcl::WindowData aData;
     aData.setMask(nMask);
@@ -1075,7 +1069,7 @@ void SystemWindow::setOptimalLayoutSize(bool bAllowWindowShrink)
 
     Size aSize = get_preferred_size();
 
-    Size aMax(bestmaxFrameSizeForScreenSize(GetDesktopRectPixel().GetSize()));
+    Size aMax(bestmaxFrameSizeForScreenSize(Size(GetDesktopRectPixel().GetSize())));
 
     aSize.setWidth( std::min(aMax.Width(), aSize.Width()) );
     aSize.setHeight( std::min(aMax.Height(), aSize.Height()) );
@@ -1124,7 +1118,7 @@ VclPtr<VirtualDevice> SystemWindow::createScreenshot()
 
     Size aSize(GetOutputSizePixel());
 
-    VclPtr<VirtualDevice> xOutput(VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT));
+    VclPtr<VirtualDevice> xOutput(VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA));
     xOutput->SetOutputSizePixel(aSize);
 
     Point aPos;

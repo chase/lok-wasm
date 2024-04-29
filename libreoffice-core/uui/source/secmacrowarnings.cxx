@@ -23,14 +23,18 @@
 #include <vcl/svapp.hxx>
 #include <osl/file.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <tools/datetime.hxx>
 #include <tools/debug.hxx>
+#include <unotools/datetime.hxx>
+#include <unotools/resmgr.hxx>
 #include <unotools/securityoptions.hxx>
 #include <tools/urlobj.hxx>
 
-using namespace ::com::sun::star::security;
-
 #include "secmacrowarnings.hxx"
 
+#include <strings.hrc>
+
+using namespace ::com::sun::star::security;
 using namespace ::com::sun::star;
 
 
@@ -64,7 +68,10 @@ MacroWarning::MacroWarning(weld::Window* pParent, bool _bWithSignatures)
     : MessageDialogController(pParent, "uui/ui/macrowarnmedium.ui", "MacroWarnMedium", "grid")
     , mxGrid(m_xBuilder->weld_widget("grid"))
     , mxSignsFI(m_xBuilder->weld_label("signsLabel"))
+    , mxNotYetValid(m_xBuilder->weld_label("certNotYetValidLabel"))
+    , mxNoLongerValid(m_xBuilder->weld_label("certNoLongerValidLabel"))
     , mxViewSignsBtn(m_xBuilder->weld_button("viewSignsButton"))
+    , mxViewCertBtn(m_xBuilder->weld_button("viewCertButton"))
     , mxAlwaysTrustCB(m_xBuilder->weld_check_button("alwaysTrustCheckbutton"))
     , mxEnableBtn(m_xBuilder->weld_button("ok"))
     , mxDisableBtn(m_xBuilder->weld_button("cancel"))
@@ -100,14 +107,19 @@ IMPL_LINK_NOARG(MacroWarning, ViewSignsBtnHdl, weld::Button&, void)
 
     uno::Reference< security::XDocumentDigitalSignatures > xD(
         security::DocumentDigitalSignatures::createWithVersion(comphelper::getProcessComponentContext(), maODFVersion));
-    if( xD.is() )
-    {
-        xD->setParentWindow(m_xDialog->GetXWindow());
-        if( mxCert.is() )
-            xD->showCertificate( mxCert );
-        else if( mxStore.is() )
-            xD->showScriptingContentSignatures( mxStore, uno::Reference< io::XInputStream >() );
-    }
+    if( !xD.is() )
+        return;
+
+    xD->setParentWindow(m_xDialog->GetXWindow());
+    if( mxCert.is() )
+        xD->showCertificate( mxCert );
+    else if( mxStore.is() )
+        xD->showScriptingContentSignatures( mxStore, uno::Reference< io::XInputStream >() );
+    else
+        return;
+
+    mxAlwaysTrustCB->set_sensitive(true);
+    EnableOkBtn(true);
 }
 
 IMPL_LINK_NOARG(MacroWarning, EnableBtnHdl, weld::Button&, void)
@@ -138,8 +150,8 @@ IMPL_LINK_NOARG(MacroWarning, DisableBtnHdl, weld::Button&, void)
 
 IMPL_LINK_NOARG(MacroWarning, AlwaysTrustCheckHdl, weld::Toggleable&, void)
 {
-    const bool bEnable = (mnActSecLevel < 2 || mxAlwaysTrustCB->get_active());
-    mxEnableBtn->set_sensitive(bEnable);
+    const bool bEnable = (mnActSecLevel < 3 || mxAlwaysTrustCB->get_active());
+    EnableOkBtn(bEnable);
     mxDisableBtn->set_sensitive(!mxAlwaysTrustCB->get_active());
 }
 
@@ -148,22 +160,28 @@ void MacroWarning::InitControls()
     // show signature controls?
     if (mbShowSignatures)
     {
+        mxAlwaysTrustCB->connect_toggled(LINK(this, MacroWarning, AlwaysTrustCheckHdl));
+        mxAlwaysTrustCB->set_sensitive(false);
         mxViewSignsBtn->connect_clicked(LINK(this, MacroWarning, ViewSignsBtnHdl));
-        mxViewSignsBtn->set_sensitive(false);
-
-        if (!SvtSecurityOptions::IsReadOnly(SvtSecurityOptions::EOption::MacroTrustedAuthors))
-            mxAlwaysTrustCB->connect_toggled(LINK(this, MacroWarning, AlwaysTrustCheckHdl));
-        else
-            mxAlwaysTrustCB->set_visible(false);
+        mxViewSignsBtn->set_visible(false);
+        mxViewCertBtn->connect_clicked(LINK(this, MacroWarning, ViewSignsBtnHdl));
+        mxViewCertBtn->set_visible(false);
 
         mnActSecLevel = SvtSecurityOptions::GetMacroSecurityLevel();
         if ( mnActSecLevel >= 2 )
-            mxEnableBtn->set_sensitive(false);
+            EnableOkBtn(false);
     }
     else
     {
         mxGrid->hide();
     }
+}
+
+void MacroWarning::EnableOkBtn(bool bEnable)
+{
+    mxEnableBtn->set_sensitive(bEnable);
+    std::locale aResLocale(Translate::Create("uui"));
+    mxEnableBtn->set_tooltip_text(bEnable ? "" : Translate::get(STR_VERIFIY_CERT, aResLocale));
 }
 
 void MacroWarning::SetStorage( const css::uno::Reference < css::embed::XStorage >& rxStore,
@@ -182,12 +200,13 @@ void MacroWarning::SetStorage( const css::uno::Reference < css::embed::XStorage 
 
     for( sal_Int32 i = 1 ; i < nCnt ; ++i )
     {
-        s.append("\n");
-        s.append(GetContentPart( rInfos[ i ].Signer->getSubjectName(), aCN_Id ));
+        s.append(OUString::Concat("\n")
+            + GetContentPart( rInfos[ i ].Signer->getSubjectName(), aCN_Id ));
     }
 
     mxSignsFI->set_label(s.makeStringAndClear());
-    mxViewSignsBtn->set_sensitive(true);
+    mxViewSignsBtn->set_visible(true);
+    mxViewCertBtn->set_visible(false);
 }
 
 void MacroWarning::SetCertificate( const css::uno::Reference< css::security::XCertificate >& _rxCert )
@@ -197,7 +216,16 @@ void MacroWarning::SetCertificate( const css::uno::Reference< css::security::XCe
     {
         OUString s( GetContentPart( mxCert->getSubjectName(), u"CN" ) );
         mxSignsFI->set_label(s);
-        mxViewSignsBtn->set_sensitive(true);
+
+        ::DateTime now( ::DateTime::SYSTEM );
+        DateTime aDateTimeStart( DateTime::EMPTY );
+        DateTime aDateTimeEnd( DateTime::EMPTY );
+        utl::typeConvert( mxCert->getNotValidBefore(), aDateTimeStart );
+        utl::typeConvert( mxCert->getNotValidAfter(), aDateTimeEnd );
+        mxNotYetValid->set_visible(now < aDateTimeStart);
+        mxNoLongerValid->set_visible(now > aDateTimeEnd);
+        mxViewSignsBtn->set_visible(false);
+        mxViewCertBtn->set_visible(true);
     }
 }
 

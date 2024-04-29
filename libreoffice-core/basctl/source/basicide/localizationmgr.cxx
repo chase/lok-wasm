@@ -39,6 +39,7 @@
 #include <tools/debug.hxx>
 #include <utility>
 #include <osl/diagnose.h>
+#include <o3tl/string_view.hxx>
 
 namespace basctl
 {
@@ -52,9 +53,9 @@ using namespace ::com::sun::star::resource;
 namespace
 {
 
-constexpr OUStringLiteral aDot(u".");
-constexpr OUStringLiteral aEsc(u"&");
-constexpr OUStringLiteral aSemi(u";");
+constexpr OUString aDot(u"."_ustr);
+constexpr OUString aEsc(u"&"_ustr);
+constexpr OUString aSemi(u";"_ustr);
 
 } // namespace
 
@@ -79,10 +80,10 @@ bool LocalizationMgr::isLibraryLocalized ()
 
 void LocalizationMgr::handleTranslationbar ()
 {
-    static constexpr OUStringLiteral aToolBarResName = u"private:resource/toolbar/translationbar";
+    static constexpr OUString aToolBarResName = u"private:resource/toolbar/translationbar"_ustr;
 
     Reference< beans::XPropertySet > xFrameProps
-        ( m_pShell->GetViewFrame()->GetFrame().GetFrameInterface(), uno::UNO_QUERY );
+        ( m_pShell->GetViewFrame().GetFrame().GetFrameInterface(), uno::UNO_QUERY );
     if ( !xFrameProps.is() )
         return;
 
@@ -107,7 +108,7 @@ void LocalizationMgr::handleTranslationbar ()
 // TODO: -> export from toolkit
 
 
-static bool isLanguageDependentProperty( const OUString& aName )
+static bool isLanguageDependentProperty( std::u16string_view aName )
 {
     static struct Prop
     {
@@ -126,7 +127,7 @@ static bool isLanguageDependentProperty( const OUString& aName )
     };
 
     for (Prop const* pProp = vProp; pProp->sName; ++pProp)
-        if (aName.equalsAsciiL(pProp->sName, pProp->nNameLength))
+        if (o3tl::equalsAscii(aName, std::string_view(pProp->sName, pProp->nNameLength)))
             return true;
     return false;
 }
@@ -925,15 +926,10 @@ void LocalizationMgr::renameStringResourceIDs( const ScriptDocument& rDocument, 
         xDummyStringResolver, RENAME_DIALOG_IDS );
 
     // Handle all controls
-    Sequence< OUString > aNames = xDialogModel->getElementNames();
-    const OUString* pNames = aNames.getConstArray();
-    sal_Int32 nCtrls = aNames.getLength();
-    for( sal_Int32 i = 0 ; i < nCtrls ; ++i )
-    {
-        OUString aCtrlName( pNames[i] );
-        Any aCtrl = xDialogModel->getByName( aCtrlName );
+    for(const auto& rCtrlName : xDialogModel->getElementNames()) {
+        Any aCtrl = xDialogModel->getByName( rCtrlName );
         implHandleControlResourceProperties( aCtrl, aDlgName,
-            aCtrlName, xStringResourceManager,
+            rCtrlName, xStringResourceManager,
             xDummyStringResolver, RENAME_DIALOG_IDS );
     }
 }
@@ -956,15 +952,10 @@ void LocalizationMgr::removeResourceForDialog( const ScriptDocument& rDocument, 
         xDummyStringResolver, REMOVE_IDS_FROM_RESOURCE );
 
     // Handle all controls
-    Sequence< OUString > aNames = xDialogModel->getElementNames();
-    const OUString* pNames = aNames.getConstArray();
-    sal_Int32 nCtrls = aNames.getLength();
-    for( sal_Int32 i = 0 ; i < nCtrls ; ++i )
-    {
-        OUString aCtrlName( pNames[i] );
-        Any aCtrl = xDialogModel->getByName( aCtrlName );
+    for(const auto& rCtrlName : xDialogModel->getElementNames()) {
+        Any aCtrl = xDialogModel->getByName( rCtrlName );
         implHandleControlResourceProperties( aCtrl, aDlgName,
-            aCtrlName, xStringResourceManager,
+            rCtrlName, xStringResourceManager,
             xDummyStringResolver, REMOVE_IDS_FROM_RESOURCE );
     }
 }
@@ -984,15 +975,10 @@ void LocalizationMgr::resetResourceForDialog( const Reference< container::XNameC
         aDummyName, xStringResourceManager, xDummyStringResolver, RESET_IDS );
 
     // Handle all controls
-    Sequence< OUString > aNames = xDialogModel->getElementNames();
-    const OUString* pNames = aNames.getConstArray();
-    sal_Int32 nCtrls = aNames.getLength();
-    for( sal_Int32 i = 0 ; i < nCtrls ; ++i )
-    {
-        OUString aCtrlName( pNames[i] );
-        Any aCtrl = xDialogModel->getByName( aCtrlName );
+    for(const auto& rCtrlName : xDialogModel->getElementNames()){
+        Any aCtrl = xDialogModel->getByName( rCtrlName );
         implHandleControlResourceProperties( aCtrl, aDummyName,
-            aCtrlName, xStringResourceManager, xDummyStringResolver, RESET_IDS );
+            rCtrlName, xStringResourceManager, xDummyStringResolver, RESET_IDS );
     }
 }
 
@@ -1011,15 +997,10 @@ void LocalizationMgr::setResourceIDsForDialog( const Reference< container::XName
         aDummyName, xStringResourceManager, xDummyStringResolver, SET_IDS );
 
     // Handle all controls
-    Sequence< OUString > aNames = xDialogModel->getElementNames();
-    const OUString* pNames = aNames.getConstArray();
-    sal_Int32 nCtrls = aNames.getLength();
-    for( sal_Int32 i = 0 ; i < nCtrls ; ++i )
-    {
-        OUString aCtrlName( pNames[i] );
-        Any aCtrl = xDialogModel->getByName( aCtrlName );
+    for(const auto& rCtrlName : xDialogModel->getElementNames()) {
+        Any aCtrl = xDialogModel->getByName( rCtrlName );
         implHandleControlResourceProperties( aCtrl, aDummyName,
-            aCtrlName, xStringResourceManager, xDummyStringResolver, SET_IDS );
+            rCtrlName, xStringResourceManager, xDummyStringResolver, SET_IDS );
     }
 }
 
@@ -1065,15 +1046,10 @@ void LocalizationMgr::copyResourceForDroppedDialog( const Reference< container::
         std::u16string_view(), xStringResourceManager, xSourceStringResolver, MOVE_RESOURCES );
 
     // Handle all controls
-    Sequence< OUString > aNames = xDialogModel->getElementNames();
-    const OUString* pNames = aNames.getConstArray();
-    sal_Int32 nCtrls = aNames.getLength();
-    for( sal_Int32 i = 0 ; i < nCtrls ; ++i )
-    {
-        OUString aCtrlName( pNames[i] );
-        Any aCtrl = xDialogModel->getByName( aCtrlName );
+    for(const auto& rCtrlName : xDialogModel->getElementNames()) {
+        Any aCtrl = xDialogModel->getByName( rCtrlName );
         implHandleControlResourceProperties( aCtrl, aDialogName,
-            aCtrlName, xStringResourceManager, xSourceStringResolver, MOVE_RESOURCES );
+            rCtrlName, xStringResourceManager, xSourceStringResolver, MOVE_RESOURCES );
     }
 }
 
@@ -1093,13 +1069,8 @@ void LocalizationMgr::copyResourceForDialog(
           xSourceStringResolver, COPY_RESOURCES );
 
     // Handle all controls
-    Sequence< OUString > aNames = xDialogModel->getElementNames();
-    const OUString* pNames = aNames.getConstArray();
-    sal_Int32 nCtrls = aNames.getLength();
-    for( sal_Int32 i = 0 ; i < nCtrls ; ++i )
-    {
-        OUString aCtrlName( pNames[i] );
-        Any aCtrl = xDialogModel->getByName( aCtrlName );
+    for(const auto& rCtrlName : xDialogModel->getElementNames()) {
+        Any aCtrl = xDialogModel->getByName( rCtrlName );
         implHandleControlResourceProperties( aCtrl, aDummyName, aDummyName,
             xTargetStringResourceManager, xSourceStringResolver, COPY_RESOURCES );
     }

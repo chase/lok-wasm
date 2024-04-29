@@ -76,8 +76,6 @@ namespace sw::mark
     class ContentIdxStore
     {
     public:
-
-            virtual void Clear() =0;
             virtual bool Empty() =0;
             virtual void Save(SwDoc& rDoc, SwNodeOffset nNode, sal_Int32 nContent, bool bSaveFlySplit=false) =0;
             virtual void Restore(SwDoc& rDoc, SwNodeOffset nNode, sal_Int32 nOffset=0, bool bAuto = false, bool bAtStart = false, RestoreMode = RestoreMode::All) =0;
@@ -95,7 +93,8 @@ void DelBookmarks(SwNode& rStt,
     const SwNode& rEnd,
     std::vector< ::sw::mark::SaveBookmark> * SaveBkmk =nullptr,
     std::optional<sal_Int32> oStartContentIdx = std::nullopt,
-    std::optional<sal_Int32> oEndContentIdx = std::nullopt);
+    std::optional<sal_Int32> oEndContentIdx = std::nullopt,
+    bool isReplace = false);
 
 /** data structure to temporarily hold fly anchor positions relative to some
  *  location. */

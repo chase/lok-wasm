@@ -46,8 +46,6 @@
 #include <svl/sharedstring.hxx>
 #include <scmatrix.hxx>
 
-using ::std::vector;
-
 #include <com/sun/star/sheet/ComplexReference.hpp>
 #include <com/sun/star/sheet/ExternalReference.hpp>
 #include <com/sun/star/sheet/FormulaToken.hpp>
@@ -57,6 +55,7 @@ using ::std::vector;
 #include <o3tl/safeint.hxx>
 #include <o3tl/sorted_vector.hxx>
 
+using ::std::vector;
 using namespace formula;
 using namespace com::sun::star;
 
@@ -1388,6 +1387,11 @@ void ScTokenArray::CheckToken( const FormulaToken& r )
             case ocCount:
             case ocCount2:
             case ocVLookup:
+            case ocXLookup:
+            case ocXMatch:
+            case ocFilter:
+            case ocSort:
+            case ocSortBy:
             case ocSLN:
             case ocIRR:
             case ocMIRR:
@@ -4418,7 +4422,11 @@ sc::RefUpdateResult ScTokenArray::AdjustReferenceOnMovedTab( const sc::RefUpdate
 
     ScAddress aNewPos = rOldPos;
     if (adjustTabOnMove(aNewPos, rCxt))
+    {
         aRes.mbReferenceModified = true;
+        aRes.mbValueChanged = true;
+        aRes.mnTab = aNewPos.Tab(); // this sets the new tab position used when deleting
+    }
 
     TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)

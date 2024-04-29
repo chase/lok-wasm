@@ -59,6 +59,7 @@
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/ucb/SimpleFileAccess.hpp>
 #include <com/sun/star/script/XErrorQuery.hpp>
+#include <ooo/vba/VbStrConv.hpp>
 #include <ooo/vba/VbTriState.hpp>
 #include <com/sun/star/bridge/oleautomation/XAutomationObject.hpp>
 #include <memory>
@@ -72,14 +73,6 @@
 #include <i18nutil/searchopt.hxx>
 #include <unotools/textsearch.hxx>
 #include <svl/numformat.hxx>
-
-
-
-using namespace comphelper;
-using namespace osl;
-using namespace com::sun::star;
-using namespace com::sun::star::lang;
-using namespace com::sun::star::uno;
 
 #include <date.hxx>
 #include <sbstdobj.hxx>
@@ -109,6 +102,12 @@ using namespace com::sun::star::uno;
 #endif
 
 #include <vcl/TypeSerializer.hxx>
+
+using namespace comphelper;
+using namespace osl;
+using namespace com::sun::star;
+using namespace com::sun::star::lang;
+using namespace com::sun::star::uno;
 
 static sal_Int32 GetDayDiff(const Date& rDate) { return rDate - Date(1899'12'30); }
 
@@ -378,16 +377,12 @@ void SbRtl_CurDir(StarBASIC *, SbxArray & rPar, bool)
     {
         OUString aDrive = rPar.Get(1)->GetOUString();
         if ( aDrive.getLength() != 1 )
-        {
-            StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-            return;
-        }
+            return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
+
         auto c = rtl::toAsciiUpperCase(aDrive[0]);
         if ( !rtl::isAsciiUpperCase( c ) )
-        {
-            StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-            return;
-        }
+            return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
+
         nCurDir = c - 'A' + 1;
     }
     wchar_t pBuffer[ _MAX_PATH ];
@@ -397,14 +392,10 @@ void SbRtl_CurDir(StarBASIC *, SbxArray & rPar, bool)
     auto const handler = _set_thread_local_invalid_parameter_handler(&invalidParameterHandler);
     auto const ok = _wgetdcwd( nCurDir, pBuffer, _MAX_PATH ) != nullptr;
     _set_thread_local_invalid_parameter_handler(handler);
-    if ( ok )
-    {
-        rPar.Get(0)->PutString(OUString(o3tl::toU(pBuffer)));
-    }
-    else
-    {
-        StarBASIC::Error( ERRCODE_BASIC_NO_DEVICE );
-    }
+    if ( !ok )
+        return StarBASIC::Error( ERRCODE_BASIC_NO_DEVICE );
+
+    rPar.Get(0)->PutString(OUString(o3tl::toU(pBuffer)));
 
 #else
 
@@ -416,20 +407,16 @@ void SbRtl_CurDir(StarBASIC *, SbxArray & rPar, bool)
     {
         pMem.reset(new char[nSize]);
         if( !pMem )
-        {
-            StarBASIC::Error( ERRCODE_BASIC_NO_MEMORY );
-            return;
-        }
+            return StarBASIC::Error( ERRCODE_BASIC_NO_MEMORY );
+
         if( getcwd( pMem.get(), nSize-1 ) != nullptr )
         {
             rPar.Get(0)->PutString(OUString::createFromAscii(pMem.get()));
             return;
         }
         if( errno != ERANGE )
-        {
-            StarBASIC::Error( ERRCODE_BASIC_INTERNAL_ERROR );
-            return;
-        }
+            return StarBASIC::Error( ERRCODE_BASIC_INTERNAL_ERROR );
+
         nSize += PATH_INCR;
     };
 
@@ -649,16 +636,14 @@ static void implRemoveDirRecursive( const OUString& aDirPath )
 
     if( !bExists || !bFolder )
     {
-        StarBASIC::Error( ERRCODE_BASIC_PATH_NOT_FOUND );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_PATH_NOT_FOUND );
     }
 
     Directory aDir( aDirPath );
     nRet = aDir.open();
     if( nRet != FileBase::E_None )
     {
-        StarBASIC::Error( ERRCODE_BASIC_PATH_NOT_FOUND );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_PATH_NOT_FOUND );
     }
     aDir.close();
 
@@ -681,8 +666,7 @@ void SbRtl_RmDir(StarBASIC *, SbxArray & rPar, bool)
                 {
                     if( !xSFI->isFolder( aPath ) )
                     {
-                        StarBASIC::Error( ERRCODE_BASIC_PATH_NOT_FOUND );
-                        return;
+                        return StarBASIC::Error( ERRCODE_BASIC_PATH_NOT_FOUND );
                     }
                     SbiInstance* pInst = GetSbData()->pInst;
                     bool bCompatibility = ( pInst && pInst->IsCompatibility() );
@@ -691,8 +675,7 @@ void SbRtl_RmDir(StarBASIC *, SbxArray & rPar, bool)
                         Sequence< OUString > aContent = xSFI->getFolderContents( aPath, true );
                         if( aContent.hasElements() )
                         {
-                            StarBASIC::Error( ERRCODE_BASIC_ACCESS_ERROR );
-                            return;
+                            return StarBASIC::Error( ERRCODE_BASIC_ACCESS_ERROR );
                         }
                     }
 
@@ -975,51 +958,43 @@ void SbRtl_InStrRev(StarBASIC *, SbxArray & rPar, bool)
 void SbRtl_Int(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() < 2)
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-    else
-    {
-        SbxVariableRef pArg = rPar.Get(1);
-        double aDouble= pArg->GetDouble();
-        /*
-            floor( 2.8 ) =  2.0
-            floor( -2.8 ) = -3.0
-        */
-        aDouble = floor( aDouble );
-        rPar.Get(0)->PutDouble(aDouble);
-    }
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
+
+    SbxVariableRef pArg = rPar.Get(1);
+    double aDouble= pArg->GetDouble();
+    /*
+        floor( 2.8 ) =  2.0
+        floor( -2.8 ) = -3.0
+    */
+    aDouble = floor( aDouble );
+    rPar.Get(0)->PutDouble(aDouble);
 }
 
 
 void SbRtl_Fix(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() < 2)
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
+
+    SbxVariableRef pArg = rPar.Get(1);
+    double aDouble = pArg->GetDouble();
+    if ( aDouble >= 0.0 )
+        aDouble = floor( aDouble );
     else
-    {
-        SbxVariableRef pArg = rPar.Get(1);
-        double aDouble = pArg->GetDouble();
-        if ( aDouble >= 0.0 )
-            aDouble = floor( aDouble );
-        else
-            aDouble = ceil( aDouble );
-        rPar.Get(0)->PutDouble(aDouble);
-    }
+        aDouble = ceil( aDouble );
+    rPar.Get(0)->PutDouble(aDouble);
 }
 
 
 void SbRtl_LCase(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() < 2)
-    {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-    }
-    else
-    {
-        const CharClass& rCharClass = GetCharClass();
-        OUString aStr(rPar.Get(1)->GetOUString());
-        aStr = rCharClass.lowercase(aStr);
-        rPar.Get(0)->PutString(aStr);
-    }
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
+
+    const CharClass& rCharClass = GetCharClass();
+    OUString aStr(rPar.Get(1)->GetOUString());
+    aStr = rCharClass.lowercase(aStr);
+    rPar.Get(0)->PutString(aStr);
 }
 
 void SbRtl_Left(StarBASIC *, SbxArray & rPar, bool)
@@ -1071,14 +1046,10 @@ void SbRtl_Log(StarBASIC *, SbxArray & rPar, bool)
 void SbRtl_LTrim(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() < 2)
-    {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-    }
-    else
-    {
-        OUString aStr(comphelper::string::stripStart(rPar.Get(1)->GetOUString(), ' '));
-        rPar.Get(0)->PutString(aStr);
-    }
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
+
+    OUString aStr(comphelper::string::stripStart(rPar.Get(1)->GetOUString(), ' '));
+    rPar.Get(0)->PutString(aStr);
 }
 
 
@@ -1130,8 +1101,7 @@ void SbRtl_Mid(StarBASIC *, SbxArray & rPar, bool bWrite)
                     bool bCompatibility = ( pInst && pInst->IsCompatibility() );
                     if( bCompatibility )
                     {
-                        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-                        return;
+                        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
                     }
                     nStartPos = nArgLen;
                 }
@@ -1212,8 +1182,7 @@ void SbRtl_Replace(StarBASIC *, SbxArray & rPar, bool)
     const sal_uInt32 nArgCount = rPar.Count() - 1;
     if ( nArgCount < 3 || nArgCount > 6 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     sal_Int32 lStartPos = 1;
@@ -1225,8 +1194,7 @@ void SbRtl_Replace(StarBASIC *, SbxArray & rPar, bool)
         }
         if (lStartPos < 1)
         {
-            StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
-            return;
+            return StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
         }
     }
     --lStartPos; // Make it 0-based
@@ -1240,8 +1208,7 @@ void SbRtl_Replace(StarBASIC *, SbxArray & rPar, bool)
         }
         if (lCount < -1)
         {
-            StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
-            return;
+            return StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
         }
     }
 
@@ -1347,14 +1314,10 @@ void SbRtl_RTL(StarBASIC * pBasic, SbxArray & rPar, bool)
 void SbRtl_RTrim(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() < 2)
-    {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-    }
-    else
-    {
-        OUString aStr(comphelper::string::stripEnd(rPar.Get(1)->GetOUString(), ' '));
-        rPar.Get(0)->PutString(aStr);
-    }
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
+
+    OUString aStr(comphelper::string::stripEnd(rPar.Get(1)->GetOUString(), ' '));
+    rPar.Get(0)->PutString(aStr);
 }
 
 void SbRtl_Sgn(StarBASIC *, SbxArray & rPar, bool)
@@ -1713,8 +1676,7 @@ void SbRtl_CDateToUnoDate(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 2)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     unoToSbxValue(rPar.Get(0), Any(SbxDateToUNODate(rPar.Get(1))));
@@ -1725,8 +1687,7 @@ void SbRtl_CDateFromUnoDate(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 2 || rPar.Get(1)->GetType() != SbxOBJECT)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     Any aAny(sbxToUnoValue(rPar.Get(1), cppu::UnoType<css::util::Date>::get()));
@@ -1760,8 +1721,7 @@ void SbRtl_CDateToUnoTime(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 2)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     unoToSbxValue(rPar.Get(0), Any(SbxDateToUNOTime(rPar.Get(1))));
@@ -1772,8 +1732,7 @@ void SbRtl_CDateFromUnoTime(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 2 || rPar.Get(1)->GetType() != SbxOBJECT)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     Any aAny(sbxToUnoValue(rPar.Get(1), cppu::UnoType<css::util::Time>::get()));
@@ -1816,8 +1775,7 @@ void SbRtl_CDateToUnoDateTime(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 2)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     unoToSbxValue(rPar.Get(0), Any(SbxDateToUNODateTime(rPar.Get(1))));
@@ -1828,8 +1786,7 @@ void SbRtl_CDateFromUnoDateTime(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 2 || rPar.Get(1)->GetType() != SbxOBJECT)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     Any aAny(sbxToUnoValue(rPar.Get(1), cppu::UnoType<css::util::DateTime>::get()));
@@ -1954,8 +1911,7 @@ void SbRtl_DateSerial(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() < 4)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
     sal_Int16 nYear = rPar.Get(1)->GetInteger();
     sal_Int16 nMonth = rPar.Get(2)->GetInteger();
@@ -1972,8 +1928,7 @@ void SbRtl_TimeSerial(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() < 4)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
     sal_Int16 nHour = rPar.Get(1)->GetInteger();
     if ( nHour == 24 )
@@ -1986,8 +1941,7 @@ void SbRtl_TimeSerial(StarBASIC *, SbxArray & rPar, bool)
         (nMinute < 0 || nMinute > 59 )  ||
         (nSecond < 0 || nSecond > 59 ))
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     rPar.Get(0)->PutDate(implTimeSerial(nHour, nMinute, nSecond)); // JSM
@@ -2479,15 +2433,11 @@ void SbRtl_IsNumeric(StarBASIC *, SbxArray & rPar, bool)
 
 void SbRtl_IsMissing(StarBASIC *, SbxArray & rPar, bool)
 {
-    if (rPar.Count() < 2)
-    {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-    }
-    else
-    {
-        // #57915 Missing is reported by an error
-        rPar.Get(0)->PutBool(rPar.Get(1)->IsErr());
-    }
+    if (rPar.Count() != 2)
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
+
+    // #57915 Missing is reported by an error
+    rPar.Get(0)->PutBool(rPar.Get(1)->IsErr());
 }
 
 // Function looks for wildcards, removes them and always returns the pure path
@@ -2498,7 +2448,7 @@ static OUString implSetupWildcard(const OUString& rFileParam, SbiRTLData& rRTLDa
     static const char cWild1 = '*';
     static const char cWild2 = '?';
 
-    rRTLData.pWildCard.reset();
+    rRTLData.moWildCard.reset();
     rRTLData.sFullNameToBeChecked.clear();
 
     OUString aFileParam = rFileParam;
@@ -2552,7 +2502,7 @@ static OUString implSetupWildcard(const OUString& rFileParam, SbiRTLData& rRTLDa
     // invalid anyway because it was not accepted by OSL before
     if (aPureFileName != "*")
     {
-        rRTLData.pWildCard = std::make_unique<WildCard>(aPureFileName);
+        rRTLData.moWildCard.emplace(aPureFileName);
     }
     return aPathStr;
 }
@@ -2561,9 +2511,9 @@ static bool implCheckWildcard(std::u16string_view rName, SbiRTLData const& rRTLD
 {
     bool bMatch = true;
 
-    if (rRTLData.pWildCard)
+    if (rRTLData.moWildCard)
     {
-        bMatch = rRTLData.pWildCard->Matches(rName);
+        bMatch = rRTLData.moWildCard->Matches(rName);
     }
     return bMatch;
 }
@@ -2921,8 +2871,7 @@ void SbRtl_GetAttr(StarBASIC *, SbxArray & rPar, bool)
                     catch(const Exception & ) {}
                     if( !bExists )
                     {
-                        StarBASIC::Error( ERRCODE_BASIC_FILE_NOT_FOUND );
-                        return;
+                        return StarBASIC::Error( ERRCODE_BASIC_FILE_NOT_FOUND );
                     }
 
                     bool bReadOnly = xSFI->isReadOnly( aPath );
@@ -3089,8 +3038,7 @@ void SbRtl_EOF(StarBASIC *, SbxArray & rPar, bool)
         SbiStream* pSbStrm = pIO->GetStream( nChannel );
         if ( !pSbStrm )
         {
-            StarBASIC::Error( ERRCODE_BASIC_BAD_CHANNEL );
-            return;
+            return StarBASIC::Error( ERRCODE_BASIC_BAD_CHANNEL );
         }
         bool beof;
         SvStream* pSvStrm = pSbStrm->GetStrm();
@@ -3130,8 +3078,7 @@ void SbRtl_FileAttr(StarBASIC *, SbxArray & rPar, bool)
         SbiStream* pSbStrm = pIO->GetStream( nChannel );
         if ( !pSbStrm )
         {
-            StarBASIC::Error( ERRCODE_BASIC_BAD_CHANNEL );
-            return;
+            return StarBASIC::Error( ERRCODE_BASIC_BAD_CHANNEL );
         }
         sal_Int16 nRet;
         if (rPar.Get(2)->GetInteger() == 1)
@@ -3159,8 +3106,7 @@ void SbRtl_Loc(StarBASIC *, SbxArray & rPar, bool)
         SbiStream* pSbStrm = pIO->GetStream( nChannel );
         if ( !pSbStrm )
         {
-            StarBASIC::Error( ERRCODE_BASIC_BAD_CHANNEL );
-            return;
+            return StarBASIC::Error( ERRCODE_BASIC_BAD_CHANNEL );
         }
         SvStream* pSvStrm = pSbStrm->GetStrm();
         std::size_t nPos;
@@ -3204,8 +3150,7 @@ void SbRtl_Lof(StarBASIC *, SbxArray & rPar, bool)
         SbiStream* pSbStrm = pIO->GetStream( nChannel );
         if ( !pSbStrm )
         {
-            StarBASIC::Error( ERRCODE_BASIC_BAD_CHANNEL );
-            return;
+            return StarBASIC::Error( ERRCODE_BASIC_BAD_CHANNEL );
         }
         SvStream* pSvStrm = pSbStrm->GetStrm();
         sal_uInt64 const nLen = pSvStrm->TellEnd();
@@ -3220,16 +3165,14 @@ void SbRtl_Seek(StarBASIC *, SbxArray & rPar, bool)
     int nArgs = static_cast<int>(rPar.Count());
     if ( nArgs < 2 || nArgs > 3 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
     sal_Int16 nChannel = rPar.Get(1)->GetInteger();
     SbiIoSystem* pIO = GetSbData()->pInst->GetIoSystem();
     SbiStream* pSbStrm = pIO->GetStream( nChannel );
     if ( !pSbStrm )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_CHANNEL );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_CHANNEL );
     }
     SvStream* pStrm = pSbStrm->GetStrm();
 
@@ -3248,8 +3191,7 @@ void SbRtl_Seek(StarBASIC *, SbxArray & rPar, bool)
         sal_Int32 nPos = rPar.Get(2)->GetLong();
         if ( nPos < 1 )
         {
-            StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-            return;
+            return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
         }
         nPos--; // Basic counts from 1, SvStreams count from 0
         pSbStrm->SetExpandOnWriteTo( 0 );
@@ -3312,8 +3254,7 @@ static void lcl_FormatNumberPercent(SbxArray& rPar, bool isPercent)
     const sal_uInt32 nArgCount = rPar.Count();
     if (nArgCount < 2 || nArgCount > 6)
     {
-        StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
-        return;
+        return StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
     }
 
     // The UI locale never changes -> we can use static value here
@@ -3324,8 +3265,7 @@ static void lcl_FormatNumberPercent(SbxArray& rPar, bool isPercent)
         nNumDigitsAfterDecimal = rPar.Get(2)->GetInteger();
         if (nNumDigitsAfterDecimal < -1)
         {
-            StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
-            return;
+            return StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
         }
         else if (nNumDigitsAfterDecimal > 255)
             nNumDigitsAfterDecimal %= 256;
@@ -3348,8 +3288,7 @@ static void lcl_FormatNumberPercent(SbxArray& rPar, bool isPercent)
                 // do nothing;
                 break;
             default:
-                StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
-                return;
+                return StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
         }
     }
 
@@ -3366,8 +3305,7 @@ static void lcl_FormatNumberPercent(SbxArray& rPar, bool isPercent)
                 bUseParensForNegativeNumbers = true;
                 break;
             default:
-                StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
-                return;
+                return StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
         }
     }
 
@@ -3384,8 +3322,7 @@ static void lcl_FormatNumberPercent(SbxArray& rPar, bool isPercent)
                 bGroupDigits = true;
                 break;
             default:
-                StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
-                return;
+                return StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
         }
     }
 
@@ -3468,7 +3405,11 @@ struct RandomNumberGenerator
     }
 };
 
-class theRandomNumberGenerator : public rtl::Static<RandomNumberGenerator, theRandomNumberGenerator> {};
+RandomNumberGenerator& theRandomNumberGenerator()
+{
+    static RandomNumberGenerator theGenerator;
+    return theGenerator;
+}
 
 }
 
@@ -3481,7 +3422,7 @@ void SbRtl_Randomize(StarBASIC *, SbxArray & rPar, bool)
     if (rPar.Count() == 2)
     {
         int nSeed = static_cast<int>(rPar.Get(1)->GetInteger());
-        theRandomNumberGenerator::get().global_rng.seed(nSeed);
+        theRandomNumberGenerator().global_rng.seed(nSeed);
     }
     // without parameter, no need to do anything - RNG is seeded at first use
 }
@@ -3495,7 +3436,7 @@ void SbRtl_Rnd(StarBASIC *, SbxArray & rPar, bool)
     else
     {
         std::uniform_real_distribution<double> dist(0.0, 1.0);
-        double const tmp(dist(theRandomNumberGenerator::get().global_rng));
+        double const tmp(dist(theRandomNumberGenerator().global_rng));
         rPar.Get(0)->PutDouble(tmp);
     }
 }
@@ -3850,8 +3791,7 @@ void SbRtl_DDEInitiate(StarBASIC *, SbxArray & rPar, bool)
     int nArgs = static_cast<int>(rPar.Count());
     if ( nArgs != 3 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
     const OUString& rApp = rPar.Get(1)->GetOUString();
     const OUString& rTopic = rPar.Get(2)->GetOUString();
@@ -3893,8 +3833,7 @@ void SbRtl_DDETerminateAll(StarBASIC *, SbxArray & rPar, bool)
     int nArgs = static_cast<int>(rPar.Count());
     if ( nArgs != 1 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     SbiDdeControl* pDDE = GetSbData()->pInst->GetDdeControl();
@@ -3910,8 +3849,7 @@ void SbRtl_DDERequest(StarBASIC *, SbxArray & rPar, bool)
     int nArgs = static_cast<int>(rPar.Count());
     if ( nArgs != 3 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
     size_t nChannel = rPar.Get(1)->GetInteger();
     const OUString& rItem = rPar.Get(2)->GetOUString();
@@ -3934,8 +3872,7 @@ void SbRtl_DDEExecute(StarBASIC *, SbxArray & rPar, bool)
     int nArgs = static_cast<int>(rPar.Count());
     if ( nArgs != 3 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
     size_t nChannel = rPar.Get(1)->GetInteger();
     const OUString& rCommand = rPar.Get(2)->GetOUString();
@@ -3953,8 +3890,7 @@ void SbRtl_DDEPoke(StarBASIC *, SbxArray & rPar, bool)
     int nArgs = static_cast<int>(rPar.Count());
     if ( nArgs != 4 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
     size_t nChannel = rPar.Get(1)->GetInteger();
     const OUString& rItem = rPar.Get(2)->GetOUString();
@@ -3972,8 +3908,7 @@ void SbRtl_FreeFile(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 1)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
     SbiIoSystem* pIO = GetSbData()->pInst->GetIoSystem();
     short nChannel = 1;
@@ -4078,18 +4013,50 @@ void SbRtl_QBColor(StarBASIC *, SbxArray & rPar, bool)
 
     if (rPar.Count() != 2)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     sal_Int16 nCol = rPar.Get(1)->GetInteger();
     if( nCol < 0 || nCol > 15 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
     sal_Int32 nRGB = pRGB[ nCol ];
     rPar.Get(0)->PutLong(nRGB);
+}
+
+static std::vector<sal_uInt8> byteArray2Vec(SbxArray* pArr)
+{
+    std::vector<sal_uInt8> result;
+    if (pArr)
+    {
+        const sal_uInt32 nCount = pArr->Count();
+        result.reserve(nCount + 1); // to avoid reallocation when padding in vbFromUnicode
+        for (sal_uInt32 i = 0; i < nCount; i++)
+            result.push_back(pArr->Get(i)->GetByte());
+    }
+    return result;
+}
+
+// Makes sure to get the byte array if passed, or the string converted to the bytes using
+// StringToByteArray in basic/source/sbx/sbxstr.cxx
+static std::vector<sal_uInt8> getByteArray(SbxValue& val)
+{
+    if (val.GetFullType() == SbxOBJECT)
+        if (auto pObj = val.GetObject())
+            if (pObj->GetType() == (SbxARRAY | SbxBYTE))
+                if (auto pArr = dynamic_cast<SbxArray*>(pObj))
+                    return byteArray2Vec(pArr);
+
+    // Convert to string
+    tools::SvRef<SbxValue> pStringValue(new SbxValue(SbxSTRING));
+    *pStringValue = val;
+
+    // Convert string to byte array
+    tools::SvRef<SbxValue> pValue(new SbxValue(SbxOBJECT));
+    pValue->PutObject(new SbxArray(SbxBYTE));
+    *pValue = *pStringValue; // Does the magic of conversion of strings to byte arrays
+    return byteArray2Vec(dynamic_cast<SbxArray*>(pValue->GetObject()));
 }
 
 // StrConv(string, conversion, LCID)
@@ -4098,11 +4065,9 @@ void SbRtl_StrConv(StarBASIC *, SbxArray & rPar, bool)
     const sal_uInt32 nArgCount = rPar.Count() - 1;
     if( nArgCount < 2 || nArgCount > 3 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
-    OUString aOldStr = rPar.Get(1)->GetOUString();
     sal_Int32 nConversion = rPar.Get(2)->GetLong();
     LanguageType nLanguage = LANGUAGE_SYSTEM;
     if (nArgCount == 3)
@@ -4110,127 +4075,101 @@ void SbRtl_StrConv(StarBASIC *, SbxArray & rPar, bool)
         sal_Int32 lcid = rPar.Get(3)->GetLong();
         nLanguage = LanguageType(lcid);
     }
-    OUString sLanguage = LanguageTag(nLanguage).getLanguage();
-    rtl_TextEncoding encodingVal = utl_getWinTextEncodingFromLangStr(sLanguage);
 
-    sal_Int32 nOldLen = aOldStr.getLength();
-    if( nOldLen == 0 )
+    if (nConversion == ooo::vba::VbStrConv::vbUnicode) // This mode does not combine
     {
-        // null string,return
-        rPar.Get(0)->PutString(aOldStr);
-        return;
-    }
-
-    TransliterationFlags nType = TransliterationFlags::NONE;
-    if ( (nConversion & 0x03) == 3 ) //  vbProperCase
-    {
-        const CharClass& rCharClass = GetCharClass();
-        aOldStr = rCharClass.titlecase( aOldStr.toAsciiLowerCase(), 0, nOldLen );
-    }
-    else if ( (nConversion & 0x01) == 1 ) // vbUpperCase
-    {
-        nType |= TransliterationFlags::LOWERCASE_UPPERCASE;
-    }
-    else if ( (nConversion & 0x02) == 2 ) // vbLowerCase
-    {
-        nType |= TransliterationFlags::UPPERCASE_LOWERCASE;
-    }
-    if ( (nConversion & 0x04) == 4 ) // vbWide
-    {
-        nType |= TransliterationFlags::HALFWIDTH_FULLWIDTH;
-    }
-    else if ( (nConversion & 0x08) == 8 ) // vbNarrow
-    {
-        nType |= TransliterationFlags::FULLWIDTH_HALFWIDTH;
-    }
-    if ( (nConversion & 0x10) == 16) // vbKatakana
-    {
-        nType |= TransliterationFlags::HIRAGANA_KATAKANA;
-    }
-    else if ( (nConversion & 0x20) == 32 ) // vbHiragana
-    {
-        nType |= TransliterationFlags::KATAKANA_HIRAGANA;
-    }
-    OUString aNewStr( aOldStr );
-    if( nType != TransliterationFlags::NONE )
-    {
-        uno::Reference< uno::XComponentContext > xContext = getProcessComponentContext();
-        ::utl::TransliterationWrapper aTransliterationWrapper( xContext, nType );
-        uno::Sequence<sal_Int32> aOffsets;
-        aTransliterationWrapper.loadModuleIfNeeded( nLanguage );
-        aNewStr = aTransliterationWrapper.transliterate( aOldStr, nLanguage, 0, nOldLen, &aOffsets );
-    }
-
-    if ( (nConversion & 0x40) == 64 ) // vbUnicode
-    {
-        // convert the string to byte string, preserving unicode (2 bytes per character)
-        sal_Int32 nSize = aNewStr.getLength()*2;
-        const sal_Unicode* pSrc = aNewStr.getStr();
-        std::unique_ptr<char[]> pChar(new char[nSize+1]);
-        for( sal_Int32 i=0; i < nSize; i++ )
-        {
-            pChar[i] = static_cast< char >( (i%2) ? ((*pSrc) >> 8) & 0xff : (*pSrc) & 0xff );
-            if( i%2 )
-            {
-                pSrc++;
-            }
-        }
-        pChar[nSize] = '\0';
-        OString aOStr(pChar.get());
-
-        // there is no concept about default codepage in unix. so it is incorrectly in unix
-        OUString aOUStr = OStringToOUString(aOStr, encodingVal);
+        // Assume that the passed byte array is encoded in the defined encoding, convert to
+        // UTF-16 and store as string. Passed strings are converted to byte array first.
+        auto inArray = getByteArray(*rPar.Get(1));
+        std::string_view s(reinterpret_cast<char*>(inArray.data()), inArray.size() / sizeof(char));
+        const auto encoding = utl_getWinTextEncodingFromLangStr(LanguageTag(nLanguage).getBcp47());
+        OUString aOUStr = OStringToOUString(s, encoding);
         rPar.Get(0)->PutString(aOUStr);
         return;
     }
-    else if ( (nConversion & 0x80) == 128 ) // vbFromUnicode
+
+    if (nConversion == ooo::vba::VbStrConv::vbFromUnicode) // This mode does not combine
     {
-        // there is no concept about default codepage in unix. so it is incorrectly in unix
-        OString aOStr = OUStringToOString(aNewStr, encodingVal);
-        const char* pChar = aOStr.getStr();
-        sal_Int32 nArraySize = aOStr.getLength();
+        // Assume that the passed byte array is UTF-16-encoded (system-endian), convert to specified
+        // encoding and store as byte array. Passed strings are converted to byte array first.
+        auto inArray = getByteArray(*rPar.Get(1));
+        while (inArray.size() % sizeof(sal_Unicode))
+            inArray.push_back('\0');
+        std::u16string_view s(reinterpret_cast<sal_Unicode*>(inArray.data()),
+                              inArray.size() / sizeof(sal_Unicode));
+        const auto encoding = utl_getWinTextEncodingFromLangStr(LanguageTag(nLanguage).getBcp47());
+        OString aOStr = OUStringToOString(s, encoding);
+        const sal_Int32 lb = IsBaseIndexOne() ? 1 : 0;
+        const sal_Int32 ub = lb + aOStr.getLength() - 1;
         SbxDimArray* pArray = new SbxDimArray(SbxBYTE);
-        bool bIncIndex = IsBaseIndexOne();
-        if(nArraySize)
+        pArray->unoAddDim(lb, ub);
+
+        for (sal_Int32 i = 0; i < aOStr.getLength(); ++i)
         {
-            if( bIncIndex )
+            SbxVariable* pNew = new SbxVariable(SbxBYTE);
+            pNew->PutByte(aOStr[i]);
+            pArray->Put(pNew, i);
+        }
+
+        SbxVariable* retVar = rPar.Get(0);
+        SbxFlagBits nFlags = retVar->GetFlags();
+        retVar->ResetFlag(SbxFlagBits::Fixed);
+        retVar->PutObject(pArray);
+        retVar->SetFlags(nFlags);
+        retVar->SetParameters(nullptr);
+        return;
+    }
+
+    std::vector<TransliterationFlags> aTranslitSet;
+    auto check = [&nConversion, &aTranslitSet](sal_Int32 conv, TransliterationFlags flag)
+    {
+        if ((nConversion & conv) != conv)
+            return false;
+
+        aTranslitSet.push_back(flag);
+        nConversion &= ~conv;
+        return true;
+    };
+
+    // Check mutually exclusive bits together
+
+    if (!check(ooo::vba::VbStrConv::vbProperCase, TransliterationFlags::TITLE_CASE))
+        if (!check(ooo::vba::VbStrConv::vbUpperCase, TransliterationFlags::LOWERCASE_UPPERCASE))
+            check(ooo::vba::VbStrConv::vbLowerCase, TransliterationFlags::UPPERCASE_LOWERCASE);
+
+    if (!check(ooo::vba::VbStrConv::vbWide, TransliterationFlags::HALFWIDTH_FULLWIDTH))
+        check(ooo::vba::VbStrConv::vbNarrow, TransliterationFlags::FULLWIDTH_HALFWIDTH);
+
+    if (!check(ooo::vba::VbStrConv::vbKatakana, TransliterationFlags::HIRAGANA_KATAKANA))
+        check(ooo::vba::VbStrConv::vbHiragana, TransliterationFlags::KATAKANA_HIRAGANA);
+
+    if (nConversion) // unknown / incorrectly combined bits
+        return StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
+
+    OUString aStr = rPar.Get(1)->GetOUString();
+    if (!aStr.isEmpty() && !aTranslitSet.empty())
+    {
+        uno::Reference< uno::XComponentContext > xContext = getProcessComponentContext();
+
+        for (auto transliterationFlag : aTranslitSet)
+        {
+            if (transliterationFlag == TransliterationFlags::TITLE_CASE)
             {
-                pArray->AddDim(1, nArraySize);
+                // TransliterationWrapper only handles the first character of the passed string
+                // when handling TITLE_CASE; see Transliteration_titlecase::transliterateImpl in
+                // i18npool/source/transliteration/transliteration_body.cxx
+                CharClass aCharClass{ xContext, LanguageTag(nLanguage) };
+                aStr = aCharClass.titlecase(aCharClass.lowercase(aStr));
             }
             else
             {
-                pArray->AddDim(0, nArraySize - 1);
+                utl::TransliterationWrapper aWrapper(xContext, transliterationFlag);
+                aStr = aWrapper.transliterate(aStr, nLanguage, 0, aStr.getLength(), nullptr);
             }
         }
-        else
-        {
-            pArray->unoAddDim(0, -1);
-        }
-
-        for( sal_Int32 i=0; i< nArraySize; i++)
-        {
-            SbxVariable* pNew = new SbxVariable( SbxBYTE );
-            pNew->PutByte(*pChar);
-            pChar++;
-            pNew->SetFlag( SbxFlagBits::Write );
-            sal_Int32 aIdx[1];
-            aIdx[0] = i;
-            if( bIncIndex )
-            {
-                ++aIdx[0];
-            }
-            pArray->Put(pNew, aIdx);
-        }
-
-        SbxVariableRef refVar = rPar.Get(0);
-        SbxFlagBits nFlags = refVar->GetFlags();
-        refVar->ResetFlag( SbxFlagBits::Fixed );
-        refVar->PutObject( pArray );
-        refVar->SetFlags( nFlags );
-        refVar->SetParameters( nullptr );
-        return;
     }
-    rPar.Get(0)->PutString(aNewStr);
+
+    rPar.Get(0)->PutString(aStr);
 }
 
 
@@ -4238,8 +4177,7 @@ void SbRtl_Beep(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 1)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
     Sound::Beep();
 }
@@ -4248,8 +4186,7 @@ void SbRtl_Load(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 2)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
 
@@ -4276,8 +4213,7 @@ void SbRtl_Unload(StarBASIC *, SbxArray & rPar, bool)
     rPar.Get(0)->PutEmpty();
     if (rPar.Count() != 2)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
 
@@ -4303,8 +4239,7 @@ void SbRtl_LoadPicture(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 2)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     OUString aFileURL = getFullPath(rPar.Get(1)->GetOUString());
@@ -4327,8 +4262,7 @@ void SbRtl_SavePicture(StarBASIC *, SbxArray & rPar, bool)
     rPar.Get(0)->PutEmpty();
     if (rPar.Count() != 3)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     SbxBase* pObj = rPar.Get(1)->GetObject();
@@ -4346,15 +4280,13 @@ void SbRtl_MsgBox(StarBASIC *, SbxArray & rPar, bool)
     const sal_uInt32 nArgCount = rPar.Count();
     if( nArgCount < 2 || nArgCount > 6 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     // tdf#147529 - check for missing parameters
     if (IsMissing(rPar, 1))
     {
-        StarBASIC::Error(ERRCODE_BASIC_NOT_OPTIONAL);
-        return;
+        return StarBASIC::Error(ERRCODE_BASIC_NOT_OPTIONAL);
     }
 
     // tdf#151012 - initialize optional parameters with their default values (number of buttons)
@@ -4584,8 +4516,7 @@ void SbRtl_Partition(StarBASIC *, SbxArray & rPar, bool)
 {
     if (rPar.Count() != 5)
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     sal_Int32 nNumber = rPar.Get(1)->GetLong();
@@ -4595,8 +4526,7 @@ void SbRtl_Partition(StarBASIC *, SbxArray & rPar, bool)
 
     if( nStart < 0 || nStop <= nStart || nInterval < 1 )
     {
-        StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
-        return;
+        return StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
     }
 
     // the Partition function inserts leading spaces before lowervalue and uppervalue

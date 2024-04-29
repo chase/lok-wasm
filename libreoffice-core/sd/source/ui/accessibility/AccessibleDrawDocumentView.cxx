@@ -31,6 +31,7 @@
 #include <com/sun/star/view/XSelectionSupplier.hpp>
 #include <cppuhelper/queryinterface.hxx>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/sequence.hxx>
 #include <sal/log.hxx>
 #include <tools/debug.hxx>
 
@@ -314,7 +315,7 @@ void SAL_CALL
         }
         else
             SAL_WARN("sd", "View invalid");
-        CommitChange(AccessibleEventId::PAGE_CHANGED,rEventObject.NewValue,rEventObject.OldValue);
+        CommitChange(AccessibleEventId::PAGE_CHANGED,rEventObject.NewValue,rEventObject.OldValue, -1);
     }
     else if ( rEventObject.PropertyName == "VisibleArea" )
     {
@@ -323,7 +324,7 @@ void SAL_CALL
     }
     else if (rEventObject.PropertyName == "ActiveLayer")
     {
-        CommitChange(AccessibleEventId::PAGE_CHANGED,rEventObject.NewValue,rEventObject.OldValue);
+        CommitChange(AccessibleEventId::PAGE_CHANGED,rEventObject.NewValue,rEventObject.OldValue, -1);
     }
     else if (rEventObject.PropertyName == "UpdateAcc")
     {

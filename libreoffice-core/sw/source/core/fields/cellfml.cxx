@@ -572,8 +572,8 @@ void SwTableFormula::BoxNmsToPtr( const SwTable& rTable, OUStringBuffer& rNewStr
     }
 
     pBox = rTable.GetTableBox( rFirstBox );
-    rNewStr.append(reinterpret_cast<sal_IntPtr>(pBox))
-            .append(rFirstBox[ rFirstBox.getLength()-1 ]); // get label for the box
+    rNewStr.append(OUString::number(reinterpret_cast<sal_IntPtr>(pBox))
+        + OUStringChar(rFirstBox[ rFirstBox.getLength()-1 ])); // get label for the box
 }
 
 /// create external formula (for UI)
@@ -748,11 +748,11 @@ OUString SwTableFormula::ScanString( FnScanFormula fnFormula, const SwTable& rTa
 
 const SwTable* SwTableFormula::FindTable( SwDoc& rDoc, std::u16string_view rNm )
 {
-    const SwFrameFormats& rTableFormats = *rDoc.GetTableFrameFormats();
+    const sw::TableFrameFormats& rTableFormats = *rDoc.GetTableFrameFormats();
     const SwTable* pTmpTable = nullptr, *pRet = nullptr;
     for( auto nFormatCnt = rTableFormats.size(); nFormatCnt; )
     {
-        SwFrameFormat* pFormat = rTableFormats[ --nFormatCnt ];
+        SwTableFormat* pFormat = rTableFormats[ --nFormatCnt ];
         // if we are called from Sw3Writer, a number is dependent on the format name
         SwTableBox* pFBox;
         if ( rNm == o3tl::getToken(pFormat->GetName(), 0, 0x0a) &&
@@ -1233,8 +1233,8 @@ void SwTableFormula::SplitMergeBoxNm_( const SwTable& rTable, OUStringBuffer& rN
     if( pLastBox )
         rNewStr.append(OUString::number(reinterpret_cast<sal_IntPtr>(pEndBox)) + ":");
 
-    rNewStr.append(reinterpret_cast<sal_IntPtr>(pSttBox))
-            .append(rFirstBox[ rFirstBox.getLength()-1] );
+    rNewStr.append(OUString::number(reinterpret_cast<sal_IntPtr>(pSttBox))
+        + OUStringChar(rFirstBox[ rFirstBox.getLength()-1] ));
 }
 
 /// Create external formula but remember that the formula is placed in a split/merged table

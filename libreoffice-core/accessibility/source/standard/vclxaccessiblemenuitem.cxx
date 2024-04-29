@@ -20,6 +20,7 @@
 #include <standard/vclxaccessiblemenuitem.hxx>
 #include <toolkit/helper/convert.hxx>
 #include <helper/characterattributeshelper.hxx>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <comphelper/accessiblekeybindinghelper.hxx>
 #include <com/sun/star/awt/KeyModifier.hpp>
 
@@ -49,7 +50,7 @@ using namespace ::comphelper;
 
 
 VCLXAccessibleMenuItem::VCLXAccessibleMenuItem( Menu* pParent, sal_uInt16 nItemPos, Menu* pMenu )
-    :OAccessibleMenuItemComponent( pParent, nItemPos, pMenu )
+    :ImplInheritanceHelper( pParent, nItemPos, pMenu )
 {
 }
 
@@ -65,6 +66,14 @@ bool VCLXAccessibleMenuItem::IsSelected()
     return IsHighlighted();
 }
 
+bool VCLXAccessibleMenuItem::IsCheckable()
+{
+    if (!m_pParent)
+        return false;
+
+    const sal_uInt16 nItemId = m_pParent->GetItemId(m_nItemPos);
+    return m_pParent->IsItemCheckable(nItemId);
+}
 
 bool VCLXAccessibleMenuItem::IsChecked()
 {
@@ -106,6 +115,8 @@ void VCLXAccessibleMenuItem::FillAccessibleStateSet( sal_Int64& rStateSet )
     if ( IsSelected() )
         rStateSet |= AccessibleStateType::SELECTED;
 
+    if (IsCheckable())
+        rStateSet |= AccessibleStateType::CHECKABLE;
     if ( IsChecked() )
         rStateSet |= AccessibleStateType::CHECKED;
 }
@@ -131,18 +142,6 @@ void VCLXAccessibleMenuItem::implGetSelection( sal_Int32& nStartIndex, sal_Int32
     nStartIndex = 0;
     nEndIndex = 0;
 }
-
-
-// XInterface
-
-
-IMPLEMENT_FORWARD_XINTERFACE2( VCLXAccessibleMenuItem, OAccessibleMenuItemComponent, VCLXAccessibleMenuItem_BASE )
-
-
-// XTypeProvider
-
-
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( VCLXAccessibleMenuItem, OAccessibleMenuItemComponent, VCLXAccessibleMenuItem_BASE )
 
 
 // XServiceInfo

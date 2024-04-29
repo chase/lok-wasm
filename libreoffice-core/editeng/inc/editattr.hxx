@@ -24,6 +24,8 @@
 #include <optional>
 #include <tools/color.hxx>
 #include <tools/debug.hxx>
+#include <tools/fontenum.hxx>
+#include <svl/itemset.hxx>
 
 class SvxFont;
 class SvxFontItem;
@@ -52,6 +54,7 @@ class SfxGrabBagItem;
 
 #define CH_FEATURE_OLD  (sal_uInt8)         0xFF
 #define CH_FEATURE      u'\x0001'
+#define CH_SOFTHYPHEN   u'\x00AD'
 
 // DEF_METRIC: For my pool, the DefMetric should always appear when
 // GetMetric (nWhich)!
@@ -64,7 +67,7 @@ class SfxGrabBagItem;
 // bEdge: Attribute will not expand, if you want to expand just on the edge
 class EditCharAttrib
 {
-    const SfxPoolItem*  pItem;
+    SfxPoolItemHolder   maItemHolder;
 
     sal_Int32               nStart;
     sal_Int32               nEnd;
@@ -72,7 +75,7 @@ class EditCharAttrib
     bool                bEdge       :1;
 
 public:
-    EditCharAttrib( const SfxPoolItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttrib(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
     virtual ~EditCharAttrib();
 
     EditCharAttrib(const EditCharAttrib&) = delete;
@@ -80,8 +83,9 @@ public:
 
     void                dumpAsXml(xmlTextWriterPtr pWriter) const;
 
-    sal_uInt16          Which() const   { return pItem->Which(); }
-    const SfxPoolItem*  GetItem() const { return pItem; }
+    const SfxPoolItemHolder& GetHolder() const {  return maItemHolder; }
+    const SfxPoolItem* GetItem() const { return GetHolder().getItem(); }
+    sal_uInt16 Which() const { if(GetItem()) return GetItem()->Which(); return 0; }
 
     sal_Int32&          GetStart()                  { return nStart; }
     sal_Int32&          GetEnd()                    { return nEnd; }
@@ -154,7 +158,7 @@ inline void EditCharAttrib::Collaps( sal_Int32 nDiff )
 class EditCharAttribFont final : public EditCharAttrib
 {
 public:
-    EditCharAttribFont( const SvxFontItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribFont(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -164,7 +168,7 @@ public:
 class EditCharAttribWeight final : public EditCharAttrib
 {
 public:
-    EditCharAttribWeight( const SvxWeightItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribWeight(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -173,7 +177,7 @@ public:
 class EditCharAttribItalic final : public EditCharAttrib
 {
 public:
-    EditCharAttribItalic( const SvxPostureItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribItalic(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -183,7 +187,7 @@ public:
 class EditCharAttribShadow final : public EditCharAttrib
 {
 public:
-    EditCharAttribShadow( const SvxShadowedItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribShadow(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -193,7 +197,7 @@ public:
 class EditCharAttribEscapement final : public EditCharAttrib
 {
 public:
-    EditCharAttribEscapement( const SvxEscapementItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribEscapement(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -203,7 +207,7 @@ public:
 class EditCharAttribOutline final : public EditCharAttrib
 {
 public:
-    EditCharAttribOutline( const SvxContourItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribOutline(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -213,7 +217,7 @@ public:
 class EditCharAttribStrikeout final : public EditCharAttrib
 {
 public:
-    EditCharAttribStrikeout( const SvxCrossedOutItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribStrikeout(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -223,7 +227,7 @@ public:
 class EditCharAttribCaseMap final : public EditCharAttrib
 {
 public:
-    EditCharAttribCaseMap( const SvxCaseMapItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribCaseMap(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -233,7 +237,7 @@ public:
 class EditCharAttribUnderline final : public EditCharAttrib
 {
 public:
-    EditCharAttribUnderline( const SvxUnderlineItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribUnderline(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -243,7 +247,7 @@ public:
 class EditCharAttribOverline final : public EditCharAttrib
 {
 public:
-    EditCharAttribOverline( const SvxOverlineItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribOverline(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -253,7 +257,7 @@ public:
 class EditCharAttribEmphasisMark final : public EditCharAttrib
 {
 public:
-    EditCharAttribEmphasisMark( const SvxEmphasisMarkItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribEmphasisMark(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -263,7 +267,7 @@ public:
 class EditCharAttribRelief final : public EditCharAttrib
 {
 public:
-    EditCharAttribRelief( const SvxCharReliefItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribRelief(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -273,7 +277,7 @@ public:
 class EditCharAttribFontHeight final : public EditCharAttrib
 {
 public:
-    EditCharAttribFontHeight( const SvxFontHeightItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribFontHeight(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -283,7 +287,7 @@ public:
 class EditCharAttribFontWidth final : public EditCharAttrib
 {
 public:
-    EditCharAttribFontWidth( const SvxCharScaleWidthItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribFontWidth(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -293,7 +297,7 @@ public:
 class EditCharAttribColor final : public EditCharAttrib
 {
 public:
-    EditCharAttribColor( const SvxColorItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribColor(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -302,9 +306,7 @@ public:
 class EditCharAttribBackgroundColor final : public EditCharAttrib
 {
 public:
-    EditCharAttribBackgroundColor(const SvxColorItem& rAttr,
-                                  sal_Int32 nStart,
-                                  sal_Int32 nEnd );
+    EditCharAttribBackgroundColor(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
     virtual void    SetFont(SvxFont& rFont, OutputDevice* pOutDev) override;
 };
 
@@ -313,7 +315,7 @@ public:
 class EditCharAttribLanguage final : public EditCharAttrib
 {
 public:
-    EditCharAttribLanguage( const SvxLanguageItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribLanguage(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -323,7 +325,7 @@ public:
 class EditCharAttribTab final : public EditCharAttrib
 {
 public:
-    EditCharAttribTab( const SfxVoidItem& rAttr, sal_Int32 nPos );
+    EditCharAttribTab(SfxItemPool&, const SfxPoolItem&, sal_Int32 nPos);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -333,7 +335,7 @@ public:
 class EditCharAttribLineBreak final : public EditCharAttrib
 {
 public:
-    EditCharAttribLineBreak( const SfxVoidItem& rAttr, sal_Int32 nPos );
+    EditCharAttribLineBreak(SfxItemPool&, const SfxPoolItem&, sal_Int32 nPos);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -345,11 +347,12 @@ class EditCharAttribField final : public EditCharAttrib
     OUString   aFieldValue;
     std::optional<Color>  mxTxtColor;
     std::optional<Color>  mxFldColor;
+    std::optional<FontLineStyle> mxFldLineStyle;
 
     EditCharAttribField& operator = ( const EditCharAttribField& rAttr ) = delete;
 
 public:
-    EditCharAttribField( const SvxFieldItem& rAttr, sal_Int32 nPos );
+    EditCharAttribField(SfxItemPool&, const SfxPoolItem&, sal_Int32 nPos);
     EditCharAttribField( const EditCharAttribField& rAttr );
     virtual ~EditCharAttribField() override;
 
@@ -360,6 +363,7 @@ public:
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
     std::optional<Color>&   GetTextColor()      { return mxTxtColor; }
     std::optional<Color>&   GetFieldColor()     { return mxFldColor; }
+    std::optional<FontLineStyle>& GetFldLineStyle() { return mxFldLineStyle; }
 
     const OUString& GetFieldValue() const { return aFieldValue;}
     void SetFieldValue(const OUString& rVal);
@@ -372,7 +376,7 @@ public:
 class EditCharAttribPairKerning final : public EditCharAttrib
 {
 public:
-    EditCharAttribPairKerning( const SvxAutoKernItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribPairKerning(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -382,7 +386,7 @@ public:
 class EditCharAttribKerning final : public EditCharAttrib
 {
 public:
-    EditCharAttribKerning( const SvxKerningItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribKerning(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -392,7 +396,7 @@ public:
 class EditCharAttribWordLineMode final : public EditCharAttrib
 {
 public:
-    EditCharAttribWordLineMode( const SvxWordLineModeItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribWordLineMode(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 
     virtual void    SetFont( SvxFont& rFont, OutputDevice* pOutDev ) override;
 };
@@ -401,7 +405,7 @@ public:
 class EditCharAttribGrabBag final : public EditCharAttrib
 {
 public:
-    EditCharAttribGrabBag( const SfxGrabBagItem& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
+    EditCharAttribGrabBag(SfxItemPool&, const SfxPoolItem&, sal_Int32 nStart, sal_Int32 nEnd);
 };
 
 

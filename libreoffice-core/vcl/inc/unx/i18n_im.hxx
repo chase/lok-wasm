@@ -17,12 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_I18N_IM_HXX
-#define INCLUDED_VCL_INC_UNX_I18N_IM_HXX
+#pragma once
 
 #include <X11/Xlib.h>
-
-#include <vclpluginapi.h>
 
 #define bUseInputMethodDefault True
 
@@ -48,7 +45,5 @@ public:
     SalI18N_InputMethod();
     ~SalI18N_InputMethod();
 };
-
-#endif // INCLUDED_VCL_INC_UNX_I18N_IM_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

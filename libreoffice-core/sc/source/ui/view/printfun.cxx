@@ -466,6 +466,9 @@ static void lcl_HidePrint( const ScTableInfo& rTabInfo, SCCOL nX1, SCCOL nX2 )
 void ScPrintFunc::DrawToDev(ScDocument& rDoc, OutputDevice* pDev, double /* nPrintFactor */,
                             const tools::Rectangle& rBound, ScViewData* pViewData, bool bMetaFile)
 {
+    if (rDoc.GetMaxTableNumber() < 0)
+        return;
+
     //! evaluate nPrintFactor !!!
 
     SCTAB nTab = 0;
@@ -585,7 +588,7 @@ void ScPrintFunc::DrawToDev(ScDocument& rDoc, OutputDevice* pDev, double /* nPri
             new FmFormView(
                 *pModel,
                 pDev));
-        pDrawView->ShowSdrPage(pDrawView->GetModel()->GetPage(nTab));
+        pDrawView->ShowSdrPage(pDrawView->GetModel().GetPage(nTab));
         pDrawView->SetPrintPreview();
         aOutputData.SetDrawView( pDrawView.get() );
     }
@@ -1907,7 +1910,7 @@ tools::Long ScPrintFunc::DoNotes( tools::Long nNoteStart, bool bDoPrint, ScPrevi
     pEditEngine->SetDefaults( *pEditDefaults );
 
     vcl::Font aMarkFont;
-    ScAutoFontColorMode eColorMode = bUseStyleColor ? SC_AUTOCOL_DISPLAY : SC_AUTOCOL_PRINT;
+    ScAutoFontColorMode eColorMode = bUseStyleColor ? ScAutoFontColorMode::Display : ScAutoFontColorMode::Print;
     rDoc.GetPool()->GetDefaultItem(ATTR_PATTERN).fillFont(aMarkFont, eColorMode);
     pDev->SetFont(aMarkFont);
     tools::Long nMarkLen = pDev->GetTextWidth("GW99999:");
@@ -2322,7 +2325,7 @@ void ScPrintFunc::PrintPage( tools::Long nPageNo, SCCOL nX1, SCROW nY1, SCCOL nX
 
         ScPatternAttr aPattern( rDoc.GetPool() );
         vcl::Font aFont;
-        ScAutoFontColorMode eColorMode = bUseStyleColor ? SC_AUTOCOL_DISPLAY : SC_AUTOCOL_PRINT;
+        ScAutoFontColorMode eColorMode = bUseStyleColor ? ScAutoFontColorMode::Display : ScAutoFontColorMode::Print;
         aPattern.fillFont(aFont, eColorMode, pDev);
         pDev->SetFont(aFont);
 

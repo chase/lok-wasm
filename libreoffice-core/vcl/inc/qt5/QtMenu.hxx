@@ -53,6 +53,9 @@ private:
     QMenu* mpQMenu;
     QButtonGroup* m_pButtonGroup;
 
+    // help ID of currently/last selected item
+    static OUString m_sCurrentHelpId;
+
     void DoFullMenuUpdate(Menu* pMenuBar);
     static void NativeItemText(OUString& rItemText);
 
@@ -64,7 +67,9 @@ private:
     bool validateQMenuBar() const;
     QPushButton* ImplAddMenuBarButton(const QIcon& rIcon, const QString& rToolTip, int nId);
     void ImplRemoveMenuBarButton(int nId);
-    void adjustButtonSizes();
+    void connectHelpShortcut(QMenu* pMenu);
+    // set slots that handle signals relevant for help menu
+    void connectHelpSignalSlots(QMenu* pMenu, QtMenuItem* pSalMenuItem);
 
 public:
     QtMenu(bool bMenuBar);
@@ -75,7 +80,6 @@ public:
     virtual void RemoveItem(unsigned nPos) override;
     virtual void SetSubMenu(SalMenuItem* pSalMenuItem, SalMenu* pSubMenu, unsigned nPos) override;
     virtual void SetFrame(const SalFrame* pFrame) override;
-    const QtFrame* GetFrame() const;
     virtual void ShowMenuBar(bool bVisible) override;
     virtual bool ShowNativePopupMenu(FloatingWindow* pWin, const tools::Rectangle& rRect,
                                      FloatWinPopupFlags nFlags) override;
@@ -103,6 +107,8 @@ public:
     QtMenuItem* GetItemAtPos(unsigned nPos) { return maItems[nPos]; }
 
 private slots:
+    static void slotShowHelp();
+    static void slotMenuHovered(QtMenuItem* pItem);
     static void slotMenuTriggered(QtMenuItem* pQItem);
     static void slotMenuAboutToShow(QtMenuItem* pQItem);
     static void slotMenuAboutToHide(QtMenuItem* pQItem);

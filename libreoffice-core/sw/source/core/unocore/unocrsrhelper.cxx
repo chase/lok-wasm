@@ -144,34 +144,23 @@ void GetSelectableFromAny(uno::Reference<uno::XInterface> const& xIfc,
     }
 
     uno::Reference<lang::XUnoTunnel> const xTunnel(xIfc, UNO_QUERY);
-    if (!xTunnel.is()) // everything below needs tunnel
-    {
-        return;
-    }
 
     SwXShape *const pShape(comphelper::getFromUnoTunnel<SwXShape>(xTunnel));
     if (pShape)
     {
-        uno::Reference<uno::XAggregation> const xAgg(
-                pShape->GetAggregationInterface());
-        if (xAgg.is())
+        if (SvxShape * pSvxShape = pShape->GetSvxShape())
         {
-            SvxShape *const pSvxShape(
-                    comphelper::getFromUnoTunnel<SvxShape>(xTunnel));
-            if (pSvxShape)
-            {
-                SdrObject *const pSdrObject = pSvxShape->GetSdrObject();
-                if (pSdrObject)
-                {   // hmm... needs view to verify it's in right doc...
-                    o_rSdrObjects.push_back(pSdrObject);
-                }
+            SdrObject *const pSdrObject = pSvxShape->GetSdrObject();
+            if (pSdrObject)
+            {   // hmm... needs view to verify it's in right doc...
+                o_rSdrObjects.push_back(pSdrObject);
             }
         }
         return;
     }
 
     OTextCursorHelper *const pCursor(
-        comphelper::getFromUnoTunnel<OTextCursorHelper>(xTunnel));
+        dynamic_cast<OTextCursorHelper*>(xIfc.get()));
     if (pCursor)
     {
         if (pCursor->GetDoc() == &rTargetDoc)
@@ -181,8 +170,7 @@ void GetSelectableFromAny(uno::Reference<uno::XInterface> const& xIfc,
         return;
     }
 
-    SwXTextRanges* const pRanges(
-        comphelper::getFromUnoTunnel<SwXTextRanges>(xTunnel));
+    SwXTextRanges* const pRanges = dynamic_cast<SwXTextRanges*>(xIfc.get());
     if (pRanges)
     {
         SwUnoCursor const* pUnoCursor = pRanges->GetCursor();
@@ -195,8 +183,7 @@ void GetSelectableFromAny(uno::Reference<uno::XInterface> const& xIfc,
 
     // check these before Range to prevent misinterpretation of text frames
     // and cells also implement XTextRange
-    SwXFrame *const pFrame(
-        comphelper::getFromUnoTunnel<SwXFrame>(xTunnel));
+    SwXFrame *const pFrame = dynamic_cast<SwXFrame*>(xIfc.get());
     if (pFrame)
     {
         const SwFrameFormat *const pFrameFormat(pFrame->GetFrameFormat());
@@ -207,8 +194,7 @@ void GetSelectableFromAny(uno::Reference<uno::XInterface> const& xIfc,
         return;
     }
 
-    SwXTextTable *const pTextTable(
-        comphelper::getFromUnoTunnel<SwXTextTable>(xTunnel));
+    SwXTextTable *const pTextTable = dynamic_cast<SwXTextTable*>(xIfc.get());
     if (pTextTable)
     {
         SwFrameFormat *const pFrameFormat(pTextTable->GetFrameFormat());
@@ -219,8 +205,7 @@ void GetSelectableFromAny(uno::Reference<uno::XInterface> const& xIfc,
         return;
     }
 
-    SwXCell *const pCell(
-        comphelper::getFromUnoTunnel<SwXCell>(xTunnel));
+    SwXCell *const pCell = dynamic_cast<SwXCell*>(xIfc.get());
     if (pCell)
     {
         SwFrameFormat *const pFrameFormat(pCell->GetFrameFormat());
@@ -240,7 +225,7 @@ void GetSelectableFromAny(uno::Reference<uno::XInterface> const& xIfc,
         return;
     }
 
-    uno::Reference<text::XTextRange> const xTextRange(xTunnel, UNO_QUERY);
+    uno::Reference<text::XTextRange> const xTextRange(xIfc, UNO_QUERY);
     if (xTextRange.is())
     {
         SwUnoInternalPaM aPam(rTargetDoc);
@@ -251,8 +236,7 @@ void GetSelectableFromAny(uno::Reference<uno::XInterface> const& xIfc,
         return;
     }
 
-    SwXCellRange *const pCellRange(
-        comphelper::getFromUnoTunnel<SwXCellRange>(xTunnel));
+    SwXCellRange *const pCellRange = dynamic_cast<SwXCellRange*>(xIfc.get());
     if (pCellRange)
     {
         SwUnoCursor const*const pUnoCursor(pCellRange->GetTableCursor());
@@ -265,8 +249,8 @@ void GetSelectableFromAny(uno::Reference<uno::XInterface> const& xIfc,
         return;
     }
 
-    ::sw::mark::IMark const*const pMark(
-            SwXBookmark::GetBookmarkInDoc(& rTargetDoc, xTunnel));
+    ::sw::mark::IMark const*const pMark =
+            SwXBookmark::GetBookmarkInDoc(& rTargetDoc, xIfc);
     if (pMark)
     {
         o_rpMark = pMark;
@@ -667,12 +651,24 @@ bool getCursorPropertyValue(const SfxItemPropertyMapEntry& rEntry
             {
                 if (pAny)
                 {
-                    uno::Reference<text::XTextContent> xParagraph = SwXParagraph::CreateXParagraph(pTextNode->GetDoc(), pTextNode);
+                    uno::Reference<text::XTextContent> xParagraph = SwXParagraph::CreateXParagraph(pTextNode->GetDoc(), pTextNode, nullptr);
                     *pAny <<= xParagraph;
                 }
             }
             else
                 eNewState = PropertyState_DEFAULT_VALUE;
+        }
+        break;
+        case FN_UNO_SORTED_TEXT_ID:
+        {
+            if( pAny )
+            {
+                sal_Int32 nIndex = -1;
+                SwTextNode* pTextNode = rPam.GetPoint()->GetNode().GetTextNode();
+                if ( pTextNode )
+                    nIndex = pTextNode->GetIndex().get();
+                *pAny <<= nIndex;
+            }
         }
         break;
         case FN_UNO_ENDNOTE:
@@ -828,7 +824,7 @@ void setNumberingProperty(const Any& rValue, SwPaM& rPam)
     uno::Reference<XIndexReplace> xIndexReplace;
     if(rValue >>= xIndexReplace)
     {
-        auto pSwNum = comphelper::getFromUnoTunnel<SwXNumberingRules>(xIndexReplace);
+        auto pSwNum = dynamic_cast<SwXNumberingRules*>(xIndexReplace.get());
         if(pSwNum)
         {
             SwDoc& rDoc = rPam.GetDoc();
@@ -891,11 +887,10 @@ void setNumberingProperty(const Any& rValue, SwPaM& rPam)
                         const SvxFontListItem* pFontListItem =
                                 static_cast<const SvxFontListItem* >(rDoc.GetDocShell()
                                                     ->GetItem( SID_ATTR_CHAR_FONTLIST ));
-                        const FontList*  pList = pFontListItem->GetFontList();
+                        const FontList* pList = pFontListItem->GetFontList();
 
-                        FontMetric aFontMetric = pList->Get(
-                            pBulletFontNames[i],WEIGHT_NORMAL, ITALIC_NONE);
-                        vcl::Font aFont(aFontMetric);
+                        vcl::Font aFont(pList->Get(
+                            pBulletFontNames[i],WEIGHT_NORMAL, ITALIC_NONE));
                         aFormat.SetBulletFont(&aFont);
                     }
                     aRule.Set( i, aFormat );
@@ -1092,7 +1087,7 @@ void InsertFile(SwUnoCursor* pUnoCursor, const OUString& rURL,
                 new SfxMedium(xReadStorage, sBaseURL ) :
                 new SfxMedium(sFileName, StreamMode::READ ));
         if( !sBaseURL.isEmpty() )
-            pMed->GetItemSet()->Put( SfxStringItem( SID_DOC_BASEURL, sBaseURL ) );
+            pMed->GetItemSet().Put( SfxStringItem( SID_DOC_BASEURL, sBaseURL ) );
 
         SfxFilterMatcher aMatcher( rFact.GetFilterContainer()->GetName() );
         ErrCode nErr = aMatcher.GuessFilter(*pMed, pFilter, SfxFilterFlags::NONE);
@@ -1119,9 +1114,9 @@ void InsertFile(SwUnoCursor* pUnoCursor, const OUString& rURL,
                 pMed.reset(new SfxMedium(sFileName, StreamMode::READ, pFilter, nullptr));
         }
         if(!sFilterOptions.isEmpty())
-            pMed->GetItemSet()->Put( SfxStringItem( SID_FILE_FILTEROPTIONS, sFilterOptions ) );
+            pMed->GetItemSet().Put( SfxStringItem( SID_FILE_FILTEROPTIONS, sFilterOptions ) );
         if(!sBaseURL.isEmpty())
-            pMed->GetItemSet()->Put( SfxStringItem( SID_DOC_BASEURL, sBaseURL ) );
+            pMed->GetItemSet().Put( SfxStringItem( SID_DOC_BASEURL, sBaseURL ) );
     }
 
     // this sourcecode is not responsible for the lifetime of the shell, SfxObjectShellLock should not be used
@@ -1132,10 +1127,10 @@ void InsertFile(SwUnoCursor* pUnoCursor, const OUString& rURL,
         return;
 
     SwReaderPtr pRdr;
-    SfxItemSet* pSet =  pMed->GetItemSet();
-    pSet->Put(SfxBoolItem(FN_API_CALL, true));
+    SfxItemSet& rSet =  pMed->GetItemSet();
+    rSet.Put(SfxBoolItem(FN_API_CALL, true));
     if(!sPassword.isEmpty())
-        pSet->Put(SfxStringItem(SID_PASSWORD, sPassword));
+        rSet.Put(SfxStringItem(SID_PASSWORD, sPassword));
     Reader *pRead = pDocSh->StartConvertFrom( *pMed, pRdr, nullptr, pUnoCursor);
     if( !pRead )
         return;
@@ -1148,7 +1143,7 @@ void InsertFile(SwUnoCursor* pUnoCursor, const OUString& rURL,
     SwNodeIndex aSave(  pUnoCursor->GetPoint()->GetNode(), -1 );
     sal_Int32 nContent = pUnoCursor->GetPoint()->GetContentIndex();
 
-    ErrCode nErrno = pRdr->Read( *pRead );   // and paste the document
+    ErrCodeMsg nErrno = pRdr->Read( *pRead );   // and paste the document
 
     if(!nErrno)
     {
@@ -1497,7 +1492,8 @@ void makeTableCellRedline( SwTableBox& rTableBox,
     std::u16string_view rRedlineType,
     const uno::Sequence< beans::PropertyValue >& rRedlineProperties )
 {
-    IDocumentRedlineAccess* pRedlineAccess = &rTableBox.GetFrameFormat()->GetDoc()->getIDocumentRedlineAccess();
+    SwDoc* pDoc = rTableBox.GetFrameFormat()->GetDoc();
+    IDocumentRedlineAccess* pRedlineAccess = &pDoc->getIDocumentRedlineAccess();
 
     RedlineType eType;
     if ( rRedlineType == u"TableCellInsert" )
@@ -1511,6 +1507,31 @@ void makeTableCellRedline( SwTableBox& rTableBox,
     else
     {
         throw lang::IllegalArgumentException();
+    }
+
+    // set table row property "HasTextChangesOnly" to false
+    // to handle tracked deletion or insertion of the table row on the UI
+    const SvxPrintItem *pHasTextChangesOnlyProp =
+         rTableBox.GetFrameFormat()->GetAttrSet().GetItem<SvxPrintItem>(RES_PRINT);
+    if ( !pHasTextChangesOnlyProp || pHasTextChangesOnlyProp->GetValue() )
+    {
+        SvxPrintItem aSetTracking(RES_PRINT, false);
+        SwNodeIndex aInsPos( *rTableBox.GetSttNd(), 1 );
+        // as a workaround for the cells without text content,
+        // add a redline with invisible text CH_TXT_TRACKED_DUMMY_CHAR
+        if ( rTableBox.IsEmpty() )
+        {
+            SwPaM aPaM(aInsPos);
+            pDoc->getIDocumentContentOperations().InsertString( aPaM,
+                    OUStringChar(CH_TXT_TRACKED_DUMMY_CHAR) );
+            aPaM.SetMark();
+            aPaM.GetMark()->SetContent(0);
+            makeRedline(aPaM, RedlineType::TableCellInsert == eType
+                    ? u"Insert"
+                    : u"Delete", rRedlineProperties);
+        }
+        SwCursor aCursor( SwPosition(aInsPos), nullptr );
+        pDoc->SetBoxAttr( aCursor, aSetTracking );
     }
 
     comphelper::SequenceAsHashMap aPropMap( rRedlineProperties );

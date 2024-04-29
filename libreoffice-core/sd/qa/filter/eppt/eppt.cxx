@@ -28,13 +28,7 @@ class Test : public UnoApiXmlTest
 {
 public:
     Test();
-    void registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx) override;
 };
-
-void Test::registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx)
-{
-    XmlTestTools::registerOOXMLNamespaces(pXmlXpathCtx);
-}
 
 Test::Test()
     : UnoApiXmlTest("/sd/qa/filter/eppt/data/")
@@ -44,7 +38,7 @@ Test::Test()
 CPPUNIT_TEST_FIXTURE(Test, testOOXMLCustomShapeBitmapFill)
 {
     // Save the bugdoc to PPT.
-    loadFromURL(u"custom-shape-bitmap-fill.pptx");
+    loadFromFile(u"custom-shape-bitmap-fill.pptx");
     saveAndReload("MS PowerPoint 97");
 
     // Check if the bitmap shape was lost.
@@ -94,7 +88,7 @@ CPPUNIT_TEST_FIXTURE(Test, testThemeExport)
 
     // Verify that this color is not lost:
     xmlDocUniquePtr pXmlDoc = parseExport("ppt/theme/theme1.xml");
-    assertXPath(pXmlDoc, "//a:clrScheme/a:lt1/a:srgbClr", "val",
+    assertXPath(pXmlDoc, "//a:clrScheme/a:lt1/a:srgbClr"_ostr, "val"_ostr,
                 "222222"); // expected color 22-22-22
 
     // Check the theme after loading again
@@ -120,7 +114,7 @@ CPPUNIT_TEST_FIXTURE(Test, testThemeExport)
 CPPUNIT_TEST_FIXTURE(Test, testLoopingFromAnimation)
 {
     // Given a media shape that has an animation that specifies looping for the video:
-    loadFromURL(u"video-loop.pptx");
+    loadFromFile(u"video-loop.pptx");
 
     // When exporting that to PPTX:
     save("Impress Office Open XML");
@@ -132,7 +126,7 @@ CPPUNIT_TEST_FIXTURE(Test, testLoopingFromAnimation)
     // - Actual  : 0
     // - In <>, XPath '//p:cMediaNode/p:cTn' number of nodes is incorrect
     // i.e. the media node was lost on export, the video no longer looped.
-    assertXPath(pXmlDoc, "//p:cMediaNode/p:cTn", "repeatCount", "indefinite");
+    assertXPath(pXmlDoc, "//p:cMediaNode/p:cTn"_ostr, "repeatCount"_ostr, "indefinite");
 }
 }
 

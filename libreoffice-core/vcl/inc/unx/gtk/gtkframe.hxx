@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_GTK_GTKFRAME_HXX
-#define INCLUDED_VCL_INC_UNX_GTK_GTKFRAME_HXX
+#pragma once
 
 #include <cairo.h>
 #include <gdk/gdk.h>
@@ -32,7 +31,7 @@
 #include <vcl/idle.hxx>
 #include <vcl/sysdata.hxx>
 #include <unx/saltype.h>
-#include <unx/screensaverinhibitor.hxx>
+#include <unx/sessioninhibitor.hxx>
 
 #include <tools/link.hxx>
 
@@ -187,6 +186,9 @@ class GtkSalFrame final : public SalFrame
 #endif
     gulong                          m_nPortalSettingChangedSignalId;
     GDBusProxy*                     m_pSettingsPortal;
+    gulong                          m_nSessionClientSignalId;
+    GDBusProxy*                     m_pSessionManager;
+    GDBusProxy*                     m_pSessionClient;
 #if !GTK_CHECK_VERSION(4, 0, 0)
     GdkWindow*                      m_pForeignParent;
     GdkNativeWindow                 m_aForeignParentWindow;
@@ -202,7 +204,7 @@ class GtkSalFrame final : public SalFrame
     bool                            m_bGraphics;
     ModKeyFlags                     m_nKeyModifiers;
     PointerStyle                    m_ePointerStyle;
-    ScreenSaverInhibitor            m_ScreenSaverInhibitor;
+    SessionManagerInhibitor         m_SessionManagerInhibitor;
     gulong                          m_nSetFocusSignalId;
     bool                            m_bFullscreen;
     bool                            m_bDefaultPos;
@@ -248,7 +250,7 @@ class GtkSalFrame final : public SalFrame
     static gboolean     signalButton( GtkWidget*, GdkEventButton*, gpointer );
     static void         signalStyleUpdated(GtkWidget*, gpointer);
 #else
-    static void         signalStyleUpdated(GtkWidget*, const gchar* pSetting, pointer);
+    static void         signalStyleUpdated(GtkWidget*, const gchar* pSetting, gpointer);
 #endif
     void DrawingAreaResized(GtkWidget* pWidget, int nWidth, int nHeight);
     void DrawingAreaDraw(cairo_t *cr);
@@ -425,6 +427,8 @@ class GtkSalFrame final : public SalFrame
 
     void ListenPortalSettings();
 
+    void ListenSessionManager();
+
     void UpdateGeometryFromEvent(int x_root, int y_root, int nEventX, int nEventY);
 
 public:
@@ -529,7 +533,7 @@ public:
     virtual void                SetMaxClientSize( tools::Long nWidth, tools::Long nHeight ) override;
     virtual void                SetPosSize( tools::Long nX, tools::Long nY, tools::Long nWidth, tools::Long nHeight, sal_uInt16 nFlags ) override;
     virtual void                GetClientSize( tools::Long& rWidth, tools::Long& rHeight ) override;
-    virtual void                GetWorkArea( tools::Rectangle& rRect ) override;
+    virtual void                GetWorkArea( AbsoluteScreenPixelRectangle& rRect ) override;
     virtual SalFrame*           GetParent() const override;
     virtual void SetWindowState(const vcl::WindowData*) override;
     virtual bool GetWindowState(vcl::WindowData*) override;
@@ -612,6 +616,8 @@ public:
     virtual bool                HidePopover(void* nId) override;
     virtual weld::Window*       GetFrameWeld() const override;
     virtual void                UpdateDarkMode() override;
+    virtual bool                GetUseDarkMode() const override;
+    virtual bool                GetUseReducedAnimation() const override;
 
     static GtkSalFrame         *getFromWindow( GtkWidget *pWindow );
 
@@ -653,21 +659,21 @@ public:
 
     void SetColorScheme(GVariant* variant);
 
+    void SessionManagerInhibit(bool bStart, ApplicationInhibitFlags eType, std::u16string_view sReason, const char* application_id);
+
     void DisallowCycleFocusOut();
     bool IsCycleFocusOutDisallowed() const;
     void AllowCycleFocusOut();
 };
 
-#define OOO_TYPE_FIXED ooo_fixed_get_type()
-
-#if !GTK_CHECK_VERSION(4, 0, 0)
 extern "C" {
 
 GType ooo_fixed_get_type();
+#if !GTK_CHECK_VERSION(4, 0, 0)
 AtkObject* ooo_fixed_get_accessible(GtkWidget *obj);
+#endif
 
 } // extern "C"
-#endif
 
 #if !GTK_CHECK_VERSION(3, 22, 0)
 enum GdkAnchorHints
@@ -684,6 +690,5 @@ enum GdkAnchorHints
 };
 #endif
 
-#endif // INCLUDED_VCL_INC_UNX_GTK_GTKFRAME_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

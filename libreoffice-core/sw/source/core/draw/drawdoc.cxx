@@ -97,10 +97,8 @@ SwDrawModel::~SwDrawModel()
     for (sal_uInt16 i=0; i < nPageCount; ++i)
     {
         SdrPage* pPage = GetPage(i);
-        const size_t nObjCount = pPage->GetObjCount();
-        for (size_t j=0; j < nObjCount; ++j)
+        for (const rtl::Reference<SdrObject>& pSdrObj : *pPage)
         {
-            SdrObject* pSdrObj = pPage->GetObj(j);
             SwDrawContact* pContact = dynamic_cast<SwDrawContact*>(pSdrObj->GetUserCall());
             if (pContact)
                 pContact->RemoveAllVirtObjs();
@@ -129,9 +127,9 @@ uno::Reference<embed::XStorage> SwDrawModel::GetDocumentStorage() const
     return m_rDoc.GetDocStorage();
 }
 
-uno::Reference< uno::XInterface > SwDrawModel::createUnoModel()
+uno::Reference< frame::XModel > SwDrawModel::createUnoModel()
 {
-    uno::Reference< uno::XInterface > xModel;
+    uno::Reference< frame::XModel > xModel;
 
     try
     {

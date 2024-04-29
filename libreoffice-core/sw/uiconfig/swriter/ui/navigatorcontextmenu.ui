@@ -57,7 +57,7 @@
       <object class="GtkMenuItem" id="deletechapter">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_DELETE_CHAPTER">Delete Chapter</property>
+        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_DELETE_CHAPTER">Delete Heading</property>
         <property name="use-underline">True</property>
         <accelerator key="Delete" signal="activate"/>
       </object>
@@ -66,7 +66,7 @@
       <object class="GtkMenuItem" id="801">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_PROMOTE_CHAPTER">Move Chapter Up</property>
+        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_PROMOTE_CHAPTER">Move Heading Up</property>
         <property name="use-underline">True</property>
         <accelerator key="Up" signal="activate" modifiers="GDK_CONTROL_MASK"/>
       </object>
@@ -75,7 +75,7 @@
       <object class="GtkMenuItem" id="802">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_DEMOTE_CHAPTER">Move Chapter Down</property>
+        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_DEMOTE_CHAPTER">Move Heading Down</property>
         <property name="use-underline">True</property>
         <accelerator key="Down" signal="activate" modifiers="GDK_CONTROL_MASK"/>
       </object>
@@ -184,6 +184,15 @@
       </object>
     </child>
     <child>
+      <object class="GtkMenuItem" id="deleteregion">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_DELETE_REGION">Delete Section</property>
+        <property name="use-underline">True</property>
+        <accelerator key="Delete" signal="activate"/>
+      </object>
+    </child>
+    <child>
       <object class="GtkMenuItem" id="deletehyperlink">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
@@ -241,6 +250,22 @@
         <property name="visible">True</property>
         <property name="can-focus">False</property>
         <property name="label" translatable="yes" context="navigatorcontextmenu|STR_RENAME">_Rename...</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkCheckMenuItem" id="protectsection">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_PROTECT_SECTION">Protect Section</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkCheckMenuItem" id="hidesection">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_HIDE_SECTION">Hide Section</property>
         <property name="use-underline">True</property>
       </object>
     </child>
@@ -438,7 +463,7 @@
       <object class="GtkMenuItem" id="1">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_OUTLINE_LEVEL">Outline Level</property>
+        <property name="label" translatable="yes" context="navigatorcontextmenu|STR_OUTLINE_LEVEL">Show Up to Outline Level</property>
         <property name="use-underline">True</property>
         <child type="submenu">
           <object class="GtkMenu" id="outlinelevel">

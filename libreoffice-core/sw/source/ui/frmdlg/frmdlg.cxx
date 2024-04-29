@@ -41,22 +41,22 @@
 #include <comphelper/lok.hxx>
 
 // the dialog's carrier
-SwFrameDlg::SwFrameDlg(SfxViewFrame const * pViewFrame,
-                       weld::Window*        pParent,
+SwFrameDlg::SwFrameDlg(const SfxViewFrame& rViewFrame,
+                       weld::Window*       pParent,
                        const SfxItemSet&   rCoreSet,
                        bool                bNewFrame,
                        const OUString&     sResType,
                        bool                bFormat,
-                       const OString&      sDefPage,
+                       const OUString&     sDefPage,
                        const OUString*     pStr)
 
     : SfxTabDialogController(pParent, "modules/swriter/ui/" + sResType.toAsciiLowerCase() + ".ui",
-                             sResType.toUtf8(), &rCoreSet, pStr != nullptr)
+                             sResType, &rCoreSet, pStr != nullptr)
     , m_bFormat(bFormat)
     , m_bNew(bNewFrame)
     , m_rSet(rCoreSet)
     , m_sDlgType(sResType)
-    , m_pWrtShell(static_cast<SwView*>(pViewFrame->GetViewShell())->GetWrtShellPtr())
+    , m_pWrtShell(static_cast<SwView*>(rViewFrame.GetViewShell())->GetWrtShellPtr())
 {
     sal_uInt16 nHtmlMode = ::GetHtmlMode(m_pWrtShell->GetView().GetDocShell());
     bool bHTMLMode = (nHtmlMode & HTMLMODE_ON) != 0;
@@ -123,7 +123,7 @@ SwFrameDlg::~SwFrameDlg()
 {
 }
 
-void SwFrameDlg::PageCreated(const OString& rId, SfxTabPage &rPage)
+void SwFrameDlg::PageCreated(const OUString& rId, SfxTabPage &rPage)
 {
     SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
     if (rId == "type")
@@ -159,7 +159,7 @@ void SwFrameDlg::PageCreated(const OString& rId, SfxTabPage &rPage)
         aNewSet.Put( SwMacroAssignDlg::AddEvents(
             m_sDlgType == "PictureDialog" ? MACASSGN_GRAPHIC : m_sDlgType == "ObjectDialog" ? MACASSGN_OLE : MACASSGN_FRMURL ) );
         if (m_pWrtShell)
-            rPage.SetFrame( m_pWrtShell->GetView().GetViewFrame()->GetFrame().GetFrameInterface() );
+            rPage.SetFrame( m_pWrtShell->GetView().GetViewFrame().GetFrame().GetFrameInterface() );
         rPage.PageCreated(aNewSet);
     }
     else if (rId == "borders")

@@ -11,12 +11,12 @@
 
 #include <document.hxx>
 #include <docpool.hxx>
+#include <scitems.hxx>
 #include <svl/intitem.hxx>
 #include <svl/zformat.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/numformat.hxx>
 #include <svl/itempool.hxx>
-#include <scitems.hxx>
 
 namespace sc
 {

@@ -197,6 +197,7 @@ certain functionality.
 @li @c editeng
 @li @c editeng.chaining
 @li @c editeng.items
+@li @c editeng.quicktextsize
 
 @section embeddedobj
 
@@ -315,6 +316,10 @@ certain functionality.
 @li @c jfw.level1
 @li @c jfw.level2
 
+@section LanguageTool
+
+@li @c languagetool
+
 @section LibreOfficeKit
 
 @li @c lok
@@ -338,8 +343,13 @@ certain functionality.
 @section package
 
 @li @c package
+@li @c package.manifest
 @li @c package.xstor
 @li @c package.threadeddeflate
+
+@section pyuno
+
+@li @c pyuno.runtime
 
 @section sdext
 
@@ -378,6 +388,7 @@ certain functionality.
 @li @c svl
 @li @c svl.crypto
 @li @c svl.items
+@li @c svl.misc
 @li @c svl.numbers
 
 @section svtools
@@ -433,7 +444,6 @@ certain functionality.
 @li @c ucb.ucp.cmis
 @li @c ucb.ucp.ext
 @li @c ucb.ucp.file
-@li @c ucb.ucp.ftp
 @li @c ucb.ucp.gio
 @li @c ucb.ucp.tdoc
 @li @c ucb.ucp.webdav
@@ -489,6 +499,7 @@ certain functionality.
 @li @c vcl.helper
 @li @c vcl.icontest
 @li @c vcl.ios.clipboard
+@li @c vcl.items
 @li @c vcl.kf5 - KF5
 @li @c vcl.layout - Widget layout
 @li @c vcl.lazydelete
@@ -504,7 +515,7 @@ certain functionality.
 @li @c vcl.quartz
 @li @c vcl.schedule - scheduler / main-loop information
 @li @c vcl.schedule.deinit
-@li @c vcl.screensaverinhibitor
+@li @c vcl.sessioninhibitor
 @li @c vcl.scrollbar - Scroll Bars
 @li @c vcl.se - VCL Session Manager
 @li @c vcl.se.debug
@@ -583,6 +594,7 @@ certain functionality.
 @li @c xmlsecurity.comp - xml security component
 @li @c xmlsecurity.dialogs - xml security dialogs
 @li @c xmlsecurity.helper
+@li @c xmlsecurity.nss
 @li @c xmlsecurity.ooxml - OOXML signature support
 @li @c xmlsecurity.qa
 @li @c xmlsecurity.workben

@@ -22,7 +22,6 @@
 
 #include <config_options.h>
 #include <com/sun/star/style/XStyle.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 
 #include <rtl/ref.hxx>
 #include <cppuhelper/implbase.hxx>
@@ -273,11 +272,7 @@ public:
 
     SfxStyleSheetBase*  First(SfxStyleFamily eFamily, SfxStyleSearchBits eMask = SfxStyleSearchBits::All);
     SfxStyleSheetBase*  Next();
-    virtual SfxStyleSheetBase*  Find( const OUString&, SfxStyleFamily eFam, SfxStyleSearchBits n=SfxStyleSearchBits::All ) const;
-
-    virtual bool                SetParent(SfxStyleFamily eFam,
-                                          const OUString &rStyle,
-                                          const OUString &rParent);
+    virtual SfxStyleSheetBase*  Find( const OUString&, SfxStyleFamily eFam, SfxStyleSearchBits n=SfxStyleSearchBits::All );
 
     void                        Reindex();
     /** Add a style sheet.
@@ -341,16 +336,12 @@ public:
     const OUString&     GetOldName() const { return aName; }
 };
 
-class SVL_DLLPUBLIC SfxUnoStyleSheet : public cppu::ImplInheritanceHelper<SfxStyleSheet, css::style::XStyle, css::lang::XUnoTunnel>
+class SVL_DLLPUBLIC SfxUnoStyleSheet : public cppu::ImplInheritanceHelper<SfxStyleSheet, css::style::XStyle>
 {
 public:
     SfxUnoStyleSheet( const OUString& _rName, const SfxStyleSheetBasePool& _rPool, SfxStyleFamily _eFamily, SfxStyleSearchBits _nMask );
 
     static SfxUnoStyleSheet* getUnoStyleSheet( const css::uno::Reference< css::style::XStyle >& xStyle );
-
-    // XUnoTunnel
-    static const css::uno::Sequence< ::sal_Int8 >& getUnoTunnelId();
-    virtual ::sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< ::sal_Int8 >& aIdentifier ) override;
 };
 
 #endif

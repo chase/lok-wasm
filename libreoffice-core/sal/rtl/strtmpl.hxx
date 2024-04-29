@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
@@ -34,6 +35,7 @@
 #include "strimp.hxx"
 
 #include <o3tl/safeint.hxx>
+#include <o3tl/string_view.hxx>
 #include <osl/diagnose.h>
 #include <sal/log.hxx>
 #include <rtl/character.hxx>
@@ -47,7 +49,7 @@ void internRelease(rtl_uString*);
 
 namespace rtl::str
 {
-template <typename C> auto IMPL_RTL_USTRCODE(C c) { return std::make_unsigned_t<C>(c); }
+template <typename C> auto UChar(C c) { return std::make_unsigned_t<C>(c); }
 
 // Wrappers around null-terminated/known-length strings, that allow to generalize algorithms
 // without overhead (e.g., without need to get length of null-terminated strings).
@@ -85,35 +87,20 @@ template <typename C> struct with_length
     auto end() const { return p + len; }
 };
 
-struct ToAsciiLower
+template <bool (&fApplicable)(sal_uInt32), sal_uInt32 (&fReplace)(sal_uInt32)> struct CaseReplace
 {
-    template <typename C> static bool Applicable(C c)
-    {
-        return rtl::isAsciiUpperCase(IMPL_RTL_USTRCODE(c));
-    }
-    template <typename C> static C Replace(C c)
-    {
-        return rtl::toAsciiLowerCase(IMPL_RTL_USTRCODE(c));
-    }
-} constexpr toAsciiLower;
-
-struct ToAsciiUpper
-{
-    template <typename C> static bool Applicable(C c)
-    {
-        return rtl::isAsciiLowerCase(IMPL_RTL_USTRCODE(c));
-    }
-    template <typename C> static C Replace(C c)
-    {
-        return rtl::toAsciiUpperCase(IMPL_RTL_USTRCODE(c));
-    }
-} constexpr toAsciiUpper;
+    static auto Applicable() { return [](auto c) { return fApplicable(UChar(c)); }; }
+    template <typename C> static C Replace(C c) { return fReplace(UChar(c)); }
+};
+constexpr CaseReplace<rtl::isAsciiUpperCase, rtl::toAsciiLowerCase> toAsciiLower;
+constexpr CaseReplace<rtl::isAsciiLowerCase, rtl::toAsciiUpperCase> toAsciiUpper;
 
 template <typename C> struct FromTo
 {
     C from;
     C to;
     FromTo(C cFrom, C cTo) : from(cFrom), to(cTo) {}
+    auto Applicable() const { return [this](C c) { return c == from; }; }
     C Replace(C c) const { return c == from ? to : c; }
 };
 
@@ -150,24 +137,6 @@ inline sal_Int16 implGetDigit(sal_Unicode ch, sal_Int16 nRadix)
     else if ((ch >= 'A') && (ch <= 'Z'))
         n = ch - 'A' + 10;
     return (n < nRadix) ? n : -1;
-}
-
-inline bool implIsWhitespace(sal_Unicode c)
-{
-    /* Space or Control character? */
-    if ((c <= 32) && c)
-        return true;
-
-    /* Only in the General Punctuation area Space or Control characters are included? */
-    if ((c < 0x2000) || (c > 0x206F))
-        return false;
-
-    if (((c >= 0x2000) && (c <= 0x200B)) ||    /* All Spaces           */
-        (c == 0x2028) ||                       /* LINE SEPARATOR       */
-        (c == 0x2029))                         /* PARAGRAPH SEPARATOR  */
-        return true;
-
-    return false;
 }
 
 /* ======================================================================= */
@@ -211,8 +180,8 @@ struct CompareNormal
     template <typename C1, typename C2> static sal_Int32 compare(C1 c1, C2 c2)
     {
         warnIfOneIsCharAndNotAscii(c1, c2);
-        return static_cast<sal_Int32>(IMPL_RTL_USTRCODE(c1))
-               - static_cast<sal_Int32>(IMPL_RTL_USTRCODE(c2));
+        return static_cast<sal_Int32>(UChar(c1))
+               - static_cast<sal_Int32>(UChar(c2));
     }
 };
 
@@ -221,7 +190,7 @@ struct CompareIgnoreAsciiCase
     template <typename C1, typename C2> static sal_Int32 compare(C1 c1, C2 c2)
     {
         warnIfOneIsCharAndNotAscii(c1, c2);
-        return rtl::compareIgnoreAsciiCase(IMPL_RTL_USTRCODE(c1), IMPL_RTL_USTRCODE(c2));
+        return rtl::compareIgnoreAsciiCase(UChar(c1), UChar(c2));
     }
 };
 
@@ -260,12 +229,12 @@ sal_Int32 compare(S1 s1, S2 s2, Compare, Shorten_t shortenedLength)
 }
 
 // take advantage of builtin optimisations
-template <typename C, std::enable_if_t<sizeof(C) == sizeof(wchar_t), int> = 0>
+template <typename C> requires (sizeof(C) == sizeof(wchar_t))
 sal_Int32 compare(null_terminated<C> s1, null_terminated<C> s2, CompareNormal, NoShortening)
 {
     return wcscmp(reinterpret_cast<wchar_t const*>(s1.p), reinterpret_cast<wchar_t const*>(s2.p));
 }
-template <typename C, std::enable_if_t<sizeof(C) == sizeof(char), int> = 0>
+template <typename C> requires (sizeof(C) == sizeof(char))
 sal_Int32 compare(null_terminated<C> s1, null_terminated<C> s2, CompareNormal, NoShortening)
 {
     return strcmp(reinterpret_cast<char const*>(s1.p), reinterpret_cast<char const*>(s2.p));
@@ -310,25 +279,13 @@ sal_Int32 reverseCompare_WithLengths(const C1* pStr1, sal_Int32 nStr1Len,
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 hashCode_WithLength(const IMPL_RTL_STRCODE*, sal_Int32);
-
-template <typename IMPL_RTL_STRCODE> sal_Int32 hashCode( const IMPL_RTL_STRCODE* pStr )
-{
-    return hashCode_WithLength( pStr, getLength( pStr ) );
-}
-
-/* ----------------------------------------------------------------------- */
-
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 hashCode_WithLength                             ( const IMPL_RTL_STRCODE* pStr,
-                                                            sal_Int32 nLen )
+template <typename C> sal_Int32 hashCode_WithLength(const C* pStr, sal_Int32 nLen)
 {
     assert(nLen >= 0);
     sal_uInt32 h = static_cast<sal_uInt32>(nLen);
     while ( nLen > 0 )
     {
-        h = (h*37U) + IMPL_RTL_USTRCODE( *pStr );
+        h = (h*37U) + UChar( *pStr );
         pStr++;
         nLen--;
     }
@@ -337,21 +294,26 @@ sal_Int32 hashCode_WithLength                             ( const IMPL_RTL_STRCO
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 indexOfChar                             ( const IMPL_RTL_STRCODE* pStr,
-                                                    IMPL_RTL_STRCODE c )
+template <typename C> sal_Int32 hashCode(const C* pStr)
+{
+    return hashCode_WithLength( pStr, getLength( pStr ) );
+}
+
+/* ----------------------------------------------------------------------- */
+
+template <typename C> sal_Int32 indexOfChar(const C* pStr, C c)
 {
     assert(pStr);
     if (!c)
         return -1; // Unifies behavior of strchr/wcschr and unoptimized algorithm wrt '\0'
 
-    if constexpr (sizeof(IMPL_RTL_STRCODE) == sizeof(char))
+    if constexpr (sizeof(C) == sizeof(char))
     {
         // take advantage of builtin optimisations
-        const IMPL_RTL_STRCODE* p = strchr(pStr, c);
+        const C* p = strchr(pStr, c);
         return p ? p - pStr : -1;
     }
-    else if constexpr (sizeof(IMPL_RTL_STRCODE) == sizeof(wchar_t))
+    else if constexpr (sizeof(C) == sizeof(wchar_t))
     {
         // take advantage of builtin optimisations
         wchar_t const * p = wcschr(reinterpret_cast<wchar_t const *>(pStr), static_cast<wchar_t>(c));
@@ -359,7 +321,7 @@ sal_Int32 indexOfChar                             ( const IMPL_RTL_STRCODE* pStr
     }
     else
     {
-        const IMPL_RTL_STRCODE* pTempStr = pStr;
+        const C* pTempStr = pStr;
         while ( *pTempStr )
         {
             if ( *pTempStr == c )
@@ -374,41 +336,43 @@ sal_Int32 indexOfChar                             ( const IMPL_RTL_STRCODE* pStr
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 indexOfChar_WithLength                             ( const IMPL_RTL_STRCODE* pStr,
-                                                               sal_Int32 nLen,
-                                                               IMPL_RTL_STRCODE c )
+template <typename C> sal_Int32 indexOfChar_WithLength(const C* pStr, sal_Int32 nLen, C c)
 {
 //    assert(nLen >= 0);
     if (nLen <= 0)
         return -1;
     // take advantage of builtin optimisations
-    using my_string_view = std::basic_string_view<IMPL_RTL_STRCODE>;
-    my_string_view v(pStr, nLen);
-    typename my_string_view::size_type idx = v.find(c);
-    return idx == my_string_view::npos ? -1 : idx;
+    std::basic_string_view v(pStr, nLen);
+    auto idx = v.find(c);
+    return idx == v.npos ? -1 : idx;
 }
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 lastIndexOfChar_WithLength(const IMPL_RTL_STRCODE*, sal_Int32, IMPL_RTL_STRCODE);
+template <typename C> sal_Int32 lastIndexOfChar_WithLength(const C* pStr, sal_Int32 nLen, C c)
+{
+    assert(nLen >= 0);
+    // take advantage of builtin optimisations
+    std::basic_string_view v(pStr, nLen);
+    auto idx = v.rfind(c);
+    return idx == v.npos ? -1 : idx;
+}
 
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 lastIndexOfChar                             ( const IMPL_RTL_STRCODE* pStr,
-                                                        IMPL_RTL_STRCODE c )
+/* ----------------------------------------------------------------------- */
+
+template <typename C> sal_Int32 lastIndexOfChar(const C* pStr, C c)
 {
     assert(pStr);
     if (!c)
         return -1; // Unifies behavior of strrchr/wcsrchr and lastIndexOfChar_WithLength wrt '\0'
 
-    if constexpr (sizeof(IMPL_RTL_STRCODE) == sizeof(char))
+    if constexpr (sizeof(C) == sizeof(char))
     {
         // take advantage of builtin optimisations
-        const IMPL_RTL_STRCODE* p = strrchr(pStr, c);
+        const C* p = strrchr(pStr, c);
         return p ? p - pStr : -1;
     }
-    else if constexpr (sizeof(IMPL_RTL_STRCODE) == sizeof(wchar_t))
+    else if constexpr (sizeof(C) == sizeof(wchar_t))
     {
         // take advantage of builtin optimisations
         wchar_t const * p = wcsrchr(reinterpret_cast<wchar_t const *>(pStr), static_cast<wchar_t>(c));
@@ -422,60 +386,9 @@ sal_Int32 lastIndexOfChar                             ( const IMPL_RTL_STRCODE* 
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 lastIndexOfChar_WithLength                             ( const IMPL_RTL_STRCODE* pStr,
-                                                                   sal_Int32 nLen,
-                                                                   IMPL_RTL_STRCODE c )
-{
-    assert(nLen >= 0);
-    // take advantage of builtin optimisations
-    using my_string_view = std::basic_string_view<IMPL_RTL_STRCODE>;
-    my_string_view v(pStr, nLen);
-    typename my_string_view::size_type idx = v.rfind(c);
-    return idx == my_string_view::npos ? -1 : idx;
-}
-
-/* ----------------------------------------------------------------------- */
-
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 indexOfStr_WithLength(const IMPL_RTL_STRCODE*, sal_Int32, const IMPL_RTL_STRCODE*,
-                                sal_Int32);
-
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 indexOfStr                             ( const IMPL_RTL_STRCODE* pStr,
-                                                   const IMPL_RTL_STRCODE* pSubStr )
-{
-    assert(pStr);
-    assert(pSubStr);
-    /* an empty SubString is always not findable */
-    if (*pSubStr == 0)
-        return -1;
-    if constexpr (sizeof(IMPL_RTL_STRCODE) == sizeof(char))
-    {
-        // take advantage of builtin optimisations
-        const IMPL_RTL_STRCODE* p = strstr(pStr, pSubStr);
-        return p ? p - pStr : -1;
-    }
-    else if constexpr (sizeof(IMPL_RTL_STRCODE) == sizeof(wchar_t))
-    {
-        // take advantage of builtin optimisations
-        wchar_t const * p = wcsstr(reinterpret_cast<wchar_t const *>(pStr), reinterpret_cast<wchar_t const *>(pSubStr));
-        return p ? p - reinterpret_cast<wchar_t const *>(pStr) : -1;
-    }
-    else
-    {
-        return indexOfStr_WithLength( pStr, getLength( pStr ),
-                                                         pSubStr, getLength( pSubStr ) );
-    }
-}
-
-/* ----------------------------------------------------------------------- */
-
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 indexOfStr_WithLength                             ( const IMPL_RTL_STRCODE* pStr,
-                                                              sal_Int32 nStrLen,
-                                                              const  IMPL_RTL_STRCODE* pSubStr,
-                                                              sal_Int32 nSubLen )
+template <typename C>
+sal_Int32 indexOfStr_WithLength(const C* pStr, sal_Int32 nStrLen,
+                                const C* pSubStr, sal_Int32 nSubLen)
 {
     assert(nStrLen >= 0);
     assert(nSubLen >= 0);
@@ -483,10 +396,9 @@ sal_Int32 indexOfStr_WithLength                             ( const IMPL_RTL_STR
     if ( nSubLen == 0 )
         return -1;
     // take advantage of builtin optimisations
-    using my_string_view = std::basic_string_view<IMPL_RTL_STRCODE>;
-    my_string_view v(pStr, nStrLen);
+    std::basic_string_view v(pStr, nStrLen);
     auto idx = nSubLen == 1 ? v.find(*pSubStr) : v.find(pSubStr, 0, nSubLen);
-    return idx == my_string_view::npos ? -1 : idx;
+    return idx == v.npos ? -1 : idx;
 }
 
 inline sal_Int32 indexOfStr_WithLength(const sal_Unicode* pStr, sal_Int32 nStrLen,
@@ -520,25 +432,37 @@ inline sal_Int32 indexOfStr_WithLength(const sal_Unicode* pStr, sal_Int32 nStrLe
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 lastIndexOfStr_WithLength(const IMPL_RTL_STRCODE*, sal_Int32, const IMPL_RTL_STRCODE*,
-                                    sal_Int32);
-
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 lastIndexOfStr                             ( const IMPL_RTL_STRCODE* pStr,
-                                                       const IMPL_RTL_STRCODE* pSubStr )
+template <typename C> sal_Int32 indexOfStr(const C* pStr, const C* pSubStr)
 {
-    return lastIndexOfStr_WithLength( pStr, getLength( pStr ),
-                                                          pSubStr, getLength( pSubStr ) );
+    assert(pStr);
+    assert(pSubStr);
+    /* an empty SubString is always not findable */
+    if (*pSubStr == 0)
+        return -1;
+    if constexpr (sizeof(C) == sizeof(char))
+    {
+        // take advantage of builtin optimisations
+        const C* p = strstr(pStr, pSubStr);
+        return p ? p - pStr : -1;
+    }
+    else if constexpr (sizeof(C) == sizeof(wchar_t))
+    {
+        // take advantage of builtin optimisations
+        wchar_t const * p = wcsstr(reinterpret_cast<wchar_t const *>(pStr), reinterpret_cast<wchar_t const *>(pSubStr));
+        return p ? p - reinterpret_cast<wchar_t const *>(pStr) : -1;
+    }
+    else
+    {
+        return indexOfStr_WithLength( pStr, getLength( pStr ),
+                                                         pSubStr, getLength( pSubStr ) );
+    }
 }
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 lastIndexOfStr_WithLength                             ( const IMPL_RTL_STRCODE* pStr,
-                                                                  sal_Int32 nStrLen,
-                                                                  const IMPL_RTL_STRCODE* pSubStr,
-                                                                  sal_Int32 nSubLen )
+template <typename C>
+sal_Int32 lastIndexOfStr_WithLength(const C* pStr, sal_Int32 nStrLen,
+                                    const C* pSubStr, sal_Int32 nSubLen)
 {
     assert(nStrLen >= 0);
     assert(nSubLen >= 0);
@@ -546,11 +470,17 @@ sal_Int32 lastIndexOfStr_WithLength                             ( const IMPL_RTL
     if ( nSubLen == 0 )
         return -1;
     // take advantage of builtin optimisations
-    using my_string_view = std::basic_string_view<IMPL_RTL_STRCODE>;
-    my_string_view v(pStr, nStrLen);
-    my_string_view needle(pSubStr, nSubLen);
-    typename my_string_view::size_type idx = v.rfind(needle);
-    return idx == my_string_view::npos ? -1 : idx;
+    std::basic_string_view v(pStr, nStrLen);
+    std::basic_string_view needle(pSubStr, nSubLen);
+    auto idx = v.rfind(needle);
+    return idx == v.npos ? -1 : idx;
+}
+
+/* ----------------------------------------------------------------------- */
+
+template <typename C> sal_Int32 lastIndexOfStr(const C* pStr, const C* pSubStr)
+{
+    return lastIndexOfStr_WithLength(pStr, getLength(pStr), pSubStr, getLength(pSubStr));
 }
 
 /* ----------------------------------------------------------------------- */
@@ -563,41 +493,9 @@ template <class S, class Replacer> void replaceChars(S str, Replacer replacer)
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE> sal_Int32 trim_WithLength(IMPL_RTL_STRCODE*, sal_Int32);
-
-template <typename IMPL_RTL_STRCODE> sal_Int32 trim( IMPL_RTL_STRCODE* pStr )
+template <typename C> sal_Int32 trim_WithLength(C* pStr, sal_Int32 nLen)
 {
-    return trim_WithLength( pStr, getLength( pStr ) );
-}
-
-/* ----------------------------------------------------------------------- */
-
-template <typename IMPL_RTL_STRCODE>
-std::basic_string_view<IMPL_RTL_STRCODE> trimView( IMPL_RTL_STRCODE* pStr, sal_Int32 nLen )
-{
-    assert(nLen >= 0);
-    sal_Int32 nPreSpaces    = 0;
-    sal_Int32 nPostSpaces   = 0;
-    sal_Int32 nIndex        = nLen-1;
-
-    while ( (nPreSpaces < nLen) && implIsWhitespace( IMPL_RTL_USTRCODE(*(pStr+nPreSpaces)) ) )
-        nPreSpaces++;
-
-    while ( (nIndex > nPreSpaces) && implIsWhitespace( IMPL_RTL_USTRCODE(*(pStr+nIndex)) ) )
-    {
-        nPostSpaces++;
-        nIndex--;
-    }
-
-    return { pStr + nPreSpaces, static_cast<size_t>(nLen - nPostSpaces - nPreSpaces) };
-}
-
-/* ----------------------------------------------------------------------- */
-
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 trim_WithLength( IMPL_RTL_STRCODE* pStr, sal_Int32 nLen )
-{
-    const auto view = trimView(pStr, nLen);
+    const auto view = o3tl::trim(std::basic_string_view(pStr, nLen));
 
     if (static_cast<sal_Int32>(view.size()) != nLen)
     {
@@ -612,7 +510,11 @@ sal_Int32 trim_WithLength( IMPL_RTL_STRCODE* pStr, sal_Int32 nLen )
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE> sal_Int32 valueOfBoolean( IMPL_RTL_STRCODE* pStr, sal_Bool b )
+template <typename C> sal_Int32 trim(C* pStr) { return trim_WithLength(pStr, getLength(pStr)); }
+
+/* ----------------------------------------------------------------------- */
+
+template <typename C> sal_Int32 valueOfBoolean(C* pStr, sal_Bool b)
 {
     assert(pStr);
     if ( b )
@@ -647,9 +549,7 @@ template <typename IMPL_RTL_STRCODE> sal_Int32 valueOfBoolean( IMPL_RTL_STRCODE*
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE>
-sal_Int32 valueOfChar                             ( IMPL_RTL_STRCODE* pStr,
-                                                    IMPL_RTL_STRCODE c )
+template <typename C> sal_Int32 valueOfChar(C* pStr, C c)
 {
     assert(pStr);
     *pStr++ = c;
@@ -659,16 +559,14 @@ sal_Int32 valueOfChar                             ( IMPL_RTL_STRCODE* pStr,
 
 /* ----------------------------------------------------------------------- */
 
-template <sal_Int32 maxLen, typename IMPL_RTL_STRCODE, typename T>
-sal_Int32 valueOfInt                               ( IMPL_RTL_STRCODE* pStr,
-                                                     T n,
-                                                     sal_Int16 nRadix )
+template <sal_Int32 maxLen, typename C, typename T>
+sal_Int32 valueOfInt(C* pStr, T n, sal_Int16 nRadix)
 {
     assert(pStr);
     assert( nRadix >= RTL_STR_MIN_RADIX && nRadix <= RTL_STR_MAX_RADIX );
+    const auto* const pStart = pStr;
     char    aBuf[maxLen];
     char*   pBuf = aBuf;
-    sal_Int32   nLen = 0;
     using uT = std::make_unsigned_t<T>;
     uT nValue;
 
@@ -683,7 +581,6 @@ sal_Int32 valueOfInt                               ( IMPL_RTL_STRCODE* pStr,
         {
             *pStr = '-';
             pStr++;
-            nLen++;
             nValue = n == std::numeric_limits<T>::min() ? static_cast<uT>(n) : -n;
         }
         else
@@ -706,22 +603,15 @@ sal_Int32 valueOfInt                               ( IMPL_RTL_STRCODE* pStr,
     while ( nValue > 0 );
 
     /* copy the values in the right direction into the destination buffer */
-    do
-    {
-        pBuf--;
-        *pStr = *pBuf;
-        pStr++;
-        nLen++;
-    }
-    while ( pBuf != aBuf );
+    pStr = std::reverse_copy(aBuf, pBuf, pStr);
     *pStr = 0;
 
-    return nLen;
+    return pStr - pStart;
 }
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRCODE> sal_Bool toBoolean( const IMPL_RTL_STRCODE* pStr )
+template <typename C> sal_Bool toBoolean(const C* pStr)
 {
     assert(pStr);
     if ( *pStr == '1' )
@@ -782,7 +672,7 @@ template <typename T, class S> T toInt(S str, sal_Int16 nRadix)
     const auto end = str.end();
 
     /* Skip whitespaces */
-    while (pStr != end && implIsWhitespace(IMPL_RTL_USTRCODE(*pStr)))
+    while (pStr != end && o3tl::internal::implIsWhitespace(UChar(*pStr)))
         pStr++;
     if (pStr == end)
         return 0;
@@ -794,7 +684,7 @@ template <typename T, class S> T toInt(S str, sal_Int16 nRadix)
     std::make_unsigned_t<T> n = 0;
     while (pStr != end)
     {
-        sal_Int16 nDigit = implGetDigit(IMPL_RTL_USTRCODE(*pStr), nRadix);
+        sal_Int16 nDigit = implGetDigit(UChar(*pStr), nRadix);
         if ( nDigit < 0 )
             break;
         if (static_cast<std::make_unsigned_t<T>>(nMod < nDigit ? nDiv - 1 : nDiv) < n)
@@ -818,26 +708,17 @@ template <typename T, class S> T toInt(S str, sal_Int16 nRadix)
 /* Internal String-Class help functions                                    */
 /* ======================================================================= */
 
-template <class STRINGDATA> using STRCODE = std::remove_extent_t<decltype(STRINGDATA::buffer)>;
-template <typename C> struct STRINGDATA_;
-template <> struct STRINGDATA_<char>
-{
-    using T = rtl_String;
-};
-template <> struct STRINGDATA_<sal_Unicode>
-{
-    using T = rtl_uString;
-};
-template <typename C> using STRINGDATA = typename STRINGDATA_<C>::T;
+template <class rtl_tString> using Char_T = std::remove_extent_t<decltype(rtl_tString::buffer)>;
 
-template <typename IMPL_RTL_STRINGDATA> IMPL_RTL_STRINGDATA* Alloc( sal_Int32 nLen )
+template <typename rtl_tString> rtl_tString* Alloc(sal_Int32 nLen)
 {
-    IMPL_RTL_STRINGDATA * pData
-        = (sal::static_int_cast< sal_uInt32 >(nLen)
-           <= ((SAL_MAX_UINT32 - sizeof (IMPL_RTL_STRINGDATA))
-               / sizeof (STRCODE<IMPL_RTL_STRINGDATA>)))
-        ? static_cast<IMPL_RTL_STRINGDATA *>(rtl_allocateString(
-            sizeof (IMPL_RTL_STRINGDATA) + nLen * sizeof (STRCODE<IMPL_RTL_STRINGDATA>)))
+    constexpr auto fix = offsetof(rtl_tString, buffer) + sizeof rtl_tString::buffer;
+    rtl_tString * pData
+        = (o3tl::make_unsigned(nLen)
+           <= ((std::numeric_limits<std::size_t>::max() - fix)
+               / sizeof (Char_T<rtl_tString>)))
+        ? static_cast<rtl_tString *>(rtl_allocateString(
+            fix + nLen * sizeof (Char_T<rtl_tString>)))
         : nullptr;
     if (pData != nullptr) {
         pData->refCount = 1;
@@ -851,7 +732,7 @@ template <typename IMPL_RTL_STRINGDATA> IMPL_RTL_STRINGDATA* Alloc( sal_Int32 nL
 /* String-Class functions                                                  */
 /* ======================================================================= */
 
-template <typename IMPL_RTL_STRINGDATA> void acquire(IMPL_RTL_STRINGDATA * pThis)
+template <typename rtl_tString> void acquire(rtl_tString* pThis)
 {
     if (!SAL_STRING_IS_STATIC (pThis))
         osl_atomic_increment( &((pThis)->refCount) );
@@ -859,13 +740,13 @@ template <typename IMPL_RTL_STRINGDATA> void acquire(IMPL_RTL_STRINGDATA * pThis
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA> void release( IMPL_RTL_STRINGDATA* pThis )
+template <typename rtl_tString> void release(rtl_tString* pThis)
 {
     if (SAL_UNLIKELY(SAL_STRING_IS_STATIC (pThis)))
         return;
 
     /* OString doesn't have an 'intern' */
-    if constexpr (sizeof(STRCODE<IMPL_RTL_STRINGDATA>) == sizeof(sal_Unicode))
+    if constexpr (sizeof(Char_T<rtl_tString>) == sizeof(sal_Unicode))
     {
         if (SAL_STRING_IS_INTERN (pThis))
         {
@@ -886,9 +767,9 @@ template <typename IMPL_RTL_STRINGDATA> void release( IMPL_RTL_STRINGDATA* pThis
 /* static data to be referenced by all empty strings
  * the refCount is predefined to 1 and must never become 0 !
  */
-template <typename IMPL_RTL_STRINGDATA> struct EmptyStringImpl
+template <typename rtl_tString> struct EmptyStringImpl
 {
-    static IMPL_RTL_STRINGDATA data;
+    static rtl_tString data;
 };
 
 template <>
@@ -905,19 +786,18 @@ inline rtl_String EmptyStringImpl<rtl_String>::data = {
     { 0 }                       /* char      buffer[1]; */
 };
 
-template <typename IMPL_RTL_STRINGDATA> void new_( IMPL_RTL_STRINGDATA** ppThis )
+template <typename rtl_tString> void new_(rtl_tString** ppThis)
 {
     assert(ppThis);
     if ( *ppThis)
         release( *ppThis );
 
-    *ppThis = &EmptyStringImpl<IMPL_RTL_STRINGDATA>::data;
+    *ppThis = &EmptyStringImpl<rtl_tString>::data;
 }
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA>
-void new_WithLength( IMPL_RTL_STRINGDATA** ppThis, sal_Int32 nLen )
+template <typename rtl_tString> void new_WithLength(rtl_tString** ppThis, sal_Int32 nLen)
 {
     assert(ppThis);
     assert(nLen >= 0);
@@ -928,7 +808,7 @@ void new_WithLength( IMPL_RTL_STRINGDATA** ppThis, sal_Int32 nLen )
         if ( *ppThis)
             release( *ppThis );
 
-        *ppThis = Alloc<IMPL_RTL_STRINGDATA>( nLen );
+        *ppThis = Alloc<rtl_tString>( nLen );
         assert(*ppThis != nullptr);
         (*ppThis)->length   = 0;
         (*ppThis)->buffer[0] = 0;
@@ -937,8 +817,8 @@ void new_WithLength( IMPL_RTL_STRINGDATA** ppThis, sal_Int32 nLen )
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA, typename C>
-void newFromStr_WithLength(IMPL_RTL_STRINGDATA** ppThis, const C* pCharStr, sal_Int32 nLen,
+template <typename rtl_tString, typename C>
+void newFromStr_WithLength(rtl_tString** ppThis, const C* pCharStr, sal_Int32 nLen,
                            sal_Int32 allocExtra = 0)
 {
     assert(ppThis);
@@ -949,8 +829,8 @@ void newFromStr_WithLength(IMPL_RTL_STRINGDATA** ppThis, const C* pCharStr, sal_
     if (nLen + allocExtra == 0)
         return new_(ppThis);
 
-    IMPL_RTL_STRINGDATA* pOrg = *ppThis;
-    *ppThis = Alloc<IMPL_RTL_STRINGDATA>(nLen + allocExtra);
+    rtl_tString* pOrg = *ppThis;
+    *ppThis = Alloc<rtl_tString>(nLen + allocExtra);
     assert(*ppThis != nullptr);
     if (nLen > 0)
         Copy((*ppThis)->buffer, pCharStr, nLen);
@@ -967,9 +847,7 @@ void newFromStr_WithLength(IMPL_RTL_STRINGDATA** ppThis, const C* pCharStr, sal_
         release(pOrg);
 }
 
-template <typename IMPL_RTL_STRINGDATA>
-void newFromString                                ( IMPL_RTL_STRINGDATA** ppThis,
-                                                    const IMPL_RTL_STRINGDATA* pStr )
+template <typename rtl_tString> void newFromString(rtl_tString** ppThis, const rtl_tString* pStr)
 {
     assert(pStr);
 
@@ -978,49 +856,15 @@ void newFromString                                ( IMPL_RTL_STRINGDATA** ppThis
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA>
-void newFromStr                                ( IMPL_RTL_STRINGDATA** ppThis,
-                                                 const STRCODE<IMPL_RTL_STRINGDATA>* pCharStr )
+template <typename rtl_tString>
+void newFromStr(rtl_tString** ppThis, const Char_T<rtl_tString>* pCharStr)
 {
-#if OSL_DEBUG_LEVEL > 0
-    //TODO: For now, only abort in non-production debug builds; once all places that rely on the
-    // undocumented newFromStr behavior of treating a null pCharStr like an empty string have been
-    // found and fixed, drop support for that behavior and turn this into a general assert:
-    if (pCharStr == nullptr) {
-        std::abort();
-    }
-#endif
-
-    newFromStr_WithLength(ppThis, pCharStr, pCharStr ? getLength(pCharStr) : 0);
+    newFromStr_WithLength(ppThis, pCharStr, getLength(pCharStr));
 }
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA> void assign(IMPL_RTL_STRINGDATA**, IMPL_RTL_STRINGDATA*);
-
-template <typename IMPL_RTL_STRINGDATA>
-void newFromSubString                                ( IMPL_RTL_STRINGDATA** ppThis,
-                                                       const IMPL_RTL_STRINGDATA* pFrom,
-                                                       sal_Int32 beginIndex,
-                                                       sal_Int32 count )
-{
-    assert(ppThis);
-    if ( beginIndex == 0 && count == pFrom->length )
-        return assign(ppThis, const_cast<IMPL_RTL_STRINGDATA*>(pFrom));
-    if ( count < 0 || beginIndex < 0 || beginIndex + count > pFrom->length )
-    {
-        assert(false); // fail fast at least in debug builds
-        return newFromStr_WithLength(ppThis, "!!br0ken!!", 10);
-    }
-
-    newFromStr_WithLength( ppThis, pFrom->buffer + beginIndex, count );
-}
-
-/* ----------------------------------------------------------------------- */
-
-template <typename IMPL_RTL_STRINGDATA>
-void assign                                ( IMPL_RTL_STRINGDATA** ppThis,
-                                             IMPL_RTL_STRINGDATA* pStr )
+template <typename rtl_tString> void assign(rtl_tString** ppThis, rtl_tString* pStr)
 {
     assert(ppThis);
     /* must be done at first, if pStr == *ppThis */
@@ -1034,7 +878,25 @@ void assign                                ( IMPL_RTL_STRINGDATA** ppThis,
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA> auto* getStr( IMPL_RTL_STRINGDATA* pThis )
+template <typename rtl_tString>
+void newFromSubString(rtl_tString** ppThis, const rtl_tString* pFrom, sal_Int32 beginIndex,
+                      sal_Int32 count)
+{
+    assert(ppThis);
+    if ( beginIndex == 0 && count == pFrom->length )
+        return assign(ppThis, const_cast<rtl_tString*>(pFrom));
+    if ( count < 0 || beginIndex < 0 || beginIndex + count > pFrom->length )
+    {
+        assert(false); // fail fast at least in debug builds
+        return newFromStr_WithLength(ppThis, "!!br0ken!!", 10);
+    }
+
+    newFromStr_WithLength( ppThis, pFrom->buffer + beginIndex, count );
+}
+
+/* ----------------------------------------------------------------------- */
+
+template <typename rtl_tString> auto* getStr(rtl_tString* pThis)
 {
     assert(pThis);
     return pThis->buffer;
@@ -1044,8 +906,8 @@ template <typename IMPL_RTL_STRINGDATA> auto* getStr( IMPL_RTL_STRINGDATA* pThis
 
 enum ThrowPolicy { NoThrow, Throw };
 
-template <ThrowPolicy throwPolicy, typename IMPL_RTL_STRINGDATA, typename C1, typename C2>
-void newConcat(IMPL_RTL_STRINGDATA** ppThis, const C1* pLeft, sal_Int32 nLeftLength,
+template <ThrowPolicy throwPolicy, typename rtl_tString, typename C1, typename C2>
+void newConcat(rtl_tString** ppThis, const C1* pLeft, sal_Int32 nLeftLength,
                const C2* pRight, sal_Int32 nRightLength)
 {
     assert(ppThis);
@@ -1053,7 +915,7 @@ void newConcat(IMPL_RTL_STRINGDATA** ppThis, const C1* pLeft, sal_Int32 nLeftLen
     assert(pLeft || nLeftLength == 0);
     assert(nRightLength >= 0);
     assert(pRight || nRightLength == 0);
-    IMPL_RTL_STRINGDATA* pOrg = *ppThis;
+    rtl_tString* pOrg = *ppThis;
 
     if (nLeftLength > std::numeric_limits<sal_Int32>::max() - nRightLength)
     {
@@ -1072,7 +934,7 @@ void newConcat(IMPL_RTL_STRINGDATA** ppThis, const C1* pLeft, sal_Int32 nLeftLen
     }
     else
     {
-        auto* pTempStr = Alloc<IMPL_RTL_STRINGDATA>(nLeftLength + nRightLength);
+        auto* pTempStr = Alloc<rtl_tString>(nLeftLength + nRightLength);
         OSL_ASSERT(pTempStr != nullptr);
         *ppThis = pTempStr;
         if (*ppThis != nullptr) {
@@ -1090,9 +952,8 @@ void newConcat(IMPL_RTL_STRINGDATA** ppThis, const C1* pLeft, sal_Int32 nLeftLen
         release( pOrg );
 }
 
-template<typename IMPL_RTL_STRINGDATA, typename IMPL_RTL_STRCODE>
-void newConcat(IMPL_RTL_STRINGDATA** ppThis, IMPL_RTL_STRINGDATA* pLeft,
-               const IMPL_RTL_STRCODE* pRight, sal_Int32 nRightLength)
+template <typename rtl_tString, typename C>
+void newConcat(rtl_tString** ppThis, rtl_tString* pLeft, const C* pRight, sal_Int32 nRightLength)
 {
     assert(pLeft != nullptr);
     if (nRightLength == 0)
@@ -1101,10 +962,8 @@ void newConcat(IMPL_RTL_STRINGDATA** ppThis, IMPL_RTL_STRINGDATA* pLeft,
         newConcat<Throw>(ppThis, pLeft->buffer, pLeft->length, pRight, nRightLength);
 }
 
-template <typename IMPL_RTL_STRINGDATA>
-void newConcat                                ( IMPL_RTL_STRINGDATA** ppThis,
-                                                IMPL_RTL_STRINGDATA* pLeft,
-                                                IMPL_RTL_STRINGDATA* pRight )
+template <typename rtl_tString>
+void newConcat(rtl_tString** ppThis, rtl_tString* pLeft, rtl_tString* pRight)
 {
     /* Test for 0-Pointer - if not, change newReplaceStrAt! */
     if ( !pRight || !pRight->length )
@@ -1120,16 +979,14 @@ void newConcat                                ( IMPL_RTL_STRINGDATA** ppThis,
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA>
-void ensureCapacity                                ( IMPL_RTL_STRINGDATA** ppThis,
-                                                     sal_Int32 size )
+template <typename rtl_tString> void ensureCapacity(rtl_tString** ppThis, sal_Int32 size)
 {
     assert(ppThis);
-    IMPL_RTL_STRINGDATA* const pOrg = *ppThis;
+    rtl_tString* const pOrg = *ppThis;
     if ( pOrg->refCount == 1 && pOrg->length >= size )
         return;
     assert( pOrg->length <= size ); // do not truncate
-    auto* pTempStr = Alloc<IMPL_RTL_STRINGDATA>( size );
+    auto* pTempStr = Alloc<rtl_tString>( size );
     Copy( pTempStr->buffer, pOrg->buffer, pOrg->length );
     // right now the length is still the same as of the original
     pTempStr->length = pOrg->length;
@@ -1142,13 +999,9 @@ void ensureCapacity                                ( IMPL_RTL_STRINGDATA** ppThi
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA, typename IMPL_RTL_STRCODE>
-void newReplaceStrAt                                ( IMPL_RTL_STRINGDATA** ppThis,
-                                                      IMPL_RTL_STRINGDATA* pStr,
-                                                      sal_Int32 nIndex,
-                                                      sal_Int32 nCount,
-                                                      const IMPL_RTL_STRCODE* pNewSubStr,
-                                                      sal_Int32 nNewSubStrLen )
+template <typename rtl_tString, typename C>
+void newReplaceStrAt(rtl_tString** ppThis, rtl_tString* pStr, sal_Int32 nIndex, sal_Int32 nCount,
+                     const C* pNewSubStr, sal_Int32 nNewSubStrLen)
 {
     assert(ppThis);
     assert(nIndex >= 0 && nIndex <= pStr->length);
@@ -1174,10 +1027,10 @@ void newReplaceStrAt                                ( IMPL_RTL_STRINGDATA** ppTh
     if ( !nCount && !nNewSubStrLen )
         return assign(ppThis, pStr);
 
-    IMPL_RTL_STRINGDATA*    pOrg = *ppThis;
+    rtl_tString*    pOrg = *ppThis;
 
     /* Alloc New Buffer */
-    *ppThis = Alloc<IMPL_RTL_STRINGDATA>(pStr->length - nCount + nNewSubStrLen);
+    *ppThis = Alloc<rtl_tString>(pStr->length - nCount + nNewSubStrLen);
     assert(*ppThis != nullptr);
     auto* pBuffer = (*ppThis)->buffer;
     if ( nIndex )
@@ -1200,12 +1053,9 @@ void newReplaceStrAt                                ( IMPL_RTL_STRINGDATA** ppTh
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA>
-void newReplaceStrAt                                ( IMPL_RTL_STRINGDATA** ppThis,
-                                                      IMPL_RTL_STRINGDATA* pStr,
-                                                      sal_Int32 nIndex,
-                                                      sal_Int32 nCount,
-                                                      IMPL_RTL_STRINGDATA* pNewSubStr )
+template <typename rtl_tString>
+void newReplaceStrAt(rtl_tString** ppThis, rtl_tString* pStr, sal_Int32 nIndex, sal_Int32 nCount,
+                     rtl_tString* pNewSubStr)
 {
     assert(ppThis);
     assert(nIndex >= 0 && nIndex <= pStr->length);
@@ -1247,18 +1097,18 @@ void newReplaceStrAt                                ( IMPL_RTL_STRINGDATA** ppTh
 
 /* ----------------------------------------------------------------------- */
 
-template <class Traits, typename IMPL_RTL_STRINGDATA>
-void newReplaceChars(IMPL_RTL_STRINGDATA** ppThis, IMPL_RTL_STRINGDATA* pStr)
+template <typename rtl_tString, class Replacer>
+void newReplaceChars(rtl_tString** ppThis, rtl_tString* pStr, Replacer replacer)
 {
     assert(ppThis);
     assert(pStr);
 
     const auto pEnd = pStr->buffer + pStr->length;
-    auto pCharStr = std::find_if(pStr->buffer, pEnd, [](auto c) { return Traits::Applicable(c); });
+    auto pCharStr = std::find_if(pStr->buffer, pEnd, replacer.Applicable());
     if (pCharStr != pEnd)
     {
-        IMPL_RTL_STRINGDATA* pOrg = *ppThis;
-        *ppThis = Alloc<IMPL_RTL_STRINGDATA>(pStr->length);
+        rtl_tString* pOrg = *ppThis;
+        *ppThis = Alloc<rtl_tString>(pStr->length);
         assert(*ppThis != nullptr);
         auto* pNewCharStr = (*ppThis)->buffer;
         /* Copy String */
@@ -1268,7 +1118,7 @@ void newReplaceChars(IMPL_RTL_STRINGDATA** ppThis, IMPL_RTL_STRINGDATA* pStr)
         /* replace/copy rest of the string */
         do
         {
-            *pNewCharStr = Traits::Replace(*pCharStr);
+            *pNewCharStr = replacer.Replace(*pCharStr);
             pNewCharStr++;
             pCharStr++;
         } while (pCharStr != pEnd);
@@ -1284,12 +1134,10 @@ void newReplaceChars(IMPL_RTL_STRINGDATA** ppThis, IMPL_RTL_STRINGDATA* pStr)
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA>
-void newTrim                                ( IMPL_RTL_STRINGDATA** ppThis,
-                                              IMPL_RTL_STRINGDATA* pStr )
+template <typename rtl_tString> void newTrim(rtl_tString** ppThis, rtl_tString* pStr)
 {
     assert(pStr);
-    const auto view = trimView(pStr->buffer, pStr->length);
+    const auto view = o3tl::trim(std::basic_string_view(pStr->buffer, pStr->length));
 
     if (static_cast<sal_Int32>(view.size()) == pStr->length)
         assign(ppThis, pStr);
@@ -1299,12 +1147,9 @@ void newTrim                                ( IMPL_RTL_STRINGDATA** ppThis,
 
 /* ----------------------------------------------------------------------- */
 
-template <typename IMPL_RTL_STRINGDATA>
-sal_Int32 getToken                                ( IMPL_RTL_STRINGDATA** ppThis,
-                                                    IMPL_RTL_STRINGDATA* pStr,
-                                                    sal_Int32 nToken,
-                                                    STRCODE<IMPL_RTL_STRINGDATA> cTok,
-                                                    sal_Int32 nIndex )
+template <typename rtl_tString>
+sal_Int32 getToken(rtl_tString** ppThis, rtl_tString* pStr, sal_Int32 nToken,
+                   Char_T<rtl_tString> cTok, sal_Int32 nIndex)
 {
     assert(ppThis);
     assert(pStr);
@@ -1352,9 +1197,9 @@ sal_Int32 getToken                                ( IMPL_RTL_STRINGDATA** ppThis
 /* String buffer help functions                                            */
 /* ======================================================================= */
 
-template <class IMPL_RTL_STRINGDATA>
-void stringbuffer_newFromStr_WithLength(IMPL_RTL_STRINGDATA** ppThis,
-                                        const STRCODE<IMPL_RTL_STRINGDATA>* pStr, sal_Int32 count)
+template <class rtl_tString>
+void stringbuffer_newFromStr_WithLength(rtl_tString** ppThis,
+                                        const Char_T<rtl_tString>* pStr, sal_Int32 count)
 {
     assert(ppThis);
     assert(count >= 0);
@@ -1364,9 +1209,9 @@ void stringbuffer_newFromStr_WithLength(IMPL_RTL_STRINGDATA** ppThis,
     newFromStr_WithLength(ppThis, pStr, count, 16);
 }
 
-template <class IMPL_RTL_STRINGDATA>
-sal_Int32 stringbuffer_newFromStringBuffer(IMPL_RTL_STRINGDATA** ppThis, sal_Int32 capacity,
-                                           IMPL_RTL_STRINGDATA* pStr)
+template <class rtl_tString>
+sal_Int32 stringbuffer_newFromStringBuffer(rtl_tString** ppThis, sal_Int32 capacity,
+                                           rtl_tString* pStr)
 {
     assert(capacity >= 0);
     assert(pStr);
@@ -1378,8 +1223,8 @@ sal_Int32 stringbuffer_newFromStringBuffer(IMPL_RTL_STRINGDATA** ppThis, sal_Int
     return capacity;
 }
 
-template <class IMPL_RTL_STRINGDATA>
-void stringbuffer_ensureCapacity(IMPL_RTL_STRINGDATA** ppThis, sal_Int32* capacity,
+template <class rtl_tString>
+void stringbuffer_ensureCapacity(rtl_tString** ppThis, sal_Int32* capacity,
                                  sal_Int32 minimumCapacity)
 {
     assert(ppThis);
@@ -1396,8 +1241,8 @@ void stringbuffer_ensureCapacity(IMPL_RTL_STRINGDATA** ppThis, sal_Int32* capaci
     newFromStr_WithLength(ppThis, (*ppThis)->buffer, nLength, *capacity - nLength);
 }
 
-template <class IMPL_RTL_STRINGDATA, typename C>
-void stringbuffer_insert(IMPL_RTL_STRINGDATA** ppThis, sal_Int32* capacity, sal_Int32 offset,
+template <class rtl_tString, typename C>
+void stringbuffer_insert(rtl_tString** ppThis, sal_Int32* capacity, sal_Int32 offset,
                          const C* pStr, sal_Int32 len)
 {
     assert(ppThis);
@@ -1428,8 +1273,8 @@ void stringbuffer_insert(IMPL_RTL_STRINGDATA** ppThis, sal_Int32* capacity, sal_
     pBuf[nOldLen + len] = 0;
 }
 
-template <class IMPL_RTL_STRINGDATA>
-void stringbuffer_remove(IMPL_RTL_STRINGDATA** ppThis, sal_Int32 start, sal_Int32 len)
+template <class rtl_tString>
+void stringbuffer_remove(rtl_tString** ppThis, sal_Int32 start, sal_Int32 len)
 {
     assert(ppThis);
     assert(start >= 0 && start <= (*ppThis)->length);
@@ -1507,16 +1352,9 @@ void newReplaceAllFromIndex(S** s, S* s1, CharTypeFrom const* from, sal_Int32 fr
     RTL_LOG_STRING_NEW(*s);
 }
 
-template <typename IMPL_RTL_STRINGDATA>
-void newReplace(IMPL_RTL_STRINGDATA** ppThis, IMPL_RTL_STRINGDATA* pStr,
-                STRCODE<IMPL_RTL_STRINGDATA> cOld, STRCODE<IMPL_RTL_STRINGDATA> cNew)
-{
-    return newReplaceAllFromIndex(ppThis, pStr, &cOld, 1, &cNew, 1, 0);
-}
-
-template <class S, typename CharTypeFrom, typename CharTypeTo>
-void newReplaceFirst(S** s, S* s1, CharTypeFrom const* from, sal_Int32 fromLength,
-                     CharTypeTo const* to, sal_Int32 toLength, sal_Int32& fromIndex)
+template <class rtl_tString, typename C1, typename C2>
+void newReplaceFirst(rtl_tString** s, rtl_tString* s1, C1 const* from, sal_Int32 fromLength,
+                     C2 const* to, sal_Int32 toLength, sal_Int32& fromIndex)
 {
     assert(s != nullptr);
     assert(s1 != nullptr);
@@ -1562,11 +1400,11 @@ static inline constexpr sal_uInt64 eX[] = { 10ull,
                                             1000000000000000000ull,
                                             10000000000000000000ull };
 
-template <typename S>
-void doubleToString(S** pResult, sal_Int32* pResultCapacity, sal_Int32 nResultOffset, double fValue,
-                    rtl_math_StringFormat eFormat, sal_Int32 nDecPlaces, STRCODE<S> cDecSeparator,
-                    sal_Int32 const* pGroups, STRCODE<S> cGroupSeparator,
-                    bool bEraseTrailingDecZeros)
+template <typename rtl_tString>
+void doubleToString(rtl_tString** pResult, sal_Int32* pResultCapacity, sal_Int32 nResultOffset,
+                    double fValue, rtl_math_StringFormat eFormat, sal_Int32 nDecPlaces,
+                    Char_T<rtl_tString> cDecSeparator, sal_Int32 const* pGroups,
+                    Char_T<rtl_tString> cGroupSeparator, bool bEraseTrailingDecZeros)
 {
     auto decimalDigits = [](sal_uInt64 n) {
         return std::distance(std::begin(eX), std::upper_bound(std::begin(eX), std::end(eX), n)) + 1;
@@ -1578,20 +1416,19 @@ void doubleToString(S** pResult, sal_Int32* pResultCapacity, sal_Int32 nResultOf
         return (n + d / 2) / d * d;
     };
 
-    auto append = [](S** s, sal_Int32* pCapacity, sal_Int32& rOffset, auto sv)
+    auto append = [](rtl_tString** s, sal_Int32* pCapacity, sal_Int32 rOffset, auto sv)
     {
-        stringbuffer_insert(s, pCapacity, rOffset, sv.data(), sv.size());
-        rOffset += sv.size();
+        if (!pCapacity)
+            newFromStr_WithLength(s, sv.data(), sv.size());
+        else
+            stringbuffer_insert(s, pCapacity, rOffset, sv.data(), sv.size());
     };
 
     if (std::isnan(fValue))
     {
         // #i112652# XMLSchema-2
         constexpr std::string_view nan{ "NaN" };
-        if (!pResultCapacity)
-            return newFromStr_WithLength(pResult, nan.data(), nan.size());
-        else
-            return append(pResult, pResultCapacity, nResultOffset, nan);
+        return append(pResult, pResultCapacity, nResultOffset, nan);
     }
 
     // sign adjustment, instead of testing for fValue<0.0 this will also fetch -0.0
@@ -1601,10 +1438,7 @@ void doubleToString(S** pResult, sal_Int32* pResultCapacity, sal_Int32 nResultOf
     {
         // #i112652# XMLSchema-2
         std::string_view inf = bSign ? std::string_view("-INF") : std::string_view("INF");
-        if (!pResultCapacity)
-            return newFromStr_WithLength(pResult, inf.data(), inf.size());
-        else
-            return append(pResult, pResultCapacity, nResultOffset, inf);
+        return append(pResult, pResultCapacity, nResultOffset, inf);
     }
 
     if (bSign)
@@ -1706,7 +1540,7 @@ void doubleToString(S** pResult, sal_Int32* pResultCapacity, sal_Int32 nResultOf
     // rtl_math_DecimalPlaces_Max was passed with rtl_math_StringFormat_F or
     // others, but we don't want to allocate/deallocate 2GB just to fill it
     // with trailing '0' characters..
-    nDecPlaces = std::clamp<sal_Int32>(nDecPlaces, -20, 20);
+    nDecPlaces = std::clamp<sal_Int32>(nDecPlaces, -309, 309);
 
     sal_Int32 nDigits = nDecPlaces + 1;
 
@@ -1732,11 +1566,11 @@ void doubleToString(S** pResult, sal_Int32* pResultCapacity, sal_Int32 nResultOf
     sal_Int32 nBuf
         = (nDigits <= 0 ? std::max<sal_Int32>(nDecPlaces, std::abs(nExp)) : nDigits + nDecPlaces)
           + 10 + (pGroups ? std::abs(nDigits) * 2 : 0);
-    // max(nDigits) = max(nDecPlaces) + 1 + max(nExp) + 1 = 20 + 1 + 308 + 1 = 330
-    // max(nBuf) = max(nDigits) + max(nDecPlaces) + 10 + max(nDigits) * 2 = 330 * 3 + 20 + 10 = 1020
-    assert(nBuf <= 1024);
-    STRCODE<S>* const pBuf = static_cast<STRCODE<S>*>(alloca(nBuf * sizeof(STRCODE<S>)));
-    STRCODE<S>* p = pBuf;
+    // max(nDigits) = max(nDecPlaces) + 1 + max(nExp) + 1 = 309 + 1 + 308 + 1 = 619
+    // max(nBuf) = max(nDigits) + max(nDecPlaces) + 10 + max(nDigits) * 2 = 619 * 3 + 309 + 10 = 2176
+    assert(nBuf <= 2176);
+    auto* const pBuf = static_cast<Char_T<rtl_tString>*>(alloca(nBuf * sizeof(Char_T<rtl_tString>)));
+    auto* p = pBuf;
     if (bSign)
         *p++ = '-';
 
@@ -1884,16 +1718,13 @@ void doubleToString(S** pResult, sal_Int32* pResultCapacity, sal_Int32 nResultOf
         *p++ = nExp % 10 + '0';
     }
 
-    if (!pResultCapacity)
-        newFromStr_WithLength(pResult, pBuf, p - pBuf);
-    else
-        append(pResult, pResultCapacity, nResultOffset, std::basic_string_view(pBuf, p - pBuf));
+    append(pResult, pResultCapacity, nResultOffset, std::basic_string_view(pBuf, p - pBuf));
 }
 
 template <sal_Int32 maxLen, typename C, typename T> sal_Int32 SAL_CALL valueOfFP(C* pStr, T f)
 {
     assert(pStr);
-    STRINGDATA<C>* pResult = nullptr;
+    rtl_String* pResult = nullptr;
     doubleToString(&pResult, nullptr, 0, f, rtl_math_StringFormat_G,
                    maxLen - std::size("-x.E-xxx") + 1, '.', nullptr, 0, true);
     const sal_Int32 nLen = pResult->length;

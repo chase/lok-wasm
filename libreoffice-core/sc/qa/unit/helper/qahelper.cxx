@@ -8,14 +8,18 @@
  */
 
 #include "qahelper.hxx"
+#include <LibreOfficeKit/LibreOfficeKitEnums.h>
+#include <comphelper/propertysequence.hxx>
 #include "csv_handler.hxx"
 #include "debughelper.hxx"
 #include <drwlayer.hxx>
 #include <comphelper/sequence.hxx>
+#include <comphelper/servicehelper.hxx>
 #include <compiler.hxx>
 #include <conditio.hxx>
 #include <stlsheet.hxx>
 #include <formulacell.hxx>
+#include <formulagroup.hxx>
 #include <svx/svdpage.hxx>
 #include <svx/svdoole2.hxx>
 #include <tools/UnitConversion.hxx>
@@ -32,6 +36,8 @@
 #include <scitems.hxx>
 #include <stringutil.hxx>
 #include <tokenarray.hxx>
+#include <vcl/keycodes.hxx>
+#include <vcl/scheduler.hxx>
 #include <o3tl/safeint.hxx>
 
 #include <orcus/csv_parser.hpp>
@@ -41,9 +47,13 @@
 
 #include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/chart2/data/XDataReceiver.hpp>
+#include <com/sun/star/document/MacroExecMode.hpp>
 
 using namespace com::sun::star;
 using namespace ::com::sun::star::uno;
+using ::std::cout;
+using ::std::cerr;
+using ::std::endl;
 
 FormulaGrammarSwitch::FormulaGrammarSwitch(ScDocument* pDoc, formula::FormulaGrammar::Grammar eGrammar) :
     mpDoc(pDoc), meOldGrammar(pDoc->GetGrammar())
@@ -119,39 +129,38 @@ void ScModelTestBase::testFile(const OUString& aFileName, ScDocument& rDoc, SCTA
 
     std::string aContent;
     loadFile(aFileName, aContent);
-    orcus::csv_parser<csv_handler> parser ( &aContent[0], aContent.size() , aHandler, aConfig);
+    orcus::csv_parser<csv_handler> parser(aContent, aHandler, aConfig);
     try
     {
         parser.parse();
     }
-    catch (const orcus::csv::parse_error& e)
+    catch (const orcus::parse_error& e)
     {
         std::cout << "reading csv content file failed: " << e.what() << std::endl;
-        OStringBuffer aErrorMsg("csv parser error: ");
-        aErrorMsg.append(e.what());
+        OString aErrorMsg = OString::Concat("csv parser error: ") + e.what();
         CPPUNIT_ASSERT_MESSAGE(aErrorMsg.getStr(), false);
     }
 }
 
-void ScModelTestBase::testCondFile(const OUString& aFileName, ScDocument* pDoc, SCTAB nTab)
+void ScModelTestBase::testCondFile( const OUString& aFileName, ScDocument* pDoc, SCTAB nTab, bool bCommaAsDelimiter )
 {
     conditional_format_handler aHandler(pDoc, nTab);
     orcus::csv::parser_config aConfig;
-    aConfig.delimiters.push_back(',');
+    if ( bCommaAsDelimiter )
+        aConfig.delimiters.push_back(',');
     aConfig.delimiters.push_back(';');
     aConfig.text_qualifier = '"';
     std::string aContent;
     loadFile(aFileName, aContent);
-    orcus::csv_parser<conditional_format_handler> parser ( &aContent[0], aContent.size() , aHandler, aConfig);
+    orcus::csv_parser<conditional_format_handler> parser(aContent, aHandler, aConfig);
     try
     {
         parser.parse();
     }
-    catch (const orcus::csv::parse_error& e)
+    catch (const orcus::parse_error& e)
     {
         std::cout << "reading csv content file failed: " << e.what() << std::endl;
-        OStringBuffer aErrorMsg("csv parser error: ");
-        aErrorMsg.append(e.what());
+        OString aErrorMsg = OString::Concat("csv parser error: ") + e.what();
         CPPUNIT_ASSERT_MESSAGE(aErrorMsg.getStr(), false);
     }
 }
@@ -171,7 +180,7 @@ void ScModelTestBase::testFormats(ScDocument* pDoc,std::u16string_view sFormat)
     model::ComplexColor aComplexColor;
 
     pPattern->fillFontOnly(aFont);
-    pPattern->fillColor(aComplexColor, SC_AUTOCOL_RAW);
+    pPattern->fillColor(aComplexColor, ScAutoFontColorMode::Raw);
     CPPUNIT_ASSERT_EQUAL_MESSAGE("font size should be 10", tools::Long(200), aFont.GetFontSize().getHeight());
     CPPUNIT_ASSERT_EQUAL_MESSAGE("font color should be black", COL_AUTO, aComplexColor.getFinalColor());
     pPattern = pDoc->GetPattern(0,1,1);
@@ -185,7 +194,7 @@ void ScModelTestBase::testFormats(ScDocument* pDoc,std::u16string_view sFormat)
     CPPUNIT_ASSERT_EQUAL_MESSAGE("font should be bold", WEIGHT_BOLD, aFont.GetWeight());
     pPattern = pDoc->GetPattern(1,0,1);
     pPattern->fillFontOnly(aFont);
-    pPattern->fillColor(aComplexColor, SC_AUTOCOL_RAW);
+    pPattern->fillColor(aComplexColor, ScAutoFontColorMode::Raw);
     CPPUNIT_ASSERT_EQUAL_MESSAGE("font should be blue", COL_BLUE, aComplexColor.getFinalColor());
     pPattern = pDoc->GetPattern(1,1,1);
     pPattern->fillFontOnly(aFont);
@@ -272,6 +281,70 @@ void ScModelTestBase::testFormats(ScDocument* pDoc,std::u16string_view sFormat)
     pCondFormat = pDoc->GetCondFormat(1,1,2);
     const ScRangeList& rRange3 = pCondFormat->GetRange();
     CPPUNIT_ASSERT_EQUAL(ScRangeList(ScRange(1,1,2,3,1,2)), rRange3);
+}
+
+void ScModelTestBase::goToCell(const OUString& rCell)
+{
+    uno::Sequence<beans::PropertyValue> aArgs
+        = comphelper::InitPropertySequence({ { "ToPoint", uno::Any(rCell) } });
+    dispatchCommand(mxComponent, ".uno:GoToCell", aArgs);
+}
+
+void ScModelTestBase::typeString(const std::u16string_view& rStr)
+{
+    ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>(mxComponent);
+    for (const char16_t c : rStr)
+    {
+        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, c, 0);
+        pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, c, 0);
+        Scheduler::ProcessEventsToIdle();
+    }
+}
+
+void ScModelTestBase::insertStringToCell(const OUString& rCell, const std::u16string_view& rStr)
+{
+    goToCell(rCell);
+
+    typeString(rStr);
+
+    ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>(mxComponent);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::RETURN);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::RETURN);
+    Scheduler::ProcessEventsToIdle();
+}
+
+void ScModelTestBase::insertArrayToCell(const OUString& rCell, const std::u16string_view& rStr)
+{
+    goToCell(rCell);
+
+    typeString(rStr);
+
+    ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>(mxComponent);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_MOD1 | KEY_SHIFT | awt::Key::RETURN);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_MOD1 | KEY_SHIFT | awt::Key::RETURN);
+    Scheduler::ProcessEventsToIdle();
+}
+
+void ScModelTestBase::insertNewSheet(ScDocument& rDoc)
+{
+    sal_Int32 nTabs = static_cast<sal_Int32>(rDoc.GetTableCount());
+
+    uno::Sequence<beans::PropertyValue> aArgs(comphelper::InitPropertySequence(
+        { { "Name", uno::Any(OUString("NewTab")) }, { "Index", uno::Any(nTabs + 1) } }));
+    dispatchCommand(mxComponent, ".uno:Insert", aArgs);
+
+    CPPUNIT_ASSERT_EQUAL(static_cast<SCTAB>(nTabs + 1), rDoc.GetTableCount());
+}
+
+void ScModelTestBase::executeAutoSum()
+{
+    dispatchCommand(mxComponent, ".uno:AutoSum", {});
+
+    // Use RETURN key to exit autosum edit view
+    ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>(mxComponent);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::RETURN);
+    pModelObj->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::RETURN);
+    Scheduler::ProcessEventsToIdle();
 }
 
 const SdrOle2Obj* ScModelTestBase::getSingleOleObject(ScDocument& rDoc, sal_uInt16 nPage)
@@ -501,7 +574,7 @@ void ScModelTestBase::createScDoc(const char* pName, const char* pPassword, bool
     if (!pName)
         load("private:factory/scalc");
     else
-        loadFromURL(OUString::createFromAscii(pName), pPassword);
+        loadFromFile(OUString::createFromAscii(pName), pPassword);
 
     uno::Reference<lang::XServiceInfo> xServiceInfo(mxComponent, uno::UNO_QUERY_THROW);
     CPPUNIT_ASSERT(xServiceInfo->supportsService("com.sun.star.sheet.SpreadsheetDocument"));
@@ -512,7 +585,14 @@ void ScModelTestBase::createScDoc(const char* pName, const char* pPassword, bool
 
 ScDocument* ScModelTestBase::getScDoc()
 {
-    ScModelObj* pModelObj = dynamic_cast<ScModelObj*>(mxComponent.get());
+    ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>(mxComponent);
+    CPPUNIT_ASSERT(pModelObj);
+    return pModelObj->GetDocument();
+}
+
+ScDocument* ScModelTestBase::getScDoc2()
+{
+    ScModelObj* pModelObj = comphelper::getFromUnoTunnel<ScModelObj>(mxComponent2);
     CPPUNIT_ASSERT(pModelObj);
     return pModelObj->GetDocument();
 }
@@ -540,7 +620,7 @@ void ScModelTestBase::miscRowHeightsTest( TestParam const * aTestValues, unsigne
     {
         const std::u16string_view sFileName = aTestValues[ index ].sTestDoc;
         const OUString sExportType =  aTestValues[ index ].sExportType;
-        loadFromURL(sFileName);
+        loadFromFile(sFileName);
 
         if ( !sExportType.isEmpty() )
             saveAndReload(sExportType);
@@ -569,6 +649,55 @@ void ScModelTestBase::miscRowHeightsTest( TestParam const * aTestValues, unsigne
             }
         }
     }
+}
+
+void ScModelTestBase::enableOpenCL()
+{
+    /**
+     * Turn on OpenCL group interpreter. Call this after the document is
+     * loaded and before performing formula calculation.
+     */
+    sc::FormulaGroupInterpreter::enableOpenCL_UnitTestsOnly();
+}
+
+void ScModelTestBase::disableOpenCL()
+{
+    sc::FormulaGroupInterpreter::disableOpenCL_UnitTestsOnly();
+}
+
+void ScModelTestBase::initTestEnv(std::u16string_view fileName)
+{
+    // Some documents contain macros, disable them, otherwise
+    // the "Error, BASIC runtime error." dialog is prompted
+    // and it crashes in tearDown
+    std::vector<beans::PropertyValue> args;
+    beans::PropertyValue aMacroValue;
+    aMacroValue.Name = "MacroExecutionMode";
+    aMacroValue.Handle = -1;
+    aMacroValue.Value <<= document::MacroExecMode::NEVER_EXECUTE;
+    aMacroValue.State = beans::PropertyState_DIRECT_VALUE;
+    args.push_back(aMacroValue);
+
+    disableOpenCL();
+    CPPUNIT_ASSERT(!ScCalcConfig::isOpenCLEnabled());
+
+    // Open the document with OpenCL disabled
+    mxComponent = mxDesktop->loadComponentFromURL(
+        createFileURL(fileName), "_default", 0, comphelper::containerToSequence(args));
+
+    enableOpenCL();
+    CPPUNIT_ASSERT(ScCalcConfig::isOpenCLEnabled());
+
+    // it's not possible to open the same document twice, thus, create a temp file
+    createTempCopy(fileName);
+
+    // Open the document with OpenCL enabled
+    mxComponent2 = mxDesktop->loadComponentFromURL(
+        maTempFile.GetURL(), "_default", 0, comphelper::containerToSequence(args));
+
+    // Check there are 2 documents
+    uno::Reference<frame::XFrames> xFrames = mxDesktop->getFrames();
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(2), xFrames->getCount());
 }
 
 ScRange ScUcalcTestBase::insertRangeData(

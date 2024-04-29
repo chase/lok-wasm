@@ -32,7 +32,7 @@
 #include <string>
 
 constexpr OUStringLiteral AVMEDIA_GST_FRAMEGRABBER_IMPLEMENTATIONNAME = u"com.sun.star.comp.avmedia.FrameGrabber_GStreamer";
-constexpr OUStringLiteral AVMEDIA_GST_FRAMEGRABBER_SERVICENAME = u"com.sun.star.media.FrameGrabber_GStreamer";
+constexpr OUString AVMEDIA_GST_FRAMEGRABBER_SERVICENAME = u"com.sun.star.media.FrameGrabber_GStreamer"_ustr;
 
 using namespace ::com::sun::star;
 
@@ -150,7 +150,7 @@ uno::Reference< graphic::XGraphic > SAL_CALL FrameGrabber::grabFrame( double fMe
         pData = aMapInfo.data;
 
         int nStride = GST_ROUND_UP_4( nWidth * 3 );
-        BitmapEx aBmp = vcl::bitmap::CreateFromData(pData, nWidth, nHeight, nStride, vcl::PixelFormat::N24_BPP);
+        BitmapEx aBmp = vcl::bitmap::CreateFromData(pData, nWidth, nHeight, nStride, /*nBitsPerPixel*/24);
 
         gst_buffer_unmap( pBuf, &aMapInfo );
         xRet = Graphic( aBmp ).GetXGraphic();

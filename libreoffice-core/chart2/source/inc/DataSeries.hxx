@@ -30,6 +30,7 @@
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/uno3.hxx>
 #include "ModifyListenerHelper.hxx"
+#include "PropertyHelper.hxx"
 
 // STL
 #include <vector>
@@ -59,9 +60,10 @@ typedef ::cppu::WeakImplHelper<
     DataSeries_Base;
 }
 
-class OOO_DLLPUBLIC_CHARTTOOLS DataSeries final :
-    public impl::DataSeries_Base,
-    public ::property::OPropertySet
+class OOO_DLLPUBLIC_CHARTTOOLS DataSeries
+    final
+    : public impl::DataSeries_Base
+    , public ::property::OPropertySet
 {
 public:
     explicit DataSeries();
@@ -86,7 +88,6 @@ public:
     virtual void SAL_CALL resetDataPoint( sal_Int32 nIndex ) override;
     virtual void SAL_CALL resetAllDataPoints() override;
 
-private:
     // ____ XDataSink ____
     /// @see css::chart2::data::XDataSink
     virtual void SAL_CALL setData( const css::uno::Sequence< css::uno::Reference< css::chart2::data::XLabeledDataSequence > >& aData ) override;
@@ -94,7 +95,6 @@ private:
     // ____ XDataSource ____
     /// @see css::chart2::data::XDataSource
     virtual css::uno::Sequence< css::uno::Reference< css::chart2::data::XLabeledDataSequence > > SAL_CALL getDataSequences() override;
-public:
 
     // ____ OPropertySet ____
     virtual void GetDefaultValue( sal_Int32 nHandle, css::uno::Any& rAny ) const override;
@@ -143,6 +143,16 @@ public:
 
     const tRegressionCurveContainerType & getRegressionCurves2() const { return m_aRegressionCurves; }
 
+    /** Get the label of a series (e.g. for the legend)
+
+        @param rLabelSequenceRole
+            The data sequence contained in xSeries that has this role will be used
+            to take its label.
+     */
+    OUString getLabelForRole( const OUString & rLabelSequenceRole );
+
+    bool hasUnhiddenData();
+
 private:
 
     // late initialization to call after copy-constructing
@@ -172,6 +182,8 @@ private:
 
     rtl::Reference<ModifyEventForwarder> m_xModifyEventForwarder;
 };
+
+OOO_DLLPUBLIC_CHARTTOOLS const tPropertyValueMap & StaticDataSeriesDefaults();
 
 }  // namespace chart
 

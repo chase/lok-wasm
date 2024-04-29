@@ -37,6 +37,9 @@ class SmPrintUIOptions;
 class SmGraphicAccessible;
 class SmGraphicWidget;
 
+constexpr sal_uInt16 MINZOOM = 25;
+constexpr sal_uInt16 MAXZOOM = 800;
+
 class SmGraphicWindow final : public InterimItemWindow
 {
 private:
@@ -249,27 +252,9 @@ class SmViewShell final : public SfxViewShell
     SmGraphicController maGraphicController;
     OUString maStatusText;
     bool mbPasteState;
-    /** Used to determine whether insertions using SID_INSERTSPECIAL and SID_INSERTCOMMANDTEXT
-     * should be inserted into SmEditWindow or directly into the SmDocShell as done if the
-     * visual editor was last to have focus.
-     */
-    bool mbInsertIntoEditWindow;
 
     DECL_LINK( DialogClosedHdl, sfx2::FileDialogHelper*, void );
     virtual void            Notify( SfxBroadcaster& rBC, const SfxHint& rHint ) override;
-
-    static Size GetTextLineSize(OutputDevice const & rDevice,
-                         const OUString& rLine);
-    static Size GetTextSize(OutputDevice const & rDevice,
-                     std::u16string_view rText,
-                     tools::Long          MaxWidth);
-    static void DrawTextLine(OutputDevice& rDevice,
-                      const Point&  rPosition,
-                      const OUString& rLine);
-    static void DrawText(OutputDevice& rDevice,
-                  const Point&  rPosition,
-                  std::u16string_view rText,
-                  sal_uInt16        MaxWidth);
 
     virtual SfxPrinter *GetPrinter(bool bCreate = false) override;
     virtual sal_uInt16 SetPrinter(SfxPrinter *pNewPrinter,
@@ -291,12 +276,12 @@ class SmViewShell final : public SfxViewShell
 
 public:
 
-    SmViewShell(SfxViewFrame *pFrame, SfxViewShell *pOldSh);
+    SmViewShell(SfxViewFrame& rFrame, SfxViewShell *pOldSh);
     virtual ~SmViewShell() override;
 
     SmDocShell * GetDoc() const
     {
-        return static_cast<SmDocShell *>( GetViewFrame()->GetObjectShell() );
+        return static_cast<SmDocShell *>( GetViewFrame().GetObjectShell() );
     }
 
     SmEditWindow * GetEditWindow();
@@ -326,6 +311,8 @@ public:
 
     void SendCaretToLOK() const;
 
+    void InvalidateSlots();
+
 private:
     /// SfxInterface initializer.
     static void InitInterface_Impl();
@@ -334,19 +321,10 @@ public:
     void Execute( SfxRequest& rReq );
     void GetState(SfxItemSet &);
 
-    void Impl_Print( OutputDevice &rOutDev, const SmPrintUIOptions &rPrintUIOptions,
-            tools::Rectangle aOutRect );
-
-    /** Set bInsertIntoEditWindow so we know where to insert
-     *
-     * This method is called whenever SmGraphicWidget or SmEditWindow gets focus,
-     * so that when text is inserted from catalog or elsewhere we know whether to
-     * insert for the visual editor, or the text editor.
-     */
-    void SetInsertIntoEditWindow(bool bEditWindowHadFocusLast){
-        mbInsertIntoEditWindow = bEditWindowHadFocusLast;
-    }
     static bool IsInlineEditEnabled();
+
+    // Opens the main help page for the Math module
+    void StartMainHelp();
 
 private:
     void ZoomByItemSet(const SfxItemSet *pSet);

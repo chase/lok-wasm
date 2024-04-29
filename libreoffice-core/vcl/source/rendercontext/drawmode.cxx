@@ -245,7 +245,8 @@ BitmapEx GetBitmapEx(BitmapEx const& rBitmapEx, DrawModeFlags nDrawMode)
 
     if (nDrawMode & (DrawModeFlags::BlackBitmap | DrawModeFlags::WhiteBitmap))
     {
-        Bitmap aColorBmp(aBmpEx.GetSizePixel(), vcl::PixelFormat::N1_BPP);
+        Bitmap aColorBmp(aBmpEx.GetSizePixel(), vcl::PixelFormat::N8_BPP,
+                         &Bitmap::GetGreyPalette(256));
         sal_uInt8 cCmpVal;
 
         if (nDrawMode & DrawModeFlags::BlackBitmap)
@@ -260,13 +261,15 @@ BitmapEx GetBitmapEx(BitmapEx const& rBitmapEx, DrawModeFlags nDrawMode)
             // Create one-bit mask out of alpha channel, by thresholding it at alpha=0.5. As
             // DRAWMODE_BLACK/WHITEBITMAP requires monochrome output, having alpha-induced
             // grey levels is not acceptable
-            BitmapEx aMaskEx(aBmpEx.GetAlpha().GetBitmap());
+            BitmapEx aMaskEx(aBmpEx.GetAlphaMask().GetBitmap());
+            aMaskEx.Invert(); // convert to transparency
             BitmapFilter::Filter(aMaskEx, BitmapMonochromeFilter(129));
+            aMaskEx.Invert(); // convert to alpha
             aBmpEx = BitmapEx(aColorBmp, aMaskEx.GetBitmap());
         }
         else
         {
-            aBmpEx = BitmapEx(aColorBmp, aBmpEx.GetAlpha());
+            aBmpEx = BitmapEx(aColorBmp);
         }
     }
 

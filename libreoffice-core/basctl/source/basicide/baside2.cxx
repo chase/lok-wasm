@@ -95,7 +95,7 @@ short const ValidWindow = 0x1234;
 #if defined(OW) || defined(MTF)
 char const FilterMask_All[] = "*";
 #else
-constexpr OUStringLiteral FilterMask_All = u"*.*";
+constexpr OUString FilterMask_All = u"*.*"_ustr;
 #endif
 
 } // end anonymous namespace
@@ -282,7 +282,7 @@ void ModulWindow::CheckCompileBasic()
 
     bool bDone = false;
 
-    GetShell()->GetViewFrame()->GetWindow().EnterWait();
+    GetShell()->GetViewFrame().GetWindow().EnterWait();
 
     AssertValidEditEngine();
     GetEditorWindow().SetSourceInBasic();
@@ -302,7 +302,7 @@ void ModulWindow::CheckCompileBasic()
         GetBreakPoints().SetBreakPointsInBasic( m_xModule.get() );
     }
 
-    GetShell()->GetViewFrame()->GetWindow().LeaveWait();
+    GetShell()->GetViewFrame().GetWindow().LeaveWait();
 
     m_aStatus.bError = !bDone;
     m_aStatus.bIsRunning = false;
@@ -442,7 +442,7 @@ void ModulWindow::LoadBasic()
         GetEditorWindow().PaintImmediately();
         GetEditorWindow().ForceSyntaxTimeout();
         GetEditorWindow().DestroyProgress();
-        ErrCode nError = aMedium.GetError();
+        ErrCodeMsg nError = aMedium.GetErrorIgnoreWarning();
         if ( nError )
             ErrorHandler::HandleError( nError );
     }
@@ -457,16 +457,12 @@ void ModulWindow::LoadBasic()
 
 void ModulWindow::SaveBasicSource()
 {
-    sfx2::FileDialogHelper aDlg(ui::dialogs::TemplateDescription::FILESAVE_AUTOEXTENSION_PASSWORD,
+    sfx2::FileDialogHelper aDlg(ui::dialogs::TemplateDescription::FILESAVE_AUTOEXTENSION,
                                 FileDialogFlags::NONE, this->GetFrameWeld());
     aDlg.SetContext(sfx2::FileDialogHelper::BasicExportSource);
     const Reference<XFilePicker3>& xFP = aDlg.GetFilePicker();
 
-    Reference< XFilePickerControlAccess > xFPControl(xFP, UNO_QUERY);
-    xFPControl->enableControl(ExtendedFilePickerElementIds::CHECKBOX_PASSWORD, false);
-    Any aValue;
-    aValue <<= true;
-    xFPControl->setValue(ExtendedFilePickerElementIds::CHECKBOX_AUTOEXTENSION, 0, aValue);
+    xFP.queryThrow<XFilePickerControlAccess>()->setValue(ExtendedFilePickerElementIds::CHECKBOX_AUTOEXTENSION, 0, Any(true));
 
     xFP->appendFilter( "BASIC", "*.bas" );
     xFP->appendFilter( IDEResId(RID_STR_FILTER_ALLFILES), FilterMask_All );
@@ -488,7 +484,7 @@ void ModulWindow::SaveBasicSource()
         GetEditEngine()->Write( *pStream );
         aMedium.Commit();
         LeaveWait();
-        ErrCode nError = aMedium.GetError();
+        ErrCodeMsg nError = aMedium.GetErrorIgnoreWarning();
         if ( nError )
             ErrorHandler::HandleError( nError );
     }
@@ -612,7 +608,7 @@ void ModulWindow::ManageBreakPoints()
 
 void ModulWindow::BasicErrorHdl( StarBASIC const * pBasic )
 {
-    GetShell()->GetViewFrame()->ToTop();
+    GetShell()->GetViewFrame().ToTop();
 
     // Return value: BOOL
     //  FALSE:  cancel
@@ -1130,6 +1126,9 @@ void ModulWindow::GetState( SfxItemSet &rSet )
                     if (!sProcName.isEmpty())
                         aTitle += "." + sProcName;
 
+                    if (IsReadOnly())
+                        aTitle += " (" + IDEResId(RID_STR_READONLY) + ")";
+
                     SfxStringItem aTitleItem( SID_BASICIDE_STAT_TITLE, aTitle );
                     rSet.Put( aTitleItem );
                 }
@@ -1378,12 +1377,7 @@ bool ModulWindow::IsPasteAllowed()
     if ( xClipboard.is() )
     {
 
-        Reference< datatransfer::XTransferable > xTransf;
-        {
-            SolarMutexReleaser aReleaser;
-            // get clipboard content
-            xTransf = xClipboard->getContents();
-        }
+        Reference< datatransfer::XTransferable > xTransf = xClipboard->getContents();
         if ( xTransf.is() )
         {
             datatransfer::DataFlavor aFlavor;
@@ -1402,7 +1396,7 @@ void ModulWindow::OnNewDocument ()
     m_aXEditorWindow->SetLineNumberDisplay(bLineNumbers);
 }
 
-OString ModulWindow::GetHid () const
+OUString ModulWindow::GetHid () const
 {
     return HID_BASICIDE_MODULWINDOW;
 }
@@ -1513,6 +1507,18 @@ void ModulWindowLayout::BasicRemoveWatch ()
     aWatchWindow->RemoveSelectedWatch();
 }
 
+void ModulWindowLayout::ShowWatchWindow(bool bVisible)
+{
+    aWatchWindow->Show(bVisible);
+    ArrangeWindows();
+}
+
+void ModulWindowLayout::ShowStackWindow(bool bVisible)
+{
+    aStackWindow->Show(bVisible);
+    ArrangeWindows();
+}
+
 void ModulWindowLayout::OnFirstSize (tools::Long const nWidth, tools::Long const nHeight)
 {
     AddToLeft(&rObjectCatalog, Size(nWidth * 0.20, nHeight * 0.75));
@@ -1561,7 +1567,7 @@ void ModulWindowLayout::SyntaxColors::NewConfig (bool bFirst)
         { TokenType::Keywords,    svtools::BASICKEYWORD },
     };
 
-    Color aDocColor = aConfig.GetColorValue(svtools::DOCCOLOR).nColor;
+    Color aDocColor = aConfig.GetColorValue(svtools::BASICEDITOR).nColor;
     if (bFirst || aDocColor != m_aBackgroundColor)
     {
         m_aBackgroundColor = aDocColor;
@@ -1581,10 +1587,10 @@ void ModulWindowLayout::SyntaxColors::NewConfig (bool bFirst)
     }
 
     bool bChanged = false;
-    for (unsigned i = 0; i != std::size(vIds); ++i)
+    for (const auto& vId: vIds)
     {
-        Color const aColor = aConfig.GetColorValue(vIds[i].eEntry).nColor;
-        Color& rMyColor = aColors[vIds[i].eTokenType];
+        Color const aColor = aConfig.GetColorValue(vId.eEntry).nColor;
+        Color& rMyColor = aColors[vId.eTokenType];
         if (bFirst || aColor != rMyColor)
         {
             rMyColor = aColor;

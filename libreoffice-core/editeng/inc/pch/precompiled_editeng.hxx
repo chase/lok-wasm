@@ -47,6 +47,7 @@
 #include <optional>
 #include <ostream>
 #include <set>
+#include <span>
 #include <stddef.h>
 #include <string.h>
 #include <string>
@@ -113,7 +114,6 @@
 #include <vcl/mapmod.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/region.hxx>
-#include <vcl/scopedbitmapaccess.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/task.hxx>
@@ -214,7 +214,6 @@
 #include <o3tl/cow_wrapper.hxx>
 #include <o3tl/safeint.hxx>
 #include <o3tl/sorted_vector.hxx>
-#include <o3tl/span.hxx>
 #include <o3tl/strong_int.hxx>
 #include <o3tl/typed_flags_set.hxx>
 #include <o3tl/underlyingenumvalue.hxx>

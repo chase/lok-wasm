@@ -32,36 +32,39 @@ namespace dp_misc
 {
 namespace
 {
-    struct StrOperatingSystem :
-        public rtl::StaticWithInit<OUString, StrOperatingSystem> {
-             OUString operator () () {
+    const OUString & StrOperatingSystem()
+    {
+        static const OUString theOS = []()
+            {
                 OUString os( "$_OS" );
                 ::rtl::Bootstrap::expandMacros( os );
                 return os;
-            }
+            }();
+        return theOS;
     };
 
-    struct StrCPU :
-        public rtl::StaticWithInit<OUString, StrCPU> {
-            OUString operator () () {
+    const OUString & StrCPU()
+    {
+        static const OUString theCPU = []()
+            {
                 OUString arch( "$_ARCH" );
                 ::rtl::Bootstrap::expandMacros( arch );
                 return arch;
-            }
+            }();
+        return theCPU;
     };
 
 
-    struct StrPlatform : public rtl::StaticWithInit<
-        OUString, StrPlatform> {
-            OUString operator () () {
-                return StrOperatingSystem::get() + "_" + StrCPU::get();
-            }
+    const OUString & StrPlatform()
+    {
+        static const OUString thePlatform = StrOperatingSystem() + "_" + StrCPU();
+        return thePlatform;
     };
 
     bool checkOSandCPU(std::u16string_view os, std::u16string_view cpu)
     {
-        return (os == StrOperatingSystem::get())
-            && (cpu == StrCPU::get());
+        return (os == StrOperatingSystem())
+            && (cpu == StrCPU());
     }
 
     bool isPlatformSupported( std::u16string_view token )
@@ -81,8 +84,6 @@ namespace
             ret = checkOSandCPU(u"Solaris", u"SPARC64");
         else if (token == u"solaris_x86")
             ret = checkOSandCPU(u"Solaris", u"x86");
-        else if (token == u"aix_powerpc")
-            ret = checkOSandCPU(u"AIX", u"PowerPC");
         else if (token == u"macosx_aarch64")
             ret = checkOSandCPU(u"MacOSX", u"AARCH64");
         else if (token == u"macosx_x86_64")
@@ -117,8 +118,6 @@ namespace
             ret = checkOSandCPU(u"Linux", u"IA64");
         else if (token == u"linux_m68k")
             ret = checkOSandCPU(u"Linux", u"M68K");
-        else if (token == u"linux_s390")
-            ret = checkOSandCPU(u"Linux", u"S390");
         else if (token == u"linux_s390x")
             ret = checkOSandCPU(u"Linux", u"S390x");
         else if (token == u"linux_hppa")
@@ -127,6 +126,10 @@ namespace
             ret = checkOSandCPU(u"Linux", u"ALPHA");
         else if (token == u"linux_aarch64")
             ret = checkOSandCPU(u"Linux", u"AARCH64");
+        else if (token == u"linux_riscv64")
+            ret = checkOSandCPU(u"Linux", u"RISCV64");
+        else if (token == u"linux_loongarch64")
+            ret = checkOSandCPU(u"Linux", u"LOONGARCH64");
         else if (token == u"freebsd_x86")
             ret = checkOSandCPU(u"FreeBSD", u"x86");
         else if (token == u"freebsd_x86_64")
@@ -165,7 +168,7 @@ namespace
 
 OUString const & getPlatformString()
 {
-    return StrPlatform::get();
+    return StrPlatform();
 }
 
 bool platform_fits( std::u16string_view platform_string )
@@ -176,9 +179,9 @@ bool platform_fits( std::u16string_view platform_string )
         const std::u16string_view token(
             o3tl::trim(o3tl::getToken(platform_string, 0, ',', index )) );
         // check if this platform:
-        if (o3tl::equalsIgnoreAsciiCase( token, StrPlatform::get() ) ||
+        if (o3tl::equalsIgnoreAsciiCase( token, StrPlatform() ) ||
             (token.find( '_' ) == std::u16string_view::npos && /* check OS part only */
-             o3tl::equalsIgnoreAsciiCase( token, StrOperatingSystem::get() )))
+             o3tl::equalsIgnoreAsciiCase( token, StrOperatingSystem() )))
         {
             return true;
         }

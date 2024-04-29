@@ -87,7 +87,6 @@ $(eval $(call gb_Library_use_libraries,svxcore,\
 
 $(eval $(call gb_Library_use_externals,svxcore,\
 	boost_headers \
-    epoxy \
 	icuuc \
 	icu_headers \
 	libxml2 \
@@ -161,7 +160,6 @@ $(eval $(call gb_Library_add_exception_objects,svxcore,\
     svx/source/form/fmcontrollayout \
     svx/source/form/fmdmod \
     svx/source/form/fmdocumentclassification \
-    svx/source/form/fmdpage \
     svx/source/form/fmexch \
     svx/source/form/fmexpl \
     svx/source/form/fmmodel \
@@ -204,16 +202,10 @@ $(eval $(call gb_Library_add_exception_objects,svxcore,\
     svx/source/gallery2/galobj \
     svx/source/gallery2/galtheme \
     svx/source/gallery2/GalleryControl \
-    svx/source/gallery2/gallerybinaryengine \
-    svx/source/gallery2/gallerybinaryengineentry \
-    svx/source/gallery2/gallerystoragelocations \
-    svx/source/gallery2/gallerybinarystoragelocations \
     svx/source/gallery2/galleryobjectcollection \
     svx/source/gallery2/galleryfilestorage \
     svx/source/gallery2/galleryfilestorageentry \
-    svx/source/gallery2/galleryobjectstorage \
-    svx/source/gallery2/galleryobjectbinarystorage \
-    svx/source/gallery2/galleryobjectxmlstorage \
+    svx/source/gallery2/gallerystoragelocations \
     svx/source/items/chrtitem \
     svx/source/items/clipfmtitem \
     svx/source/items/customshapeitem \
@@ -335,8 +327,9 @@ $(eval $(call gb_Library_add_exception_objects,svxcore,\
     svx/source/sdr/properties/connectorproperties \
     svx/source/sdr/properties/e3dcompoundproperties \
     svx/source/sdr/properties/oleproperties \
-    svx/source/svdraw/clonelist \
     svx/source/svdraw/charthelper \
+    svx/source/svdraw/constructhelper \
+    svx/source/svdraw/clonelist \
     svx/source/svdraw/gradtrns \
     svx/source/svdraw/polypolygoneditor \
     svx/source/svdraw/presetooxhandleadjustmentrelations \
@@ -446,7 +439,6 @@ $(eval $(call gb_Library_add_exception_objects,svxcore,\
     svx/source/toolbars/fontworkbar \
     svx/source/uitest/sdrobject \
     svx/source/unodraw/gluepts \
-    svx/source/unodraw/shapepropertynotifier \
     svx/source/unodraw/SvxXTextColumns \
     svx/source/unodraw/tableshape \
     svx/source/unodraw/unobrushitemhelper \

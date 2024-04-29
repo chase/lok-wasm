@@ -26,6 +26,8 @@
 #include <compiler.hxx>
 #include <tokenarray.hxx>
 
+#include <comphelper/servicehelper.hxx>
+
 #include <memory>
 #include <utility>
 

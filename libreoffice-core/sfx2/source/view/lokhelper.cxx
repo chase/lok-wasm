@@ -20,12 +20,14 @@
 #include <com/sun/star/ui/ContextChangeEventObject.hpp>
 
 #include <comphelper/processfactory.hxx>
+#include <o3tl/string_view.hxx>
 #include <rtl/strbuf.hxx>
 #include <vcl/lok.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/commandevent.hxx>
 #include <vcl/window.hxx>
 #include <sal/log.hxx>
+#include <sfx2/app.hxx>
 #include <sfx2/msg.hxx>
 #include <sfx2/viewsh.hxx>
 #include <sfx2/request.hxx>
@@ -34,8 +36,8 @@
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
 #include <sfx2/msgpool.hxx>
-#include <tools/json_writer.hxx>
 #include <comphelper/scopeguard.hxx>
+#include <tools/json_writer.hxx>
 
 #include <boost/property_tree/json_parser.hpp>
 
@@ -87,16 +89,13 @@ const std::size_t g_logNotifierCacheMaxSize = 50;
 ::std::list<::std::string> g_logNotifierCache;
 }
 
-int SfxLokHelper::createView(SfxViewFrame* pViewFrame, ViewShellDocId docId)
+int SfxLokHelper::createView(SfxViewFrame& rViewFrame, ViewShellDocId docId)
 {
     assert(docId >= ViewShellDocId(0) && "Cannot createView for invalid (negative) DocId.");
 
-    if (pViewFrame == nullptr)
-        return -1;
-
     SfxViewShell::SetCurrentDocId(docId);
-    SfxRequest aRequest(pViewFrame, SID_NEWWINDOW);
-    pViewFrame->ExecView_Impl(aRequest);
+    SfxRequest aRequest(rViewFrame, SID_NEWWINDOW);
+    rViewFrame.ExecView_Impl(aRequest);
     SfxViewShell* pViewShell = SfxViewShell::Current();
     if (pViewShell == nullptr)
         return -1;
@@ -160,9 +159,9 @@ void SfxLokHelper::destroyView(int nId)
         if (pViewShell->GetViewShellId() == nViewShellId)
         {
             pViewShell->SetLOKAccessibilityState(false);
-            SfxViewFrame* pViewFrame = pViewShell->GetViewFrame();
-            SfxRequest aRequest(pViewFrame, SID_CLOSEWIN);
-            pViewFrame->Exec_Impl(aRequest);
+            SfxViewFrame& rViewFrame = pViewShell->GetViewFrame();
+            SfxRequest aRequest(rViewFrame, SID_CLOSEWIN);
+            rViewFrame.Exec_Impl(aRequest);
             break;
         }
     }
@@ -213,11 +212,11 @@ void SfxLokHelper::setView(int nId)
     if (bIsCurrShell)
         return;
 
-    SfxViewFrame* pViewFrame = pViewShell->GetViewFrame();
-    pViewFrame->MakeActive_Impl(false);
+    SfxViewFrame& rViewFrame = pViewShell->GetViewFrame();
+    rViewFrame.MakeActive_Impl(false);
 
     // Make comphelper::dispatchCommand() find the correct frame.
-    uno::Reference<frame::XFrame> xFrame = pViewFrame->GetFrame().GetFrameInterface();
+    uno::Reference<frame::XFrame> xFrame = rViewFrame.GetFrame().GetFrameInterface();
     uno::Reference<frame::XDesktop2> xDesktop = frame::Desktop::create(comphelper::getProcessComponentContext());
     xDesktop->setActiveFrame(xFrame);
 }
@@ -458,8 +457,7 @@ static OString lcl_generateJSON(const SfxViewShell* pView, const boost::property
     aMessageProps.put("mode", pView->getEditMode());
     std::stringstream aStream;
     boost::property_tree::write_json(aStream, aMessageProps, false /* pretty */);
-    const std::string aString = aStream.str();
-    return OString(aString.c_str(), aString.size()).trim();
+    return OString(o3tl::trim(aStream.str()));
 }
 
 static inline OString lcl_generateJSON(const SfxViewShell* pView, int nViewId, std::string_view rKey,
@@ -487,7 +485,7 @@ void SfxLokHelper::notifyOtherView(const SfxViewShell* pThisView, SfxViewShell c
 
     const OString aPayload = lcl_generateJSON(pThisView, rKey, rPayload);
     const int viewId = SfxLokHelper::getView(pThisView);
-    pOtherView->libreOfficeKitViewCallbackWithViewId(nType, aPayload.getStr(), viewId);
+    pOtherView->libreOfficeKitViewCallbackWithViewId(nType, aPayload, viewId);
 }
 
 void SfxLokHelper::notifyOtherView(const SfxViewShell* pThisView, SfxViewShell const* pOtherView,
@@ -498,7 +496,7 @@ void SfxLokHelper::notifyOtherView(const SfxViewShell* pThisView, SfxViewShell c
         return;
 
     const int viewId = SfxLokHelper::getView(pThisView);
-    pOtherView->libreOfficeKitViewCallbackWithViewId(nType, lcl_generateJSON(pThisView, rTree).getStr(), viewId);
+    pOtherView->libreOfficeKitViewCallbackWithViewId(nType, lcl_generateJSON(pThisView, rTree), viewId);
 }
 
 void SfxLokHelper::notifyOtherViews(const SfxViewShell* pThisView, int nType, std::string_view rKey,
@@ -525,7 +523,7 @@ void SfxLokHelper::notifyOtherViews(const SfxViewShell* pThisView, int nType, st
                 viewId = SfxLokHelper::getView(pThisView);
             }
 
-            pViewShell->libreOfficeKitViewCallbackWithViewId(nType, aPayload.getStr(), viewId);
+            pViewShell->libreOfficeKitViewCallbackWithViewId(nType, aPayload, viewId);
         }
 
         pViewShell = SfxViewShell::GetNext(*pViewShell);
@@ -556,7 +554,7 @@ void SfxLokHelper::notifyOtherViews(const SfxViewShell* pThisView, int nType,
                 viewId = SfxLokHelper::getView(pThisView);
             }
 
-            pViewShell->libreOfficeKitViewCallbackWithViewId(nType, aPayload.getStr(), viewId);
+            pViewShell->libreOfficeKitViewCallbackWithViewId(nType, aPayload, viewId);
         }
 
         pViewShell = SfxViewShell::GetNext(*pViewShell);
@@ -576,10 +574,9 @@ namespace {
             const SfxSlot* pSlot = SfxSlotPool::GetSlotPool(pShell->GetFrame()).GetSlot(nWhich);
             if (pSlot)
             {
-                const char* pName = pSlot->GetUnoName();
-                if (pName)
+                if (!pSlot->GetUnoName().isEmpty())
                 {
-                    return ".uno:" + OStringToOUString(pName, RTL_TEXTENCODING_ASCII_US);
+                    return pSlot->GetCommand();
                 }
             }
         }
@@ -590,7 +587,7 @@ namespace {
 
 void SfxLokHelper::sendUnoStatus(const SfxViewShell* pShell, const SfxPoolItem* pItem)
 {
-    if (!pShell || !pItem || pItem == INVALID_POOL_ITEM || DisableCallbacks::disabled())
+    if (!pShell || !pItem || IsInvalidItem(pItem) || DisableCallbacks::disabled())
         return;
 
     boost::property_tree::ptree aItem = pItem->dumpAsJSON();
@@ -603,13 +600,13 @@ void SfxLokHelper::sendUnoStatus(const SfxViewShell* pShell, const SfxPoolItem* 
 
         std::stringstream aStream;
         boost::property_tree::write_json(aStream, aItem);
-        pShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, aStream.str().c_str());
+        pShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, OString(aStream.str()));
     }
 }
 
 void SfxLokHelper::notifyViewRenderState(const SfxViewShell* pShell, vcl::ITiledRenderable* pDoc)
 {
-    pShell->libreOfficeKitViewCallback(LOK_CALLBACK_VIEW_RENDER_STATE, pDoc->getViewRenderState().getStr());
+    pShell->libreOfficeKitViewCallback(LOK_CALLBACK_VIEW_RENDER_STATE, pDoc->getViewRenderState());
 }
 
 void SfxLokHelper::notifyWindow(const SfxViewShell* pThisView,
@@ -630,16 +627,15 @@ void SfxLokHelper::notifyWindow(const SfxViewShell* pThisView,
     {
         if (!rItem.first.isEmpty() && !rItem.second.isEmpty())
         {
-            auto aFirst = rItem.first.replaceAll("\"", "\\\"");
-            auto aSecond = rItem.second.replaceAll("\"", "\\\"");
-            aPayload.append(", \"" + aFirst + "\": \"" +
-                    aSecond).append('"');
+            auto aFirst = rItem.first.replaceAll("\""_ostr, "\\\""_ostr);
+            auto aSecond = rItem.second.replaceAll("\""_ostr, "\\\""_ostr);
+            aPayload.append(", \"" + aFirst + "\": \"" + aSecond + "\"");
         }
     }
     aPayload.append('}');
 
     const OString s = aPayload.makeStringAndClear();
-    pThisView->libreOfficeKitViewCallback(LOK_CALLBACK_WINDOW, s.getStr());
+    pThisView->libreOfficeKitViewCallback(LOK_CALLBACK_WINDOW, s);
 }
 
 void SfxLokHelper::notifyInvalidation(SfxViewShell const* pThisView, tools::Rectangle const* pRect)
@@ -674,7 +670,7 @@ void SfxLokHelper::notifyDocumentSizeChanged(SfxViewShell const* pThisView, cons
             pThisView->libreOfficeKitViewInvalidateTilesCallback(&aRectangle, i, nMode);
         }
     }
-    pThisView->libreOfficeKitViewCallback(LOK_CALLBACK_DOCUMENT_SIZE_CHANGED, rPayload.getStr());
+    pThisView->libreOfficeKitViewCallback(LOK_CALLBACK_DOCUMENT_SIZE_CHANGED, rPayload);
 }
 
 void SfxLokHelper::notifyDocumentSizeChangedAllViews(vcl::ITiledRenderable* pDoc, bool bInvalidateAll)
@@ -692,7 +688,7 @@ void SfxLokHelper::notifyDocumentSizeChangedAllViews(vcl::ITiledRenderable* pDoc
         // or not?
         if (pCurrentViewShell == nullptr || pViewShell->GetDocId() == pCurrentViewShell-> GetDocId())
         {
-            SfxLokHelper::notifyDocumentSizeChanged(pViewShell, "", pDoc, bInvalidateAll);
+            SfxLokHelper::notifyDocumentSizeChanged(pViewShell, ""_ostr, pDoc, bInvalidateAll);
             bInvalidateAll = false; // we direct invalidations to all views anyway.
         }
         pViewShell = SfxViewShell::GetNext(*pViewShell);
@@ -708,7 +704,7 @@ void SfxLokHelper::notifyPartSizeChangedAllViews(vcl::ITiledRenderable* pDoc, in
     while (pViewShell)
     {
         if (pViewShell->getPart() == nPart)
-            SfxLokHelper::notifyDocumentSizeChanged(pViewShell, "", pDoc, false);
+            SfxLokHelper::notifyDocumentSizeChanged(pViewShell, ""_ostr, pDoc, false);
         pViewShell = SfxViewShell::GetNext(*pViewShell);
     }
 }
@@ -718,7 +714,7 @@ OString SfxLokHelper::makeVisCursorInvalidation(int nViewId, const OString& rRec
 {
     if (comphelper::LibreOfficeKit::isViewIdForVisCursorInvalidation())
     {
-        OString sHyperlink = rHyperlink.isEmpty() ? "{}" : rHyperlink;
+        OString sHyperlink = rHyperlink.isEmpty() ? "{}"_ostr : rHyperlink;
         return OString::Concat("{ \"viewId\": \"") + OString::number(nViewId) +
             "\", \"rectangle\": \"" + rRectangle +
             "\", \"mispelledWord\": \"" +  OString::number(bMispelledWord ? 1 : 0) +
@@ -757,11 +753,11 @@ void SfxLokHelper::notifyContextChange(const css::ui::ContextChangeEventObject& 
     if (!pViewShell)
         return;
 
-    OString aBuffer =
-        OUStringToOString(rEvent.ApplicationName.replace(' ', '_'), RTL_TEXTENCODING_UTF8) +
+    OUString aBuffer =
+        rEvent.ApplicationName.replace(' ', '_') +
         " " +
-        OUStringToOString(rEvent.ContextName.replace(' ', '_'), RTL_TEXTENCODING_UTF8);
-    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CONTEXT_CHANGED, aBuffer.getStr());
+        rEvent.ContextName.replace(' ', '_');
+    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CONTEXT_CHANGED, aBuffer.toUtf8());
 }
 
 void SfxLokHelper::notifyLog(const std::ostringstream& stream)
@@ -782,7 +778,7 @@ void SfxLokHelper::notifyLog(const std::ostringstream& stream)
             }
             g_logNotifierCache.clear();
         }
-       pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CORE_LOG, stream.str().c_str());
+        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CORE_LOG, stream.str().c_str());
     }
     else
     {
@@ -1105,7 +1101,7 @@ void SfxLokHelper::sendNetworkAccessError(std::string_view rAction)
     if (pViewShell)
     {
         pViewShell->libreOfficeKitViewCallback(
-            LOK_CALLBACK_ERROR, aWriter.extractAsStdString().c_str());
+            LOK_CALLBACK_ERROR, aWriter.finishAndGetAsOString());
     }
 }
 

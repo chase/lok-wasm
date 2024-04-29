@@ -30,6 +30,8 @@
 #include <token.hxx>
 #include <math.hxx>
 #include <kahan.hxx>
+#include <queryentry.hxx>
+#include <sortparam.hxx>
 #include "parclass.hxx"
 
 #include <map>
@@ -46,7 +48,6 @@ class ScFormulaCell;
 class ScDBRangeBase;
 struct ScQueryParam;
 struct ScDBQueryParamBase;
-struct ScQueryEntry;
 
 struct ScSingleRefData;
 struct ScComplexRefData;
@@ -54,6 +55,57 @@ struct ScInterpreterContext;
 
 class ScJumpMatrix;
 struct ScRefCellValue;
+
+enum MatchMode{ exactorNA=0, exactorS=-1, exactorG=1, wildcard=2 };
+enum SearchMode{ searchfwd=1, searchrev=-1, searchbasc=2, searchbdesc=-2 };
+
+struct VectorSearchArguments
+{
+    // struct contains the contents of the function arguments
+    // OpCode of struct owner
+    sal_uInt16 nSearchOpCode = SC_OPCODE_NONE;
+
+    // match mode (common, enum values are from XLOOKUP)
+    // optional 5th argument to set match mode
+    //   0 - Exact match. If none found, return #N/A. (MATCH value 0)
+    //  -1 - Exact match. If none found, return the next smaller item. (MATCH value 1)
+    //   1 - Exact match. If none found, return the next larger item. (MATCH value -1)
+    //   2 - A wildcard match where *, ?, and ~ have special meaning. (XLOOKUP only)
+    // TODO : is this enum needed, or do we solely use rEntry.eOp ?
+    MatchMode eMatchMode = exactorG;
+
+    // value to be searched for (common)
+    SCCOL nCol1 = 0;
+    SCROW nRow1 = 0;
+    SCTAB nTab1 = 0;
+    SCCOL nCol2 = 0;
+    SCROW nRow2 = 0;
+    SCTAB nTab2 = 0;
+    ScMatrixRef pMatSrc;
+    bool isStringSearch = true;
+    double fSearchVal;
+    svl::SharedString sSearchStr;
+    bool bVLookup;
+
+    // search mode (only XLOOKUP has all 4 options, MATCH only uses searchfwd)
+    // optional 6th argument to set search mode
+    //   1 - Perform a search starting at the first item. This is the default.
+    //  -1 - Perform a reverse search starting at the last item.
+    //   2 - Perform a binary search that relies on lookup_array being sorted in ascending order.
+    //       If not sorted, invalid results will be returned.
+    //  -2 - Perform a binary search that relies on lookup_array being sorted in descending order.
+    //       If not sorted, invalid results will be returned.
+    //
+    SearchMode eSearchMode = searchfwd;
+
+    // search variables
+    SCSIZE nHitIndex = 0;
+    SCSIZE nBestFit = SCSIZE_MAX;
+
+    // result
+    int nIndex = -1;
+    bool isResultNA = false;
+};
 
 namespace sc {
 
@@ -131,6 +183,12 @@ struct FormulaTokenRef_less
 {
     bool operator () ( const formula::FormulaConstTokenRef& r1, const formula::FormulaConstTokenRef& r2 ) const
         { return r1.get() < r2.get(); }
+    // So we don't have to create a FormulaConstTokenRef to search by formula::FormulaToken*
+    using is_transparent = void;
+    bool operator () ( const formula::FormulaToken* p1, const formula::FormulaConstTokenRef& r2 ) const
+        { return p1 < r2.get(); }
+    bool operator () ( const formula::FormulaConstTokenRef& r1, const formula::FormulaToken* p2 ) const
+        { return r1.get() < p2; }
 };
 typedef ::std::map< const formula::FormulaConstTokenRef, formula::FormulaConstTokenRef, FormulaTokenRef_less> ScTokenMatrixMap;
 
@@ -212,6 +270,9 @@ private:
 
     VolatileType meVolatileType;
 
+    // sort parameters
+    ScSortParam aSortParam;
+
     void MakeMatNew(ScMatrixRef& rMat, SCSIZE nC, SCSIZE nR);
 
     /// Merge global and document specific settings.
@@ -234,6 +295,10 @@ private:
     bool IsTableOpInRange( const ScRange& );
     sal_uInt32 GetCellNumberFormat( const ScAddress& rPos, ScRefCellValue& rCell );
     double ConvertStringToValue( const OUString& );
+    bool SearchVectorForValue( VectorSearchArguments& );
+    bool SearchMatrixForValue( VectorSearchArguments&, ScQueryParam&, ScQueryEntry&, ScQueryEntry::Item& );
+    bool SearchRangeForValue( VectorSearchArguments&, ScQueryParam&, ScQueryEntry& );
+
 public:
     static double ScGetGCD(double fx, double fy);
     /** For matrix back calls into the current interpreter.
@@ -427,6 +492,8 @@ private:
     sal_Int32 GetInt32();
     /** if GetDoubleWithDefault() not within int32 limits sets nGlobalError and returns SAL_MAX_INT32 */
     sal_Int32 GetInt32WithDefault( sal_Int32 nDefault );
+    /** if GetDouble() not within int32 limits sets nGlobalError and returns SAL_MAX_INT32 */
+    sal_Int32 GetFloor32();
     /** if GetDouble() not within int16 limits sets nGlobalError and returns SAL_MAX_INT16 */
     sal_Int16 GetInt16();
     /** if GetDouble() not within uint32 limits sets nGlobalError and returns SAL_MAX_UINT32 */
@@ -483,8 +550,8 @@ private:
     // Set error according to rVal, and set rVal to 0.0 if there was an error.
     inline void TreatDoubleError( double& rVal );
     // Lookup using ScLookupCache, @returns true if found and result address
-    bool LookupQueryWithCache( ScAddress & o_rResultPos,
-            const ScQueryParam & rParam, const ScComplexRefData* refData ) const;
+    bool LookupQueryWithCache( ScAddress & o_rResultPos, const ScQueryParam & rParam,
+            const ScComplexRefData* refData, sal_Int8 nSearchMode, sal_uInt16 nOpCode ) const;
 
     void ScIfJump();
     void ScIfError( bool bNAonly );
@@ -494,6 +561,24 @@ private:
     // ScJumpMatrixToken, no further checks are applied!
     // Returns true if last jump was executed and result matrix pushed.
     bool JumpMatrix( short nStackLevel );
+
+    // Advance sort
+    static void DecoladeRow(ScSortInfoArray* pArray, SCROW nRow1, SCROW nRow2);
+
+    std::unique_ptr<ScSortInfoArray> CreateFastSortInfoArray(
+        const ScSortParam& rSortParam, bool bMatrix, SCCOLROW nInd1, SCCOLROW nInd2);
+    std::vector<SCCOLROW> GetSortOrder(const ScSortParam& rSortParam, const ScMatrixRef& pMatSrc);
+    ScMatrixRef CreateSortedMatrix(const ScSortParam& rSortParam, const ScMatrixRef& pMatSrc,
+        const ScRange& rSourceRange, const std::vector<SCCOLROW>& rSortArray, SCSIZE nsC, SCSIZE nsR);
+
+    void QuickSort(ScSortInfoArray* pArray, const ScMatrixRef& pMatSrc, SCCOLROW nLo, SCCOLROW nHi);
+
+    short Compare(ScSortInfoArray* pArray, const ScMatrixRef& pMatSrc, SCCOLROW nIndex1, SCCOLROW nIndex2) const;
+    short CompareCell( sal_uInt16 nSort,
+        ScRefCellValue& rCell1, ScRefCellValue& rCell2 ) const;
+    short CompareMatrixCell( const ScMatrixRef& pMatSrc, sal_uInt16 nSort, SCCOL nCell1Col, SCROW nCell1Row,
+        SCCOL nCell2Col, SCROW nCell2Row ) const;
+    // Advance sort end
 
     double Compare( ScQueryOp eOp );
     /** @param pOptions
@@ -614,6 +699,7 @@ private:
     void ScRow();
     void ScSheet();
     void ScMatch();
+    void ScXMatch();
     void IterateParametersIf( ScIterFuncIf );
     void ScCountIf();
     void ScSumIf();
@@ -626,6 +712,10 @@ private:
     void ScLookup();
     void ScHLookup();
     void ScVLookup();
+    void ScXLookup();
+    void ScFilter();
+    void ScSort();
+    void ScSortBy();
     void ScSubTotal();
 
     // If upon call rMissingField==true then the database field parameter may be
@@ -930,7 +1020,7 @@ private:
     void ScMedian();
     double GetMedian( ::std::vector<double> & rArray );
     double GetPercentileExclusive( ::std::vector<double> & rArray, double fPercentile );
-    std::vector<double> GetTopNumberArray( SCSIZE& rCol, SCSIZE& rRow );
+    std::vector<double> GetRankNumberArray( SCSIZE& rCol, SCSIZE& rRow );
     void GetNumberSequenceArray( sal_uInt8 nParamCount, ::std::vector<double>& rArray, bool bConvertTextInArray );
     void GetSortArray( sal_uInt8 nParamCount, ::std::vector<double>& rSortArray, ::std::vector<tools::Long>* pIndexOrder, bool bConvertTextInArray, bool bAllowEmptyArray );
     static void QuickSort(::std::vector<double>& rSortArray, ::std::vector<tools::Long>* pIndexOrder);
@@ -1002,6 +1092,9 @@ public:
     // Resets the interpreter object, allowing reuse of interpreter object for each cell
     // in the group.
     void Init( ScFormulaCell* pCell, const ScAddress& rPos, ScTokenArray& rTokArray );
+    // Used only for threaded formula-groups.
+    // Drops any caches that contain Tokens
+    void DropTokenCaches();
 
     formula::StackVar Interpret();
 
@@ -1080,7 +1173,7 @@ inline bool ScInterpreter::MustHaveParamCountMinWithStackCheck( short nAct, shor
     assert(sp >= nAct);
     if (sp < nAct)
     {
-        PushParameterExpected();
+        PushError(FormulaError::UnknownStackVariable);
         return false;
     }
     return MustHaveParamCountMin( nAct, nMin);

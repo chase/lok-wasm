@@ -18,6 +18,7 @@
  */
 
 #include <svl/stritem.hxx>
+#include <svl/voiditem.hxx>
 #include <com/sun/star/util/URL.hpp>
 #include <com/sun/star/util/URLTransformer.hpp>
 #include <com/sun/star/util/XURLTransformer.hpp>
@@ -104,7 +105,7 @@ rtl::Reference<svt::StatusbarController> SfxStatusBarControllerFactory(
         sal_uInt16 nSlotId = pSlot->GetSlotId();
         if ( nSlotId > 0 )
         {
-            OString aCmd = OString::Concat(".uno:") + pSlot->GetUnoName();
+            OUString aCmd = pSlot->GetCommand();
             pStatusBar->SetHelpId( nSlotId, aCmd );
             return SfxStatusBarControl::CreateControl( nSlotId, nID, pStatusBar, pModule );
         }
@@ -184,8 +185,7 @@ void SAL_CALL SfxStatusBarControl::statusChanged( const frame::FeatureStateEvent
         uno::Reference < frame::XDispatch > xDisp = xProvider->queryDispatch( rEvent.FeatureURL, OUString(), 0 );
         if ( xDisp.is() )
         {
-            uno::Reference< lang::XUnoTunnel > xTunnel( xDisp, uno::UNO_QUERY );
-            if (auto pDisp = comphelper::getFromUnoTunnel<SfxOfficeDispatch>(xTunnel))
+            if (auto pDisp = dynamic_cast<SfxOfficeDispatch*>(xDisp.get()))
                 pViewFrame = pDisp->GetDispatcher_Impl()->GetFrame();
         }
     }
@@ -376,7 +376,7 @@ void SfxStatusBarControl::StateChangedAtStatusBarControl
         pBar->SetItemText( nSID, pStr->GetValue() );
     else
     {
-        DBG_ASSERT( eState != SfxItemState::DEFAULT || pState->IsVoidItem(),
+        DBG_ASSERT( eState != SfxItemState::DEFAULT || pState->isVoidItem(),
                     "wrong SfxPoolItem subclass in SfxStatusBarControl" );
         pBar->SetItemText( nSID, OUString() );
     }

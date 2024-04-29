@@ -25,9 +25,11 @@ $(eval $(call gb_Library_use_externals,svl,\
         curl) \
     dtoa \
     icu_headers \
+    icui18n \
     icuuc \
     mdds_headers \
     libxml2 \
+    zxcvbn-c \
 ))
 
 $(eval $(call gb_Library_set_componentfile,svl,svl/util/svl,services))
@@ -112,7 +114,6 @@ $(eval $(call gb_Library_add_exception_objects,svl,\
     svl/source/config/languageoptions \
     svl/source/crypto/cryptosign \
     svl/source/filepicker/pickerhistory \
-    svl/source/items/aeitem \
     svl/source/items/cenumitm \
     svl/source/items/cintitem \
     svl/source/items/custritm \
@@ -131,7 +132,6 @@ $(eval $(call gb_Library_add_exception_objects,svl,\
     svl/source/items/lckbitem \
     svl/source/items/legacyitem \
     svl/source/items/macitem \
-    svl/source/items/poolcach \
     svl/source/items/poolitem \
     svl/source/items/ptitem \
     svl/source/items/rectitem \
@@ -144,6 +144,7 @@ $(eval $(call gb_Library_add_exception_objects,svl,\
     svl/source/items/style \
     svl/source/items/stylepool \
     svl/source/items/visitem \
+    svl/source/items/voiditem \
     svl/source/items/whiter \
     svl/source/misc/PasswordHelper \
     svl/source/misc/adrparse \
@@ -166,7 +167,6 @@ $(eval $(call gb_Library_add_exception_objects,svl,\
     svl/source/misc/urihelper \
     svl/source/notify/SfxBroadcaster \
     svl/source/notify/broadcast \
-    svl/source/notify/isethint \
     svl/source/notify/listener \
     svl/source/notify/lstner \
     svl/source/numbers/currencytable \

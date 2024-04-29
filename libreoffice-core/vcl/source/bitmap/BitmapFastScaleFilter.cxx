@@ -21,8 +21,8 @@
 #include <tools/helpers.hxx>
 
 #include <vcl/bitmapex.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 
-#include <bitmap/BitmapWriteAccess.hxx>
 #include <bitmap/BitmapFastScaleFilter.hxx>
 
 BitmapEx BitmapFastScaleFilter::execute(BitmapEx const& rBitmapEx) const
@@ -40,7 +40,7 @@ BitmapEx BitmapFastScaleFilter::execute(BitmapEx const& rBitmapEx) const
 
     if (nNewWidth > 0 && nNewHeight > 0)
     {
-        Bitmap::ScopedReadAccess pReadAcc(aBitmap);
+        BitmapScopedReadAccess pReadAcc(aBitmap);
 
         if (pReadAcc)
         {
@@ -112,7 +112,7 @@ BitmapEx BitmapFastScaleFilter::execute(BitmapEx const& rBitmapEx) const
         }
     }
 
-    AlphaMask aMask(rBitmapEx.GetAlpha());
+    AlphaMask aMask(rBitmapEx.GetAlphaMask());
 
     if (bRet && !aMask.IsEmpty())
         bRet = aMask.Scale(maSize, BmpScaleFlag::Fast);

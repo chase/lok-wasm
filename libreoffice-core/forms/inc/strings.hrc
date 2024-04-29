@@ -21,7 +21,7 @@
 
 #include <unotools/resmgr.hxx>
 
-#define NC_(Context, String) TranslateId(Context, reinterpret_cast<char const *>(u8##String))
+#define NC_(Context, String) TranslateId(Context, u8##String)
 
 #define RID_BASELISTBOX_ERROR_FILLLIST              NC_("RID_BASELISTBOX_ERROR_FILLLIST", "The contents of a combo box or list field could not be determined.")
 #define RID_STR_IMPORT_GRAPHIC                      NC_("RID_STR_IMPORT_GRAPHIC", "Insert Image" )
@@ -71,7 +71,7 @@
 #define RID_STR_DATATYPE_BOOLEAN                    NC_("RID_STR_DATATYPE_BOOLEAN", "True/False (Boolean)")
 #define RID_STR_DATATYPE_DECIMAL                    NC_("RID_STR_DATATYPE_DECIMAL", "Decimal")
 #define RID_STR_DATATYPE_FLOAT                      NC_("RID_STR_DATATYPE_FLOAT", "Floating point")
-#define RID_STR_DATATYPE_DOUBLE                     NC_("RID_STR_DATATYPE_DOUBLE", "Double")
+#define RID_STR_DATATYPE_DOUBLE                     NC_("RID_STR_DATATYPE_DOUBLE", "Double precision")
 #define RID_STR_DATATYPE_DATE                       NC_("RID_STR_DATATYPE_DATE", "Date")
 #define RID_STR_DATATYPE_TIME                       NC_("RID_STR_DATATYPE_TIME", "Time")
 #define RID_STR_DATATYPE_DATETIME                   NC_("RID_STR_DATATYPE_DATETIME", "Date and Time")
@@ -82,5 +82,6 @@
 #define RID_STR_XFORMS_PATTERN_DOESNT_MATCH         NC_("RID_STR_XFORMS_PATTERN_DOESNT_MATCH", "The string '$1' does not match the required regular expression '$2'.")
 #define RID_STR_XFORMS_BINDING_UI_NAME              NC_("RID_STR_XFORMS_BINDING_UI_NAME", "Binding" )
 #define RID_STR_XFORMS_CANT_REMOVE_TYPE             NC_("RID_STR_XFORMS_CANT_REMOVE_TYPE", "This is a built-in type and cannot be removed." )
+#define RID_STR_XFORMS_WARN_TARGET_IS_FILE          NC_("RID_STR_XFORMS_WARN_TARGET_IS_FILE", "Are you sure you want to write to local file \"$\"?" )
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

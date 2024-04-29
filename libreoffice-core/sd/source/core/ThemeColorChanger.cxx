@@ -7,6 +7,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+#include <editeng/colritem.hxx>
 #include <theme/ThemeColorChanger.hxx>
 #include <svx/theme/IThemeColorChanger.hxx>
 #include <svx/svdmodel.hxx>
@@ -157,7 +158,7 @@ void ThemeColorChanger::doApply(std::shared_ptr<model::ColorSet> const& pColorSe
         // TODO - for now change all the objects regardless to which master page it belongs to.
         // Currently we don't have a concept of master slide with a group of layouts as in MSO, but we always only
         // have master pages, which aren't grouped together. In MSO the theme is defined per master slide, so when
-        // changing a theme, all the layouts get the new theme, as layouts are synonomus to master pages in LibreOffise,
+        // changing a theme, all the layouts get the new theme, as layouts are synonymous to master pages in LibreOffice,
         // this is not possible to do and we would need to change the theme for each master page separately, which
         // is just annoying for the user.
 

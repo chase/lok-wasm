@@ -462,15 +462,15 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
         case SID_FONTWORK:
         {
             sal_uInt16 nId = ScGetFontWorkId();
-            SfxViewFrame* pViewFrm = rViewData.GetViewShell()->GetViewFrame();
+            SfxViewFrame& rViewFrm = rViewData.GetViewShell()->GetViewFrame();
 
             if ( rReq.GetArgs() )
-                pViewFrm->SetChildWindow( nId,
+                rViewFrm.SetChildWindow( nId,
                                            static_cast<const SfxBoolItem&>(
                                             (rReq.GetArgs()->Get(SID_FONTWORK))).
                                                 GetValue() );
             else
-                pViewFrm->ToggleChildWindow( nId );
+                rViewFrm.ToggleChildWindow( nId );
 
             rBindings.Invalidate( SID_FONTWORK );
             rReq.Done();
@@ -578,11 +578,12 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
                     {
                         OUString aTitle(pSelected->GetTitle());
                         OUString aDescription(pSelected->GetDescription());
+                        bool isDecorative(pSelected->IsDecorative());
 
                         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                         vcl::Window* pWin = rViewData.GetActiveWin();
                         ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(
-                                    pWin ? pWin->GetFrameWeld() : nullptr, aTitle, aDescription));
+                                    pWin ? pWin->GetFrameWeld() : nullptr, aTitle, aDescription, isDecorative));
 
                         if(RET_OK == pDlg->Execute())
                         {
@@ -591,8 +592,10 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
                             // handle Title and Description
                             pDlg->GetTitle(aTitle);
                             pDlg->GetDescription(aDescription);
+                            pDlg->IsDecorative(isDecorative);
                             pSelected->SetTitle(aTitle);
                             pSelected->SetDescription(aDescription);
+                            pSelected->SetDecorative(isDecorative);
 
                             // ChartListenerCollectionNeedsUpdate is needed for Navigator update
                             pDocSh->GetDocument().SetChartListenerCollectionNeedsUpdate( true );

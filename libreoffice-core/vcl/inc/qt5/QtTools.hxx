@@ -57,7 +57,7 @@ inline QRect toQRect(const tools::Rectangle& rRect)
     return QRect(rRect.Left(), rRect.Top(), rRect.GetWidth(), rRect.GetHeight());
 }
 
-inline QRect toQRect(const tools::Rectangle& rRect, const qreal fScale)
+inline QRect toQRect(const AbsoluteScreenPixelRectangle& rRect, const qreal fScale)
 {
     return QRect(floor(rRect.Left() * fScale), floor(rRect.Top() * fScale),
                  ceil(rRect.GetWidth() * fScale), ceil(rRect.GetHeight() * fScale));
@@ -106,8 +106,6 @@ inline QImage::Format getBitFormat(vcl::PixelFormat ePixelFormat)
 {
     switch (ePixelFormat)
     {
-        case vcl::PixelFormat::N1_BPP:
-            return QImage::Format_Mono;
         case vcl::PixelFormat::N8_BPP:
             return QImage::Format_Indexed8;
         case vcl::PixelFormat::N24_BPP:

@@ -20,6 +20,7 @@
 #include <sal/config.h>
 
 #include <string_view>
+#include <thread>
 
 #ifdef _WIN32
 #include <prewin.h>
@@ -61,6 +62,7 @@
 #include <rtl/process.h>
 #include <sal/log.hxx>
 #include <tools/link.hxx>
+#include <vcl/idletask.hxx>
 #include <vcl/wintypes.hxx>
 
 #ifdef MACOSX
@@ -84,7 +86,7 @@
 #include <awt/animatedimagespeer.hxx>
 #include <toolkit/awt/vclxwindow.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 
 #include <toolkit/helper/convert.hxx>
 #include <controls/filectrl.hxx>
@@ -417,7 +419,7 @@ public:
     virtual void Invoke() override
     {
         SolarMutexGuard aSolarGuard;
-        osl::Thread::wait(std::chrono::milliseconds(m_nPauseMilliseconds));
+        std::this_thread::sleep_for(std::chrono::milliseconds(m_nPauseMilliseconds));
         Stop();
         delete this;
     }
@@ -483,6 +485,8 @@ public:
     virtual void SAL_CALL stopRecording() override;
 
     css::uno::Sequence< OUString > SAL_CALL getRecordingAndClear() override;
+
+    virtual void SAL_CALL waitUntilAllIdlesDispatched() override;
 
     // css::awt::XToolkit
     css::uno::Reference< css::awt::XWindowPeer >  SAL_CALL getDesktopWindow(  ) override;
@@ -971,7 +975,7 @@ void SAL_CALL VCLXToolkit::disposing()
         m_bKeyListener = false;
     }
     css::lang::EventObject aEvent(
-        static_cast< ::cppu::OWeakObject * >(this));
+        getXWeak());
     m_aTopWindowListeners.disposeAndClear(aEvent);
     m_aKeyHandlers.disposeAndClear(aEvent);
     m_aFocusListeners.disposeAndClear(aEvent);
@@ -988,7 +992,7 @@ css::uno::Reference< css::awt::XWindowPeer > VCLXToolkit::getDesktopWindow(  )
 css::awt::Rectangle VCLXToolkit::getWorkArea(  )
 {
     sal_Int32 nDisplay = Application::GetDisplayBuiltInScreen();
-    tools::Rectangle aWorkRect = Application::GetScreenPosSizePixel( nDisplay );
+    AbsoluteScreenPixelRectangle aWorkRect = Application::GetScreenPosSizePixel( nDisplay );
     css::awt::Rectangle aNotherRect;
     aNotherRect.X = aWorkRect.Left();
     aNotherRect.Y = aWorkRect.Top();
@@ -1777,7 +1781,7 @@ vcl::Window* VCLXToolkit::ImplCreateWindow( rtl::Reference<VCLXWindow>* ppNewCom
                 }
                 else if (aServiceName == "progressbar")
                 {
-                    pNewWindow = VclPtr<ProgressBar>::Create( pParent, nWinBits );
+                    pNewWindow = VclPtr<ProgressBar>::Create( pParent, nWinBits, ProgressBar::BarStyle::Progress );
                     *ppNewComp = new VCLXProgressBar;
                 }
                 else if (aServiceName == "filecontrol")
@@ -1842,12 +1846,12 @@ css::uno::Reference< css::awt::XWindowPeer > VCLXToolkit::ImplCreateWindow(
 
     SolarMutexGuard aSolarGuard;
 
-    css::uno::Reference< css::awt::XWindowPeer > xRef;
+    css::uno::Reference< css::awt::XVclWindowPeer > xRef;
 
     VclPtr<vcl::Window> pParent;
     if ( rDescriptor.Parent.is() )
     {
-        VCLXWindow* pParentComponent = comphelper::getFromUnoTunnel<VCLXWindow>( rDescriptor.Parent );
+        VCLXWindow* pParentComponent = dynamic_cast<VCLXWindow*>( rDescriptor.Parent.get() );
 
         // #103939# Don't throw assertion, may be it's a system dependent window, used in ImplCreateWindow.
         // DBG_ASSERT( pParentComponent, "ParentComponent not valid" );
@@ -1990,7 +1994,7 @@ css::uno::Reference< css::awt::XWindowPeer > VCLXToolkit::createSystemChild( con
         pChildWindow.reset(VclPtr<WorkWindow>::Create(nullptr, Parent));
     }
 
-    css::uno::Reference< css::awt::XWindowPeer > xPeer;
+    css::uno::Reference< css::awt::XVclWindowPeer > xPeer;
     if ( pChildWindow )
     {
         rtl::Reference<VCLXTopWindow> pPeer = new VCLXTopWindow;
@@ -2188,7 +2192,7 @@ void SAL_CALL VCLXToolkit::addTopWindowListener(
         aGuard.clear();
         rListener->disposing(
             css::lang::EventObject(
-                static_cast< ::cppu::OWeakObject * >(this)));
+                getXWeak()));
     }
     else if (m_aTopWindowListeners.addInterface(rListener) == 1
              && !m_bEventListener)
@@ -2223,7 +2227,7 @@ void SAL_CALL VCLXToolkit::addKeyHandler(
         aGuard.clear();
         rHandler->disposing(
             css::lang::EventObject(
-                static_cast< ::cppu::OWeakObject * >(this)));
+                getXWeak()));
     }
     else if (m_aKeyHandlers.addInterface(rHandler) == 1 && !m_bKeyListener)
     {
@@ -2256,7 +2260,7 @@ void SAL_CALL VCLXToolkit::addFocusListener(
         aGuard.clear();
         rListener->disposing(
             css::lang::EventObject(
-                static_cast< ::cppu::OWeakObject * >(this)));
+                getXWeak()));
     }
     else if (m_aFocusListeners.addInterface(rListener) == 1
              && !m_bEventListener)
@@ -2541,6 +2545,11 @@ void SAL_CALL VCLXToolkit::stopRecording()
 css::uno::Sequence< OUString > VCLXToolkit::getRecordingAndClear()
 {
     return comphelper::ProfileZone::getRecordingAndClear();
+}
+
+void VCLXToolkit::waitUntilAllIdlesDispatched()
+{
+    IdleTask::waitUntilIdleDispatched();
 }
 
 // css:awt:XToolkitRobot

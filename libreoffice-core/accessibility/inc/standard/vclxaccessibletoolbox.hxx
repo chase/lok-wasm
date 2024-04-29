@@ -22,18 +22,15 @@
 #include <toolkit/awt/vclxaccessiblecomponent.hxx>
 #include <vcl/toolbox.hxx>
 #include <com/sun/star/accessibility/XAccessibleSelection.hpp>
+#include <cppuhelper/implbase.hxx>
 
-
-
-
-typedef ::cppu::ImplHelper1 < css::accessibility::XAccessibleSelection > VCLXAccessibleToolBox_BASE;
-
-typedef std::map< sal_Int32, css::uno::Reference< css::accessibility::XAccessible > > ToolBoxItemsMap;
 
 class VCLXAccessibleToolBoxItem;
 class ToolBox;
 
-class VCLXAccessibleToolBox final : public VCLXAccessibleComponent, public VCLXAccessibleToolBox_BASE
+typedef std::map< sal_Int32, rtl::Reference< VCLXAccessibleToolBoxItem > > ToolBoxItemsMap;
+
+class VCLXAccessibleToolBox final : public cppu::ImplInheritanceHelper<VCLXAccessibleComponent, css::accessibility::XAccessibleSelection>
 {
 private:
     ToolBoxItemsMap             m_aAccessibleChildren;
@@ -67,12 +64,6 @@ private:
 
 public:
     VCLXAccessibleToolBox( VCLXWindow* pVCLXWindow );
-
-    // XInterface
-    DECLARE_XINTERFACE( )
-
-    // XTypeProvider
-    DECLARE_XTYPEPROVIDER( )
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;

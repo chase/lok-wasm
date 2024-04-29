@@ -224,7 +224,7 @@ bool SdrTextObj::AdjustTextFrameWidthAndHeight( tools::Rectangle& rR, bool bHgt,
         }
     }
 
-    if (maGeo.nRotationAngle)
+    if (maGeo.m_nRotationAngle)
     {
         // Object is rotated.
         Point aD1(rR.TopLeft());
@@ -240,7 +240,9 @@ bool SdrTextObj::AdjustTextFrameWidthAndHeight( tools::Rectangle& rR, bool bHgt,
 
 bool SdrTextObj::NbcAdjustTextFrameWidthAndHeight(bool bHgt, bool bWdt)
 {
-    bool bRet = AdjustTextFrameWidthAndHeight(maRect,bHgt,bWdt);
+    tools::Rectangle aRectangle(getRectangle());
+    bool bRet = AdjustTextFrameWidthAndHeight(aRectangle, bHgt, bWdt);
+    setRectangle(aRectangle);
     if (bRet)
     {
         SetBoundAndSnapRectsDirty();
@@ -256,11 +258,11 @@ bool SdrTextObj::NbcAdjustTextFrameWidthAndHeight(bool bHgt, bool bWdt)
 
 bool SdrTextObj::AdjustTextFrameWidthAndHeight()
 {
-    tools::Rectangle aNewRect(maRect);
-    bool bRet=AdjustTextFrameWidthAndHeight(aNewRect);
+    tools::Rectangle aNewRect(getRectangle());
+    bool bRet = AdjustTextFrameWidthAndHeight(aNewRect);
     if (bRet) {
         tools::Rectangle aBoundRect0; if (m_pUserCall!=nullptr) aBoundRect0=GetLastBoundRect();
-        maRect = aNewRect;
+        setRectangle(aNewRect);
         SetBoundAndSnapRectsDirty();
         if (auto pRectObj = dynamic_cast<SdrRectObj *>(this)) { // this is a hack
             pRectObj->SetXPolyDirty();
@@ -437,8 +439,7 @@ bool SdrTextObj::HasText() const
 
 void SdrTextObj::AppendFamilyToStyleName(OUString& styleName, SfxStyleFamily family)
 {
-    OUStringBuffer aFam;
-    aFam.append(static_cast<sal_Int32>(family));
+    OUStringBuffer aFam = OUString::number(static_cast<sal_Int32>(family));
     comphelper::string::padToLength(aFam, PADDING_LENGTH_FOR_STYLE_FAMILY , PADDING_CHARACTER_FOR_STYLE_FAMILY);
 
     styleName += "|" + aFam;

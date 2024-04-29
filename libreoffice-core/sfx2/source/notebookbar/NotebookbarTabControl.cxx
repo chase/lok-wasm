@@ -30,14 +30,16 @@
 #include <com/sun/star/frame/XFrame.hpp>
 #include <com/sun/star/uno/Reference.h>
 #include <com/sun/star/awt/PopupMenuDirection.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/frame/XPopupMenuController.hpp>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertyvalue.hxx>
 #include <sidebar/SidebarToolBox.hxx>
+#include <toolkit/awt/vclxmenu.hxx>
 #include <cppuhelper/implbase.hxx>
 
 #define ICON_SIZE 25
-constexpr OUStringLiteral TOOLBAR_STR = u"private:resource/toolbar/notebookbarshortcuts";
+constexpr OUString TOOLBAR_STR = u"private:resource/toolbar/notebookbarshortcuts"_ustr;
 
 using namespace css::uno;
 using namespace css::ui;
@@ -53,11 +55,11 @@ public:
     {
         try
         {
-            if( SfxViewFrame::Current() )
+            if (SfxViewFrame* pViewFrm = SfxViewFrame::Current())
             {
                 Reference<XComponentContext> xContext = comphelper::getProcessComponentContext();
                 const Reference<XModuleManager> xModuleManager  = ModuleManager::create( xContext );
-                Reference<XFrame> xFrame = SfxViewFrame::Current()->GetFrame().GetFrameInterface();
+                Reference<XFrame> xFrame = pViewFrm->GetFrame().GetFrameInterface();
                 OUString aModuleName = xModuleManager->identify( xFrame );
 
                 Reference<XUIConfigurationManager> m_xConfigManager;
@@ -95,11 +97,11 @@ public:
     {
         try
         {
-            if( SfxViewFrame::Current() )
+            if (SfxViewFrame* pViewFrm = SfxViewFrame::Current())
             {
                 Reference<XComponentContext> xContext = comphelper::getProcessComponentContext();
                 const Reference<XModuleManager> xModuleManager  = ModuleManager::create( xContext );
-                Reference<XFrame> xFrame = SfxViewFrame::Current()->GetFrame().GetFrameInterface();
+                Reference<XFrame> xFrame = pViewFrm->GetFrame().GetFrameInterface();
                 OUString aModuleName = xModuleManager->identify( xFrame );
 
                 Reference<XUIConfigurationManager> m_xConfigManager;
@@ -237,7 +239,8 @@ bool NotebookbarTabControl::EventNotify( NotifyEvent& rNEvt )
 
 void NotebookbarTabControl::StateChanged(StateChangedType nStateChange)
 {
-    if( !m_bInitialized && SfxViewFrame::Current() )
+    SfxViewFrame* pViewFrm = SfxViewFrame::Current();
+    if (!m_bInitialized && pViewFrm)
     {
         VclPtr<ShortcutsToolBox> pShortcuts = VclPtr<ShortcutsToolBox>::Create( this );
         pShortcuts->Show();
@@ -249,7 +252,7 @@ void NotebookbarTabControl::StateChanged(StateChangedType nStateChange)
 
         m_bInitialized = true;
     }
-    if( m_bInitialized && m_bInvalidate && SfxViewFrame::Current() )
+    if (m_bInitialized && m_bInvalidate && pViewFrm)
     {
         ToolBox* pToolBox = GetToolBox();
         if( !pToolBox )
@@ -259,7 +262,7 @@ void NotebookbarTabControl::StateChanged(StateChangedType nStateChange)
 
         Reference<XComponentContext> xContext = comphelper::getProcessComponentContext();
         const Reference<XModuleManager> xModuleManager  = ModuleManager::create( xContext );
-        m_xFrame = SfxViewFrame::Current()->GetFrame().GetFrameInterface();
+        m_xFrame = pViewFrm->GetFrame().GetFrameInterface();
         OUString aModuleName = xModuleManager->identify( m_xFrame );
 
         FillShortcutsToolBox( xContext, m_xFrame, aModuleName, pToolBox );
@@ -340,8 +343,7 @@ IMPL_LINK(NotebookbarTabControl, OpenNotebookbarPopupMenu, NotebookBar*, pNotebo
         xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
         "com.sun.star.comp.framework.ResourceMenuController", aArgs, xContext), UNO_QUERY);
 
-    Reference<css::awt::XPopupMenu> xPopupMenu(xContext->getServiceManager()->createInstanceWithContext(
-        "com.sun.star.awt.PopupMenu", xContext), UNO_QUERY);
+    rtl::Reference<VCLXPopupMenu> xPopupMenu = new VCLXPopupMenu();
 
     if (!xPopupController.is() || !xPopupMenu.is())
         return;

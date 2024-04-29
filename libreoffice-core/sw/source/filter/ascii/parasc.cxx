@@ -78,7 +78,7 @@ public:
 }
 
 // Call for the general reader interface
-ErrCode AsciiReader::Read( SwDoc& rDoc, const OUString&, SwPaM &rPam, const OUString & )
+ErrCodeMsg AsciiReader::Read( SwDoc& rDoc, const OUString&, SwPaM &rPam, const OUString & )
 {
     if( !m_pStream )
     {
@@ -95,8 +95,8 @@ ErrCode AsciiReader::Read( SwDoc& rDoc, const OUString&, SwPaM &rPam, const OUSt
         OUString optionsString;
         aParser.GetUsedAsciiOptions().WriteUserData(optionsString);
 
-        if(m_pMedium != nullptr && m_pMedium->GetItemSet() != nullptr)
-            m_pMedium->GetItemSet()->Put(SfxStringItem(SID_FILE_FILTEROPTIONS, optionsString));
+        if(m_pMedium != nullptr)
+            m_pMedium->GetItemSet().Put(SfxStringItem(SID_FILE_FILTEROPTIONS, optionsString));
     }
     // after Read reset the options
     m_aOption.ResetASCIIOpts();

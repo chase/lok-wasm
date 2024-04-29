@@ -19,18 +19,18 @@
 #ifndef INCLUDED_CONNECTIVITY_SQLPARSE_HXX
 #define INCLUDED_CONNECTIVITY_SQLPARSE_HXX
 
-#include <memory>
-#include <string_view>
-
 #include <com/sun/star/uno/Reference.h>
-#include <osl/mutex.hxx>
 #include <connectivity/sqlnode.hxx>
 #include <connectivity/IParseContext.hxx>
 #include <connectivity/dbtoolsdllapi.hxx>
 #include <connectivity/sqlerror.hxx>
-#include <salhelper/singletonref.hxx>
+#include <comphelper/singletonref.hxx>
+#include <vcl/lazydelete.hxx>
 
 #include <map>
+#include <memory>
+#include <mutex>
+#include <string_view>
 
 namespace com::sun::star::i18n { class XCharacterClassification; }
 namespace com::sun::star::i18n { class XLocaleData4; }
@@ -82,7 +82,7 @@ namespace connectivity
 
     class OSQLParseNodesContainer
     {
-        ::osl::Mutex m_aMutex;
+        std::mutex m_aMutex;
         ::std::vector< OSQLParseNode* > m_aNodes;
     public:
         OSQLParseNodesContainer();
@@ -94,7 +94,7 @@ namespace connectivity
         void clearAndDelete();
     };
 
-    typedef salhelper::SingletonRef<OSQLParseNodesContainer> OSQLParseNodesGarbageCollector;
+    typedef comphelper::SingletonRef<OSQLParseNodesContainer> OSQLParseNodesGarbageCollector;
 
     //= OSQLParser
 
@@ -140,7 +140,7 @@ namespace connectivity
         sal_Int32                   m_nDateFormatKey;
         css::uno::Reference< css::uno::XComponentContext >    m_xContext;
         css::uno::Reference< css::i18n::XCharacterClassification> m_xCharClass;
-        static css::uno::Reference< css::i18n::XLocaleData4>       s_xLocaleData;
+        static vcl::DeleteOnDeinit<css::uno::Reference< css::i18n::XLocaleData4>> s_xLocaleData;
 
         // convert a string into double trim it to scale of _nscale and then transform it back to string
         OUString stringToDouble(const OUString& _rValue,sal_Int16 _nScale);
@@ -152,7 +152,7 @@ namespace connectivity
         OSQLParseNode*  buildNode_STR_NUM(OSQLParseNode*& pLiteral);
         OSQLParseNode*  buildNode_Date(const double& fValue, sal_Int32 nType);
 
-        static ::osl::Mutex& getMutex();
+        static std::mutex& getMutex();
 
     public:
         // if NULL, a default context will be used

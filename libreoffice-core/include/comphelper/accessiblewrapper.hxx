@@ -297,9 +297,14 @@ namespace comphelper
         // OAccessibleContextWrapper
         virtual void notifyTranslatedEvent( const css::accessibility::AccessibleEventObject& _rEvent ) override;
 
+        // helper method for both 'disposing' methods
+        void implDisposing(const css::lang::EventObject* pEvent);
+
         // OComponentHelper
-        using OAccessibleContextWrapperHelper::disposing;
-        virtual void SAL_CALL disposing() override;
+        void SAL_CALL disposing() override;
+
+        // XAccessibleEventListener
+        virtual void SAL_CALL disposing(const css::lang::EventObject& rEvent) override;
 
     protected:
         virtual ~OAccessibleContextWrapper() override;

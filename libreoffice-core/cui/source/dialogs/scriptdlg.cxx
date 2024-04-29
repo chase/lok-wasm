@@ -128,9 +128,6 @@ void SvxScriptOrgDialog::Init( std::u16string_view language  )
 
     Sequence< Reference< browse::XBrowseNode > > children;
 
-    OUString userStr("user");
-    OUString const shareStr("share");
-
     try
     {
         Reference< browse::XBrowseNodeFactory > xFac = browse::theBrowseNodeFactory::get(xCtx);
@@ -155,17 +152,15 @@ void SvxScriptOrgDialog::Init( std::u16string_view language  )
         bool app = false;
         OUString uiName = childNode->getName();
         OUString factoryURL;
-        if ( uiName == userStr || uiName == shareStr )
+        if (uiName == "user")
         {
             app = true;
-            if ( uiName == userStr )
-            {
-                uiName = m_sMyMacros;
-            }
-            else
-            {
-                uiName = m_sProdMacros;
-            }
+            uiName = m_sMyMacros;
+        }
+        else if (uiName == "share")
+        {
+            app = true;
+            uiName = m_sProdMacros;
         }
         else
         {
@@ -197,7 +192,7 @@ void SvxScriptOrgDialog::Init( std::u16string_view language  )
         Reference< browse::XBrowseNode > langEntries =
             getLangNodeFromRootNode( childNode, language );
 
-        insertEntry( uiName, app ? OUString(RID_CUIBMP_HARDDISK) : OUString(RID_CUIBMP_DOC),
+        insertEntry( uiName, app ? RID_CUIBMP_HARDDISK : RID_CUIBMP_DOC,
             nullptr, true, std::make_unique< SFEntry >( langEntries, xDocumentModel ), factoryURL, false );
     }
 
@@ -1035,8 +1030,7 @@ void SvxScriptOrgDialog::StoreCurrentSelection()
             aDescription = ";" + aDescription;
     }
     while (bEntry);
-    OUString sDesc( aDescription );
-    m_lastSelection[ m_sLanguage ] = sDesc;
+    m_lastSelection[m_sLanguage] = aDescription;
 }
 
 void SvxScriptOrgDialog::RestorePreviousSelection()
@@ -1302,12 +1296,11 @@ OUString GetErrorMessage( const css::uno::Any& aException )
 void SvxScriptErrorDialog::ShowAsyncErrorDialog( weld::Window* pParent, css::uno::Any const & aException )
 {
     SolarMutexGuard aGuard;
-    OUString sMessage = GetErrorMessage( aException );
 
     // Pass a copy of the message to the ShowDialog method as the
     // SvxScriptErrorDialog may be deleted before ShowDialog is called
     DialogData* pData = new DialogData;
-    pData->sMessage = sMessage;
+    pData->sMessage = GetErrorMessage(aException);
     pData->pParent = pParent;
     Application::PostUserEvent(
         LINK( nullptr, SvxScriptErrorDialog, ShowDialog ),

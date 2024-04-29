@@ -151,7 +151,7 @@ CPPUNIT_TEST_FIXTURE(HtmlImportTest, testListStyleType)
         if (rProp.Name == "BulletChar")
         {
             // should be 'o'.
-            CPPUNIT_ASSERT_EQUAL(OUString(u"\uE009"), rProp.Value.get<OUString>());
+            CPPUNIT_ASSERT_EQUAL(u"\uE009"_ustr, rProp.Value.get<OUString>());
             bBulletFound = true;
             break;
         }
@@ -402,7 +402,7 @@ CPPUNIT_TEST_FIXTURE(HtmlImportTest, testTdf122789)
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     CPPUNIT_ASSERT(pTextDoc);
     SwDoc* pDoc = pTextDoc->GetDocShell()->GetDoc();
-    const SwFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
+    const auto& rFormats = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), rFormats.size());
     // This failed, the image had an absolute size, not a relative one.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt8>(70), rFormats[0]->GetAttrSet().GetFrameSize().GetWidthPercent());
@@ -516,8 +516,18 @@ CPPUNIT_TEST_FIXTURE(HtmlImportTest, testUTF16_nonBMP)
 {
     createSwWebDoc("emojis16BE.html");
     // tdf#146173: non-BMP characters' surrogates didn't combine correctly
-    CPPUNIT_ASSERT_EQUAL(OUString(u"a text with emojis: 🌾 ☀👨🏼‍🌾🏃🏼‍♂️🤙🏽🔍"),
+    CPPUNIT_ASSERT_EQUAL(u"a text with emojis: 🌾 ☀👨🏼‍🌾🏃🏼‍♂️🤙🏽🔍"_ustr,
                          getParagraph(1)->getString());
+}
+
+CPPUNIT_TEST_FIXTURE(HtmlImportTest, testTdf154273)
+{
+    createSwWebDoc("tdf154273.html");
+
+    // Without the fix in place, this test would have failed with
+    // - Expected: 'test'
+    // - Actual  : &apos;test&apos;
+    CPPUNIT_ASSERT_EQUAL(OUString("'test' "), getParagraph(1)->getString());
 }
 
 CPPUNIT_TEST_FIXTURE(SwHtmlOptionsImportTest, testOleData)
@@ -569,9 +579,30 @@ CPPUNIT_TEST_FIXTURE(HtmlImportTest, testRGBAColor)
     const uno::Reference<beans::XPropertySet> xRun(getRun(xPara,1), uno::UNO_QUERY);
     const Color nBackColor(0xaed89a);
 
-    // Without the accompanying fix in place, this test would have failed, the backround
+    // Without the accompanying fix in place, this test would have failed, the background
     // color was not imported at all, when it was in hex RGBA format in HTML.
     CPPUNIT_ASSERT_EQUAL(nBackColor, getProperty<Color>(xRun, "CharBackColor"));
+}
+
+CPPUNIT_TEST_FIXTURE(HtmlImportTest, testTdf153341)
+{
+    createSwWebDoc("tdf153341.html");
+
+    const uno::Reference<text::XTextRange> xPara1 = getParagraph(1);
+    const uno::Reference<beans::XPropertySet> xRun1(getRun(xPara1,1), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(Color(ColorTransparency, 0x00, 0xFF, 0x00, 0x00), getProperty<Color>(xRun1, "CharColor"));
+
+    const uno::Reference<text::XTextRange> xPara2 = getParagraph(2);
+    const uno::Reference<beans::XPropertySet> xRun2(getRun(xPara2,1), uno::UNO_QUERY);
+
+    // Without the fix in place, this test would have failed with
+    // - Expected: rgba[ff00007f]
+    // - Actual  : rgba[ff0000ff]
+    CPPUNIT_ASSERT_EQUAL(Color(ColorTransparency, 0x80, 0xFF, 0x00, 0x00), getProperty<Color>(xRun2, "CharColor"));
+
+    const uno::Reference<text::XTextRange> xPara3 = getParagraph(3);
+    const uno::Reference<beans::XPropertySet> xRun3(getRun(xPara3,1), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(Color(ColorTransparency, 0xB3, 0xFF, 0x00, 0x00), getProperty<Color>(xRun3, "CharColor"));
 }
 
 CPPUNIT_TEST_FIXTURE(HtmlImportTest, testTdf155011)

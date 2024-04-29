@@ -46,7 +46,7 @@ uno::Any SAL_CALL ZipPackageFolderEnumeration::nextElement()
     uno::Any aAny;
     if (aIterator == rContents.end())
         throw container::NoSuchElementException(THROW_WHERE);
-    aAny <<= (*aIterator).second.xTunnel;
+    aAny <<= uno::Reference(cppu::getXWeak((*aIterator).second.xPackageEntry.get()));
     ++aIterator;
     return aAny;
 }

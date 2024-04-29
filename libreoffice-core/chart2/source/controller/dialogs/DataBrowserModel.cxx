@@ -201,7 +201,7 @@ private:
 
 bool lcl_ShowCategoriesAsDataLabel( const rtl::Reference< ::chart::Diagram > & xDiagram )
 {
-    return !DiagramHelper::isCategoryDiagram(xDiagram);
+    return !xDiagram->isCategory();
 }
 
 } // anonymous namespace
@@ -286,7 +286,7 @@ void DataBrowserModel::insertDataSeries( sal_Int32 nAfterColumnIndex )
         nAfterColumnIndex = getCategoryColumnCount()-1;
 
     sal_Int32 nStartCol = 0;
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram(m_xChartDocument);
+    rtl::Reference< Diagram > xDiagram = m_xChartDocument->getFirstChartDiagram();
     rtl::Reference<ChartType> xChartType;
     rtl::Reference<DataSeries> xSeries;
     if (o3tl::make_unsigned(nAfterColumnIndex) < m_aColumns.size())
@@ -297,7 +297,7 @@ void DataBrowserModel::insertDataSeries( sal_Int32 nAfterColumnIndex )
     if( xSeries.is())
     {
         // Use the chart type of the currently selected data series.
-        xChartType = DiagramHelper::getChartTypeOfSeries( xDiagram, xSeries );
+        xChartType = xDiagram->getChartTypeOfSeries( xSeries );
 
         // Find the corresponding header and determine the last column of this
         // data series.
@@ -314,7 +314,7 @@ void DataBrowserModel::insertDataSeries( sal_Int32 nAfterColumnIndex )
     else
     {
         // No data series at specified column position. Use the first chart type.
-        xChartType = DiagramHelper::getChartTypeByIndex( xDiagram, 0 );
+        xChartType = xDiagram->getChartTypeByIndex( 0 );
         nStartCol = nAfterColumnIndex;
     }
 
@@ -460,7 +460,7 @@ void DataBrowserModel::removeDataSeriesOrComplexCategoryLevel( sal_Int32 nAtColu
     // Collect all the remaining data sequences in the same chart type. The
     // deleted data series is already gone by this point.
     std::vector<uno::Reference<chart2::data::XLabeledDataSequence> > aAllDataSeqs =
-        DataSeriesHelper::getAllDataSequences(xSeriesCnt->getDataSeries());
+        DataSeriesHelper::getAllDataSequences(xSeriesCnt->getDataSeries2());
 
     // Check if the sequences to be deleted are still referenced by any of
     // the other data series.  If not, mark them for deletion.
@@ -749,14 +749,14 @@ void DataBrowserModel::updateFromModel()
     m_aColumns.clear();
     m_aHeaders.clear();
 
-    rtl::Reference< Diagram > xDiagram( ChartModelHelper::findDiagram( m_xChartDocument ));
+    rtl::Reference< Diagram > xDiagram( m_xChartDocument->getFirstChartDiagram());
     if( !xDiagram.is())
         return;
 
     // set template at DialogModel
     rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager = m_xChartDocument->getTypeManager();
-    DiagramHelper::tTemplateWithServiceName aTemplateAndService =
-        DiagramHelper::getTemplateForDiagram( xDiagram, xChartTypeManager );
+    Diagram::tTemplateWithServiceName aTemplateAndService =
+        xDiagram->getTemplate( xChartTypeManager );
     if( aTemplateAndService.xChartTypeTemplate.is())
         m_apDialogModel->setTemplate( aTemplateAndService.xChartTypeTemplate );
 
@@ -888,7 +888,7 @@ void DataBrowserModel::updateFromModel()
 }
 
 void DataBrowserModel::addErrorBarRanges(
-    const Reference< chart2::XDataSeries > & xDataSeries,
+    const rtl::Reference< DataSeries > & xDataSeries,
     sal_Int32 nNumberFormatKey,
     sal_Int32 & rInOutSequenceIndex,
     sal_Int32 & rInOutHeaderEnd, bool bYError )
@@ -918,9 +918,7 @@ void DataBrowserModel::addErrorBarRanges(
 
         for (uno::Reference<chart2::data::XLabeledDataSequence> const & rDataSequence : aSequences)
         {
-            rtl::Reference<DataSeries> pDataSeries = dynamic_cast<DataSeries*>(xDataSeries.get());
-            assert(pDataSeries || !xDataSeries);
-            m_aColumns.emplace_back(pDataSeries, lcl_getUIRoleName(rDataSequence),
+            m_aColumns.emplace_back(xDataSeries, lcl_getUIRoleName(rDataSequence),
                                              rDataSequence, NUMBER, nNumberFormatKey);
             ++rInOutSequenceIndex;
             ++rInOutHeaderEnd;

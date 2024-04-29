@@ -22,7 +22,6 @@
 #include <formatflysplit.hxx>
 #include <view.hxx>
 #include <cmdid.h>
-#include <frameformats.hxx>
 
 namespace
 {
@@ -57,7 +56,7 @@ CPPUNIT_TEST_FIXTURE(Test, testDeleteSections)
         "value": "ZOTERO_BIBL"
     }
 }
-)json");
+)json"_ostr);
     aArgs = comphelper::containerToSequence(aArgsVec);
     dispatchCommand(mxComponent, ".uno:DeleteSections", aArgs);
 
@@ -81,8 +80,8 @@ CPPUNIT_TEST_FIXTURE(Test, testSplitFlyFootnoteUI)
     aMgr.InsertFlyFrame(eAnchor, aMgr.GetPos(), aMgr.GetSize());
     pWrtShell->EndAllAction();
     pWrtShell->StartAllAction();
-    SwFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
-    SwFrameFormat* pFly = rFlys[0];
+    sw::FrameFormats<sw::SpzFrameFormat*>& rFlys = *pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormat* pFly = rFlys[0];
     {
         SwAttrSet aSet(pFly->GetAttrSet());
         aSet.Put(SwFormatFlySplit(true));
@@ -97,7 +96,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSplitFlyFootnoteUI)
     // When checking if we can insert a footnote inside the split fly:
     SwView& rView = pWrtShell->GetView();
     std::unique_ptr<SfxPoolItem> pItem;
-    SfxItemState eState = rView.GetViewFrame()->GetBindings().QueryState(FN_INSERT_FOOTNOTE, pItem);
+    SfxItemState eState = rView.GetViewFrame().GetBindings().QueryState(FN_INSERT_FOOTNOTE, pItem);
 
     // Then make sure that the insertion is allowed:
     // Without the accompanying fix in place, this test would have failed with:

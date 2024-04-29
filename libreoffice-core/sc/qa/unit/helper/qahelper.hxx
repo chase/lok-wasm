@@ -92,7 +92,7 @@ inline std::string print(const ScAddress& rAddr)
 /**
  * Temporarily set formula grammar.
  */
-class FormulaGrammarSwitch
+class SCQAHELPER_DLLPUBLIC FormulaGrammarSwitch
 {
     ScDocument* mpDoc;
     formula::FormulaGrammar::Grammar meOldGrammar;
@@ -156,14 +156,19 @@ public:
 
     void createScDoc(const char* pName = nullptr, const char* pPassword = nullptr, bool bCheckErrorCode = true);
     ScDocument* getScDoc();
+    ScDocument* getScDoc2();
     ScDocShell* getScDocShell();
     ScTabViewShell* getViewShell();
     void miscRowHeightsTest( TestParam const * aTestValues, unsigned int numElems);
 
+    void enableOpenCL();
+    void disableOpenCL();
+    void initTestEnv(std::u16string_view fileName);
+
     void testFile(const OUString& aFileName, ScDocument& rDoc, SCTAB nTab, StringType aStringFormat = StringType::StringValue);
 
     //need own handler because conditional formatting strings must be generated
-    void testCondFile(const OUString& aFileName, ScDocument* pDoc, SCTAB nTab);
+    void testCondFile(const OUString& aFileName, ScDocument* pDoc, SCTAB nTab, bool bCommaAsDelimiter = true);
 
     const SdrOle2Obj* getSingleOleObject(ScDocument& rDoc, sal_uInt16 nPage);
 
@@ -172,6 +177,13 @@ public:
     ScRangeList getChartRanges(ScDocument& rDoc, const SdrOle2Obj& rChartObj);
 
     void testFormats(ScDocument* pDoc,std::u16string_view sFormat);
+
+    void goToCell(const OUString& rCell);
+    void typeString(const std::u16string_view& rStr);
+    void insertStringToCell(const OUString& rCell, const std::u16string_view& rStr);
+    void insertArrayToCell(const OUString& rCell, const std::u16string_view& rStr);
+    void insertNewSheet(ScDocument& rDoc);
+    void executeAutoSum();
 
 private:
     // Why is this here and not in osl, and using the already existing file

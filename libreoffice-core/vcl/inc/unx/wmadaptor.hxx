@@ -17,15 +17,13 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_WMADAPTOR_HXX
-#define INCLUDED_VCL_INC_UNX_WMADAPTOR_HXX
+#pragma once
 
 #include <rtl/ustring.hxx>
 #include <tools/gen.hxx>
 
 #include <X11/Xlib.h>
 
-#include <vclpluginapi.h>
 #include "salframe.h"
 #include <vector>
 
@@ -131,7 +129,7 @@ protected:
     Atom                    m_aWMAtoms[ NetAtomMax];
     int                     m_nDesktops;
     bool                    m_bEqualWorkAreas;
-    ::std::vector< tools::Rectangle >
+    ::std::vector< AbsoluteScreenPixelRectangle >
                             m_aWMWorkAreas;
     bool                    m_bEnableAlwaysOnTopWorks;
     bool                    m_bLegacyPartialFullscreen;
@@ -178,7 +176,7 @@ public:
     /*
      *  gets the specified workarea
      */
-    const tools::Rectangle& getWorkArea( int n ) const
+    const AbsoluteScreenPixelRectangle& getWorkArea( int n ) const
     { return m_aWMWorkAreas[n]; }
 
     /*
@@ -290,7 +288,5 @@ public:
 };
 
 } // namespace
-
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

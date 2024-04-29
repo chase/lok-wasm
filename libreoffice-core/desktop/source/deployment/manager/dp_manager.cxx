@@ -251,7 +251,7 @@ void PackageManagerImpl::initActivationLayer(
                             ucbhelper::Content remFileContent(
                                 url + "removed", Reference<XCommandEnvironment>(), m_xComponentContext);
                             std::vector<sal_Int8> data = dp_misc::readFile(remFileContent);
-                            OString osData(reinterpret_cast<const char*>(data.data()),
+                            std::string_view osData(reinterpret_cast<const char*>(data.data()),
                                                   data.size());
                             OUString sData = OStringToOUString(
                                 osData, RTL_TEXTENCODING_UTF8);
@@ -791,7 +791,7 @@ Reference<deployment::XPackage> PackageManagerImpl::addPackage(
             {
                 OUString const id = dp_misc::getIdentifier( xPackage );
 
-                ::osl::MutexGuard g(m_addMutex);
+                std::unique_lock g(m_addMutex);
                 if (isInstalled(xPackage))
                 {
                     //Do not guard the complete function with the getMutex
@@ -941,17 +941,16 @@ void PackageManagerImpl::removePackage(
 
 OUString PackageManagerImpl::getDeployPath( ActivePackages::Data const & data )
 {
-    OUStringBuffer buf;
-    buf.append( data.temporaryName );
+    OUStringBuffer buf( data.temporaryName );
     //The bundled extensions are not contained in an additional folder
     //with a unique name. data.temporaryName contains already the
     //UTF8 encoded folder name. See PackageManagerImpl::synchronize
     if (m_context != "bundled")
     {
-        buf.append( "_/" );
-        buf.append( ::rtl::Uri::encode( data.fileName, rtl_UriCharClassPchar,
-                                    rtl_UriEncodeIgnoreEscapes,
-                                    RTL_TEXTENCODING_UTF8 ) );
+        buf.append( "_/"
+            + ::rtl::Uri::encode( data.fileName, rtl_UriCharClassPchar,
+                                  rtl_UriEncodeIgnoreEscapes,
+                                  RTL_TEXTENCODING_UTF8 ) );
     }
     return makeURL( m_activePackages, buf.makeStringAndClear() );
 }
@@ -982,7 +981,7 @@ Reference<deployment::XPackage> PackageManagerImpl::getDeployedPackage_(
         INetContentTypeParameterList params;
         if (INetContentTypes::parse( data.mediaType, type, subType, &params ))
         {
-            auto const iter = params.find(OString("platform"));
+            auto const iter = params.find("platform"_ostr);
             if (iter != params.end() && !platform_fits(iter->second.m_sValue))
                 throw lang::IllegalArgumentException(
                     DpResId(RID_STR_NO_SUCH_PACKAGE) + id,

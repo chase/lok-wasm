@@ -595,19 +595,28 @@ void ScConditionEntry::UpdateDeleteTab( sc::RefUpdateDeleteTabContext& rCxt )
     StartListening();
 }
 
-void ScConditionEntry::UpdateMoveTab( sc::RefUpdateMoveTabContext& rCxt )
+void ScConditionEntry::UpdateMoveTab(sc::RefUpdateMoveTabContext& rCxt)
 {
+    sc::RefUpdateResult aResFinal;
+    aResFinal.mnTab = aSrcPos.Tab();
     if (pFormula1)
     {
-        pFormula1->AdjustReferenceOnMovedTab(rCxt, aSrcPos);
+        sc::RefUpdateResult aRes = pFormula1->AdjustReferenceOnMovedTab(rCxt, aSrcPos);
+        if (aRes.mbValueChanged)
+            aResFinal.mnTab = aRes.mnTab;
         pFCell1.reset();
     }
 
     if (pFormula2)
     {
-        pFormula2->AdjustReferenceOnMovedTab(rCxt, aSrcPos);
+        sc::RefUpdateResult aRes = pFormula2->AdjustReferenceOnMovedTab(rCxt, aSrcPos);
+        if (aRes.mbValueChanged)
+            aResFinal.mnTab = aRes.mnTab;
         pFCell2.reset();
     }
+
+    if (aResFinal.mnTab != aSrcPos.Tab())
+        aSrcPos.SetTab(aResFinal.mnTab);
 
     StartListening();
 }

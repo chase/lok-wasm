@@ -27,12 +27,12 @@ using namespace ::com::sun::star;
 
 #define IUL 6
 
-constexpr OUStringLiteral IU0 = u".uno:Save";
-constexpr OUStringLiteral IU1 = u".uno:SaveAll";
-constexpr OUStringLiteral IU2 = u".uno:CloseDoc";
-constexpr OUStringLiteral IU3 = u".uno:CloseWin";
-constexpr OUStringLiteral IU4 = u".uno:CloseFrame";
-constexpr OUStringLiteral IU5 = u".uno:SaveAs";
+constexpr OUString IU0 = u".uno:Save"_ustr;
+constexpr OUString IU1 = u".uno:SaveAll"_ustr;
+constexpr OUString IU2 = u".uno:CloseDoc"_ustr;
+constexpr OUString IU3 = u".uno:CloseWin"_ustr;
+constexpr OUString IU4 = u".uno:CloseFrame"_ustr;
+constexpr OUString IU5 = u".uno:SaveAs"_ustr;
 const uno::Sequence< OUString > Interceptor::m_aInterceptedURL{ IU0, IU1, IU2, IU3, IU4, IU5};
 
 
@@ -85,7 +85,7 @@ Interceptor::Interceptor(
     DocumentHolder* pDocH,
     bool bLink )
     : m_xOleAccess( xOleAccess ),
-      m_xDocHLocker( static_cast< ::cppu::OWeakObject* >( pDocH ) ),
+      m_xDocHLocker( cppu::getXWeak( pDocH ) ),
       m_pDocH(pDocH),
       m_pDisposeEventListeners(nullptr),
       m_pStatCL(nullptr),

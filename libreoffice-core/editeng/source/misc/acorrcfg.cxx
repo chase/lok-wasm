@@ -96,7 +96,7 @@ static void scanAutoCorrectDirForLanguageTags( const OUString& rURL )
                     }
                     catch (const uno::Exception&)
                     {
-                        TOOLS_WARN_EXCEPTION("editeng", "Unable to get directory entry.");
+                        TOOLS_WARN_EXCEPTION("editeng", "Unable to get a directory entry from '" << rURL << "'");
                     }
                 }
             }
@@ -104,7 +104,7 @@ static void scanAutoCorrectDirForLanguageTags( const OUString& rURL )
     }
     catch (const uno::Exception&)
     {
-        TOOLS_WARN_EXCEPTION("editeng", "Unable to iterate directory.");
+        TOOLS_WARN_EXCEPTION("editeng", "Unable to iterate directory '" << rURL << "'");
     }
 }
 
@@ -184,9 +184,10 @@ Sequence<OUString>  SvxBaseAutoCorrCfg::GetPropertyNames()
         "DoubleQuoteAtEnd",                     // 16
         "CorrectAccidentalCapsLock",            // 17
         "TransliterateRTL",                     // 18
-        "ChangeAngleQuotes"                     // 19
+        "ChangeAngleQuotes",                    // 19
+        "SetDOIAttribute",                      // 20
     };
-    const int nCount = 20;
+    const int nCount = 21;
     Sequence<OUString> aNames(nCount);
     OUString* pNames = aNames.getArray();
     for(int i = 0; i < nCount; i++)
@@ -297,6 +298,10 @@ void SvxBaseAutoCorrCfg::Load(bool bInit)
                     if(*o3tl::doAccess<bool>(pValues[nProp]))
                         nFlags |= ACFlags::ChgAngleQuotes;
                 break;//"ChangeAngleQuotes"
+                case  20:
+                    if(*o3tl::doAccess<bool>(pValues[nProp]))
+                        nFlags |= ACFlags::SetDOIAttr;
+                break;//"SetDOIAttr",
             }
         }
     }
@@ -352,9 +357,10 @@ void SvxBaseAutoCorrCfg::ImplCommit()
             // "CorrectAccidentalCapsLock"
          css::uno::Any(bool(nFlags & ACFlags::TransliterateRTL)),
             // "TransliterateRTL"
-        css::uno::Any(bool(nFlags & ACFlags::ChgAngleQuotes))});
+         css::uno::Any(bool(nFlags & ACFlags::ChgAngleQuotes)),
             // "ChangeAngleQuotes"
-
+         css::uno::Any(bool(nFlags & ACFlags::SetDOIAttr)), // "SetDOIAttribute"
+        });
 }
 
 void SvxBaseAutoCorrCfg::Notify( const Sequence<OUString>& /* aPropertyNames */)
@@ -413,8 +419,10 @@ Sequence<OUString>  SvxSwAutoCorrCfg::GetPropertyNames()
         "Format/ByInput/ApplyNumbering/SpecialCharacter/FontFamily",    //44
         "Format/ByInput/ApplyNumbering/SpecialCharacter/FontCharset",   //45
         "Format/ByInput/ApplyNumbering/SpecialCharacter/FontPitch",     //46
+        "Format/Option/SetDOIAttribute",                                //47
+        "Format/ByInput/ApplyBulletsAfterSpace",                        //48
     };
-    const int nCount = 47;
+    const int nCount = 49;
     Sequence<OUString> aNames(nCount);
     OUString* pNames = aNames.getArray();
     for(int i = 0; i < nCount; i++)
@@ -518,7 +526,7 @@ void SvxSwAutoCorrCfg::Load(bool bInit)
                 {
                     sal_Int32 nVal = 0; pValues[nProp] >>= nVal;
                     rSwFlags.nAutoCmpltListLen =
-                        sal::static_int_cast< sal_uInt16 >(nVal);
+                        sal::static_int_cast< sal_uInt32 >(nVal);
                 }
                 break; // "Completion/MaxListLen",
                 case  36: rSwFlags.bAutoCmpltCollectWords = *o3tl::doAccess<bool>(pValues[nProp]); break; // "Completion/CollectWords",
@@ -564,6 +572,8 @@ void SvxSwAutoCorrCfg::Load(bool bInit)
                     rSwFlags.aByInputBulletFont.SetPitch(FontPitch(nVal));
                 }
                 break;// "Format/ByInput/ApplyNumbering/SpecialCharacter/FontPitch",
+                case   47: rSwFlags.bSetDOIAttr = *o3tl::doAccess<bool>(pValues[nProp]); break; // "Format/Option/SetDOIAttribute",
+                case 48 : rSwFlags.bSetNumRuleAfterSpace = *o3tl::doAccess<bool>(pValues[nProp]); break; // "Format/ByInput/ApplyNumberingAfterSpace",
             }
         }
     }
@@ -665,8 +675,12 @@ void SvxSwAutoCorrCfg::ImplCommit()
             // "Format/ByInput/ApplyNumbering/SpecialCharacter/FontFamily"
          css::uno::Any(sal_Int32(rSwFlags.aByInputBulletFont.GetCharSet())),
             // "Format/ByInput/ApplyNumbering/SpecialCharacter/FontCharset"
-         css::uno::Any(sal_Int32(rSwFlags.aByInputBulletFont.GetPitch()))});
+         css::uno::Any(sal_Int32(rSwFlags.aByInputBulletFont.GetPitch())),
             // "Format/ByInput/ApplyNumbering/SpecialCharacter/FontPitch"
+         css::uno::Any(rSwFlags.bSetDOIAttr),
+         css::uno::Any(rSwFlags.bSetNumRuleAfterSpace), // "Format/ByInput/ApplyNumberingAfterSpace"
+        });
+            // "Format/Option/SetDOIAttribute"
 }
 
 void SvxSwAutoCorrCfg::Notify( const Sequence<OUString>& /* aPropertyNames */ )

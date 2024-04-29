@@ -47,9 +47,12 @@
 #include <fldbas.hxx>
 #include <frmatr.hxx>
 #include <frmtool.hxx>
+#include "../text/inftxt.hxx"
+#include "../text/itrpaint.hxx"
 #include <ndtxt.hxx>
 #include <undobj.hxx>
 #include <flyfrms.hxx>
+#include <sectfrm.hxx>
 
 #include <swselectionlist.hxx>
 #include <comphelper/lok.hxx>
@@ -68,8 +71,9 @@ namespace {
             const SwVirtFlyDrawObj* pObj =
                                 static_cast<const SwVirtFlyDrawObj*>(aIter());
             const SwAnchoredObject* pAnchoredObj = GetUserCall( aIter() )->GetAnchoredObj( aIter() );
-            const SwFormatSurround& rSurround = pAnchoredObj->GetFrameFormat().GetSurround();
-            const SvxOpaqueItem& rOpaque = pAnchoredObj->GetFrameFormat().GetOpaque();
+            const SwFrameFormat* pObjFormat = pAnchoredObj->GetFrameFormat();
+            const SwFormatSurround& rSurround = pObjFormat->GetSurround();
+            const SvxOpaqueItem& rOpaque = pObjFormat->GetOpaque();
             bool bInBackground = ( rSurround.GetSurround() == css::text::WrapTextMode_THROUGH ) && !rOpaque.GetValue();
 
             bool bBackgroundMatches = bInBackground == bSearchBackground;
@@ -185,8 +189,7 @@ bool SwLayoutFrame::GetModelPositionForViewPoint( SwPosition *pPos, Point &rPoin
     return bRet;
 }
 
-/** Searches the page containing the searched point. */
-
+/** Searches for the page containing the searched point. */
 bool SwPageFrame::GetModelPositionForViewPoint( SwPosition *pPos, Point &rPoint,
                              SwCursorMoveState* pCMS, bool bTestBackground ) const
 {
@@ -826,8 +829,7 @@ static bool lcl_UpDown( SwPaM *pPam, const SwContentFrame *pStart,
         //If I'm in the DocumentBody, I want to stay there.
         if ( pStart->IsInDocBody() )
         {
-            while ( pCnt && (!pCnt->IsInDocBody() ||
-                             (pCnt->IsTextFrame() && static_cast<const SwTextFrame*>(pCnt)->IsHiddenNow())))
+            while (pCnt && (!pCnt->IsInDocBody() || pCnt->IsHiddenNow()))
             {
                 pCnt = (*fnNxtPrv)( pCnt );
                 pCnt = ::lcl_MissProtectedFrames( pCnt, fnNxtPrv, true, bInReadOnly, bTableSel );
@@ -838,8 +840,7 @@ static bool lcl_UpDown( SwPaM *pPam, const SwContentFrame *pStart,
         //case of necessity.
         else if ( pStart->IsInFootnote() )
         {
-            while ( pCnt && (!pCnt->IsInFootnote() ||
-                            (pCnt->IsTextFrame() && static_cast<const SwTextFrame*>(pCnt)->IsHiddenNow())))
+            while (pCnt && (!pCnt->IsInFootnote() || pCnt->IsHiddenNow()))
             {
                 pCnt = (*fnNxtPrv)( pCnt );
                 pCnt = ::lcl_MissProtectedFrames( pCnt, fnNxtPrv, true, bInReadOnly, bTableSel );
@@ -849,7 +850,7 @@ static bool lcl_UpDown( SwPaM *pPam, const SwContentFrame *pStart,
         //In Flys we can go ahead blindly as long as we find a Content.
         else if ( pStart->IsInFly() )
         {
-            if ( pCnt && pCnt->IsTextFrame() && static_cast<const SwTextFrame*>(pCnt)->IsHiddenNow() )
+            if (pCnt && pCnt->IsHiddenNow())
             {
                 pCnt = (*fnNxtPrv)( pCnt );
                 pCnt = ::lcl_MissProtectedFrames( pCnt, fnNxtPrv, true, bInReadOnly, bTableSel );
@@ -873,7 +874,7 @@ static bool lcl_UpDown( SwPaM *pPam, const SwContentFrame *pStart,
             }
             if ( !bSame )
                 pCnt = nullptr;
-            else if (pCnt->IsTextFrame() && static_cast<const SwTextFrame*>(pCnt)->IsHiddenNow()) // i73332
+            else if (pCnt->IsHiddenNow()) // i73332
             {
                 pCnt = (*fnNxtPrv)( pCnt );
                 pCnt = ::lcl_MissProtectedFrames( pCnt, fnNxtPrv, true, bInReadOnly, bTableSel );
@@ -956,8 +957,7 @@ static bool lcl_UpDown( SwPaM *pPam, const SwContentFrame *pStart,
             }
         }
 
-    } while ( !bEnd ||
-              (pCnt && pCnt->IsTextFrame() && static_cast<const SwTextFrame*>(pCnt)->IsHiddenNow()));
+    } while (!bEnd || (pCnt && pCnt->IsHiddenNow()));
 
     if (pCnt == nullptr)
     {
@@ -1244,7 +1244,7 @@ const SwContentFrame *SwLayoutFrame::GetContentPos( Point& rPoint,
                 if ( pComp != pContent )
                     continue;
 
-                if ( !pContent->IsTextFrame() || !static_cast<const SwTextFrame*>(pContent)->IsHiddenNow() )
+                if (!pContent->IsHiddenNow())
                 {
                     SwRect aContentFrame( pContent->UnionFrame() );
                     if ( aContentFrame.Contains( rPoint ) )
@@ -1725,6 +1725,15 @@ bool SwFrame::IsProtected() const
     return false;
 }
 
+// virtual
+bool SwFrame::IsHiddenNow() const
+{
+    if (const auto* pSectFrame = FindSctFrame())
+        return pSectFrame->IsHiddenNow();
+
+    return false;
+}
+
 /** @return the physical page number */
 sal_uInt16 SwFrame::GetPhyPageNum() const
 {
@@ -1862,15 +1871,15 @@ sal_uInt16 SwFrame::GetVirtPageNum() const
 
         if ( pDesc->GetNumOffset() && pDesc->GetDefinedIn() )
         {
-            const sw::BroadcastingModify *pMod = pDesc->GetDefinedIn();
-            SwVirtPageNumInfo aInfo( pPage );
-            pMod->GetInfo( aInfo );
-            if ( aInfo.GetPage() )
+            auto pMod = const_cast<sw::BroadcastingModify*>(pDesc->GetDefinedIn());
+            sw::VirtPageNumHint aHint(pPage);
+            pMod->CallSwClientNotify(aHint);
+            if(aHint.GetPage())
             {
-                if( !pVirtPage || aInfo.GetPage()->GetPhyPageNum() > pVirtPage->GetPhyPageNum() )
+                if(!pVirtPage || aHint.GetPage()->GetPhyPageNum() > pVirtPage->GetPhyPageNum())
                 {
-                    pVirtPage = aInfo.GetPage();
-                    pFrame = aInfo.GetFrame();
+                    pVirtPage = aHint.GetPage();
+                    pFrame = aHint.GetFrame();
                 }
             }
         }
@@ -2016,30 +2025,31 @@ static void Add( SwRegionRects& rRegion, const SwRect& rRect )
 }
 
 /*
- * The following situations can happen:
- *  1. Start and end lie in one screen-row and in the same node
+ * The following situations can happen (simplified version, before
+ * CJK/CTL features were added):
+ *  1. Start and end in same line of text and in the same frame
  *     -> one rectangle out of start and end; and we're okay
- *  2. Start and end lie in one frame (therefore in the same node!)
+ *  2. Start and end in same frame
  *     -> expand start to the right, end to the left and if more than two
- *        screen-rows are involved - calculate the in-between
- *  3. Start and end lie in different frames
+ *        lines of text are involved - calculate the in-between area
+ *  3. Start and end in different frames
  *     -> expand start to the right until frame-end, calculate Rect
  *        expand end to the left until frame-start, calculate Rect
  *        and if more than two frames are involved add the PrtArea of all
  *        frames which lie in between
  *
- * Big reorganization because of the FlyFrame - those need to be locked out.
+ * Big reorganization because of FlyFrame - those need to be excluded.
  * Exceptions:  - The Fly in which the selection took place (if it took place
  *                 in a Fly)
- *              - The Flys which are underrun by the text
+ *              - The Flys which are below the text (in z-order)
  *              - The Flys which are anchored to somewhere inside the selection.
  * Functioning: First a SwRegion with a root gets initialized.
- *              Out of the region the inverted sections are cut out. The
+ *              Out of the region the selected areas are cut out. The
  *              section gets compressed and finally inverted and thereby the
- *              inverted rectangles are available.
- *              In the end the Flys are cut out of the section.
+ *              rectangles are available for highlighting.
+ *              In the end the Flys are cut out of the region.
  */
-void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
+void SwRootFrame::CalcFrameRects(SwShellCursor const& rCursor, SwRects & rRects, RectsMode const eMode)
 {
     auto [pStartPos, pEndPos] = rCursor.StartEnd(); // SwPosition*
 
@@ -2049,7 +2059,6 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
     if (pSh)
         bIgnoreVisArea = pSh->GetViewOptions()->IsPDFExport() || comphelper::LibreOfficeKit::isActive();
 
-    // #i12836# enhanced pdf
     SwRegionRects aRegion( !bIgnoreVisArea ?
                            pSh->VisArea() :
                            getFrameArea() );
@@ -2078,7 +2087,7 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
     //tdf#119224 start and end are expected to exist for the scope of this function
     SwFrameDeleteGuard aStartFrameGuard(pStartFrame), aEndFrameGuard(pEndFrame);
 
-    //Do not subtract the FlyFrames in which selected Frames lie.
+    // Do not subtract FlyFrames that contain selected Frames.
     SwSortedObjs aSortObjs;
     if ( pStartFrame->IsInFly() )
     {
@@ -2094,7 +2103,7 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
     }
 
     // if a selection which is not allowed exists, we correct what is not
-    // allowed (header/footer/table-headline) for two pages.
+    // allowed (header/footer/table-headline start/end on different pages).
     do {    // middle check loop
         const SwLayoutFrame* pSttLFrame = pStartFrame->GetUpper();
         const SwFrameType cHdFtTableHd = SwFrameType::Header | SwFrameType::Footer | SwFrameType::Tab;
@@ -2400,7 +2409,7 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
               MultiPortionType::ROT_270 == pSt2Pos->nMultiType ||
               MultiPortionType::ROT_90  == pSt2Pos->nMultiType ) &&
             pSt2Pos->aPortion == pEnd2Pos->aPortion;
-        //case 1: (Same frame and same row)
+        // case 1: (Same frame and same line)
         if( bSameRotatedOrBidi ||
             aRectFnSet.GetTop(aStRect) == aRectFnSet.GetTop(aEndRect) )
         {
@@ -2423,9 +2432,8 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
             }
 
             SwRect aTmp( aTmpSt, aTmpEnd );
-            // Bug 34888: If content is selected which doesn't take space
-            //            away (i.e. PostIts, RefMarks, TOXMarks), then at
-            //            least set the width of the Cursor.
+            // If content is selected which doesn't take space (e.g. PostIts,
+            // RefMarks, TOXMarks), then at least set the width of the Cursor.
             if( 1 == aRectFnSet.GetWidth(aTmp) &&
                 pStartPos->GetContentIndex() !=
                 pEndPos->GetContentIndex() )
@@ -2467,7 +2475,7 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
             Sub( aRegion, aSubRect );
 
             //If there's at least a twips between start- and endline,
-            //so the whole area between will be added.
+            //the whole area between will be added.
             SwTwips aTmpBottom = aRectFnSet.GetBottom(aStRect);
             SwTwips aTmpTop = aRectFnSet.GetTop(aEndRect);
             if( aTmpBottom != aTmpTop )
@@ -2565,7 +2573,7 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
         if ( aPrvRect.HasArea() )
             Sub( aRegion, aPrvRect );
 
-        //At least the endframe...
+        // At last the endframe...
         aRectFnSet.Refresh(pEndFrame);
         nTmpTwips = aRectFnSet.GetTop(aEndRect);
         if( aRectFnSet.GetTop(aEndFrame) != nTmpTwips )
@@ -2586,16 +2594,64 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
     pSt2Pos.reset();
     pEnd2Pos.reset();
 
-    // Cut out Flys during loop. We don't cut out Flys when:
-    // - the Lower is StartFrame/EndFrame (FlyInCnt and all other Flys which again
-    //   sit in it)
-    // - if in the Z-order we have Flys above those in which the StartFrame is
-    //   placed
-    // - if they are anchored to inside the selection and thus part of it
+    // Cut out Flys in the foreground. We don't cut out a Fly when:
+    // - it's a Lower of StartFrame/EndFrame (FLY_AS_CHAR and all other Flys
+    //   which sit in it recursively)
+    // - it's lower in the Z-order than the fly that contains the StartFrame
+    //   (i.e. the one with the StartFrame is painted on top of it)
+    // - it's anchored to inside the selection and thus part of it
     const SwPageFrame *pPage      = pStartFrame->FindPageFrame();
     const SwPageFrame *pEndPage   = pEndFrame->FindPageFrame();
 
-    while ( pPage )
+    // for link rectangles: just remove all the fly portions - this prevents
+    // splitting of portions vertically (causes spurious extra PDF annotations)
+    if (eMode == RectsMode::NoAnchoredFlys)
+    {
+        for (SwContentFrame * pFrame = pStartFrame; ; pFrame = pFrame->GetFollow())
+        {
+            assert(pFrame->IsTextFrame());
+            SwTextGridItem const*const pGrid(GetGridItem(pFrame->FindPageFrame()));
+            SwTextPaintInfo info(static_cast<SwTextFrame*>(pFrame), pFrame->FindPageFrame()->getFrameArea());
+            SwTextPainter painter(static_cast<SwTextFrame*>(pFrame), &info);
+            // because nothing outside the start/end has been added, it doesn't
+            // matter to match exactly the start/end, subtracting outside is no-op
+            if (pFrame == pStartFrame)
+            {
+                painter.CharToLine(static_cast<SwTextFrame*>(pFrame)->MapModelToViewPos(*pStartPos));
+            }
+            do
+            {
+                info.SetPos(painter.GetTopLeft());
+                bool const bAdjustBaseLine(
+                    painter.GetLineInfo().HasSpecialAlign(pFrame->IsVertical())
+                    || nullptr != pGrid || painter.GetCurr()->GetHangingBaseline());
+                SwTwips nAscent, nHeight;
+                painter.CalcAscentAndHeight(nAscent, nHeight);
+                SwTwips const nOldY(info.Y());
+                for (SwLinePortion const* pLP = painter.GetCurr()->GetFirstPortion();
+                        pLP; pLP = pLP->GetNextPortion())
+                {
+                    if (pLP->IsFlyPortion())
+                    {
+                        info.Y(info.Y() + (bAdjustBaseLine
+                                ? painter.AdjustBaseLine(*painter.GetCurr(), pLP)
+                                : nAscent));
+                        SwRect flyPortion;
+                        info.CalcRect(*pLP, &flyPortion);
+                        Sub(aRegion, flyPortion);
+                        info.Y(nOldY);
+                    }
+                    pLP->Move(info);
+                }
+            }
+            while (painter.Next());
+            if (pFrame == pEndFrame)
+            {
+                break;
+            }
+        }
+    }
+    else while (pPage)
     {
         if ( pPage->GetSortedObjs() )
         {
@@ -2607,7 +2663,7 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
                     continue;
                 const SwVirtFlyDrawObj* pObj = pFly->GetVirtDrawObj();
                 const SwFormatSurround &rSur = pFly->GetFormat()->GetSurround();
-                SwFormatAnchor const& rAnchor(pAnchoredObj->GetFrameFormat().GetAnchor());
+                SwFormatAnchor const& rAnchor(pAnchoredObj->GetFrameFormat()->GetAnchor());
                 const SwPosition* anchoredAt = rAnchor.GetContentAnchor();
                 bool inSelection = (
                             anchoredAt != nullptr
@@ -2615,7 +2671,7 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
                                 && IsDestroyFrameAnchoredAtChar(*anchoredAt, *pStartPos, *pEndPos))
                             || (rAnchor.GetAnchorId() == RndStdIds::FLY_AT_PARA
                                 && IsSelectFrameAnchoredAtPara(*anchoredAt, *pStartPos, *pEndPos))));
-                if( inSelection )
+                if (eMode != RectsMode::NoAnchoredFlys && inSelection)
                         Add( aRegion, pFly->getFrameArea() );
                 else if ( !pFly->IsAnLower( pStartFrame ) &&
                     (rSur.GetSurround() != css::text::WrapTextMode_THROUGH &&
@@ -2654,7 +2710,7 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
             pPage = static_cast<const SwPageFrame*>(pPage->GetNext());
     }
 
-    //Because it looks better, we close the DropCaps.
+    // Because it looks better, we cut out the DropCaps.
     SwRect aDropRect;
     if ( pStartFrame->IsTextFrame() )
     {
@@ -2667,7 +2723,7 @@ void SwRootFrame::CalcFrameRects(SwShellCursor &rCursor)
             Sub( aRegion, aDropRect );
     }
 
-    rCursor.assign( aRegion.begin(), aRegion.end() );
+    rRects.assign( aRegion.begin(), aRegion.end() );
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

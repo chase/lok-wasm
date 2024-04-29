@@ -64,6 +64,7 @@
 #include <com/sun/star/ui/dialogs/ExecutableDialogResults.hpp>
 #include <svx/svdpagv.hxx>
 #include <o3tl/temporary.hxx>
+#include <officecfg/Office/Common.hxx>
 
 #include <comphelper/lok.hxx>
 
@@ -82,7 +83,7 @@ void ScTabViewShell::ConnectObject( const SdrOle2Obj* pObj )
     if ( pClient )
         return;
 
-    pClient = new ScClient( this, pWin, GetScDrawView()->GetModel(), pObj );
+    pClient = new ScClient( this, pWin, &GetScDrawView()->GetModel(), pObj );
     ScViewData& rViewData = GetViewData();
     ScDocShell* pDocSh = rViewData.GetDocShell();
     ScDocument& rDoc = pDocSh->GetDocument();
@@ -159,7 +160,7 @@ void ScTabViewShell::ActivateObject(SdrOle2Obj* pObj, sal_Int32 nVerb)
 
     uno::Reference < embed::XEmbeddedObject > xObj = pObj->GetObjRef();
     vcl::Window* pWin = GetActiveWin();
-    ErrCode nErr = ERRCODE_NONE;
+    ErrCodeMsg nErr = ERRCODE_NONE;
     bool bErrorShown = false;
 
     {
@@ -169,12 +170,12 @@ void ScTabViewShell::ActivateObject(SdrOle2Obj* pObj, sal_Int32 nVerb)
         bool bNegativeX = comphelper::LibreOfficeKit::isActive() && rDoc.IsNegativePage(rViewData.GetTabNo());
         SfxInPlaceClient* pClient = FindIPClient( xObj, pWin );
         if ( !pClient )
-            pClient = new ScClient( this, pWin, GetScDrawView()->GetModel(), pObj );
+            pClient = new ScClient( this, pWin, &GetScDrawView()->GetModel(), pObj );
 
         if (bNegativeX)
             pClient->SetNegativeX(true);
 
-        if ( (sal_uInt32(nErr) & ERRCODE_ERROR_MASK) == 0 && xObj.is() )
+        if ( (sal_uInt32(nErr.GetCode()) & ERRCODE_ERROR_MASK) == 0 && xObj.is() )
         {
             tools::Rectangle aRect = pObj->GetLogicRect();
 
@@ -317,8 +318,17 @@ void ScTabViewShell::DeactivateOle()
         pClient->DeactivateObject();
 }
 
+void ScTabViewShell::SetInsertWizardUndoMark()
+{
+    assert(m_InsertWizardUndoMark == MARK_INVALID);
+    m_InsertWizardUndoMark = GetUndoManager()->MarkTopUndoAction();
+}
+
 IMPL_LINK( ScTabViewShell, DialogClosedHdl, css::ui::dialogs::DialogClosedEvent*, pEvent, void )
 {
+    assert(m_InsertWizardUndoMark != MARK_INVALID);
+    UndoStackMark nInsertWizardUndoMark = m_InsertWizardUndoMark;
+    m_InsertWizardUndoMark = MARK_INVALID;
     if( pEvent->DialogResult == ui::dialogs::ExecutableDialogResults::CANCEL )
     {
         ScTabView* pTabView = GetViewData().GetView();
@@ -331,8 +341,16 @@ IMPL_LINK( ScTabViewShell, DialogClosedHdl, css::ui::dialogs::DialogClosedEvent*
         DeactivateOle();
         pView->UnMarkAll();
 
-        rScDoc.GetUndoManager()->Undo();
-        rScDoc.GetUndoManager()->ClearRedo();
+        auto pUndoManager = rScDoc.GetUndoManager();
+        if (pUndoManager->GetRedoActionCount())
+        {
+            pUndoManager->RemoveMark(nInsertWizardUndoMark);
+        }
+        else
+        {
+            pUndoManager->UndoMark(nInsertWizardUndoMark);
+            pUndoManager->ClearRedo();
+        }
 
         // leave the draw shell
         SetDrawShell( false );
@@ -364,28 +382,28 @@ void ScTabViewShell::ExecDrawIns(SfxRequest& rReq)
 
     MakeDrawLayer();
 
-    SfxBindings& rBindings = GetViewFrame()->GetBindings();
+    SfxBindings& rBindings = GetViewFrame().GetBindings();
     ScTabView*   pTabView  = GetViewData().GetView();
     vcl::Window*      pWin      = pTabView->GetActiveWin();
     ScDrawView*  pView     = pTabView->GetScDrawView();
     ScDocShell*  pDocSh    = GetViewData().GetDocShell();
     ScDocument&  rDoc      = pDocSh->GetDocument();
-    SdrModel*    pDrModel  = pView->GetModel();
+    SdrModel& rModel = pView->GetModel();
 
     switch ( nSlot )
     {
         case SID_INSERT_GRAPHIC:
-            FuInsertGraphic(*this, pWin, pView, pDrModel, rReq);
+            FuInsertGraphic(*this, pWin, pView, &rModel, rReq);
             // shell is set in MarkListHasChanged
             break;
 
         case SID_INSERT_AVMEDIA:
-            FuInsertMedia(*this, pWin, pView, pDrModel, rReq);
+            FuInsertMedia(*this, pWin, pView, &rModel, rReq);
             // shell is set in MarkListHasChanged
             break;
 
         case SID_INSERT_DIAGRAM:
-            FuInsertChart(*this, pWin, pView, pDrModel, rReq, LINK( this, ScTabViewShell, DialogClosedHdl ));
+            FuInsertChart(*this, pWin, pView, &rModel, rReq, LINK( this, ScTabViewShell, DialogClosedHdl ));
             if (comphelper::LibreOfficeKit::isActive())
                 pDocSh->SetModified();
             break;
@@ -393,7 +411,7 @@ void ScTabViewShell::ExecDrawIns(SfxRequest& rReq)
         case SID_INSERT_OBJECT:
         case SID_INSERT_SMATH:
         case SID_INSERT_FLOATINGFRAME:
-            FuInsertOLE(*this, pWin, pView, pDrModel, rReq);
+            FuInsertOLE(*this, pWin, pView, &rModel, rReq);
             break;
 
         case SID_INSERT_SIGNATURELINE:
@@ -485,6 +503,15 @@ void ScTabViewShell::ExecDrawIns(SfxRequest& rReq)
         case SID_LINKS:
             {
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
+                if (officecfg::Office::Common::Security::Scripting::DisableActiveContent::get())
+                {
+                    std::unique_ptr<weld::MessageDialog> xError(Application::CreateMessageDialog(
+                        nullptr, VclMessageType::Warning, VclButtonsType::Ok,
+                        SvtResId(STR_WARNING_EXTERNAL_LINK_EDIT_DISABLED)));
+                    xError->run();
+                    break;
+                }
+
                 ScopedVclPtr<SfxAbstractLinksDialog> pDlg(pFact->CreateLinksDialog(pWin->GetFrameWeld(), rDoc.GetLinkManager()));
                 pDlg->Execute();
                 rBindings.Invalidate( nSlot );
@@ -548,7 +575,7 @@ void ScTabViewShell::ExecDrawIns(SfxRequest& rReq)
             break;
 
         case SID_FONTWORK_GALLERY_FLOATER:
-            svx::FontworkBar::execute(*pView, rReq, GetViewFrame()->GetBindings());
+            svx::FontworkBar::execute(*pView, rReq, GetViewFrame().GetBindings());
             rReq.Ignore();
             break;
     }
@@ -556,7 +583,7 @@ void ScTabViewShell::ExecDrawIns(SfxRequest& rReq)
 
 void ScTabViewShell::GetDrawInsState(SfxItemSet &rSet)
 {
-    bool bOle = GetViewFrame()->GetFrame().IsInPlace();
+    bool bOle = GetViewFrame().GetFrame().IsInPlace();
     bool bTabProt = GetViewData().GetDocument().IsTabProtected(GetViewData().GetTabNo());
     ScDocShell* pDocShell = GetViewData().GetDocShell();
     bool bShared = pDocShell && pDocShell->IsDocShared();
@@ -804,11 +831,11 @@ void ScTabViewShell::ExecuteUndo(SfxRequest& rReq)
                 if ( bLockPaint )
                     pDocSh->UnlockPaint();
 
-                GetViewFrame()->GetBindings().InvalidateAll(false);
+                GetViewFrame().GetBindings().InvalidateAll(false);
             }
             break;
 //      default:
-//          GetViewFrame()->ExecuteSlot( rReq );
+//          GetViewFrame().ExecuteSlot( rReq );
     }
 }
 
@@ -869,7 +896,7 @@ void ScTabViewShell::GetUndoState(SfxItemSet &rSet)
                 }
                 else
                     // get state from sfx view frame
-                    GetViewFrame()->GetSlotState( nWhich, nullptr, &rSet );
+                    GetViewFrame().GetSlotState( nWhich, nullptr, &rSet );
                 break;
             }
             case SID_REDO:
@@ -894,12 +921,12 @@ void ScTabViewShell::GetUndoState(SfxItemSet &rSet)
                 }
                 else
                     // get state from sfx view frame
-                    GetViewFrame()->GetSlotState( nWhich, nullptr, &rSet );
+                    GetViewFrame().GetSlotState( nWhich, nullptr, &rSet );
                 break;
             }
             default:
                 // get state from sfx view frame
-                GetViewFrame()->GetSlotState( nWhich, nullptr, &rSet );
+                GetViewFrame().GetSlotState( nWhich, nullptr, &rSet );
         }
 
         nWhich = aIter.NextWhich();

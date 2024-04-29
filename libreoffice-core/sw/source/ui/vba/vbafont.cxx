@@ -68,15 +68,15 @@ namespace {
 
 class UnderLineMapper
 {
-    ConstToConst MSO2OOO;
-    ConstToConst OOO2MSO;
+    ConstToConst m_MSO2OOO;
+    ConstToConst m_OOO2MSO;
 private:
     UnderLineMapper()
     {
         for ( auto const & index: UnderLineTable )
         {
-            MSO2OOO[ index.nMSOConst ] = index.nOOOConst;
-            OOO2MSO[ index.nOOOConst ] = index.nMSOConst;
+            m_MSO2OOO[ index.nMSOConst ] = index.nOOOConst;
+            m_OOO2MSO[ index.nOOOConst ] = index.nMSOConst;
         }
     }
 public:
@@ -94,16 +94,16 @@ public:
     /// @throws lang::IllegalArgumentException
     sal_Int32 getOOOFromMSO( sal_Int32 nMSOConst )
     {
-        ConstToConst::iterator it = MSO2OOO.find( nMSOConst );
-        if ( it == MSO2OOO.end() )
+        ConstToConst::iterator it = m_MSO2OOO.find( nMSOConst );
+        if ( it == m_MSO2OOO.end() )
             throw lang::IllegalArgumentException();
         return it->second;
     }
     /// @throws lang::IllegalArgumentException
     sal_Int32 getMSOFromOOO( sal_Int32 nOOOConst )
     {
-        ConstToConst::iterator it = OOO2MSO.find( nOOOConst );
-        if ( it == OOO2MSO.end() )
+        ConstToConst::iterator it = m_OOO2MSO.find( nOOOConst );
+        if ( it == m_OOO2MSO.end() )
             throw lang::IllegalArgumentException();
         return it->second;
     }
@@ -111,7 +111,8 @@ public:
 
 }
 
-SwVbaFont::SwVbaFont( const uno::Reference< XHelperInterface >& xParent, const uno::Reference< uno::XComponentContext >& xContext, const uno::Reference< container::XIndexAccess >& xPalette, uno::Reference< css::beans::XPropertySet > const & xPropertySet ) : SwVbaFont_BASE( xParent, xContext, xPalette, xPropertySet )
+SwVbaFont::SwVbaFont( const uno::Reference< XHelperInterface >& xParent, const uno::Reference< uno::XComponentContext >& xContext, const uno::Reference< container::XIndexAccess >& xPalette, uno::Reference< css::beans::XPropertySet > const & xPropertySet )
+    : SwVbaFont_BASE( xParent, xContext, xPalette, xPropertySet, Component::WORD )
 {
 }
 
@@ -139,14 +140,6 @@ OUString
 SwVbaFont::getServiceImplName()
 {
     return "SwVbaFont";
-}
-
-void SAL_CALL
-SwVbaFont::setColorIndex( const uno::Any& _colorindex )
-{
-        sal_Int32 nIndex = 0;
-        _colorindex >>= nIndex;
-        return setColor( mxPalette->getByIndex( nIndex ) );
 }
 
 uno::Any SAL_CALL

@@ -22,6 +22,7 @@
 #include <dlgeddef.hxx>
 #include <dlgedview.hxx>
 #include <dlgedobj.hxx>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
@@ -31,6 +32,7 @@
 #include <toolkit/awt/vclxfont.hxx>
 #include <toolkit/helper/convert.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
@@ -225,12 +227,6 @@ awt::Rectangle AccessibleDialogControlShape::implGetBounds()
 {
     return GetBounds();
 }
-
-// XInterface
-IMPLEMENT_FORWARD_XINTERFACE2( AccessibleDialogControlShape, OAccessibleExtendedComponentHelper, AccessibleDialogControlShape_BASE )
-
-// XTypeProvider
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( AccessibleDialogControlShape, OAccessibleExtendedComponentHelper, AccessibleDialogControlShape_BASE )
 
 // XComponent
 void AccessibleDialogControlShape::disposing()

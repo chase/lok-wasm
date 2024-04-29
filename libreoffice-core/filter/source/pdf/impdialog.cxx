@@ -26,7 +26,9 @@
 #include <sfx2/passwd.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <sfx2/objsh.hxx>
-#include <svx/AccessibilityCheckDialog.hxx>
+#include <svl/stritem.hxx>
+#include <sfx2/dispatch.hxx>
+#include <sfx2/sfxsids.hrc>
 
 #include <comphelper/lok.hxx>
 #include <comphelper/propertyvalue.hxx>
@@ -283,7 +285,7 @@ ImpPDFTabDialog::ImpPDFTabDialog(weld::Window* pParent, const Sequence< Property
 
 ImpPDFTabSecurityPage* ImpPDFTabDialog::getSecurityPage() const
 {
-    SfxTabPage* pSecurityPage = GetTabPage("security");
+    SfxTabPage* pSecurityPage = GetTabPage(u"security");
     if (pSecurityPage)
     {
         return static_cast<ImpPDFTabSecurityPage*>(pSecurityPage);
@@ -293,7 +295,7 @@ ImpPDFTabSecurityPage* ImpPDFTabDialog::getSecurityPage() const
 
 ImpPDFTabOpnFtrPage * ImpPDFTabDialog::getOpenPage() const
 {
-    SfxTabPage* pOpenPage = GetTabPage("initialview");
+    SfxTabPage* pOpenPage = GetTabPage(u"initialview");
     if (pOpenPage)
     {
         return static_cast<ImpPDFTabOpnFtrPage*>(pOpenPage);
@@ -303,7 +305,7 @@ ImpPDFTabOpnFtrPage * ImpPDFTabDialog::getOpenPage() const
 
 ImpPDFTabLinksPage* ImpPDFTabDialog::getLinksPage() const
 {
-    SfxTabPage* pLinksPage = GetTabPage("links");
+    SfxTabPage* pLinksPage = GetTabPage(u"links");
     if (pLinksPage)
     {
         return static_cast<ImpPDFTabLinksPage*>(pLinksPage);
@@ -314,7 +316,7 @@ ImpPDFTabLinksPage* ImpPDFTabDialog::getLinksPage() const
 
 ImpPDFTabGeneralPage* ImpPDFTabDialog::getGeneralPage() const
 {
-    SfxTabPage* pGeneralPage = GetTabPage("general");
+    SfxTabPage* pGeneralPage = GetTabPage(u"general");
     if (pGeneralPage)
     {
         return static_cast<ImpPDFTabGeneralPage*>(pGeneralPage);
@@ -335,16 +337,35 @@ IMPL_LINK_NOARG(ImpPDFTabDialog, OkHdl, weld::Button&, void)
         if (pShell)
         {
             sfx::AccessibilityIssueCollection aCollection = pShell->runAccessibilityCheck();
-            if (!aCollection.getIssues().empty())
+            auto aIssues = aCollection.getIssues();
+            int nIssueCount(aIssues.size());
+            if (!aIssues.empty())
             {
-                mpAccessibilityCheckDialog = std::make_shared<svx::AccessibilityCheckDialog>(
-                    m_xDialog.get(), aCollection, [pShell]() -> sfx::AccessibilityIssueCollection {
-                        return pShell->runAccessibilityCheck();
-                    });
-                mpAccessibilityCheckDialog->getDialog()->set_modal(true);
-                weld::DialogController::runAsync(mpAccessibilityCheckDialog, [this](sal_Int32 retValue){
-                    m_xDialog->response(retValue);
-                });
+                OUString aMessage(FilterResId(STR_WARN_PDFUA_ISSUES, nIssueCount));
+                aMessage = aMessage.replaceFirst("%1", OUString::number(nIssueCount));
+
+                std::unique_ptr<weld::MessageDialog> xPDFUADialog(Application::CreateMessageDialog(
+                    getGeneralPage()->GetFrameWeld(), VclMessageType::Warning,
+                    VclButtonsType::Cancel, aMessage));
+                xPDFUADialog->add_button(FilterResId(STR_PDFUA_INVESTIGATE, nIssueCount), RET_NO);
+                xPDFUADialog->add_button(FilterResId(STR_PDFUA_IGNORE), RET_YES);
+                xPDFUADialog->set_default_response(RET_YES);
+
+                int ret = xPDFUADialog->run();
+                if (ret == RET_YES)
+                    m_xDialog->response(RET_OK);
+                else if (ret == RET_NO)
+                {
+                    m_xDialog->response(RET_CANCEL);
+                    // Show accessibility check Sidebar deck
+                    SfxDispatcher* pDispatcher = pShell->GetDispatcher();
+                    if (pDispatcher)
+                    {
+                        const SfxStringItem sDeckName(SID_SIDEBAR_DECK, "A11yCheckDeck");
+                        pDispatcher->ExecuteList(SID_SIDEBAR_DECK, SfxCallMode::RECORD,
+                                                 { &sDeckName });
+                    }
+                }
             }
             else
             {
@@ -366,15 +387,9 @@ ImpPDFTabDialog::~ImpPDFTabDialog()
 {
     maConfigItem.WriteModifiedConfig();
     maConfigI18N.WriteModifiedConfig();
-    if (mpAccessibilityCheckDialog)
-    {
-        // restore set_modal to its original state
-        mpAccessibilityCheckDialog->getDialog()->set_modal(false);
-        mpAccessibilityCheckDialog->response(RET_CANCEL);
-    }
 }
 
-void ImpPDFTabDialog::PageCreated(const OString& rId, SfxTabPage& rPage)
+void ImpPDFTabDialog::PageCreated(const OUString& rId, SfxTabPage& rPage)
 {
     if (rId == "general")
         static_cast<ImpPDFTabGeneralPage&>(rPage).SetFilterConfigItem(this);
@@ -400,21 +415,20 @@ void ImpPDFTabDialog::PageCreated(const OString& rId, SfxTabPage& rPage)
     }
 }
 
-
 Sequence< PropertyValue > ImpPDFTabDialog::GetFilterData()
 {
     // updating the FilterData sequence and storing FilterData to configuration
-    if (ImpPDFTabGeneralPage* pPage = static_cast<ImpPDFTabGeneralPage*>(GetTabPage("general")))
+    if (ImpPDFTabGeneralPage* pPage = static_cast<ImpPDFTabGeneralPage*>(GetTabPage(u"general")))
         pPage->GetFilterConfigItem(this);
-    if (ImpPDFTabViewerPage* pPage = static_cast<ImpPDFTabViewerPage*>(GetTabPage("userinterface")))
+    if (ImpPDFTabViewerPage* pPage = static_cast<ImpPDFTabViewerPage*>(GetTabPage(u"userinterface")))
         pPage->GetFilterConfigItem(this);
-    if (ImpPDFTabOpnFtrPage* pPage = static_cast<ImpPDFTabOpnFtrPage*>(GetTabPage("initialview")))
+    if (ImpPDFTabOpnFtrPage* pPage = static_cast<ImpPDFTabOpnFtrPage*>(GetTabPage(u"initialview")))
         pPage->GetFilterConfigItem(this);
-    if (ImpPDFTabLinksPage* pPage = static_cast<ImpPDFTabLinksPage*>(GetTabPage("links")))
+    if (ImpPDFTabLinksPage* pPage = static_cast<ImpPDFTabLinksPage*>(GetTabPage(u"links")))
         pPage->GetFilterConfigItem(this);
-    if (ImpPDFTabSecurityPage* pPage = static_cast<ImpPDFTabSecurityPage*>( GetTabPage("security")))
+    if (ImpPDFTabSecurityPage* pPage = static_cast<ImpPDFTabSecurityPage*>( GetTabPage(u"security")))
         pPage->GetFilterConfigItem(this);
-    if (ImpPDFTabSigningPage* pPage = static_cast<ImpPDFTabSigningPage*>(GetTabPage("digitalsignatures")))
+    if (ImpPDFTabSigningPage* pPage = static_cast<ImpPDFTabSigningPage*>(GetTabPage(u"digitalsignatures")))
         pPage->GetFilterConfigItem(this);
 
     // prepare the items to be returned
@@ -586,26 +600,30 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem(ImpPDFTabDialog* pParent)
     mbIsWriter = pParent->mbIsWriter;
     mbIsSpreadsheet = pParent->mbIsSpreadsheet;
 
-    mxCbExportNotesInMargin->set_sensitive( mbIsWriter );
-    mxCbExportEmptyPages->set_sensitive( mbIsWriter );
-    mxCbExportPlaceholders->set_sensitive( mbIsWriter );
-
     mxRbLosslessCompression->connect_toggled( LINK( this, ImpPDFTabGeneralPage, ToggleCompressionHdl ) );
     const bool bUseLosslessCompression = pParent->mbUseLosslessCompression;
     if ( bUseLosslessCompression )
         mxRbLosslessCompression->set_active(true);
     else
         mxRbJPEGCompression->set_active(true);
+    const bool bReadOnlyCompression = !pParent->maConfigItem.IsReadOnly("UseLosslessCompression");
+    mxRbLosslessCompression->set_sensitive(bReadOnlyCompression);
+    mxRbJPEGCompression->set_sensitive(bReadOnlyCompression);
 
     mxNfQuality->set_value( pParent->mnQuality, FieldUnit::PERCENT );
-    mxQualityFrame->set_sensitive(!bUseLosslessCompression);
+    mxQualityFrame->set_sensitive(
+        !bUseLosslessCompression && !pParent->maConfigItem.IsReadOnly("Quality"));
 
     mxCbReduceImageResolution->connect_toggled(LINK(this, ImpPDFTabGeneralPage, ToggleReduceImageResolutionHdl));
     const bool  bReduceImageResolution = pParent->mbReduceImageResolution;
     mxCbReduceImageResolution->set_active( bReduceImageResolution );
+    mxCbReduceImageResolution->set_sensitive(
+        !pParent->maConfigItem.IsReadOnly("ReduceImageResolution"));
     OUString aStrRes = OUString::number( pParent->mnMaxImageResolution ) + " DPI";
     mxCoReduceImageResolution->set_entry_text(aStrRes);
-    mxCoReduceImageResolution->set_sensitive( bReduceImageResolution );
+    mxCoReduceImageResolution->set_sensitive(
+        bReduceImageResolution && !pParent->maConfigItem.IsReadOnly("MaxImageResolution"));
+
     mxCbWatermark->connect_toggled( LINK( this, ImpPDFTabGeneralPage, ToggleWatermarkHdl ) );
     mxFtWatermark->set_sensitive(false );
     mxEdWatermark->set_sensitive( false );
@@ -630,6 +648,7 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem(ImpPDFTabDialog* pParent)
     const bool bIsPDFUA = pParent->mbPDFUACompliance;
     mxCbPDFUA->set_active(bIsPDFUA);
     mxCbPDFUA->connect_toggled(LINK(this, ImpPDFTabGeneralPage, TogglePDFVersionOrUniversalAccessibilityHandle));
+    mxCbPDFUA->set_sensitive(!pParent->maConfigItem.IsReadOnly("PDFUACompliance"));
 
     // the TogglePDFVersionOrUniversalAccessibilityHandle handler will read or write the *UserSelection based
     // on the mxCbPDFA (= bIsPDFA) state, so we have to prepare the correct input state.
@@ -637,19 +656,32 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem(ImpPDFTabDialog* pParent)
         mxCbTaggedPDF->set_active(pParent->mbUseTaggedPDFUserSelection);
     else
         mbUseTaggedPDFUserSelection = pParent->mbUseTaggedPDFUserSelection;
+
     mxCbExportBookmarks->set_active(pParent->mbExportBookmarksUserSelection);
     TogglePDFVersionOrUniversalAccessibilityHandle(*mxCbPDFA);
 
     mxCbExportFormFields->set_active(pParent->mbExportFormFields);
     mxCbExportFormFields->connect_toggled( LINK( this, ImpPDFTabGeneralPage, ToggleExportFormFieldsHdl ) );
+    mxCbExportFormFields->set_sensitive(!pParent->maConfigItem.IsReadOnly("ExportFormFields"));
 
     mxLbFormsFormat->set_active(static_cast<sal_uInt16>(pParent->mnFormsType));
     mxCbAllowDuplicateFieldNames->set_active( pParent->mbAllowDuplicateFieldNames );
+    // FormsFrame contains (and thus sets_sensitive) FormsFormat and AllowDuplicateFieldNames
     mxFormsFrame->set_sensitive(pParent->mbExportFormFields);
+    if (pParent->mbExportFormFields)
+    {
+        if (pParent->maConfigItem.IsReadOnly("FormsType"))
+            mxLbFormsFormat->set_sensitive(false);
+        if (pParent->maConfigItem.IsReadOnly("AllowDuplicateFieldNames"))
+            mxCbAllowDuplicateFieldNames->set_sensitive(false);
+    }
 
 
     mxCbExportNotes->set_active( pParent->mbExportNotes );
-    mxCbExportNotesInMargin->set_active( pParent->mbExportNotesInMargin );
+    mxCbExportNotesInMargin->set_active(mbIsWriter && pParent->mbExportNotesInMargin);
+    mxCbExportNotesInMargin->set_sensitive(
+        mbIsWriter && !pParent->maConfigItem.IsReadOnly("ExportNotesInMargin"));
+
     if (comphelper::LibreOfficeKit::isActive())
     {
         mxCbViewPDF->hide();
@@ -658,6 +690,7 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem(ImpPDFTabDialog* pParent)
     else
     {
        mxCbViewPDF->set_active(pParent->mbViewPDF);
+       mxCbViewPDF->set_sensitive(!pParent->maConfigItem.IsReadOnly("ViewPDFAfterExport"));
     }
 
     if ( mbIsPresentation )
@@ -666,12 +699,16 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem(ImpPDFTabDialog* pParent)
         mxCbExportNotesPages->show();
         mxCbExportNotesPages->set_active(pParent->mbExportNotesPages);
         mxCbExportNotesPages->connect_toggled( LINK(this, ImpPDFTabGeneralPage, ToggleExportNotesPagesHdl ) );
+        mxCbExportNotesPages->set_sensitive(!pParent->maConfigItem.IsReadOnly("ExportNotesPages"));
         mxCbExportOnlyNotesPages->show();
         mxCbExportOnlyNotesPages->set_active(pParent->mbExportOnlyNotesPages);
         // tdf#116473 Initially enable Export only note pages option depending on the checked state of Export notes pages option
-        mxCbExportOnlyNotesPages->set_sensitive(mxCbExportNotesPages->get_active());
+        mxCbExportOnlyNotesPages->set_sensitive(
+            mxCbExportNotesPages->get_active() && !pParent->maConfigItem.IsReadOnly("ExportOnlyNotesPages"));
         mxCbExportHiddenSlides->show();
         mxCbExportHiddenSlides->set_active(pParent->mbExportHiddenSlides);
+        mxCbExportHiddenSlides->set_sensitive(
+            !pParent->maConfigItem.IsReadOnly("ExportHiddenSlides"));
     }
     else
     {
@@ -694,6 +731,7 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem(ImpPDFTabDialog* pParent)
 
         mxCbSinglePageSheets->show();
         mxCbSinglePageSheets->set_active(pParent->mbSinglePageSheets);
+        mxCbSinglePageSheets->set_sensitive(!pParent->maConfigItem.IsReadOnly("SinglePageSheets"));
     }
     else
     {
@@ -704,17 +742,18 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem(ImpPDFTabDialog* pParent)
         mxEdSheets->hide();
     }
 
-    mxCbExportPlaceholders->set_visible(mbIsWriter);
-    if( !mbIsWriter )
-    {
-        mxCbExportPlaceholders->set_active(false);
-        mxCbExportNotesInMargin->set_active(false);
-    }
     mxCbExportEmptyPages->set_active(!pParent->mbIsSkipEmptyPages);
+    mxCbExportEmptyPages->set_sensitive(
+        mbIsWriter && !pParent->maConfigItem.IsReadOnly("IsSkipEmptyPages"));
+
+    mxCbExportPlaceholders->set_visible(mbIsWriter);
     mxCbExportPlaceholders->set_active(pParent->mbIsExportPlaceholders);
+    mxCbExportPlaceholders->set_sensitive(
+        mbIsWriter && !pParent->maConfigItem.IsReadOnly("ExportPlaceholders"));
 
     mxCbAddStream->show();
     mxCbAddStream->set_active(pParent->mbAddStream);
+    mxCbAddStream->set_sensitive(!pParent->maConfigItem.IsReadOnly("IsAddStream"));
 
     mxCbAddStream->connect_toggled(LINK(this, ImpPDFTabGeneralPage, ToggleAddStreamHdl));
     ToggleAddStreamHdl(*mxCbAddStream); // init addstream dependencies
@@ -850,29 +889,46 @@ void ImpPDFTabGeneralPage::EnableExportNotesPages()
 {
     if ( mbIsPresentation )
     {
-        mxCbExportNotesPages->set_sensitive( !mxRbSelection->get_active() );
-        mxCbExportOnlyNotesPages->set_sensitive( !mxRbSelection->get_active() && mxCbExportNotesPages->get_active() );
+        mxCbExportNotesPages->set_sensitive(
+            !mxRbSelection->get_active() && !IsReadOnlyProperty("ExportNotesPages"));
+        mxCbExportOnlyNotesPages->set_sensitive(
+            !mxRbSelection->get_active() && mxCbExportNotesPages->get_active()
+            && !IsReadOnlyProperty("ExportOnlyNotesPages"));
     }
 }
 
 IMPL_LINK_NOARG(ImpPDFTabGeneralPage, ToggleExportFormFieldsHdl, weld::Toggleable&, void)
 {
-    mxFormsFrame->set_sensitive(mxCbExportFormFields->get_active());
+    const bool bExportFormFields = mxCbExportFormFields->get_active();
+    // FormsFrame contains (and thus sets_sensitive) FormsFormat and AllowDuplicateFieldNames
+    mxFormsFrame->set_sensitive(bExportFormFields);
+    if (bExportFormFields)
+    {
+        if (IsReadOnlyProperty("FormsType"))
+            mxLbFormsFormat->set_sensitive(false);
+        if (IsReadOnlyProperty("AllowDuplicateFieldNames"))
+            mxCbAllowDuplicateFieldNames->set_sensitive(false);
+    }
 }
 
 IMPL_LINK_NOARG(ImpPDFTabGeneralPage, ToggleExportNotesPagesHdl, weld::Toggleable&, void)
 {
-    mxCbExportOnlyNotesPages->set_sensitive(mxCbExportNotesPages->get_active());
+    mxCbExportOnlyNotesPages->set_sensitive(
+        mxCbExportNotesPages->get_active()
+        && !IsReadOnlyProperty("ExportOnlyNotesPages"));
 }
 
 IMPL_LINK_NOARG(ImpPDFTabGeneralPage, ToggleCompressionHdl, weld::Toggleable&, void)
 {
-    mxQualityFrame->set_sensitive(mxRbJPEGCompression->get_active());
+    mxQualityFrame->set_sensitive(
+        mxRbJPEGCompression->get_active() && !IsReadOnlyProperty("Quality"));
 }
 
 IMPL_LINK_NOARG(ImpPDFTabGeneralPage, ToggleReduceImageResolutionHdl, weld::Toggleable&, void)
 {
-    mxCoReduceImageResolution->set_sensitive(mxCbReduceImageResolution->get_active());
+    mxCoReduceImageResolution->set_sensitive(
+        mxCbReduceImageResolution->get_active()
+        && !IsReadOnlyProperty("MaxImageResolution"));
 }
 
 IMPL_LINK_NOARG(ImpPDFTabGeneralPage, ToggleWatermarkHdl, weld::Toggleable&, void)
@@ -914,10 +970,12 @@ IMPL_LINK_NOARG(ImpPDFTabGeneralPage, TogglePDFVersionOrUniversalAccessibilityHa
     // set the security page status (and its controls as well)
     ImpPDFTabSecurityPage* pSecPage = mpParent ? mpParent->getSecurityPage() : nullptr;
     if (pSecPage)
-        pSecPage->ImplPDFASecurityControl(!bIsPDFA);
+        pSecPage->ImplPDFASecurityControl();
 
-    mxCbTaggedPDF->set_sensitive(!bIsPDFA && !bIsPDFUA);
-    mxRbPDFAVersion->set_sensitive(bIsPDFA);
+    mxCbTaggedPDF->set_sensitive(
+        !bIsPDFA && !bIsPDFUA && !IsReadOnlyProperty("UseTaggedPDF"));
+    mxRbPDFAVersion->set_sensitive(
+        bIsPDFA && !IsReadOnlyProperty("SelectPdfVersion"));
 
     if (bIsPDFA || bIsPDFUA)
     {
@@ -965,7 +1023,8 @@ IMPL_LINK_NOARG(ImpPDFTabGeneralPage, TogglePDFVersionOrUniversalAccessibilityHa
         mxCbExportBookmarks->set_active(mpParent->mbExportBookmarksUserSelection);
         mxCbUseReferenceXObject->set_active(mpParent->mbUseReferenceXObjectUserSelection);
     }
-    mxCbExportBookmarks->set_sensitive(!bIsPDFUA);
+    mxCbExportBookmarks->set_sensitive(
+        !bIsPDFUA && !IsReadOnlyProperty("ExportBookmarks"));
     mxCbUseReferenceXObject->set_sensitive(!bIsPDFUA);
 
     ImpPDFTabOpnFtrPage *const pOpenPage(mpParent ? mpParent->getOpenPage() : nullptr);
@@ -1126,7 +1185,7 @@ void ImpPDFTabOpnFtrPage::SetFilterConfigItem(ImpPDFTabDialog *const pParent)
     }
 
     // The call from ImpPDFTabGeneralPage::SetFilterConfigItem() did not init
-    // the radio buttons correctly becuse ImpPDFTabOpnFtrPage did not yet exist.
+    // the radio buttons correctly because ImpPDFTabOpnFtrPage did not yet exist.
     ToggleInitialView(*pParent);
 }
 
@@ -1290,6 +1349,7 @@ ImpPDFTabSecurityPage::ImpPDFTabSecurityPage(weld::Container* pPage, weld::Dialo
     , mxCbEnableCopy(m_xBuilder->weld_check_button("enablecopy"))
     , mxCbEnableAccessibility(m_xBuilder->weld_check_button("enablea11y"))
     , mxPasswordTitle(m_xBuilder->weld_label("setpasswordstitle"))
+    , mxPermissionTitle(m_xBuilder->weld_label("label2"))
 {
     msStrSetPwd = mxPasswordTitle->get_label();
     mxPbSetPwd->connect_clicked(LINK(this, ImpPDFTabSecurityPage, ClickmaPbSetPwdHdl));
@@ -1386,7 +1446,7 @@ void ImpPDFTabSecurityPage::SetFilterConfigItem( const  ImpPDFTabDialog* pParent
     ImpPDFTabGeneralPage* pGeneralPage = pParent->getGeneralPage();
 
     if (pGeneralPage)
-        ImplPDFASecurityControl(!pGeneralPage->IsPdfaSelected());
+        ImplPDFASecurityControl();
 }
 
 IMPL_LINK_NOARG(ImpPDFTabSecurityPage, ClickmaPbSetPwdHdl, weld::Button&, void)
@@ -1454,6 +1514,8 @@ void ImpPDFTabSecurityPage::enablePermissionControls()
     {
         mxCbEnableAccessibility->set_active(true);
     }
+    mxPermissionTitle->set_sensitive(!bIsPDFASel);
+    mxPbSetPwd->set_sensitive(!bIsPDFASel);
     mxCbEnableAccessibility->set_sensitive(!bIsPDFUASel);
     if (bIsPDFASel)
     {
@@ -1507,9 +1569,8 @@ void ImpPDFTabSecurityPage::enablePermissionControls()
 
 // This tab page is under control of the PDF/A-1a checkbox:
 // TODO: implement a method to do it.
-void ImpPDFTabSecurityPage::ImplPDFASecurityControl( bool bEnableSecurity )
+void ImpPDFTabSecurityPage::ImplPDFASecurityControl()
 {
-    m_xContainer->set_sensitive(bEnableSecurity);
     // after enable, check the status of control as if the dialog was initialized
     enablePermissionControls();
 }

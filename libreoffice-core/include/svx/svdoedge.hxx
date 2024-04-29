@@ -42,14 +42,14 @@ class SdrObjConnection final
     friend class                ImpEdgeHdl;
     friend class                SdrCreateView;
 
-    Point                       aObjOfs;       // set during dragging of a node
-    SdrObject*                  pObj;          // referenced object
-    sal_uInt16                  nConId;        // connector number
+    Point                       m_aObjOfs;       // set during dragging of a node
+    SdrObject*                  m_pSdrObj;          // referenced object
+    sal_uInt16                  m_nConId;        // connector number
 
-    bool                        bBestConn : 1;   // true -> the best-matching connector is searched for
-    bool                        bBestVertex : 1; // true -> the best-matching vertex to connect is searched for
-    bool                        bAutoVertex : 1; // autoConnector at apex nCon
-    bool                        bAutoCorner : 1; // autoConnector at corner nCon
+    bool                        m_bBestConn : 1;   // true -> the best-matching connector is searched for
+    bool                        m_bBestVertex : 1; // true -> the best-matching vertex to connect is searched for
+    bool                        m_bAutoVertex : 1; // autoConnector at apex nCon
+    bool                        m_bAutoCorner : 1; // autoConnector at corner nCon
 
 public:
     SdrObjConnection() { ResetVars(); }
@@ -57,15 +57,15 @@ public:
     void ResetVars();
     bool TakeGluePoint(SdrGluePoint& rGP) const;
 
-    void SetBestConnection( bool rB ) { bBestConn = rB; };
-    void SetBestVertex( bool rB ) { bBestVertex = rB; };
-    void SetAutoVertex( bool rB ) { bAutoVertex = rB; };
-    void SetConnectorId( sal_uInt16 nId ) { nConId = nId; };
+    void SetBestConnection( bool rB ) { m_bBestConn = rB; };
+    void SetBestVertex( bool rB ) { m_bBestVertex = rB; };
+    void SetAutoVertex( bool rB ) { m_bAutoVertex = rB; };
+    void SetConnectorId( sal_uInt16 nId ) { m_nConId = nId; };
 
-    bool IsBestConnection() const { return bBestConn; };
-    bool IsAutoVertex() const { return bAutoVertex; };
-    sal_uInt16 GetConnectorId() const { return nConId; };
-    SdrObject* GetObject() const { return pObj; }
+    bool IsBestConnection() const { return m_bBestConn; };
+    bool IsAutoVertex() const { return m_bAutoVertex; };
+    sal_uInt16 GetConnectorId() const { return m_nConId; };
+    SdrObject* GetSdrObject() const { return m_pSdrObj; }
 };
 
 
@@ -78,26 +78,32 @@ public:
     // The 5 distances are set on dragging or via SetAttr and are
     // evaluated by ImpCalcEdgeTrack. Only 0-3 longs are transported
     // via Get/SetAttr/Get/SetStyleSh though.
-    Point                       aObj1Line2;
-    Point                       aObj1Line3;
-    Point                       aObj2Line2;
-    Point                       aObj2Line3;
-    Point                       aMiddleLine;
+    Point                       m_aObj1Line2;
+    Point                       m_aObj1Line3;
+    Point                       m_aObj2Line2;
+    Point                       m_aObj2Line3;
+    Point                       m_aMiddleLine;
 
     // Following values are set by ImpCalcEdgeTrack
-    tools::Long                        nAngle1;           // exit angle at Obj1
-    tools::Long                        nAngle2;           // exit angle at Obj2
-    sal_uInt16                  nObj1Lines;        // 1..3
-    sal_uInt16                  nObj2Lines;        // 1..3
-    sal_uInt16                  nMiddleLine;       // 0xFFFF=none, otherwise point number of the beginning of the line
+    tools::Long                        m_nAngle1;           // exit angle at Obj1
+    tools::Long                        m_nAngle2;           // exit angle at Obj2
+    sal_uInt16                  m_nObj1Lines;        // 1..3
+    sal_uInt16                  m_nObj2Lines;        // 1..3
+    sal_uInt16                  m_nMiddleLine;       // 0xFFFF=none, otherwise point number of the beginning of the line
+
+    // The value determines how curved connectors are routed. With value 'true' it is routed
+    // compatible to OOXML, with value 'false' LO routing is used.
+    // The value is set/get via property SDRATTR_EDGEOOXMLCURVE.
+    bool m_bUseOOXMLCurve;
 
 public:
     SdrEdgeInfoRec()
-    :   nAngle1(0),
-        nAngle2(0),
-        nObj1Lines(0),
-        nObj2Lines(0),
-        nMiddleLine(0xFFFF)
+    :   m_nAngle1(0),
+        m_nAngle2(0),
+        m_nObj1Lines(0),
+        m_nObj2Lines(0),
+        m_nMiddleLine(0xFFFF),
+        m_bUseOOXMLCurve(false)
     {}
 
     Point& ImpGetLineOffsetPoint(SdrEdgeLineCode eLineCode);
@@ -112,12 +118,12 @@ public:
 class SdrEdgeObjGeoData final : public SdrTextObjGeoData
 {
 public:
-    SdrObjConnection            aCon1;  // connection status of the beginning of the line
-    SdrObjConnection            aCon2;  // connection status of the end of the line
-    std::optional<XPolygon>     pEdgeTrack;
-    bool                        bEdgeTrackDirty; // true -> connector track needs to be recalculated
-    bool                        bEdgeTrackUserDefined;
-    SdrEdgeInfoRec              aEdgeInfo;
+    SdrObjConnection            m_aCon1;  // connection status of the beginning of the line
+    SdrObjConnection            m_aCon2;  // connection status of the end of the line
+    std::optional<XPolygon>     m_pEdgeTrack;
+    bool                        m_bEdgeTrackDirty; // true -> connector track needs to be recalculated
+    bool                        m_bEdgeTrackUserDefined;
+    SdrEdgeInfoRec              m_aEdgeInfo;
 
 public:
     SdrEdgeObjGeoData();
@@ -138,15 +144,15 @@ private:
     virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
     virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
 
-    SdrObjConnection            aCon1;  // Connection status of the beginning of the line
-    SdrObjConnection            aCon2;  // Connection status of the end of the line
+    SdrObjConnection            m_aCon1;  // Connection status of the beginning of the line
+    SdrObjConnection            m_aCon2;  // Connection status of the end of the line
 
-    std::optional<XPolygon>     pEdgeTrack;
-    sal_uInt16                  nNotifyingCount; // Locking
-    SdrEdgeInfoRec              aEdgeInfo;
+    std::optional<XPolygon>     m_pEdgeTrack;
+    sal_uInt16                  m_nNotifyingCount; // Locking
+    SdrEdgeInfoRec              m_aEdgeInfo;
 
-    bool                        bEdgeTrackDirty : 1; // true -> Connection track needs to be recalculated
-    bool                        bEdgeTrackUserDefined : 1;
+    bool                        m_bEdgeTrackDirty : 1; // true -> Connection track needs to be recalculated
+    bool                        m_bEdgeTrackUserDefined : 1;
 
     // Bool to allow suppression of default connects at object
     // inside test (HitTest) and object center test (see ImpFindConnector())
@@ -196,7 +202,7 @@ public:
     // react on model/page change
     virtual void handlePageChange(SdrPage* pOldPage, SdrPage* pNewPage) override;
 
-    SdrObjConnection& GetConnection(bool bTail1) { return *(bTail1 ? &aCon1 : &aCon2); }
+    SdrObjConnection& GetConnection(bool bTail1) { return *(bTail1 ? &m_aCon1 : &m_aCon2); }
     virtual void TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
     virtual SdrObjKind GetObjIdentifier() const override;
     virtual const tools::Rectangle& GetCurrentBoundRect() const override;
@@ -209,11 +215,11 @@ public:
     // * for all of the below: bTail1=true: beginning of the line,
     //   otherwise end of the line
     // * pObj=NULL: disconnect connector
-    void SetEdgeTrackDirty() { bEdgeTrackDirty=true; }
+    void SetEdgeTrackDirty() { m_bEdgeTrackDirty=true; }
     void ConnectToNode(bool bTail1, SdrObject* pObj) override;
     void DisconnectFromNode(bool bTail1) override;
     SdrObject* GetConnectedNode(bool bTail1) const override;
-    const SdrObjConnection& GetConnection(bool bTail1) const { return *(bTail1 ? &aCon1 : &aCon2); }
+    const SdrObjConnection& GetConnection(bool bTail1) const { return *(bTail1 ? &m_aCon1 : &m_aCon2); }
     bool CheckNodeConnection(bool bTail1) const;
 
     virtual void RecalcSnapRect() override;

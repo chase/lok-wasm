@@ -39,15 +39,6 @@ class ToolBox;
 #define TAB_PAGE_NOTFOUND   (sal_uInt16(0xFFFF))
 #endif /* !TAB_APPEND */
 
-#define TAB_OFFSET          3
-#define TAB_TABOFFSET_X     3
-#define TAB_TABOFFSET_Y     3
-#define TAB_EXTRASPACE_X    6
-#define TAB_BORDER_LEFT     1
-#define TAB_BORDER_TOP      1
-#define TAB_BORDER_RIGHT    2
-#define TAB_BORDER_BOTTOM   2
-
 class VCL_DLLPUBLIC TabControl : public Control
 {
 protected:
@@ -78,7 +69,6 @@ protected:
     SAL_DLLPRIVATE void         ImplDrawItem(vcl::RenderContext& rRenderContext, ImplTabItem const * pItem,
                                              const tools::Rectangle& rCurRect, bool bFirstInGroup,
                                              bool bLastInGroup);
-    SAL_DLLPRIVATE void         ImplFreeLayoutData();
     SAL_DLLPRIVATE bool         ImplHandleKeyEvent( const KeyEvent& rKeyEvent );
 
     DECL_DLLPRIVATE_LINK( ImplListBoxSelectHdl, ListBox&, void );
@@ -87,7 +77,6 @@ protected:
     using Window::ImplInit;
     SAL_DLLPRIVATE void         ImplInit( vcl::Window* pParent, WinBits nStyle );
 
-    virtual void                FillLayoutData() const override;
     virtual const vcl::Font&    GetCanonicalFont( const StyleSettings& _rStyle ) const override;
     virtual const Color&        GetCanonicalTextColor( const StyleSettings& _rStyle ) const override;
     virtual bool                ImplPlaceTabs( tools::Long nWidth );
@@ -130,7 +119,7 @@ public:
     sal_uInt16          GetPageCount() const;
     sal_uInt16          GetPageId( sal_uInt16 nPos ) const;
     sal_uInt16 GetPageId(const Point& rPos) const;
-    sal_uInt16          GetPageId( const OString& rName ) const;
+    sal_uInt16          GetPageId( const OUString& rName ) const;
 
     void SetCurPageId(sal_uInt16 nPageId);
     sal_uInt16          GetCurPageId() const;
@@ -146,8 +135,8 @@ public:
     void                SetHelpText( sal_uInt16 nPageId, const OUString& rText );
     const OUString&     GetHelpText( sal_uInt16 nPageId ) const;
 
-    void                SetPageName( sal_uInt16 nPageId, const OString& rName ) const;
-    OString             GetPageName( sal_uInt16 nPageId ) const;
+    void                SetPageName( sal_uInt16 nPageId, const OUString& rName ) const;
+    OUString            GetPageName( sal_uInt16 nPageId ) const;
 
     void SetAccessibleName( sal_uInt16 nItemId, const OUString& rStr );
     OUString GetAccessibleName( sal_uInt16 nItemId ) const;
@@ -162,16 +151,6 @@ public:
 
     void                SetActivatePageHdl( const Link<TabControl*,void>& rLink ) { maActivateHdl = rLink; }
     void                SetDeactivatePageHdl( const Link<TabControl*, bool>& rLink ) { maDeactivateHdl = rLink; }
-
-    // returns (control relative) bounding rectangle for the
-    // character at index nIndex relative to the text of page nPageId
-    using Control::GetCharacterBounds;
-    tools::Rectangle GetCharacterBounds( sal_uInt16 nPageId, tools::Long nIndex ) const;
-
-    // returns the index relative to the text of page nPageId (also returned)
-    // at position rPoint (control relative)
-    using Control::GetIndexForPoint;
-    tools::Long GetIndexForPoint( const Point& rPoint, sal_uInt16& rPageId ) const;
 
     // returns the rectangle of the tab for page nPageId
     tools::Rectangle GetTabBounds( sal_uInt16 nPageId ) const;
@@ -189,7 +168,7 @@ public:
 
     virtual void queue_resize(StateChangedType eReason = StateChangedType::Layout) override;
 
-    virtual bool set_property(const OString &rKey, const OUString &rValue) override;
+    virtual bool set_property(const OUString &rKey, const OUString &rValue) override;
 
     virtual void DumpAsPropertyTree(tools::JsonWriter&) override;
 };

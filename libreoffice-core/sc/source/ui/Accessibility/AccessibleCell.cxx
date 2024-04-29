@@ -154,15 +154,15 @@ void SAL_CALL ScAccessibleCell::grabFocus(  )
     }
 }
 
-tools::Rectangle ScAccessibleCell::GetBoundingBoxOnScreen() const
+AbsoluteScreenPixelRectangle ScAccessibleCell::GetBoundingBoxOnScreen() const
 {
-    tools::Rectangle aCellRect(GetBoundingBox());
+    AbsoluteScreenPixelRectangle aCellRect(GetBoundingBox());
     if (mpViewShell)
     {
         vcl::Window* pWindow = mpViewShell->GetWindowByPos(meSplitPos);
         if (pWindow)
         {
-            tools::Rectangle aRect = pWindow->GetWindowExtentsRelative(nullptr);
+            AbsoluteScreenPixelRectangle aRect = pWindow->GetWindowExtentsAbsolute();
             aCellRect.Move(aRect.Left(), aRect.Top());
         }
     }
@@ -183,7 +183,7 @@ tools::Rectangle ScAccessibleCell::GetBoundingBox() const
         vcl::Window* pWindow = mpViewShell->GetWindowByPos(meSplitPos);
         if (pWindow)
         {
-            tools::Rectangle aRect(pWindow->GetWindowExtentsRelative(pWindow->GetAccessibleParentWindow()));
+            tools::Rectangle aRect(pWindow->GetWindowExtentsRelative(*pWindow->GetAccessibleParentWindow()));
             aRect.Move(-aRect.Left(), -aRect.Top());
             aCellRect = aRect.Intersection(aCellRect);
         }
@@ -455,6 +455,15 @@ void ScAccessibleCell::AddRelation(const ScRange& rRange,
     const sal_uInt32 nCount(static_cast<sal_uInt32>(rRange.aEnd.Col() -
                 rRange.aStart.Col() + 1) * (rRange.aEnd.Row() -
                 rRange.aStart.Row() + 1));
+
+    // tdf#157299 avoid handling a large amount of cells for performance reasons
+    if (nCount > 1000)
+    {
+        SAL_WARN("sc", "ScAccessibleCell::AddRelation: Not setting relations "
+                       "for cell range with more than 1000 cells for performance reasons.");
+        return;
+    }
+
     uno::Sequence < uno::Reference < uno::XInterface > > aTargetSet( nCount );
     uno::Reference < uno::XInterface >* pTargetSet = aTargetSet.getArray();
     sal_uInt32 nPos(0);
@@ -486,7 +495,14 @@ uno::Any SAL_CALL ScAccessibleCell::getExtendedAttributes()
 {
     SolarMutexGuard aGuard;
 
-    uno::Any strRet;
+    // report row and column index text via attributes as specified in ARIA which map
+    // to attributes of the same name for AT-SPI2, IAccessible2, UIA
+    // https://www.w3.org/TR/core-aam-1.2/#ariaRowIndexText
+    // https://www.w3.org/TR/core-aam-1.2/#ariaColIndexText
+    const OUString sRowIndexText = maCellAddress.Format(ScRefFlags::ROW_VALID);
+    const OUString sColIndexText = maCellAddress.Format(ScRefFlags::COL_VALID);
+    OUString sAttributes = "rowindextext:" + sRowIndexText + ";colindextext:" + sColIndexText + ";";
+
     if (mpViewShell)
     {
         OUString strFor = mpViewShell->GetFormula(maCellAddress) ;
@@ -510,9 +526,10 @@ uno::Any SAL_CALL ScAccessibleCell::getExtendedAttributes()
                 strFor += "false";
             strFor += ";";
         }
-        strRet <<= strFor ;
+        sAttributes += strFor ;
     }
-    return strRet;
+
+    return uno::Any(sAttributes);
 }
 
 // cell has its own ParaIndent property, so when calling character attributes on cell, the ParaIndent should replace the ParaLeftMargin if its value is not zero.

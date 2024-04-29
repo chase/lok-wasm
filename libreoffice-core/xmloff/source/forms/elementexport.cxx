@@ -167,9 +167,9 @@ namespace xmloff
         // So we translate the old persistence service name into new ones, if possible
 
         OUString sToWriteServiceName = sServiceName;
-#define CHECK_N_TRANSLATE( name )   \
-        else if (sServiceName == SERVICE_PERSISTENT_COMPONENT_##name) \
-            sToWriteServiceName = SERVICE_##name
+#define CHECK_N_TRANSLATE( persistentComponent, serviceName )   \
+        else if (sServiceName == persistentComponent) \
+            sToWriteServiceName = serviceName
 
         if (sServiceName == SERVICE_PERSISTENT_COMPONENT_EDIT)
         {
@@ -179,25 +179,25 @@ namespace xmloff
             if (xSI.is() && xSI->supportsService(SERVICE_FORMATTEDFIELD))
                 sToWriteServiceName = SERVICE_FORMATTEDFIELD;
         }
-        CHECK_N_TRANSLATE( FORM );
-        CHECK_N_TRANSLATE( LISTBOX );
-        CHECK_N_TRANSLATE( COMBOBOX );
-        CHECK_N_TRANSLATE( RADIOBUTTON );
-        CHECK_N_TRANSLATE( GROUPBOX );
-        CHECK_N_TRANSLATE( FIXEDTEXT );
-        CHECK_N_TRANSLATE( COMMANDBUTTON );
-        CHECK_N_TRANSLATE( CHECKBOX );
-        CHECK_N_TRANSLATE( GRID );
-        CHECK_N_TRANSLATE( IMAGEBUTTON );
-        CHECK_N_TRANSLATE( FILECONTROL );
-        CHECK_N_TRANSLATE( TIMEFIELD );
-        CHECK_N_TRANSLATE( DATEFIELD );
-        CHECK_N_TRANSLATE( NUMERICFIELD );
-        CHECK_N_TRANSLATE( CURRENCYFIELD );
-        CHECK_N_TRANSLATE( PATTERNFIELD );
-        CHECK_N_TRANSLATE( HIDDENCONTROL );
-        CHECK_N_TRANSLATE( IMAGECONTROL );
-        CHECK_N_TRANSLATE( FORMATTEDFIELD );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_FORM,           SERVICE_FORM );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_LISTBOX,        SERVICE_LISTBOX );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_COMBOBOX,       SERVICE_COMBOBOX );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_RADIOBUTTON,    SERVICE_RADIOBUTTON );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_GROUPBOX,       SERVICE_GROUPBOX );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_FIXEDTEXT,      SERVICE_FIXEDTEXT );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_COMMANDBUTTON,  SERVICE_COMMANDBUTTON );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_CHECKBOX,       SERVICE_CHECKBOX );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_GRID,           SERVICE_GRID );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_IMAGEBUTTON,    SERVICE_IMAGEBUTTON );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_FILECONTROL,    SERVICE_FILECONTROL );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_TIMEFIELD,      SERVICE_TIMEFIELD );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_DATEFIELD,      SERVICE_DATEFIELD );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_NUMERICFIELD,   SERVICE_NUMERICFIELD );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_CURRENCYFIELD,  SERVICE_CURRENCYFIELD );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_PATTERNFIELD,   SERVICE_PATTERNFIELD );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_HIDDENCONTROL,  SERVICE_HIDDENCONTROL );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_IMAGECONTROL,   SERVICE_IMAGECONTROL );
+        CHECK_N_TRANSLATE( SERVICE_PERSISTENT_COMPONENT_FORMATTEDFIELD, SERVICE_FORMATTEDFIELD );
 #if OSL_DEBUG_LEVEL > 0
         Reference< XServiceInfo > xSI(m_xProps, UNO_QUERY);
         OSL_ENSURE(xSI.is() && xSI->supportsService(sToWriteServiceName),
@@ -505,7 +505,7 @@ namespace xmloff
                 CCAFlags::Label, CCAFlags::Title
             };
             // the names of all properties which are expected to be of type string
-            static const rtl::OUStringConstExpr aStringPropertyNames[] =
+            static constexpr OUString aStringPropertyNames[] =
             {
                 PROPERTY_LABEL, PROPERTY_TITLE
             };
@@ -534,7 +534,7 @@ namespace xmloff
             {   // attribute flags
                 CCAFlags::CurrentSelected, CCAFlags::Disabled, CCAFlags::Dropdown, CCAFlags::Printable, CCAFlags::ReadOnly, CCAFlags::Selected, CCAFlags::TabStop, CCAFlags::EnableVisible
             };
-            static const rtl::OUStringConstExpr pBooleanPropertyNames[] =
+            static constexpr OUString pBooleanPropertyNames[] =
             {   // property names
                 PROPERTY_STATE, PROPERTY_ENABLED,
                 PROPERTY_DROPDOWN, PROPERTY_PRINTABLE,
@@ -574,7 +574,7 @@ namespace xmloff
             {   // attribute flags
                 CCAFlags::Size, CCAFlags::TabIndex
             };
-            static const rtl::OUStringConstExpr pIntegerPropertyNames[] =
+            static constexpr OUString pIntegerPropertyNames[] =
             {   // property names
                 PROPERTY_LINECOUNT, PROPERTY_TABINDEX
             };
@@ -934,7 +934,7 @@ namespace xmloff
                 SCAFlags::Validation, SCAFlags::MultiLine, SCAFlags::AutoCompletion, SCAFlags::Multiple, SCAFlags::DefaultButton, SCAFlags::IsTristate,
                 SCAFlags::Toggle, SCAFlags::FocusOnClick
             };
-            static const rtl::OUStringConstExpr pBooleanPropertyNames[] =
+            static constexpr OUString pBooleanPropertyNames[] =
             {   // property names
                 PROPERTY_STRICTFORMAT, PROPERTY_MULTILINE,
                 PROPERTY_AUTOCOMPLETE,
@@ -973,7 +973,7 @@ namespace xmloff
             {   // attribute flags
                 SCAFlags::PageStepSize
             };
-            static const rtl::OUStringConstExpr pIntegerPropertyNames[] =
+            static constexpr OUString pIntegerPropertyNames[] =
             {   // property names
                 PROPERTY_BLOCK_INCREMENT
             };
@@ -1124,7 +1124,7 @@ namespace xmloff
             {   // attribute flags
                 SCAFlags::GroupName
             };
-            static const rtl::OUStringConstExpr pStringPropertyNames[] =
+            static constexpr OUString pStringPropertyNames[] =
             {   // property names
                 PROPERTY_GROUP_NAME
             };
@@ -1141,7 +1141,7 @@ namespace xmloff
                     exportStringPropertyAttribute(
                         OAttributeMetaData::getSpecialAttributeNamespace( nStringPropertyAttributeIds[i] ),
                         OAttributeMetaData::getSpecialAttributeName( nStringPropertyAttributeIds[i] ),
-                        OUString(pStringPropertyNames[i])
+                        pStringPropertyNames[i]
                     );
             #if OSL_DEBUG_LEVEL > 0
                     //  reset the bit for later checking
@@ -2046,7 +2046,7 @@ namespace xmloff
             {
                 faName, /*faAction,*/ faCommand, faFilter, faOrder
             };
-            static const rtl::OUStringConstExpr aStringPropertyNames[] =
+            static constexpr OUString aStringPropertyNames[] =
             {
                 PROPERTY_NAME, /*PROPERTY_TARGETURL,*/ PROPERTY_COMMAND, PROPERTY_FILTER, PROPERTY_ORDER
             };
@@ -2090,7 +2090,7 @@ namespace xmloff
             {
                 faAllowDeletes, faAllowInserts, faAllowUpdates, faApplyFilter, faEscapeProcessing, faIgnoreResult
             };
-            static const rtl::OUStringConstExpr pBooleanPropertyNames[] =
+            static constexpr OUString pBooleanPropertyNames[] =
             {
                 PROPERTY_ALLOWDELETES,
                 PROPERTY_ALLOWINSERTS,

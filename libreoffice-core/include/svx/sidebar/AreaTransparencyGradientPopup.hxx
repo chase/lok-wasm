@@ -19,15 +19,14 @@
 #ifndef INCLUDED_SVX_SOURCE_SIDEBAR_AREA_AREATRANSPARENCYGRADIENTPOPUP_HXX
 #define INCLUDED_SVX_SOURCE_SIDEBAR_AREA_AREATRANSPARENCYGRADIENTPOPUP_HXX
 
+#include <basegfx/utils/bgradient.hxx>
 #include <vcl/weld.hxx>
 #include <svtools/toolbarmenu.hxx>
-#include <basegfx/utils/gradienttools.hxx>
 
 class XFillFloatTransparenceItem;
 
 namespace svx::sidebar
 {
-class AreaTransparencyGradientControl;
 class AreaPropertyPanelBase;
 
 class AreaTransparencyGradientPopup final : public WeldToolbarPopup
@@ -45,14 +44,14 @@ private:
     std::unique_ptr<weld::MetricSpinButton> mxMtrTrgrEndValue;
     std::unique_ptr<weld::MetricSpinButton> mxMtrTrgrBorder;
 
-    // MCGR: Preserve in-between ColorStops until we have an UI to edit these
+    // MCGR: Preserve ColorStops until we have a UI to edit these
     basegfx::BColorStops maColorStops;
 
     void InitStatus(XFillFloatTransparenceItem const* pGradientItem);
-    void ExecuteValueModify(sal_uInt8 nStartCol, sal_uInt8 nEndCol);
+    void ExecuteValueModify();
     DECL_LINK(ModifiedTrgrHdl_Impl, weld::MetricSpinButton&, void);
-    DECL_LINK(Left_Click45_Impl, const OString&, void);
-    DECL_LINK(Right_Click45_Impl, const OString&, void);
+    DECL_LINK(Left_Click45_Impl, const OUString&, void);
+    DECL_LINK(Right_Click45_Impl, const OUString&, void);
 
 public:
     AreaTransparencyGradientPopup(const css::uno::Reference<css::frame::XFrame>& rFrame,

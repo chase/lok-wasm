@@ -7,7 +7,6 @@
 
 import time
 import threading
-import os.path
 from contextlib import contextmanager
 from uitest.uihelper.common import get_state_as_dict
 
@@ -23,6 +22,10 @@ class UITest(object):
         self._xUITest = xUITest
         self._xContext = xContext
         self._desktop = None
+        self.use_dispose = True
+
+    def set_use_dispose(self, use_dispose):
+        self.use_dispose = use_dispose
 
     def get_desktop(self):
         if self._desktop:
@@ -64,13 +67,6 @@ class UITest(object):
     def wait_until_property_is_updated(self, element, propertyName, value):
         while True:
             if get_state_as_dict(element)[propertyName] == value:
-                return
-            else:
-                time.sleep(DEFAULT_SLEEP)
-
-    def wait_until_file_is_available(self, fileName):
-        while True:
-            if os.path.isfile(fileName):
                 return
             else:
                 time.sleep(DEFAULT_SLEEP)
@@ -128,27 +124,31 @@ class UITest(object):
         finally:
             self.close_doc()
 
+    def wait_and_yield_dialog(self, event, parent, close_button):
+        while not event.executed:
+            time.sleep(DEFAULT_SLEEP)
+        dialog = self._xUITest.getTopFocusWindow()
+        if parent == dialog:
+            raise Exception("executing the action did not open the dialog")
+        try:
+            yield dialog
+        except:
+            if not close_button:
+                if 'cancel' in dialog.getChildren():
+                    self.close_dialog_through_button(dialog.getChild("cancel"))
+            raise
+        finally:
+            if close_button:
+                self.close_dialog_through_button(dialog.getChild(close_button))
+
     # Calls UITest.close_dialog_through_button at exit
     @contextmanager
     def execute_dialog_through_command(self, command, printNames=False, close_button = "ok", eventName = "DialogExecute"):
         with EventListener(self._xContext, eventName, printNames=printNames) as event:
+            xDialogParent = self._xUITest.getTopFocusWindow()
             if not self._xUITest.executeDialog(command):
                 raise Exception("Dialog not executed for: " + command)
-            while True:
-                if event.executed:
-                    xDialog = self._xUITest.getTopFocusWindow()
-                    try:
-                        yield xDialog
-                    except:
-                        if not close_button:
-                            if 'cancel' in xDialog.getChildren():
-                                self.close_dialog_through_button(xDialog.getChild("cancel"))
-                        raise
-                    finally:
-                        if close_button:
-                            self.close_dialog_through_button(xDialog.getChild(close_button))
-                    return
-                time.sleep(DEFAULT_SLEEP)
+            yield from self.wait_and_yield_dialog(event, xDialogParent, close_button)
 
     @contextmanager
     def execute_modeless_dialog_through_command(self, command, printNames=False, close_button = "ok"):
@@ -161,29 +161,10 @@ class UITest(object):
         if parameters is None:
             parameters = tuple()
 
+        xDialogParent = self._xUITest.getTopFocusWindow()
         with EventListener(self._xContext, event_name) as event:
             ui_object.executeAction(action, parameters)
-            while True:
-                if event.executed:
-                    xDialog = self._xUITest.getTopFocusWindow()
-                    try:
-                        yield xDialog
-                    finally:
-                        if close_button:
-                            self.close_dialog_through_button(xDialog.getChild(close_button))
-                    return
-                time.sleep(DEFAULT_SLEEP)
-
-    def _handle_crash_reporter(self):
-        xCrashReportDlg = self._xUITest.getTopFocusWindow()
-        state = get_state_as_dict(xCrashReportDlg)
-        print(state)
-        if state['ID'] != "CrashReportDialog":
-            return False
-        print("found a crash reporter")
-        xCancelBtn = xCrashReportDlg.getChild("btn_cancel")
-        self.close_dialog_through_button(xCancelBtn)
-        return True
+            yield from self.wait_and_yield_dialog(event, xDialogParent, close_button)
 
     # Calls UITest.close_doc at exit
     @contextmanager
@@ -192,11 +173,7 @@ class UITest(object):
         try:
             xBtn = xStartCenter.getChild(app + "_all")
         except RuntimeException:
-            if self._handle_crash_reporter():
-                xStartCenter = self._xUITest.getTopFocusWindow()
-                xBtn = xStartCenter.getChild(app + "_all")
-            else:
-                raise
+            raise
 
         with EventListener(self._xContext, "OnNew") as event:
             xBtn.executeAction("CLICK", tuple())
@@ -231,7 +208,14 @@ class UITest(object):
         if not component:
             print("close_doc: active frame has no component")
             return
-        component.dispose()
+        if self.use_dispose:
+            component.dispose()
+        else:
+            if component.isModified():
+                with self.execute_dialog_through_command('.uno:CloseDoc', close_button="discard") as xConfirmationDialog:
+                    pass
+            else:
+                self._xUITest.executeCommand(".uno:CloseDoc")
         frames = desktop.getFrames()
         if frames:
             frames[0].activate()

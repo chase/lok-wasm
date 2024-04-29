@@ -761,23 +761,9 @@ Any SAL_CALL ODbaseTable::queryInterface( const Type & rType )
         return Any();
 
     Any aRet = OTable_TYPEDEF::queryInterface(rType);
-    return aRet.hasValue() ? aRet : ::cppu::queryInterface(rType,static_cast< css::lang::XUnoTunnel*> (this));
+    return aRet;
 }
 
-
-const Sequence< sal_Int8 > & ODbaseTable::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit implId;
-    return implId.getSeq();
-}
-
-// css::lang::XUnoTunnel
-
-sal_Int64 ODbaseTable::getSomething( const Sequence< sal_Int8 > & rId )
-{
-    return comphelper::getSomethingImpl(rId, this,
-                                        comphelper::FallbackToGetSomethingOf<ODbaseTable_BASE>{});
-}
 
 bool ODbaseTable::fetchRow(OValueRefRow& _rRow, const OSQLColumns & _rCols, bool bRetrieveData)
 {
@@ -857,8 +843,8 @@ bool ODbaseTable::fetchRow(OValueRefRow& _rRow, const OSQLColumns & _rCols, bool
             }
             else
             {
-                // Commit the string.  Use intern() to ref-count it.
-                *(*_rRow)[i] = OUString::intern(pData, static_cast<sal_Int32>(nLastPos+1), m_eEncoding);
+                // Commit the string
+                *(*_rRow)[i] = OUString(pData, static_cast<sal_Int32>(nLastPos+1), m_eEncoding);
             }
         } // if (nType == DataType::CHAR || nType == DataType::VARCHAR)
         else if ( DataType::TIMESTAMP == nType )
@@ -942,7 +928,7 @@ bool ODbaseTable::fetchRow(OValueRefRow& _rRow, const OSQLColumns & _rCols, bool
                 continue;
             }
 
-            OUString aStr = OUString::intern(pData+nPos1, nPos2-nPos1+1, m_eEncoding);
+            OUString aStr(pData+nPos1, nPos2-nPos1+1, m_eEncoding);
 
             switch (nType)
             {
@@ -1597,9 +1583,7 @@ bool ODbaseTable::DeleteRow(const OSQLColumns& _rCols)
             {
                 xCol->getPropertyValue(OMetaConnection::getPropMap().getNameByIndex(PROPERTY_ID_NAME)) >>= aColName;
 
-                Reference<XUnoTunnel> xTunnel(xIndex,UNO_QUERY);
-                OSL_ENSURE(xTunnel.is(),"No TunnelImplementation!");
-                ODbaseIndex* pIndex = comphelper::getFromUnoTunnel<ODbaseIndex>(xTunnel);
+                ODbaseIndex* pIndex = dynamic_cast<ODbaseIndex*>(xIndex.get());
                 assert(pIndex && "ODbaseTable::DeleteRow: No Index returned!");
 
                 OSQLColumns::const_iterator aIter = std::find_if(_rCols.begin(), _rCols.end(),
@@ -1703,9 +1687,7 @@ bool ODbaseTable::UpdateBuffer(OValueRefVector& rRow, const OValueRefRow& pOrgRo
                 continue;
             else
             {
-                Reference<XUnoTunnel> xTunnel(xIndex,UNO_QUERY);
-                OSL_ENSURE(xTunnel.is(),"No TunnelImplementation!");
-                ODbaseIndex* pIndex = comphelper::getFromUnoTunnel<ODbaseIndex>(xTunnel);
+                ODbaseIndex* pIndex = dynamic_cast<ODbaseIndex*>(xIndex.get());
                 assert(pIndex && "ODbaseTable::UpdateBuffer: No Index returned!");
 
                 if (pIndex->Find(0,*rRow[nPos]))
@@ -1811,9 +1793,7 @@ bool ODbaseTable::UpdateBuffer(OValueRefVector& rRow, const OValueRefRow& pOrgRo
         }
         if (aIndexedCols[i].is())
         {
-            Reference<XUnoTunnel> xTunnel(aIndexedCols[i],UNO_QUERY);
-            OSL_ENSURE(xTunnel.is(),"No TunnelImplementation!");
-            ODbaseIndex* pIndex = comphelper::getFromUnoTunnel<ODbaseIndex>(xTunnel);
+            ODbaseIndex* pIndex = dynamic_cast<ODbaseIndex*>(aIndexedCols[i].get());
             assert(pIndex && "ODbaseTable::UpdateBuffer: No Index returned!");
             // Update !!
             if (pOrgRow.is() && !thisColIsNull)

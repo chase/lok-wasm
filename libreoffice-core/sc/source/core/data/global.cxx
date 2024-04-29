@@ -39,7 +39,6 @@
 #include <svl/zformat.hxx>
 #include <vcl/keycodes.hxx>
 #include <vcl/virdev.hxx>
-#include <vcl/weld.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 #include <unotools/charclass.hxx>
@@ -140,7 +139,7 @@ bool ScGlobal::HasAttrChanged( const SfxItemSet&  rNewAttrs,
         // Both Items set
         // PoolItems, meaning comparing pointers is valid
         if ( SfxItemState::SET == eOldState )
-            bInvalidate = (pNewItem != pOldItem);
+            bInvalidate = !SfxPoolItem::areSame(pNewItem, pOldItem);
     }
     else
     {
@@ -188,8 +187,16 @@ bool ScGlobal::CheckWidthInvalidate( bool& bNumFormatChanged,
                                      const SfxItemSet& rNewAttrs,
                                      const SfxItemSet& rOldAttrs )
 {
-    std::optional<bool> equal = ScPatternAttr::FastEqualPatternSets( rNewAttrs, rOldAttrs );
-    if( equal.has_value() && equal )
+    // Here ScPatternAttr::FastEqualPatternSets was used before. This implies that
+    // the two given SfxItemSet are internal ones from ScPatternAttr, but there is
+    // no guarantee here for that. Also that former method contained the comment
+    //   "Actually test_tdf133629 from UITest_calc_tests9 somehow manages to have
+    //   a different range (and I don't understand enough why), so better be safe and compare fully."
+    // which may be based on this usage. I check for that already in
+    // ScPatternAttr::operator==, seems not to be triggered there.
+    // All in all: Better use SfxItemSet::operator== here, and not one specialized
+    // on the SfxItemSets of ScPatternAttr
+    if (rNewAttrs == rOldAttrs)
     {
         bNumFormatChanged = false;
         return false;
@@ -392,8 +399,10 @@ OUString ScGlobal::GetLongErrorString(FormulaError nErr)
         case FormulaError::UnknownOpCode:
         case FormulaError::UnknownStackVariable:
         case FormulaError::UnknownToken:
-        case FormulaError::NoCode:
             pErrNumber = STR_LONG_ERR_SYNTAX;
+        break;
+        case FormulaError::NoCode:
+            pErrNumber = STR_LONG_ERR_NO_CODE;
         break;
         case FormulaError::CircularReference:
             pErrNumber = STR_LONG_ERR_CIRC_REF;
@@ -825,7 +834,7 @@ void ScGlobal::OpenURL(const OUString& rURL, const OUString& rTarget, bool bIgno
     OUString aReferName;
     if ( pScActiveViewShell )
     {
-        pFrame = pScActiveViewShell->GetViewFrame();
+        pFrame = &pScActiveViewShell->GetViewFrame();
         pObjShell = pFrame->GetObjectShell();
         const SfxMedium* pMed = pObjShell->GetMedium();
         if (pMed)

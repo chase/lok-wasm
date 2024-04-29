@@ -66,9 +66,11 @@ public:
 
     void                    SelectCharacter( sal_UCS4 cNew );
     virtual sal_UCS4        GetSelectCharacter() const;
-    void                    createContextMenu();
+    virtual sal_UCS4        GetCharFromIndex(int index) const;
+    void                    createContextMenu(const Point& rPosition);
 
     void            SetDoubleClickHdl( const Link<SvxShowCharSet*,void>& rLink ) { aDoubleClkHdl = rLink; }
+    void            SetReturnKeyPressHdl( const Link<SvxShowCharSet*,void>& rLink ) { m_aReturnKeypressHdl = rLink; }
     void            SetSelectHdl( const Link<SvxShowCharSet*,void>& rHdl ) { aSelectHdl = rHdl; }
     void            SetHighlightHdl( const Link<SvxShowCharSet*,void>& rHdl ) { aHighHdl = rHdl; }
     void            SetPreSelectHdl( const Link<SvxShowCharSet*,void>& rHdl ) { aPreSelectHdl = rHdl; }
@@ -77,7 +79,7 @@ public:
     void            SetFont( const vcl::Font& rFont );
     vcl::Font const & GetFont() const { return maFont; }
     FontCharMapRef const & GetFontCharMap();
-    bool            isFavChar(const OUString& sTitle, const OUString& rFont);
+    bool            isFavChar(std::u16string_view sTitle, std::u16string_view rFont);
     void            getFavCharacterList(); //gets both Fav char and Fav char font list
     void            updateFavCharacterList(const OUString& rChar, const OUString& rFont);
 
@@ -110,7 +112,7 @@ private:
     virtual bool MouseButtonUp(const MouseEvent& rMEvt) override;
     virtual void GetFocus() override;
     virtual void LoseFocus() override;
-    virtual bool KeyInput(const KeyEvent&) override;
+    virtual bool Command(const CommandEvent& rCEvt) override;
 
     virtual css::uno::Reference<css::accessibility::XAccessible> CreateAccessible() override;
     virtual FactoryFunction GetUITestFactory() const override;
@@ -119,6 +121,7 @@ protected:
     typedef std::map<sal_Int32, std::shared_ptr<svx::SvxShowCharSetItem> > ItemsMap;
     ItemsMap        m_aItems;
     Link<SvxShowCharSet*,void>     aDoubleClkHdl;
+    Link<SvxShowCharSet*,void>     m_aReturnKeypressHdl;
     Link<SvxShowCharSet*,void>     aSelectHdl;
     Link<SvxShowCharSet*,void>     aFavClickHdl;
     Link<SvxShowCharSet*,void>     aHighHdl;
@@ -138,7 +141,6 @@ protected:
 
     FontCharMapRef  mxFontCharMap;
     Size            maFontSize;
-    Point           maPosition;
 
     bool mbRecalculateFont  : 1;
     bool mbUpdateForeground : 1;
@@ -146,12 +148,13 @@ protected:
 
 
 protected:
-    virtual void            DrawChars_Impl(vcl::RenderContext& rRenderContext, int n1, int n2);
+    virtual bool KeyInput(const KeyEvent&) override;
+    void            DrawChars_Impl(vcl::RenderContext& rRenderContext, int n1, int n2);
     void            InitSettings(vcl::RenderContext& rRenderContext);
     // abstraction layers are: Unicode<->MapIndex<->Pixel
     Point           MapIndexToPixel( int) const;
     DECL_DLLPRIVATE_LINK(VscrollHdl, weld::ScrolledWindow&, void);
-    void ContextMenuSelect(std::string_view rIdent);
+    void ContextMenuSelect(std::u16string_view rIdent);
 
     void            init();
     tools::Rectangle       getGridRectangle(const Point &rPointUL, const Size &rOutputSize) const;

@@ -371,6 +371,7 @@ void SwLayAction::Action(OutputDevice* pRenderContext)
         m_pRoot->ResetTurboFlag();
         m_bActionInProgress = false;
         m_pRoot->DeleteEmptySct();
+        m_pRoot->DeleteEmptyFlys();
         return;
     }
     else if ( m_pRoot->GetTurbo() )
@@ -397,6 +398,7 @@ void SwLayAction::Action(OutputDevice* pRenderContext)
             SetAgain(true);
     }
     m_pRoot->DeleteEmptySct();
+    m_pRoot->DeleteEmptyFlys();
 
     m_pWait.reset();
 
@@ -807,6 +809,12 @@ void SwLayAction::InternalAction(OutputDevice* pRenderContext)
             unlockPositionOfObjects( pPg );
             pPg = static_cast<SwPageFrame*>(pPg->GetNext());
         }
+        if (m_pRoot->IsSuperfluous()) // could be newly set now!
+        {
+            bool bOld = IsAgain();
+            m_pRoot->RemoveSuperfluous();
+            SetAgain(bOld);
+        }
         // reset flag for special interrupt content formatting.
         mbFormatContentOnInterrupt = false;
     }
@@ -832,7 +840,7 @@ bool SwLayAction::TurboAction_( const SwContentFrame *pCnt )
 
         if ( !pCnt->GetValidLineNumFlag() && pCnt->IsTextFrame() )
         {
-            const sal_uLong nAllLines = static_cast<const SwTextFrame*>(pCnt)->GetAllLines();
+            const sal_Int32 nAllLines = static_cast<const SwTextFrame*>(pCnt)->GetAllLines();
             const_cast<SwTextFrame*>(static_cast<const SwTextFrame*>(pCnt))->RecalcAllLines();
             if ( nAllLines != static_cast<const SwTextFrame*>(pCnt)->GetAllLines() )
             {
@@ -1166,21 +1174,28 @@ bool SwLayAction::IsShortCut( SwPageFrame *&prPage )
                 }
                 // no shortcut, if at previous page
                 // an anchored object is registered, whose anchor is <pContent>.
-                else if ( prPage->GetPrev() )
+                else
                 {
-                    SwSortedObjs* pObjs =
-                        static_cast<SwPageFrame*>(prPage->GetPrev())->GetSortedObjs();
-                    if ( pObjs )
+                    auto const CheckFlys = [&bRet,pContent](SwPageFrame & rPage)
                     {
-                        for (SwAnchoredObject* pObj : *pObjs)
+                        SwSortedObjs *const pObjs(rPage.GetSortedObjs());
+                        if (pObjs)
                         {
-                            if ( pObj->GetAnchorFrameContainingAnchPos() == pContent )
+                            for (SwAnchoredObject *const pObj : *pObjs)
                             {
-                                bRet = false;
-                                break;
+                                if (pObj->GetAnchorFrameContainingAnchPos() == pContent)
+                                {
+                                    bRet = false;
+                                    break;
+                                }
                             }
                         }
+                    };
+                    if (prPage->GetPrev())
+                    {
+                        CheckFlys(*static_cast<SwPageFrame*>(prPage->GetPrev()));
                     }
+                    CheckFlys(*prPage); // tdf#147666 also check this page
                 }
             }
         }
@@ -1424,10 +1439,11 @@ bool SwLayAction::FormatLayout( OutputDevice *pRenderContext, SwLayoutFrame *pLa
                 PopFormatLayout();
             }
         }
-        else if ( m_pImp->GetShell()->IsPaintLocked() )
-            // Shortcut to minimize the cycles. With Lock, the
-            // paint is coming either way (primarily for browse)
+        else if (pLay->IsSctFrame() && pLay->GetNext() && pLay->GetNext()->IsSctFrame() && pLow->IsTextFrame() && pLow == pLay->GetLastLower())
+        {
+            // else: only calc the last text lower of sections, followed by sections
             pLow->OptCalc();
+        }
 
         if ( IsAgain() )
             return false;
@@ -1634,7 +1650,7 @@ bool SwLayAction::FormatLayoutTab( SwTabFrame *pTab, bool bAddRect )
     // format lowers, only if table frame is valid
     if ( pTab->isFrameAreaDefinitionValid() )
     {
-        FlowFrameJoinLockGuard tabG(pTab); // tdf#124675 prevent Join() if pTab becomes empty
+        // tdf#128437 FlowFrameJoinLockGuard on pTab caused a problem here
         SwLayoutFrame *pLow = static_cast<SwLayoutFrame*>(pTab->Lower());
         while ( pLow )
         {
@@ -1667,7 +1683,7 @@ bool SwLayAction::FormatContent(SwPageFrame *const pPage)
                 assert(pAnchorPage);
                 if (pAnchorPage != pPage
                     && pPage->GetPhyPageNum() < pAnchorPage->GetPhyPageNum()
-                    && pObj->GetFrameFormat().GetAnchor().GetAnchorId()
+                    && pObj->GetFrameFormat()->GetAnchor().GetAnchorId()
                         != RndStdIds::FLY_AS_CHAR)
                 {
                     moved.emplace_back(pObj, pAnchorPage);
@@ -1682,6 +1698,12 @@ bool SwLayAction::FormatContent(SwPageFrame *const pPage)
                 pObj->InvalidateObjPos();
                 ::Notify_Background(pObj->GetDrawObj(), pPage,
                     pObj->GetObjRect(), PrepareHint::FlyFrameLeave, false);
+                // tdf#148897 in case the fly moves back to this page before
+                // being positioned again, the SwFlyNotify / ::Notify() could
+                // conclude that it didn't move at all and not call
+                // NotifyBackground(); note: pObj->SetObjTop(FAR_AWAY) results
+                // in wrong positions, use different approach!
+                pObj->SetForceNotifyNewBackground(true);
             }
             if (!moved.empty())
             {
@@ -1777,7 +1799,7 @@ bool SwLayAction::FormatContent(SwPageFrame *const pPage)
 
             if ( !pContent->GetValidLineNumFlag() && pContent->IsTextFrame() )
             {
-                const sal_uLong nAllLines = static_cast<const SwTextFrame*>(pContent)->GetAllLines();
+                const sal_Int32 nAllLines = static_cast<const SwTextFrame*>(pContent)->GetAllLines();
                 const_cast<SwTextFrame*>(static_cast<const SwTextFrame*>(pContent))->RecalcAllLines();
                 if ( IsPaintExtraData() && IsPaint() &&
                      nAllLines != static_cast<const SwTextFrame*>(pContent)->GetAllLines() )
@@ -1880,7 +1902,7 @@ bool SwLayAction::FormatContent(SwPageFrame *const pPage)
         {
             if ( !pContent->GetValidLineNumFlag() && pContent->IsTextFrame() )
             {
-                const sal_uLong nAllLines = static_cast<const SwTextFrame*>(pContent)->GetAllLines();
+                const sal_Int32 nAllLines = static_cast<const SwTextFrame*>(pContent)->GetAllLines();
                 const_cast<SwTextFrame*>(static_cast<const SwTextFrame*>(pContent))->RecalcAllLines();
                 if ( IsPaintExtraData() && IsPaint() &&
                      nAllLines != static_cast<const SwTextFrame*>(pContent)->GetAllLines() )
@@ -1976,7 +1998,7 @@ void SwLayAction::FormatFlyContent( const SwFlyFrame *pFly )
 
         if ( !pContent->GetValidLineNumFlag() && pContent->IsTextFrame() )
         {
-            const sal_uLong nAllLines = static_cast<const SwTextFrame*>(pContent)->GetAllLines();
+            const sal_Int32 nAllLines = static_cast<const SwTextFrame*>(pContent)->GetAllLines();
             const_cast<SwTextFrame*>(static_cast<const SwTextFrame*>(pContent))->RecalcAllLines();
             if ( IsPaintExtraData() && IsPaint() &&
                  nAllLines != static_cast<const SwTextFrame*>(pContent)->GetAllLines() )
@@ -2173,7 +2195,7 @@ bool SwLayIdle::isJobEnabled(IdleJobType eJob, const SwViewShell* pViewShell)
         case IdleJobType::SMART_TAGS:
         {
             const SwDoc* pDoc = pViewShell->GetDoc();
-            if (!pDoc->GetDocShell()->IsHelpDocument() || pDoc->isXForms() || !SwSmartTagMgr::Get().IsSmartTagsEnabled())
+            if (pDoc->GetDocShell()->IsHelpDocument() || pDoc->isXForms() || !SwSmartTagMgr::Get().IsSmartTagsEnabled())
                 return false;
             return true;
         }

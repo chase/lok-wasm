@@ -147,7 +147,7 @@ void SwSectionFrame::Init()
     {
         const SwFormatCol *pOld = Lower() ? &rCol : new SwFormatCol;
         ChgColumns( *pOld, rCol, IsAnyNoteAtEnd() );
-        if( pOld != &rCol )
+        if (!SfxPoolItem::areSame( pOld, &rCol ))
             delete pOld;
     }
 }
@@ -187,6 +187,13 @@ void SwSectionFrame::DestroyImpl()
 
 SwSectionFrame::~SwSectionFrame()
 {
+}
+
+//virtual
+bool SwSectionFrame::IsHiddenNow() const
+{
+    const auto* pSection = GetSection();
+    return !pSection || pSection->CalcHiddenFlag();
 }
 
 void SwSectionFrame::DelEmpty( bool bRemove )
@@ -1371,6 +1378,20 @@ void SwSectionFrame::Format( vcl::RenderContext* pRenderContext, const SwBorderA
 
     SwRectFnSet aRectFnSet(this);
 
+    if (GetSection()->CalcHiddenFlag())
+    {
+        {
+            SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*this);
+            aRectFnSet.SetHeight(aFrm, 0);
+        }
+        {
+            SwFrameAreaDefinition::FramePrintAreaWriteAccess aPrt(*this);
+            aRectFnSet.SetHeight(aPrt, 0);
+        }
+        setFrameAreaSizeValid(true);
+        setFramePrintAreaValid(true);
+    }
+
     if ( !isFramePrintAreaValid() )
     {
         PROTOCOL( this, PROT::PrintArea, DbgAction::NONE, nullptr )
@@ -2182,6 +2203,11 @@ bool SwSectionFrame::Growable() const
 
 SwTwips SwSectionFrame::Grow_( SwTwips nDist, bool bTst )
 {
+    if (GetSection()->CalcHiddenFlag())
+    {
+        return 0;
+    }
+
     if ( !IsColLocked() && !HasFixSize() )
     {
         SwRectFnSet aRectFnSet(this);
@@ -2646,6 +2672,17 @@ void SwSectionFrame::SwClientNotify(const SwModify& rMod, const SfxHint& rHint)
             return;
         SwSectionFrame::MoveContentAndDelete(this, pHint->IsSaveContent());
     }
+    else if (rHint.GetId() == SfxHintId::SwSectionHidden)
+    {
+        InvalidateAll();
+        InvalidateObjs(false);
+
+        for (SwFrame* pLowerFrame = Lower(); pLowerFrame; pLowerFrame = pLowerFrame->GetNext())
+        {
+            pLowerFrame->InvalidateAll();
+            pLowerFrame->InvalidateObjs(false);
+        }
+    }
     else
         SwFrame::SwClientNotify(rMod, rHint);
 }
@@ -2957,6 +2994,32 @@ bool SwSectionFrame::IsBalancedSection() const
         bRet = !GetSection()->GetFormat()->GetBalancedColumns().GetValue();
     }
     return bRet;
+}
+
+void SwSectionFrame::dumpAsXml(xmlTextWriterPtr writer) const
+{
+    (void)xmlTextWriterStartElement(writer, BAD_CAST("section"));
+    dumpAsXmlAttributes( writer );
+    if ( HasFollow() )
+        (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "follow" ), "%" SAL_PRIuUINT32, GetFollow()->GetFrameId() );
+
+    if (m_pPrecede != nullptr)
+        (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "precede" ), "%" SAL_PRIuUINT32, m_pPrecede->GetFrame().GetFrameId() );
+
+    (void)xmlTextWriterStartElement(writer, BAD_CAST("infos"));
+    dumpInfosAsXml(writer);
+    (void)xmlTextWriterEndElement(writer);
+    dumpChildrenAsXml(writer);
+
+    (void)xmlTextWriterEndElement(writer);
+}
+
+void SwSectionFrame::dumpAsXmlAttributes(xmlTextWriterPtr writer) const
+{
+    SwLayoutFrame::dumpAsXmlAttributes(writer);
+
+    SwSectionNode const*const pNode(GetSection() ? GetSection()->GetFormat()->GetSectionNode() : nullptr);
+    (void)xmlTextWriterWriteFormatAttribute(writer, BAD_CAST("sectionNodeIndex"), "%" SAL_PRIdINT32, pNode ? sal_Int32(pNode->GetIndex()) : -1);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

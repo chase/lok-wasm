@@ -47,6 +47,7 @@
 #include <vcl/settings.hxx>
 #include <vcl/commandinfoprovider.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <toolkit/awt/vclxmenu.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <vcl/window.hxx>
 #include <unotools/cmdoptions.hxx>
@@ -65,10 +66,10 @@ using namespace ::com::sun::star::util;
 using namespace ::com::sun::star::container;
 using namespace ::com::sun::star::ui;
 
-constexpr OUStringLiteral CMD_RESTOREVISIBILITY = u".cmd:RestoreVisibility";
+constexpr OUString CMD_RESTOREVISIBILITY = u".cmd:RestoreVisibility"_ustr;
 constexpr OUStringLiteral CMD_LOCKTOOLBARS = u".uno:ToolbarLock";
 
-constexpr OUStringLiteral STATIC_CMD_PART    = u".uno:AvailableToolbars?Toolbar:string=";
+constexpr OUString STATIC_CMD_PART    = u".uno:AvailableToolbars?Toolbar:string="_ustr;
 const char STATIC_INTERNAL_CMD_PART[]    = ".cmd:";
 
 namespace framework
@@ -138,8 +139,8 @@ css::uno::Sequence< OUString > SAL_CALL ToolbarsMenuController::getSupportedServ
     return { SERVICENAME_POPUPMENUCONTROLLER };
 }
 
-constexpr OUStringLiteral g_aPropUIName( u"UIName" );
-constexpr OUStringLiteral g_aPropResourceURL( u"ResourceURL" );
+constexpr OUString g_aPropUIName( u"UIName"_ustr );
+constexpr OUString g_aPropResourceURL( u"ResourceURL"_ustr );
 
 ToolbarsMenuController::ToolbarsMenuController( const css::uno::Reference< css::uno::XComponentContext >& xContext ) :
     svt::PopupMenuControllerBase( xContext ),
@@ -409,12 +410,8 @@ void ToolbarsMenuController::fillPopupMenu( Reference< css::awt::XPopupMenu > co
     bool          bAddCommand( true );
     SvtCommandOptions aCmdOptions;
 
-    if ( aCmdOptions.HasEntries( SvtCommandOptions::CMDOPTION_DISABLED ))
-    {
-        if ( aCmdOptions.Lookup( SvtCommandOptions::CMDOPTION_DISABLED,
-                                 "ConfigureDialog"))
-            bAddCommand = false;
-    }
+    if ( aCmdOptions.HasEntriesDisabled() && aCmdOptions.LookupDisabled("ConfigureDialog"))
+        bAddCommand = false;
 
     if ( bAddCommand )
     {
@@ -450,7 +447,7 @@ void SAL_CALL ToolbarsMenuController::disposing( const EventObject& )
 {
     Reference< css::awt::XMenuListener > xHolder(this);
 
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     m_xFrame.clear();
     m_xDispatch.clear();
     m_xDocCfgMgr.clear();
@@ -468,9 +465,9 @@ void SAL_CALL ToolbarsMenuController::statusChanged( const FeatureStateEvent& Ev
     OUString aFeatureURL( Event.FeatureURL.Complete );
 
     // All other status events will be processed here
-    osl::ClearableMutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     Reference< css::awt::XPopupMenu > xPopupMenu( m_xPopupMenu );
-    aLock.clear();
+    aLock.unlock();
 
     if ( !xPopupMenu.is() )
         return;
@@ -518,7 +515,7 @@ void SAL_CALL ToolbarsMenuController::itemSelected( const css::awt::MenuEvent& r
     Reference< XNameAccess >            xPersistentWindowState;
 
     {
-        osl::MutexGuard aLock(m_aMutex);
+        std::unique_lock aLock(m_aMutex);
         xPopupMenu = m_xPopupMenu;
         xContext = m_xContext;
         xURLTransformer = m_xURLTransformer;
@@ -668,7 +665,7 @@ void SAL_CALL ToolbarsMenuController::itemActivated( const css::awt::MenuEvent& 
     Reference< XDispatchProvider > xDispatchProvider( m_xFrame, UNO_QUERY );
     Reference< XURLTransformer >   xURLTransformer( m_xURLTransformer );
     {
-        osl::MutexGuard aLock( m_aMutex );
+        std::unique_lock aLock( m_aMutex );
         fillPopupMenu( m_xPopupMenu );
         aCmdVector = m_aCommandVector;
     }
@@ -705,30 +702,30 @@ void SAL_CALL ToolbarsMenuController::itemActivated( const css::awt::MenuEvent& 
 // XPopupMenuController
 void SAL_CALL ToolbarsMenuController::setPopupMenu( const Reference< css::awt::XPopupMenu >& xPopupMenu )
 {
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
 
-    throwIfDisposed();
+    throwIfDisposed(aLock);
 
     if ( m_xFrame.is() && !m_xPopupMenu.is() )
     {
         // Create popup menu on demand
         SolarMutexGuard aSolarMutexGuard;
 
-        m_xPopupMenu = xPopupMenu;
+        m_xPopupMenu = dynamic_cast<VCLXPopupMenu*>(xPopupMenu.get());
+        assert(bool(xPopupMenu) == bool(m_xPopupMenu) && "we only support VCLXPopupMenu");
         m_xPopupMenu->addMenuListener( Reference< css::awt::XMenuListener >(this) );
         fillPopupMenu( m_xPopupMenu );
     }
 }
 
 // XInitialization
-void SAL_CALL ToolbarsMenuController::initialize( const Sequence< Any >& aArguments )
+void ToolbarsMenuController::initializeImpl( std::unique_lock<std::mutex>& rGuard, const Sequence< Any >& aArguments )
 {
-    osl::MutexGuard aLock( m_aMutex );
     bool bInitialized( m_bInitialized );
     if ( bInitialized )
         return;
 
-    svt::PopupMenuControllerBase::initialize(aArguments);
+    svt::PopupMenuControllerBase::initializeImpl(rGuard, aArguments);
 
     if ( !m_bInitialized )
         return;

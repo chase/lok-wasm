@@ -43,11 +43,11 @@ namespace svx
 {
 
 const sal_Int32 gSkewList[] = { 135, 90, 45, 180, 0, -360, -135, -90, -45 };
-constexpr OUStringLiteral g_sExtrusionDirection = u".uno:ExtrusionDirection";
-constexpr OUStringLiteral g_sExtrusionProjection = u".uno:ExtrusionProjection";
-constexpr OUStringLiteral EMPTY = u"";
+constexpr OUString g_sExtrusionDirection = u".uno:ExtrusionDirection"_ustr;
+constexpr OUString g_sExtrusionProjection = u".uno:ExtrusionProjection"_ustr;
+constexpr OUString EMPTY = u""_ustr;
 
-constexpr rtl::OUStringConstExpr aLightOffBmps[] =
+constexpr OUString aLightOffBmps[] =
 {
     RID_SVXBMP_LIGHT_OFF_FROM_TOP_LEFT,
     RID_SVXBMP_LIGHT_OFF_FROM_TOP,
@@ -60,7 +60,7 @@ constexpr rtl::OUStringConstExpr aLightOffBmps[] =
     RID_SVXBMP_LIGHT_OFF_FROM_BOTTOM_RIGHT
 };
 
-constexpr rtl::OUStringConstExpr aLightOnBmps[] =
+constexpr OUString aLightOnBmps[] =
 {
     RID_SVXBMP_LIGHT_ON_FROM_TOP_LEFT,
     RID_SVXBMP_LIGHT_ON_FROM_TOP,
@@ -73,7 +73,7 @@ constexpr rtl::OUStringConstExpr aLightOnBmps[] =
     RID_SVXBMP_LIGHT_ON_FROM_BOTTOM_RIGHT
 };
 
-constexpr rtl::OUStringConstExpr aLightPreviewBmps[] =
+constexpr OUString aLightPreviewBmps[] =
 {
     RID_SVXBMP_LIGHT_PREVIEW_FROM_TOP_LEFT,
     RID_SVXBMP_LIGHT_PREVIEW_FROM_TOP,
@@ -86,7 +86,7 @@ constexpr rtl::OUStringConstExpr aLightPreviewBmps[] =
     RID_SVXBMP_LIGHT_PREVIEW_FROM_BOTTOM_RIGHT
 };
 
-constexpr rtl::OUStringConstExpr aDirectionBmps[] =
+constexpr OUString aDirectionBmps[] =
 {
     RID_SVXBMP_DIRECTION_DIRECTION_NW,
     RID_SVXBMP_DIRECTION_DIRECTION_N,
@@ -126,7 +126,7 @@ ExtrusionDirectionWindow::ExtrusionDirectionWindow(
 
     for (sal_uInt16 i = DIRECTION_NW; i <= DIRECTION_SE; ++i)
     {
-        maImgDirection[i] = Image(StockImage::Yes, OUString(aDirectionBmps[i]));
+        maImgDirection[i] = Image(StockImage::Yes, aDirectionBmps[i]);
     }
 
     mxDirectionSet->SetSelectHdl( LINK( this, ExtrusionDirectionWindow, SelectValueSetHdl ) );
@@ -224,7 +224,7 @@ void ExtrusionDirectionWindow::statusChanged(
 IMPL_LINK_NOARG(ExtrusionDirectionWindow, SelectValueSetHdl, ValueSet*, void)
 {
     Sequence< PropertyValue > aArgs{ comphelper::makePropertyValue(
-        OUString(g_sExtrusionDirection).copy(5),
+        g_sExtrusionDirection.copy(5),
         gSkewList[mxDirectionSet->GetSelectedItemId()-1]) };
 
     mxControl->dispatchCommand( g_sExtrusionDirection, aArgs );
@@ -237,7 +237,7 @@ IMPL_LINK_NOARG(ExtrusionDirectionWindow, SelectToolbarMenuHdl, weld::Toggleable
     int nProjection = mxPerspective->get_active() ? 0 : 1;
 
     Sequence< PropertyValue > aArgs{ comphelper::makePropertyValue(
-        OUString(g_sExtrusionProjection).copy(5), static_cast<sal_Int32>(nProjection)) };
+        g_sExtrusionProjection.copy(5), static_cast<sal_Int32>(nProjection)) };
 
     mxControl->dispatchCommand( g_sExtrusionProjection, aArgs );
     implSetProjection( nProjection, true );
@@ -324,8 +324,8 @@ double ExtrusionDepthDialog::getDepth() const
 double const aDepthListInch[] = { 0, 1270,2540,5080,10160 };
 double const aDepthListMM[] = { 0, 1000, 2500, 5000, 10000 };
 
-constexpr OUStringLiteral gsExtrusionDepth( u".uno:ExtrusionDepth" );
-constexpr OUStringLiteral gsMetricUnit(     u".uno:MetricUnit"     );
+constexpr OUString gsExtrusionDepth( u".uno:ExtrusionDepth"_ustr );
+constexpr OUString gsMetricUnit(     u".uno:MetricUnit"_ustr     );
 
 ExtrusionDepthWindow::ExtrusionDepthWindow(svt::PopupWindowController* pControl, weld::Widget* pParent)
     : WeldToolbarPopup(pControl->getFrameInterface(), pParent, "svx/ui/depthwindow.ui", "DepthWindow")
@@ -496,7 +496,7 @@ IMPL_LINK(ExtrusionDepthWindow, SelectHdl, weld::Toggleable&, rButton, void)
         }
 
         Sequence< PropertyValue > aArgs{ comphelper::makePropertyValue(
-            OUString(gsExtrusionDepth).copy(5), fDepth) };
+            gsExtrusionDepth.copy(5), fDepth) };
 
         mxControl->dispatchCommand( gsExtrusionDepth,  aArgs );
         mbCommandDispatched = true;
@@ -585,8 +585,8 @@ com_sun_star_comp_svx_ExtrusionDepthController_get_implementation(
 }
 
 
-constexpr OUStringLiteral g_sExtrusionLightingDirection = u".uno:ExtrusionLightingDirection";
-constexpr OUStringLiteral g_sExtrusionLightingIntensity = u".uno:ExtrusionLightingIntensity";
+constexpr OUString g_sExtrusionLightingDirection = u".uno:ExtrusionLightingDirection"_ustr;
+constexpr OUString g_sExtrusionLightingIntensity = u".uno:ExtrusionLightingIntensity"_ustr;
 
 ExtrusionLightingWindow::ExtrusionLightingWindow(svt::PopupWindowController* pControl,
                                                  weld::Widget* pParent)
@@ -604,10 +604,10 @@ ExtrusionLightingWindow::ExtrusionLightingWindow(svt::PopupWindowController* pCo
     {
         if( i != FROM_FRONT )
         {
-            maImgLightingOff[i] = Image(StockImage::Yes, OUString(aLightOffBmps[i]));
-            maImgLightingOn[i] = Image(StockImage::Yes, OUString(aLightOnBmps[i]));
+            maImgLightingOff[i] = Image(StockImage::Yes, aLightOffBmps[i]);
+            maImgLightingOn[i] = Image(StockImage::Yes, aLightOnBmps[i]);
         }
-        maImgLightingPreview[i] = Image(StockImage::Yes, OUString(aLightPreviewBmps[i]));
+        maImgLightingPreview[i] = Image(StockImage::Yes, aLightPreviewBmps[i]);
     }
 
     mxLightingSet->SetHelpId( HID_VALUESET_EXTRUSION_LIGHTING );
@@ -726,7 +726,7 @@ IMPL_LINK_NOARG(ExtrusionLightingWindow, SelectValueSetHdl, ValueSet*, void)
         nDirection--;
 
         Sequence< PropertyValue > aArgs{ comphelper::makePropertyValue(
-            OUString(g_sExtrusionLightingDirection).copy(5), nDirection) };
+            g_sExtrusionLightingDirection.copy(5), nDirection) };
 
         mxControl->dispatchCommand( g_sExtrusionLightingDirection, aArgs );
 
@@ -750,7 +750,7 @@ IMPL_LINK(ExtrusionLightingWindow, SelectToolbarMenuHdl, weld::Toggleable&, rBut
         nLevel = 2;
 
     Sequence< PropertyValue > aArgs{ comphelper::makePropertyValue(
-        OUString(g_sExtrusionLightingIntensity).copy(5), static_cast<sal_Int32>(nLevel)) };
+        g_sExtrusionLightingIntensity.copy(5), static_cast<sal_Int32>(nLevel)) };
 
     mxControl->dispatchCommand( g_sExtrusionLightingIntensity, aArgs );
 
@@ -818,7 +818,7 @@ com_sun_star_comp_svx_ExtrusionLightingControl_get_implementation(
 }
 
 
-constexpr OUStringLiteral g_sExtrusionSurface = u".uno:ExtrusionSurface";
+constexpr OUString g_sExtrusionSurface = u".uno:ExtrusionSurface"_ustr;
 
 ExtrusionSurfaceWindow::ExtrusionSurfaceWindow(svt::PopupWindowController* pControl, weld::Widget* pParent)
     : WeldToolbarPopup(pControl->getFrameInterface(), pParent, "svx/ui/surfacewindow.ui", "SurfaceWindow")
@@ -894,7 +894,7 @@ IMPL_LINK(ExtrusionSurfaceWindow, SelectHdl, weld::Toggleable&, rButton, void)
         nSurface = 4;
 
     Sequence< PropertyValue > aArgs{ comphelper::makePropertyValue(
-        OUString(g_sExtrusionSurface).copy(5), nSurface) };
+        g_sExtrusionSurface.copy(5), nSurface) };
 
     mxControl->dispatchCommand( g_sExtrusionSurface, aArgs );
 

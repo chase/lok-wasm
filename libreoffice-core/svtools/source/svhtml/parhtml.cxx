@@ -377,9 +377,14 @@ namespace {
 
 constexpr bool HTML_ISPRINTABLE(sal_Unicode c) { return c >= 32 && c != 127; }
 
+constexpr bool HTML_ISSPACE(sal_uInt32 c)
+{
+    return ' ' == c || '\t' == c || '\r' == c || '\n' == c || '\x0b' == c;
 }
 
-HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
+}
+
+HtmlTokenId HTMLParser::ScanText(const sal_Unicode cBreak)
 {
     OUStringBuffer sTmpBuffer( MAX_LEN );
     bool bContinue = true;
@@ -478,7 +483,7 @@ HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
 
                     if( IsParserWorking() && !rInput.eof() )
                     {
-                        OUString sEntity(sEntityBuffer.getStr(), nPos);
+                        std::u16string_view sEntity(sEntityBuffer.subView(0, nPos));
                         cChar = GetHTMLCharName( sEntity );
 
                         // not found ( == 0 ): plain text
@@ -492,7 +497,7 @@ HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
                             {
                                 nNextCh = sEntityBuffer[i];
                                 sEntityBuffer.setLength( i );
-                                sEntity = OUString(sEntityBuffer.getStr(), i);
+                                sEntity = sEntityBuffer.subView(0, i);
                                 cChar = GetHTMLCharName( sEntity );
                                 if( cChar )
                                 {
@@ -705,37 +710,39 @@ HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
             {
                 break;
             }
-            nNextCh = ' ';
+            if (!m_bPreserveSpaces)
+                nNextCh = ' ';
             [[fallthrough]];
         case ' ':
-            sTmpBuffer.appendUtf32( nNextCh );
-            if( '>'!=cBreak && (!bReadListing && !bReadXMP &&
-                                !bReadPRE && !bReadTextArea) )
+            if (!m_bPreserveSpaces)
             {
-                // Reduce sequences of Blanks/Tabs/CR/LF to a single blank
-                do {
-                    nNextCh = GetNextChar();
-                    if( sal_Unicode(EOF) == nNextCh && rInput.eof() )
+                sTmpBuffer.appendUtf32(nNextCh);
+                if ('>' != cBreak && (!bReadListing && !bReadXMP && !bReadPRE && !bReadTextArea))
+                {
+                    // Reduce sequences of Blanks/Tabs/CR/LF to a single blank
+                    do
                     {
-                        if( !aToken.isEmpty() || sTmpBuffer.getLength() > 1 )
+                        nNextCh = GetNextChar();
+                        if (sal_Unicode(EOF) == nNextCh && rInput.eof())
                         {
-                            // Have seen s.th. aside from blanks?
-                            aToken.append( sTmpBuffer );
-                            sTmpBuffer.setLength(0);
-                            return HtmlTokenId::TEXTTOKEN;
+                            if (!aToken.isEmpty() || sTmpBuffer.getLength() > 1)
+                            {
+                                // Have seen s.th. aside from blanks?
+                                aToken.append(sTmpBuffer);
+                                sTmpBuffer.setLength(0);
+                                return HtmlTokenId::TEXTTOKEN;
+                            }
+                            else
+                                // Only read blanks: no text must be returned
+                                // and GetNextToken_ has to read until EOF
+                                return HtmlTokenId::NONE;
                         }
-                        else
-                            // Only read blanks: no text must be returned
-                            // and GetNextToken_ has to read until EOF
-                            return HtmlTokenId::NONE;
-                    }
-                } while ( ' ' == nNextCh || '\t' == nNextCh ||
-                          '\r' == nNextCh || '\n' == nNextCh ||
-                          '\x0b' == nNextCh );
-                bNextCh = false;
+                    } while (HTML_ISSPACE(nNextCh));
+                    bNextCh = false;
+                }
+                break;
             }
-            break;
-
+            [[fallthrough]];
         default:
             bEqSignFound = false;
             if (nNextCh == cBreak && !cQuote)
@@ -743,7 +750,7 @@ HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
             else
             {
                 do {
-                    if (!linguistic::IsControlChar(nNextCh))
+                    if (!linguistic::IsControlChar(nNextCh) || HTML_ISSPACE(nNextCh))
                     {
                     // All remaining characters make their way into the text.
                         sTmpBuffer.appendUtf32( nNextCh );
@@ -1054,7 +1061,11 @@ HtmlTokenId HTMLParser::GetNextToken_()
                         sTmpBuffer.appendUtf32( nNextCh );
                         nNextCh = GetNextChar();
                         if (std::u16string_view(sTmpBuffer) == u"![CDATA[")
+                            break;
+                        if (bFuzzing && sTmpBuffer.getLength() > 1024)
                         {
+                            SAL_WARN("svtools", "abandoning import for performance reasons with long tokens");
+                            eState = SvParserState::Error;
                             break;
                         }
                     } while( '>' != nNextCh && '/' != nNextCh && !rtl::isAsciiWhiteSpace( nNextCh ) &&
@@ -2154,7 +2165,7 @@ rtl_TextEncoding HTMLParser::GetEncodingByMIME( const OUString& rMime )
     INetContentTypeParameterList aParameters;
     if (INetContentTypes::parse(rMime, sType, sSubType, &aParameters))
     {
-        auto const iter = aParameters.find("charset");
+        auto const iter = aParameters.find("charset"_ostr);
         if (iter != aParameters.end())
         {
             const INetContentTypeParameter * pCharset = &iter->second;

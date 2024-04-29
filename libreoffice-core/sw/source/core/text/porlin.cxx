@@ -21,6 +21,7 @@
 #include <SwPortionHandler.hxx>
 
 #include "porlin.hxx"
+#include "portxt.hxx"
 #include "inftxt.hxx"
 #include "pormulti.hxx"
 #if OSL_DEBUG_LEVEL > 0
@@ -86,10 +87,10 @@ void SwLinePortion::PrePaint( const SwTextPaintInfo& rInf,
         return;
 
     const sal_uInt16 nHalfView = nViewWidth / 2;
-    sal_uInt16 nLastWidth = pLast->Width();
+    sal_uInt16 nLastWidth = pLast->Width() + pLast->ExtraBlankWidth();
 
-    if ( pLast->InSpaceGrp() && rInf.GetSpaceAdd() )
-        nLastWidth = nLastWidth + o3tl::narrowing<sal_uInt16>(pLast->CalcSpacing( rInf.GetSpaceAdd(), rInf ));
+    if ( pLast->InSpaceGrp() && rInf.GetSpaceAdd(/*bShrink=*/true) )
+        nLastWidth += pLast->CalcSpacing( rInf.GetSpaceAdd(/*bShrink=*/true), rInf );
 
     sal_uInt16 nPos;
     SwTextPaintInfo aInf( rInf );
@@ -202,6 +203,9 @@ SwLinePortion *SwLinePortion::Cut( SwLinePortion *pVictim )
 {
     SwLinePortion *pPrev = pVictim->FindPrevPortion( this );
     OSL_ENSURE( pPrev, "SwLinePortion::Cut(): can't cut" );
+    // note: if pVictim is a follow then clearing pPrev's m_bHasFollow here is
+    // tricky because it could be that the HookChar inserted a tab portion
+    // between 2 field portions
     pPrev->SetNextPortion( pVictim->GetNextPortion() );
     pVictim->SetNextPortion(nullptr);
     return pVictim;
@@ -266,16 +270,17 @@ bool SwLinePortion::Format( SwTextFormatInfo &rInf )
 void SwLinePortion::FormatEOL( SwTextFormatInfo & )
 { }
 
-void SwLinePortion::Move( SwTextPaintInfo &rInf )
+void SwLinePortion::Move(SwTextPaintInfo & rInf) const
 {
     bool bB2T = rInf.GetDirection() == DIR_BOTTOM2TOP;
     const bool bFrameDir = rInf.GetTextFrame()->IsRightToLeft();
     bool bCounterDir = ( ! bFrameDir && DIR_RIGHT2LEFT == rInf.GetDirection() ) ||
                        (   bFrameDir && DIR_LEFT2RIGHT == rInf.GetDirection() );
 
-    if ( InSpaceGrp() && rInf.GetSpaceAdd() )
+    SwTwips nTmp = PrtWidth() + ExtraBlankWidth();
+    if ( InSpaceGrp() && rInf.GetSpaceAdd(/*bShrink=*/true) )
     {
-        SwTwips nTmp = PrtWidth() + CalcSpacing( rInf.GetSpaceAdd(), rInf );
+        nTmp += CalcSpacing( rInf.GetSpaceAdd(/*bShrink=*/true), rInf );
         if( rInf.IsRotated() )
             rInf.Y( rInf.Y() + ( bB2T ? -nTmp : nTmp ) );
         else if ( bCounterDir )
@@ -291,19 +296,19 @@ void SwLinePortion::Move( SwTextPaintInfo &rInf )
             rInf.IncKanaIdx();
         }
         if( rInf.IsRotated() )
-            rInf.Y( rInf.Y() + ( bB2T ? -PrtWidth() : PrtWidth() ) );
+            rInf.Y(rInf.Y() + (bB2T ? -nTmp : nTmp));
         else if ( bCounterDir )
-            rInf.X( rInf.X() - PrtWidth() );
+            rInf.X(rInf.X() - nTmp);
         else
-            rInf.X( rInf.X() + PrtWidth() );
+            rInf.X(rInf.X() + nTmp);
     }
-    if( IsMultiPortion() && static_cast<SwMultiPortion*>(this)->HasTabulator() )
+    if (IsMultiPortion() && static_cast<SwMultiPortion const*>(this)->HasTabulator())
         rInf.IncSpaceIdx();
 
     rInf.SetIdx( rInf.GetIdx() + GetLen() );
 }
 
-tools::Long SwLinePortion::CalcSpacing( tools::Long , const SwTextSizeInfo & ) const
+SwTwips SwLinePortion::CalcSpacing( tools::Long , const SwTextSizeInfo & ) const
 {
     return 0;
 }

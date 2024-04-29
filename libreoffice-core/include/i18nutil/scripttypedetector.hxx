@@ -20,7 +20,8 @@
 #define INCLUDED_I18NUTIL_SCRIPTTYPEDETECTOR_HXX
 
 #include <i18nutil/i18nutildllapi.h>
-#include <rtl/ustring.hxx>
+
+#include <string_view>
 
 class I18NUTIL_DLLPUBLIC ScriptTypeDetector
 {
@@ -28,9 +29,6 @@ public:
     static sal_Int32 beginOfScriptDirection( std::u16string_view Text, sal_Int32 nPos, sal_Int16 scriptDirection );
     static sal_Int32 endOfScriptDirection( std::u16string_view Text, sal_Int32 nPos, sal_Int16 scriptDirection );
     static sal_Int16 getScriptDirection( std::u16string_view Text, sal_Int32 nPos, sal_Int16 defaultScriptDirection );
-    static sal_Int32 beginOfCTLScriptType( std::u16string_view Text, sal_Int32 nPos );
-    static sal_Int32 endOfCTLScriptType( std::u16string_view Text, sal_Int32 nPos );
-    static sal_Int16 getCTLScriptType(std::u16string_view Text, sal_Int32 nPos );
 };
 
 #endif

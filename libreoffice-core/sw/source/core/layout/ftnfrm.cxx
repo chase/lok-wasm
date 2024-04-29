@@ -17,6 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <libxml/xmlwriter.h>
+
 #include <txtftn.hxx>
 #include <fmtftn.hxx>
 #include <ftnidx.hxx>
@@ -2292,7 +2294,7 @@ void SwFootnoteBossFrame::RearrangeFootnotes( const SwTwips nDeadLine, const boo
                     {
                         pLastFootnoteFrame->Cut();
                         SwFrame::DestroyFrame(pLastFootnoteFrame);
-                        pLastFootnoteFrame = nullptr;
+                        // pLastFootnoteFrame overwritten at end of block
                     }
                 }
                 if ( !bLock )
@@ -2556,9 +2558,9 @@ SwTwips SwFootnoteBossFrame::GetVarSpace() const
     if( pBody )
     {
         SwRectFnSet aRectFnSet(this);
+        nRet = aRectFnSet.GetHeight(pBody->getFrameArea());
         if( IsInSct() )
         {
-            nRet = 0;
             SwTwips nTmp = aRectFnSet.YDiff( aRectFnSet.GetPrtTop(*pBody),
                                                aRectFnSet.GetTop(getFrameArea()) );
             const SwSectionFrame* pSect = FindSctFrame();
@@ -2592,12 +2594,11 @@ SwTwips SwFootnoteBossFrame::GetVarSpace() const
                     }
                 }
             }
-            if( nTmp < nRet )
-                nRet = nTmp;
+            if( nTmp < 0 )
+                nRet += nTmp;
         }
         else
-            nRet = - aRectFnSet.GetHeight(pPg->getFramePrintArea())/5;
-        nRet += aRectFnSet.GetHeight(pBody->getFrameArea());
+            nRet -= aRectFnSet.GetHeight(pPg->getFramePrintArea())/5;
         if( nRet < 0 )
             nRet = 0;
     }
@@ -2964,13 +2965,9 @@ SwContentFrame* SwFootnoteFrame::FindLastContent()
     while ( pTmpLastLower && pTmpLastLower->GetNext() )
     {
         pTmpLastLower = pTmpLastLower->GetNext();
-        if ( ( pTmpLastLower->IsTextFrame() &&
-               !static_cast<SwTextFrame*>(pTmpLastLower)->IsHiddenNow() ) ||
-             ( pTmpLastLower->IsSctFrame() &&
-               static_cast<SwSectionFrame*>(pTmpLastLower)->GetSection() &&
-               static_cast<SwSectionFrame*>(pTmpLastLower)->ContainsContent() ) ||
-             ( pTmpLastLower->IsTabFrame() &&
-               static_cast<SwTabFrame*>(pTmpLastLower)->ContainsContent() ) )
+        if (!pTmpLastLower->IsHiddenNow()
+            && (!pTmpLastLower->IsLayoutFrame()
+                || static_cast<SwLayoutFrame*>(pTmpLastLower)->ContainsContent()))
         {
             pLastLowerOfFootnote = pTmpLastLower;
         }
@@ -2991,6 +2988,30 @@ SwContentFrame* SwFootnoteFrame::FindLastContent()
     }
 
     return pLastContentFrame;
+}
+
+void SwFootnoteFrame::dumpAsXml(xmlTextWriterPtr writer) const
+{
+    (void)xmlTextWriterStartElement(writer, reinterpret_cast<const xmlChar*>("ftn"));
+    dumpAsXmlAttributes(writer);
+
+    (void)xmlTextWriterStartElement(writer, BAD_CAST("infos"));
+    dumpInfosAsXml(writer);
+    (void)xmlTextWriterEndElement(writer);
+    dumpChildrenAsXml(writer);
+
+    (void)xmlTextWriterEndElement(writer);
+}
+
+void SwFootnoteFrame::dumpAsXmlAttributes(xmlTextWriterPtr writer) const
+{
+    SwLayoutFrame::dumpAsXmlAttributes(writer);
+
+    (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST("ref"), "%" SAL_PRIuUINT32, GetRef()->GetFrameId() );
+    if (GetMaster())
+        (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST("master"), "%" SAL_PRIuUINT32, GetMaster()->GetFrameId() );
+    if (GetFollow())
+        (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST("follow"), "%" SAL_PRIuUINT32, GetFollow()->GetFrameId() );
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -135,12 +135,12 @@ uno::Reference< uno::XInterface > SAL_CALL SvxSimpleUnoModel::createInstance( co
         || aServiceSpecifier == "com.sun.star.text.TextField.DateTime"
        )
     {
-        return static_cast<cppu::OWeakObject *>(new SvxUnoTextField( text::textfield::Type::DATE ));
+        return cppu::getXWeak(new SvxUnoTextField( text::textfield::Type::DATE ));
     }
 
     if( aServiceSpecifier == "com.sun.star.text.TextField.URL" )
     {
-        return static_cast<cppu::OWeakObject *>(new SvxUnoTextField(text::textfield::Type::URL));
+        return cppu::getXWeak(new SvxUnoTextField(text::textfield::Type::URL));
     }
 
     return SvxUnoTextCreateTextField( aServiceSpecifier );
@@ -304,7 +304,7 @@ void SvxWriteXML( EditEngine& rEditEngine, SvStream& rStream, const ESelection& 
             uno::Reference<io::XOutputStream> xOut( new utl::OOutputStreamWrapper( rStream ) );
 
 /* testcode
-            static const OUStringLiteral aURL( u"file:///e:/test.xml" );
+            static constexpr OUStringLiteral aURL( u"file:///e:/test.xml" );
             SvFileStream aStream(aURL, StreamMode::WRITE | StreamMode::TRUNC);
             xOut = new utl::OOutputStreamWrapper(aStream);
 */

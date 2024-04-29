@@ -154,6 +154,7 @@ class AutofilterTest(UITestCase):
             xSearchEdit = xFloatWindow.getChild("search_edit")
             xSearchEdit.executeAction("TYPE", mkPropertyValues({"TEXT" : "11"}))
 
+            self.ui_test.wait_until_property_is_updated(xList, "Children", str(1))
             self.assertEqual(1, len(xList.getChildren()))
             self.assertEqual("11", get_state_as_dict(xList.getChild('0'))['Text'])
 
@@ -179,6 +180,7 @@ class AutofilterTest(UITestCase):
             xSearchEdit = xFloatWindow.getChild("search_edit")
             xSearchEdit.executeAction("TYPE", mkPropertyValues({"TEXT" : "22"}))
 
+            self.ui_test.wait_until_property_is_updated(xList, "Children", str(1))
             self.assertEqual(1, len(xList.getChildren()))
             self.assertEqual("22", get_state_as_dict(xList.getChild('0'))['Text'])
 
@@ -471,6 +473,7 @@ class AutofilterTest(UITestCase):
             xGridWin.executeAction("LAUNCH", mkPropertyValues({"AUTOFILTER": "", "COL": "1", "ROW": "0"}))
             xFloatWindow = self.xUITest.getFloatWindow()
             xMenu = xFloatWindow.getChild("menu")
+            xMenu.executeAction("TYPE", mkPropertyValues({"KEYCODE":"DOWN"}))
             xMenu.executeAction("TYPE", mkPropertyValues({"KEYCODE":"DOWN"}))
             xMenu.executeAction("TYPE", mkPropertyValues({"KEYCODE":"DOWN"}))
             xMenu.executeAction("TYPE", mkPropertyValues({"KEYCODE":"DOWN"}))

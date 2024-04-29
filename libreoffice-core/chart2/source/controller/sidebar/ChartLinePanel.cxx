@@ -196,7 +196,7 @@ void ChartLinePanel::selectionChanged(bool bCorrectType)
         updateData();
 }
 
-void ChartLinePanel::doUpdateModel(rtl::Reference<::chart::ChartModel> xModel)
+void ChartLinePanel::doUpdateModel(const rtl::Reference<::chart::ChartModel>& xModel)
 {
     if (mbModelValid)
     {
@@ -281,7 +281,7 @@ void ChartLinePanel::updateLineWidth(bool bDisabled, bool bSetOrDefault, const S
     if (comphelper::LibreOfficeKit::isActive() && pViewShell)
     {
         pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                        (".uno:LineWidth=" + std::to_string(mnWidthCoreValue)).c_str());
+                        ".uno:LineWidth=" + OString::number(mnWidthCoreValue));
     }
 }
 

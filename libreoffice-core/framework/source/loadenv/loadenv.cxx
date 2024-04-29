@@ -92,8 +92,8 @@
 #include <classes/taskcreator.hxx>
 #include <tools/fileutil.hxx>
 
-constexpr OUStringLiteral PROP_TYPES = u"Types";
-constexpr OUStringLiteral PROP_NAME = u"Name";
+constexpr OUString PROP_TYPES = u"Types"_ustr;
+constexpr OUString PROP_NAME = u"Name"_ustr;
 
 namespace framework {
 
@@ -105,7 +105,7 @@ class LoadEnvListener : public ::cppu::WeakImplHelper< css::frame::XLoadEventLis
                                                         css::frame::XDispatchResultListener >
 {
     private:
-        osl::Mutex m_mutex;
+        std::mutex m_mutex;
         bool m_bWaitingResult;
         LoadEnv* m_pLoadEnv;
 
@@ -477,7 +477,7 @@ css::uno::Reference< css::lang::XComponent > LoadEnv::getTargetComponent() const
 
 void SAL_CALL LoadEnvListener::loadFinished(const css::uno::Reference< css::frame::XFrameLoader >&)
 {
-    osl::MutexGuard g(m_mutex);
+    std::unique_lock g(m_mutex);
     if (m_bWaitingResult)
         m_pLoadEnv->impl_setResult(true);
     m_bWaitingResult = false;
@@ -485,7 +485,7 @@ void SAL_CALL LoadEnvListener::loadFinished(const css::uno::Reference< css::fram
 
 void SAL_CALL LoadEnvListener::loadCancelled(const css::uno::Reference< css::frame::XFrameLoader >&)
 {
-    osl::MutexGuard g(m_mutex);
+    std::unique_lock g(m_mutex);
     if (m_bWaitingResult)
         m_pLoadEnv->impl_setResult(false);
     m_bWaitingResult = false;
@@ -493,7 +493,7 @@ void SAL_CALL LoadEnvListener::loadCancelled(const css::uno::Reference< css::fra
 
 void SAL_CALL LoadEnvListener::dispatchFinished(const css::frame::DispatchResultEvent& aEvent)
 {
-    osl::MutexGuard g(m_mutex);
+    std::unique_lock g(m_mutex);
 
     if (!m_bWaitingResult)
         return;
@@ -517,7 +517,7 @@ void SAL_CALL LoadEnvListener::dispatchFinished(const css::frame::DispatchResult
 
 void SAL_CALL LoadEnvListener::disposing(const css::lang::EventObject&)
 {
-    osl::MutexGuard g(m_mutex);
+    std::unique_lock g(m_mutex);
     if (m_bWaitingResult)
         m_pLoadEnv->impl_setResult(false);
     m_bWaitingResult = false;
@@ -1804,7 +1804,7 @@ void LoadEnv::impl_applyPersistentWindowState(const css::uno::Reference< css::aw
                 return;
 
             SystemWindow* pSystemWindow = static_cast<SystemWindow*>(pWindowCheck.get());
-            pSystemWindow->SetWindowState(OUStringToOString(sWindowState,RTL_TEXTENCODING_UTF8));
+            pSystemWindow->SetWindowState(sWindowState);
             // <- SOLAR SAFE
         }
     }

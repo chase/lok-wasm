@@ -367,9 +367,10 @@ void SvxTransparenceTabPage::Reset(const SfxItemSet* rAttrs)
     m_xMtrTrgrStartValue->set_value(static_cast<sal_uInt16>(((static_cast<sal_uInt16>(aStart.GetRed()) + 1) * 100) / 255), FieldUnit::PERCENT);
     m_xMtrTrgrEndValue->set_value(static_cast<sal_uInt16>(((static_cast<sal_uInt16>(aEnd.GetRed()) + 1) * 100) / 255), FieldUnit::PERCENT);
 
-    // MCGR: preserve in-between ColorStops if given
-    if (rGradient.GetColorStops().size() > 2)
-        maColorStops = basegfx::BColorStops(rGradient.GetColorStops().begin() + 1, rGradient.GetColorStops().end() - 1);
+    // MCGR: preserve ColorStops if given
+    // tdf#155901 We need offset of first and last stop, so include them.
+    if (rGradient.GetColorStops().size() >= 2)
+        maColorStops = rGradient.GetColorStops();
     else
         maColorStops.clear();
 
@@ -419,7 +420,7 @@ void SvxTransparenceTabPage::ChangesApplied()
 
 void SvxTransparenceTabPage::ActivatePage(const SfxItemSet& rSet)
 {
-    const CntUInt16Item* pPageTypeItem = rSet.GetItem<CntUInt16Item>(SID_PAGE_TYPE, false);
+    const CntUInt16Item* pPageTypeItem = rSet.GetItem<SfxUInt16Item>(SID_PAGE_TYPE, false);
     if (pPageTypeItem)
         SetPageType(static_cast<PageType>(pPageTypeItem->GetValue()));
 
@@ -511,17 +512,22 @@ void SvxTransparenceTabPage::InvalidatePreview (bool bEnable)
 basegfx::BColorStops SvxTransparenceTabPage::createColorStops()
 {
     basegfx::BColorStops aColorStops;
-    const sal_uInt8 nStartCol(static_cast<sal_uInt8>((static_cast<sal_uInt16>(m_xMtrTrgrStartValue->get_value(FieldUnit::PERCENT)) * 255) / 100));
-    const sal_uInt8 nEndCol(static_cast<sal_uInt8>((static_cast<sal_uInt16>(m_xMtrTrgrEndValue->get_value(FieldUnit::PERCENT)) * 255) / 100));
+    basegfx::BColor aStartBColor(m_xMtrTrgrStartValue->get_value(FieldUnit::PERCENT) / 100.0);
+    aStartBColor.clamp();
+    basegfx::BColor aEndBColor(m_xMtrTrgrEndValue->get_value(FieldUnit::PERCENT) / 100.0);
+    aEndBColor.clamp();
 
-    aColorStops.emplace_back(0.0, Color(nStartCol, nStartCol, nStartCol).getBColor());
-
-    if(!maColorStops.empty())
+    if(maColorStops.size() >= 2)
     {
-        aColorStops.insert(aColorStops.begin(), maColorStops.begin(), maColorStops.end());
+        aColorStops = maColorStops;
+        aColorStops.front() = basegfx::BColorStop(maColorStops.front().getStopOffset(), aStartBColor);
+        aColorStops.back() = basegfx::BColorStop(maColorStops.back().getStopOffset(), aEndBColor);
     }
-
-    aColorStops.emplace_back(1.0, Color(nEndCol, nEndCol, nEndCol).getBColor());
+    else
+    {
+        aColorStops.emplace_back(0.0, aStartBColor);
+        aColorStops.emplace_back(1.0, aEndBColor);
+    }
 
     return aColorStops;
 }

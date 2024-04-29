@@ -39,7 +39,6 @@
 #include <vectdlg.hxx>
 #include <tpoption.hxx>
 #include <prntopts.hxx>
-#include <pubdlg.hxx>
 #include <masterlayoutdlg.hxx>
 #include <headerfooterdlg.hxx>
 #include "PhotoAlbumDialog.hxx"
@@ -61,7 +60,7 @@ BitmapEx SdAbstractGenericDialog_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString SdAbstractGenericDialog_Impl::GetScreenshotId() const
+OUString SdAbstractGenericDialog_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -146,11 +145,6 @@ short AbstractSdVectorizeDlg_Impl::Execute()
     return m_xDlg->run();
 }
 
-short AbstractSdPublishingDlg_Impl::Execute()
-{
-    return m_xDlg->run();
-}
-
 short AbstractHeaderFooterDialog_Impl::Execute()
 {
     return m_xDlg->run();
@@ -167,7 +161,7 @@ BitmapEx AbstractHeaderFooterDialog_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractHeaderFooterDialog_Impl::GetScreenshotId() const
+OUString AbstractHeaderFooterDialog_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -198,7 +192,7 @@ BitmapEx AbstractBreakDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractBreakDlg_Impl::GetScreenshotId() const
+OUString AbstractBreakDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -219,7 +213,7 @@ BitmapEx AbstractMasterLayoutDialog_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractMasterLayoutDialog_Impl::GetScreenshotId() const
+OUString AbstractMasterLayoutDialog_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -235,7 +229,7 @@ BitmapEx AbstractCopyDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractCopyDlg_Impl::GetScreenshotId() const
+OUString AbstractCopyDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -251,7 +245,7 @@ BitmapEx AbstractSdCustomShowDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractSdCustomShowDlg_Impl::GetScreenshotId() const
+OUString AbstractSdCustomShowDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -261,7 +255,7 @@ short SdAbstractTabController_Impl::Execute()
     return m_xDlg->run();
 }
 
-void SdAbstractTabController_Impl::SetCurPageId( const OString &rName )
+void SdAbstractTabController_Impl::SetCurPageId( const OUString &rName )
 {
     m_xDlg->SetCurPageId( rName );
 }
@@ -298,12 +292,12 @@ BitmapEx SdAbstractTabController_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString SdAbstractTabController_Impl::GetScreenshotId() const
+OUString SdAbstractTabController_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
 
-void AbstractBulletDialog_Impl::SetCurPageId( const OString& rName )
+void AbstractBulletDialog_Impl::SetCurPageId( const OUString& rName )
 {
     m_xDlg->SetCurPageId( rName );
 }
@@ -334,12 +328,12 @@ BitmapEx AbstractBulletDialog_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractBulletDialog_Impl::GetScreenshotId() const
+OUString AbstractBulletDialog_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
 
-void SdPresLayoutTemplateDlg_Impl::SetCurPageId( const OString& rName )
+void SdPresLayoutTemplateDlg_Impl::SetCurPageId( const OUString& rName )
 {
     m_xDlg->SetCurPageId( rName );
 }
@@ -370,7 +364,7 @@ BitmapEx SdPresLayoutTemplateDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString SdPresLayoutTemplateDlg_Impl::GetScreenshotId() const
+OUString SdPresLayoutTemplateDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -391,7 +385,7 @@ BitmapEx AbstractSdModifyFieldDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractSdModifyFieldDlg_Impl::GetScreenshotId() const
+OUString AbstractSdModifyFieldDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -427,7 +421,7 @@ BitmapEx AbstractSdSnapLineDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractSdSnapLineDlg_Impl::GetScreenshotId() const
+OUString AbstractSdSnapLineDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -437,7 +431,7 @@ void AbstractSdInsertLayerDlg_Impl::GetAttr( SfxItemSet& rOutAttrs )
     m_xDlg->GetAttr(rOutAttrs);
 }
 
-void AbstractSdInsertLayerDlg_Impl::SetHelpId( const OString& rHelpId )
+void AbstractSdInsertLayerDlg_Impl::SetHelpId( const OUString& rHelpId )
 {
     m_xDlg->set_help_id(rHelpId);
 }
@@ -448,7 +442,7 @@ BitmapEx AbstractSdInsertLayerDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractSdInsertLayerDlg_Impl::GetScreenshotId() const
+OUString AbstractSdInsertLayerDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -474,7 +468,7 @@ BitmapEx AbstractSdInsertPagesObjsDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractSdInsertPagesObjsDlg_Impl::GetScreenshotId() const
+OUString AbstractSdInsertPagesObjsDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -505,7 +499,7 @@ BitmapEx AbstractMorphDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractMorphDlg_Impl::GetScreenshotId() const
+OUString AbstractMorphDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -521,7 +515,7 @@ BitmapEx AbstractSdStartPresDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractSdStartPresDlg_Impl::GetScreenshotId() const
+OUString AbstractSdStartPresDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -537,7 +531,7 @@ BitmapEx AbstractSdPresLayoutDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractSdPresLayoutDlg_Impl::GetScreenshotId() const
+OUString AbstractSdPresLayoutDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -563,23 +557,7 @@ BitmapEx AbstractSdVectorizeDlg_Impl::createScreenshot() const
     return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
 }
 
-OString AbstractSdVectorizeDlg_Impl::GetScreenshotId() const
-{
-    return m_xDlg->get_help_id();
-}
-
-void AbstractSdPublishingDlg_Impl::GetParameterSequence( css::uno::Sequence< css::beans::PropertyValue >& rParams )
-{
-    m_xDlg->GetParameterSequence( rParams );
-}
-
-BitmapEx AbstractSdPublishingDlg_Impl::createScreenshot() const
-{
-    VclPtr<VirtualDevice> xDialogSurface(m_xDlg->getDialog()->screenshot());
-    return xDialogSurface->GetBitmapEx(Point(), xDialogSurface->GetOutputSizePixel());
-}
-
-OString AbstractSdPublishingDlg_Impl::GetScreenshotId() const
+OUString AbstractSdVectorizeDlg_Impl::GetScreenshotId() const
 {
     return m_xDlg->get_help_id();
 }
@@ -692,11 +670,6 @@ VclPtr<SfxAbstractDialog> SdAbstractDialogFactory_Impl::CreatSdActionDialog(weld
 VclPtr<AbstractSdVectorizeDlg>  SdAbstractDialogFactory_Impl::CreateSdVectorizeDlg(weld::Window* pParent, const Bitmap& rBmp, ::sd::DrawDocShell* pDocShell)
 {
     return VclPtr<AbstractSdVectorizeDlg_Impl>::Create(std::make_unique<SdVectorizeDlg>(pParent, rBmp, pDocShell));
-}
-
-VclPtr<AbstractSdPublishingDlg>  SdAbstractDialogFactory_Impl::CreateSdPublishingDlg(weld::Window* pParent, DocumentType eDocType)
-{
-    return VclPtr<AbstractSdPublishingDlg_Impl>::Create(std::make_unique<SdPublishingDlg>(pParent, eDocType));
 }
 
 // Factories for TabPages

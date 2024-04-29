@@ -88,7 +88,8 @@ void DrawViewShell::GetCtrlState(SfxItemSet &rSet)
 
         if (pOLV)
         {
-            const SvxFieldData* pField = pOLV->GetFieldAtCursor();
+            const SvxFieldItem* pFieldItem = pOLV->GetFieldAtSelection();
+            const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
             if( auto pUrlField = dynamic_cast< const SvxURLField *>( pField ) )
             {
                 aHLinkItem.SetName(pUrlField->GetRepresentation());
@@ -122,13 +123,13 @@ void DrawViewShell::GetCtrlState(SfxItemSet &rSet)
                         uno::Reference< beans::XPropertySetInfo > xPropInfo( xPropSet->getPropertySetInfo(), uno::UNO_SET_THROW );
 
                         form::FormButtonType eButtonType = form::FormButtonType_URL;
-                        static const OUStringLiteral sButtonType( u"ButtonType" );
+                        static constexpr OUString sButtonType( u"ButtonType"_ustr );
                         if(xPropInfo->hasPropertyByName( sButtonType ) && (xPropSet->getPropertyValue( sButtonType ) >>= eButtonType ) )
                         {
                             OUString aString;
 
                             // Label
-                            static const OUStringLiteral sLabel( u"Label" );
+                            static constexpr OUString sLabel( u"Label"_ustr );
                             if(xPropInfo->hasPropertyByName(sLabel))
                             {
                                 if( xPropSet->getPropertyValue(sLabel) >>= aString )
@@ -136,7 +137,7 @@ void DrawViewShell::GetCtrlState(SfxItemSet &rSet)
                             }
 
                             // URL
-                            static const OUStringLiteral sTargetURL( u"TargetURL" );
+                            static constexpr OUString sTargetURL( u"TargetURL"_ustr );
                             if(xPropInfo->hasPropertyByName(sTargetURL))
                             {
                                 if( xPropSet->getPropertyValue(sTargetURL) >>= aString )
@@ -144,7 +145,7 @@ void DrawViewShell::GetCtrlState(SfxItemSet &rSet)
                             }
 
                             // Target
-                            static const OUStringLiteral sTargetFrame( u"TargetFrame" );
+                            static constexpr OUString sTargetFrame( u"TargetFrame"_ustr );
                             if(xPropInfo->hasPropertyByName(sTargetFrame) )
                             {
                                 if( xPropSet->getPropertyValue(sTargetFrame) >>= aString )
@@ -524,7 +525,8 @@ void DrawViewShell::GetAttrState( SfxItemSet& rSet )
 
             case SID_REMOVE_HYPERLINK:
             {
-                if (!URLFieldHelper::IsCursorAtURLField(mpDrawView->GetTextEditOutlinerView()))
+                if (!URLFieldHelper::IsCursorAtURLField(mpDrawView->GetTextEditOutlinerView(),
+                                                        /*AlsoCheckBeforeCursor=*/true))
                     rSet.DisableItem(nWhich);
             }
             break;

@@ -19,14 +19,14 @@
 
 #include <awt/vclxcontainer.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
-#include <comphelper/interfacecontainer3.hxx>
+#include <toolkit/helper/listenermultiplexer.hxx>
 
 #include <vcl/svapp.hxx>
 #include <vcl/window.hxx>
 #include <vcl/tabpage.hxx>
 #include <tools/debug.hxx>
 #include <helper/scrollabledialog.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 
 void VCLXContainer::ImplGetPropertyIds( std::vector< sal_uInt16 > &rIds )
 {

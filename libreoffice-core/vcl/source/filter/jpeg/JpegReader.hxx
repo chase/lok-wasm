@@ -22,7 +22,7 @@
 #include <vcl/graph.hxx>
 #include <vcl/bitmap.hxx>
 
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <graphic/GraphicReader.hxx>
 
 enum class GraphicFilterImportFlags;
@@ -48,8 +48,8 @@ struct JPEGCreateBitmapParam
 class JPEGReader : public GraphicReader
 {
     SvStream&           mrStream;
-    std::unique_ptr<Bitmap> mpBitmap;
-    std::unique_ptr<Bitmap> mpIncompleteAlpha;
+    std::optional<Bitmap> mpBitmap;
+    std::optional<AlphaMask> mpIncompleteAlpha;
 
     tools::Long                mnLastPos;
     tools::Long                mnLastLines;

@@ -29,17 +29,18 @@
 
 #include <svl/lstner.hxx>
 #include <cppuhelper/basemutex.hxx>
-#include <cppuhelper/compbase5.hxx>
+#include <cppuhelper/compbase.hxx>
 #include <cppuhelper/implbase1.hxx>
+#include <rtl/ref.hxx>
 
 namespace tools { class Rectangle; }
+class AbsoluteScreenPixelRectangle;
 
 /** @descr
         This base class provides an implementation of the
         <code>AccessibleContext</code> service.
 */
-
-typedef cppu::WeakAggComponentImplHelper5<
+typedef cppu::WeakComponentImplHelper<
                 css::accessibility::XAccessible,
                 css::accessibility::XAccessibleComponent,
                 css::accessibility::XAccessibleContext,
@@ -47,16 +48,13 @@ typedef cppu::WeakAggComponentImplHelper5<
                 css::lang::XServiceInfo
                 > ScAccessibleContextBaseWeakImpl;
 
-typedef cppu::ImplHelper1<
-                css::accessibility::XAccessibleEventListener
-                > ScAccessibleContextBaseImplEvent;
-
 class ScAccessibleContextBase
     :   public cppu::BaseMutex,
         public ScAccessibleContextBaseWeakImpl,
-        public ScAccessibleContextBaseImplEvent,
         public SfxListener
 {
+class ScAccessibleContextBaseEventListener;
+
 public:
     //=====  internal  ========================================================
     ScAccessibleContextBase(
@@ -78,15 +76,6 @@ public:
     ///=====  SfxListener  =====================================================
 
     virtual void Notify( SfxBroadcaster& rBC, const SfxHint& rHint ) override;
-
-    ///=====  XInterface  =====================================================
-
-    virtual css::uno::Any SAL_CALL queryInterface(
-        css::uno::Type const & rType ) override;
-
-    virtual void SAL_CALL acquire() noexcept override;
-
-    virtual void SAL_CALL release() noexcept override;
 
     ///=====  XAccessible  =====================================================
 
@@ -173,15 +162,6 @@ public:
         removeAccessibleEventListener(
             const css::uno::Reference<css::accessibility::XAccessibleEventListener>& xListener) override;
 
-    ///=====  XAccessibleEventListener  ========================================
-
-    virtual void SAL_CALL
-        disposing( const css::lang::EventObject& Source ) override;
-
-    virtual void SAL_CALL
-        notifyEvent(
-        const css::accessibility::AccessibleEventObject& aEvent ) override;
-
     ///=====  XServiceInfo  ====================================================
 
     /** Returns an identifier for the implementation of this object.
@@ -200,17 +180,6 @@ public:
     virtual css::uno::Sequence< OUString> SAL_CALL
         getSupportedServiceNames() override;
 
-    ///=====  XTypeProvider  ===================================================
-
-     /// returns the possible types
-    virtual css::uno::Sequence< css::uno::Type > SAL_CALL
-        getTypes() override;
-
-    /** Returns an implementation id.
-    */
-    virtual css::uno::Sequence<sal_Int8> SAL_CALL
-        getImplementationId() override;
-
 protected:
     /// Return this object's description.
     ///
@@ -227,7 +196,7 @@ protected:
     /// Return the object's current bounding box relative to the desktop.
     ///
     /// @throws css::uno::RuntimeException
-    virtual tools::Rectangle GetBoundingBoxOnScreen() const;
+    virtual AbsoluteScreenPixelRectangle GetBoundingBoxOnScreen() const;
 
     /// Return the object's current bounding box relative to the parent object.
     ///
@@ -280,6 +249,8 @@ private:
     /** This is the role of this object.
     */
     sal_Int16 maRole;
+
+    rtl::Reference<ScAccessibleContextBaseEventListener> mxEventListener;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -21,6 +21,7 @@
 #include <comphelper/sequence.hxx>
 #include <osl/diagnose.h>
 #include <sal/log.hxx>
+#include <comphelper/diagnose_ex.hxx>
 
 #if OSL_DEBUG_LEVEL > 0
     #include <cppuhelper/exc_hlp.hxx>
@@ -87,10 +88,12 @@ void copyProperties(const Reference<XPropertySet>& _rxSource,
             catch (Exception&)
             {
 #if OSL_DEBUG_LEVEL > 0
-                OUStringBuffer aBuffer;
-                aBuffer.append( "::comphelper::copyProperties: could not copy property '" );
-                aBuffer.append(rSourceProp.Name );
-                aBuffer.append( "' to the destination set (a '" );
+                TOOLS_WARN_EXCEPTION("comphelper", "Caught exception copying properties");
+
+                OUStringBuffer aBuffer(
+                        "::comphelper::copyProperties: could not copy property '"
+                        + rSourceProp.Name
+                        + "' to the destination set (a '" );
 
                 Reference< XServiceInfo > xSI( _rxDest, UNO_QUERY );
                 if ( xSI.is() )
@@ -99,21 +102,21 @@ void copyProperties(const Reference<XPropertySet>& _rxSource,
                 }
                 else
                 {
-                    aBuffer.append( OUString::createFromAscii(typeid( *_rxDest ).name()) );
+                    aBuffer.appendAscii( typeid( *_rxDest ).name() );
                 }
                 aBuffer.append( "' implementation).\n" );
 
                 Any aException( ::cppu::getCaughtException() );
-                aBuffer.append( "Caught an exception of type '" );
-                aBuffer.append( aException.getValueTypeName() );
-                aBuffer.append( "'" );
+                aBuffer.append( "Caught an exception of type '"
+                        + aException.getValueTypeName()
+                        + "'" );
 
                 Exception aBaseException;
                 if ( ( aException >>= aBaseException ) && !aBaseException.Message.isEmpty() )
                 {
-                    aBuffer.append( ", saying '" );
-                    aBuffer.append( aBaseException.Message );
-                    aBuffer.append( "'" );
+                    aBuffer.append( ", saying '"
+                        + aBaseException.Message
+                        + "'" );
                 }
                 aBuffer.append( "." );
 

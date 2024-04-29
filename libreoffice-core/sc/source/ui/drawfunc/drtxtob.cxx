@@ -37,6 +37,7 @@
 #include <editeng/lspcitem.hxx>
 #include <editeng/ulspitem.hxx>
 #include <editeng/urlfieldhelper.hxx>
+#include <editeng/editund2.hxx>
 #include <svx/hlnkitem.hxx>
 #include <svx/svdoutl.hxx>
 #include <svx/sdooitm.hxx>
@@ -182,7 +183,7 @@ void ScDrawTextObjectBar::Execute( SfxRequest &rReq )
                     if (nFormat == SotClipboardFormatId::STRING)
                         pOutView->Paste();
                     else
-                        pOutView->PasteSpecial();
+                        pOutView->PasteSpecial(nFormat);
                 }
             }
             break;
@@ -291,8 +292,10 @@ void ScDrawTextObjectBar::Execute( SfxRequest &rReq )
             break;
 
         case SID_OPEN_HYPERLINK:
-            if (const SvxFieldData* pField = pOutView->GetFieldAtCursor())
             {
+                const SvxFieldItem* pFieldItem
+                    = pOutView->GetFieldAtSelection(/*AlsoCheckBeforeCursor=*/true);
+                const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
                 if (const SvxURLField* pURLField = dynamic_cast<const SvxURLField*>(pField))
                 {
                     ScGlobal::OpenURL(pURLField->GetURL(), pURLField->GetTargetFrame(), true);
@@ -304,13 +307,15 @@ void ScDrawTextObjectBar::Execute( SfxRequest &rReq )
             {
                 // Ensure the field is selected first
                 pOutView->SelectFieldAtCursor();
-                mrViewData.GetViewShell()->GetViewFrame()->GetDispatcher()->Execute(SID_HYPERLINK_DIALOG);
+                mrViewData.GetViewShell()->GetViewFrame().GetDispatcher()->Execute(SID_HYPERLINK_DIALOG);
             }
             break;
 
         case SID_COPY_HYPERLINK_LOCATION:
             {
-                const SvxFieldData* pField = pOutView->GetFieldAtCursor();
+                const SvxFieldItem* pFieldItem
+                    = pOutView->GetFieldAtSelection(/*AlsoCheckBeforeCursor=*/true);
+                const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
                 if (const SvxURLField* pURLField = dynamic_cast<const SvxURLField*>(pField))
                 {
                     uno::Reference<datatransfer::clipboard::XClipboard> xClipboard
@@ -322,7 +327,6 @@ void ScDrawTextObjectBar::Execute( SfxRequest &rReq )
 
         case SID_REMOVE_HYPERLINK:
             {
-                // Ensure the field is selected first
                 URLFieldHelper::RemoveURLField(pOutView->GetEditView());
             }
             break;
@@ -357,8 +361,8 @@ void ScDrawTextObjectBar::Execute( SfxRequest &rReq )
 
 void ScDrawTextObjectBar::GetState( SfxItemSet& rSet )
 {
-    SfxViewFrame* pViewFrm = mrViewData.GetViewShell()->GetViewFrame();
-    bool bHasFontWork = pViewFrm->HasChildWindow(SID_FONTWORK);
+    SfxViewFrame& rViewFrm = mrViewData.GetViewShell()->GetViewFrame();
+    bool bHasFontWork = rViewFrm.HasChildWindow(SID_FONTWORK);
     bool bDisableFontWork = false;
 
     if (IsNoteEdit())
@@ -380,7 +384,8 @@ void ScDrawTextObjectBar::GetState( SfxItemSet& rSet )
         if ( pOutView )
         {
             bool bField = false;
-            const SvxFieldData* pField = pOutView->GetFieldAtCursor();
+            const SvxFieldItem* pFieldItem = pOutView->GetFieldAtSelection();
+            const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
             if (const SvxURLField* pURLField = dynamic_cast<const SvxURLField*>(pField))
             {
                 aHLinkItem.SetName( pURLField->GetRepresentation() );
@@ -406,8 +411,8 @@ void ScDrawTextObjectBar::GetState( SfxItemSet& rSet )
         || rSet.GetItemState(SID_COPY_HYPERLINK_LOCATION) != SfxItemState::UNKNOWN
         || rSet.GetItemState(SID_REMOVE_HYPERLINK) != SfxItemState::UNKNOWN)
     {
-        SdrView* pView = mrViewData.GetScDrawView();
-        if( !URLFieldHelper::IsCursorAtURLField(pView->GetTextEditOutlinerView()) )
+        OutlinerView* pOutView = mrViewData.GetScDrawView()->GetTextEditOutlinerView();
+        if (!URLFieldHelper::IsCursorAtURLField(pOutView, /*AlsoCheckBeforeCursor=*/true))
         {
             rSet.DisableItem( SID_OPEN_HYPERLINK );
             rSet.DisableItem( SID_EDIT_HYPERLINK );
@@ -417,18 +422,18 @@ void ScDrawTextObjectBar::GetState( SfxItemSet& rSet )
     }
 
     if( rSet.GetItemState( SID_TRANSLITERATE_HALFWIDTH ) != SfxItemState::UNKNOWN )
-        ScViewUtil::HideDisabledSlot( rSet, pViewFrm->GetBindings(), SID_TRANSLITERATE_HALFWIDTH );
+        ScViewUtil::HideDisabledSlot( rSet, rViewFrm.GetBindings(), SID_TRANSLITERATE_HALFWIDTH );
     if( rSet.GetItemState( SID_TRANSLITERATE_FULLWIDTH ) != SfxItemState::UNKNOWN )
-        ScViewUtil::HideDisabledSlot( rSet, pViewFrm->GetBindings(), SID_TRANSLITERATE_FULLWIDTH );
+        ScViewUtil::HideDisabledSlot( rSet, rViewFrm.GetBindings(), SID_TRANSLITERATE_FULLWIDTH );
     if( rSet.GetItemState( SID_TRANSLITERATE_HIRAGANA ) != SfxItemState::UNKNOWN )
-        ScViewUtil::HideDisabledSlot( rSet, pViewFrm->GetBindings(), SID_TRANSLITERATE_HIRAGANA );
+        ScViewUtil::HideDisabledSlot( rSet, rViewFrm.GetBindings(), SID_TRANSLITERATE_HIRAGANA );
     if( rSet.GetItemState( SID_TRANSLITERATE_KATAKANA ) != SfxItemState::UNKNOWN )
-        ScViewUtil::HideDisabledSlot( rSet, pViewFrm->GetBindings(), SID_TRANSLITERATE_KATAKANA );
+        ScViewUtil::HideDisabledSlot( rSet, rViewFrm.GetBindings(), SID_TRANSLITERATE_KATAKANA );
 
     if ( rSet.GetItemState( SID_ENABLE_HYPHENATION ) != SfxItemState::UNKNOWN )
     {
         SdrView* pView = mrViewData.GetScDrawView();
-        SfxItemSet aAttrs( pView->GetModel()->GetItemPool() );
+        SfxItemSet aAttrs(pView->GetModel().GetItemPool());
         pView->GetAttributes( aAttrs );
         if( aAttrs.GetItemState( EE_PARA_HYPHENATE ) >= SfxItemState::DEFAULT )
         {
@@ -527,6 +532,8 @@ void ScDrawTextObjectBar::GetClipState( SfxItemSet& rSet )
                         aFormats.AddClipbrdFormat( SotClipboardFormatId::RTF );
                     if ( aDataHelper.HasFormat( SotClipboardFormatId::RICHTEXT ) )
                         aFormats.AddClipbrdFormat( SotClipboardFormatId::RICHTEXT );
+                    if (aDataHelper.HasFormat(SotClipboardFormatId::HTML_SIMPLE))
+                        aFormats.AddClipbrdFormat(SotClipboardFormatId::HTML_SIMPLE);
 
                     rSet.Put( aFormats );
                 }
@@ -550,7 +557,7 @@ void ScDrawTextObjectBar::ExecuteToggle( SfxRequest &rReq )
 
     SfxItemSet aSet( pView->GetDefaultAttr() );
 
-    SfxItemSet aViewAttr(pView->GetModel()->GetItemPool());
+    SfxItemSet aViewAttr(pView->GetModel().GetItemPool());
     pView->GetAttributes(aViewAttr);
 
     //  Underline
@@ -662,7 +669,7 @@ void ScDrawTextObjectBar::ExecuteAttr( SfxRequest &rReq )
     const SfxItemSet*   pArgs = rReq.GetArgs();
     sal_uInt16          nSlot = rReq.GetSlot();
 
-    SfxItemSet aEditAttr( pView->GetModel()->GetItemPool() );
+    SfxItemSet aEditAttr( pView->GetModel().GetItemPool() );
     pView->GetAttributes( aEditAttr );
     SfxItemSet  aNewAttr( *aEditAttr.GetPool(), aEditAttr.GetRanges() );
 
@@ -791,7 +798,8 @@ void ScDrawTextObjectBar::ExecuteAttr( SfxRequest &rReq )
     {
         switch ( nSlot )
         {
-            case SID_TEXT_STANDARD: // delete hard text attributes
+            case SID_CELL_FORMAT_RESET:
+            case SID_TEXT_STANDARD:
             {
                 OutlinerView* pOutView = pView->IsTextEdit() ?
                                 pView->GetTextEditOutlinerView() : nullptr;
@@ -799,7 +807,17 @@ void ScDrawTextObjectBar::ExecuteAttr( SfxRequest &rReq )
                     pOutView->Paint( tools::Rectangle() );
 
                 SfxItemSetFixed<EE_ITEMS_START, EE_ITEMS_END> aEmptyAttr( *aEditAttr.GetPool() );
+                SfxItemSetFixed<SDRATTR_TEXT_MINFRAMEHEIGHT, SDRATTR_TEXT_MINFRAMEHEIGHT,
+                                SDRATTR_TEXT_MAXFRAMEHEIGHT, SDRATTR_TEXT_MAXFRAMEWIDTH> aSizeAttr(*aEditAttr.GetPool());
+
+                aSizeAttr.Put(pView->GetAttrFromMarked(true));
                 pView->SetAttributes( aEmptyAttr, true );
+
+                if (IsNoteEdit())
+                {
+                    pView->SetAttributes(aSizeAttr, false);
+                    pView->GetTextEditObject()->AdjustTextFrameWidthAndHeight();
+                }
 
                 if ( pOutView )
                 {
@@ -928,8 +946,7 @@ void ScDrawTextObjectBar::ExecuteAttr( SfxRequest &rReq )
         SfxItemSetFixed<EE_PARA_LRSPACE, EE_PARA_LRSPACE> aAttr( GetPool() );
         nId = EE_PARA_LRSPACE;
         SvxLRSpaceItem aLRSpaceItem( rItem.GetLeft(),
-            rItem.GetRight(), rItem.GetTextLeft(),
-            rItem.GetTextFirstLineOffset(), nId );
+            rItem.GetRight(), rItem.GetTextFirstLineOffset(), nId );
         aAttr.Put( aLRSpaceItem );
         pView->SetAttributes( aAttr );
     }
@@ -965,11 +982,11 @@ void ScDrawTextObjectBar::GetAttrState( SfxItemSet& rDestSet )
         // issue 21255 - Notes now support rich text formatting.
     }
 
-    bool bDisableCTLFont = !SvtCTLOptions().IsCTLFontEnabled();
+    bool bDisableCTLFont = !::SvtCTLOptions::IsCTLFontEnabled();
     bool bDisableVerticalText = !SvtCJKOptions::IsVerticalTextEnabled();
 
     SdrView* pView = mrViewData.GetScDrawView();
-    SfxItemSet aAttrSet(pView->GetModel()->GetItemPool());
+    SfxItemSet aAttrSet(pView->GetModel().GetItemPool());
     pView->GetAttributes(aAttrSet);
 
     //  direct attributes
@@ -1192,7 +1209,7 @@ void ScDrawTextObjectBar::GetStatePropPanelAttr(SfxItemSet &rSet)
 
     SdrView*            pView = mrViewData.GetScDrawView();
 
-    SfxItemSet aEditAttr(pView->GetModel()->GetItemPool());
+    SfxItemSet aEditAttr(pView->GetModel().GetItemPool());
     pView->GetAttributes(aEditAttr);
     //SfxItemSet    aAttrs( *aEditAttr.GetPool(), aEditAttr.GetRanges() );
 

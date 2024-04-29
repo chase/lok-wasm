@@ -901,7 +901,7 @@ bool IsEmptyBox( const SwTableBox& rBox, SwPaM& rPam )
     if( bRet )
     {
         // now check for paragraph bound flies
-        const SwFrameFormats& rFormats = *rPam.GetDoc().GetSpzFrameFormats();
+        const sw::SpzFrameFormats& rFormats = *rPam.GetDoc().GetSpzFrameFormats();
         SwNodeOffset nSttIdx = rPam.GetPoint()->GetNodeIndex(),
               nEndIdx = rBox.GetSttNd()->EndOfSectionIndex(),
               nIdx;
@@ -2383,7 +2383,9 @@ void FndBox_::MakeFrames( SwTable &rTable )
             for ( sal_uInt16 j = nStPos; j <= nEndPos; ++j )
             {
                 SwTableLine * pLine = rTable.GetTabLines()[j];
-                if ( !bHideChanges || !pLine->IsDeleted(nRedlinePos) )
+                if ( ( !bHideChanges || !pLine->IsDeleted(nRedlinePos) ) &&
+                            // tdf#159026 fix Undo crash with floating tables
+                            pUpperFrame->GetUpper() )
                     ::lcl_InsertRow( *pLine,
                                 static_cast<SwLayoutFrame*>(pUpperFrame), pSibling );
             }

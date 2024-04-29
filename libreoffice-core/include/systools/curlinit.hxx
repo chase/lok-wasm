@@ -11,10 +11,16 @@
 
 #include <curl/curl.h>
 
-#if defined(LINUX) && !defined(SYSTEM_CURL)
+#include <officecfg/Office/Security.hxx>
+
+// curl is built with --with-secure-transport on macOS and iOS so doesn't need these
+// certs. Windows doesn't need them either, but lets assume everything else does
+#if !defined(SYSTEM_OPENSSL) && !defined(_WIN32) && !defined(MACOSX) && !defined(IOS)
 #include <com/sun/star/uno/RuntimeException.hpp>
 
+#define LO_CURL_NEEDS_CA_BUNDLE
 #include "opensslinit.hxx"
+#endif
 
 #include <rtl/string.hxx>
 #include <sal/log.hxx>
@@ -23,11 +29,35 @@
 
 static void InitCurl_easy(CURL* const pCURL)
 {
+    CURLcode rc;
+    (void)rc;
+
+#if defined(LO_CURL_NEEDS_CA_BUNDLE)
     char const* const path = GetCABundleFile();
-    auto rc = curl_easy_setopt(pCURL, CURLOPT_CAINFO, path);
+    rc = curl_easy_setopt(pCURL, CURLOPT_CAINFO, path);
     if (rc != CURLE_OK) // only if OOM?
     {
         throw css::uno::RuntimeException("CURLOPT_CAINFO failed");
+    }
+#endif
+
+    if (!officecfg::Office::Security::Net::AllowInsecureProtocols::get())
+    {
+        rc = curl_easy_setopt(pCURL, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+        assert(rc == CURLE_OK);
+        rc = curl_easy_setopt(pCURL, CURLOPT_PROXY_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+        assert(rc == CURLE_OK);
+#if (LIBCURL_VERSION_MAJOR > 7) || (LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR >= 85)
+        rc = curl_easy_setopt(pCURL, CURLOPT_PROTOCOLS_STR, "https");
+        assert(rc == CURLE_OK);
+        rc = curl_easy_setopt(pCURL, CURLOPT_REDIR_PROTOCOLS_STR, "https");
+        assert(rc == CURLE_OK);
+#else
+        rc = curl_easy_setopt(pCURL, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+        assert(rc == CURLE_OK);
+        rc = curl_easy_setopt(pCURL, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
+        assert(rc == CURLE_OK);
+#endif
     }
 
     curl_version_info_data const* const pVersion(curl_version_info(CURLVERSION_NOW));
@@ -50,13 +80,6 @@ static void InitCurl_easy(CURL* const pCURL)
     assert(rc == CURLE_OK);
 }
 
-#else
-
-static void InitCurl_easy(CURL* const)
-{
-    // these don't use OpenSSL so CAs work out of the box
-}
-
-#endif
+#undef LO_CURL_NEEDS_CA_BUNDLE
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab cinoptions=b1,g0,N-s cinkeys+=0=break: */

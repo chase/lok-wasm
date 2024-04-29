@@ -20,7 +20,6 @@
 #ifndef INCLUDED_VCL_SOURCE_INC_SVIMPBOX_HXX
 #define INCLUDED_VCL_SOURCE_INC_SVIMPBOX_HXX
 
-#include <vcl/dllapi.h>
 #include <vcl/seleng.hxx>
 #include <vcl/idle.hxx>
 #include <vcl/image.hxx>
@@ -250,7 +249,7 @@ public:
     void                Resize();
     void                GetFocus();
     void                LoseFocus();
-    virtual void        UpdateAll( bool bInvalidateCompleteView );
+    virtual void        UpdateAll();
     void                SetEntryHeight();
     void                InvalidateEntry( SvTreeListEntry* );
     void                RecalcFocusRect();

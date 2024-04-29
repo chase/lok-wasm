@@ -92,7 +92,6 @@ using namespace ::com::sun::star::linguistic2;
 
 using namespace com::sun::star::xml::dom;
 using ::com::sun::star::uno::Reference;
-using ::com::sun::star::lang::XMultiServiceFactory;
 
 
 SdDrawDocument* SdDrawDocument::s_pDocLockedInsertingLinks = nullptr;
@@ -165,7 +164,6 @@ SdDrawDocument::SdDrawDocument(DocumentType eType, SfxObjectShell* pDrDocSh)
         SetUIUnit( static_cast<FieldUnit>(pOptions->GetMetric()), Fraction( 1, 1 ) );    // default
 
     SetScaleUnit(MapUnit::Map100thMM);
-    SetScaleFraction(Fraction(1, 1));
     SetDefaultFontHeight(o3tl::convert(24, o3tl::Length::pt, o3tl::Length::mm100));
 
     m_pItemPool->SetDefaultMetric(MapUnit::Map100thMM);
@@ -200,7 +198,7 @@ SdDrawDocument::SdDrawDocument(DocumentType eType, SfxObjectShell* pDrDocSh)
     }
 
     LanguageType eRealLanguage = MsLangId::getRealLanguage( meLanguage );
-    mpCharClass.reset(new CharClass( LanguageTag( eRealLanguage) ));
+    moCharClass.emplace(LanguageTag( eRealLanguage));
 
     // If the current application language is a language that uses right-to-left text...
     LanguageType eRealCTLLanguage = Application::GetSettings().GetLanguageTag().getLanguageType();
@@ -368,7 +366,7 @@ SdDrawDocument::~SdDrawDocument()
     mpCustomShowList.reset();
     mpOutliner.reset();
     mpInternalOutliner.reset();
-    mpCharClass.reset();
+    moCharClass.reset();
 }
 
 void SdDrawDocument::adaptSizeAndBorderForAllPages(
@@ -1011,9 +1009,9 @@ void SdDrawDocument::SetOnlineSpell(bool bIn)
 }
 
 // OnlineSpelling: highlighting on/off
-uno::Reference< uno::XInterface > SdDrawDocument::createUnoModel()
+uno::Reference< frame::XModel > SdDrawDocument::createUnoModel()
 {
-    uno::Reference< uno::XInterface > xModel;
+    uno::Reference< frame::XModel > xModel;
 
     try
     {

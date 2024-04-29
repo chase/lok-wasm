@@ -54,8 +54,8 @@
 using namespace ::ooo::vba;
 using namespace ::com::sun::star;
 
-constexpr OUStringLiteral FORMATSTRING = u"FormatString";
-constexpr OUStringLiteral LOCALE = u"Locale";
+constexpr OUString FORMATSTRING = u"FormatString"_ustr;
+constexpr OUString LOCALE = u"Locale"_ustr;
 
 template< typename... Ifc >
 ScVbaFormat< Ifc... >::ScVbaFormat( const uno::Reference< XHelperInterface >& xParent,
@@ -796,7 +796,7 @@ template< typename... Ifc >
 ScCellRangesBase*
 ScVbaFormat< Ifc... >::getCellRangesBase()
 {
-    return comphelper::getFromUnoTunnel<ScCellRangesBase>( mxPropertySet );
+    return dynamic_cast<ScCellRangesBase*>( mxPropertySet.get() );
 }
 
 template< typename... Ifc >

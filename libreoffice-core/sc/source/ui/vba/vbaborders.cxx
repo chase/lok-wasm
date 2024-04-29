@@ -43,7 +43,7 @@ typedef InheritedHelperInterfaceWeakImpl<excel::XBorder > ScVbaBorder_Base;
 // borders, the enumeration will match the order in this list
 const sal_Int16 supportedIndexTable[] = {  XlBordersIndex::xlEdgeLeft, XlBordersIndex::xlEdgeTop, XlBordersIndex::xlEdgeBottom, XlBordersIndex::xlEdgeRight, XlBordersIndex::xlDiagonalDown, XlBordersIndex::xlDiagonalUp, XlBordersIndex::xlInsideVertical, XlBordersIndex::xlInsideHorizontal };
 
-constexpr OUStringLiteral sTableBorder = u"TableBorder";
+constexpr OUString sTableBorder = u"TableBorder"_ustr;
 
 //  Equiv widths in 1/100 mm
 const sal_Int32 OOLineThin = 26;
@@ -367,18 +367,18 @@ namespace {
 class RangeBorderEnumWrapper : public EnumerationHelper_BASE
 {
     uno::Reference<container::XIndexAccess > m_xIndexAccess;
-    sal_Int32 nIndex;
+    sal_Int32 m_nIndex;
 public:
-    explicit RangeBorderEnumWrapper( uno::Reference< container::XIndexAccess > xIndexAccess ) : m_xIndexAccess(std::move( xIndexAccess )), nIndex( 0 ) {}
+    explicit RangeBorderEnumWrapper( uno::Reference< container::XIndexAccess > xIndexAccess ) : m_xIndexAccess(std::move( xIndexAccess )), m_nIndex( 0 ) {}
     virtual sal_Bool SAL_CALL hasMoreElements(  ) override
     {
-        return ( nIndex < m_xIndexAccess->getCount() );
+        return ( m_nIndex < m_xIndexAccess->getCount() );
     }
 
     virtual uno::Any SAL_CALL nextElement(  ) override
     {
-        if ( nIndex < m_xIndexAccess->getCount() )
-            return m_xIndexAccess->getByIndex( nIndex++ );
+        if ( m_nIndex < m_xIndexAccess->getCount() )
+            return m_xIndexAccess->getByIndex( m_nIndex++ );
         throw container::NoSuchElementException();
     }
 };

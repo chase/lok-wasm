@@ -35,6 +35,7 @@
 #include <com/sun/star/io/XSeekable.hpp>
 #include <com/sun/star/xml/crypto/DigestID.hpp>
 #include <com/sun/star/xml/crypto/CipherID.hpp>
+#include <com/sun/star/xml/crypto/KDFID.hpp>
 
 #include <CRC32.hxx>
 #include <ZipOutputEntry.hxx>
@@ -53,6 +54,7 @@
 
 #include <rtl/random.h>
 #include <sal/log.hxx>
+#include <o3tl/unreachable.hxx>
 #include <comphelper/diagnose_ex.hxx>
 
 #include <PackageConstants.hxx>
@@ -73,12 +75,6 @@ using namespace cppu;
 #define THROW_WHERE ""
 #endif
 
-const css::uno::Sequence < sal_Int8 > & ZipPackageStream::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit lcl_CachedImplId;
-    return lcl_CachedImplId.getSeq();
-}
-
 ZipPackageStream::ZipPackageStream ( ZipPackage & rNewPackage,
                                     const uno::Reference< XComponentContext >& xContext,
                                     sal_Int32 nFormat,
@@ -90,7 +86,6 @@ ZipPackageStream::ZipPackageStream ( ZipPackage & rNewPackage,
 , m_bIsEncrypted ( false )
 , m_nImportedStartKeyAlgorithm( 0 )
 , m_nImportedEncryptionAlgorithm( 0 )
-, m_nImportedChecksumAlgorithm( 0 )
 , m_nImportedDerivedKeySize( 0 )
 , m_nStreamMode( PACKAGE_STREAM_NOTSET )
 , m_nMagicalHackPos( 0 )
@@ -190,9 +185,19 @@ sal_Int32 ZipPackageStream::GetEncryptionAlgorithm() const
     return m_nImportedEncryptionAlgorithm ? m_nImportedEncryptionAlgorithm : m_rZipPackage.GetEncAlgID();
 }
 
-sal_Int32 ZipPackageStream::GetBlockSize() const
+sal_Int32 ZipPackageStream::GetIVSize() const
 {
-    return GetEncryptionAlgorithm() == css::xml::crypto::CipherID::AES_CBC_W3C_PADDING ? 16 : 8;
+    switch (GetEncryptionAlgorithm())
+    {
+        case css::xml::crypto::CipherID::BLOWFISH_CFB_8:
+            return 8;
+        case css::xml::crypto::CipherID::AES_CBC_W3C_PADDING:
+            return 16;
+        case css::xml::crypto::CipherID::AES_GCM_W3C:
+            return 12;
+        default:
+            O3TL_UNREACHABLE;
+    }
 }
 
 ::rtl::Reference<EncryptionData> ZipPackageStream::GetEncryptionData(Bugs const bugs)
@@ -203,7 +208,7 @@ sal_Int32 ZipPackageStream::GetBlockSize() const
             *m_xBaseEncryptionData,
             GetEncryptionKey(bugs),
             GetEncryptionAlgorithm(),
-            m_nImportedChecksumAlgorithm ? m_nImportedChecksumAlgorithm : m_rZipPackage.GetChecksumAlgID(),
+            m_oImportedChecksumAlgorithm ? m_oImportedChecksumAlgorithm : m_rZipPackage.GetChecksumAlgID(),
             m_nImportedDerivedKeySize ? m_nImportedDerivedKeySize : m_rZipPackage.GetDefaultDerivedKeySize(),
             GetStartKeyGenID(),
             bugs != Bugs::None);
@@ -225,10 +230,10 @@ uno::Sequence<sal_Int8> ZipPackageStream::GetEncryptionKey(Bugs const bugs)
         else if ( nKeyGenID == xml::crypto::DigestID::SHA1 )
         {
             aNameToFind = bUseWinEncoding
-                ? OUString(PACKAGE_ENCRYPTIONDATA_SHA1MS1252)
+                ? PACKAGE_ENCRYPTIONDATA_SHA1MS1252
                 : (bugs == Bugs::WrongSHA1)
-                    ? OUString(PACKAGE_ENCRYPTIONDATA_SHA1UTF8)
-                    : OUString(PACKAGE_ENCRYPTIONDATA_SHA1CORRECT);
+                    ? PACKAGE_ENCRYPTIONDATA_SHA1UTF8
+                    : PACKAGE_ENCRYPTIONDATA_SHA1CORRECT;
         }
         else
             throw uno::RuntimeException(THROW_WHERE "No expected key is provided!" );
@@ -300,13 +305,13 @@ uno::Reference< io::XInputStream > ZipPackageStream::TryToGetRawFromDataStream( 
         }
 
         // insert a new stream in the package
-        uno::Reference< XUnoTunnel > xTunnel;
+        uno::Reference< XInterface > xTmp;
         Any aRoot = pPackage->getByHierarchicalName("/");
-        aRoot >>= xTunnel;
-        uno::Reference< container::XNameContainer > xRootNameContainer( xTunnel, UNO_QUERY_THROW );
+        aRoot >>= xTmp;
+        uno::Reference< container::XNameContainer > xRootNameContainer( xTmp, UNO_QUERY_THROW );
 
-        uno::Reference< XUnoTunnel > xNPSTunnel( xNewPackStream, UNO_QUERY );
-        xRootNameContainer->insertByName("dummy", Any( xNPSTunnel ) );
+        uno::Reference< XInterface > xNPSDummy( xNewPackStream, UNO_QUERY );
+        xRootNameContainer->insertByName("dummy", Any( xNPSDummy ) );
 
         // commit the temporary package
         pPackage->commitChanges();
@@ -330,9 +335,9 @@ uno::Reference< io::XInputStream > ZipPackageStream::TryToGetRawFromDataStream( 
         // close raw stream, package stream and folder
         xInRaw.clear();
         xNewPSProps.clear();
-        xNPSTunnel.clear();
+        xNPSDummy.clear();
         xNewPackStream.clear();
-        xTunnel.clear();
+        xTmp.clear();
         xRootNameContainer.clear();
 
         // return the stream representing the first temporary file
@@ -349,6 +354,9 @@ uno::Reference< io::XInputStream > ZipPackageStream::TryToGetRawFromDataStream( 
     throw io::IOException(THROW_WHERE );
 }
 
+// presumably the purpose of this is to transfer encrypted streams between
+// storages, needed for password-protected macros in documents, which is
+// tragically a feature that exists
 bool ZipPackageStream::ParsePackageRawStream()
 {
     OSL_ENSURE( GetOwnSeekStream().is(), "A stream must be provided!" );
@@ -390,7 +398,14 @@ bool ZipPackageStream::ParsePackageRawStream()
                                                         + xTempEncrData->m_aDigest.getLength()
                                                         + aMediaType.getLength() * sizeof( sal_Unicode );
                     m_nImportedEncryptionAlgorithm = nEncAlgorithm;
-                    m_nImportedChecksumAlgorithm = nChecksumAlgorithm;
+                    if (nChecksumAlgorithm == 0)
+                    {
+                        m_oImportedChecksumAlgorithm.reset();
+                    }
+                    else
+                    {
+                        m_oImportedChecksumAlgorithm.emplace(nChecksumAlgorithm);
+                    }
                     m_nImportedDerivedKeySize = nDerivedKeySize;
                     m_nImportedStartKeyAlgorithm = nStartKeyGenID;
                     m_nMagicalHackSize = nMagHackSize;
@@ -436,16 +451,17 @@ bool ZipPackageStream::saveChild(
         std::vector < uno::Sequence < beans::PropertyValue > > &rManList,
         ZipOutputStream & rZipOut,
         const uno::Sequence < sal_Int8 >& rEncryptionKey,
-        sal_Int32 nPBKDF2IterationCount,
+        ::std::optional<sal_Int32> const oPBKDF2IterationCount,
+        ::std::optional<::std::tuple<sal_Int32, sal_Int32, sal_Int32>> const oArgon2Args,
         const rtlRandomPool &rRandomPool)
 {
     bool bSuccess = true;
 
-    static const OUStringLiteral sDigestProperty (u"Digest");
-    static const OUStringLiteral sEncryptionAlgProperty    (u"EncryptionAlgorithm");
-    static const OUStringLiteral sStartKeyAlgProperty  (u"StartKeyAlgorithm");
-    static const OUStringLiteral sDigestAlgProperty    (u"DigestAlgorithm");
-    static const OUStringLiteral sDerivedKeySizeProperty  (u"DerivedKeySize");
+    static constexpr OUString sDigestProperty (u"Digest"_ustr);
+    static constexpr OUString sEncryptionAlgProperty    (u"EncryptionAlgorithm"_ustr);
+    static constexpr OUString sStartKeyAlgProperty  (u"StartKeyAlgorithm"_ustr);
+    static constexpr OUString sDigestAlgProperty    (u"DigestAlgorithm"_ustr);
+    static constexpr OUString sDerivedKeySizeProperty  (u"DerivedKeySize"_ustr);
 
     uno::Sequence < beans::PropertyValue > aPropSet (PKG_SIZE_NOENCR_MNFST);
 
@@ -573,9 +589,17 @@ bool ZipPackageStream::saveChild(
         {
             if ( bToBeEncrypted && !bTransportOwnEncrStreamAsRaw )
             {
-                uno::Sequence < sal_Int8 > aSalt( 16 ), aVector( GetBlockSize() );
-                rtl_random_getBytes ( rRandomPool, aSalt.getArray(), 16 );
-                rtl_random_getBytes ( rRandomPool, aVector.getArray(), aVector.getLength() );
+                uno::Sequence<sal_Int8> aSalt(16);
+                // note: for GCM it's particularly important that IV is unique
+                uno::Sequence<sal_Int8> aVector(GetIVSize());
+                if (rtl_random_getBytes(rRandomPool, aSalt.getArray(), 16) != rtl_Random_E_None)
+                {
+                    throw uno::RuntimeException("rtl_random_getBytes failed");
+                }
+                if (rtl_random_getBytes(rRandomPool, aVector.getArray(), aVector.getLength()) != rtl_Random_E_None)
+                {
+                    throw uno::RuntimeException("rtl_random_getBytes failed");
+                }
                 if ( !m_bHaveOwnKey )
                 {
                     m_aEncryptionKey = rEncryptionKey;
@@ -584,7 +608,8 @@ bool ZipPackageStream::saveChild(
 
                 setInitialisationVector ( aVector );
                 setSalt ( aSalt );
-                setIterationCount(nPBKDF2IterationCount);
+                setIterationCount(oPBKDF2IterationCount);
+                setArgon2Args(oArgon2Args);
             }
 
             // last property is digest, which is inserted later if we didn't have
@@ -595,8 +620,29 @@ bool ZipPackageStream::saveChild(
             pPropSet[PKG_MNFST_INIVECTOR].Value <<= m_xBaseEncryptionData->m_aInitVector;
             pPropSet[PKG_MNFST_SALT].Name = "Salt";
             pPropSet[PKG_MNFST_SALT].Value <<= m_xBaseEncryptionData->m_aSalt;
-            pPropSet[PKG_MNFST_ITERATION].Name = "IterationCount";
-            pPropSet[PKG_MNFST_ITERATION].Value <<= m_xBaseEncryptionData->m_nIterationCount;
+            if (m_xBaseEncryptionData->m_oArgon2Args)
+            {
+                pPropSet[PKG_MNFST_KDF].Name = "KeyDerivationFunction";
+                pPropSet[PKG_MNFST_KDF].Value <<= xml::crypto::KDFID::Argon2id;
+                pPropSet[PKG_MNFST_ARGON2ARGS].Name = "Argon2Args";
+                uno::Sequence<sal_Int32> const args{
+                    ::std::get<0>(*m_xBaseEncryptionData->m_oArgon2Args),
+                    ::std::get<1>(*m_xBaseEncryptionData->m_oArgon2Args),
+                    ::std::get<2>(*m_xBaseEncryptionData->m_oArgon2Args) };
+                pPropSet[PKG_MNFST_ARGON2ARGS].Value <<= args;
+            }
+            else if (m_xBaseEncryptionData->m_oPBKDFIterationCount)
+            {
+                pPropSet[PKG_MNFST_KDF].Name = "KeyDerivationFunction";
+                pPropSet[PKG_MNFST_KDF].Value <<= xml::crypto::KDFID::PBKDF2;
+                pPropSet[PKG_MNFST_ITERATION].Name = "IterationCount";
+                pPropSet[PKG_MNFST_ITERATION].Value <<= *m_xBaseEncryptionData->m_oPBKDFIterationCount;
+            }
+            else
+            {
+                pPropSet[PKG_MNFST_KDF].Name = "KeyDerivationFunction";
+                pPropSet[PKG_MNFST_KDF].Value <<= xml::crypto::KDFID::PGP_RSA_OAEP_MGF1P;
+            }
 
             // Need to store the uncompressed size in the manifest
             OSL_ENSURE( m_nOwnStreamOrigSize >= 0, "The stream size was not correctly initialized!" );
@@ -609,14 +655,18 @@ bool ZipPackageStream::saveChild(
                 if ( !xEncData.is() )
                     throw uno::RuntimeException();
 
-                pPropSet[PKG_MNFST_DIGEST].Name = sDigestProperty;
-                pPropSet[PKG_MNFST_DIGEST].Value <<= m_xBaseEncryptionData->m_aDigest;
                 pPropSet[PKG_MNFST_ENCALG].Name = sEncryptionAlgProperty;
                 pPropSet[PKG_MNFST_ENCALG].Value <<= xEncData->m_nEncAlg;
                 pPropSet[PKG_MNFST_STARTALG].Name = sStartKeyAlgProperty;
                 pPropSet[PKG_MNFST_STARTALG].Value <<= xEncData->m_nStartKeyGenID;
-                pPropSet[PKG_MNFST_DIGESTALG].Name = sDigestAlgProperty;
-                pPropSet[PKG_MNFST_DIGESTALG].Value <<= xEncData->m_nCheckAlg;
+                if (xEncData->m_oCheckAlg)
+                {
+                    assert(xEncData->m_nEncAlg != xml::crypto::CipherID::AES_GCM_W3C);
+                    pPropSet[PKG_MNFST_DIGEST].Name = sDigestProperty;
+                    pPropSet[PKG_MNFST_DIGEST].Value <<= m_xBaseEncryptionData->m_aDigest;
+                    pPropSet[PKG_MNFST_DIGESTALG].Name = sDigestAlgProperty;
+                    pPropSet[PKG_MNFST_DIGESTALG].Value <<= *xEncData->m_oCheckAlg;
+                }
                 pPropSet[PKG_MNFST_DERKEYSIZE].Name = sDerivedKeySizeProperty;
                 pPropSet[PKG_MNFST_DERKEYSIZE].Value <<= xEncData->m_nDerivedKeySize;
             }
@@ -800,14 +850,24 @@ bool ZipPackageStream::saveChild(
             if ( !xEncData.is() )
                 throw uno::RuntimeException();
 
-            pPropSet[PKG_MNFST_DIGEST].Name = sDigestProperty;
-            pPropSet[PKG_MNFST_DIGEST].Value <<= m_xBaseEncryptionData->m_aDigest;
+            // very confusing: half the encryption properties are
+            // unconditionally added above and the other half conditionally;
+            // assert that we have the expected group and not duplicates
+            assert(std::any_of(aPropSet.begin(), aPropSet.end(), [](auto const& it){ return it.Name == "Salt"; }));
+            assert(!std::any_of(aPropSet.begin(), aPropSet.end(), [](auto const& it){ return it.Name == sEncryptionAlgProperty; }));
+
             pPropSet[PKG_MNFST_ENCALG].Name = sEncryptionAlgProperty;
             pPropSet[PKG_MNFST_ENCALG].Value <<= xEncData->m_nEncAlg;
             pPropSet[PKG_MNFST_STARTALG].Name = sStartKeyAlgProperty;
             pPropSet[PKG_MNFST_STARTALG].Value <<= xEncData->m_nStartKeyGenID;
-            pPropSet[PKG_MNFST_DIGESTALG].Name = sDigestAlgProperty;
-            pPropSet[PKG_MNFST_DIGESTALG].Value <<= xEncData->m_nCheckAlg;
+            if (xEncData->m_oCheckAlg)
+            {
+                assert(xEncData->m_nEncAlg != xml::crypto::CipherID::AES_GCM_W3C);
+                pPropSet[PKG_MNFST_DIGEST].Name = sDigestProperty;
+                pPropSet[PKG_MNFST_DIGEST].Value <<= m_xBaseEncryptionData->m_aDigest;
+                pPropSet[PKG_MNFST_DIGESTALG].Name = sDigestAlgProperty;
+                pPropSet[PKG_MNFST_DIGESTALG].Value <<= *xEncData->m_oCheckAlg;
+            }
             pPropSet[PKG_MNFST_DERKEYSIZE].Name = sDerivedKeySizeProperty;
             pPropSet[PKG_MNFST_DERKEYSIZE].Value <<= xEncData->m_nDerivedKeySize;
 
@@ -953,6 +1013,9 @@ uno::Reference< io::XInputStream > SAL_CALL ZipPackageStream::getDataStream()
         }
         catch( const packages::WrongPasswordException& )
         {
+            // note: due to SHA1 check this fallback is only done for
+            // * ODF 1.2 files written by OOo < 3.4beta / LO < 3.5
+            // * ODF 1.1/OOoXML files written by any version
             if ( m_rZipPackage.GetStartKeyGenID() == xml::crypto::DigestID::SHA1 )
             {
                 SAL_WARN("package", "ZipPackageStream::getDataStream(): SHA1 mismatch, trying fallbacks...");
@@ -1093,13 +1156,6 @@ uno::Reference< io::XInputStream > SAL_CALL ZipPackageStream::getPlainRawStream(
     }
 
     return uno::Reference< io::XInputStream >();
-}
-
-// XUnoTunnel
-
-sal_Int64 SAL_CALL ZipPackageStream::getSomething( const Sequence< sal_Int8 >& aIdentifier )
-{
-    return comphelper::getSomethingImpl(aIdentifier, this);
 }
 
 // XPropertySet

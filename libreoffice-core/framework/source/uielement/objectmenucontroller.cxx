@@ -27,6 +27,7 @@
 #include <cppuhelper/weak.hxx>
 #include <vcl/svapp.hxx>
 #include <osl/mutex.hxx>
+#include <toolkit/awt/vclxmenu.hxx>
 
 using namespace com::sun::star::uno;
 using namespace com::sun::star::lang;
@@ -84,7 +85,7 @@ void ObjectMenuController::fillPopupMenu( const Sequence< css::embed::VerbDescri
 
     resetPopupMenu( rPopupMenu );
 
-    static const OUStringLiteral aVerbCommand( u".uno:ObjectMenue?VerbID:short=" );
+    static constexpr OUStringLiteral aVerbCommand( u".uno:ObjectMenue?VerbID:short=" );
     for ( sal_Int32 i = 0; i < rVerbCommandSeq.getLength(); i++ )
     {
         const css::embed::VerbDescriptor& rVerb = pVerbCommandArray[i];
@@ -102,7 +103,7 @@ void SAL_CALL ObjectMenuController::disposing( const EventObject& )
 {
     Reference< css::awt::XMenuListener > xHolder(this);
 
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     m_xFrame.clear();
     m_xDispatch.clear();
 
@@ -117,7 +118,7 @@ void SAL_CALL ObjectMenuController::statusChanged( const FeatureStateEvent& Even
     Sequence < css::embed::VerbDescriptor > aVerbCommandSeq;
     if ( Event.State >>= aVerbCommandSeq )
     {
-        osl::MutexGuard aLock( m_aMutex );
+        std::unique_lock aLock( m_aMutex );
         if ( m_xPopupMenu.is() )
             fillPopupMenu( aVerbCommandSeq, m_xPopupMenu );
     }

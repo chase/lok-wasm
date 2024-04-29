@@ -14,12 +14,12 @@
 #include <comphelper/classids.hxx>
 #include <tools/globname.hxx>
 #include <svtools/embedhlp.hxx>
+#include <editeng/acorrcfg.hxx>
 #include <editeng/frmdiritem.hxx>
+#include <editeng/svxacorr.hxx>
 #include <vcl/errinf.hxx>
 #include <vcl/event.hxx>
 #include <editeng/langitem.hxx>
-#include <sfx2/viewfrm.hxx>
-#include <sfx2/dispatch.hxx>
 #include <vcl/scheduler.hxx>
 #include <comphelper/propertyvalue.hxx>
 
@@ -31,7 +31,6 @@
 #include <view.hxx>
 #include <ndtxt.hxx>
 #include <swdtflvr.hxx>
-#include <cmdid.h>
 #include <unotxdoc.hxx>
 #include <UndoManager.hxx>
 #include <IDocumentRedlineAccess.hxx>
@@ -65,7 +64,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testMathInsertAnchorType)
     pShell->InsertObject(svt::EmbeddedObjectRef(), &aGlobalName);
 
     // Then the anchor type should be as-char.
-    SwFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), rFormats.size());
     const SwFrameFormat& rFormat = *rFormats[0];
     const SwFormatAnchor& rAnchor = rFormat.GetAnchor();
@@ -82,7 +81,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testTextboxTextRotateAngle)
     // Check the writing direction of the only TextFrame in the document.
     createSwDoc("textbox-textrotateangle.odt");
     SwDoc* pDoc = getSwDoc();
-    SwFrameFormats& rFrameFormats = *pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormats& rFrameFormats = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(2), rFrameFormats.size());
     CPPUNIT_ASSERT_EQUAL(o3tl::narrowing<sal_uInt16>(RES_DRAWFRMFMT), rFrameFormats[0]->Which());
     CPPUNIT_ASSERT_EQUAL(o3tl::narrowing<sal_uInt16>(RES_FLYFRMFMT), rFrameFormats[1]->Which());
@@ -117,6 +116,55 @@ CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testNumDownIndent)
     ErrorRegistry::Reset();
 }
 
+CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testBulletsOnSpaceOff)
+{
+    SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
+    pAutoCorrect->GetSwFlags().bSetNumRule = false;
+    pAutoCorrect->GetSwFlags().bSetNumRuleAfterSpace = false;
+
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwDocShell* pDocShell = pDoc->GetDocShell();
+    SwWrtShell* pWrtShell = pDocShell->GetWrtShell();
+    pWrtShell->Down(/*bSelect=*/false);
+    SwEditWin& rEditWin = pDocShell->GetView()->GetEditWin();
+    KeyEvent aKeyEvent('-', 0);
+    rEditWin.KeyInput(aKeyEvent);
+    KeyEvent aKeyEvent2(' ', KEY_SPACE);
+    rEditWin.KeyInput(aKeyEvent2);
+    KeyEvent aKeyEvent3('a', 0);
+    rEditWin.KeyInput(aKeyEvent3);
+    SwTextNode* pTextNode = pWrtShell->GetCursor()->GetPointNode().GetTextNode();
+
+    CPPUNIT_ASSERT_EQUAL(OUString("- a"), pTextNode->GetText());
+    ErrorRegistry::Reset();
+}
+
+CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testBulletsOnSpace)
+{
+    SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
+    pAutoCorrect->GetSwFlags().bSetNumRule = true;
+    pAutoCorrect->GetSwFlags().bSetNumRuleAfterSpace = true;
+
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwDocShell* pDocShell = pDoc->GetDocShell();
+    SwWrtShell* pWrtShell = pDocShell->GetWrtShell();
+    pWrtShell->Down(/*bSelect=*/false);
+    SwEditWin& rEditWin = pDocShell->GetView()->GetEditWin();
+    KeyEvent aKeyEvent('-', 0);
+    rEditWin.KeyInput(aKeyEvent);
+    KeyEvent aKeyEvent2(' ', KEY_SPACE);
+    rEditWin.KeyInput(aKeyEvent2);
+    KeyEvent aKeyEvent3('a', 0);
+    rEditWin.KeyInput(aKeyEvent3);
+    SwTextNode* pTextNode = pWrtShell->GetCursor()->GetPointNode().GetTextNode();
+
+    // '- ' was converted into bullet
+    CPPUNIT_ASSERT_EQUAL(OUString("a"), pTextNode->GetText());
+    ErrorRegistry::Reset();
+}
+
 CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testLocaleIndependentTemplate)
 {
     createSwDoc("locale-independent-template.odt");
@@ -142,9 +190,9 @@ CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testTextBoxZOrder)
 {
     createSwDoc("textbox-zorder.docx");
     SwDoc* pDoc = getSwDoc();
-    SwFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(3), rFormats.size());
-    const SwFrameFormat* pEllipse = rFormats[2];
+    const sw::SpzFrameFormat* pEllipse = rFormats[2];
     const SdrObject* pEllipseShape = pEllipse->FindRealSdrObject();
     // Make sure we test the right shape.
     CPPUNIT_ASSERT_EQUAL(OUString("Shape3"), pEllipseShape->GetName());
@@ -182,7 +230,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testTextBoxMakeFlyFrame)
     // Without the accompanying fix in place, this test would have failed, because the first text
     // frame in the body frame had an SwAnchoredDrawObject anchored to it, but not a fly frame, so
     // a blank square was painted, not the image.
-    assertXPath(pLayout, "/root/page/body/txt/anchored/fly", 1);
+    assertXPath(pLayout, "/root/page/body/txt/anchored/fly"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testIMEGrouping)
@@ -301,10 +349,9 @@ CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testCopyBookmarks)
 
     // Also, when checking the # of non-copy images in the resulting doc model:
     nActual = 0;
-    SwFrameFormats& rFrameFormats = *pDoc->GetSpzFrameFormats();
-    for (size_t i = 0; i < rFrameFormats.size(); ++i)
+    for (auto pSpz : *pDoc->GetSpzFrameFormats())
     {
-        if (rFrameFormats[i]->GetName().indexOf("Copy") == -1)
+        if (pSpz->GetName().indexOf("Copy") == -1)
         {
             ++nActual;
         }
@@ -525,7 +572,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreDocTest, testSplitFlyInsertUndo)
     // Given a document with an inline table, which is then turned into a floating one:
     createSwDoc();
     SwDoc* pDoc = getSwDocShell()->GetDoc();
-    const SwFrameFormats& rFlyFormats = *pDoc->GetSpzFrameFormats();
+    sw::FrameFormats<sw::SpzFrameFormat*>& rFlyFormats = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT(rFlyFormats.empty());
     // Insert a table:
     SwWrtShell* pWrtShell = getSwDocShell()->GetWrtShell();

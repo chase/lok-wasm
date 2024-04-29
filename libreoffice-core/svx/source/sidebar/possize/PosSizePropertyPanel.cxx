@@ -52,7 +52,7 @@
 using namespace css;
 using namespace css::uno;
 
-constexpr OUStringLiteral USERITEM_NAME = u"FitItem";
+constexpr OUString USERITEM_NAME = u"FitItem"_ustr;
 
 namespace svx::sidebar {
 
@@ -238,7 +238,7 @@ void PosSizePropertyPanel::Initialize()
 
     if ( mpView != nullptr )
     {
-        maUIScale = mpView->GetModel()->GetUIScale();
+        maUIScale = mpView->GetModel().GetUIScale();
         mbAdjustEnabled = hasText(*mpView);
     }
 
@@ -401,7 +401,7 @@ IMPL_LINK_NOARG( PosSizePropertyPanel, ChangePosXHdl, weld::MetricSpinButton&, v
     {
         tools::Long lX = GetCoreValue( *mxMtrPosX, mePoolUnit );
 
-        Fraction aUIScale = mpView->GetModel()->GetUIScale();
+        Fraction aUIScale = mpView->GetModel().GetUIScale();
         lX = tools::Long( lX * aUIScale );
 
         SfxInt32Item aPosXItem( SID_ATTR_TRANSFORM_POS_X,static_cast<sal_uInt32>(lX));
@@ -417,7 +417,7 @@ IMPL_LINK_NOARG( PosSizePropertyPanel, ChangePosYHdl, weld::MetricSpinButton&, v
     {
         tools::Long lY = GetCoreValue( *mxMtrPosY, mePoolUnit );
 
-        Fraction aUIScale = mpView->GetModel()->GetUIScale();
+        Fraction aUIScale = mpView->GetModel().GetUIScale();
         lY = tools::Long( lY * aUIScale );
 
         SfxInt32Item aPosYItem( SID_ATTR_TRANSFORM_POS_Y,static_cast<sal_uInt32>(lY));
@@ -445,7 +445,7 @@ IMPL_LINK_NOARG( PosSizePropertyPanel, RotationHdl, DialControl&, void )
     Degree100 nTmp = mxCtrlDial->GetRotation();
 
     // #i123993# Need to take UIScale into account when executing rotations
-    const double fUIScale(mpView && mpView->GetModel() ? double(mpView->GetModel()->GetUIScale()) : 1.0);
+    const double fUIScale(mpView ? double(mpView->GetModel().GetUIScale()) : 1.0);
     SdrAngleItem aAngleItem( SID_ATTR_TRANSFORM_ANGLE, nTmp);
     SfxInt32Item aRotXItem( SID_ATTR_TRANSFORM_ROT_X, basegfx::fround(mlRotX * fUIScale));
     SfxInt32Item aRotYItem( SID_ATTR_TRANSFORM_ROT_Y, basegfx::fround(mlRotY * fUIScale));
@@ -688,7 +688,7 @@ void PosSizePropertyPanel::NotifyItemUpdate(
 
         case SID_ATTR_METRIC:
         {
-            const Fraction aUIScale(mpView->GetModel()->GetUIScale());
+            const Fraction aUIScale(mpView->GetModel().GetUIScale());
             MetricState(eState, pState, aUIScale);
             UpdateUIScale(aUIScale);
             mbFieldMetricOutDated = false;
@@ -799,7 +799,7 @@ void PosSizePropertyPanel::GetControlState(const sal_uInt16 nSID, boost::propert
     {
         OUString sValue = Application::GetSettings().GetNeutralLocaleDataWrapper().
             getNum(pControl->get_value(pControl->get_unit()), pControl->get_digits(), false, false);
-        rState.put(pControl->get_buildable_name().getStr(), sValue.toUtf8().getStr());
+        rState.put(pControl->get_buildable_name().toUtf8().getStr(), sValue.toUtf8().getStr());
     }
 }
 
@@ -808,7 +808,7 @@ void PosSizePropertyPanel::executeSize()
     if ( !mxMtrWidth->get_value_changed_from_saved() && !mxMtrHeight->get_value_changed_from_saved())
         return;
 
-    Fraction aUIScale = mpView->GetModel()->GetUIScale();
+    Fraction aUIScale = mpView->GetModel().GetUIScale();
 
     // get Width
     double nWidth = static_cast<double>(mxMtrWidth->get_value(FieldUnit::MM_100TH));
@@ -921,9 +921,7 @@ FieldUnit PosSizePropertyPanel::GetCurrentUnit( SfxItemState eState, const SfxPo
             SfxModule* pModule = pSh->GetModule();
             if ( pModule )
             {
-                const SfxPoolItem* pItem = pModule->GetItem( SID_ATTR_METRIC );
-                if ( pItem )
-                    eUnit = static_cast<FieldUnit>(static_cast<const SfxUInt16Item*>(pItem)->GetValue());
+                eUnit = pModule->GetFieldUnit();
             }
             else
             {

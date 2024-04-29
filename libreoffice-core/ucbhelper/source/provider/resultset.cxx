@@ -1303,7 +1303,7 @@ void ResultSet::propertyChanged( const beans::PropertyChangeEvent& rEvt ) const
 
     // Notify listeners interested especially in the changed property.
     comphelper::OInterfaceContainerHelper4<beans::XPropertyChangeListener>* pPropsContainer
-        = m_pImpl->m_pPropertyChangeListeners->getContainer(
+        = m_pImpl->m_pPropertyChangeListeners->getContainer(aGuard,
                                                         rEvt.PropertyName );
     if ( pPropsContainer )
     {
@@ -1312,14 +1312,10 @@ void ResultSet::propertyChanged( const beans::PropertyChangeEvent& rEvt ) const
 
     // Notify listeners interested in all properties.
     pPropsContainer
-        = m_pImpl->m_pPropertyChangeListeners->getContainer( OUString() );
+        = m_pImpl->m_pPropertyChangeListeners->getContainer( aGuard, OUString() );
     if ( pPropsContainer )
     {
-        comphelper::OInterfaceIteratorHelper4 aIter( aGuard, *pPropsContainer );
-        while ( aIter.hasMoreElements() )
-        {
-            aIter.next()->propertyChange( rEvt );
-        }
+        pPropsContainer->notifyEach( aGuard, &beans::XPropertyChangeListener::propertyChange, rEvt);
     }
 }
 
@@ -1333,7 +1329,7 @@ void ResultSet::rowCountChanged( sal_uInt32 nOld, sal_uInt32 nNew )
 
     propertyChanged(
         beans::PropertyChangeEvent(
-            static_cast< cppu::OWeakObject * >( this ),
+            getXWeak(),
             "RowCount",
             false,
             1001,
@@ -1349,7 +1345,7 @@ void ResultSet::rowCountFinal()
 
     propertyChanged(
         beans::PropertyChangeEvent(
-            static_cast< cppu::OWeakObject * >( this ),
+            getXWeak(),
             "IsRowCountFinal",
             false,
             1000,

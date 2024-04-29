@@ -58,6 +58,7 @@
 #include <com/sun/star/drawing/framework/XView.hpp>
 #include <com/sun/star/drawing/framework/ResourceId.hpp>
 
+#include <string_view>
 #include <vector>
 
 using namespace ::com::sun::star;
@@ -73,7 +74,7 @@ namespace {
 
 struct snew_slide_value_info
 {
-    rtl::OUStringConstExpr msBmpResId;
+    OUString msBmpResId;
     TranslateId mpStrResId;
     WritingMode meWritingMode;
     AutoLayout maAutoLayout;
@@ -81,16 +82,13 @@ struct snew_slide_value_info
 
 }
 
-constexpr OUStringLiteral EMPTY = u"";
-
-const snew_slide_value_info notes[] =
+constexpr snew_slide_value_info notes[] =
 {
     {BMP_SLIDEN_01, STR_AUTOLAYOUT_NOTES, WritingMode_LR_TB,
      AUTOLAYOUT_NOTES},
-    {EMPTY, {}, WritingMode_LR_TB, AUTOLAYOUT_NONE},
 };
 
-const snew_slide_value_info handout[] =
+constexpr snew_slide_value_info handout[] =
 {
     {BMP_SLIDEH_01, STR_AUTOLAYOUT_HANDOUT1, WritingMode_LR_TB,
      AUTOLAYOUT_HANDOUT1},
@@ -104,10 +102,9 @@ const snew_slide_value_info handout[] =
      AUTOLAYOUT_HANDOUT6},
     {BMP_SLIDEH_09, STR_AUTOLAYOUT_HANDOUT9, WritingMode_LR_TB,
      AUTOLAYOUT_HANDOUT9},
-    {EMPTY, {}, WritingMode_LR_TB, AUTOLAYOUT_NONE},
 };
 
-const snew_slide_value_info standard[] =
+constexpr snew_slide_value_info standard[] =
 {
     {BMP_LAYOUT_EMPTY, STR_AUTOLAYOUT_NONE, WritingMode_LR_TB,        AUTOLAYOUT_NONE},
     {BMP_LAYOUT_HEAD03, STR_AUTOLAYOUT_TITLE, WritingMode_LR_TB,       AUTOLAYOUT_TITLE},
@@ -127,7 +124,6 @@ const snew_slide_value_info standard[] =
     {BMP_LAYOUT_VERTICAL01, STR_AL_VERT_TITLE_VERT_OUTLINE, WritingMode_TB_RL, AUTOLAYOUT_VTITLE_VCONTENT},
     {BMP_LAYOUT_HEAD02, STR_AL_TITLE_VERT_OUTLINE, WritingMode_TB_RL, AUTOLAYOUT_TITLE_VCONTENT},
     {BMP_LAYOUT_HEAD02A, STR_AL_TITLE_VERT_OUTLINE_CLIPART,   WritingMode_TB_RL, AUTOLAYOUT_TITLE_2VTEXT},
-    {EMPTY, {}, WritingMode_LR_TB, AUTOLAYOUT_NONE}
 };
 
 class LayoutValueSet : public ValueSet
@@ -321,11 +317,8 @@ void LayoutMenu::InsertPageWithLayout (AutoLayout aLayout)
     if (pViewShell == nullptr)
         return;
 
-    SfxViewFrame* pViewFrame = mrBase.GetViewFrame();
-    if (pViewFrame == nullptr)
-        return;
-
-    SfxDispatcher* pDispatcher = pViewFrame->GetDispatcher();
+    SfxViewFrame& rViewFrame = mrBase.GetViewFrame();
+    SfxDispatcher* pDispatcher = rViewFrame.GetDispatcher();
     if (pDispatcher == nullptr)
         return;
 
@@ -452,7 +445,7 @@ void LayoutMenu::AssignLayoutToSelectedSlides (AutoLayout aLayout)
                 continue;
 
             // Call the SID_ASSIGN_LAYOUT slot with all the necessary parameters.
-            SfxRequest aRequest (mrBase.GetViewFrame(), SID_ASSIGN_LAYOUT);
+            SfxRequest aRequest(mrBase.GetViewFrame(), SID_ASSIGN_LAYOUT);
             aRequest.AppendItem(SfxUInt32Item (ID_VAL_WHATPAGE, (rpPage->GetPageNum()-1)/2));
             aRequest.AppendItem(SfxUInt32Item (ID_VAL_WHATLAYOUT, aLayout));
             pMainViewShell->ExecuteSlot (aRequest, false);
@@ -465,7 +458,7 @@ SfxRequest LayoutMenu::CreateRequest (
     sal_uInt16 nSlotId,
     AutoLayout aLayout)
 {
-    SfxRequest aRequest (mrBase.GetViewFrame(), nSlotId);
+    SfxRequest aRequest(mrBase.GetViewFrame(), nSlotId);
 
     do
     {
@@ -507,19 +500,20 @@ void LayoutMenu::Fill()
     OUString sCenterPaneViewName;
     try
     {
-        Reference<XControllerManager> xControllerManager (
-            Reference<XWeak>(&mrBase.GetDrawController()), UNO_QUERY_THROW);
-        Reference<XResourceId> xPaneId (ResourceId::create(
-            ::comphelper::getProcessComponentContext(),
-            FrameworkHelper::msCenterPaneURL));
-        Reference<XView> xView (FrameworkHelper::Instance(mrBase)->GetView(xPaneId));
-        if (xView.is())
-            sCenterPaneViewName = xView->getResourceId()->getResourceURL();
+        if (mrBase.GetDrawController())
+        {
+            Reference<XResourceId> xPaneId (ResourceId::create(
+                ::comphelper::getProcessComponentContext(),
+                FrameworkHelper::msCenterPaneURL));
+            Reference<XView> xView (FrameworkHelper::Instance(mrBase)->GetView(xPaneId));
+            if (xView.is())
+                sCenterPaneViewName = xView->getResourceId()->getResourceURL();
+        }
     }
     catch (RuntimeException&)
     {}
 
-    const snew_slide_value_info* pInfo = nullptr;
+    std::span<const snew_slide_value_info> pInfo;
     if (sCenterPaneViewName == framework::FrameworkHelper::msNotesViewURL)
     {
         pInfo = notes;
@@ -533,27 +527,25 @@ void LayoutMenu::Fill()
     {
         pInfo = standard;
     }
-    else
-    {
-        pInfo = nullptr;
-    }
 
     Clear();
-    for (sal_uInt16 i=1; pInfo!=nullptr && pInfo->mpStrResId; i++, pInfo++)
+    sal_uInt16 id = 1;
+    for (const auto& elem : pInfo)
     {
-        if ((WritingMode_TB_RL != pInfo->meWritingMode) || bVertical)
+        if ((WritingMode_TB_RL != elem.meWritingMode) || bVertical)
         {
-            Image aImg("private:graphicrepository/" + static_cast<const OUString &>(pInfo->msBmpResId));
+            Image aImg(OUString::Concat("private:graphicrepository/") + elem.msBmpResId);
 
-            if (bRightToLeft && (WritingMode_TB_RL != pInfo->meWritingMode))
+            if (bRightToLeft && (WritingMode_TB_RL != elem.meWritingMode))
             { // FIXME: avoid interpolating RTL layouts.
                 BitmapEx aRTL = aImg.GetBitmapEx();
                 aRTL.Mirror(BmpMirrorFlags::Horizontal);
                 aImg = Image(aRTL);
             }
 
-            mxLayoutValueSet->InsertItem(i, aImg, SdResId(pInfo->mpStrResId));
-            mxLayoutValueSet->SetItemData (i, new AutoLayout(pInfo->maAutoLayout));
+            mxLayoutValueSet->InsertItem(id, aImg, SdResId(elem.mpStrResId));
+            mxLayoutValueSet->SetItemData(id, new AutoLayout(elem.maAutoLayout));
+            ++id;
         }
     }
 }
@@ -596,9 +588,9 @@ void LayoutMenu::ShowContextMenu(const Point* pPos)
 
     // Disable the SID_INSERTPAGE_LAYOUT_MENU item when
     // the document is read-only.
-    const SfxPoolItem* pItem = nullptr;
+    SfxPoolItemHolder aResult;
     const SfxItemState aState (
-        mrBase.GetViewFrame()->GetDispatcher()->QueryState(SID_INSERTPAGE, pItem));
+        mrBase.GetViewFrame().GetDispatcher()->QueryState(SID_INSERTPAGE, aResult));
     if (aState == SfxItemState::DISABLED)
         xMenu->set_sensitive("insert", false);
 
@@ -611,16 +603,16 @@ IMPL_LINK_NOARG(LayoutMenu, StateChangeHandler, const OUString&, void)
     InvalidateContent();
 }
 
-void LayoutMenu::OnMenuItemSelected(std::string_view ident)
+void LayoutMenu::OnMenuItemSelected(std::u16string_view ident)
 {
     if (ident.empty())
         return;
 
-    if (ident == "apply")
+    if (ident == u"apply")
     {
         AssignLayoutToSelectedSlides(GetSelectedAutoLayout());
     }
-    else if (ident == "insert")
+    else if (ident == u"insert")
     {
         // Add arguments to this slot and forward it to the main view
         // shell.

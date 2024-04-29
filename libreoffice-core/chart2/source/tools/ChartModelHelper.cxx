@@ -41,12 +41,6 @@ namespace chart
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
 
-uno::Reference< chart2::data::XRangeHighlighter > ChartModelHelper::createRangeHighlighter(
-        const rtl::Reference< ChartModel > & xSelectionSupplier )
-{
-    return new RangeHighlighter( xSelectionSupplier );
-}
-
 rtl::Reference< InternalDataProvider > ChartModelHelper::createInternalDataProvider(
     const rtl::Reference<::chart::ChartModel>& xChartDoc, bool bConnectToModel )
 {
@@ -82,29 +76,14 @@ rtl::Reference< InternalDataProvider > ChartModelHelper::createInternalDataProvi
     return new InternalDataProvider( xChartDoc, bConnectToModel, bDefaultDataInColumns );
 }
 
-rtl::Reference< Diagram > ChartModelHelper::findDiagram( const rtl::Reference<::chart::ChartModel>& xChartDoc )
-{
-    try
-    {
-        if( !xChartDoc )
-            return nullptr;
-        return xChartDoc->getFirstChartDiagram();
-    }
-    catch( const uno::Exception & )
-    {
-        DBG_UNHANDLED_EXCEPTION("chart2");
-    }
-    return nullptr;
-}
-
 rtl::Reference< BaseCoordinateSystem > ChartModelHelper::getFirstCoordinateSystem( const rtl::Reference<::chart::ChartModel>& xModel )
 {
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xModel );
+    rtl::Reference< Diagram > xDiagram = xModel->getFirstChartDiagram();
     if( xDiagram.is() )
     {
-        auto& rCooSysSeq( xDiagram->getBaseCoordinateSystems() );
-        if( !rCooSysSeq.empty() )
-            return rCooSysSeq[0];
+        auto aCooSysSeq( xDiagram->getBaseCoordinateSystems() );
+        if( !aCooSysSeq.empty() )
+            return aCooSysSeq[0];
     }
     return nullptr;
 }
@@ -114,25 +93,19 @@ std::vector< rtl::Reference< DataSeries > > ChartModelHelper::getDataSeries(
 {
     std::vector< rtl::Reference< DataSeries > > aResult;
 
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xChartDoc );
+    rtl::Reference< Diagram > xDiagram = xChartDoc->getFirstChartDiagram();
     if( xDiagram.is())
-        aResult = DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+        aResult = xDiagram->getDataSeries();
 
     return aResult;
 }
 
 rtl::Reference< ChartType > ChartModelHelper::getChartTypeOfSeries(
                                 const rtl::Reference<::chart::ChartModel>& xModel
-                              , const uno::Reference< XDataSeries >&   xGivenDataSeries )
-{
-    return DiagramHelper::getChartTypeOfSeries( ChartModelHelper::findDiagram( xModel ), xGivenDataSeries );
-}
-
-rtl::Reference< ChartType > ChartModelHelper::getChartTypeOfSeries(
-                                const rtl::Reference<::chart::ChartModel>& xModel
                               , const rtl::Reference< DataSeries >&   xGivenDataSeries )
 {
-    return DiagramHelper::getChartTypeOfSeries( ChartModelHelper::findDiagram( xModel ), xGivenDataSeries );
+    rtl::Reference<Diagram> xDiagram = xModel->getFirstChartDiagram();
+    return xDiagram ? xDiagram->getChartTypeOfSeries( xGivenDataSeries ) : nullptr;
 }
 
 awt::Size ChartModelHelper::getDefaultPageSize()
@@ -167,7 +140,7 @@ bool ChartModelHelper::isIncludeHiddenCells( const rtl::Reference<::chart::Chart
 {
     bool bIncluded = true;  // hidden cells are included by default.
 
-    rtl::Reference< Diagram > xDiagram( ChartModelHelper::findDiagram(xChartModel) );
+    rtl::Reference< Diagram > xDiagram( xChartModel->getFirstChartDiagram() );
     if (!xDiagram.is())
         return bIncluded;
 

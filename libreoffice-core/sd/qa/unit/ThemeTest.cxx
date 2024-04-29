@@ -47,17 +47,17 @@ Color GetShapeTextColor(const uno::Reference<text::XTextRange>& xShape)
                                                         uno::UNO_QUERY);
     uno::Reference<beans::XPropertySet> xPortion(xPara->createEnumeration()->nextElement(),
                                                  uno::UNO_QUERY);
-    sal_Int32 nColor{};
+    Color nColor{};
     xPortion->getPropertyValue("CharColor") >>= nColor;
-    return Color(nColor);
+    return nColor;
 }
 
 /// Get the solid fill color of xShape.
 Color GetShapeFillColor(const uno::Reference<beans::XPropertySet>& xShape)
 {
-    sal_Int32 nColor{};
+    Color nColor{};
     xShape->getPropertyValue("FillColor") >>= nColor;
-    return Color(nColor);
+    return nColor;
 }
 
 } // end anonymous namespace
@@ -65,7 +65,7 @@ Color GetShapeFillColor(const uno::Reference<beans::XPropertySet>& xShape)
 CPPUNIT_TEST_FIXTURE(ThemeTest, testThemeChange)
 {
     // Given a document, with a first slide and blue shape text from theme:
-    loadFromURL(u"theme.pptx");
+    loadFromFile(u"theme.pptx");
 
     SdXImpressDocument* pXImpressDocument = dynamic_cast<SdXImpressDocument*>(mxComponent.get());
     CPPUNIT_ASSERT(pXImpressDocument);

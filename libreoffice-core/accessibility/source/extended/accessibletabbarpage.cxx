@@ -23,6 +23,7 @@
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <unotools/accessiblerelationsethelper.hxx>
 #include <vcl/svapp.hxx>
@@ -45,7 +46,7 @@ namespace accessibility
 
 
     AccessibleTabBarPage::AccessibleTabBarPage( TabBar* pTabBar, sal_uInt16 nPageId, const Reference< XAccessible >& rxParent )
-        :AccessibleTabBarBase( pTabBar )
+        :ImplInheritanceHelper( pTabBar )
         ,m_nPageId( nPageId )
         ,m_xParent( rxParent )
     {
@@ -183,18 +184,6 @@ namespace accessibility
 
         return aBounds;
     }
-
-
-    // XInterface
-
-
-    IMPLEMENT_FORWARD_XINTERFACE2( AccessibleTabBarPage, OAccessibleExtendedComponentHelper, AccessibleTabBarPage_BASE )
-
-
-    // XTypeProvider
-
-
-    IMPLEMENT_FORWARD_XTYPEPROVIDER2( AccessibleTabBarPage, OAccessibleExtendedComponentHelper, AccessibleTabBarPage_BASE )
 
 
     // XComponent

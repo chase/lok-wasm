@@ -95,7 +95,7 @@ public:
         uno::Sequence< uno::Any > aArgs{
             // access the application object ( parent for workbook )
             uno::Any(ooo::vba::createVBAUnoAPIServiceWithArgs( mpDocShell, "ooo.vba.Application", {} )),
-            uno::Any(mpDocShell->GetModel())
+            uno::Any(uno::Reference(static_cast<css::sheet::XSpreadsheetDocument*>(mpDocShell->GetModel())))
         };
         maWorkbook <<= ooo::vba::createVBAUnoAPIServiceWithArgs( mpDocShell, "ooo.vba.excel.Workbook", aArgs );
     }
@@ -124,12 +124,11 @@ public:
                     OUString sSheetName;
                     if( rDoc.GetName( i, sSheetName ) )
                     {
-                        uno::Reference< frame::XModel > xModel( mpDocShell->GetModel() );
-                        uno::Reference <sheet::XSpreadsheetDocument> xSpreadDoc( xModel, uno::UNO_QUERY_THROW );
+                        rtl::Reference< ScModelObj > xSpreadDoc( mpDocShell->GetModel() );
                         uno::Reference<sheet::XSpreadsheets > xSheets( xSpreadDoc->getSheets(), uno::UNO_SET_THROW );
                         uno::Reference< container::XIndexAccess > xIndexAccess( xSheets, uno::UNO_QUERY_THROW );
                         uno::Reference< sheet::XSpreadsheet > xSheet( xIndexAccess->getByIndex( i ), uno::UNO_QUERY_THROW );
-                        uno::Sequence< uno::Any > aArgs{ maWorkbook, uno::Any(xModel), uno::Any(sSheetName) };
+                        uno::Sequence< uno::Any > aArgs{ maWorkbook, uno::Any(uno::Reference< frame::XModel >(xSpreadDoc)), uno::Any(sSheetName) };
                         // use the convenience function
                         maCachedObject <<= ooo::vba::createVBAUnoAPIServiceWithArgs( mpDocShell, "ooo.vba.excel.Worksheet", aArgs );
                         break;
@@ -182,8 +181,7 @@ public:
         OUString sCodeName;
 
         // need to find the page ( and index )  for this control
-        uno::Reference< drawing::XDrawPagesSupplier > xSupplier( mrDocShell.GetModel(), uno::UNO_QUERY_THROW );
-        uno::Reference< container::XIndexAccess > xIndex( xSupplier->getDrawPages(), uno::UNO_QUERY_THROW );
+        uno::Reference< container::XIndexAccess > xIndex(  mrDocShell.GetModel()->getDrawPages(), uno::UNO_QUERY_THROW );
         sal_Int32 nLen = xIndex->getCount();
         bool bMatched = false;
         for ( sal_Int32 index = 0; index < nLen; ++index )
@@ -218,8 +216,7 @@ public:
     OUString SAL_CALL getCodeNameForContainer( const uno::Reference<uno::XInterface>& xContainer ) override
     {
         SolarMutexGuard aGuard;
-        uno::Reference<drawing::XDrawPagesSupplier> xSupplier(mrDocShell.GetModel(), uno::UNO_QUERY_THROW);
-        uno::Reference<container::XIndexAccess> xIndex(xSupplier->getDrawPages(), uno::UNO_QUERY_THROW);
+        uno::Reference<container::XIndexAccess> xIndex(mrDocShell.GetModel()->getDrawPages(), uno::UNO_QUERY_THROW);
 
         for (sal_Int32 i = 0, n = xIndex->getCount(); i < n; ++i)
         {
@@ -266,6 +263,7 @@ const ProvNamesId_Type aProvNamesId[] =
     { "com.sun.star.text.TextField.SheetName",          Type::SHEETFIELD },
     { "com.sun.star.style.CellStyle",                   Type::CELLSTYLE },
     { "com.sun.star.style.PageStyle",                   Type::PAGESTYLE },
+    { "com.sun.star.style.GraphicStyle",                Type::GRAPHICSTYLE },
     { "com.sun.star.sheet.TableAutoFormat",             Type::AUTOFORMAT },
     { "com.sun.star.sheet.TableAutoFormats",            Type::AUTOFORMATS },
     { "com.sun.star.sheet.SheetCellRanges",             Type::CELLRANGES },
@@ -425,6 +423,13 @@ uno::Reference<uno::XInterface> ScServiceProvider::MakeInstance(
         case Type::PAGESTYLE:
             xRet.set(static_cast<style::XStyle*>(new ScStyleObj( nullptr, SfxStyleFamily::Page, OUString() )));
             break;
+        case Type::GRAPHICSTYLE:
+            if (pDocShell)
+            {
+                pDocShell->MakeDrawLayer();
+                xRet.set(static_cast<style::XStyle*>(new ScStyleObj( nullptr, SfxStyleFamily::Frame, OUString() )));
+            }
+            break;
         case Type::AUTOFORMAT:
             xRet.set(static_cast<container::XIndexAccess*>(new ScAutoFormatObj( SC_AFMTOBJ_INVALID )));
             break;
@@ -505,18 +510,18 @@ uno::Reference<uno::XInterface> ScServiceProvider::MakeInstance(
 
         // Support creation of GraphicStorageHandler and EmbeddedObjectResolver
         case Type::EXPORT_GRAPHIC_STORAGE_HANDLER:
-            xRet.set(static_cast<cppu::OWeakObject *>(new SvXMLGraphicHelper( SvXMLGraphicHelperMode::Write )));
+            xRet.set(getXWeak(new SvXMLGraphicHelper( SvXMLGraphicHelperMode::Write )));
             break;
         case Type::IMPORT_GRAPHIC_STORAGE_HANDLER:
-            xRet.set(static_cast<cppu::OWeakObject *>(new SvXMLGraphicHelper( SvXMLGraphicHelperMode::Read )));
+            xRet.set(getXWeak(new SvXMLGraphicHelper( SvXMLGraphicHelperMode::Read )));
             break;
         case Type::EXPORT_EOR:
             if (pDocShell)
-                xRet.set(static_cast<cppu::OWeakObject *>(new SvXMLEmbeddedObjectHelper( *pDocShell, SvXMLEmbeddedObjectHelperMode::Write )));
+                xRet.set(getXWeak(new SvXMLEmbeddedObjectHelper( *pDocShell, SvXMLEmbeddedObjectHelperMode::Write )));
             break;
         case Type::IMPORT_EOR:
             if (pDocShell)
-                xRet.set(static_cast<cppu::OWeakObject *>(new SvXMLEmbeddedObjectHelper( *pDocShell, SvXMLEmbeddedObjectHelperMode::Read )));
+                xRet.set(getXWeak(new SvXMLEmbeddedObjectHelper( *pDocShell, SvXMLEmbeddedObjectHelperMode::Read )));
             break;
         case Type::VALBIND:
         case Type::LISTCELLBIND:
@@ -583,7 +588,7 @@ uno::Reference<uno::XInterface> ScServiceProvider::MakeInstance(
                 uno::Any aGlobs;
                 if ( !pDocShell->GetBasicManager()->GetGlobalUNOConstant( "VBAGlobals", aGlobs ) )
                 {
-                    uno::Sequence< uno::Any > aArgs{ uno::Any(pDocShell->GetModel()) };
+                    uno::Sequence< uno::Any > aArgs{ uno::Any(uno::Reference(static_cast<css::sheet::XSpreadsheetDocument*>(pDocShell->GetModel()))) };
                     xRet = ::comphelper::getProcessServiceFactory()->createInstanceWithArguments( "ooo.vba.excel.Globals", aArgs );
                     pDocShell->GetBasicManager()->SetGlobalUNOConstant( "VBAGlobals", uno::Any( xRet ) );
                     BasicManager* pAppMgr = SfxApplication::GetBasicManager();

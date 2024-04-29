@@ -25,6 +25,8 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/io/XActiveDataSource.hpp>
+
+#include <optional>
 #include <utility>
 #include <xmloff/maptype.hxx>
 #include <xmloff/txtprmap.hxx>
@@ -83,7 +85,7 @@ class ODBExport : public SvXMLExport
         }
     };
 
-    std::unique_ptr< TStringPair >                  m_aAutoIncrement;
+    std::optional< TStringPair >                  m_oAutoIncrement;
     std::unique_ptr< TDelimiter >                   m_aDelimiter;
     std::vector< TypedPropertyValue >             m_aDataSourceSettings;
     std::vector< XMLPropertyState >               m_aCurrentPropertyStates;
@@ -123,8 +125,8 @@ class ODBExport : public SvXMLExport
     void                    exportReports();
     void                    exportQueries(bool _bExportContext);
     void                    exportTables(bool _bExportContext);
-    void                    exportStyleName(XPropertySet* _xProp,SvXMLAttributeList& _rAtt);
-    void                    exportStyleName(const ::xmloff::token::XMLTokenEnum _eToken,const Reference<XPropertySet>& _xProp,SvXMLAttributeList& _rAtt,TPropertyStyleMap& _rMap);
+    void                    exportStyleName(XPropertySet* _xProp,comphelper::AttributeList& _rAtt);
+    void                    exportStyleName(const ::xmloff::token::XMLTokenEnum _eToken,const Reference<XPropertySet>& _xProp,comphelper::AttributeList& _rAtt,TPropertyStyleMap& _rMap);
     void                    exportCollection(const Reference< XNameAccess >& _xCollection
                                             ,enum ::xmloff::token::XMLTokenEnum _eComponents
                                             ,enum ::xmloff::token::XMLTokenEnum _eSubComponents

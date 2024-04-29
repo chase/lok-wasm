@@ -10,106 +10,69 @@
 #ifndef INCLUDED_TEST_CPPUNITASSERTHELPER_HXX
 #define INCLUDED_TEST_CPPUNITASSERTHELPER_HXX
 
-#include <test/testdllapi.hxx>
-
 #include <rtl/ustring.hxx>
 
 #include <com/sun/star/awt/Point.hpp>
 #include <com/sun/star/awt/Size.hpp>
 #include <com/sun/star/table/CellAddress.hpp>
 #include <com/sun/star/table/CellRangeAddress.hpp>
-#include <tools/gen.hxx>
 
 #include <cppunit/TestAssert.h>
-
-CPPUNIT_NS_BEGIN
 
 /** @brief Trait used by CPPUNIT_ASSERT* macros to compare com::sun::star:awt::Point.
  *
  * This specialization from @c struct @c assertion_traits<> helps to compare
  * @see com::sun::star::awt::Point.
  */
-template <> struct assertion_traits<css::awt::Point>
+template <>
+inline std::string CPPUNIT_NS::assertion_traits<css::awt::Point>::toString(const css::awt::Point& x)
 {
-    static bool equal(const css::awt::Point& x, const css::awt::Point& y) { return x == y; }
-
-    static std::string toString(const css::awt::Point& x)
-    {
-        OStringStream ost;
-        ost << "Point: " << x.X << "." << x.Y << " (coordinate: X.Y)";
-        return ost.str();
-    }
-};
+    OStringStream ost;
+    ost << "Point: " << x.X << "." << x.Y << " (coordinate: X.Y)";
+    return ost.str();
+}
 
 /** @brief Trait used by CPPUNIT_ASSERT* macros to compare com::sun::star:awt::Size.
  *
  * This specialization from @c struct @c assertion_traits<> helps to compare
  * @see com::sun::star::awt::Size.
  */
-template <> struct assertion_traits<css::awt::Size>
+template <>
+inline std::string CPPUNIT_NS::assertion_traits<css::awt::Size>::toString(const css::awt::Size& x)
 {
-    static bool equal(const css::awt::Size& x, const css::awt::Size& y) { return x == y; }
-
-    static std::string toString(const css::awt::Size& x)
-    {
-        OStringStream ost;
-        ost << "Size: " << x.Width << " x " << x.Height << " (Width x Height)";
-        return ost.str();
-    }
-};
+    OStringStream ost;
+    ost << "Size: " << x.Width << " x " << x.Height << " (Width x Height)";
+    return ost.str();
+}
 
 /** @brief Trait used by CPPUNIT_ASSERT* macros to compare com::sun::star::table::CellAddress.
  *
  * This specialization from @c struct @c assertion_traits<> helps to compare
  * @see com::sun::star::table::CellAddress.
  */
-template <> struct assertion_traits<css::table::CellAddress>
+template <>
+inline std::string
+CPPUNIT_NS::assertion_traits<css::table::CellAddress>::toString(const css::table::CellAddress& x)
 {
-    static bool equal(const css::table::CellAddress& x, const css::table::CellAddress& y)
-    {
-        return x == y;
-    }
-
-    static std::string toString(const css::table::CellAddress& x)
-    {
-        OStringStream ost;
-        ost << "Sheet: " << x.Sheet << " Column: " << x.Column << " Row: " << x.Row;
-        return ost.str();
-    }
-};
+    OStringStream ost;
+    ost << "Sheet: " << x.Sheet << " Column: " << x.Column << " Row: " << x.Row;
+    return ost.str();
+}
 
 /** @brief Trait used by CPPUNIT_ASSERT* macros to compare com::sun::star::table::CellRangeAddress.
  *
  * This specialization from @c struct @c assertion_traits<> helps to compare
  * @see com::sun::star::table::CellRangeAddress.
  */
-template <> struct assertion_traits<css::table::CellRangeAddress>
+template <>
+inline std::string CPPUNIT_NS::assertion_traits<css::table::CellRangeAddress>::toString(
+    const css::table::CellRangeAddress& x)
 {
-    static bool equal(const css::table::CellRangeAddress& x, const css::table::CellRangeAddress& y)
-    {
-        return x == y;
-    }
-
-    static std::string toString(const css::table::CellRangeAddress& x)
-    {
-        OStringStream ost;
-        ost << "Sheet: " << x.Sheet << " StartColumn: " << x.StartColumn
-            << " StartRow: " << x.StartRow << " EndColumn: " << x.EndColumn
-            << " EndRow: " << x.EndRow;
-        return ost.str();
-    }
-};
-
-void OOO_DLLPUBLIC_TEST AssertRectEqualWithTolerance(std::string_view sInfo,
-                                                     const tools::Rectangle& rExpected,
-                                                     const tools::Rectangle& rActual,
-                                                     const sal_Int32 nTolerance);
-
-void OOO_DLLPUBLIC_TEST AssertPointEqualWithTolerance(std::string_view sInfo, const Point rExpected,
-                                                      const Point rActual,
-                                                      const sal_Int32 nTolerance);
-
-CPPUNIT_NS_END
+    OStringStream ost;
+    ost << "Sheet: " << x.Sheet << " StartColumn: " << x.StartColumn << " StartRow: " << x.StartRow
+        << " EndColumn: " << x.EndColumn << " EndRow: " << x.EndRow;
+    return ost.str();
+}
 
 #endif // INCLUDED_TEST_CPPUNITASSERTHELPER_HXX
 

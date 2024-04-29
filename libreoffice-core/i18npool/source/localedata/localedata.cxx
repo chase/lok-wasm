@@ -42,10 +42,10 @@ using namespace com::sun::star::uno;
 using namespace com::sun::star::lang;
 using namespace com::sun::star;
 
-typedef sal_Unicode**   (* MyFunc_Type)( sal_Int16&);
-typedef sal_Unicode const *** (* MyFunc_Type2)( sal_Int16&, sal_Int16& );
-typedef sal_Unicode const **** (* MyFunc_Type3)( sal_Int16&, sal_Int16&, sal_Int16& );
-typedef sal_Unicode const * const * (* MyFunc_FormatCode)( sal_Int16&, sal_Unicode const *&, sal_Unicode const *& );
+typedef OUString const * (* MyFuncOUString_Type)( sal_Int16&);
+typedef OUString const ** (* MyFunc_Type2)( sal_Int16&, sal_Int16& );
+typedef OUString const *** (* MyFunc_Type3)( sal_Int16&, sal_Int16&, sal_Int16& );
+typedef OUString const * (* MyFunc_FormatCode)( sal_Int16&, sal_Unicode const *&, sal_Unicode const *& );
 
 #ifndef DISABLE_DYNLOADING
 
@@ -336,7 +336,9 @@ const struct {
     { "sun_ID", lcl_DATA_OTHERS },
     { "en_IL",  lcl_DATA_OTHERS },  // needs to be in OTHERS instead of EN because inherits from he_IL
     { "pdc_US", lcl_DATA_OTHERS },
-    { "dv_MV",  lcl_DATA_OTHERS }
+    { "dv_MV",  lcl_DATA_OTHERS },
+    { "mfe_MU", lcl_DATA_OTHERS },
+    { "sat_IN", lcl_DATA_OTHERS }
 };
 
 #else
@@ -386,31 +388,31 @@ LocaleDataImpl::~LocaleDataImpl()
 LocaleDataItem SAL_CALL
 LocaleDataImpl::getLocaleItem( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getLocaleItem" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getLocaleItem" ));
 
     if ( func ) {
         sal_Int16 dataItemCount = 0;
-        sal_Unicode **dataItem = func(dataItemCount);
+        OUString const *dataItem = func(dataItemCount);
 
         LocaleDataItem item{
-                OUString(dataItem[0]),
-                OUString(dataItem[1]),
-                OUString(dataItem[2]),
-                OUString(dataItem[3]),
-                OUString(dataItem[4]),
-                OUString(dataItem[5]),
-                OUString(dataItem[6]),
-                OUString(dataItem[7]),
-                OUString(dataItem[8]),
-                OUString(dataItem[9]),
-                OUString(dataItem[10]),
-                OUString(dataItem[11]),
-                OUString(dataItem[12]),
-                OUString(dataItem[13]),
-                OUString(dataItem[14]),
-                OUString(dataItem[15]),
-                OUString(dataItem[16]),
-                OUString(dataItem[17])
+                dataItem[0],
+                dataItem[1],
+                dataItem[2],
+                dataItem[3],
+                dataItem[4],
+                dataItem[5],
+                dataItem[6],
+                dataItem[7],
+                dataItem[8],
+                dataItem[9],
+                dataItem[10],
+                dataItem[11],
+                dataItem[12],
+                dataItem[13],
+                dataItem[14],
+                dataItem[15],
+                dataItem[16],
+                dataItem[17]
                 };
         return item;
     }
@@ -424,34 +426,34 @@ LocaleDataImpl::getLocaleItem( const Locale& rLocale )
 LocaleDataItem2 SAL_CALL
 LocaleDataImpl::getLocaleItem2( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getLocaleItem" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getLocaleItem" ));
 
     if ( func ) {
         sal_Int16 dataItemCount = 0;
-        sal_Unicode **dataItem = func(dataItemCount);
+        OUString const *dataItem = func(dataItemCount);
 
         assert(dataItemCount >= 18);
 
         LocaleDataItem2 item{
-                OUString(dataItem[0]),
-                OUString(dataItem[1]),
-                OUString(dataItem[2]),
-                OUString(dataItem[3]),
-                OUString(dataItem[4]),
-                OUString(dataItem[5]),
-                OUString(dataItem[6]),
-                OUString(dataItem[7]),
-                OUString(dataItem[8]),
-                OUString(dataItem[9]),
-                OUString(dataItem[10]),
-                OUString(dataItem[11]),
-                OUString(dataItem[12]),
-                OUString(dataItem[13]),
-                OUString(dataItem[14]),
-                OUString(dataItem[15]),
-                OUString(dataItem[16]),
-                OUString(dataItem[17]),
-                dataItemCount >= 19 ? OUString(dataItem[18]) : OUString()
+                dataItem[0],
+                dataItem[1],
+                dataItem[2],
+                dataItem[3],
+                dataItem[4],
+                dataItem[5],
+                dataItem[6],
+                dataItem[7],
+                dataItem[8],
+                dataItem[9],
+                dataItem[10],
+                dataItem[11],
+                dataItem[12],
+                dataItem[13],
+                dataItem[14],
+                dataItem[15],
+                dataItem[16],
+                dataItem[17],
+                dataItemCount >= 19 ? dataItem[18] : OUString()
                 };
         return item;
     }
@@ -677,14 +679,14 @@ Sequence< CalendarItem2 > &LocaleDataImpl::getCalendarItemByName(const OUString&
 }
 
 Sequence< CalendarItem2 > LocaleDataImpl::getCalendarItems(
-        sal_Unicode const * const * const allCalendars, sal_Int16 & rnOffset,
+        OUString const * allCalendars, sal_Int16 & rnOffset,
         const sal_Int16 nWhichItem, const sal_Int16 nCalendar,
         const Locale & rLocale, const Sequence< Calendar2 > & calendarsSeq )
 {
     Sequence< CalendarItem2 > aItems;
     if ( allCalendars[rnOffset] == std::u16string_view(u"ref") )
     {
-        aItems = getCalendarItemByName( OUString( allCalendars[rnOffset+1]), rLocale, calendarsSeq, nWhichItem);
+        aItems = getCalendarItemByName( allCalendars[rnOffset+1], rLocale, calendarsSeq, nWhichItem);
         rnOffset += 2;
     }
     else
@@ -699,9 +701,9 @@ Sequence< CalendarItem2 > LocaleDataImpl::getCalendarItems(
             case REF_PMONTHS:
                 for (CalendarItem2& rItem : asNonConstRange(aItems))
                 {
-                    rItem = CalendarItem2{ OUString(allCalendars[rnOffset]),
-                            OUString(allCalendars[rnOffset+1]),
-                            OUString(allCalendars[rnOffset+2]), OUString(allCalendars[rnOffset+3])};
+                    rItem = CalendarItem2{ allCalendars[rnOffset],
+                            allCalendars[rnOffset+1],
+                            allCalendars[rnOffset+2], allCalendars[rnOffset+3]};
                     rnOffset += 4;
                 }
                 break;
@@ -709,9 +711,9 @@ Sequence< CalendarItem2 > LocaleDataImpl::getCalendarItems(
                 // Absent narrow name.
                 for (CalendarItem2& rItem : asNonConstRange(aItems))
                 {
-                    rItem = CalendarItem2{ OUString(allCalendars[rnOffset]),
-                            OUString(allCalendars[rnOffset+1]),
-                            OUString(allCalendars[rnOffset+2]), OUString()};
+                    rItem = CalendarItem2{ allCalendars[rnOffset],
+                            allCalendars[rnOffset+1],
+                            allCalendars[rnOffset+2], OUString()};
                     rnOffset += 3;
                 }
                 break;
@@ -726,9 +728,9 @@ Sequence< Calendar2 > SAL_CALL
 LocaleDataImpl::getAllCalendars2( const Locale& rLocale )
 {
 
-    sal_Unicode const * const * allCalendars = nullptr;
+    OUString const * allCalendars = nullptr;
 
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getAllCalendars" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getAllCalendars" ));
 
     if ( func ) {
         sal_Int16 calendarsCount = 0;
@@ -756,9 +758,8 @@ LocaleDataImpl::getAllCalendars2( const Locale& rLocale )
             offset++;
             sal_Int16 minimalDaysInFirstWeek = allCalendars[offset][0];
             offset++;
-            Calendar2 aCalendar(days, months, gmonths, pmonths, eras, startOfWeekDay,
+            calendarsSeqRange[i] = Calendar2(days, months, gmonths, pmonths, eras, startOfWeekDay,
                     minimalDaysInFirstWeek, defaultCalendar, calendarID);
-            calendarsSeqRange[i] = aCalendar;
         }
         return calendarsSeq;
     }
@@ -783,26 +784,25 @@ LocaleDataImpl::getAllCalendars( const Locale& rLocale )
 Sequence< Currency2 > SAL_CALL
 LocaleDataImpl::getAllCurrencies2( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getAllCurrencies" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getAllCurrencies" ));
 
     if ( func ) {
         sal_Int16 currencyCount = 0;
-        sal_Unicode **allCurrencies = func(currencyCount);
+        OUString const *allCurrencies = func(currencyCount);
 
         Sequence< Currency2 > seq(currencyCount);
         auto seqRange = asNonConstRange(seq);
         for(int i = 0, nOff = 0; i < currencyCount; i++, nOff += 8 ) {
-            Currency2 cur(
-                    OUString(allCurrencies[nOff]), // string ID
-                    OUString(allCurrencies[nOff+1]), // string Symbol
-                    OUString(allCurrencies[nOff+2]), // string BankSymbol
-                    OUString(allCurrencies[nOff+3]), // string Name
+            seqRange[i] = Currency2(
+                    allCurrencies[nOff], // string ID
+                    allCurrencies[nOff+1], // string Symbol
+                    allCurrencies[nOff+2], // string BankSymbol
+                    allCurrencies[nOff+3], // string Name
                     allCurrencies[nOff+4][0] != 0, // boolean Default
                     allCurrencies[nOff+5][0] != 0, // boolean UsedInCompatibleFormatCodes
                     allCurrencies[nOff+6][0],   // short DecimalPlaces
                     allCurrencies[nOff+7][0] != 0 // boolean LegacyOnly
                     );
-            seqRange[i] = cur;
         }
         return seq;
     }
@@ -828,7 +828,7 @@ LocaleDataImpl::getAllFormats( const Locale& rLocale )
         MyFunc_FormatCode         func;
         sal_Unicode const        *from;
         sal_Unicode const        *to;
-        sal_Unicode const *const *formatArray;
+        OUString const           *formatArray;
         sal_Int16                 formatCount;
 
         FormatSection() : func(nullptr), from(nullptr), to(nullptr), formatArray(nullptr), formatCount(0) {}
@@ -850,20 +850,19 @@ LocaleDataImpl::getAllFormats( const Locale& rLocale )
     sal_Int32 f = 0;
     for (const FormatSection & s : section)
     {
-        sal_Unicode const * const * const formatArray = s.formatArray;
+        OUString const * const formatArray = s.formatArray;
         if ( formatArray )
         {
             for (int i = 0, nOff = 0; i < s.formatCount; ++i, nOff += 7, ++f)
             {
-                FormatElement elem(
-                        OUString(formatArray[nOff]).replaceAll(s.from, s.to),
-                        OUString(formatArray[nOff + 1]),
-                        OUString(formatArray[nOff + 2]),
-                        OUString(formatArray[nOff + 3]),
-                        OUString(formatArray[nOff + 4]),
+                seqRange[f] = FormatElement(
+                        formatArray[nOff].replaceAll(s.from, s.to),
+                        formatArray[nOff + 1],
+                        formatArray[nOff + 2],
+                        formatArray[nOff + 3],
+                        formatArray[nOff + 4],
                         formatArray[nOff + 5][0],
                         formatArray[nOff + 6][0] != 0);
-                seqRange[f] = elem;
             }
         }
     }
@@ -874,17 +873,17 @@ LocaleDataImpl::getAllFormats( const Locale& rLocale )
 Sequence< OUString > SAL_CALL
 LocaleDataImpl::getDateAcceptancePatterns( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getDateAcceptancePatterns" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getDateAcceptancePatterns" ));
 
     if (func)
     {
         sal_Int16 patternsCount = 0;
-        sal_Unicode **patternsArray = func( patternsCount );
+        OUString const *patternsArray = func( patternsCount );
         Sequence< OUString > seq( patternsCount );
         auto seqRange = asNonConstRange(seq);
         for (sal_Int16 i = 0; i < patternsCount; ++i)
         {
-            seqRange[i] = OUString( patternsArray[i] );
+            seqRange[i] = patternsArray[i];
         }
         return seq;
     }
@@ -903,13 +902,13 @@ LocaleDataImpl::getDateAcceptancePatterns( const Locale& rLocale )
 OUString
 LocaleDataImpl::getCollatorRuleByAlgorithm( const Locale& rLocale, std::u16string_view algorithm )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getCollatorImplementation" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getCollatorImplementation" ));
     if ( func ) {
         sal_Int16 collatorCount = 0;
-        sal_Unicode **collatorArray = func(collatorCount);
+        OUString const *collatorArray = func(collatorCount);
         for(sal_Int16 i = 0; i < collatorCount; i++)
             if (algorithm == collatorArray[i * COLLATOR_ELEMENTS + COLLATOR_OFFSET_ALGO])
-                return OUString(collatorArray[i * COLLATOR_ELEMENTS + COLLATOR_OFFSET_RULE]);
+                return collatorArray[i * COLLATOR_ELEMENTS + COLLATOR_OFFSET_RULE];
     }
     return OUString();
 }
@@ -918,18 +917,17 @@ LocaleDataImpl::getCollatorRuleByAlgorithm( const Locale& rLocale, std::u16strin
 Sequence< Implementation > SAL_CALL
 LocaleDataImpl::getCollatorImplementations( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getCollatorImplementation" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getCollatorImplementation" ));
 
     if ( func ) {
         sal_Int16 collatorCount = 0;
-        sal_Unicode **collatorArray = func(collatorCount);
+        OUString const *collatorArray = func(collatorCount);
         Sequence< Implementation > seq(collatorCount);
         auto seqRange = asNonConstRange(seq);
         for(sal_Int16 i = 0; i < collatorCount; i++) {
-            Implementation impl(
-                    OUString(collatorArray[i * COLLATOR_ELEMENTS + COLLATOR_OFFSET_ALGO]),
+            seqRange[i] = Implementation(
+                    collatorArray[i * COLLATOR_ELEMENTS + COLLATOR_OFFSET_ALGO],
                     collatorArray[i * COLLATOR_ELEMENTS + COLLATOR_OFFSET_DEFAULT][0] != 0);
-            seqRange[i] = impl;
         }
         return seq;
     }
@@ -941,15 +939,15 @@ LocaleDataImpl::getCollatorImplementations( const Locale& rLocale )
 Sequence< OUString > SAL_CALL
 LocaleDataImpl::getCollationOptions( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getCollationOptions" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getCollationOptions" ));
 
     if ( func ) {
         sal_Int16 optionsCount = 0;
-        sal_Unicode **optionsArray = func(optionsCount);
+        OUString const *optionsArray = func(optionsCount);
         Sequence< OUString > seq(optionsCount);
         auto seqRange = asNonConstRange(seq);
         for(sal_Int16 i = 0; i < optionsCount; i++) {
-            seqRange[i] = OUString( optionsArray[i] );
+            seqRange[i] = optionsArray[i];
         }
         return seq;
     }
@@ -961,27 +959,22 @@ LocaleDataImpl::getCollationOptions( const Locale& rLocale )
 Sequence< OUString > SAL_CALL
 LocaleDataImpl::getSearchOptions( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getSearchOptions" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getSearchOptions" ));
 
     if ( func ) {
         sal_Int16 optionsCount = 0;
-        sal_Unicode **optionsArray = func(optionsCount);
-        Sequence< OUString > seq(optionsCount);
-        auto seqRange = asNonConstRange(seq);
-        for(sal_Int16 i = 0; i < optionsCount; i++) {
-            seqRange[i] = OUString( optionsArray[i] );
-        }
-        return seq;
+        OUString const *optionsArray = func(optionsCount);
+        return Sequence< OUString >(optionsArray, optionsCount);
     }
     else {
         return {};
     }
 }
 
-sal_Unicode **
+OUString const *
 LocaleDataImpl::getIndexArray(const Locale& rLocale, sal_Int16& indexCount)
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getIndexAlgorithm" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getIndexAlgorithm" ));
 
     if (func)
         return func(indexCount);
@@ -992,7 +985,7 @@ Sequence< OUString >
 LocaleDataImpl::getIndexAlgorithm( const Locale& rLocale )
 {
     sal_Int16 indexCount = 0;
-    sal_Unicode **indexArray = getIndexArray(rLocale, indexCount);
+    OUString const *indexArray = getIndexArray(rLocale, indexCount);
 
     if ( indexArray ) {
         Sequence< OUString > seq(indexCount);
@@ -1011,12 +1004,12 @@ OUString
 LocaleDataImpl::getDefaultIndexAlgorithm( const Locale& rLocale )
 {
     sal_Int16 indexCount = 0;
-    sal_Unicode **indexArray = getIndexArray(rLocale, indexCount);
+    OUString const *indexArray = getIndexArray(rLocale, indexCount);
 
     if ( indexArray ) {
         for(sal_Int16 i = 0; i < indexCount; i++) {
             if (indexArray[i*5 + 3][0])
-                return OUString(indexArray[i*5]);
+                return indexArray[i*5];
         }
     }
     return OUString();
@@ -1026,7 +1019,7 @@ bool
 LocaleDataImpl::hasPhonetic( const Locale& rLocale )
 {
     sal_Int16 indexCount = 0;
-    sal_Unicode **indexArray = getIndexArray(rLocale, indexCount);
+    OUString const *indexArray = getIndexArray(rLocale, indexCount);
 
     if ( indexArray ) {
         for(sal_Int16 i = 0; i < indexCount; i++) {
@@ -1037,11 +1030,11 @@ LocaleDataImpl::hasPhonetic( const Locale& rLocale )
     return false;
 }
 
-sal_Unicode **
+OUString const *
 LocaleDataImpl::getIndexArrayForAlgorithm(const Locale& rLocale, std::u16string_view algorithm)
 {
     sal_Int16 indexCount = 0;
-    sal_Unicode **indexArray = getIndexArray(rLocale, indexCount);
+    OUString const *indexArray = getIndexArray(rLocale, indexCount);
     if ( indexArray ) {
         for(sal_Int16 i = 0; i < indexCount; i++) {
             if (algorithm == indexArray[i*5])
@@ -1054,36 +1047,36 @@ LocaleDataImpl::getIndexArrayForAlgorithm(const Locale& rLocale, std::u16string_
 bool
 LocaleDataImpl::isPhonetic( const Locale& rLocale, std::u16string_view algorithm )
 {
-    sal_Unicode **indexArray = getIndexArrayForAlgorithm(rLocale, algorithm);
+    OUString const *indexArray = getIndexArrayForAlgorithm(rLocale, algorithm);
     return indexArray && indexArray[4][0];
 }
 
 OUString
 LocaleDataImpl::getIndexKeysByAlgorithm( const Locale& rLocale, std::u16string_view algorithm )
 {
-    sal_Unicode **indexArray = getIndexArrayForAlgorithm(rLocale, algorithm);
+    OUString const *indexArray = getIndexArrayForAlgorithm(rLocale, algorithm);
     return indexArray ? (OUString::Concat(u"0-9") + indexArray[2]) : OUString();
 }
 
 OUString
 LocaleDataImpl::getIndexModuleByAlgorithm( const Locale& rLocale, std::u16string_view algorithm )
 {
-    sal_Unicode **indexArray = getIndexArrayForAlgorithm(rLocale, algorithm);
-    return indexArray ? OUString(indexArray[1]) : OUString();
+    OUString const *indexArray = getIndexArrayForAlgorithm(rLocale, algorithm);
+    return indexArray ? indexArray[1] : OUString();
 }
 
 Sequence< UnicodeScript >
 LocaleDataImpl::getUnicodeScripts( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getUnicodeScripts" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getUnicodeScripts" ));
 
     if ( func ) {
         sal_Int16 scriptCount = 0;
-        sal_Unicode **scriptArray = func(scriptCount);
+        OUString const *scriptArray = func(scriptCount);
         Sequence< UnicodeScript > seq(scriptCount);
         auto seqRange = asNonConstRange(seq);
         for(sal_Int16 i = 0; i < scriptCount; i++) {
-            seqRange[i] = UnicodeScript( o3tl::toInt32(std::u16string_view(scriptArray[i], 1)) );
+            seqRange[i] = UnicodeScript( o3tl::toInt32(scriptArray[i].subView(0, 1)) );
         }
         return seq;
     }
@@ -1095,17 +1088,12 @@ LocaleDataImpl::getUnicodeScripts( const Locale& rLocale )
 Sequence< OUString >
 LocaleDataImpl::getFollowPageWords( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getFollowPageWords" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getFollowPageWords" ));
 
     if ( func ) {
         sal_Int16 wordCount = 0;
-        sal_Unicode **wordArray = func(wordCount);
-        Sequence< OUString > seq(wordCount);
-        auto seqRange = asNonConstRange(seq);
-        for(sal_Int16 i = 0; i < wordCount; i++) {
-            seqRange[i] = OUString(wordArray[i]);
-        }
-        return seq;
+        OUString const *wordArray = func(wordCount);
+        return Sequence< OUString >(wordArray, wordCount);
     }
     else {
         return {};
@@ -1115,19 +1103,12 @@ LocaleDataImpl::getFollowPageWords( const Locale& rLocale )
 Sequence< OUString > SAL_CALL
 LocaleDataImpl::getTransliterations( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getTransliterations" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getTransliterations" ));
 
     if ( func ) {
         sal_Int16 transliterationsCount = 0;
-        sal_Unicode **transliterationsArray = func(transliterationsCount);
-
-        Sequence< OUString > seq(transliterationsCount);
-        auto seqRange = asNonConstRange(seq);
-        for(int i = 0; i < transliterationsCount; i++) {
-            OUString  elem(transliterationsArray[i]);
-            seqRange[i] = elem;
-        }
-        return seq;
+        const OUString *transliterationsArray = func(transliterationsCount);
+        return Sequence< OUString >(transliterationsArray, transliterationsCount);
     }
     else {
         return {};
@@ -1140,16 +1121,16 @@ LocaleDataImpl::getTransliterations( const Locale& rLocale )
 LanguageCountryInfo SAL_CALL
 LocaleDataImpl::getLanguageCountryInfo( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getLCInfo" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getLCInfo" ));
 
     if ( func ) {
         sal_Int16 LCInfoCount = 0;
-        sal_Unicode **LCInfoArray = func(LCInfoCount);
-        LanguageCountryInfo info{OUString(LCInfoArray[0]),
-                OUString(LCInfoArray[1]),
-                OUString(LCInfoArray[2]),
-                OUString(LCInfoArray[3]),
-                OUString(LCInfoArray[4])};
+        OUString const *LCInfoArray = func(LCInfoCount);
+        LanguageCountryInfo info{LCInfoArray[0],
+                LCInfoArray[1],
+                LCInfoArray[2],
+                LCInfoArray[3],
+                LCInfoArray[4]};
         return info;
     }
     else {
@@ -1163,13 +1144,14 @@ LocaleDataImpl::getLanguageCountryInfo( const Locale& rLocale )
 ForbiddenCharacters SAL_CALL
 LocaleDataImpl::getForbiddenCharacters( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getForbiddenCharacters" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getForbiddenCharacters" ));
 
     if ( func ) {
         sal_Int16 LCForbiddenCharactersCount = 0;
-        sal_Unicode **LCForbiddenCharactersArray = func(LCForbiddenCharactersCount);
+        OUString const *LCForbiddenCharactersArray = func(LCForbiddenCharactersCount);
+        assert(LCForbiddenCharactersCount == 3);
         ForbiddenCharacters chars{
-            OUString(LCForbiddenCharactersArray[0]), OUString(LCForbiddenCharactersArray[1])};
+            LCForbiddenCharactersArray[0], LCForbiddenCharactersArray[1]};
         return chars;
     }
     else {
@@ -1181,12 +1163,13 @@ LocaleDataImpl::getForbiddenCharacters( const Locale& rLocale )
 OUString
 LocaleDataImpl::getHangingCharacters( const Locale& rLocale )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getForbiddenCharacters" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getForbiddenCharacters" ));
 
     if ( func ) {
         sal_Int16 LCForbiddenCharactersCount = 0;
-        sal_Unicode **LCForbiddenCharactersArray = func(LCForbiddenCharactersCount);
-        return OUString(LCForbiddenCharactersArray[2]);
+        const OUString *LCForbiddenCharactersArray = func(LCForbiddenCharactersCount);
+        assert(LCForbiddenCharactersCount == 3);
+        return LCForbiddenCharactersArray[2];
     }
 
     return OUString();
@@ -1195,18 +1178,12 @@ LocaleDataImpl::getHangingCharacters( const Locale& rLocale )
 Sequence< OUString >
 LocaleDataImpl::getBreakIteratorRules( const Locale& rLocale  )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getBreakIteratorRules" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getBreakIteratorRules" ));
 
     if ( func ) {
         sal_Int16 LCBreakIteratorRuleCount = 0;
-        sal_Unicode **LCBreakIteratorRulesArray = func(LCBreakIteratorRuleCount);
-        Sequence< OUString > seq(LCBreakIteratorRuleCount);
-        auto seqRange = asNonConstRange(seq);
-        for(int i = 0; i < LCBreakIteratorRuleCount; i++) {
-            OUString  elem(LCBreakIteratorRulesArray[i]);
-            seqRange[i] = elem;
-        }
-        return seq;
+        OUString const *LCBreakIteratorRulesArray = func(LCBreakIteratorRuleCount);
+        return Sequence< OUString >(LCBreakIteratorRulesArray, LCBreakIteratorRuleCount);
     }
     else {
         return {};
@@ -1217,18 +1194,12 @@ LocaleDataImpl::getBreakIteratorRules( const Locale& rLocale  )
 Sequence< OUString > SAL_CALL
 LocaleDataImpl::getReservedWord( const Locale& rLocale  )
 {
-    MyFunc_Type func = reinterpret_cast<MyFunc_Type>(getFunctionSymbol( rLocale, "getReservedWords" ));
+    MyFuncOUString_Type func = reinterpret_cast<MyFuncOUString_Type>(getFunctionSymbol( rLocale, "getReservedWords" ));
 
     if ( func ) {
         sal_Int16 LCReservedWordsCount = 0;
-        sal_Unicode **LCReservedWordsArray = func(LCReservedWordsCount);
-        Sequence< OUString > seq(LCReservedWordsCount);
-        auto seqRange = asNonConstRange(seq);
-        for(int i = 0; i < LCReservedWordsCount; i++) {
-            OUString  elem(LCReservedWordsArray[i]);
-            seqRange[i] = elem;
-        }
-        return seq;
+        OUString const *LCReservedWordsArray = func(LCReservedWordsCount);
+        return Sequence< OUString >(LCReservedWordsArray, LCReservedWordsCount);
     }
     else {
         return {};
@@ -1247,7 +1218,7 @@ LocaleDataImpl::getContinuousNumberingLevels( const lang::Locale& rLocale )
         // invoke function
         sal_Int16 nStyles;
         sal_Int16 nAttributes;
-        sal_Unicode const *** p0 = func( nStyles, nAttributes );
+        OUString const ** p0 = func( nStyles, nAttributes );
 
         // allocate memory for nAttributes attributes for each of the nStyles styles.
         Sequence< Sequence<beans::PropertyValue> > pv( nStyles );
@@ -1256,20 +1227,18 @@ LocaleDataImpl::getContinuousNumberingLevels( const lang::Locale& rLocale )
             i = Sequence<beans::PropertyValue>( nAttributes );
         }
 
-        sal_Unicode const *** pStyle = p0;
+        OUString const ** pStyle = p0;
         for( int i=0;  i<nStyles;  i++ ) {
-            sal_Unicode const ** pAttribute = pStyle[i];
+            OUString const * pAttribute = pStyle[i];
             auto pvElementRange = asNonConstRange(pvRange[i]);
             for( int j=0;  j<nAttributes;  j++ ) { // prefix, numberingtype, ...
-                sal_Unicode const * pString = pAttribute[j];
+                OUString const & pString = pAttribute[j];
                 beans::PropertyValue& rVal = pvElementRange[j];
                 OUString sVal;
-                if( pString ) {
-                    if( 0 != j && 2 != j )
-                        sVal = pString;
-                    else if( *pString )
-                        sVal = OUString( pString, 1 );
-                }
+                if( 0 != j && 2 != j )
+                    sVal = pString;
+                else if( !pString.isEmpty() )
+                    sVal = pString.copy( 0, 1 );
 
                 switch( j )
                 {
@@ -1357,20 +1326,20 @@ LocaleDataImpl::getOutlineNumberingLevels( const lang::Locale& rLocale )
         sal_Int16 nStyles;
         sal_Int16 nLevels;
         sal_Int16 nAttributes;
-        sal_Unicode const **** p0 = func( nStyles, nLevels, nAttributes );
+        OUString const *** p0 = func( nStyles, nLevels, nAttributes );
 
         Sequence< Reference<container::XIndexAccess> > aRet( nStyles );
         auto aRetRange = asNonConstRange(aRet);
-        sal_Unicode const **** pStyle = p0;
+        OUString const *** pStyle = p0;
         for( i=0;  i<nStyles;  i++ )
         {
             int j;
 
             std::unique_ptr<OutlineNumberingLevel_Impl[]> level(new OutlineNumberingLevel_Impl[ nLevels+1 ]);
-            sal_Unicode const *** pLevel = pStyle[i];
+            OUString const ** pLevel = pStyle[i];
             for( j = 0;  j < nLevels;  j++ )
             {
-                sal_Unicode const ** pAttribute = pLevel[j];
+                OUString const * pAttribute = pLevel[j];
                 for( int k=0; k<nAttributes; k++ )
                 {
                     OUString tmp( pAttribute[k] );

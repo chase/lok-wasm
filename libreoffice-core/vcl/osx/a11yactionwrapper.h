@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_OSX_A11YACTIONWRAPPER_H
-#define INCLUDED_VCL_OSX_A11YACTIONWRAPPER_H
+#pragma once
 
 #include <osx/osxvcltypes.h>
 #include <osx/a11ywrapper.h>
@@ -28,8 +27,7 @@
 }
 + (NSArray*)actionNamesForElement:(AquaA11yWrapper*)wrapper;
 + (void)doAction:(NSString*)action ofElement:(AquaA11yWrapper*)wrapper;
++ (NSAccessibilityActionName)actionNameForSelector:(SEL)aSelector;
 @end
-
-#endif // INCLUDED_VCL_OSX_A11YACTIONWRAPPER_H
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_LINGUISTIC_SOURCE_SPELLDSP_HXX
-#define INCLUDED_LINGUISTIC_SOURCE_SPELLDSP_HXX
+#pragma once
 
 #include "defs.hxx"
 #include <linguistic/misc.hxx>
@@ -32,6 +31,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <unotools/charclass.hxx>
 
 class LngSvcMgr;
@@ -54,7 +54,7 @@ class SpellCheckerDispatcher :
 
     LngSvcMgr                       &m_rMgr;
     mutable std::unique_ptr<linguistic::SpellCache> m_pCache; // Spell Cache (holds known words)
-    std::unique_ptr<CharClass>       m_pCharClass;
+    std::optional<CharClass>       m_oCharClass;
 
     SpellCheckerDispatcher(const SpellCheckerDispatcher &) = delete;
     SpellCheckerDispatcher & operator = (const SpellCheckerDispatcher &) = delete;
@@ -106,7 +106,7 @@ public:
 
 private:
     void setCharClass(const LanguageTag& rLanguageTag);
-    static OUString makeLowerCase(const OUString&, CharClass const *);
+    static OUString makeLowerCase(const OUString&, const std::optional<CharClass> &);
 
 };
 
@@ -134,8 +134,5 @@ inline const css::uno::Reference< css::linguistic2::XSearchableDictionaryList > 
         m_xDicList = linguistic::GetDictionaryList();
     return m_xDicList;
 }
-
-
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

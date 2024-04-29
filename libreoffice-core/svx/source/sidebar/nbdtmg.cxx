@@ -206,7 +206,7 @@ void NBOTypeMgrBase::ImplLoad(std::u16string_view filename)
                         aNum.SetLevel(i, aFmt);
                     }
                 }
-                RelplaceNumRule(aNum,nNumIndex,0x1/*nLevel*/);
+                ReplaceNumRule(aNum,nNumIndex,0x1/*nLevel*/);
                 xIStm->ReadInt32( nNumIndex );
             }
         }
@@ -268,7 +268,7 @@ void BulletsTypeMgr::Init()
         pActualBullets[i] = new BulletsSettings;
         pActualBullets[i]->cBulletChar = aDefaultBulletTypes[i];
         pActualBullets[i]->aFont = rActBulletFont;
-        OString id = OString::Concat(RID_SVXSTR_BULLET_DESCRIPTION_0.mpId) + OString::number(i);
+        OString id = OString::Concat(RID_SVXSTR_BULLET_DESCRIPTION_0.getId()) + OString::number(i);
         pActualBullets[i]->sDescription = SvxResId( TranslateId(RID_SVXSTR_BULLET_DESCRIPTION_0.mpContext, id.getStr()) );
     }
 }
@@ -298,8 +298,11 @@ sal_uInt16 BulletsTypeMgr::GetNBOIndexForNumRule(SvxNumRule& aNum,sal_uInt16 mLe
     return sal_uInt16(0xFFFF);
 }
 
-void BulletsTypeMgr::RelplaceNumRule(SvxNumRule& aNum, sal_uInt16 nIndex, sal_uInt16 mLevel)
+void BulletsTypeMgr::ReplaceNumRule(SvxNumRule& aNum, sal_uInt16 nIndex, sal_uInt16 mLevel)
 {
+    if ( nIndex >= DEFAULT_BULLET_TYPES )
+        return;
+
     if ( mLevel == sal_uInt16(0xFFFF) || mLevel == 0)
         return;
 
@@ -314,8 +317,6 @@ void BulletsTypeMgr::RelplaceNumRule(SvxNumRule& aNum, sal_uInt16 nIndex, sal_uI
     SvxNumberFormat aFmt(aNum.GetLevel(nActLv));
     sal_UCS4 cChar = aFmt.GetBulletChar();
     std::optional<vcl::Font> pFont = aFmt.GetBulletFont();
-    if ( nIndex >= DEFAULT_BULLET_TYPES )
-        return;
 
     pActualBullets[nIndex]->cBulletChar = cChar;
     if ( pFont )
@@ -468,7 +469,7 @@ sal_uInt16 NumberingTypeMgr::GetNBOIndexForNumRule(SvxNumRule& aNum,sal_uInt16 m
     return sal_uInt16(0xFFFF);
 }
 
-void NumberingTypeMgr::RelplaceNumRule(SvxNumRule& aNum, sal_uInt16 nIndex, sal_uInt16 mLevel)
+void NumberingTypeMgr::ReplaceNumRule(SvxNumRule& aNum, sal_uInt16 nIndex, sal_uInt16 mLevel)
 {
     sal_uInt16 nActLv = IsSingleLevel(mLevel);
 
@@ -592,7 +593,7 @@ void OutlineTypeMgr::Init()
         {
             pOutlineSettingsArrs[ nItem ] = new OutlineSettings_Impl;
             OutlineSettings_Impl* pItemArr = pOutlineSettingsArrs[ nItem ];
-            OString id = OString::Concat(RID_SVXSTR_OUTLINENUM_DESCRIPTION_0.mpId) + OString::number(nItem);
+            OString id = OString::Concat(RID_SVXSTR_OUTLINENUM_DESCRIPTION_0.getId()) + OString::number(nItem);
             pItemArr->sDescription = SvxResId( TranslateId(RID_SVXSTR_OUTLINENUM_DESCRIPTION_0.mpContext, id.getStr()) );
             pItemArr->pNumSettingsArr = new NumSettingsArr_Impl;
             Reference<XIndexAccess> xLevel = aOutlineAccess.getConstArray()[nItem];
@@ -665,7 +666,7 @@ sal_uInt16 OutlineTypeMgr::GetNBOIndexForNumRule(SvxNumRule& aNum,sal_uInt16 /*m
                 const SvxBrushItem* pBrsh1 = aFmt.GetBrush();
                 const SvxBrushItem* pBrsh2 = _pSet->pBrushItem;
                 bool bIsMatch = false;
-                if (pBrsh1==pBrsh2) bIsMatch = true;
+                if (SfxPoolItem::areSame(pBrsh1,pBrsh2)) bIsMatch = true;
                 if (pBrsh1 && pBrsh2) {
                     const Graphic* pGrf1 = pBrsh1->GetGraphic();
                     const Graphic* pGrf2 = pBrsh2->GetGraphic();
@@ -705,7 +706,7 @@ sal_uInt16 OutlineTypeMgr::GetNBOIndexForNumRule(SvxNumRule& aNum,sal_uInt16 /*m
     return sal_uInt16(0xFFFF);
 }
 
-void OutlineTypeMgr::RelplaceNumRule(SvxNumRule& aNum, sal_uInt16 nIndex, sal_uInt16 mLevel)
+void OutlineTypeMgr::ReplaceNumRule(SvxNumRule& aNum, sal_uInt16 nIndex, sal_uInt16 mLevel)
 {
     sal_uInt16 const nLength = SAL_N_ELEMENTS(pOutlineSettingsArrs);
     if ( nIndex >= nLength )

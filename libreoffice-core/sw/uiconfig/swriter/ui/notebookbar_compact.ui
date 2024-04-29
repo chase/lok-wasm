@@ -382,16 +382,17 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuFile-PrintDefault">
+      <object class="GtkMenuItem" id="MenuFile-Print">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
-        <property name="action_name">.uno:PrintDefault</property>
+        <property name="action_name">.uno:Print</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuFile-Print">
+      <object class="GtkMenuItem" id="MenuFile-PrintDefault">
+        <property name="visible">False</property>
         <property name="can_focus">False</property>
-        <property name="action_name">.uno:Print</property>
+        <property name="action_name">.uno:PrintDefault</property>
       </object>
     </child>
     <child>
@@ -837,14 +838,14 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuHome-ParaLeftToRight">
+      <object class="GtkRadioMenuItem" id="MenuHome-ParaLeftToRight">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:ParaLeftToRight</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuHome-ParaRightToLeft">
+      <object class="GtkRadioMenuItem" id="MenuHome-ParaRightToLeft">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:ParaRightToLeft</property>
@@ -1186,6 +1187,12 @@
       </object>
     </child>
     <child>
+      <object class="GtkSeparatorMenuItem" id="separator159">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+      </object>
+    </child>
+    <child>
       <object class="GtkMenuItem" id="InsertBreakD">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
@@ -1197,6 +1204,13 @@
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:InsertSection</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="MenuInsert-InsertHorizontalLine">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="action_name">.uno:StyleApply?Style:string=Horizontal Line&amp;FamilyName:string=ParagraphStyles</property>
       </object>
     </child>
     <child>
@@ -1305,13 +1319,6 @@
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:InsertFrameInteract</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="InsertObjectFloatingFrameD">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:InsertObjectFloatingFrame</property>
       </object>
     </child>
     <child>
@@ -1784,9 +1791,53 @@
         <property name="can_focus">False</property>
         <property name="action_name">.uno:MoreDictionaries</property>
       </object>
-      <packing>
-        <property name="bottom_attach">0</property>
-      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="MenuReview-AutoCorrect">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="action_name">.uno:AutoFormatMenu</property>
+        <child type="submenu">
+          <object class="GtkMenu" id="Menu AutoCorrect">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <child>
+              <object class="GtkMenuItem" id="MenuReview-AutoCorrectWhileTyping">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="action_name">.uno:OnlineAutoFormat</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkMenuItem" id="MenuReview-AutoFormatApply">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="action_name">.uno:AutoFormatApply</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkMenuItem" id="MenuReview-AutoFormatApplyAndEdit">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="action_name">.uno:AutoFormatRedlineApply</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkSeparatorMenuItem" id="MenuReview-separator6">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkMenuItem" id="MenuReview-AutoCorrectDialog">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="action_name">.uno:AutoCorrectDlg</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
     </child>
     <child>
       <object class="GtkSeparatorMenuItem" id="MenuReview-separator1">
@@ -2305,14 +2356,14 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <child>
-      <object class="GtkMenuItem" id="PrintLayoutD">
+      <object class="GtkRadioMenuItem" id="PrintLayoutD">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:PrintLayout</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="BrowseViewF">
+      <object class="GtkRadioMenuItem" id="BrowseViewF">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:BrowseView</property>
@@ -2397,6 +2448,13 @@
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:TableBoundaries</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="SectionBoundariesD">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="action_name">.uno:SectionBoundaries</property>
       </object>
     </child>
     <child>
@@ -2979,7 +3037,7 @@
                             <property name="toolbar_style">both-horiz</property>
                             <child>
                               <object class="GtkToolButton" id="Files-PrintDefault">
-                                <property name="visible">True</property>
+                                <property name="visible">False</property>
                                 <property name="action_name">.uno:PrintDefault</property>
                               </object>
                               <packing>
@@ -3018,7 +3076,7 @@
                             <property name="show_arrow">False</property>
                             <child>
                               <object class="GtkToolButton" id="PrinterSetup">
-                                <property name="visible">True</property>
+                                <property name="visible">False</property>
                                 <property name="visible_horizontal">False</property>
                                 <property name="action_name">.uno:PrinterSetup</property>
                                 <property name="icon_name">sfx2/res/symphony/open_more.png</property>
@@ -3672,7 +3730,7 @@
                             <child>
                               <object class="GtkMenuToolButton" id="Home-BackColor">
                                 <property name="visible">True</property>
-                                <property name="action_name">.uno:BackColor</property>
+                                <property name="action_name">.uno:CharBackColor</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -7119,45 +7177,6 @@
                         <property name="expand">False</property>
                         <property name="fill">True</property>
                         <property name="position">9</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="VclOptionalBox" id="References-Section-Field1">
-                        <property name="visible">True</property>
-                        <property name="can_focus">False</property>
-                        <property name="valign">center</property>
-                        <property name="vexpand">True</property>
-                        <child>
-                          <object class="sfxlo-NotebookbarToolBox" id="SectionBottom188">
-                            <property name="visible">True</property>
-                            <property name="can_focus">True</property>
-                            <property name="toolbar_style">both-horiz</property>
-                            <property name="show_arrow">False</property>
-                            <child>
-                              <object class="GtkToolButton" id="References-InsertField">
-                                <property name="visible">True</property>
-                                <property name="action_name">.uno:InsertField</property>
-                              </object>
-                              <packing>
-                                <property name="expand">False</property>
-                                <property name="homogeneous">True</property>
-                              </packing>
-                            </child>
-                          </object>
-                          <packing>
-                            <property name="expand">False</property>
-                            <property name="fill">True</property>
-                            <property name="position">1</property>
-                          </packing>
-                        </child>
-                        <style>
-                          <class name="priority-5"/>
-                        </style>
-                      </object>
-                      <packing>
-                        <property name="expand">False</property>
-                        <property name="fill">True</property>
-                        <property name="position">10</property>
                       </packing>
                     </child>
                     <child>

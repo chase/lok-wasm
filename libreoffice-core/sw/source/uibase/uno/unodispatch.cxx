@@ -45,7 +45,7 @@ const char cInternalDBChangeNotification[] = ".uno::Writer/DataSourceChanged";
 SwXDispatchProviderInterceptor::SwXDispatchProviderInterceptor(SwView& rVw) :
     m_pView(&rVw)
 {
-    uno::Reference< frame::XFrame> xUnoFrame = m_pView->GetViewFrame()->GetFrame().GetFrameInterface();
+    uno::Reference< frame::XFrame> xUnoFrame = m_pView->GetViewFrame().GetFrame().GetFrameInterface();
     m_xIntercepted.set(xUnoFrame, uno::UNO_QUERY);
     if(m_xIntercepted.is())
     {
@@ -151,18 +151,6 @@ void SwXDispatchProviderInterceptor::disposing( const lang::EventObject& )
     m_xIntercepted = nullptr;
 }
 
-const uno::Sequence< sal_Int8 > & SwXDispatchProviderInterceptor::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXDispatchProviderInterceptorUnoTunnelId;
-    return theSwXDispatchProviderInterceptorUnoTunnelId.getSeq();
-}
-
-sal_Int64 SwXDispatchProviderInterceptor::getSomething(
-    const uno::Sequence< sal_Int8 >& aIdentifier )
-{
-    return comphelper::getSomethingImpl(aIdentifier, this);
-}
-
 void    SwXDispatchProviderInterceptor::Invalidate()
 {
     DispatchMutexLock_Impl aLock;
@@ -221,7 +209,7 @@ void SwXDispatch::dispatch(const util::URL& aURL,
     else if(aURL.Complete == cURLFormLetter)
     {
         SfxUnoAnyItem aDBProperties(FN_PARAM_DATABASE_PROPERTIES, uno::Any(aArgs));
-        m_pView->GetViewFrame()->GetDispatcher()->ExecuteList(
+        m_pView->GetViewFrame().GetDispatcher()->ExecuteList(
             FN_MAILMERGE_WIZARD,
             SfxCallMode::ASYNCHRON,
             { &aDBProperties });
@@ -234,7 +222,7 @@ void SwXDispatch::dispatch(const util::URL& aURL,
     else if(aURL.Complete == cInternalDBChangeNotification)
     {
         frame::FeatureStateEvent aEvent;
-        aEvent.Source = *static_cast<cppu::OWeakObject*>(this);
+        aEvent.Source = getXWeak();
 
         const SwDBData& rData = m_pView->GetWrtShell().GetDBData();
         svx::ODataAccessDescriptor aDescriptor;
@@ -276,7 +264,7 @@ void SwXDispatch::addStatusListener(
     m_bOldEnable = bEnable;
     frame::FeatureStateEvent aEvent;
     aEvent.IsEnabled = bEnable;
-    aEvent.Source = *static_cast<cppu::OWeakObject*>(this);
+    aEvent.Source = getXWeak();
     aEvent.FeatureURL = aURL;
 
     // one of the URLs requires a special state...
@@ -312,10 +300,9 @@ void SwXDispatch::addStatusListener(
 void SwXDispatch::removeStatusListener(
     const uno::Reference< frame::XStatusListener >& xControl, const util::URL&  )
 {
-    m_aStatusListenerVector.erase(
-        std::remove_if(m_aStatusListenerVector.begin(), m_aStatusListenerVector.end(),
-            [&](const StatusStruct_Impl& status) { return status.xListener.get() == xControl.get(); }),
-        m_aStatusListenerVector.end());
+    std::erase_if(
+            m_aStatusListenerVector,
+            [&](const StatusStruct_Impl& status) { return status.xListener.get() == xControl.get(); });
     if(m_aStatusListenerVector.empty() && m_pView)
     {
         uno::Reference<view::XSelectionSupplier> xSupplier = m_pView->GetUNOObject();
@@ -338,7 +325,7 @@ void SwXDispatch::selectionChanged( const lang::EventObject&  )
     m_bOldEnable = bEnable;
     frame::FeatureStateEvent aEvent;
     aEvent.IsEnabled = bEnable;
-    aEvent.Source = *static_cast<cppu::OWeakObject*>(this);
+    aEvent.Source = getXWeak();
 
     // calls to statusChanged may call addStatusListener or removeStatusListener
     // so copy m_aStatusListenerVector on stack
@@ -360,7 +347,7 @@ void SwXDispatch::disposing( const lang::EventObject& rSource )
     m_bListenerAdded = false;
 
     lang::EventObject aObject;
-    aObject.Source = static_cast<cppu::OWeakObject*>(this);
+    aObject.Source = getXWeak();
     // calls to statusChanged may call addStatusListener or removeStatusListener
     // so copy m_aStatusListenerVector on stack
     auto copyStatusListenerVector = m_aStatusListenerVector;

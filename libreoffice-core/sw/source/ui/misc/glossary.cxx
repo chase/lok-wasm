@@ -54,6 +54,7 @@
 #include <macassgn.hxx>
 #include <docsh.hxx>
 #include <shellio.hxx>
+#include <unotextcursor.hxx>
 
 #include <cmdid.h>
 #include <sfx2/filedlghelper.hxx>
@@ -85,8 +86,7 @@ static OUString lcl_GetValidShortCut( const OUString& rName )
     while( rName[nStart-1]==' ' && nStart < nSz )
         nStart++;
 
-    OUStringBuffer aBuf;
-    aBuf.append(rName[nStart-1]);
+    OUStringBuffer aBuf(OUString::number(rName[nStart-1]));
 
     for( ; nStart < nSz; ++nStart )
     {
@@ -288,9 +288,9 @@ public:
     }
 };
 
-SwGlossaryDlg::SwGlossaryDlg(SfxViewFrame const * pViewFrame,
+SwGlossaryDlg::SwGlossaryDlg(const SfxViewFrame& rViewFrame,
                              SwGlossaryHdl * pGlosHdl, SwWrtShell *pWrtShell)
-    : SfxDialogController(pViewFrame->GetFrameWeld(), "modules/swriter/ui/autotext.ui", "AutoTextDialog")
+    : SfxDialogController(rViewFrame.GetFrameWeld(), "modules/swriter/ui/autotext.ui", "AutoTextDialog")
     , m_sReadonlyPath(SwResId(STR_READONLY_PATH))
     , m_pGlossaryHdl(pGlosHdl)
     , m_bResume(false)
@@ -410,17 +410,12 @@ IMPL_LINK(SwGlossaryDlg, GrpSelect, weld::TreeView&, rBox, void)
         ShowAutoText(::GetCurrGlosGroup(), m_xShortNameEdit->get_text());
     }
     else
-    {
-        m_xNameED->set_text("");
-        m_xShortNameEdit->set_text("");
-        m_xShortNameEdit->set_sensitive(false);
         ShowAutoText("", "");
-    }
     // update controls
     NameModify(*m_xShortNameEdit);
-    if( SfxRequest::HasMacroRecorder( m_pShell->GetView().GetViewFrame() ) )
+    if (SfxRequest::HasMacroRecorder(m_pShell->GetView().GetViewFrame()))
     {
-        SfxRequest aReq( m_pShell->GetView().GetViewFrame(), FN_SET_ACT_GLOSSARY );
+        SfxRequest aReq(m_pShell->GetView().GetViewFrame(), FN_SET_ACT_GLOSSARY);
         aReq.AppendItem(SfxStringItem(FN_SET_ACT_GLOSSARY, getCurrentGlossary()));
         aReq.Done();
     }
@@ -441,9 +436,9 @@ void SwGlossaryDlg::Apply()
     {
         m_pGlossaryHdl->InsertGlossary(aGlosName);
     }
-    if( SfxRequest::HasMacroRecorder( m_pShell->GetView().GetViewFrame() ) )
+    if (SfxRequest::HasMacroRecorder(m_pShell->GetView().GetViewFrame()))
     {
-        SfxRequest aReq( m_pShell->GetView().GetViewFrame(), FN_INSERT_GLOSSARY );
+        SfxRequest aReq(m_pShell->GetView().GetViewFrame(), FN_INSERT_GLOSSARY);
         aReq.AppendItem(SfxStringItem(FN_INSERT_GLOSSARY, getCurrentGlossary()));
         aReq.AppendItem(SfxStringItem(FN_PARAM_1, aGlosName));
         aReq.Done();
@@ -550,7 +545,7 @@ IMPL_LINK_NOARG( SwGlossaryDlg, EnableHdl, weld::Toggleable&, void )
     m_xEditBtn->set_item_visible("import", bIsGroup && !m_bIsOld && !m_pGlossaryHdl->IsReadOnly() );
 }
 
-IMPL_LINK(SwGlossaryDlg, MenuHdl, const OString&, rItemIdent, void)
+IMPL_LINK(SwGlossaryDlg, MenuHdl, const OUString&, rItemIdent, void)
 {
     if (rItemIdent == "edit")
     {
@@ -598,7 +593,7 @@ IMPL_LINK(SwGlossaryDlg, MenuHdl, const OString&, rItemIdent, void)
             m_xShortNameEdit->set_text(aShortName);
             NameModify(*m_xNameED);       // for toggling the buttons
 
-            if( SfxRequest::HasMacroRecorder( m_pShell->GetView().GetViewFrame() ) )
+            if (SfxRequest::HasMacroRecorder(m_pShell->GetView().GetViewFrame()))
             {
                 SfxRequest aReq(m_pShell->GetView().GetViewFrame(), FN_NEW_GLOSSARY);
                 aReq.AppendItem(SfxStringItem(FN_NEW_GLOSSARY, getCurrentGlossary()));
@@ -665,7 +660,7 @@ IMPL_LINK(SwGlossaryDlg, MenuHdl, const OString&, rItemIdent, void)
         const SvxMacroItem* pMacroItem;
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         ScopedVclPtr<SfxAbstractDialog> pMacroDlg(pFact->CreateEventConfigDialog(m_xDialog.get(), aSet,
-            m_pShell->GetView().GetViewFrame()->GetFrame().GetFrameInterface() ));
+            m_pShell->GetView().GetViewFrame().GetFrame().GetFrameInterface() ));
         if ( pMacroDlg && pMacroDlg->Execute() == RET_OK &&
             (pMacroItem = pMacroDlg->GetOutputItemSet()->GetItemIfSet( RES_FRMMACRO, false )) )
         {
@@ -813,7 +808,7 @@ void SwGlossaryDlg::Init()
     const OUString sSelStr(::GetCurrGlosGroup().getToken(0, GLOS_DELIM));
     const sal_Int32 nSelPath = o3tl::toInt32(o3tl::getToken(::GetCurrGlosGroup(), 1, GLOS_DELIM));
     // #i66304# - "My AutoText" comes from mytexts.bau, but should be translated
-    static const OUStringLiteral sMyAutoTextEnglish(u"My AutoText");
+    static constexpr OUStringLiteral sMyAutoTextEnglish(u"My AutoText");
     const OUString sMyAutoTextTranslated(SwResId(STR_MY_AUTOTEXT));
     for(size_t nId = 0; nId < nCnt; ++nId )
     {
@@ -904,6 +899,25 @@ void SwGlossaryDlg::Init()
     m_xInsertTipCB->set_active( rCfg.IsAutoTextTip() );
     m_xInsertTipCB->set_sensitive(!officecfg::Office::Writer::AutoFunction::Text::ShowToolTip::isReadOnly());
     m_xInsertTipCB->connect_toggled(LINK(this, SwGlossaryDlg, CheckBoxHdl));
+
+    // tdf#124088 - propose autotext and shortcut name based on selected text
+    if (m_pShell->HasSelection())
+    {
+        OUString aSelText;
+        m_pShell->GetSelectedText(aSelText, ParaBreakType::ToBlank);
+
+        aSelText = aSelText.trim();
+        if (aSelText.getLength() > 25)
+        {
+            aSelText = aSelText.copy(0, 25);
+            if (const sal_Int32 nBlankIndex = aSelText.lastIndexOf(' '); nBlankIndex != -1)
+                aSelText = aSelText.copy(0, nBlankIndex);
+        }
+
+        m_xNameED->set_text(aSelText);
+        m_xNameED->select_region(0, -1);
+        m_xShortNameEdit->set_text(lcl_GetValidShortCut(aSelText));
+    }
 }
 
 // KeyInput for ShortName - Edits without Spaces
@@ -1029,7 +1043,7 @@ void SwGlossaryDlg::ResumeShowAutoText()
             m_xAutoText = text::AutoTextContainer::create( comphelper::getProcessComponentContext() );
         }
 
-        uno::Reference< XTextCursor > & xCursor = m_xExampleFrame->GetTextCursor();
+        rtl::Reference< SwXTextCursor > & xCursor = m_xExampleFrame->GetTextCursor();
         if(xCursor.is())
         {
             if (!sShortName.isEmpty())
@@ -1041,7 +1055,7 @@ void SwGlossaryDlg::ResumeShowAutoText()
                     uno::Any aEntry(xGroup->getByName(sShortName));
                     uno::Reference< XAutoTextEntry >  xEntry;
                     aEntry >>= xEntry;
-                    xEntry->applyTo(xCursor);
+                    xEntry->applyTo(static_cast<XSentenceCursor*>(xCursor.get()));
                 }
             }
         }

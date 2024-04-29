@@ -68,6 +68,8 @@
 #include <comphelper/sequence.hxx>
 #include "UnoGraphicExporter.hxx"
 #include <memory>
+// #i102251#
+#include <editeng/editstat.hxx>
 
 #define MAX_EXT_PIX         2048
 
@@ -82,9 +84,6 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::document;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::task;
-
-// #i102251#
-#include <editeng/editstat.hxx>
 
 namespace {
 
@@ -112,24 +111,19 @@ namespace {
 
         TriState meAntiAliasing = TRISTATE_INDET;
 
-        explicit ExportSettings(const SdrModel* pSdrModel);
+        explicit ExportSettings();
     };
 
-    ExportSettings::ExportSettings(const SdrModel* pSdrModel)
+    ExportSettings::ExportSettings()
     :   mnWidth( 0 )
         ,mnHeight( 0 )
         ,mbExportOnlyBackground( false )
         ,mbScrollText( false )
         ,mbUseHighContrast( false )
         ,mbTranslucent( false )
-        ,maScaleX( 1, 1 )
-        ,maScaleY( 1, 1 )
+        ,maScaleX(1, 1)
+        ,maScaleY(1, 1)
     {
-        if (pSdrModel)
-        {
-            maScaleX = pSdrModel->GetScaleFraction();
-            maScaleY = pSdrModel->GetScaleFraction();
-        }
     }
 
     /** implements a component to export shapes or pages to external graphic formats.
@@ -725,9 +719,10 @@ bool GraphicExporter::GetGraphic( ExportSettings const & rSettings, Graphic& aGr
                 pView->SetPageVisible( false );
                 pView->ShowSdrPage( pPage );
 
-                // tdf#96922 completely deactivate EditView PageVisualization, including
-                // PageBackground (formerly 'wiese').
-                pView->SetPagePaintingAllowed(false);
+                // tdf#96922 deactivate EditView PageVisualization, including PageBackground
+                // (formerly 'wiese'). Do *not* switch off MasterPageVisualizationAllowed, we
+                // want MasterPage content if a whole SdrPage is exported
+                pView->SetPageDecorationAllowed(false);
 
                 const Point aNewOrg( pPage->GetLeftBorder(), pPage->GetUpperBorder() );
                 aNewSize = Size( aSize.Width() - pPage->GetLeftBorder() - pPage->GetRightBorder(),
@@ -870,11 +865,11 @@ bool GraphicExporter::GetGraphic( ExportSettings const & rSettings, Graphic& aGr
                     pMtf->SetPrefMapMode( aLocalMapMode );
 
                     pMtf->AddAction( new MetaCommentAction(
-                                         "XTEXT_SCROLLRECT", 0,
+                                         "XTEXT_SCROLLRECT"_ostr, 0,
                                          reinterpret_cast<sal_uInt8 const*>(&aScrollRectangle),
                                          sizeof( tools::Rectangle ) ) );
                     pMtf->AddAction( new MetaCommentAction(
-                                         "XTEXT_PAINTRECT", 0,
+                                         "XTEXT_PAINTRECT"_ostr, 0,
                                          reinterpret_cast<sal_uInt8 const*>(&aPaintRectangle),
                                          sizeof( tools::Rectangle ) ) );
 
@@ -1015,7 +1010,7 @@ sal_Bool SAL_CALL GraphicExporter::filter( const Sequence< PropertyValue >& aDes
     GraphicFilter &rFilter = GraphicFilter::GetGraphicFilter();
 
     // get the arguments from the descriptor
-    ExportSettings aSettings(mpDoc);
+    ExportSettings aSettings;
     ParseSettings(aDescriptor, aSettings);
 
     const sal_uInt16    nFilter = !aSettings.maMediaType.isEmpty()
@@ -1303,7 +1298,7 @@ Graphic SvxGetGraphicForShape( SdrObject& rShape )
         rtl::Reference< GraphicExporter > xExporter( new GraphicExporter() );
         Reference< XComponent > xComp( rShape.getUnoShape(), UNO_QUERY_THROW );
         xExporter->setSourceDocument( xComp );
-        ExportSettings aSettings(&rShape.getSdrModelFromSdrObject());
+        ExportSettings aSettings;
         xExporter->GetGraphic( aSettings, aGraphic, true/*bVector*/ );
     }
     catch( Exception& )

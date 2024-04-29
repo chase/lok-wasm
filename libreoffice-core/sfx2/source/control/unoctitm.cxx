@@ -115,7 +115,7 @@ static void InterceptLOKStateChangeEvent( sal_uInt16 nSID, SfxViewFrame* pViewFr
 void SfxStatusDispatcher::ReleaseAll()
 {
     css::lang::EventObject aObject;
-    aObject.Source = static_cast<cppu::OWeakObject*>(this);
+    aObject.Source = getXWeak();
     std::unique_lock aGuard(maMutex);
     maListeners.disposeAndClear( aGuard, aObject );
 }
@@ -123,7 +123,7 @@ void SfxStatusDispatcher::ReleaseAll()
 void SfxStatusDispatcher::sendStatusChanged(const OUString& rURL, const css::frame::FeatureStateEvent& rEvent)
 {
     std::unique_lock aGuard(maMutex);
-    ::comphelper::OInterfaceContainerHelper4<css::frame::XStatusListener>* pContnr = maListeners.getContainer(rURL);
+    ::comphelper::OInterfaceContainerHelper4<css::frame::XStatusListener>* pContnr = maListeners.getContainer(aGuard, rURL);
     if (!pContnr)
         return;
     pContnr->forEach(aGuard,
@@ -173,12 +173,6 @@ void SAL_CALL SfxStatusDispatcher::removeStatusListener( const css::uno::Referen
 }
 
 
-// XUnoTunnel
-sal_Int64 SAL_CALL SfxOfficeDispatch::getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier )
-{
-    return comphelper::getSomethingImpl(aIdentifier, this);
-}
-
 SfxOfficeDispatch::SfxOfficeDispatch( SfxBindings& rBindings, SfxDispatcher* pDispat, const SfxSlot* pSlot, const css::util::URL& rURL )
     : pImpl( new SfxDispatchController_Impl( this, &rBindings, pDispat, pSlot, rURL ))
 {
@@ -204,14 +198,6 @@ SfxOfficeDispatch::~SfxOfficeDispatch()
         SolarMutexGuard aGuard;
         pImpl.reset();
     }
-}
-
-const css::uno::Sequence< sal_Int8 >& SfxOfficeDispatch::getUnoTunnelId()
-{
-    // {38 57 CA 80 09 36 11 d4 83 FE 00 50 04 52 6B 21}
-    static const sal_uInt8 pGUID[16] = { 0x38, 0x57, 0xCA, 0x80, 0x09, 0x36, 0x11, 0xd4, 0x83, 0xFE, 0x00, 0x50, 0x04, 0x52, 0x6B, 0x21 };
-    static css::uno::Sequence< sal_Int8 > seqID(reinterpret_cast<const sal_Int8*>(pGUID), 16) ;
-    return seqID ;
 }
 
 #if HAVE_FEATURE_JAVA
@@ -252,7 +238,7 @@ void SAL_CALL SfxOfficeDispatch::dispatch( const css::util::URL& aURL, const css
         {
             // Make sure that we own the solar mutex, otherwise later
             // vcl::SolarThreadExecutor::execute() will release the solar mutex, even if it's owned by
-            // an other thread, leading to an std::abort() at the end.
+            // another thread, leading to an std::abort() at the end.
             SolarMutexGuard aGuard;
             vcl::solarthread::syncExecute([this, &aURL, &aArgs]() {
                 pImpl->dispatch(aURL, aArgs,
@@ -349,9 +335,9 @@ SfxDispatchController_Impl::SfxDispatchController_Impl(
     , bMasterSlave( false )
     , bVisible( true )
 {
-    if ( aDispatchURL.Protocol == "slot:" && pSlot->pUnoName )
+    if ( aDispatchURL.Protocol == "slot:" && !pSlot->pUnoName.isEmpty() )
     {
-        aDispatchURL.Complete = ".uno:" + OUString::createFromAscii(pSlot->pUnoName);
+        aDispatchURL.Complete = pSlot->GetCommand();
         Reference< XURLTransformer > xTrans( URLTransformer::create( ::comphelper::getProcessComponentContext() ) );
         xTrans->parseStrict( aDispatchURL );
     }
@@ -546,18 +532,21 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
 
     SolarMutexGuard aGuard;
 
-    if (comphelper::LibreOfficeKit::isActive() &&
-        SfxViewShell::Current()->isBlockedCommand(aURL.Complete))
+    if (comphelper::LibreOfficeKit::isActive())
     {
-        tools::JsonWriter aTree;
-        aTree.put("code", "");
-        aTree.put("kind", "BlockedCommand");
-        aTree.put("cmd", aURL.Complete);
-        aTree.put("message", "Blocked feature");
-        aTree.put("viewID", SfxViewShell::Current()->GetViewShellId().get());
+        const SfxViewShell* pViewShell = SfxViewShell::Current();
+        if (pViewShell && pViewShell->isBlockedCommand(aURL.Complete))
+        {
+            tools::JsonWriter aTree;
+            aTree.put("code", "");
+            aTree.put("kind", "BlockedCommand");
+            aTree.put("cmd", aURL.Complete);
+            aTree.put("message", "Blocked feature");
+            aTree.put("viewID", pViewShell->GetViewShellId().get());
 
-        SfxViewShell::Current()->libreOfficeKitViewCallback(LOK_COMMAND_BLOCKED, aTree.extractData());
-        return;
+            pViewShell->libreOfficeKitViewCallback(LOK_COMMAND_BLOCKED, aTree.finishAndGetAsOString());
+            return;
+        }
     }
 
     if (
@@ -640,7 +629,7 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
     }
 
     bool bSuccess = false;
-    const SfxPoolItem* pItem = nullptr;
+    SfxPoolItemHolder aItem;
     MapUnit eMapUnit( MapUnit::Map100thMM );
 
     // Extra scope so that aInternalSet is destroyed before
@@ -669,7 +658,7 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
                         sal_Int32 nIndex = lNewArgs.getLength();
                         lNewArgs.realloc( nIndex+1 );
                         auto plNewArgs = lNewArgs.getArray();
-                        plNewArgs[nIndex].Name   = OUString::createFromAscii( pSlot->pUnoName );
+                        plNewArgs[nIndex].Name   = pSlot->pUnoName;
                         plNewArgs[nIndex].Value  <<= SfxDispatchController_Impl::getSlaveCommand( aDispatchURL );
                     }
 
@@ -679,12 +668,12 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
                     if (xSet->Count())
                     {
                         // execute with arguments - call directly
-                        pItem = pDispatcher->Execute(GetId(), nCall, &*xSet, &aInternalSet, nModifier);
-                        if ( pItem != nullptr )
+                        aItem = pDispatcher->Execute(GetId(), nCall, &*xSet, &aInternalSet, nModifier);
+                        if (nullptr != aItem.getItem())
                         {
-                            if (const SfxBoolItem* pBoolItem = dynamic_cast<const SfxBoolItem*>(pItem))
+                            if (const SfxBoolItem* pBoolItem = dynamic_cast<const SfxBoolItem*>(aItem.getItem()))
                                 bSuccess = pBoolItem->GetValue();
-                            else if ( !pItem->IsVoidItem() )
+                            else if ( !aItem.getItem()->isVoidItem() )
                                 bSuccess = true;  // all other types are true
                         }
                         // else bSuccess = false look to line 664 it is false
@@ -700,8 +689,8 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
                         aReq.SetModifier( nModifier );
                         aReq.SetInternalArgs_Impl(aInternalSet);
                         pDispatcher->GetBindings()->Execute_Impl( aReq, pSlot, pShell );
-                        pItem = aReq.GetReturnValue();
-                        bSuccess = aReq.IsDone() || pItem != nullptr;
+                        aItem = aReq.GetReturnValue();
+                        bSuccess = aReq.IsDone() || nullptr != aItem.getItem();
                     }
                 }
                 else
@@ -716,10 +705,10 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
             TransformParameters( GetId(), lNewArgs, aSet );
 
             if ( aSet.Count() )
-                pItem = pDispatcher->Execute(GetId(), nCall, &aSet, &aInternalSet, nModifier);
+                aItem = pDispatcher->Execute(GetId(), nCall, &aSet, &aInternalSet, nModifier);
             else
                 // SfxRequests take empty sets as argument sets, GetArgs() returning non-zero!
-                pItem = pDispatcher->Execute(GetId(), nCall, nullptr, &aInternalSet, nModifier);
+                aItem = pDispatcher->Execute(GetId(), nCall, nullptr, &aInternalSet, nModifier);
 
             // no bindings, no invalidate ( usually done in SfxDispatcher::Call_Impl()! )
             if (SfxApplication* pApp = SfxApplication::Get())
@@ -727,13 +716,13 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
                 SfxDispatcher* pAppDispat = pApp->GetAppDispatcher_Impl();
                 if ( pAppDispat )
                 {
-                    const SfxPoolItem* pState=nullptr;
-                    SfxItemState eState = pDispatcher->QueryState( GetId(), pState );
-                    StateChangedAtToolBoxControl( GetId(), eState, pState );
+                    SfxPoolItemHolder aResult;
+                    SfxItemState eState(pDispatcher->QueryState(GetId(), aResult));
+                    StateChangedAtToolBoxControl(GetId(), eState, aResult.getItem());
                 }
             }
 
-            bSuccess = (pItem != nullptr);
+            bSuccess = (nullptr != aItem.getItem());
         }
     }
 
@@ -747,12 +736,12 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
         aEvent.State = css::frame::DispatchResultState::FAILURE;
 
     aEvent.Source = static_cast<css::frame::XDispatch*>(pDispatch);
-    if ( bSuccess && pItem && !pItem->IsVoidItem() )
+    if ( bSuccess && nullptr != aItem.getItem() && !aItem.getItem()->isVoidItem() )
     {
         sal_uInt16 nSubId( 0 );
         if ( eMapUnit == MapUnit::MapTwip )
             nSubId |= CONVERT_TWIPS;
-        pItem->QueryValue( aEvent.Result, static_cast<sal_uInt8>(nSubId) );
+        aItem.getItem()->QueryValue( aEvent.Result, static_cast<sal_uInt8>(nSubId) );
     }
 
     rListener->dispatchFinished( aEvent );
@@ -848,7 +837,7 @@ void SfxDispatchController_Impl::StateChanged( sal_uInt16 nSID, SfxItemState eSt
         return;
 
     css::uno::Any aState;
-    if ( ( eState >= SfxItemState::DEFAULT ) && pState && !IsInvalidItem( pState ) && !pState->IsVoidItem() )
+    if ( ( eState >= SfxItemState::DEFAULT ) && pState && !IsInvalidItem( pState ) && !pState->isVoidItem() )
     {
         // Retrieve metric from pool to have correct sub ID when calling QueryValue
         sal_uInt16     nSubId( 0 );
@@ -904,12 +893,11 @@ void SfxDispatchController_Impl::StateChangedAtToolBoxControl( sal_uInt16 nSID, 
 
 static void InterceptLOKStateChangeEvent(sal_uInt16 nSID, SfxViewFrame* pViewFrame, const css::frame::FeatureStateEvent& aEvent, const SfxPoolItem* pState)
 {
-    if (!comphelper::LibreOfficeKit::isActive())
+    const SfxViewShell* pViewShell = pViewFrame->GetViewShell();
+    if (!comphelper::LibreOfficeKit::isActive() || !pViewShell)
         return;
 
-    OUStringBuffer aBuffer;
-    aBuffer.append(aEvent.FeatureURL.Complete);
-    aBuffer.append(u'=');
+    OUStringBuffer aBuffer(aEvent.FeatureURL.Complete + "=");
 
     if (aEvent.FeatureURL.Path == "Bold" ||
         aEvent.FeatureURL.Path == "CenterPara" ||
@@ -1037,6 +1025,8 @@ static void InterceptLOKStateChangeEvent(sal_uInt16 nSID, SfxViewFrame* pViewFra
              aEvent.FeatureURL.Path == "RejectAllTrackedChanges" ||
              aEvent.FeatureURL.Path == "AcceptTrackedChange" ||
              aEvent.FeatureURL.Path == "RejectTrackedChange" ||
+             aEvent.FeatureURL.Path == "AcceptTrackedChangeToNext" ||
+             aEvent.FeatureURL.Path == "RejectTrackedChangeToNext" ||
              aEvent.FeatureURL.Path == "NextTrackedChange" ||
              aEvent.FeatureURL.Path == "PreviousTrackedChange" ||
              aEvent.FeatureURL.Path == "FormatGroup" ||
@@ -1058,8 +1048,6 @@ static void InterceptLOKStateChangeEvent(sal_uInt16 nSID, SfxViewFrame* pViewFra
              aEvent.FeatureURL.Path == "DeleteNote" ||
              aEvent.FeatureURL.Path == "AcceptChanges" ||
              aEvent.FeatureURL.Path == "SetDefault" ||
-             aEvent.FeatureURL.Path == "ParaLeftToRight" ||
-             aEvent.FeatureURL.Path == "ParaRightToLeft" ||
              aEvent.FeatureURL.Path == "ParaspaceIncrease" ||
              aEvent.FeatureURL.Path == "ParaspaceDecrease" ||
              aEvent.FeatureURL.Path == "TableDialog" ||
@@ -1131,6 +1119,18 @@ static void InterceptLOKStateChangeEvent(sal_uInt16 nSID, SfxViewFrame* pViewFra
     {
         aBuffer.append(aEvent.IsEnabled ? std::u16string_view(u"enabled") : std::u16string_view(u"disabled"));
     }
+    else if (aEvent.FeatureURL.Path == "ParaLeftToRight" ||
+             aEvent.FeatureURL.Path == "ParaRightToLeft")
+    {
+        tools::JsonWriter aTree;
+        bool bTemp = false;
+        aEvent.State >>= bTemp;
+        aTree.put("commandName", aEvent.FeatureURL.Complete);
+        aTree.put("disabled", !aEvent.IsEnabled);
+        aTree.put("state", bTemp ? "true" : "false");
+        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, aTree.finishAndGetAsOString());
+        return;
+    }
     else if (aEvent.FeatureURL.Path == "AssignLayout" ||
              aEvent.FeatureURL.Path == "StatusSelectionMode" ||
              aEvent.FeatureURL.Path == "Signature" ||
@@ -1149,8 +1149,7 @@ static void InterceptLOKStateChangeEvent(sal_uInt16 nSID, SfxViewFrame* pViewFra
              aEvent.FeatureURL.Path == "TransformWidth" ||
              aEvent.FeatureURL.Path == "TransformHeight")
     {
-        const SfxViewShell* pViewShell = SfxViewShell::Current();
-        if (aEvent.IsEnabled && pViewShell && pViewShell->isLOKMobilePhone())
+        if (aEvent.IsEnabled && pViewShell->isLOKMobilePhone())
         {
             boost::property_tree::ptree aTree;
             boost::property_tree::ptree aState;
@@ -1195,11 +1194,7 @@ static void InterceptLOKStateChangeEvent(sal_uInt16 nSID, SfxViewFrame* pViewFra
         aTree.put("state", aString);
         std::stringstream aStream;
         boost::property_tree::write_json(aStream, aTree);
-        const SfxViewShell* pShell = pViewFrame->GetViewShell();
-        if (pShell)
-        {
-            pShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, aStream.str().c_str());
-        }
+        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, OString(aStream.str()));
         return;
     }
     else if (aEvent.FeatureURL.Path == "StateTableCell")
@@ -1313,14 +1308,13 @@ static void InterceptLOKStateChangeEvent(sal_uInt16 nSID, SfxViewFrame* pViewFra
     else
     {
         // Try to send JSON state version
-        SfxLokHelper::sendUnoStatus(pViewFrame->GetViewShell(), pState);
+        SfxLokHelper::sendUnoStatus(pViewShell, pState);
 
         return;
     }
 
     OUString payload = aBuffer.makeStringAndClear();
-    if (const SfxViewShell* pViewShell = pViewFrame->GetViewShell())
-        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, payload.toUtf8().getStr());
+    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED, payload.toUtf8());
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

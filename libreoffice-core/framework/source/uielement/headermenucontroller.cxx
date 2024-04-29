@@ -33,6 +33,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <osl/mutex.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <toolkit/awt/vclxmenu.hxx>
 
 //  Defines
 
@@ -96,8 +97,8 @@ void HeaderMenuController::fillPopupMenu( const Reference< css::frame::XModel >&
         aCmd = ".uno:InsertPageFooter";
         aHeaderFooterIsOnStr = "FooterIsOn";
     }
-    static const OUStringLiteral aIsPhysicalStr( u"IsPhysical" );
-    static const OUStringLiteral aDisplayNameStr( u"DisplayName" );
+    static constexpr OUStringLiteral aIsPhysicalStr( u"IsPhysical" );
+    static constexpr OUStringLiteral aDisplayNameStr( u"DisplayName" );
 
     try
     {
@@ -126,10 +127,10 @@ void HeaderMenuController::fillPopupMenu( const Reference< css::frame::XModel >&
                         xPropSet->getPropertyValue( aDisplayNameStr ) >>= aDisplayName;
                         xPropSet->getPropertyValue( aHeaderFooterIsOnStr ) >>= bHeaderIsOn;
 
-                        OUStringBuffer aStrBuf( aCmd );
-                        aStrBuf.append( "?PageStyle:string=");
-                        aStrBuf.append( aDisplayName );
-                        aStrBuf.append( "&On:bool=" );
+                        OUStringBuffer aStrBuf( aCmd
+                            + "?PageStyle:string="
+                            + aDisplayName
+                            + "&On:bool=" );
                         if ( !bHeaderIsOn )
                             aStrBuf.append( "true" );
                         else
@@ -160,8 +161,7 @@ void HeaderMenuController::fillPopupMenu( const Reference< css::frame::XModel >&
                 // Insert special item for all command
                 rPopupMenu->insertItem(ALL_MENUITEM_ID, FwkResId(STR_MENU_HEADFOOTALL), 0, 0);
 
-                OUStringBuffer aStrBuf( aCmd );
-                aStrBuf.append( "?On:bool=" );
+                OUStringBuffer aStrBuf( aCmd + "?On:bool=" );
 
                 // Command depends on check state of first menu item entry
                 if ( !bFirstChecked )
@@ -184,7 +184,7 @@ void SAL_CALL HeaderMenuController::disposing( const EventObject& )
 {
     Reference< css::awt::XMenuListener > xHolder(this);
 
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     m_xFrame.clear();
     m_xDispatch.clear();
 
@@ -200,7 +200,7 @@ void SAL_CALL HeaderMenuController::statusChanged( const FeatureStateEvent& Even
 
     if ( Event.State >>= xModel )
     {
-        osl::MutexGuard aLock( m_aMutex );
+        std::unique_lock aLock( m_aMutex );
         m_xModel = xModel;
         if ( m_xPopupMenu.is() )
             fillPopupMenu( xModel, m_xPopupMenu );
@@ -210,17 +210,17 @@ void SAL_CALL HeaderMenuController::statusChanged( const FeatureStateEvent& Even
 // XMenuListener
 void SAL_CALL HeaderMenuController::updatePopupMenu()
 {
-    osl::ResettableMutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
 
-    throwIfDisposed();
+    throwIfDisposed(aLock);
 
     Reference< css::frame::XModel > xModel( m_xModel );
-    aLock.clear();
+    aLock.unlock();
 
     if ( !xModel.is() )
         svt::PopupMenuControllerBase::updatePopupMenu();
 
-    aLock.reset();
+    aLock.lock();
     if ( m_xPopupMenu.is() && m_xModel.is() )
         fillPopupMenu( m_xModel, m_xPopupMenu );
 }

@@ -26,6 +26,7 @@
 #include <com/sun/star/datatransfer/clipboard/XClipboardListener.hpp>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/weakref.hxx>
+#include <unotools/weakref.hxx>
 
 class SwXTextView;
 class SfxRequest;
@@ -81,12 +82,13 @@ public:
 };
 
 class SwMailMergeConfigItem;
+class SwXDispatchProviderInterceptor;
 
 class SwView_Impl
 {
-    css::uno::Reference< css::frame::XDispatchProviderInterceptor >   m_xDispatchProviderInterceptor;
-    css::uno::Reference< css::view::XSelectionSupplier >              mxXTextView;       // UNO object
-    std::vector< css::uno::WeakReference< css::lang::XUnoTunnel > > mxTransferables;
+    rtl::Reference< SwXDispatchProviderInterceptor > m_xDispatchProviderInterceptor;
+    rtl::Reference< SwXTextView > mxXTextView;       // UNO object
+    std::vector< unotools::WeakReference< SwTransferable > > mxTransferables;
 
     // temporary document for printing text of selection / multi selection
     // in PDF export.

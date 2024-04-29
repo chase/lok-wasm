@@ -17,18 +17,15 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_SW_INC_ENHANCEDPDFEXPORTHELPER_HXX
-#define INCLUDED_SW_INC_ENHANCEDPDFEXPORTHELPER_HXX
+#pragma once
 
 #include <i18nlangtag/lang.h>
 #include <vcl/pdfwriter.hxx>
 #include "swrect.hxx"
 #include "swtypes.hxx"
 
-#include <map>
 #include <memory>
 #include <vector>
-#include <set>
 
 namespace vcl
 {
@@ -42,9 +39,12 @@ class SwPrintData;
 class SwTextPainter;
 class SwEditShell;
 class StringRangeEnumerator;
+class SwTextAttr;
 class SwTextNode;
 class SwTable;
 class SwNumberTreeNode;
+class SwTextPaintInfo;
+class SwTextFrame;
 
 /*
  * Mapping of OOo elements to tagged pdf elements:
@@ -97,22 +97,32 @@ class SwNumberTreeNode;
 
 struct Num_Info
 {
-    const SwFrame& mrFrame;
-    Num_Info( const SwFrame& rFrame ) : mrFrame( rFrame ) {};
+    const SwTextFrame& mrFrame;
+    Num_Info( const SwTextFrame& rFrame ) : mrFrame( rFrame ) {};
 };
 
 struct Frame_Info
 {
     const SwFrame& mrFrame;
-    Frame_Info( const SwFrame& rFrame ) : mrFrame( rFrame ) {};
+    bool const m_isLink;
+
+    Frame_Info(const SwFrame& rFrame, bool const isLink)
+        : mrFrame(rFrame), m_isLink(isLink) {}
 };
 
 struct Por_Info
 {
     const SwLinePortion& mrPor;
     const SwTextPainter& mrTextPainter;
-    Por_Info( const SwLinePortion& rPor, const SwTextPainter& rTextPainer )
-            : mrPor( rPor ), mrTextPainter( rTextPainer ) {};
+    /** this can be used to generate multiple different SE for the same portion:
+      FootnoteNum: 0-> Link 1-> Lbl
+      Double: 0-> Warichu 1-> WP 2-> WT
+      Ruby: 0-> Ruby 1-> RT 2-> RB
+    */
+    int const m_Mode;
+
+    Por_Info(const SwLinePortion& rPor, const SwTextPainter& rTextPainer, int const nMode)
+        : mrPor(rPor), mrTextPainter(rTextPainer), m_Mode(nMode) {};
 };
 
 struct lt_TableColumn
@@ -143,6 +153,8 @@ class SwTaggedPDFHelper
     const Frame_Info* mpFrameInfo;
     const Por_Info* mpPorInfo;
 
+    void OpenTagImpl(void const* pKey);
+    sal_Int32 BeginTagImpl(void const* pKey,vcl::PDFWriter::StructElement aTagRole, const OUString& rTagName);
     void BeginTag( vcl::PDFWriter::StructElement aTagRole, const OUString& rTagName );
     void EndTag();
 
@@ -153,6 +165,11 @@ class SwTaggedPDFHelper
     void BeginBlockStructureElements();
     void BeginInlineStructureElements();
     void EndStructureElements();
+
+    void EndCurrentAll();
+    void EndCurrentSpan();
+    void CreateCurrentSpan(SwTextPaintInfo const& rInf, OUString const& rStyleName);
+    bool CheckContinueSpan(SwTextPaintInfo const& rInf, std::u16string_view rStyleName, SwTextAttr const* pInetFormatAttr);
 
     bool CheckReopenTag();
     void CheckRestoreTag() const;
@@ -167,12 +184,13 @@ class SwTaggedPDFHelper
     ~SwTaggedPDFHelper();
 
     static bool IsExportTaggedPDF( const OutputDevice& rOut );
+    static void EndCurrentLink(OutputDevice const&);
 };
 
 /*
  * Analyses the document structure and export Notes, Hyperlinks, References,
  * and Outline. Link ids created during pdf export are stored in
- * aReferenceIdMap and aHyperlinkIdMap, in order to use them during
+ * SwEnhancedPDFState, in order to use them during
  * tagged pdf output. Therefore the SwEnhancedPDFExportHelper is used
  * before painting. Unfortunately links from the EditEngine into the
  * Writer document require to be exported after they have been painted.
@@ -180,14 +198,6 @@ class SwTaggedPDFHelper
  * painting process, the parameter bEditEngineOnly indicated that only
  * the bookmarks from the EditEngine have to be processed.
  */
-typedef std::set< tools::Long, lt_TableColumn > TableColumnsMapEntry;
-typedef std::pair< SwRect, sal_Int32 > IdMapEntry;
-typedef std::vector< IdMapEntry > LinkIdMap;
-typedef std::map< const SwTable*, TableColumnsMapEntry > TableColumnsMap;
-typedef std::map< const SwNumberTreeNode*, sal_Int32 > NumListIdMap;
-typedef std::map< const SwNumberTreeNode*, sal_Int32 > NumListBodyIdMap;
-typedef std::map< const void*, sal_Int32 > FrameTagIdMap;
-
 class SwEnhancedPDFExportHelper
 {
     private:
@@ -210,15 +220,7 @@ class SwEnhancedPDFExportHelper
 
     const SwPrintData& mrPrintData;
 
-    static TableColumnsMap s_aTableColumnsMap;
-    static LinkIdMap s_aLinkIdMap;
-    static NumListIdMap s_aNumListIdMap;
-    static NumListBodyIdMap s_aNumListBodyIdMap;
-    static FrameTagIdMap s_aFrameTagIdMap;
-
-    static LanguageType s_eLanguageDefault;
-
-    void EnhancedPDFExport();
+    void EnhancedPDFExport(LanguageType const eLanguageDefault);
 
     /// Exports bibliography entry links.
     void ExportAuthorityEntryLinks();
@@ -242,19 +244,9 @@ class SwEnhancedPDFExportHelper
 
     ~SwEnhancedPDFExportHelper();
 
-    static TableColumnsMap& GetTableColumnsMap() {return s_aTableColumnsMap; }
-    static LinkIdMap& GetLinkIdMap() { return s_aLinkIdMap; }
-    static NumListIdMap& GetNumListIdMap() {return s_aNumListIdMap; }
-    static NumListBodyIdMap& GetNumListBodyIdMap() {return s_aNumListBodyIdMap; }
-    static FrameTagIdMap& GetFrameTagIdMap() { return s_aFrameTagIdMap; }
-
-    static LanguageType GetDefaultLanguage() {return s_eLanguageDefault; }
-
     //scale and position rRectangle if we're scaling due to notes in margins.
     tools::Rectangle SwRectToPDFRect(const SwPageFrame* pCurrPage,
         const tools::Rectangle& rRectangle) const;
 };
-
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -197,7 +197,7 @@ ScInputWindow::ScInputWindow( vcl::Window* pParent, const SfxBindings* pBind ) :
     // sigma and equal buttons
     if (!bIsLOKMobilePhone)
     {
-        InsertItem      (SID_INPUT_SUM,      Image(StockImage::Yes, RID_BMP_INPUT_SUM), ToolBoxItemBits::DROPDOWNONLY, 3);
+        InsertItem      (SID_INPUT_SUM,      Image(StockImage::Yes, RID_BMP_INPUT_SUM), ToolBoxItemBits::DROPDOWN, 3);
         InsertItem      (SID_INPUT_EQUAL,    Image(StockImage::Yes, RID_BMP_INPUT_EQUAL), ToolBoxItemBits::NONE, 4);
         InsertItem      (SID_INPUT_CANCEL,   Image(StockImage::Yes, RID_BMP_INPUT_CANCEL), ToolBoxItemBits::NONE, 5);
         InsertItem      (SID_INPUT_OK,       Image(StockImage::Yes, RID_BMP_INPUT_OK), ToolBoxItemBits::NONE, 6);
@@ -365,6 +365,12 @@ void ScInputWindow::Select()
         pScMod->InputEnterHandler();
         SetSumAssignMode();
         mxTextWindow->Invalidate(); // Or else the Selection remains
+    }
+    else if (curItemId == SID_INPUT_SUM)
+    {
+        bool bRangeFinder = false;
+        bool bSubTotal = false;
+        AutoSum(bRangeFinder, bSubTotal, ocSum);
     }
     else if (curItemId == SID_INPUT_EQUAL)
     {
@@ -1000,7 +1006,7 @@ void ScInputBarGroup::DecrementVerticalSize()
     }
 }
 
-void ScInputWindow::MenuHdl(std::string_view command)
+void ScInputWindow::MenuHdl(std::u16string_view command)
 {
     if (command.empty())
         return;
@@ -1008,47 +1014,47 @@ void ScInputWindow::MenuHdl(std::string_view command)
     bool bSubTotal = false;
     bool bRangeFinder = false;
     OpCode eCode = ocSum;
-    if ( command ==  "sum" )
+    if ( command ==  u"sum" )
     {
         eCode = ocSum;
     }
-    else if ( command == "average" )
+    else if ( command == u"average" )
     {
         eCode = ocAverage;
     }
-    else if ( command == "max" )
+    else if ( command == u"max" )
     {
         eCode = ocMax;
     }
-    else if ( command == "min" )
+    else if ( command == u"min" )
     {
         eCode = ocMin;
     }
-    else if ( command == "count" )
+    else if ( command == u"count" )
     {
         eCode = ocCount;
     }
-    else if ( command == "counta" )
+    else if ( command == u"counta" )
     {
         eCode = ocCount2;
     }
-    else if ( command == "product" )
+    else if ( command == u"product" )
     {
         eCode = ocProduct;
     }
-    else if (command == "stdev")
+    else if (command == u"stdev")
     {
         eCode = ocStDev;
     }
-    else if (command == "stdevp")
+    else if (command == u"stdevp")
     {
         eCode = ocStDevP;
     }
-    else if (command == "var")
+    else if (command == u"var")
     {
         eCode = ocVar;
     }
-    else if (command == "varp")
+    else if (command == u"varp")
     {
         eCode = ocVarP;
     }
@@ -2554,6 +2560,7 @@ IMPL_LINK_NOARG(ScPosWnd, ModifyHdl, weld::ComboBox&, void)
 
 void ScPosWnd::DoEnter()
 {
+    bool bOpenManageNamesDialog = false;
     OUString aText = m_xWidget->get_active_text();
     if ( !aText.isEmpty() )
     {
@@ -2616,11 +2623,8 @@ void ScPosWnd::DoEnter()
                 }
                 else if (eType == SC_MANAGE_NAMES)
                 {
-                    sal_uInt16          nId  = ScNameDlgWrapper::GetChildWindowId();
-                    SfxViewFrame* pViewFrm = pViewSh->GetViewFrame();
-                    SfxChildWindow* pWnd = pViewFrm->GetChildWindow( nId );
-
-                    SC_MOD()->SetRefDialog( nId, pWnd == nullptr );
+                    // dialog is only set below after calling 'ReleaseFocus_Impl' to ensure it gets focus
+                    bOpenManageNamesDialog = true;
                 }
                 else
                 {
@@ -2655,6 +2659,16 @@ void ScPosWnd::DoEnter()
         m_xWidget->set_entry_text(aPosStr);
 
     ReleaseFocus_Impl();
+
+    if (bOpenManageNamesDialog)
+    {
+        const sal_uInt16 nId  = ScNameDlgWrapper::GetChildWindowId();
+        ScTabViewShell* pViewSh = ScTabViewShell::GetActiveViewShell();
+        assert(pViewSh);
+        SfxViewFrame& rViewFrm = pViewSh->GetViewFrame();
+        SfxChildWindow* pWnd = rViewFrm.GetChildWindow( nId );
+        SC_MOD()->SetRefDialog( nId, pWnd == nullptr );
+    }
 }
 
 IMPL_LINK_NOARG(ScPosWnd, ActivateHdl, weld::ComboBox&, bool)

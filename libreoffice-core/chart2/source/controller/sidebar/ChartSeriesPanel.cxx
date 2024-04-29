@@ -141,7 +141,7 @@ bool isTrendlineVisible(const rtl::Reference<::chart::ChartModel>& xModel,
     if (!xRegressionCurveContainer.is())
         return false;
 
-    return xRegressionCurveContainer->getRegressionCurves().hasElements();
+    return !xRegressionCurveContainer->getRegressionCurves2().empty();
 }
 
 void setTrendlineVisible(const rtl::Reference<::chart::ChartModel>&
@@ -219,7 +219,7 @@ void setAttachedAxisType(const rtl::Reference<::chart::ChartModel>&
         return;
 
     rtl::Reference<Diagram> xDiagram = xModel->getFirstChartDiagram();
-    DiagramHelper::attachSeriesToAxis(bPrimary, xDataSeries, xDiagram, comphelper::getProcessComponentContext());
+    xDiagram->attachSeriesToAxis(bPrimary, xDataSeries, comphelper::getProcessComponentContext());
 }
 
 rtl::Reference<ChartType> getChartType(
@@ -239,7 +239,7 @@ OUString getSeriesLabel(const rtl::Reference<::chart::ChartModel>& xModel, std::
         return OUString();
 
     rtl::Reference<ChartType> xChartType = getChartType(xModel);
-    return DataSeriesHelper::getDataSeriesLabel(xSeries, xChartType->getRoleOfSequenceForSeriesLabel());
+    return xSeries->getLabelForRole(xChartType->getRoleOfSequenceForSeriesLabel());
 }
 
 OUString getCID(const css::uno::Reference<css::frame::XModel>& xModel)
@@ -400,7 +400,7 @@ void ChartSeriesPanel::modelInvalid()
     mbModelValid = false;
 }
 
-void ChartSeriesPanel::doUpdateModel(rtl::Reference<::chart::ChartModel> xModel)
+void ChartSeriesPanel::doUpdateModel(const rtl::Reference<::chart::ChartModel>& xModel)
 {
     if (mbModelValid)
     {

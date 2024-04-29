@@ -54,6 +54,9 @@
 #include <viewdata.hxx>
 #include <scmod.hxx>
 #include <dragdata.hxx>
+#include <stlpool.hxx>
+#include <scresid.hxx>
+#include <globstr.hrc>
 
 #include <editeng/eeitem.hxx>
 
@@ -167,7 +170,7 @@ ScDrawTransferObj::ScDrawTransferObj( std::unique_ptr<SdrModel> pClipModel, ScDo
                                             aLabel = sTmp;
                                         }
                                     }
-                                    m_pBookmark.reset( new INetBookmark( aAbs, aLabel ) );
+                                    m_oBookmark.emplace( aAbs, aLabel );
                                 }
                             }
                         }
@@ -182,7 +185,7 @@ ScDrawTransferObj::ScDrawTransferObj( std::unique_ptr<SdrModel> pClipModel, ScDo
     // #i71538# use complete SdrViews
     // SdrExchangeView aView(pModel);
     SdrView aView(*m_pModel);
-    SdrPageView* pPv = aView.ShowSdrPage(aView.GetModel()->GetPage(0));
+    SdrPageView* pPv = aView.ShowSdrPage(aView.GetModel().GetPage(0));
     aView.MarkAllObj(pPv);
     m_aSrcSize = aView.GetAllMarkedRect().GetSize();
 
@@ -225,13 +228,13 @@ ScDrawTransferObj::~ScDrawTransferObj()
     m_pModel.reset();
     m_aDrawPersistRef.clear();                    // after the model
 
-    m_pBookmark.reset();
+    m_oBookmark.reset();
     m_pDragSourceView.reset();
 }
 
 ScDrawTransferObj* ScDrawTransferObj::GetOwnClipboard(const uno::Reference<datatransfer::XTransferable2>& xTransferable)
 {
-    return comphelper::getFromUnoTunnel<ScDrawTransferObj>(xTransferable);
+    return dynamic_cast<ScDrawTransferObj*>(xTransferable.get());
 }
 
 static bool lcl_HasOnlyControls( SdrModel* pModel )
@@ -285,7 +288,7 @@ void ScDrawTransferObj::AddSupportedFormats()
         AddFormat( SotClipboardFormatId::PNG );
         AddFormat( SotClipboardFormatId::BITMAP );
     }
-    else if ( m_pBookmark )       // url button
+    else if ( m_oBookmark )       // url button
     {
 //      AddFormat( SotClipboardFormatId::EMBED_SOURCE );
         AddFormat( SotClipboardFormatId::OBJECTDESCRIPTOR );
@@ -358,7 +361,11 @@ bool ScDrawTransferObj::GetData( const css::datatransfer::DataFlavor& rFlavor, c
         }
         else if ( nFormat == SotClipboardFormatId::DRAWING )
         {
-            bOK = SetObject( m_pModel.get(), SCDRAWTRANS_TYPE_DRAWMODEL, rFlavor );
+            SdrView aView(*m_pModel);
+            SdrPageView* pPv = aView.ShowSdrPage(aView.GetModel().GetPage(0));
+            aView.MarkAllObj( pPv );
+            auto pNewModel = aView.CreateMarkedObjModel();
+            bOK = SetObject( pNewModel.get(), SCDRAWTRANS_TYPE_DRAWMODEL, rFlavor );
         }
         else if ( nFormat == SotClipboardFormatId::BITMAP
             || nFormat == SotClipboardFormatId::PNG
@@ -367,7 +374,7 @@ bool ScDrawTransferObj::GetData( const css::datatransfer::DataFlavor& rFlavor, c
             // #i71538# use complete SdrViews
             // SdrExchangeView aView( pModel );
             SdrView aView(*m_pModel);
-            SdrPageView* pPv = aView.ShowSdrPage(aView.GetModel()->GetPage(0));
+            SdrPageView* pPv = aView.ShowSdrPage(aView.GetModel().GetPage(0));
             OSL_ENSURE( pPv, "pPv not there..." );
             aView.MarkAllObj( pPv );
             if ( nFormat == SotClipboardFormatId::GDIMETAFILE )
@@ -410,9 +417,9 @@ bool ScDrawTransferObj::GetData( const css::datatransfer::DataFlavor& rFlavor, c
                 bOK = SetObject( pEmbObj, SCDRAWTRANS_TYPE_DOCUMENT, rFlavor );
             }
         }
-        else if( m_pBookmark )
+        else if( m_oBookmark )
         {
-            bOK = SetINetBookmark( *m_pBookmark, rFlavor );
+            bOK = SetINetBookmark( *m_oBookmark, rFlavor );
         }
     }
     return bOK;
@@ -429,19 +436,20 @@ bool ScDrawTransferObj::WriteObject( tools::SvRef<SotTempStream>& rxOStm, void* 
         case SCDRAWTRANS_TYPE_DRAWMODEL:
             {
                 SdrModel* pDrawModel = static_cast<SdrModel*>(pUserObject);
+                pDrawModel->BurnInStyleSheetAttributes();
                 rxOStm->SetBufferSize( 0xff00 );
 
                 // for the changed pool defaults from drawing layer pool set those
                 // attributes as hard attributes to preserve them for saving
-                const SfxItemPool& rItemPool = m_pModel->GetItemPool();
+                const SfxItemPool& rItemPool = pDrawModel->GetItemPool();
                 const SvxFontHeightItem& rDefaultFontHeight = rItemPool.GetDefaultItem(EE_CHAR_FONTHEIGHT);
 
                 // SW should have no MasterPages
-                OSL_ENSURE(0 == m_pModel->GetMasterPageCount(), "SW with MasterPages (!)");
+                OSL_ENSURE(0 == pDrawModel->GetMasterPageCount(), "SW with MasterPages (!)");
 
-                for(sal_uInt16 a(0); a < m_pModel->GetPageCount(); a++)
+                for(sal_uInt16 a(0); a < pDrawModel->GetPageCount(); a++)
                 {
-                    const SdrPage* pPage(m_pModel->GetPage(a));
+                    const SdrPage* pPage(pDrawModel->GetPage(a));
                     SdrObjListIter aIter(pPage, SdrIterMode::DeepNoGroups);
 
                     while(aIter.IsMore())
@@ -576,7 +584,7 @@ void ScDrawTransferObj::SetDrawPersist( const SfxObjectShellRef& rRef )
 
 static void lcl_InitMarks( SdrMarkView& rDest, const SdrMarkView& rSource, SCTAB nTab )
 {
-    rDest.ShowSdrPage(rDest.GetModel()->GetPage(nTab));
+    rDest.ShowSdrPage(rDest.GetModel().GetPage(nTab));
     SdrPageView* pDestPV = rDest.GetSdrPageView();
     OSL_ENSURE(pDestPV,"PageView ?");
 
@@ -602,7 +610,7 @@ void ScDrawTransferObj::SetDragSource( const ScDrawView* pView )
 void ScDrawTransferObj::SetDragSourceObj( SdrObject& rObj, SCTAB nTab )
 {
     m_pDragSourceView.reset(new SdrView(rObj.getSdrModelFromSdrObject()));
-    m_pDragSourceView->ShowSdrPage(m_pDragSourceView->GetModel()->GetPage(nTab));
+    m_pDragSourceView->ShowSdrPage(m_pDragSourceView->GetModel().GetPage(nTab));
     SdrPageView* pPV = m_pDragSourceView->GetSdrPageView();
     m_pDragSourceView->MarkObj(&rObj, pPV); // TTTT MarkObj should take SdrObject&
 
@@ -677,11 +685,15 @@ void ScDrawTransferObj::InitDocShell()
     ScDocument& rDestDoc = pDocSh->GetDocument();
     rDestDoc.InitDrawLayer( pDocSh );
 
+    auto pPool = rDestDoc.GetStyleSheetPool();
+    pPool->CopyStyleFrom(m_pModel->GetStyleSheetPool(), ScResId(STR_STYLENAME_STANDARD), SfxStyleFamily::Frame);
+    pPool->CopyUsedGraphicStylesFrom(m_pModel->GetStyleSheetPool());
+
     SdrModel* pDestModel = rDestDoc.GetDrawLayer();
     // #i71538# use complete SdrViews
     // SdrExchangeView aDestView( pDestModel );
     SdrView aDestView(*pDestModel);
-    aDestView.ShowSdrPage(aDestView.GetModel()->GetPage(0));
+    aDestView.ShowSdrPage(aDestView.GetModel().GetPage(0));
     aDestView.Paste(
         *m_pModel,
         Point(m_aSrcSize.Width()/2, m_aSrcSize.Height()/2),
@@ -717,18 +729,6 @@ void ScDrawTransferObj::InitDocShell()
     aViewData.SetCurX( 0 );
     aViewData.SetCurY( 0 );
     pDocSh->UpdateOle(aViewData, true);
-}
-
-const css::uno::Sequence< sal_Int8 >& ScDrawTransferObj::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theScDrawTransferObjUnoTunnelId;
-    return theScDrawTransferObjUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL ScDrawTransferObj::getSomething( const css::uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(
-        rId, this, comphelper::FallbackToGetSomethingOf<TransferDataContainer>{});
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

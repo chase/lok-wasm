@@ -29,6 +29,7 @@
 #include <svx/xlnclit.hxx>
 #include <svx/svdpagv.hxx>
 #include <sfx2/docfile.hxx>
+#include <sfx2/mieclip.hxx>
 #include <svx/svdoole2.hxx>
 #include <svx/svdograf.hxx>
 #include <svx/svdundo.hxx>
@@ -417,7 +418,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                                 if( IsUndoEnabled() )
                                 {
                                     BegUndo(SdResId(STR_MODIFYLAYER));
-                                    AddUndo(GetModel()->GetSdrUndoFactory().CreateUndoObjectLayerChange(*pO, pO->GetLayer(), nLayer));
+                                    AddUndo(GetModel().GetSdrUndoFactory().CreateUndoObjectLayerChange(*pO, pO->GetLayer(), nLayer));
                                     EndUndo();
                                 }
 
@@ -506,7 +507,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                                         if( IsUndoEnabled() )
                                         {
                                             BegUndo(SdResId(STR_UNDO_DRAGDROP));
-                                            AddUndo(GetModel()->GetSdrUndoFactory().CreateUndoNewObject(*pObj));
+                                            AddUndo(GetModel().GetSdrUndoFactory().CreateUndoNewObject(*pObj));
                                             EndUndo();
                                         }
 
@@ -533,7 +534,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
 
                                             // test first connection
                                             SdrObjConnection& rConn0 = pOrigEdge->GetConnection(false);
-                                            SdrObject* pConnObj = rConn0.GetObject();
+                                            SdrObject* pConnObj = rConn0.GetSdrObject();
                                             if(pConnObj)
                                             {
                                                 SdrObject* pConnClone = ImpGetClone(aConnectorContainer, pConnObj);
@@ -565,7 +566,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
 
                                             // test second connection
                                             SdrObjConnection& rConn1 = pOrigEdge->GetConnection(true);
-                                            pConnObj = rConn1.GetObject();
+                                            pConnObj = rConn1.GetSdrObject();
                                             if(pConnObj)
                                             {
                                                 SdrObject* pConnClone = ImpGetClone(aConnectorContainer, pConnObj);
@@ -625,7 +626,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                 if( !pSourceView->IsPresObjSelected() )
                 {
                     // model is owned by from AllocModel() created DocShell
-                    SdDrawDocument* pSourceDoc = static_cast<SdDrawDocument*>( pSourceView->GetModel() );
+                    SdDrawDocument* pSourceDoc = static_cast<SdDrawDocument*>(&pSourceView->GetModel());
                     pSourceDoc->CreatingDataObj( pOwnData );
                     SdDrawDocument* pModel = static_cast<SdDrawDocument*>( pSourceView->CreateMarkedObjModel().release() );
                     bReturn = Paste(*pModel, maDropPos, pPage, nPasteOptions);
@@ -691,7 +692,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
             Graphic aGraphic;
             if (vcl::ImportPDF(*xStm, aGraphic))
             {
-                const sal_Int32 nGraphicContentSize(xStm->Tell());
+                const sal_uInt64 nGraphicContentSize(xStm->Tell());
                 xStm->Seek(0);
                 BinaryDataContainer aGraphicContent(*xStm, nGraphicContentSize);
                 aGraphic.SetGfxLink(std::make_shared<GfxLink>(aGraphicContent, GfxLinkType::NativePdf));
@@ -1351,7 +1352,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
             if( IsUndoEnabled() )
             {
                 BegUndo( SdResId(STR_UNDO_DRAGDROP) );
-                AddUndo( GetModel()->GetSdrUndoFactory().CreateUndoAttrObject( *pPickObj ) );
+                AddUndo(GetModel().GetSdrUndoFactory().CreateUndoAttrObject(*pPickObj));
                 EndUndo();
             }
 
@@ -1378,9 +1379,8 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                 SfxItemSet              aSet( mrDoc.GetPool() );
                 bool                    bClosed = pPickObj->IsClosedObj();
                 ::sd::Window* pWin = mpViewSh->GetActiveWindow();
-                sal_uInt16 nHitLog = static_cast<sal_uInt16>(pWin->PixelToLogic(
-                    Size(FuPoor::HITPIX, 0 ) ).Width());
-                const ::tools::Long              n2HitLog = nHitLog << 1;
+                double fHitLog = pWin->PixelToLogic(Size(FuPoor::HITPIX, 0 ) ).Width();
+                const ::tools::Long              n2HitLog = fHitLog * 2;
                 Point                   aHitPosR( rPos );
                 Point                   aHitPosL( rPos );
                 Point                   aHitPosT( rPos );
@@ -1393,10 +1393,10 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                 aHitPosB.AdjustY( -n2HitLog );
 
                 if( bClosed &&
-                    SdrObjectPrimitiveHit(*pPickObj, aHitPosR, nHitLog, *GetSdrPageView(), pVisiLayer, false) &&
-                    SdrObjectPrimitiveHit(*pPickObj, aHitPosL, nHitLog, *GetSdrPageView(), pVisiLayer, false) &&
-                    SdrObjectPrimitiveHit(*pPickObj, aHitPosT, nHitLog, *GetSdrPageView(), pVisiLayer, false) &&
-                    SdrObjectPrimitiveHit(*pPickObj, aHitPosB, nHitLog, *GetSdrPageView(), pVisiLayer, false) )
+                    SdrObjectPrimitiveHit(*pPickObj, aHitPosR, {fHitLog, fHitLog}, *GetSdrPageView(), pVisiLayer, false) &&
+                    SdrObjectPrimitiveHit(*pPickObj, aHitPosL, {fHitLog, fHitLog}, *GetSdrPageView(), pVisiLayer, false) &&
+                    SdrObjectPrimitiveHit(*pPickObj, aHitPosT, {fHitLog, fHitLog}, *GetSdrPageView(), pVisiLayer, false) &&
+                    SdrObjectPrimitiveHit(*pPickObj, aHitPosB, {fHitLog, fHitLog}, *GetSdrPageView(), pVisiLayer, false) )
                 {
                     // area fill
                     if(eFill == drawing::FillStyle_SOLID )
@@ -1503,6 +1503,8 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                 xStm->Seek(0);
 
                 OutlinerView* pOLV = GetTextEditOutlinerView();
+                MSE40HTMLClipFormatObj aMSE40HTMLClipFormatObj;
+                SvStream* pHtmlStream = aMSE40HTMLClipFormatObj.IsValid(*xStm);
 
                 if (pOLV)
                 {
@@ -1512,14 +1514,14 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                     if (aRect.Contains(aPos) || (!bDrag && IsTextEdit()))
                     {
                         // mba: clipboard always must contain absolute URLs (could be from alien source)
-                        pOLV->Read(*xStm, EETextFormat::Html, mpDocSh->GetHeaderAttributes());
+                        pOLV->Read(*pHtmlStream, EETextFormat::Html, mpDocSh->GetHeaderAttributes());
                         bReturn = true;
                     }
                 }
 
                 if (!bReturn)
                     // mba: clipboard always must contain absolute URLs (could be from alien source)
-                    bReturn = SdrView::Paste(*xStm, EETextFormat::Html, maDropPos, pPage, nPasteOptions);
+                    bReturn = SdrView::Paste(*pHtmlStream, EETextFormat::Html, maDropPos, pPage, nPasteOptions);
             }
         }
     }

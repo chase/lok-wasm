@@ -78,12 +78,29 @@ cd $SRC
 
 #fuzzing dictionaries
 curl --no-progress-meter -S \
-    -C - -O https://raw.githubusercontent.com/rc0r/afl-fuzz/master/dictionaries/gif.dict \
-    -C - -O https://raw.githubusercontent.com/rc0r/afl-fuzz/master/dictionaries/jpeg.dict \
-    -C - -O https://raw.githubusercontent.com/rc0r/afl-fuzz/master/dictionaries/png.dict \
-    -C - -O https://raw.githubusercontent.com/rc0r/afl-fuzz/master/dictionaries/tiff.dict \
-    -C - -O https://raw.githubusercontent.com/rc0r/afl-fuzz/master/dictionaries/xml.dict \
-    -C - -O https://raw.githubusercontent.com/rc0r/afl-fuzz/master/dictionaries/html_tags.dict
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/gif.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/jpeg.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/png.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/tiff.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/xml.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/html.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/svg.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/bmp.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/otf.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/psd.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/rtf.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/webp.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/zip.dict \
+    -C - -O https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/mathml.dict
+# build our own fuzz dict for odf, following the pattern of svg.dict
+echo "# Keywords taken from libreoffice/schema/odf1.3/OpenDocument-v1.3-schema.rng" > odf.dict
+echo "# tags" >> odf.dict
+grep "rng:element name=" libreoffice/schema/odf1.3/OpenDocument-v1.3-schema.rng | sed 's#<rng:element name="#"<#;s#^[[:blank:]]*##;s#[[:blank:]>]*$##' >> odf.dict
+echo "# attributes " >> odf.dict
+grep "rng:attribute name=" libreoffice/schema/odf1.3/OpenDocument-v1.3-schema.rng | sed 's#<rng:attribute name="#"#;s#^[[:blank:]]*##;s#[[:blank:]>]*$##' >> odf.dict
+echo "# attributes' values" >> odf.dict
+grep "rng:value" libreoffice/schema/odf1.3/OpenDocument-v1.3-schema.rng | sed 's#<rng:value>#"#;s#</rng:value>#"#;s#^[[:blank:]]*##;s#[[:blank:]>]*$##' | sort | uniq >> odf.dict
+
 #fuzzing corpuses
 #afl jpeg, gif, bmp, png, webp
 curl --no-progress-meter -S -C - -O https://lcamtuf.coredump.cx/afl/demo/afl_testcases.tgz
@@ -101,6 +118,7 @@ mkdir -p $SRC/sample-sft-fonts/adobe
 curl --no-progress-meter -S \
     -C - -o $SRC/sample-sft-fonts/adobe/AdobeVFPrototype.otf https://github.com/adobe-fonts/adobe-variable-font-prototype/releases/download/1.001/AdobeVFPrototype.otf
 zip -qr $SRC/sftfuzzer_seed_corpus.zip $SRC/sample-sft-fonts
+curl --no-progress-meter -S -C - https://storage.googleapis.com/skia-fuzzer/oss-fuzz/svg_seed_corpus.zip -o svgfuzzer_seed_corpus.zip
 curl --no-progress-meter -S \
     -C - -O https://dev-www.libreoffice.org/corpus/wmffuzzer_seed_corpus.zip \
     -C - -O https://dev-www.libreoffice.org/corpus/xbmfuzzer_seed_corpus.zip \
@@ -143,6 +161,8 @@ curl --no-progress-meter -S \
     -C - -O https://dev-www.libreoffice.org/corpus/pptxfuzzer_seed_corpus.zip \
     -C - -O https://dev-www.libreoffice.org/corpus/mmlfuzzer_seed_corpus.zip \
     -C - -O https://dev-www.libreoffice.org/corpus/mtpfuzzer_seed_corpus.zip \
-    -C - -O https://dev-www.libreoffice.org/corpus/htmlfuzzer_seed_corpus.zip
+    -C - -O https://dev-www.libreoffice.org/corpus/htmlfuzzer_seed_corpus.zip \
+    -C - -O https://dev-www.libreoffice.org/corpus/zipfuzzer_seed_corpus.zip
+cp fodtfuzzer_seed_corpus.zip fodt2pdffuzzer_seed_corpus.zip
 
 echo end downloading dependencies at `date -u`

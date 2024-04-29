@@ -53,17 +53,17 @@ using namespace ::xmloff::token;
 
 using ::com::sun::star::document::XEventsSupplier;
 
-constexpr OUStringLiteral gsIsPhysical( u"IsPhysical" );
-constexpr OUStringLiteral gsIsAutoUpdate( u"IsAutoUpdate" );
-constexpr OUStringLiteral gsFollowStyle( u"FollowStyle" );
-constexpr OUStringLiteral gsNumberingStyleName( u"NumberingStyleName" );
-constexpr OUStringLiteral gsOutlineLevel( u"OutlineLevel" );
+constexpr OUString gsIsPhysical( u"IsPhysical"_ustr );
+constexpr OUString gsIsAutoUpdate( u"IsAutoUpdate"_ustr );
+constexpr OUString gsFollowStyle( u"FollowStyle"_ustr );
+constexpr OUString gsNumberingStyleName( u"NumberingStyleName"_ustr );
+constexpr OUString gsOutlineLevel( u"OutlineLevel"_ustr );
 
 XMLStyleExport::XMLStyleExport(
         SvXMLExport& rExp,
         SvXMLAutoStylePoolP *pAutoStyleP ) :
-    rExport( rExp ),
-    pAutoStylePool( pAutoStyleP  )
+    m_rExport( rExp ),
+    m_pAutoStylePool( pAutoStyleP  )
 {
 }
 
@@ -454,17 +454,6 @@ void XMLStyleExport::exportDefaultStyle(
 }
 
 void XMLStyleExport::exportStyleFamily(
-    const char *pFamily,
-    const OUString& rXMLFamily,
-    const rtl::Reference < SvXMLExportPropertyMapper >& rPropMapper,
-    bool bUsed, XmlStyleFamily nFamily, const OUString* pPrefix)
-{
-    const OUString sFamily(OUString::createFromAscii(pFamily ));
-    exportStyleFamily( sFamily, rXMLFamily, rPropMapper, bUsed, nFamily,
-                       pPrefix);
-}
-
-void XMLStyleExport::exportStyleFamily(
     const OUString& rFamily, const OUString& rXMLFamily,
     const rtl::Reference < SvXMLExportPropertyMapper >& rPropMapper,
     bool bUsed, XmlStyleFamily nFamily, const OUString* pPrefix)
@@ -537,8 +526,8 @@ void XMLStyleExport::exportStyleFamily(
 
         // if an auto style pool is given, remember this style's name as a
         // style name that must not be used by automatic styles.
-        if (pAutoStylePool)
-            pAutoStylePool->RegisterName( nFamily, xStyle->getName() );
+        if (m_pAutoStylePool)
+            m_pAutoStylePool->RegisterName( nFamily, xStyle->getName() );
     }
 
     if( !xExportedStyles )

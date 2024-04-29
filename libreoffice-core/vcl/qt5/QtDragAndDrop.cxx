@@ -36,7 +36,7 @@ void QtDragSource::initialize(const css::uno::Sequence<css::uno::Any>& rArgument
     if (rArguments.getLength() < 2)
     {
         throw uno::RuntimeException("DragSource::initialize: Cannot install window event handler",
-                                    static_cast<OWeakObject*>(this));
+                                    getXWeak());
     }
 
     sal_IntPtr nFrame = 0;
@@ -44,8 +44,7 @@ void QtDragSource::initialize(const css::uno::Sequence<css::uno::Any>& rArgument
 
     if (!nFrame)
     {
-        throw uno::RuntimeException("DragSource::initialize: missing SalFrame",
-                                    static_cast<OWeakObject*>(this));
+        throw uno::RuntimeException("DragSource::initialize: missing SalFrame", getXWeak());
     }
 
     m_pFrame = reinterpret_cast<QtFrame*>(nFrame);
@@ -141,7 +140,7 @@ void QtDropTarget::initialize(const uno::Sequence<uno::Any>& rArguments)
     if (rArguments.getLength() < 2)
     {
         throw uno::RuntimeException("DropTarget::initialize: Cannot install window event handler",
-                                    static_cast<OWeakObject*>(this));
+                                    getXWeak());
     }
 
     sal_IntPtr nFrame = 0;
@@ -149,8 +148,7 @@ void QtDropTarget::initialize(const uno::Sequence<uno::Any>& rArguments)
 
     if (!nFrame)
     {
-        throw uno::RuntimeException("DropTarget::initialize: missing SalFrame",
-                                    static_cast<OWeakObject*>(this));
+        throw uno::RuntimeException("DropTarget::initialize: missing SalFrame", getXWeak());
     }
 
     m_nDropAction = datatransfer::dnd::DNDConstants::ACTION_NONE;
@@ -173,8 +171,7 @@ void QtDropTarget::removeDropTargetListener(
 {
     ::osl::Guard<::osl::Mutex> aGuard(m_aMutex);
 
-    m_aListeners.erase(std::remove(m_aListeners.begin(), m_aListeners.end(), xListener),
-                       m_aListeners.end());
+    std::erase(m_aListeners, xListener);
 }
 
 sal_Bool QtDropTarget::isActive() { return m_bActive; }

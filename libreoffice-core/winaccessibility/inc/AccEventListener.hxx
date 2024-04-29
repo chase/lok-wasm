@@ -24,7 +24,7 @@
 
 #include <cppuhelper/implbase.hxx>
 
-class AccObjectManagerAgent;
+class AccObjectWinManager;
 
 /**
  * AccEventListener is the general event listener for all controls. It defines the
@@ -36,11 +36,11 @@ class AccEventListener : public ::cppu::WeakImplHelper<css::accessibility::XAcce
 protected:
     //accessible owner's pointer
     css::uno::Reference<css::accessibility::XAccessible> m_xAccessible;
-    //agent pointer for objects' manager
-    AccObjectManagerAgent* pAgent;
+    // pointer for object's manager
+    AccObjectWinManager* m_pObjManager;
 
 public:
-    AccEventListener(css::accessibility::XAccessible* pAcc, AccObjectManagerAgent* Agent);
+    AccEventListener(css::accessibility::XAccessible* pAcc, AccObjectWinManager* pManager);
     virtual ~AccEventListener() override;
 
     // XEventListener
@@ -53,7 +53,7 @@ public:
     //for name changed event
     virtual void HandleNameChangedEvent(css::uno::Any name);
 
-    //for description changed event
+    virtual void HandleChildChangedEvent(css::uno::Any oldValue, css::uno::Any newValue);
     virtual void HandleDescriptionChangedEvent();
 
     //for state changed event
@@ -73,7 +73,7 @@ public:
     //get the accessible parent's role
     virtual short GetParentRole();
 
-    void RemoveMeFromBroadcaster();
+    void RemoveMeFromBroadcaster(bool isNotifyDestroy);
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

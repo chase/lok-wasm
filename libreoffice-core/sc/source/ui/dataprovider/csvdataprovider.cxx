@@ -41,20 +41,19 @@ public:
         mnCol = 0;
     }
 
-    void cell(const char* p, size_t n, bool /*transient*/)
+    void cell(std::string_view s, bool /*transient*/)
     {
         if (mnCol > mpDoc->MaxCol())
             return;
 
         double mfValue = 0.0;
-        if (ScStringUtil::parseSimpleNumber(p, n, '.', ',', mfValue))
+        if (ScStringUtil::parseSimpleNumber(s.data(), s.size(), '.', ',', mfValue))
         {
             mpDoc->SetValue(mnCol, mnRow, 0, mfValue);
         }
         else
         {
-            OString aStr(p, n);
-            mpDoc->SetString(mnCol, mnRow, 0, OStringToOUString(aStr, RTL_TEXTENCODING_UTF8));
+            mpDoc->SetString(mnCol, mnRow, 0, OStringToOUString(s, RTL_TEXTENCODING_UTF8));
         }
 
         ++mnCol;
@@ -84,14 +83,12 @@ CSVFetchThread::~CSVFetchThread()
 
 bool CSVFetchThread::IsRequestedTerminate()
 {
-    osl::MutexGuard aGuard(maMtxTerminate);
-    return mbTerminate;
+    return mbTerminate.load();
 }
 
 void CSVFetchThread::RequestTerminate()
 {
-    osl::MutexGuard aGuard(maMtxTerminate);
-    mbTerminate = true;
+    mbTerminate.store(true);
 }
 
 void CSVFetchThread::EndThread()
@@ -107,7 +104,7 @@ void CSVFetchThread::execute()
         return;
 
     CSVHandler aHdl(&mrDocument);
-    orcus::csv_parser<CSVHandler> parser(aBuffer.getStr(), aBuffer.getLength(), aHdl, maConfig);
+    orcus::csv_parser<CSVHandler> parser(aBuffer, aHdl, maConfig);
     parser.parse();
 
     for (const auto& itr : maDataTransformations)
@@ -161,7 +158,7 @@ void CSVDataProvider::ImportFinished()
 
 void CSVDataProvider::Refresh()
 {
-    ScDocShell* pDocShell = static_cast<ScDocShell*>(mpDocument->GetDocumentShell());
+    ScDocShell* pDocShell = mpDocument->GetDocumentShell();
     if (pDocShell)
         pDocShell->SetDocumentModified();
 }

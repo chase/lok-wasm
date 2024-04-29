@@ -233,7 +233,7 @@ const SwTextNode* GetBodyTextNode( const SwDoc& rDoc, SwPosition& rPos,
             else
                 pContentFrame = pPgFrame->FindLastBodyContent();
 
-            if( pContentFrame )
+            if( pContentFrame && !pContentFrame->IsInFootnote() )
             {
                 assert(pContentFrame->IsTextFrame());
                 SwTextFrame const*const pFrame(static_cast<SwTextFrame const*>(pContentFrame));
@@ -269,15 +269,9 @@ std::unique_ptr<SwFieldType> SwGetExpFieldType::Copy() const
     return std::make_unique<SwGetExpFieldType>(GetDoc());
 }
 
-void SwGetExpFieldType::SwClientNotify(const SwModify&, const SfxHint& rHint)
+void SwGetExpFieldType::SwClientNotify(const SwModify&, const SfxHint&)
 {
-    if (rHint.GetId() != SfxHintId::SwLegacyModify)
-        return;
-    auto pLegacy = static_cast<const sw::LegacyModifyHint*>(&rHint);
-    // do not expand anything else
-    if(pLegacy->GetWhich() != RES_DOCPOS_UPDATE)
-        return;
-    CallSwClientNotify(rHint);
+    // do not expand anything (else)
 }
 
 SwGetExpField::SwGetExpField(SwGetExpFieldType* pTyp, const OUString& rFormel,
@@ -377,7 +371,7 @@ void SwGetExpField::ChangeExpansion( const SwFrame& rFrame, const SwTextField& r
     SetGetExpField aEndField(aPos.GetNode(), &rField, aPos.GetContentIndex(), rFrame.GetPhyPageNum());
     if(GetSubType() & nsSwGetSetExpType::GSE_STRING)
     {
-        SwHashTable<HashStr> aHashTable(0);
+        std::unordered_map<OUString, OUString> aHashTable;
         rDoc.getIDocumentFieldsAccess().FieldsToExpand(aHashTable, aEndField, rLayout);
         rExpand = LookString( aHashTable, GetFormula() );
     }
@@ -887,10 +881,9 @@ std::unique_ptr<SwField> SwSetExpField::Copy() const
 
 void SwSetExpField::SetSubType(sal_uInt16 nSub)
 {
+    assert((nSub & 0xff) != (nsSwGetSetExpType::GSE_STRING|nsSwGetSetExpType::GSE_EXPR) && "SubType is illegal!");
     static_cast<SwSetExpFieldType*>(GetTyp())->SetType(nSub & 0xff);
     mnSubType = nSub & 0xff00;
-
-    OSL_ENSURE( (nSub & 0xff) != 3, "SubType is illegal!" );
 }
 
 sal_uInt16 SwSetExpField::GetSubType() const
@@ -1106,8 +1099,19 @@ bool SwSetExpField::PutValue( const uno::Any& rAny, sal_uInt16 nWhichId )
         break;
     case FIELD_PROP_SUBTYPE:
         nTmp32 = lcl_APIToSubType(rAny);
-        if(nTmp32 >= 0)
-            SetSubType(o3tl::narrowing<sal_uInt16>((GetSubType() & 0xff00) | nTmp32));
+        if (0 <= nTmp32 && nTmp32 != (GetSubType() & 0xff))
+        {
+            auto const subType(o3tl::narrowing<sal_uInt16>((GetSubType() & 0xff00) | nTmp32));
+            if (((nTmp32 & nsSwGetSetExpType::GSE_STRING) != (GetSubType() & nsSwGetSetExpType::GSE_STRING))
+                && GetInputFlag())
+            {
+                SwXTextField::TransmuteLeadToInputField(*this, &subType);
+            }
+            else
+            {
+                SetSubType(subType);
+            }
+        }
         break;
     case FIELD_PROP_PAR3:
         rAny >>= maPText;
@@ -1126,7 +1130,7 @@ bool SwSetExpField::PutValue( const uno::Any& rAny, sal_uInt16 nWhichId )
                 if (static_cast<SwSetExpFieldType*>(GetTyp())->GetType()
                         & nsSwGetSetExpType::GSE_STRING)
                 {
-                    SwXTextField::TransmuteLeadToInputField(*this);
+                    SwXTextField::TransmuteLeadToInputField(*this, nullptr);
                 }
                 else
                 {

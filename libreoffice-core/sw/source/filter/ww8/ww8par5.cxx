@@ -58,6 +58,7 @@
 #include <IDocumentState.hxx>
 #include <flddat.hxx>
 #include <docufld.hxx>
+#include <usrfld.hxx>
 #include <reffld.hxx>
 #include <IMark.hxx>
 #include <expfld.hxx>
@@ -393,8 +394,7 @@ bool SwWW8ImplReader::ForceFieldLanguage(SwField &rField, LanguageType nLang)
 {
     bool bRet(false);
 
-    const SvxLanguageItem *pLang =
-        static_cast<const SvxLanguageItem*>(GetFormatAttr(RES_CHRATR_LANGUAGE));
+    const SvxLanguageItem *pLang = GetFormatAttr(RES_CHRATR_LANGUAGE);
     OSL_ENSURE(pLang, "impossible");
     LanguageType nDefault =  pLang ? pLang->GetValue() : LANGUAGE_ENGLISH_US;
 
@@ -440,8 +440,8 @@ SvNumFormatType SwWW8ImplReader::GetTimeDatePara(std::u16string_view aStr, sal_u
         if (aResult.pSprm && aResult.nRemainingData >= 1 && *aResult.pSprm)
             bRTL = true;
     }
-    sal_uInt16 eLang = bRTL ? RES_CHRATR_CTL_LANGUAGE : RES_CHRATR_LANGUAGE;
-    const SvxLanguageItem *pLang = static_cast<const SvxLanguageItem*>(GetFormatAttr(eLang));
+    TypedWhichId<SvxLanguageItem> eLang = bRTL ? RES_CHRATR_CTL_LANGUAGE : RES_CHRATR_LANGUAGE;
+    const SvxLanguageItem *pLang = GetFormatAttr(eLang);
     OSL_ENSURE(pLang, "impossible");
     rLang = pLang ? pLang->GetValue() : LANGUAGE_ENGLISH_US;
 
@@ -623,11 +623,27 @@ sal_uInt16 SwWW8ImplReader::End_Field()
             case ww::eIF: // IF-field
             {
                 // conditional field parameters
-                const OUString& fieldDefinition = m_aFieldStack.back().GetBookmarkCode();
+                OUString fieldDefinition = m_aFieldStack.back().GetBookmarkCode();
 
                 OUString paramCondition;
                 OUString paramTrue;
                 OUString paramFalse;
+
+                // ParseIfFieldDefinition expects: IF <some condition> "true result" "false result"
+                // while many fields include '\* MERGEFORMAT' after that.
+                // So first trim off the switches that are not supported anyway
+                sal_Int32 nLastIndex = fieldDefinition.lastIndexOf("\\*");
+                sal_Int32 nOtherIndex = fieldDefinition.lastIndexOf("\\#"); //number format
+                if (nOtherIndex > 0 && (nOtherIndex < nLastIndex || nLastIndex < 0))
+                    nLastIndex = nOtherIndex;
+                nOtherIndex = fieldDefinition.lastIndexOf("\\@"); //date format
+                if (nOtherIndex > 0 && (nOtherIndex < nLastIndex || nLastIndex < 0))
+                    nLastIndex = nOtherIndex;
+                nOtherIndex = fieldDefinition.lastIndexOf("\\!"); //locked result
+                if (nOtherIndex > 0 && (nOtherIndex < nLastIndex || nLastIndex < 0))
+                    nLastIndex = nOtherIndex;
+                if (nLastIndex > 0)
+                    fieldDefinition = fieldDefinition.copy(0, nLastIndex);
 
                 SwHiddenTextField::ParseIfFieldDefinition(fieldDefinition, paramCondition, paramTrue, paramFalse);
 
@@ -1009,6 +1025,16 @@ tools::Long SwWW8ImplReader::Read_Field(WW8PLCFManResult* pRes)
                 m_bEmbeddObj = true;
             // Field not supported: store the field code for later use
             m_aFieldStack.back().SetBookmarkCode( aStr );
+
+            if (aF.nId == ww::eIF)
+            {
+                // In MS Word, the IF field is editable and requires a manual refresh
+                // so the last, saved result might not match either of the true or false options.
+                // But in LO the field is automatically updated and not editable,
+                // so the previous result is of no value to import since it could never be seen.
+                return aF.nLen;
+            }
+
             return aF.nLen - aF.nLRes - 1;  // skipped too many, the resulted field will be read like main text
         }
     }
@@ -1449,10 +1475,9 @@ eF_ResT SwWW8ImplReader::Read_F_ANumber( WW8FieldDesc*, OUString& rStr )
 {
     if( !m_pNumFieldType ){     // 1st time
         SwSetExpFieldType aT( &m_rDoc, "AutoNr", nsSwGetSetExpType::GSE_SEQ );
-        m_pNumFieldType = m_rDoc.getIDocumentFieldsAccess().InsertFieldType( aT );
+        m_pNumFieldType = static_cast<SwSetExpFieldType*>(m_rDoc.getIDocumentFieldsAccess().InsertFieldType( aT ));
     }
-    SwSetExpField aField( static_cast<SwSetExpFieldType*>(m_pNumFieldType), OUString(),
-                        GetNumberPara( rStr ) );
+    SwSetExpField aField( m_pNumFieldType, OUString(), GetNumberPara( rStr ) );
     aField.SetValue( ++m_nFieldNum, nullptr );
     m_rDoc.getIDocumentContentOperations().InsertPoolItem( *m_pPaM, SwFormatField( aField ) );
     return eF_ResT::OK;
@@ -1807,12 +1832,29 @@ eF_ResT SwWW8ImplReader::Read_F_DocInfo( WW8FieldDesc* pF, OUString& rStr )
         aData = aData.replaceAll("\"", "");
     }
 
-    const auto pType(static_cast<SwDocInfoFieldType*>(
-        m_rDoc.getIDocumentFieldsAccess().GetSysFieldType(SwFieldIds::DocInfo)));
-    SwDocInfoField aField(pType, nSub|nReg, aData, GetFieldResult(pF), nFormat);
-    if (bDateTime)
-        ForceFieldLanguage(aField, nLang);
-    m_rDoc.getIDocumentContentOperations().InsertPoolItem(*m_pPaM, SwFormatField(aField));
+    bool bDone = false;
+    if (DI_CUSTOM == nSub)
+    {
+        const auto pType(static_cast<SwUserFieldType*>(
+            m_rDoc.getIDocumentFieldsAccess().GetFieldType(SwFieldIds::User, aData, false)));
+        if (pType)
+        {
+            SwUserField aField(pType, 0, nFormat);
+            if (bDateTime)
+                ForceFieldLanguage(aField, nLang);
+            m_rDoc.getIDocumentContentOperations().InsertPoolItem(*m_pPaM, SwFormatField(aField));
+            bDone = true;
+        }
+    }
+    if (!bDone)
+    {
+        const auto pType(static_cast<SwDocInfoFieldType*>(
+            m_rDoc.getIDocumentFieldsAccess().GetSysFieldType(SwFieldIds::DocInfo)));
+        SwDocInfoField aField(pType, nSub|nReg, aData, GetFieldResult(pF), nFormat);
+        if (bDateTime)
+            ForceFieldLanguage(aField, nLang);
+        m_rDoc.getIDocumentContentOperations().InsertPoolItem(*m_pPaM, SwFormatField(aField));
+    }
 
     return eF_ResT::OK;
 }
@@ -2268,7 +2310,7 @@ eF_ResT SwWW8ImplReader::Read_F_PgRef( WW8FieldDesc*, OUString& rStr )
             }
             OUString sURL = "#" + sBookmarkName;
             SwFormatINetFormat aURL( sURL, "" );
-            static const OUStringLiteral sLinkStyle(u"Index Link");
+            static constexpr OUString sLinkStyle(u"Index Link"_ustr);
             const sal_uInt16 nPoolId =
                 SwStyleNameMapper::GetPoolIdFromUIName( sLinkStyle, SwGetPoolIdFromName::ChrFmt );
             aURL.SetVisitedFormatAndId( sLinkStyle, nPoolId);
@@ -2333,8 +2375,6 @@ eF_ResT SwWW8ImplReader::Read_F_Macro( WW8FieldDesc*, OUString& rStr)
     bool bBracket  = false;
     WW8ReadFieldParams aReadParam( rStr );
 
-    sal_Int32 nOffset = 0;
-
     for (;;)
     {
         const sal_Int32 nRet = aReadParam.SkipToNextToken();
@@ -2347,8 +2387,6 @@ eF_ResT SwWW8ImplReader::Read_F_Macro( WW8FieldDesc*, OUString& rStr)
                 aName = aReadParam.GetResult();
             else if( aVText.isEmpty() || bBracket )
             {
-                nOffset = aReadParam.GetTokenSttPtr() + 1;
-
                 if( bBracket )
                     aVText += " ";
                 aVText += aReadParam.GetResult();
@@ -2376,19 +2414,7 @@ eF_ResT SwWW8ImplReader::Read_F_Macro( WW8FieldDesc*, OUString& rStr)
                     m_rDoc.getIDocumentFieldsAccess().GetSysFieldType( SwFieldIds::Macro )), aName, aVText );
 
     if( !bApplyWingdings )
-    {
-
         m_rDoc.getIDocumentContentOperations().InsertPoolItem( *m_pPaM, SwFormatField( aField ) );
-        WW8_CP nOldCp = m_xPlcxMan->Where();
-        WW8_CP nCp = nOldCp + nOffset;
-
-        SwPaM aPaM(*m_pPaM, m_pPaM);
-        aPaM.SetMark();
-        aPaM.Move(fnMoveBackward);
-        aPaM.Exchange();
-
-        m_pPostProcessAttrsInfo.reset(new WW8PostProcessAttrsInfo(nCp, nCp, aPaM));
-    }
     else
     {
         //set Wingdings font
@@ -2417,16 +2443,6 @@ eF_ResT SwWW8ImplReader::Read_F_Macro( WW8FieldDesc*, OUString& rStr)
     }
 
     return eF_ResT::OK;
-}
-
-WW8PostProcessAttrsInfo::WW8PostProcessAttrsInfo(WW8_CP nCpStart, WW8_CP nCpEnd,
-                                                 SwPaM & rPaM)
-    : mbCopy(false)
-    , mnCpStart(nCpStart)
-    , mnCpEnd(nCpEnd)
-    , mPaM(*rPaM.GetMark(), *rPaM.GetPoint())
-    , mItemSet(rPaM.GetDoc().GetAttrPool(), svl::Items<RES_CHRATR_BEGIN, RES_PARATR_END - 1>)
-{
 }
 
 bool CanUseRemoteLink(const OUString &rGrfName)

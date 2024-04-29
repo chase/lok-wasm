@@ -28,6 +28,9 @@
 #include <vcl/GraphicExternalLink.hxx>
 #include <vcl/graph.hxx>
 #include <unordered_map>
+#include <frozen/bits/defines.h>
+#include <frozen/bits/elsa_std.h>
+#include <frozen/unordered_map.h>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -54,7 +57,7 @@ GradientFillContext::GradientFillContext(ContextHandler2Helper const & rParent,
     auto oRotateWithShape = rAttribs.getBool(XML_rotWithShape);
     mrGradientProps.moShadeFlip = rAttribs.getToken( XML_flip );
     mrGradientProps.moRotateWithShape = oRotateWithShape;
-    if (mpGradientFill && oRotateWithShape)
+    if (mpGradientFill && oRotateWithShape.has_value())
         mpGradientFill->mbRotateWithShape = *oRotateWithShape;
 }
 
@@ -143,7 +146,7 @@ ContextHandlerRef GradientFillContext::onCreateContext(
 namespace
 {
 
-std::unordered_map<sal_Int32, model::PatternPreset> constPatternPresetMap =
+constexpr frozen::unordered_map<sal_Int32, model::PatternPreset, 54> constPatternPresetMap
 {
     { XML_pct5, model::PatternPreset::Percent_5 },
     { XML_pct10, model::PatternPreset::Percent_10 },

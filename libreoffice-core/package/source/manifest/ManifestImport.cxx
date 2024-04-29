@@ -21,9 +21,11 @@
 #include "ManifestDefines.hxx"
 #include <PackageConstants.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <com/sun/star/xml/sax/XAttributeList.hpp>
 #include <com/sun/star/xml/crypto/DigestID.hpp>
 #include <com/sun/star/xml/crypto/CipherID.hpp>
+#include <com/sun/star/xml/crypto/KDFID.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <comphelper/base64.hxx>
 #include <comphelper/sequence.hxx>
@@ -41,9 +43,9 @@ constexpr OUStringLiteral gsSaltProperty                 ( u"Salt" );
 constexpr OUStringLiteral gsInitialisationVectorProperty ( u"InitialisationVector" );
 constexpr OUStringLiteral gsSizeProperty                 ( u"Size" );
 constexpr OUStringLiteral gsDigestProperty               ( u"Digest" );
-constexpr OUStringLiteral gsEncryptionAlgProperty        ( u"EncryptionAlgorithm" );
-constexpr OUStringLiteral gsStartKeyAlgProperty          ( u"StartKeyAlgorithm" );
-constexpr OUStringLiteral gsDigestAlgProperty            ( u"DigestAlgorithm" );
+constexpr OUString gsEncryptionAlgProperty        ( u"EncryptionAlgorithm"_ustr );
+constexpr OUString gsStartKeyAlgProperty          ( u"StartKeyAlgorithm"_ustr );
+constexpr OUString gsDigestAlgProperty            ( u"DigestAlgorithm"_ustr );
 
 ManifestImport::ManifestImport( std::vector < Sequence < PropertyValue > > & rNewManVector )
     : bIgnoreEncryptData    ( false )
@@ -163,10 +165,10 @@ void ManifestImport::doEncryptionData(StringHashMap &rConvertedAttribs)
     } else if ( aString == SHA256_1K_URL ) {
         aSequence[PKG_MNFST_DIGESTALG].Name = gsDigestAlgProperty;
         aSequence[PKG_MNFST_DIGESTALG].Value <<= xml::crypto::DigestID::SHA256_1K;
-    } else
-        bIgnoreEncryptData = true;
+    }
+    // note: digest is now *optional* - expected not to be used with AEAD
 
-    if ( !bIgnoreEncryptData ) {
+    if (aSequence[PKG_MNFST_DIGESTALG].Value.hasValue()) {
         aString = rConvertedAttribs[ATTRIBUTE_CHECKSUM];
         uno::Sequence < sal_Int8 > aDecodeBuffer;
         ::comphelper::Base64::decode(aDecodeBuffer, aString);
@@ -184,6 +186,21 @@ void ManifestImport::doAlgorithm(StringHashMap &rConvertedAttribs)
     if ( aString == BLOWFISH_NAME || aString == BLOWFISH_URL ) {
         aSequence[PKG_MNFST_ENCALG].Name = gsEncryptionAlgProperty;
         aSequence[PKG_MNFST_ENCALG].Value <<= xml::crypto::CipherID::BLOWFISH_CFB_8;
+    } else if (aString == AESGCM256_URL) {
+        aSequence[PKG_MNFST_ENCALG].Name = gsEncryptionAlgProperty;
+        aSequence[PKG_MNFST_ENCALG].Value <<= xml::crypto::CipherID::AES_GCM_W3C;
+        SAL_INFO_IF(nDerivedKeySize != 0 && nDerivedKeySize != 32, "package.manifest", "Unexpected derived key length!");
+        nDerivedKeySize = 32;
+    } else if (aString == AESGCM192_URL) {
+        aSequence[PKG_MNFST_ENCALG].Name = gsEncryptionAlgProperty;
+        aSequence[PKG_MNFST_ENCALG].Value <<= xml::crypto::CipherID::AES_GCM_W3C;
+        SAL_INFO_IF(nDerivedKeySize != 0 && nDerivedKeySize != 24, "package.manifest", "Unexpected derived key length!");
+        nDerivedKeySize = 24;
+    } else if (aString == AESGCM128_URL) {
+        aSequence[PKG_MNFST_ENCALG].Name = gsEncryptionAlgProperty;
+        aSequence[PKG_MNFST_ENCALG].Value <<= xml::crypto::CipherID::AES_GCM_W3C;
+        SAL_INFO_IF(nDerivedKeySize != 0 && nDerivedKeySize != 16, "package.manifest", "Unexpected derived key length!");
+        nDerivedKeySize = 16;
     } else if ( aString == AES256_URL ) {
         aSequence[PKG_MNFST_ENCALG].Name = gsEncryptionAlgProperty;
         aSequence[PKG_MNFST_ENCALG].Value <<= xml::crypto::CipherID::AES_CBC_W3C_PADDING;
@@ -217,16 +234,51 @@ void ManifestImport::doKeyDerivation(StringHashMap &rConvertedAttribs)
         return;
 
     OUString aString = rConvertedAttribs[ATTRIBUTE_KEY_DERIVATION_NAME];
-    if ( aString == PBKDF2_NAME || aString == PBKDF2_URL ) {
+    if (aString == PBKDF2_NAME || aString == PBKDF2_URL
+        || aString == ARGON2ID_URL || aString == ARGON2ID_URL_LO)
+    {
+        aSequence[PKG_MNFST_KDF].Name = "KeyDerivationFunction";
+        if (aString == ARGON2ID_URL || aString == ARGON2ID_URL_LO)
+        {
+            aSequence[PKG_MNFST_KDF].Value <<= xml::crypto::KDFID::Argon2id;
+
+            aString = rConvertedAttribs.find(ATTRIBUTE_ARGON2_T) != rConvertedAttribs.end()
+                ? rConvertedAttribs[ATTRIBUTE_ARGON2_T]
+                : rConvertedAttribs[ATTRIBUTE_ARGON2_T_LO];
+            sal_Int32 const t(aString.toInt32());
+            aString = rConvertedAttribs.find(ATTRIBUTE_ARGON2_M) != rConvertedAttribs.end()
+                ? rConvertedAttribs[ATTRIBUTE_ARGON2_M]
+                : rConvertedAttribs[ATTRIBUTE_ARGON2_M_LO];
+            sal_Int32 const m(aString.toInt32());
+            aString = rConvertedAttribs.find(ATTRIBUTE_ARGON2_P) != rConvertedAttribs.end()
+                ? rConvertedAttribs[ATTRIBUTE_ARGON2_P]
+                : rConvertedAttribs[ATTRIBUTE_ARGON2_P_LO];
+            sal_Int32 const p(aString.toInt32());
+            if (0 < t && 0 < m && 0 < p)
+            {
+                aSequence[PKG_MNFST_ARGON2ARGS].Name = "Argon2Args";
+                aSequence[PKG_MNFST_ARGON2ARGS].Value <<= uno::Sequence{t,m,p};
+            }
+            else
+            {
+                SAL_INFO("package.manifest", "invalid argon2 arguments");
+                bIgnoreEncryptData = true;
+            }
+        }
+        else
+        {
+            aSequence[PKG_MNFST_KDF].Value <<= xml::crypto::KDFID::PBKDF2;
+
+            aString = rConvertedAttribs[ATTRIBUTE_ITERATION_COUNT];
+            aSequence[PKG_MNFST_ITERATION].Name = gsIterationCountProperty;
+            aSequence[PKG_MNFST_ITERATION].Value <<= aString.toInt32();
+        }
+
         aString = rConvertedAttribs[ATTRIBUTE_SALT];
         uno::Sequence < sal_Int8 > aDecodeBuffer;
         ::comphelper::Base64::decode(aDecodeBuffer, aString);
         aSequence[PKG_MNFST_SALT].Name = gsSaltProperty;
         aSequence[PKG_MNFST_SALT].Value <<= aDecodeBuffer;
-
-        aString = rConvertedAttribs[ATTRIBUTE_ITERATION_COUNT];
-        aSequence[PKG_MNFST_ITERATION].Name = gsIterationCountProperty;
-        aSequence[PKG_MNFST_ITERATION].Value <<= aString.toInt32();
 
         aString = rConvertedAttribs[ATTRIBUTE_KEY_SIZE];
         if ( aString.getLength() ) {
@@ -241,8 +293,12 @@ void ManifestImport::doKeyDerivation(StringHashMap &rConvertedAttribs)
         aSequence[PKG_MNFST_DERKEYSIZE].Name = gsDerivedKeySizeProperty;
         aSequence[PKG_MNFST_DERKEYSIZE].Value <<= nDerivedKeySize;
     } else if ( bPgpEncryption ) {
-        if ( aString != "PGP" )
+        if (aString == "PGP") {
+            aSequence[PKG_MNFST_KDF].Name = "KeyDerivationFunction";
+            aSequence[PKG_MNFST_KDF].Value <<= xml::crypto::KDFID::PGP_RSA_OAEP_MGF1P;
+        } else {
             bIgnoreEncryptData = true;
+        }
     } else
         bIgnoreEncryptData = true;
 }
@@ -271,6 +327,7 @@ void SAL_CALL ManifestImport::startElement( const OUString& aName, const uno::Re
 
     switch (nLevel) {
     case 1: {
+        m_PackageVersion = aConvertedAttribs[ATTRIBUTE_VERSION];
         if (aConvertedName != ELEMENT_MANIFEST) //manifest:manifest
             aStack.back().m_bValid = false;
         break;
@@ -395,14 +452,25 @@ void SAL_CALL ManifestImport::endElement( const OUString& aName )
         return;
 
     if ( aConvertedName == ELEMENT_FILE_ENTRY && aStack.back().m_bValid ) {
-        // root folder gets KeyInfo entry if any, for PGP encryption
-        if (!bIgnoreEncryptData && !aKeys.empty() && aSequence[PKG_MNFST_FULLPATH].Value.get<OUString>() == "/" )
+        // required for wholesome encryption: if there is no document and hence
+        // no file-entry with a version attribute, send the package's version
+        // with the first file-entry.
+        // (note: the only case when a valid ODF document has no "/" entry with
+        // a version is when it is ODF 1.0/1.1 and then it doesn't have the
+        // package version either)
+        if (rManVector.empty() && !m_PackageVersion.isEmpty()
+            && !aSequence[PKG_MNFST_VERSION].Value.hasValue())
         {
-            aSequence[PKG_SIZE_NOENCR_MNFST].Name = "KeyInfo";
-            aSequence[PKG_SIZE_NOENCR_MNFST].Value <<= comphelper::containerToSequence(aKeys);
+            aSequence[PKG_MNFST_VERSION].Name = u"Version"_ustr;
+            aSequence[PKG_MNFST_VERSION].Value <<= m_PackageVersion;
         }
-        aSequence.erase(std::remove_if(aSequence.begin(), aSequence.end(),
-                                       isEmpty), aSequence.end());
+        // the first entry gets KeyInfo element if any, for PGP encryption
+        if (!bIgnoreEncryptData && !aKeys.empty() && rManVector.empty())
+        {
+            aSequence[PKG_MNFST_KEYINFO].Name = "KeyInfo";
+            aSequence[PKG_MNFST_KEYINFO].Value <<= comphelper::containerToSequence(aKeys);
+        }
+        std::erase_if(aSequence, isEmpty);
 
         bIgnoreEncryptData = false;
         rManVector.push_back ( comphelper::containerToSequence(aSequence) );

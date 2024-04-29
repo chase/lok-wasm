@@ -79,7 +79,7 @@ void FmFormView::Init()
     pImpl = new FmXFormView(this);
 
     // set model
-    SdrModel* pModel = GetModel();
+    SdrModel* pModel = &GetModel();
 
     DBG_ASSERT( dynamic_cast<const FmFormModel*>( pModel) !=  nullptr, "Wrong model" );
     FmFormModel* pFormModel = dynamic_cast<FmFormModel*>(pModel);
@@ -103,7 +103,7 @@ void FmFormView::Init()
     SfxObjectShell* pObjShell = pFormModel->GetObjectShell();
     if ( pObjShell && pObjShell->GetMedium() )
     {
-        if ( const SfxUnoAnyItem *pItem = pObjShell->GetMedium()->GetItemSet()->GetItemIfSet( SID_COMPONENTDATA, false ) )
+        if ( const SfxUnoAnyItem *pItem = pObjShell->GetMedium()->GetItemSet().GetItemIfSet( SID_COMPONENTDATA, false ) )
         {
             ::comphelper::NamedValueCollection aComponentData( pItem->GetValue() );
             bInitDesignMode = aComponentData.getOrDefault( "ApplyFormDesignMode", bInitDesignMode );
@@ -201,7 +201,7 @@ void FmFormView::ChangeDesignMode(bool bDesign)
     if (bDesign == IsDesignMode())
         return;
 
-    FmFormModel* pModel = dynamic_cast<FmFormModel*>( GetModel() );
+    FmFormModel* pModel = dynamic_cast<FmFormModel*>(&GetModel());
     if (pModel)
     {   // For the duration of the transition the Undo-Environment is disabled. This ensures that non-transient Properties can
         // also be changed (this should be done with care and also reversed before switching the mode back. An example is the
@@ -309,7 +309,7 @@ SdrPageView* FmFormView::ShowSdrPage(SdrPage* pPage)
             pFormShellImpl->UpdateForms_Lock(true);
 
             // so that the form navigator can react to the pagechange
-            pFormShell->GetViewShell()->GetViewFrame()->GetBindings().Invalidate(SID_FM_FMEXPLORER_CONTROL, true);
+            pFormShell->GetViewShell()->GetViewFrame().GetBindings().Invalidate(SID_FM_FMEXPLORER_CONTROL, true);
 
             pFormShellImpl->SetSelection_Lock(GetMarkedObjectList());
         }
@@ -497,10 +497,9 @@ bool FmFormView::KeyInput(const KeyEvent& rKEvt, vcl::Window* pWin)
     {
         if (FmFormPage* pCurPage = GetCurPage())
         {
-            for (size_t a = 0; a < pCurPage->GetObjCount(); ++a)
+            for (const rtl::Reference<SdrObject>& pObj : *pCurPage)
             {
-                SdrObject* pObj = pCurPage->GetObj(a);
-                FmFormObj* pFormObject = FmFormObj::GetFormObject(pObj);
+                FmFormObj* pFormObject = FmFormObj::GetFormObject(pObj.get());
                 if (!pFormObject)
                     continue;
 

@@ -23,9 +23,9 @@
 #include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/beans/StringPair.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include "ZipPackageEntry.hxx"
 #include <cppuhelper/implbase.hxx>
+#include <rtl/ref.hxx>
 
 #include <string_view>
 #include <unordered_map>
@@ -38,7 +38,7 @@ class ZipPackageStream;
 
 struct ZipContentInfo
 {
-    css::uno::Reference < css::lang::XUnoTunnel > xTunnel;
+    rtl::Reference < ZipPackageEntry > xPackageEntry;
     bool bFolder;
     union
     {
@@ -79,7 +79,7 @@ public:
     const OUString& GetVersion() const { return m_sVersion; }
     void SetVersion( const OUString& aVersion ) { m_sVersion = aVersion; }
 
-    bool LookForUnexpectedODF12Streams( std::u16string_view aPath );
+    bool LookForUnexpectedODF12Streams(std::u16string_view aPath, bool isWholesomeEncryption);
 
     void setChildStreamsTypeByExtension( const css::beans::StringPair& aPair );
 
@@ -91,8 +91,6 @@ public:
 
     ZipContentInfo& doGetByName( const OUString& aName );
 
-    static const css::uno::Sequence < sal_Int8 > & getUnoTunnelId();
-
     void setPackageFormat_Impl( sal_Int32 nFormat ) { m_nFormat = nFormat; }
     void setRemoveOnInsertMode_Impl( bool bRemove ) { mbAllowRemoveOnInsert = bRemove; }
 
@@ -100,7 +98,8 @@ public:
                             std::vector < css::uno::Sequence < css::beans::PropertyValue > > &rManList,
                             ZipOutputStream & rZipOut,
                             const css::uno::Sequence < sal_Int8 >& rEncryptionKey,
-                            sal_Int32 nPBKDF2IterationCount,
+                            ::std::optional<sal_Int32> oPBKDF2IterationCount,
+                            ::std::optional<::std::tuple<sal_Int32, sal_Int32, sal_Int32>> oArgon2Args,
                             const rtlRandomPool &rRandomPool ) override;
 
     // Recursive functions
@@ -110,7 +109,8 @@ public:
             std::vector < css::uno::Sequence < css::beans::PropertyValue > > &rManList,
             ZipOutputStream & rZipOut,
             const css::uno::Sequence< sal_Int8 > &rEncryptionKey,
-            sal_Int32 nPBKDF2IterationCount,
+            ::std::optional<sal_Int32> oPBKDF2IterationCount,
+            ::std::optional<::std::tuple<sal_Int32, sal_Int32, sal_Int32>> oArgon2Args,
             const rtlRandomPool & rRandomPool) const;
 
     // XNameContainer
@@ -135,9 +135,6 @@ public:
     // XPropertySet
     virtual void SAL_CALL setPropertyValue( const OUString& aPropertyName, const css::uno::Any& aValue ) override;
     virtual css::uno::Any SAL_CALL getPropertyValue( const OUString& PropertyName ) override;
-
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName(  ) override;

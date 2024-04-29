@@ -23,13 +23,14 @@
 #include <com/sun/star/container/XNamed.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include "ZipEntry.hxx"
 #include <cppuhelper/implbase.hxx>
 
 #include <vector>
+#include <optional>
+#include <tuple>
 
 typedef void* rtlRandomPool;
 class ZipOutputStream;
@@ -39,7 +40,6 @@ class ZipPackageEntry : public cppu::WeakImplHelper
 <
     css::container::XNamed,
     css::container::XChild,
-    css::lang::XUnoTunnel,
     css::beans::XPropertySet,
     css::lang::XServiceInfo
 >
@@ -68,7 +68,8 @@ public:
                             std::vector < css::uno::Sequence < css::beans::PropertyValue > > &rManList,
                             ZipOutputStream & rZipOut,
                             const css::uno::Sequence < sal_Int8 >& rEncryptionKey,
-                            sal_Int32 nPBKDF2IterationCount,
+                            ::std::optional<sal_Int32> oPBKDF2IterationCount,
+                            ::std::optional<::std::tuple<sal_Int32, sal_Int32, sal_Int32>> oArgon2Args,
                             const rtlRandomPool &rRandomPool ) = 0;
 
     void clearParent()
@@ -82,8 +83,6 @@ public:
     // XChild
     virtual css::uno::Reference< css::uno::XInterface > SAL_CALL getParent(  ) override;
     virtual void SAL_CALL setParent( const css::uno::Reference< css::uno::XInterface >& Parent ) override;
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override = 0;
     // XPropertySet
     virtual css::uno::Reference< css::beans::XPropertySetInfo > SAL_CALL getPropertySetInfo(  ) override;
     virtual void SAL_CALL setPropertyValue( const OUString& aPropertyName, const css::uno::Any& aValue ) override = 0;

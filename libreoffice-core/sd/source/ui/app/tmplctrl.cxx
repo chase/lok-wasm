@@ -51,8 +51,9 @@ SdTemplateControl::~SdTemplateControl()
 void SdTemplateControl::StateChangedAtStatusBarControl(
     sal_uInt16 /*nSID*/, SfxItemState eState, const SfxPoolItem* pState )
 {
-    if( eState != SfxItemState::DEFAULT || pState->IsVoidItem() )
+    if (eState != SfxItemState::DEFAULT || SfxItemState::DISABLED == eState)
         GetStatusBar().SetItemText( GetId(), OUString() );
+
     else if ( auto pStringItem = dynamic_cast< const SfxStringItem *>( pState ) )
     {
         msTemplate = pStringItem->GetValue();
@@ -94,7 +95,7 @@ void SdTemplateControl::Command( const CommandEvent& rCEvt )
 
     ::tools::Rectangle aRect(rCEvt.GetMousePosPixel(), Size(1, 1));
     weld::Window* pParent = weld::GetPopupParent(GetStatusBar(), aRect);
-    OString sResult = xPopup->popup_at_rect(pParent, aRect);
+    OUString sResult = xPopup->popup_at_rect(pParent, aRect);
     if (!sResult.isEmpty())
     {
         sal_uInt16 nCurrId = sResult.toUInt32();

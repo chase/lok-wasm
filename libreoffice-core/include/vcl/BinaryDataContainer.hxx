@@ -49,7 +49,7 @@ public:
     size_t getSize() const;
     bool isEmpty() const;
     const sal_uInt8* getData() const;
-    css::uno::Sequence<sal_Int8> getAsSequence() const;
+    css::uno::Sequence<sal_Int8> getCopyAsByteSequence() const;
 
     // Returns the data as a readonly stream open for reading
     std::shared_ptr<SvStream> getAsStream();

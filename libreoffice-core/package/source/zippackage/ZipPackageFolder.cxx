@@ -70,7 +70,8 @@ ZipPackageFolder::~ZipPackageFolder()
 {
 }
 
-bool ZipPackageFolder::LookForUnexpectedODF12Streams( std::u16string_view aPath )
+bool ZipPackageFolder::LookForUnexpectedODF12Streams(
+        std::u16string_view const aPath, bool const isWholesomeEncryption)
 {
     bool bHasUnexpected = false;
 
@@ -83,10 +84,14 @@ bool ZipPackageFolder::LookForUnexpectedODF12Streams( std::u16string_view aPath 
                 // META-INF is not allowed to contain subfolders
                 bHasUnexpected = true;
             }
+            else if (isWholesomeEncryption && rShortName != u"META-INF")
+            {
+                bHasUnexpected = true;
+            }
             else
             {
                 OUString sOwnPath = aPath + rShortName + "/";
-                bHasUnexpected = rInfo.pFolder->LookForUnexpectedODF12Streams( sOwnPath );
+                bHasUnexpected = rInfo.pFolder->LookForUnexpectedODF12Streams(sOwnPath, isWholesomeEncryption);
             }
         }
         else
@@ -101,6 +106,10 @@ bool ZipPackageFolder::LookForUnexpectedODF12Streams( std::u16string_view aPath 
                 }
 
                 // streams from META-INF with expected names are allowed not to be registered in manifest.xml
+            }
+            else if (isWholesomeEncryption && rShortName != "mimetype" && rShortName != "encrypted-package")
+            {
+                bHasUnexpected = true;
             }
             else if ( !rInfo.pStream->IsFromManifest() )
             {
@@ -143,26 +152,20 @@ void ZipPackageFolder::setChildStreamsTypeByExtension( const beans::StringPair& 
     }
 }
 
-const css::uno::Sequence < sal_Int8 > & ZipPackageFolder::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit lcl_CachedImplId;
-    return lcl_CachedImplId.getSeq();
-}
-
     // XNameContainer
 void SAL_CALL ZipPackageFolder::insertByName( const OUString& aName, const uno::Any& aElement )
 {
     if (hasByName(aName))
         throw ElementExistException(THROW_WHERE );
 
-    uno::Reference < XUnoTunnel > xRef;
+    uno::Reference < XInterface > xRef;
     aElement >>= xRef;
     if ( !(aElement >>= xRef) )
         throw IllegalArgumentException(THROW_WHERE, uno::Reference< uno::XInterface >(), 0 );
 
-    ZipPackageEntry* pEntry = comphelper::getFromUnoTunnel<ZipPackageFolder>(xRef);
+    ZipPackageEntry* pEntry = dynamic_cast<ZipPackageFolder*>(xRef.get());
     if (!pEntry)
-        pEntry = comphelper::getFromUnoTunnel<ZipPackageStream>(xRef);
+        pEntry = dynamic_cast<ZipPackageStream*>(xRef.get());
     if (!pEntry)
        throw IllegalArgumentException(THROW_WHERE, uno::Reference< uno::XInterface >(), 0 );
 
@@ -186,7 +189,7 @@ uno::Reference< XEnumeration > SAL_CALL ZipPackageFolder::createEnumeration(  )
     // XElementAccess
 uno::Type SAL_CALL ZipPackageFolder::getElementType(  )
 {
-    return cppu::UnoType<XUnoTunnel>::get();
+    return cppu::UnoType<XInterface>::get();
 }
 sal_Bool SAL_CALL ZipPackageFolder::hasElements(  )
 {
@@ -203,7 +206,7 @@ ZipContentInfo& ZipPackageFolder::doGetByName( const OUString& aName )
 
 uno::Any SAL_CALL ZipPackageFolder::getByName( const OUString& aName )
 {
-    return uno::Any ( doGetByName ( aName ).xTunnel );
+    return uno::Any ( uno::Reference(cppu::getXWeak(doGetByName ( aName ).xPackageEntry.get())) );
 }
 uno::Sequence< OUString > SAL_CALL ZipPackageFolder::getElementNames(  )
 {
@@ -228,7 +231,8 @@ bool ZipPackageFolder::saveChild(
         std::vector < uno::Sequence < PropertyValue > > &rManList,
         ZipOutputStream & rZipOut,
         const uno::Sequence < sal_Int8 >& rEncryptionKey,
-        sal_Int32 nPBKDF2IterationCount,
+        ::std::optional<sal_Int32> const oPBKDF2IterationCount,
+        ::std::optional<::std::tuple<sal_Int32, sal_Int32, sal_Int32>> const oArgon2Args,
         const rtlRandomPool &rRandomPool)
 {
     uno::Sequence < PropertyValue > aPropSet (PKG_SIZE_NOENCR_MNFST);
@@ -247,7 +251,7 @@ bool ZipPackageFolder::saveChild(
     else
         aPropSet.realloc( 0 );
 
-    saveContents( sTempName, rManList, rZipOut, rEncryptionKey, nPBKDF2IterationCount, rRandomPool);
+    saveContents(sTempName, rManList, rZipOut, rEncryptionKey, oPBKDF2IterationCount, oArgon2Args, rRandomPool);
 
     // folder can have a mediatype only in package format
     if ( aPropSet.hasElements() && ( m_nFormat == embed::StorageFormats::PACKAGE ) )
@@ -261,7 +265,8 @@ void ZipPackageFolder::saveContents(
         std::vector < uno::Sequence < PropertyValue > > &rManList,
         ZipOutputStream & rZipOut,
         const uno::Sequence < sal_Int8 >& rEncryptionKey,
-        sal_Int32 nPBKDF2IterationCount,
+        ::std::optional<sal_Int32> const oPBKDF2IterationCount,
+        ::std::optional<::std::tuple<sal_Int32, sal_Int32, sal_Int32>> const oArgon2Args,
         const rtlRandomPool &rRandomPool ) const
 {
     if ( maContents.empty() && !rPath.isEmpty() && m_nFormat != embed::StorageFormats::OFOPXML )
@@ -297,8 +302,8 @@ void ZipPackageFolder::saveContents(
         if ( aIter != maContents.end() && !(*aIter).second.bFolder )
         {
             bMimeTypeStreamStored = true;
-            if( !aIter->second.pStream->saveChild(
-                rPath + aIter->first, rManList, rZipOut, rEncryptionKey, nPBKDF2IterationCount, rRandomPool ))
+            if (!aIter->second.pStream->saveChild(rPath + aIter->first, rManList, rZipOut,
+                    rEncryptionKey, oPBKDF2IterationCount, oArgon2Args, rRandomPool))
             {
                 throw uno::RuntimeException( THROW_WHERE );
             }
@@ -311,16 +316,16 @@ void ZipPackageFolder::saveContents(
         {
             if (rInfo.bFolder)
             {
-                if( !rInfo.pFolder->saveChild(
-                    rPath + rShortName, rManList, rZipOut, rEncryptionKey, nPBKDF2IterationCount, rRandomPool ))
+                if (!rInfo.pFolder->saveChild(rPath + rShortName, rManList, rZipOut,
+                        rEncryptionKey, oPBKDF2IterationCount, oArgon2Args, rRandomPool))
                 {
                     throw uno::RuntimeException( THROW_WHERE );
                 }
             }
             else
             {
-                if( !rInfo.pStream->saveChild(
-                    rPath + rShortName, rManList, rZipOut, rEncryptionKey, nPBKDF2IterationCount, rRandomPool ))
+                if (!rInfo.pStream->saveChild(rPath + rShortName, rManList, rZipOut,
+                        rEncryptionKey, oPBKDF2IterationCount, oArgon2Args, rRandomPool))
                 {
                     throw uno::RuntimeException( THROW_WHERE );
                 }
@@ -329,10 +334,6 @@ void ZipPackageFolder::saveContents(
     }
 }
 
-sal_Int64 SAL_CALL ZipPackageFolder::getSomething( const uno::Sequence< sal_Int8 >& aIdentifier )
-{
-    return comphelper::getSomethingImpl(aIdentifier, this);
-}
 void SAL_CALL ZipPackageFolder::setPropertyValue( const OUString& aPropertyName, const uno::Any& aValue )
 {
     if ( aPropertyName == "MediaType" )
@@ -395,14 +396,14 @@ sal_Bool SAL_CALL ZipPackageFolder::supportsService( OUString const & rServiceNa
 
 
 ZipContentInfo::ZipContentInfo ( ZipPackageStream * pNewStream )
-: xTunnel ( pNewStream )
+: xPackageEntry ( pNewStream )
 , bFolder ( false )
 , pStream ( pNewStream )
 {
 }
 
 ZipContentInfo::ZipContentInfo ( ZipPackageFolder * pNewFolder )
-: xTunnel ( pNewFolder )
+: xPackageEntry ( pNewFolder )
 , bFolder ( true )
 , pFolder ( pNewFolder )
 {

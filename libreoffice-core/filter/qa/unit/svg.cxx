@@ -19,6 +19,7 @@
 #include <com/sun/star/text/ControlCharacter.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 
+#include <comphelper/propertyvalue.hxx>
 #include <unotools/streamwrap.hxx>
 #include <unotools/mediadescriptor.hxx>
 #include <tools/stream.hxx>
@@ -45,27 +46,23 @@ void SvgFilterTest::registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx)
 
 CPPUNIT_TEST_FIXTURE(SvgFilterTest, testPreserveJpg)
 {
-#if !defined(MACOSX)
+// On Windows, SVGFilter::filterWriterOrCalc can't get current frame to obtain selection
+#if !defined(MACOSX) && !defined(_WIN32)
     // Load a document with a jpeg image in it.
-    loadFromURL(u"preserve-jpg.odt");
+    loadFromFile(u"preserve-jpg.odt");
 
     // Select the image.
     dispatchCommand(mxComponent, ".uno:JumpToNextFrame", {});
 
     // Export the selection to SVG.
-    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
-    SvMemoryStream aStream;
-    uno::Reference<io::XOutputStream> xOut = new utl::OOutputStreamWrapper(aStream);
-    utl::MediaDescriptor aMediaDescriptor;
-    aMediaDescriptor["FilterName"] <<= OUString("writer_svg_Export");
-    aMediaDescriptor["SelectionOnly"] <<= true;
-    aMediaDescriptor["OutputStream"] <<= xOut;
-    xStorable->storeToURL("private:stream", aMediaDescriptor.getAsConstPropertyValueList());
-    aStream.Seek(STREAM_SEEK_TO_BEGIN);
+    saveWithParams({
+        comphelper::makePropertyValue("FilterName", u"writer_svg_Export"_ustr),
+        comphelper::makePropertyValue("SelectionOnly", true),
+    });
 
     // Make sure that the original JPG data is reused and we don't perform a PNG re-compress.
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    OUString aAttributeValue = getXPath(pXmlDoc, "//svg:image", "href");
+    xmlDocUniquePtr pXmlDoc = parseExportedFile();
+    OUString aAttributeValue = getXPath(pXmlDoc, "//svg:image"_ostr, "href"_ostr);
 
     // Without the accompanying fix in place, this test would have failed with:
     // - Expression: aAttributeValue.startsWith("data:image/jpeg")
@@ -78,22 +75,15 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, testPreserveJpg)
 CPPUNIT_TEST_FIXTURE(SvgFilterTest, testSemiTransparentLine)
 {
     // Load a document with a semi-transparent line shape.
-    loadFromURL(u"semi-transparent-line.odg");
+    loadFromFile(u"semi-transparent-line.odg");
 
     // Export it to SVG.
-    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
-    SvMemoryStream aStream;
-    uno::Reference<io::XOutputStream> xOut = new utl::OOutputStreamWrapper(aStream);
-    utl::MediaDescriptor aMediaDescriptor;
-    aMediaDescriptor["FilterName"] <<= OUString("draw_svg_Export");
-    aMediaDescriptor["OutputStream"] <<= xOut;
-    xStorable->storeToURL("private:stream", aMediaDescriptor.getAsConstPropertyValueList());
-    aStream.Seek(STREAM_SEEK_TO_BEGIN);
+    save("draw_svg_Export");
 
     // Get the style of the group around the actual <path> element.
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pXmlDoc = parseExportedFile();
     OUString aStyle = getXPath(
-        pXmlDoc, "//svg:g[@class='com.sun.star.drawing.LineShape']/svg:g/svg:g", "style");
+        pXmlDoc, "//svg:g[@class='com.sun.star.drawing.LineShape']/svg:g/svg:g"_ostr, "style"_ostr);
     // Without the accompanying fix in place, this test would have failed, as the style was
     // "mask:url(#mask1)", not "opacity: <value>".
     CPPUNIT_ASSERT(aStyle.startsWith("opacity: ", &aStyle));
@@ -105,22 +95,16 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, testSemiTransparentLine)
 CPPUNIT_TEST_FIXTURE(SvgFilterTest, testSemiTransparentFillWithTransparentLine)
 {
     // Load a document with a shape with semi-transparent fill and line
-    loadFromURL(u"semi-transparent-fill.odg");
+    loadFromFile(u"semi-transparent-fill.odg");
 
     // Export it to SVG.
-    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
-    SvMemoryStream aStream;
-    uno::Reference<io::XOutputStream> xOut = new utl::OOutputStreamWrapper(aStream);
-    utl::MediaDescriptor aMediaDescriptor;
-    aMediaDescriptor["FilterName"] <<= OUString("draw_svg_Export");
-    aMediaDescriptor["OutputStream"] <<= xOut;
-    xStorable->storeToURL("private:stream", aMediaDescriptor.getAsConstPropertyValueList());
-    aStream.Seek(STREAM_SEEK_TO_BEGIN);
+    save("draw_svg_Export");
 
     // Get the style of the group around the actual <path> element.
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    OUString aStyle = getXPath(
-        pXmlDoc, "//svg:g[@class='com.sun.star.drawing.EllipseShape']/svg:g/svg:g", "style");
+    xmlDocUniquePtr pXmlDoc = parseExportedFile();
+    OUString aStyle
+        = getXPath(pXmlDoc, "//svg:g[@class='com.sun.star.drawing.EllipseShape']/svg:g/svg:g"_ostr,
+                   "style"_ostr);
     CPPUNIT_ASSERT(aStyle.startsWith("opacity: ", &aStyle));
     int nPercent = std::round(aStyle.toDouble() * 100);
     // Make sure that the line is still 50% opaque
@@ -128,7 +112,8 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, testSemiTransparentFillWithTransparentLine)
 
     // Get the stroke of the fill of the EllipseShape (it must be "none")
     OUString aStroke = getXPath(
-        pXmlDoc, "//svg:g[@class='com.sun.star.drawing.EllipseShape']/svg:g/svg:path", "stroke");
+        pXmlDoc, "//svg:g[@class='com.sun.star.drawing.EllipseShape']/svg:g/svg:path"_ostr,
+        "stroke"_ostr);
     // Without the accompanying fix in place, this test would have failed, as the stroke was
     // "rgb(255,255,255)", not "none".
     CPPUNIT_ASSERT_EQUAL(OUString("none"), aStroke);
@@ -141,21 +126,12 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, testSemiTransparentText)
     // correct transparency factor applied for the first shape.
 
     // Load draw document with transparent text in one box
-    loadFromURL(u"TransparentText.odg");
+    loadFromFile(u"TransparentText.odg");
 
     // Export to SVG.
-    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
+    save("draw_svg_Export");
 
-    SvMemoryStream aStream;
-    uno::Reference<io::XOutputStream> xOut = new utl::OOutputStreamWrapper(aStream);
-    utl::MediaDescriptor aMediaDescriptor;
-    aMediaDescriptor["FilterName"] <<= OUString("draw_svg_Export");
-    aMediaDescriptor["OutputStream"] <<= xOut;
-    xStorable->storeToURL("private:stream", aMediaDescriptor.getAsConstPropertyValueList());
-    aStream.Seek(STREAM_SEEK_TO_BEGIN);
-
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-
+    xmlDocUniquePtr pXmlDoc = parseExportedFile();
     // We expect 2 groups of class "TextShape" that
     // have some svg:text node inside.
     // Without the accompanying fix in place, this test would have failed with:
@@ -163,13 +139,13 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, testSemiTransparentText)
     // - Actual  : 1
     // i.e. the 2nd shape lots its text.
 
-    assertXPath(pXmlDoc, "//svg:g[@class='TextShape']//svg:text", 2);
+    assertXPath(pXmlDoc, "//svg:g[@class='TextShape']//svg:text"_ostr, 2);
 
     // First shape has semi-transparent text.
-    assertXPath(pXmlDoc, "//svg:text[1]/svg:tspan/svg:tspan/svg:tspan[@fill-opacity='0.8']");
+    assertXPath(pXmlDoc, "//svg:text[1]/svg:tspan/svg:tspan/svg:tspan[@fill-opacity='0.8']"_ostr);
 
     // Second shape has normal text.
-    assertXPath(pXmlDoc, "//svg:text[2]/svg:tspan/svg:tspan/svg:tspan[@fill-opacity]", 0);
+    assertXPath(pXmlDoc, "//svg:text[2]/svg:tspan/svg:tspan/svg:tspan[@fill-opacity]"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SvgFilterTest, testSemiTransparentMultiParaText)
@@ -196,37 +172,30 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, testSemiTransparentMultiParaText)
     xShapeProps->setPropertyValue("CharTransparence", uno::Any(static_cast<sal_Int16>(20)));
 
     // When exporting to SVG:
-    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
-    SvMemoryStream aStream;
-    uno::Reference<io::XOutputStream> xOut = new utl::OOutputStreamWrapper(aStream);
-    utl::MediaDescriptor aMediaDescriptor;
-    aMediaDescriptor["FilterName"] <<= OUString("draw_svg_Export");
-    aMediaDescriptor["OutputStream"] <<= xOut;
-    xStorable->storeToURL("private:stream", aMediaDescriptor.getAsConstPropertyValueList());
-    aStream.Seek(STREAM_SEEK_TO_BEGIN);
+    save("draw_svg_Export");
 
     // Then make sure that the two semi-transparent paragraphs have the same X position:
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-    assertXPath(pXmlDoc, "(//svg:g[@class='TextShape']//svg:tspan[@class='TextPosition'])[1]", "x",
-                "250");
+    xmlDocUniquePtr pXmlDoc = parseExportedFile();
+    assertXPath(pXmlDoc, "(//svg:g[@class='TextShape']//svg:tspan[@class='TextPosition'])[1]"_ostr,
+                "x"_ostr, "250");
     assertXPath(pXmlDoc,
-                "(//svg:g[@class='TextShape']//svg:tspan[@class='TextPosition'])[1]/svg:tspan",
-                "fill-opacity", "0.8");
+                "(//svg:g[@class='TextShape']//svg:tspan[@class='TextPosition'])[1]/svg:tspan"_ostr,
+                "fill-opacity"_ostr, "0.8");
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 250
     // - Actual  : 8819
     // i.e. the X position of the second paragraph was wrong.
-    assertXPath(pXmlDoc, "(//svg:g[@class='TextShape']//svg:tspan[@class='TextPosition'])[2]", "x",
-                "250");
+    assertXPath(pXmlDoc, "(//svg:g[@class='TextShape']//svg:tspan[@class='TextPosition'])[2]"_ostr,
+                "x"_ostr, "250");
     assertXPath(pXmlDoc,
-                "(//svg:g[@class='TextShape']//svg:tspan[@class='TextPosition'])[2]/svg:tspan",
-                "fill-opacity", "0.8");
+                "(//svg:g[@class='TextShape']//svg:tspan[@class='TextPosition'])[2]/svg:tspan"_ostr,
+                "fill-opacity"_ostr, "0.8");
 }
 
 CPPUNIT_TEST_FIXTURE(SvgFilterTest, testShapeNographic)
 {
     // Load a document containing a 3D shape.
-    loadFromURL(u"shape-nographic.odp");
+    loadFromFile(u"shape-nographic.odp");
 
     // Export to SVG.
     uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
@@ -245,20 +214,13 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, testShapeNographic)
 CPPUNIT_TEST_FIXTURE(SvgFilterTest, testCustomBullet)
 {
     // Given a presentation with a custom bullet:
-    loadFromURL(u"custom-bullet.fodp");
+    loadFromFile(u"custom-bullet.fodp");
 
     // When exporting that to SVG:
-    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
-    SvMemoryStream aStream;
-    uno::Reference<io::XOutputStream> xOut = new utl::OOutputStreamWrapper(aStream);
-    utl::MediaDescriptor aMediaDescriptor;
-    aMediaDescriptor["FilterName"] <<= OUString("impress_svg_Export");
-    aMediaDescriptor["OutputStream"] <<= xOut;
-    xStorable->storeToURL("private:stream", aMediaDescriptor.getAsConstPropertyValueList());
+    save("impress_svg_Export");
 
     // Then make sure the bullet glyph is not lost:
-    aStream.Seek(STREAM_SEEK_TO_BEGIN);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pXmlDoc = parseExportedFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 1
     // - Actual  : 0
@@ -266,26 +228,19 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, testCustomBullet)
     // i.e. the custom bullet used '<use transform="scale(285,285)"
     // xlink:href="#bullet-char-template-45"/>', but nobody produced a bullet-char-template-45,
     // instead we need the path of the glyph inline.
-    CPPUNIT_ASSERT(!getXPath(pXmlDoc, "//svg:g[@class='BulletChars']//svg:path", "d").isEmpty());
+    CPPUNIT_ASSERT(
+        !getXPath(pXmlDoc, "//svg:g[@class='BulletChars']//svg:path"_ostr, "d"_ostr).isEmpty());
 }
 
 CPPUNIT_TEST_FIXTURE(SvgFilterTest, attributeRedefinedTest)
 {
     // Load document containing empty paragraphs with ids.
-    loadFromURL(u"attributeRedefinedTest.odp");
+    loadFromFile(u"attributeRedefinedTest.odp");
 
     // Export to SVG.
-    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
-    SvMemoryStream aStream;
-    uno::Reference<io::XOutputStream> xOut = new utl::OOutputStreamWrapper(aStream);
-    utl::MediaDescriptor aMediaDescriptor;
-    aMediaDescriptor["FilterName"] <<= OUString("impress_svg_Export");
-    aMediaDescriptor["OutputStream"] <<= xOut;
-    xStorable->storeToURL("private:stream", aMediaDescriptor.getAsConstPropertyValueList());
-    aStream.Seek(STREAM_SEEK_TO_BEGIN);
+    save("impress_svg_Export");
 
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
-
+    xmlDocUniquePtr pXmlDoc = parseExportedFile();
     // We expect four paragraph
     // 2 empty paragraphs with ids
     // 2 paragraphs with text
@@ -298,17 +253,17 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, attributeRedefinedTest)
     // <tspan id="id14" id="id15" id="id17" class="TextParagraph" font-family="Bahnschrift Light" font-size="1129px" font-weight="400">
 
     OString xPath = "//svg:g[@class='TextShape']//svg:text[@class='SVGTextShape']//"
-                    "svg:tspan[@class='TextParagraph']";
+                    "svg:tspan[@class='TextParagraph']"_ostr;
     assertXPath(pXmlDoc, xPath, 4);
 
     //assert that each tspan element with TextParagraph class has id and the tspan element of
     //each empty paragraph does not contain tspan element with class TextPosition
-    assertXPath(pXmlDoc, xPath + "[1]", "id", "id4");
-    assertXPath(pXmlDoc, xPath + "[2]", "id", "id5");
+    assertXPath(pXmlDoc, xPath + "[1]", "id"_ostr, "id4");
+    assertXPath(pXmlDoc, xPath + "[2]", "id"_ostr, "id5");
     assertXPath(pXmlDoc, xPath + "[2]//svg:tspan[@class='TextPosition']", 0);
-    assertXPath(pXmlDoc, xPath + "[3]", "id", "id6");
+    assertXPath(pXmlDoc, xPath + "[3]", "id"_ostr, "id6");
     assertXPath(pXmlDoc, xPath + "[3]//svg:tspan[@class='TextPosition']", 0);
-    assertXPath(pXmlDoc, xPath + "[4]", "id", "id7");
+    assertXPath(pXmlDoc, xPath + "[4]", "id"_ostr, "id7");
 }
 
 CPPUNIT_TEST_FIXTURE(SvgFilterTest, testTab)
@@ -328,28 +283,21 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, testTab)
     xShapeText->setString("A\tB");
 
     // When exporting that document to SVG:
-    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
-    SvMemoryStream aStream;
-    uno::Reference<io::XOutputStream> xOut = new utl::OOutputStreamWrapper(aStream);
-    utl::MediaDescriptor aMediaDescriptor;
-    aMediaDescriptor["FilterName"] <<= OUString("impress_svg_Export");
-    aMediaDescriptor["OutputStream"] <<= xOut;
-    xStorable->storeToURL("private:stream", aMediaDescriptor.getAsConstPropertyValueList());
+    save("impress_svg_Export");
 
     // Then make sure the tab is not lost:
-    aStream.Seek(STREAM_SEEK_TO_BEGIN);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pXmlDoc = parseExportedFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 2
     // - Actual  : 1
     // i.e. the 2nd text portion was not positioned, which looked as if the tab is lost.
-    assertXPath(pXmlDoc, "//svg:g[@class='TextShape']//svg:tspan[@class='TextPosition']", 2);
+    assertXPath(pXmlDoc, "//svg:g[@class='TextShape']//svg:tspan[@class='TextPosition']"_ostr, 2);
 }
 
 CPPUNIT_TEST_FIXTURE(SvgFilterTest, textInImage)
 {
     // Load document containing empty paragraphs with ids.
-    loadFromURL(u"text-in-image.odp");
+    loadFromFile(u"text-in-image.odp");
 
     // Export to SVG.
     uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY_THROW);
@@ -364,8 +312,8 @@ CPPUNIT_TEST_FIXTURE(SvgFilterTest, textInImage)
     xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
 
     // We expect the Graphic to have an image and a text
-    assertXPath(pXmlDoc, "//svg:g[@class='Graphic']//svg:image", 1);
-    assertXPath(pXmlDoc, "//svg:g[@class='Graphic']//svg:text", 1);
+    assertXPath(pXmlDoc, "//svg:g[@class='Graphic']//svg:image"_ostr, 1);
+    assertXPath(pXmlDoc, "//svg:g[@class='Graphic']//svg:text"_ostr, 1);
     // Without the accomanying fix, this test would have failed with:
     // - Expected: 1
     // - Actual  : 0

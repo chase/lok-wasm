@@ -22,8 +22,7 @@
 
 #include <toolkit/dllapi.h>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <cppuhelper/implbase1.hxx>
-#include <comphelper/accimplaccess.hxx>
+#include <cppuhelper/implbase.hxx>
 #include <comphelper/accessiblecomponenthelper.hxx>
 
 
@@ -42,13 +41,9 @@ class AccessibleRelationSetHelper;
 
 
 
-typedef ::cppu::ImplHelper1<
-    css::lang::XServiceInfo > VCLXAccessibleComponent_BASE;
-
-class TOOLKIT_DLLPUBLIC VCLXAccessibleComponent
-        :public comphelper::OAccessibleExtendedComponentHelper
-        ,public ::comphelper::OAccessibleImplementationAccess
-        ,public VCLXAccessibleComponent_BASE
+class TOOLKIT_DLLPUBLIC SAL_LOPLUGIN_ANNOTATE("crosscast") VCLXAccessibleComponent
+        :public cppu::ImplInheritanceHelper<
+             comphelper::OAccessibleExtendedComponentHelper, css::lang::XServiceInfo>
 {
 private:
     rtl::Reference<VCLXWindow>      m_xVCLXWindow;
@@ -78,11 +73,6 @@ public:
         return dynamic_cast< derived_type * >( GetWindow() ); }
 
     virtual void SAL_CALL disposing() override;
-
-    // css::uno::XInterface
-    DECLARE_XINTERFACE()
-    // css::lang::XTypeProvider
-    DECLARE_XTYPEPROVIDER()
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
@@ -117,16 +107,6 @@ public:
 protected:
     // base class overridables
     css::awt::Rectangle implGetBounds(  ) override;
-
-private:
-    /** we may be reparented (if external components use OAccessibleImplementationAccess base class),
-        so this method here returns the parent in the VCL world, in opposite to the parent
-        an external component gave us
-    @precond
-        the caller must ensure thread safety, i.e. our mutex must be locked
-    */
-    css::uno::Reference< css::accessibility::XAccessible >
-            getVclParent() const;
 };
 
 /* ----------------------------------------------------------

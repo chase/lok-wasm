@@ -77,7 +77,7 @@ private:
     css::uno::Reference< css::container::XIndexAccess > m_xMenuContainer;
     css::uno::Reference< css::ui::XUIConfigurationManager > m_xConfigManager, m_xModuleConfigManager;
     void addVerbs( const css::uno::Sequence< css::embed::VerbDescriptor >& rVerbs );
-    virtual void SAL_CALL disposing() override;
+    virtual void disposing(std::unique_lock<std::mutex>& rGuard) override;
 
 protected:
     css::uno::Reference< css::uno::XComponentContext > m_xContext;
@@ -225,7 +225,7 @@ void ResourceMenuController::updatePopupMenu()
     m_nNewMenuId = 1;
 
     // Now fill the menu with the configuration data.
-    framework::MenuBarManager::FillMenu( m_nNewMenuId, comphelper::getFromUnoTunnel<VCLXMenu>( m_xPopupMenu )->GetMenu(), m_aModuleName, m_xMenuContainer, m_xDispatchProvider );
+    framework::MenuBarManager::FillMenu( m_nNewMenuId, m_xPopupMenu->GetMenu(), m_aModuleName, m_xMenuContainer, m_xDispatchProvider );
 
     // For context menus, add object verbs.
     if ( !m_bContextMenu )
@@ -259,8 +259,7 @@ void ResourceMenuController::addVerbs( const css::uno::Sequence< css::embed::Ver
         xStorable.set( xController->getModel(), css::uno::UNO_QUERY );
 
     bool bReadOnly = xStorable.is() && xStorable->isReadonly();
-    VCLXMenu* pAwtMenu = comphelper::getFromUnoTunnel<VCLXMenu>( m_xPopupMenu );
-    Menu* pVCLMenu = pAwtMenu->GetMenu();
+    Menu* pVCLMenu = m_xPopupMenu->GetMenu();
 
     for ( const auto& rVerb : rVerbs )
     {
@@ -279,9 +278,8 @@ void ResourceMenuController::itemActivated( const css::awt::MenuEvent& /*rEvent*
     // Must initialize MenuBarManager here, because we want to let the app do context menu interception before.
     if ( !m_xMenuBarManager.is() )
     {
-        VCLXMenu* pAwtMenu = comphelper::getFromUnoTunnel<VCLXMenu>( m_xPopupMenu );
         m_xMenuBarManager.set( new framework::MenuBarManager(
-            m_xContext, m_xFrame, m_xURLTransformer, m_xDispatchProvider, m_aModuleName, pAwtMenu->GetMenu(), false, !m_bContextMenu && !m_bInToolbar ) );
+            m_xContext, m_xFrame, m_xURLTransformer, m_xDispatchProvider, m_aModuleName, m_xPopupMenu->GetMenu(), false, !m_bContextMenu && !m_bInToolbar ) );
         m_xFrame->addFrameActionListener( m_xMenuBarManager );
     }
 }
@@ -327,7 +325,7 @@ void ResourceMenuController::disposing( const css::lang::EventObject& rEvent )
     }
 }
 
-void ResourceMenuController::disposing()
+void ResourceMenuController::disposing(std::unique_lock<std::mutex>& rGuard)
 {
     css::uno::Reference< css::ui::XUIConfiguration > xConfig( m_xConfigManager, css::uno::UNO_QUERY );
     if ( xConfig.is() )
@@ -350,7 +348,7 @@ void ResourceMenuController::disposing()
         m_xMenuBarManager.clear();
     }
 
-    svt::PopupMenuControllerBase::disposing();
+    svt::PopupMenuControllerBase::disposing(rGuard);
 }
 
 OUString ResourceMenuController::getImplementationName()
@@ -475,8 +473,7 @@ void WindowListMenuController::itemActivated( const css::awt::MenuEvent& rEvent 
     {
         SolarMutexGuard g;
 
-        VCLXMenu* pAwtMenu = comphelper::getFromUnoTunnel<VCLXMenu>( m_xPopupMenu );
-        Menu* pVCLMenu = pAwtMenu->GetMenu();
+        Menu* pVCLMenu = m_xPopupMenu->GetMenu();
         int nItemCount = pVCLMenu->GetItemCount();
 
         if ( nItemCount > 0 )

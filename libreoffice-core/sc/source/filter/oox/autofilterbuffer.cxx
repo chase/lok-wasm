@@ -139,11 +139,11 @@ bool lclConvertWildcardsToRegExp( OUString& rValue )
                     aBuffer.append( '.' );
                 break;
                 case '*':
-                    aBuffer.append( '.' ).append( '*' );
+                    aBuffer.append( ".*" );
                 break;
                 case '\\': case '.': case '|': case '(': case ')': case '^': case '$':
                     // quote RE meta characters
-                    aBuffer.append( '\\' ).append( *pcChar );
+                    aBuffer.append( "\\" + OUStringChar(*pcChar) );
                 break;
                 default:
                     aBuffer.append( *pcChar );
@@ -440,10 +440,12 @@ ApiFilterSettings ColorFilter::finalizeImport()
 
     const SfxItemSet& rItemSet = pStyleSheet->GetItemSet();
     // Color (whether text or background color) is always stored in ATTR_BACKGROUND
-    const SvxBrushItem* pItem = rItemSet.GetItem<SvxBrushItem>(ATTR_BACKGROUND);
-    ::Color aColor = pItem->GetFiltColor();
-    util::Color nColor(aColor);
-    aSettings.appendField(true, nColor, mbIsBackgroundColor);
+    if (const SvxBrushItem* pItem = rItemSet.GetItem<SvxBrushItem>(ATTR_BACKGROUND))
+    {
+        ::Color aColor = pItem->GetFiltColor();
+        util::Color nColor(aColor);
+        aSettings.appendField(true, nColor, mbIsBackgroundColor);
+    }
     return aSettings;
 }
 
@@ -771,7 +773,7 @@ void AutoFilter::finalizeImport( const Reference< XDatabaseRange >& rxDatabaseRa
             the global mode in obNeedsRegExp. If either one is still in
             don't-care state, all is fine. If both are set, they must be
             equal. */
-        bool bRegExpCompatible = !obNeedsRegExp || !aSettings.mobNeedsRegExp || (obNeedsRegExp.value() == aSettings.mobNeedsRegExp.value());
+        bool bRegExpCompatible = !obNeedsRegExp.has_value() || !aSettings.mobNeedsRegExp.has_value() || (obNeedsRegExp.value() == aSettings.mobNeedsRegExp.value());
 
         // check whether fields are connected by 'or' (see comments above).
         if( rColumnFields.size() >= 2 )
@@ -835,7 +837,7 @@ void AutoFilter::finalizeImport( const Reference< XDatabaseRange >& rxDatabaseRa
 
     if (!aParam.bUserDef)
     {
-        pUserList->push_back(new ScUserListData(rSorConditionLoaded.maSortCustomList));
+        pUserList->emplace_back(rSorConditionLoaded.maSortCustomList);
         aParam.bUserDef = true;
         aParam.nUserIndex = pUserList->size()-1;
     }

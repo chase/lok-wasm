@@ -45,7 +45,6 @@ public:
     HeaderFooterTest()
         : SwModelTestBase("/sw/qa/core/header_footer/data/")
     {
-        skipValidation();
     }
 };
 
@@ -99,7 +98,7 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testNonFirstHeaderIsDisabled)
 
     // TODO
 
-    // Header can only be enabled or disabled, but can't be disbaled just for first, left or right page.
+    // Header can only be enabled or disabled, but can't be disabled just for first, left or right page.
     // If a header is enabled but empty, the header still takes space in LO, but not in MSO, where it acts the same as
     // if it is disabled.
 }
@@ -117,28 +116,28 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testHeaderFooterWithSpecialFirstPage_OOXM
     {
         xmlDocUniquePtr pXmlDoc = parseLayoutDump();
         // check first page
-        assertXPath(pXmlDoc, "/root/page[1]/header");
-        assertXPath(pXmlDoc, "/root/page[1]/footer");
-        assertXPath(pXmlDoc, "/root/page[1]/header/txt/text()", 0);
-        assertXPath(pXmlDoc, "/root/page[1]/footer/txt/text()", 0);
+        assertXPath(pXmlDoc, "/root/page[1]/header"_ostr);
+        assertXPath(pXmlDoc, "/root/page[1]/footer"_ostr);
+        assertXPath(pXmlDoc, "/root/page[1]/header/txt/text()"_ostr, 0);
+        assertXPath(pXmlDoc, "/root/page[1]/footer/txt/text()"_ostr, 0);
         // check second page in the same way
-        assertXPath(pXmlDoc, "/root/page[2]/header");
-        assertXPath(pXmlDoc, "/root/page[2]/footer");
+        assertXPath(pXmlDoc, "/root/page[2]/header"_ostr);
+        assertXPath(pXmlDoc, "/root/page[2]/footer"_ostr);
     }
     // All other pages should have header/footer
     OUString sExpected("Seite * von *");
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[2]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[2]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[3]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[3]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[4]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[4]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[5]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[5]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[6]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[6]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[7]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[7]/footer/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[2]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[2]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[3]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[3]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[4]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[4]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[5]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[5]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[6]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[6]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[7]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[7]/footer/txt/text()"_ostr));
 }
 
 // Check for correct header/footer with special first page with TOC inside
@@ -155,27 +154,27 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testHeaderFooterWithSpecialFirstPage_ODF)
     {
         xmlDocUniquePtr pXmlDoc = parseLayoutDump();
         // check first page
-        assertXPath(pXmlDoc, "/root/page[1]/header", 0);
-        assertXPath(pXmlDoc, "/root/page[1]/footer", 0);
+        assertXPath(pXmlDoc, "/root/page[1]/header"_ostr, 0);
+        assertXPath(pXmlDoc, "/root/page[1]/footer"_ostr, 0);
         // check second page in the same way
-        assertXPath(pXmlDoc, "/root/page[2]/header");
-        assertXPath(pXmlDoc, "/root/page[2]/footer");
+        assertXPath(pXmlDoc, "/root/page[2]/header"_ostr);
+        assertXPath(pXmlDoc, "/root/page[2]/footer"_ostr);
     }
 
     // All other pages should have header/footer
     OUString sExpected("Seite * von *");
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[2]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[2]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[3]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[3]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[4]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[4]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[5]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[5]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[6]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[6]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[7]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[7]/footer/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[2]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[2]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[3]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[3]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[4]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[4]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[5]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[5]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[6]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[6]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[7]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(sExpected, parseDump("/root/page[7]/footer/txt/text()"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testFloatingTableInHeader)
@@ -245,13 +244,13 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testFirstPageHeadersAndEmptyFooters)
     // Test case where headers and footers for first page are set, but footers are empty
     auto verify = [this]() {
         CPPUNIT_ASSERT_EQUAL(OUString("This is the FIRST page header."),
-                             parseDump("/root/page[1]/header/txt/text()"));
+                             parseDump("/root/page[1]/header/txt/text()"_ostr));
 
         CPPUNIT_ASSERT_EQUAL(OUString("This is the header for the REST OF THE FILE."),
-                             parseDump("/root/page[2]/header/txt/text()"));
+                             parseDump("/root/page[2]/header/txt/text()"_ostr));
 
         CPPUNIT_ASSERT_EQUAL(OUString("This is the header for the REST OF THE FILE."),
-                             parseDump("/root/page[3]/header/txt/text()"));
+                             parseDump("/root/page[3]/header/txt/text()"_ostr));
     };
 
     createSwDoc("fdo66145.docx");
@@ -270,29 +269,29 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testFirstHeaderFooterImport)
         // The document has 6 pages. Note that we don't test if 4 or just 2 page
         // styles are created, the point is that layout should be correct.
         CPPUNIT_ASSERT_EQUAL(OUString("First page header"),
-                             parseDump("/root/page[1]/header/txt/text()"));
+                             parseDump("/root/page[1]/header/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("First page footer"),
-                             parseDump("/root/page[1]/footer/txt/text()"));
+                             parseDump("/root/page[1]/footer/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("Even page header"),
-                             parseDump("/root/page[2]/header/txt/text()"));
+                             parseDump("/root/page[2]/header/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("Even page footer"),
-                             parseDump("/root/page[2]/footer/txt/text()"));
+                             parseDump("/root/page[2]/footer/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("Odd page header"),
-                             parseDump("/root/page[3]/header/txt/text()"));
+                             parseDump("/root/page[3]/header/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer"),
-                             parseDump("/root/page[3]/footer/txt/text()"));
+                             parseDump("/root/page[3]/footer/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("First page header2"),
-                             parseDump("/root/page[4]/header/txt/text()"));
+                             parseDump("/root/page[4]/header/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("First page footer 2"),
-                             parseDump("/root/page[4]/footer/txt/text()"));
+                             parseDump("/root/page[4]/footer/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("Odd page header 2"),
-                             parseDump("/root/page[5]/header/txt/text()"));
+                             parseDump("/root/page[5]/header/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer 2"),
-                             parseDump("/root/page[5]/footer/txt/text()"));
+                             parseDump("/root/page[5]/footer/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("Even page header 2"),
-                             parseDump("/root/page[6]/header/txt/text()"));
+                             parseDump("/root/page[6]/header/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("Even page footer 2"),
-                             parseDump("/root/page[6]/footer/txt/text()"));
+                             parseDump("/root/page[6]/footer/txt/text()"_ostr));
     };
 
     createSwDoc("first-header-footer.docx");
@@ -309,27 +308,29 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testFirstHeaderFooterRoundTrip)
     CPPUNIT_ASSERT_EQUAL(6, getPages());
 
     CPPUNIT_ASSERT_EQUAL(OUString("First page header"),
-                         parseDump("/root/page[1]/header/txt/text()"));
+                         parseDump("/root/page[1]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("First page footer"),
-                         parseDump("/root/page[1]/footer/txt/text()"));
+                         parseDump("/root/page[1]/footer/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Even page header"),
-                         parseDump("/root/page[2]/header/txt/text()"));
+                         parseDump("/root/page[2]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Even page footer"),
-                         parseDump("/root/page[2]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Odd page header"), parseDump("/root/page[3]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer"), parseDump("/root/page[3]/footer/txt/text()"));
+                         parseDump("/root/page[2]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Odd page header"),
+                         parseDump("/root/page[3]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer"),
+                         parseDump("/root/page[3]/footer/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("First page header2"),
-                         parseDump("/root/page[4]/header/txt/text()"));
+                         parseDump("/root/page[4]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("First page footer 2"),
-                         parseDump("/root/page[4]/footer/txt/text()"));
+                         parseDump("/root/page[4]/footer/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Odd page header 2"),
-                         parseDump("/root/page[5]/header/txt/text()"));
+                         parseDump("/root/page[5]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer 2"),
-                         parseDump("/root/page[5]/footer/txt/text()"));
+                         parseDump("/root/page[5]/footer/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Even page header 2"),
-                         parseDump("/root/page[6]/header/txt/text()"));
+                         parseDump("/root/page[6]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Even page footer 2"),
-                         parseDump("/root/page[6]/footer/txt/text()"));
+                         parseDump("/root/page[6]/footer/txt/text()"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testFirstHeaderFooter_ODF)
@@ -341,18 +342,30 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testFirstHeaderFooter_ODF)
     // Test import and export of the header-first token.
 
     // The document has 6 pages, two page styles for the first and second half of pages.
-    CPPUNIT_ASSERT_EQUAL(OUString("First header"), parseDump("/root/page[1]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("First footer"), parseDump("/root/page[1]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Left header"), parseDump("/root/page[2]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Left footer"), parseDump("/root/page[2]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Right header"), parseDump("/root/page[3]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Right footer"), parseDump("/root/page[3]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("First header2"), parseDump("/root/page[4]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("First footer2"), parseDump("/root/page[4]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Right header2"), parseDump("/root/page[5]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Right footer2"), parseDump("/root/page[5]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Left header2"), parseDump("/root/page[6]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Left footer2"), parseDump("/root/page[6]/footer/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("First header"),
+                         parseDump("/root/page[1]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("First footer"),
+                         parseDump("/root/page[1]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Left header"),
+                         parseDump("/root/page[2]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Left footer"),
+                         parseDump("/root/page[2]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Right header"),
+                         parseDump("/root/page[3]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Right footer"),
+                         parseDump("/root/page[3]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("First header2"),
+                         parseDump("/root/page[4]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("First footer2"),
+                         parseDump("/root/page[4]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Right header2"),
+                         parseDump("/root/page[5]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Right footer2"),
+                         parseDump("/root/page[5]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Left header2"),
+                         parseDump("/root/page[6]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Left footer2"),
+                         parseDump("/root/page[6]/footer/txt/text()"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testFirstHeaderFooter_DOC)
@@ -365,27 +378,29 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testFirstHeaderFooter_DOC)
     // The document has 6 pages. Note that we don't test if 4 or just 2 page
     // styles are created, the point is that layout should be correct.
     CPPUNIT_ASSERT_EQUAL(OUString("First page header"),
-                         parseDump("/root/page[1]/header/txt/text()"));
+                         parseDump("/root/page[1]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("First page footer"),
-                         parseDump("/root/page[1]/footer/txt/text()"));
+                         parseDump("/root/page[1]/footer/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Even page header"),
-                         parseDump("/root/page[2]/header/txt/text()"));
+                         parseDump("/root/page[2]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Even page footer"),
-                         parseDump("/root/page[2]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Odd page header"), parseDump("/root/page[3]/header/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer"), parseDump("/root/page[3]/footer/txt/text()"));
+                         parseDump("/root/page[2]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Odd page header"),
+                         parseDump("/root/page[3]/header/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer"),
+                         parseDump("/root/page[3]/footer/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("First page header2"),
-                         parseDump("/root/page[4]/header/txt/text()"));
+                         parseDump("/root/page[4]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("First page footer 2"),
-                         parseDump("/root/page[4]/footer/txt/text()"));
+                         parseDump("/root/page[4]/footer/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Odd page header 2"),
-                         parseDump("/root/page[5]/header/txt/text()"));
+                         parseDump("/root/page[5]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer 2"),
-                         parseDump("/root/page[5]/footer/txt/text()"));
+                         parseDump("/root/page[5]/footer/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Even page header 2"),
-                         parseDump("/root/page[6]/header/txt/text()"));
+                         parseDump("/root/page[6]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Even page footer 2"),
-                         parseDump("/root/page[6]/footer/txt/text()"));
+                         parseDump("/root/page[6]/footer/txt/text()"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testFdo65655)
@@ -452,10 +467,8 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testTdf112694)
     auto verify = [this]() {
         uno::Any aPageStyle = getStyles("PageStyles")->getByName("Standard");
         // Header was on when header for file was for explicit first pages only
-        // (marked via <w:titlePg>).
-        //CPPUNIT_ASSERT(!getProperty<bool>(aPageStyle, "HeaderIsOn"));
-        // TODO - can't disable headers/footers selectively (only fo first page)
-        CPPUNIT_ASSERT(getProperty<bool>(aPageStyle, "HeaderIsOn"));
+        // but <w:titlePg> was missing.
+        CPPUNIT_ASSERT(!getProperty<bool>(aPageStyle, "HeaderIsOn"));
     };
 
     createSwDoc("tdf112694.docx");
@@ -469,22 +482,22 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testContSectBreakHeaderFooter)
     auto verify = [this]() {
         // Load a document with a continuous section break on page 2.
         CPPUNIT_ASSERT_EQUAL(OUString("First page header, section 1"),
-                             parseDump("/root/page[1]/header/txt/text()"));
+                             parseDump("/root/page[1]/header/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("First page footer, section 1"),
-                             parseDump("/root/page[1]/footer/txt/text()"));
+                             parseDump("/root/page[1]/footer/txt/text()"_ostr));
 
         // Make sure the header stays like this; if we naively just update the page style name of the
         // first para on page 2, then this would be 'Header, section 2', which is incorrect.
         CPPUNIT_ASSERT_EQUAL(OUString("First page header, section 2"),
-                             parseDump("/root/page[2]/header/txt/text()"));
+                             parseDump("/root/page[2]/header/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("First page footer, section 2"),
-                             parseDump("/root/page[2]/footer/txt/text()"));
+                             parseDump("/root/page[2]/footer/txt/text()"_ostr));
 
         // This is inherited from page 2.
         CPPUNIT_ASSERT_EQUAL(OUString("Header, section 2"),
-                             parseDump("/root/page[3]/header/txt/text()"));
+                             parseDump("/root/page[3]/header/txt/text()"_ostr));
         CPPUNIT_ASSERT_EQUAL(OUString("Footer, section 3"),
-                             parseDump("/root/page[3]/footer/txt/text()"));
+                             parseDump("/root/page[3]/footer/txt/text()"_ostr));
 
         // Without the export fix in place, the import-export-import test would have failed with:
         // - Expected: Header, section 2
@@ -500,7 +513,7 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testContSectBreakHeaderFooter)
             // - Actual  : 2574
             // i.e. the top margin on page 3 was too large and now matches the value from the input
             // document.
-            assertXPath(pXml, "/w:document/w:body/w:sectPr/w:pgMar", "top", "2200");
+            assertXPath(pXml, "/w:document/w:body/w:sectPr/w:pgMar"_ostr, "top"_ostr, "2200");
         }
     };
 
@@ -518,10 +531,10 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testTdf145998_firstHeader)
     // Sanity check - always good to test when dealing with page styles and breaks.
     CPPUNIT_ASSERT_EQUAL(2, getPages());
 
-    CPPUNIT_ASSERT_EQUAL(OUString("Very first header"), parseDump("/root/page[1]/header/txt"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Very first header"), parseDump("/root/page[1]/header/txt"_ostr));
 
     // Page Style is already used in prior section - this can't be the first-header
-    CPPUNIT_ASSERT_EQUAL(OUString("Normal Header"), parseDump("/root/page[2]/header/txt"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Normal Header"), parseDump("/root/page[2]/header/txt"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testEvenPageOddPageFooter_Import)
@@ -616,10 +629,10 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testTdf69635)
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: "left"
     // - Actual  : "right"
-    assertXPathContent(pXmlHeader1, "/w:hdr/w:p/w:r/w:t", "left");
+    assertXPathContent(pXmlHeader1, "/w:hdr/w:p/w:r/w:t"_ostr, "left");
 
     // Make sure "left" appears as a hidden header
-    assertXPath(pXmlSettings, "/w:settings/w:evenAndOddHeaders", 0);
+    assertXPath(pXmlSettings, "/w:settings/w:evenAndOddHeaders"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testTdf113849_evenAndOddHeaders)
@@ -628,23 +641,23 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testTdf113849_evenAndOddHeaders)
     saveAndReload("Office Open XML Text");
 
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Header2 text", OUString("L. J. Kendall"),
-                                 parseDump("/root/page[2]/header/txt"));
+                                 parseDump("/root/page[2]/header/txt"_ostr));
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Footer2 text", OUString("*"),
-                                 parseDump("/root/page[2]/footer/txt"));
+                                 parseDump("/root/page[2]/footer/txt"_ostr));
 
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Header3 text", OUString("Shadow Hunt"),
-                                 parseDump("/root/page[3]/header/txt"));
+                                 parseDump("/root/page[3]/header/txt"_ostr));
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Footer3 text", OUString("*"),
-                                 parseDump("/root/page[3]/footer/txt"));
+                                 parseDump("/root/page[3]/footer/txt"_ostr));
 
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Header4 text", OUString("L. J. Kendall"),
-                                 parseDump("/root/page[4]/header/txt"));
+                                 parseDump("/root/page[4]/header/txt"_ostr));
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Footer4 text", OUString("*"),
-                                 parseDump("/root/page[4]/footer/txt"));
+                                 parseDump("/root/page[4]/footer/txt"_ostr));
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Footer5 text", OUString(""),
-                                 parseDump("/root/page[5]/footer/txt"));
+                                 parseDump("/root/page[5]/footer/txt"_ostr));
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Footer6 text", OUString(""),
-                                 parseDump("/root/page[6]/footer/txt"));
+                                 parseDump("/root/page[6]/footer/txt"_ostr));
 
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Number of pages", 6, getPages());
 }
@@ -658,9 +671,8 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testFirstPageFooterEnabled)
         xmlDocUniquePtr pXmlDoc = parseLayoutDump();
         // TODO
         // It's currently not possible to disable the header on first page only.
-        //assertXPath(pXmlDoc, "/root/page[1]/footer/txt", 0);
-        assertXPath(pXmlDoc, "/root/page[1]/footer/txt");
-
+        //assertXPath(pXmlDoc, "/root/page[1]/footer/txt"_ostr, 0);
+        assertXPath(pXmlDoc, "/root/page[1]/footer/txt"_ostr);
     };
     createSwDoc("TestFirstFooterDisabled.docx");
     verify();
@@ -929,19 +941,22 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testMsoPosition)
         xmlDocUniquePtr doc = parseExport("word/footer2.xml");
         // We write the frames out in different order than they were read, so check it's the correct
         // textbox first by checking width. These tests may need reordering if that gets fixed.
-        OUString style1 = getXPath(
-            doc, "/w:ftr/w:p/w:r[3]/mc:AlternateContent/mc:Fallback/w:pict/v:rect", "style");
+        OUString style1
+            = getXPath(doc, "/w:ftr/w:p/w:r[3]/mc:AlternateContent/mc:Fallback/w:pict/v:rect"_ostr,
+                       "style"_ostr);
         CPPUNIT_ASSERT(style1.indexOf(";width:531pt;") >= 0);
         CPPUNIT_ASSERT(style1.indexOf(";mso-position-vertical-relative:page") >= 0);
         CPPUNIT_ASSERT(style1.indexOf(";mso-position-horizontal-relative:page") >= 0);
-        OUString style2 = getXPath(
-            doc, "/w:ftr/w:p/w:r[4]/mc:AlternateContent/mc:Fallback/w:pict/v:rect", "style");
+        OUString style2
+            = getXPath(doc, "/w:ftr/w:p/w:r[4]/mc:AlternateContent/mc:Fallback/w:pict/v:rect"_ostr,
+                       "style"_ostr);
         CPPUNIT_ASSERT(style2.indexOf(";width:549pt;") >= 0);
         CPPUNIT_ASSERT(style2.indexOf(";mso-position-vertical-relative:text") >= 0);
         CPPUNIT_ASSERT(style2.indexOf(";mso-position-horizontal:center") >= 0);
         CPPUNIT_ASSERT(style2.indexOf(";mso-position-horizontal-relative:text") >= 0);
-        OUString style3 = getXPath(
-            doc, "/w:ftr/w:p/w:r[5]/mc:AlternateContent/mc:Fallback/w:pict/v:rect", "style");
+        OUString style3
+            = getXPath(doc, "/w:ftr/w:p/w:r[5]/mc:AlternateContent/mc:Fallback/w:pict/v:rect"_ostr,
+                       "style"_ostr);
         CPPUNIT_ASSERT(style3.indexOf(";width:36pt;") >= 0);
         CPPUNIT_ASSERT(style3.indexOf(";mso-position-horizontal-relative:text") >= 0);
         CPPUNIT_ASSERT(style3.indexOf(";mso-position-vertical-relative:text") >= 0);
@@ -949,18 +964,21 @@ CPPUNIT_TEST_FIXTURE(HeaderFooterTest, testMsoPosition)
 
     auto verifyHeader = [this]() {
         xmlDocUniquePtr doc = parseExport("word/header2.xml");
-        OUString style1 = getXPath(
-            doc, "/w:hdr/w:p/w:r[2]/mc:AlternateContent/mc:Fallback/w:pict/v:rect", "style");
+        OUString style1
+            = getXPath(doc, "/w:hdr/w:p/w:r[2]/mc:AlternateContent/mc:Fallback/w:pict/v:rect"_ostr,
+                       "style"_ostr);
         CPPUNIT_ASSERT(style1.indexOf(";width:335.75pt;") >= 0);
         CPPUNIT_ASSERT(style1.indexOf(";mso-position-horizontal-relative:page") >= 0);
         CPPUNIT_ASSERT(style1.indexOf(";mso-position-vertical-relative:page") >= 0);
-        OUString style2 = getXPath(
-            doc, "/w:hdr/w:p/w:r[3]/mc:AlternateContent/mc:Fallback/w:pict/v:rect", "style");
+        OUString style2
+            = getXPath(doc, "/w:hdr/w:p/w:r[3]/mc:AlternateContent/mc:Fallback/w:pict/v:rect"_ostr,
+                       "style"_ostr);
         CPPUNIT_ASSERT(style2.indexOf(";width:138.15pt;") >= 0);
         CPPUNIT_ASSERT(style2.indexOf(";mso-position-horizontal-relative:page") >= 0);
         CPPUNIT_ASSERT(style2.indexOf(";mso-position-vertical-relative:page") >= 0);
-        OUString style3 = getXPath(
-            doc, "/w:hdr/w:p/w:r[4]/mc:AlternateContent/mc:Fallback/w:pict/v:rect", "style");
+        OUString style3
+            = getXPath(doc, "/w:hdr/w:p/w:r[4]/mc:AlternateContent/mc:Fallback/w:pict/v:rect"_ostr,
+                       "style"_ostr);
         CPPUNIT_ASSERT(style3.indexOf(";width:163.8pt;") >= 0);
         CPPUNIT_ASSERT(style3.indexOf(";mso-position-horizontal-relative:page") >= 0);
         CPPUNIT_ASSERT(style3.indexOf(";mso-position-vertical-relative:page") >= 0);

@@ -31,7 +31,6 @@
 #include <sal/types.h>
 #include <com/sun/star/xml/sax/XExtendedDocumentHandler.hpp>
 #include <com/sun/star/xml/sax/XFastParser.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/document/XImporter.hpp>
@@ -182,7 +181,6 @@ class XMLOFF_DLLPUBLIC SAL_LOPLUGIN_ANNOTATE("crosscast") SvXMLImport : public c
              css::lang::XInitialization,
              css::document::XImporter,
              css::document::XFilter,
-             css::lang::XUnoTunnel,
              css::xml::sax::XFastParser>
 {
     friend class SvXMLImportContext;
@@ -229,7 +227,7 @@ class XMLOFF_DLLPUBLIC SAL_LOPLUGIN_ANNOTATE("crosscast") SvXMLImport : public c
     SAL_DLLPRIVATE void InitCtor_();
 
     SvXMLImportFlags  mnImportFlags;
-    std::set< OUString > embeddedFontUrlsKnown;
+    std::set< OUString > m_embeddedFontUrlsKnown;
     css::uno::Reference< css::xml::sax::XFastParser > mxParser;
     rtl::Reference< SvXMLImportFastNamespaceHandler > maNamespaceHandler;
     rtl::Reference < comphelper::AttributeList > maNamespaceAttrList;
@@ -353,10 +351,6 @@ public:
 
     // XInitialization
     virtual void SAL_CALL initialize( const css::uno::Sequence< css::uno::Any >& aArguments ) override;
-
-    // XUnoTunnel
-    static const css::uno::Sequence<sal_Int8>& getUnoTunnelId() noexcept;
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName(  ) final override;
@@ -531,7 +525,7 @@ public:
     **/
     bool getBuildIds( sal_Int32& rUPD, sal_Int32& rBuild ) const;
 
-    static constexpr OUStringLiteral aNamespaceSeparator = u":";
+    static constexpr OUString aNamespaceSeparator = u":"_ustr;
 
     static const sal_uInt16 OOo_1x = 10;
     static const sal_uInt16 OOo_2x = 20;
@@ -560,6 +554,7 @@ public:
     static const sal_uInt16 LO_6x = 60 | LO_flag;
     static const sal_uInt16 LO_63x = 63 | LO_flag;
     static const sal_uInt16 LO_7x = 70 | LO_flag;
+    static const sal_uInt16 LO_76 = 76 | LO_flag;
     static const sal_uInt16 LO_New = 100 | LO_flag;
     static const sal_uInt16 ProductVersionUnknown = SAL_MAX_UINT16;
 
@@ -589,7 +584,7 @@ public:
 
     // see EmbeddedFontsHelper::addEmbeddedFont
     bool addEmbeddedFont( const css::uno::Reference< css::io::XInputStream >& stream,
-        const OUString& fontName, const char* extra,
+        const OUString& fontName, std::u16string_view extra,
         std::vector< unsigned char > const & key, bool eot);
 
     virtual void NotifyContainsEmbeddedFont() {}

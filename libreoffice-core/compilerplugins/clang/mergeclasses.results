@@ -54,9 +54,6 @@ merge FmRecordCountListener_Base with FmRecordCountListener
 merge FmXDisposeListener with DisposeListenerGridBridge
 merge FmXFormShell_Base_Disambiguation with FmXFormShell
 merge GLWindow with GLX11Window
-merge GalleryFileStorage with GalleryBinaryEngine
-merge GalleryFileStorageEntry with GalleryBinaryEngineEntry
-merge GalleryStorageLocations with GalleryBinaryStorageLocations
 merge GroupTable with PPTWriterBase
 merge HostDetailsContainer with DavDetailsContainer
 merge IDocumentChartDataProviderAccess with sw::DocumentChartDataProviderManager
@@ -259,7 +256,6 @@ merge comphelper::ConfigurationListenerPropertyBase with comphelper::Configurati
 merge comphelper::ConfigurationListener_Base with comphelper::ConfigurationListener
 merge comphelper::MasterPropertySetInfo_Base with comphelper::MasterPropertySetInfo
 merge comphelper::OAccessibleComponentHelper_Base with comphelper::OAccessibleComponentHelper
-merge comphelper::OAccessibleContextHelper with comphelper::OCommonAccessibleComponent
 merge comphelper::OAccessibleWrapper_Base with comphelper::OAccessibleWrapper
 merge comphelper::OAnyEnumeration_BASE with comphelper::OAnyEnumeration
 merge comphelper::OComponentProxyAggregation with comphelper::OAccessibleWrapper
@@ -290,7 +286,6 @@ merge cppcanvas::PolyPolygon with cppcanvas::internal::ImplPolyPolygon
 merge cppcanvas::Renderer with cppcanvas::internal::ImplRenderer
 merge cppcanvas::SpriteCanvas with cppcanvas::internal::ImplSpriteCanvas
 merge cppcanvas::internal::ImplSprite with cppcanvas::internal::ImplCustomSprite
-merge cppu::(anonymous namespace)::OSingleFactoryHelper with cppu::(anonymous namespace)::OFactoryComponentHelper
 merge cppu::PropertySetMixinImpl with cppu::PropertySetMixin
 merge dbaccess::IPropertyContainer with dbaccess::OColumn
 merge dbaccess::IRefreshListener with dbaccess::OConnection
@@ -400,7 +395,6 @@ merge sdext::presenter::PresenterScrollBar with sdext::presenter::PresenterVerti
 merge sdext::presenter::PresenterSlidePreview with sdext::presenter::(anonymous namespace)::NextSlidePreview
 merge sdr::SelectionController with sdr::table::SvxTableController
 merge sdr::contact::ObjectContactOfPagePainter with sdr::contact::PagePrimitiveExtractor
-merge sdr::table::TableDesignUser with sdr::table::SdrTableObjImpl
 merge sfx2::IXmlIdRegistry with sfx2::XmlIdRegistry
 merge slideshow::internal::(anonymous namespace)::EventContainer with slideshow::internal::ClickEventHandler
 merge slideshow::internal::AnimationFunction with slideshow::internal::ExpressionNode

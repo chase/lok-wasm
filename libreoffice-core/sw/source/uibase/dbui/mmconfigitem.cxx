@@ -56,7 +56,7 @@ using namespace ::com::sun::star::sdb;
 using namespace ::com::sun::star::sdbc;
 using namespace ::com::sun::star::sdbcx;
 
-constexpr OUStringLiteral cAddressDataAssignments = u"AddressDataAssignments";
+constexpr OUString cAddressDataAssignments = u"AddressDataAssignments"_ustr;
 const char cDBColumnAssignments[]    = "DBColumnAssignments";
 const char cDataSourceName[]         = "DataSource/DataSourceName";
 const char cDataTableName[]          = "DataSource/DataTableName" ;
@@ -212,9 +212,9 @@ SwMailMergeConfigItem_Impl::SwMailMergeConfigItem_Impl() :
         m_bIsGreetingLineInMail_LastUserSetting(false),
         m_bIsGreetingLine_LastUserSetting(false)
 {
-    for (size_t i = 0; i < SAL_N_ELEMENTS(SA_ADDRESS_HEADER); ++i)
+    for (auto const& [aName, aID] : SA_ADDRESS_HEADER)
     {
-        m_AddressHeaderSA.emplace_back(SwResId(SA_ADDRESS_HEADER[i].first), SA_ADDRESS_HEADER[i].second);
+        m_AddressHeaderSA.emplace_back(SwResId(aName), aID);
     }
 
     const Sequence<OUString>& rNames = GetPropertyNames();

@@ -24,6 +24,7 @@
 
 #include <comphelper/fileformat.h>
 #include <comphelper/accessibletexthelper.hxx>
+#include <comphelper/string.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/ustring.hxx>
 #include <sal/log.hxx>
@@ -79,16 +80,17 @@
 #include "accessibility.hxx"
 #include <cfgitem.hxx>
 #include <utility>
-#include <oox/mathml/export.hxx>
+#include <oox/mathml/imexport.hxx>
 #include <ElementsDockingWindow.hxx>
 #include <smediteng.hxx>
+#include <editeng/editund2.hxx>
+
+#define ShellClass_SmDocShell
+#include <smslots.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::accessibility;
 using namespace ::com::sun::star::uno;
-
-#define ShellClass_SmDocShell
-#include <smslots.hxx>
 
 
 SFX_IMPL_SUPERCLASS_INTERFACE(SmDocShell, SfxObjectShell)
@@ -98,7 +100,7 @@ void SmDocShell::InitInterface_Impl()
     GetStaticInterface()->RegisterPopupMenu("view");
 }
 
-void SmDocShell::SetSmSyntaxVersion(sal_uInt16 nSmSyntaxVersion)
+void SmDocShell::SetSmSyntaxVersion(sal_Int16 nSmSyntaxVersion)
 {
     mnSmSyntaxVersion = nSmSyntaxVersion;
     maParser.reset(starmathdatabase::GetVersionSmParser(mnSmSyntaxVersion));
@@ -152,7 +154,7 @@ void SmDocShell::SetText(const OUString& rBuffer)
     SmViewShell *pViewSh = SmGetActiveView();
     if (pViewSh)
     {
-        pViewSh->GetViewFrame()->GetBindings().Invalidate(SID_TEXT);
+        pViewSh->GetViewFrame().GetBindings().Invalidate(SID_TEXT);
         if ( SfxObjectCreateMode::EMBEDDED == GetCreateMode() )
         {
             // have SwOleClient::FormatChanged() to align the modified formula properly
@@ -261,17 +263,24 @@ void SmDocShell::ArrangeFormula()
     const SmFormat &rFormat = GetFormat();
     mpTree->Prepare(rFormat, *this, 0);
 
-    // format/draw formulas always from left to right,
-    // and numbers should not be converted
-    vcl::text::ComplexTextLayoutFlags nLayoutMode = pOutDev->GetLayoutMode();
-    pOutDev->SetLayoutMode( vcl::text::ComplexTextLayoutFlags::Default );
-    LanguageType nDigitLang = pOutDev->GetDigitLanguage();
+    pOutDev->Push(vcl::PushFlags::TEXTLAYOUTMODE | vcl::PushFlags::TEXTLANGUAGE);
+
+    // We want the device to always be LTR, we handle RTL formulas ourselves.
+    bool bOldRTL = pOutDev->IsRTLEnabled();
+    pOutDev->EnableRTL(false);
+
+    // For RTL formulas, we want the brackets to be mirrored.
+    bool bRTL = GetFormat().IsRightToLeft();
+    pOutDev->SetLayoutMode(bRTL ? vcl::text::ComplexTextLayoutFlags::BiDiRtl
+                                : vcl::text::ComplexTextLayoutFlags::Default);
+
+    // Numbers should not be converted, for now.
     pOutDev->SetDigitLanguage( LANGUAGE_ENGLISH );
 
     mpTree->Arrange(*pOutDev, rFormat);
 
-    pOutDev->SetLayoutMode( nLayoutMode );
-    pOutDev->SetDigitLanguage( nDigitLang );
+    pOutDev->EnableRTL(bOldRTL);
+    pOutDev->Pop();
 
     SetFormulaArranged(true);
 
@@ -315,6 +324,8 @@ void SmDocShell::DrawFormula(OutputDevice &rDev, Point &rPosition, bool bDrawSel
 
     ArrangeFormula();
 
+    bool bRTL = GetFormat().IsRightToLeft();
+
     // Problem: What happens to WYSIWYG? While we're active inplace, we don't have a reference
     // device and aren't aligned to that either. So now there can be a difference between the
     // VisArea (i.e. the size within the client) and the current size.
@@ -322,6 +333,12 @@ void SmDocShell::DrawFormula(OutputDevice &rDev, Point &rPosition, bool bDrawSel
 
     rPosition.AdjustX(maFormat.GetDistance( DIS_LEFTSPACE ) );
     rPosition.AdjustY(maFormat.GetDistance( DIS_TOPSPACE  ) );
+
+    Point aPosition(rPosition);
+    if (bRTL && rDev.GetOutDevType() != OUTDEV_WINDOW)
+        aPosition.AdjustX(GetSize().Width()
+                          - maFormat.GetDistance(DIS_LEFTSPACE)
+                          - maFormat.GetDistance(DIS_RIGHTSPACE));
 
     //! in case of high contrast-mode (accessibility option!)
     //! the draw mode needs to be set to default, because when embedding
@@ -337,25 +354,40 @@ void SmDocShell::DrawFormula(OutputDevice &rDev, Point &rPosition, bool bDrawSel
         bRestoreDrawMode = true;
     }
 
-    // format/draw formulas always from left to right
-    // and numbers should not be converted
-    vcl::text::ComplexTextLayoutFlags nLayoutMode = rDev.GetLayoutMode();
-    rDev.SetLayoutMode( vcl::text::ComplexTextLayoutFlags::Default );
-    LanguageType nDigitLang = rDev.GetDigitLanguage();
+    rDev.Push(vcl::PushFlags::TEXTLAYOUTMODE | vcl::PushFlags::TEXTLANGUAGE);
+
+    // We want the device to always be LTR, we handle RTL formulas ourselves.
+    bool bOldRTL = rDev.IsRTLEnabled();
+    if (rDev.GetOutDevType() == OUTDEV_WINDOW)
+        rDev.EnableRTL(bRTL);
+    else
+        rDev.EnableRTL(false);
+
+    auto nLayoutFlags = vcl::text::ComplexTextLayoutFlags::Default;
+    if (bRTL)
+    {
+        // For RTL formulas, we want the brackets to be mirrored.
+        nLayoutFlags |= vcl::text::ComplexTextLayoutFlags::BiDiRtl;
+        if (rDev.GetOutDevType() == OUTDEV_WINDOW)
+            nLayoutFlags |= vcl::text::ComplexTextLayoutFlags::TextOriginLeft;
+    }
+
+    rDev.SetLayoutMode(nLayoutFlags);
+
+    // Numbers should not be converted, for now.
     rDev.SetDigitLanguage( LANGUAGE_ENGLISH );
 
     //Set selection if any
     if(mpCursor && bDrawSelection){
         mpCursor->AnnotateSelection();
-        SmSelectionDrawingVisitor(rDev, mpTree.get(), rPosition);
+        SmSelectionDrawingVisitor(rDev, mpTree.get(), aPosition);
     }
 
     //Drawing using visitor
-    SmDrawingVisitor(rDev, rPosition, mpTree.get());
+    SmDrawingVisitor(rDev, aPosition, mpTree.get(), GetFormat());
 
-
-    rDev.SetLayoutMode( nLayoutMode );
-    rDev.SetDigitLanguage( nDigitLang );
+    rDev.EnableRTL(bOldRTL);
+    rDev.Pop();
 
     if (bRestoreDrawMode)
         rDev.SetDrawMode( nOldDrawMode );
@@ -481,7 +513,8 @@ Printer* SmDocShell::GetPrt()
         auto pOptions = std::make_unique<SfxItemSetFixed<
                 SID_PRINTTITLE, SID_PRINTZOOM,
                 SID_NO_RIGHT_SPACES, SID_SAVE_ONLY_USED_SYMBOLS,
-                SID_AUTO_CLOSE_BRACKETS, SID_SMEDITWINDOWZOOM>>(GetPool());
+                SID_AUTO_CLOSE_BRACKETS, SID_SMEDITWINDOWZOOM,
+                SID_INLINE_EDIT_ENABLE, SID_INLINE_EDIT_ENABLE>>(GetPool());
         SmModule *pp = SM_MOD();
         pp->GetConfig()->ConfigToItemSet(*pOptions);
         mpPrinter = VclPtr<SfxPrinter>::Create(std::move(pOptions));
@@ -593,7 +626,7 @@ bool SmDocShell::ConvertFrom(SfxMedium &rMedium)
             mpTree.reset();
             InvalidateCursor();
         }
-        Reference<css::frame::XModel> xModel(GetModel());
+        rtl::Reference<SmModel> xModel(dynamic_cast<SmModel*>(GetModel().get()));
         SmXMLImportWrapper aEquation(xModel);
         aEquation.useHTMLMLEntities(true);
         bSuccess = ( ERRCODE_NONE == aEquation.Import(rMedium) );
@@ -654,7 +687,7 @@ bool SmDocShell::Load( SfxMedium& rMedium )
         if (xStorage->hasByName("content.xml") && xStorage->isStreamElement("content.xml"))
         {
             // is this a fabulous math package ?
-            Reference<css::frame::XModel> xModel(GetModel());
+            rtl::Reference<SmModel> xModel(dynamic_cast<SmModel*>(GetModel().get()));
             SmXMLImportWrapper aEquation(xModel);
             auto nError = aEquation.Import(rMedium);
             bRet = ERRCODE_NONE == nError;
@@ -800,7 +833,7 @@ void SmDocShell::writeFormulaOoxml(
     if(documentType == oox::drawingml::DOCUMENT_DOCX)
         aEquation.ConvertFromStarMath( pSerializer, nAlign);
     else
-        aEquation.ConvertFromStarMath(pSerializer, oox::FormulaExportBase::eFormulaAlign::INLINE);
+        aEquation.ConvertFromStarMath(pSerializer, oox::FormulaImExportBase::eFormulaAlign::INLINE);
 }
 
 void SmDocShell::writeFormulaRtf(OStringBuffer& rBuffer, rtl_TextEncoding nEncoding)
@@ -959,7 +992,7 @@ void SmDocShell::Execute(SfxRequest& rReq)
 
         case SID_TEXT:
         {
-            const SfxStringItem& rItem = static_cast<const SfxStringItem&>(rReq.GetArgs()->Get(SID_TEXT));
+            const SfxStringItem& rItem = rReq.GetArgs()->Get(SID_TEXT);
             if (GetText() != rItem.GetValue())
                 SetText(rItem.GetValue());
         }
@@ -1221,6 +1254,332 @@ bool SmDocShell::WriteAsMathType3( SfxMedium& rMedium )
     OUStringBuffer aTextAsBuffer(maText);
     MathType aEquation(aTextAsBuffer, mpTree.get());
     return aEquation.ConvertFromStarMath( rMedium );
+}
+
+void SmDocShell::SetRightToLeft(bool bRTL)
+{
+    SmFormat aOldFormat = GetFormat();
+    if (aOldFormat.IsRightToLeft() == bRTL)
+        return;
+
+    SmFormat aNewFormat(aOldFormat);
+    aNewFormat.SetRightToLeft(bRTL);
+
+    SfxUndoManager* pTmpUndoMgr = GetUndoManager();
+    if (pTmpUndoMgr)
+        pTmpUndoMgr->AddUndoAction(
+            std::make_unique<SmFormatAction>(this, aOldFormat, aNewFormat));
+
+    SetFormat(aNewFormat);
+    Repaint();
+}
+
+static Size GetTextLineSize(OutputDevice const& rDevice, const OUString& rLine)
+{
+    Size aSize(rDevice.GetTextWidth(rLine), rDevice.GetTextHeight());
+    const tools::Long nTabPos = rLine.isEmpty() ? 0 : rDevice.approximate_digit_width() * 8;
+
+    if (nTabPos)
+    {
+        aSize.setWidth(0);
+        sal_Int32 nPos = 0;
+        do
+        {
+            if (nPos > 0)
+                aSize.setWidth(((aSize.Width() / nTabPos) + 1) * nTabPos);
+
+            const OUString aText = rLine.getToken(0, '\t', nPos);
+            aSize.AdjustWidth(rDevice.GetTextWidth(aText));
+        } while (nPos >= 0);
+    }
+
+    return aSize;
+}
+
+static Size GetTextSize(OutputDevice const& rDevice, std::u16string_view rText,
+                        tools::Long MaxWidth)
+{
+    Size aSize;
+    Size aTextSize;
+    if (rText.empty())
+        return aTextSize;
+
+    sal_Int32 nPos = 0;
+    do
+    {
+        OUString aLine(o3tl::getToken(rText, 0, '\n', nPos));
+        aLine = aLine.replaceAll("\r", "");
+
+        aSize = GetTextLineSize(rDevice, aLine);
+
+        if (aSize.Width() > MaxWidth)
+        {
+            do
+            {
+                OUString aText;
+                sal_Int32 m = aLine.getLength();
+                sal_Int32 nLen = m;
+
+                for (sal_Int32 n = 0; n < nLen; n++)
+                {
+                    sal_Unicode cLineChar = aLine[n];
+                    if ((cLineChar == ' ') || (cLineChar == '\t'))
+                    {
+                        aText = aLine.copy(0, n);
+                        if (GetTextLineSize(rDevice, aText).Width() < MaxWidth)
+                            m = n;
+                        else
+                            break;
+                    }
+                }
+
+                aText = aLine.copy(0, m);
+                aLine = aLine.replaceAt(0, m, u"");
+                aSize = GetTextLineSize(rDevice, aText);
+                aTextSize.AdjustHeight(aSize.Height());
+                aTextSize.setWidth(std::clamp(aSize.Width(), aTextSize.Width(), MaxWidth));
+
+                aLine = comphelper::string::stripStart(aLine, ' ');
+                aLine = comphelper::string::stripStart(aLine, '\t');
+                aLine = comphelper::string::stripStart(aLine, ' ');
+            } while (!aLine.isEmpty());
+        }
+        else
+        {
+            aTextSize.AdjustHeight(aSize.Height());
+            aTextSize.setWidth(std::max(aTextSize.Width(), aSize.Width()));
+        }
+    } while (nPos >= 0);
+
+    return aTextSize;
+}
+
+static void DrawTextLine(OutputDevice& rDevice, const Point& rPosition, const OUString& rLine)
+{
+    Point aPoint(rPosition);
+    const tools::Long nTabPos = rLine.isEmpty() ? 0 : rDevice.approximate_digit_width() * 8;
+
+    if (nTabPos)
+    {
+        sal_Int32 nPos = 0;
+        do
+        {
+            if (nPos > 0)
+                aPoint.setX(((aPoint.X() / nTabPos) + 1) * nTabPos);
+
+            OUString aText = rLine.getToken(0, '\t', nPos);
+            rDevice.DrawText(aPoint, aText);
+            aPoint.AdjustX(rDevice.GetTextWidth(aText));
+        } while (nPos >= 0);
+    }
+    else
+        rDevice.DrawText(aPoint, rLine);
+}
+
+static void DrawText(OutputDevice& rDevice, const Point& rPosition, std::u16string_view rText,
+                     sal_uInt16 MaxWidth)
+{
+    if (rText.empty())
+        return;
+
+    Point aPoint(rPosition);
+    Size aSize;
+
+    sal_Int32 nPos = 0;
+    do
+    {
+        OUString aLine(o3tl::getToken(rText, 0, '\n', nPos));
+        aLine = aLine.replaceAll("\r", "");
+        aSize = GetTextLineSize(rDevice, aLine);
+        if (aSize.Width() > MaxWidth)
+        {
+            do
+            {
+                OUString aText;
+                sal_Int32 m = aLine.getLength();
+                sal_Int32 nLen = m;
+
+                for (sal_Int32 n = 0; n < nLen; n++)
+                {
+                    sal_Unicode cLineChar = aLine[n];
+                    if ((cLineChar == ' ') || (cLineChar == '\t'))
+                    {
+                        aText = aLine.copy(0, n);
+                        if (GetTextLineSize(rDevice, aText).Width() < MaxWidth)
+                            m = n;
+                        else
+                            break;
+                    }
+                }
+                aText = aLine.copy(0, m);
+                aLine = aLine.replaceAt(0, m, u"");
+
+                DrawTextLine(rDevice, aPoint, aText);
+                aPoint.AdjustY(aSize.Height());
+
+                aLine = comphelper::string::stripStart(aLine, ' ');
+                aLine = comphelper::string::stripStart(aLine, '\t');
+                aLine = comphelper::string::stripStart(aLine, ' ');
+            } while (GetTextLineSize(rDevice, aLine).Width() > MaxWidth);
+
+            // print the remaining text
+            if (!aLine.isEmpty())
+            {
+                DrawTextLine(rDevice, aPoint, aLine);
+                aPoint.AdjustY(aSize.Height());
+            }
+        }
+        else
+        {
+            DrawTextLine(rDevice, aPoint, aLine);
+            aPoint.AdjustY(aSize.Height());
+        }
+    } while (nPos >= 0);
+}
+
+void SmDocShell::Impl_Print(OutputDevice& rOutDev, const SmPrintUIOptions& rPrintUIOptions,
+                tools::Rectangle aOutRect)
+{
+    const bool bIsPrintTitle = rPrintUIOptions.getBoolValue(PRTUIOPT_TITLE_ROW, true);
+    const bool bIsPrintFrame = rPrintUIOptions.getBoolValue(PRTUIOPT_BORDER, true);
+    const bool bIsPrintFormulaText = rPrintUIOptions.getBoolValue(PRTUIOPT_FORMULA_TEXT, true);
+    SmPrintSize ePrintSize(static_cast<SmPrintSize>(
+        rPrintUIOptions.getIntValue(PRTUIOPT_PRINT_FORMAT, PRINT_SIZE_NORMAL)));
+    const sal_uInt16 nZoomFactor
+        = static_cast<sal_uInt16>(rPrintUIOptions.getIntValue(PRTUIOPT_PRINT_SCALE, 100));
+
+    rOutDev.Push();
+    rOutDev.SetLineColor(COL_BLACK);
+
+    // output text on top
+    if (bIsPrintTitle)
+    {
+        Size aSize600(0, 600);
+        Size aSize650(0, 650);
+        vcl::Font aFont(FAMILY_DONTKNOW, aSize600);
+
+        aFont.SetAlignment(ALIGN_TOP);
+        aFont.SetWeight(WEIGHT_BOLD);
+        aFont.SetFontSize(aSize650);
+        aFont.SetColor(COL_BLACK);
+        rOutDev.SetFont(aFont);
+
+        Size aTitleSize(GetTextSize(rOutDev, GetTitle(), aOutRect.GetWidth() - 200));
+
+        aFont.SetWeight(WEIGHT_NORMAL);
+        aFont.SetFontSize(aSize600);
+        rOutDev.SetFont(aFont);
+
+        Size aDescSize(GetTextSize(rOutDev, GetComment(), aOutRect.GetWidth() - 200));
+
+        if (bIsPrintFrame)
+            rOutDev.DrawRect(tools::Rectangle(
+                aOutRect.TopLeft(), Size(aOutRect.GetWidth(), 100 + aTitleSize.Height() + 200
+                                                                  + aDescSize.Height() + 100)));
+        aOutRect.AdjustTop(200);
+
+        // output title
+        aFont.SetWeight(WEIGHT_BOLD);
+        aFont.SetFontSize(aSize650);
+        rOutDev.SetFont(aFont);
+        Point aPoint(aOutRect.Left() + (aOutRect.GetWidth() - aTitleSize.Width()) / 2,
+                     aOutRect.Top());
+        DrawText(rOutDev, aPoint, GetTitle(),
+                 sal::static_int_cast<sal_uInt16>(aOutRect.GetWidth() - 200));
+        aOutRect.AdjustTop(aTitleSize.Height() + 200);
+
+        // output description
+        aFont.SetWeight(WEIGHT_NORMAL);
+        aFont.SetFontSize(aSize600);
+        rOutDev.SetFont(aFont);
+        aPoint.setX(aOutRect.Left() + (aOutRect.GetWidth() - aDescSize.Width()) / 2);
+        aPoint.setY(aOutRect.Top());
+        DrawText(rOutDev, aPoint, GetComment(),
+                 sal::static_int_cast<sal_uInt16>(aOutRect.GetWidth() - 200));
+        aOutRect.AdjustTop(aDescSize.Height() + 300);
+    }
+
+    // output text on bottom
+    if (bIsPrintFormulaText)
+    {
+        vcl::Font aFont(FAMILY_DONTKNOW, Size(0, 600));
+        aFont.SetAlignment(ALIGN_TOP);
+        aFont.SetColor(COL_BLACK);
+
+        // get size
+        rOutDev.SetFont(aFont);
+
+        Size aSize(GetTextSize(rOutDev, GetText(), aOutRect.GetWidth() - 200));
+
+        aOutRect.AdjustBottom(-(aSize.Height() + 600));
+
+        if (bIsPrintFrame)
+            rOutDev.DrawRect(tools::Rectangle(
+                aOutRect.BottomLeft(), Size(aOutRect.GetWidth(), 200 + aSize.Height() + 200)));
+
+        Point aPoint(aOutRect.Left() + (aOutRect.GetWidth() - aSize.Width()) / 2,
+                     aOutRect.Bottom() + 300);
+        DrawText(rOutDev, aPoint, GetText(),
+                 sal::static_int_cast<sal_uInt16>(aOutRect.GetWidth() - 200));
+        aOutRect.AdjustBottom(-200);
+    }
+
+    if (bIsPrintFrame)
+        rOutDev.DrawRect(aOutRect);
+
+    aOutRect.AdjustTop(100);
+    aOutRect.AdjustLeft(100);
+    aOutRect.AdjustBottom(-100);
+    aOutRect.AdjustRight(-100);
+
+    Size aSize(GetSize());
+
+    MapMode OutputMapMode;
+    switch (ePrintSize)
+    {
+        case PRINT_SIZE_NORMAL:
+            OutputMapMode = MapMode(SmMapUnit());
+            break;
+
+        case PRINT_SIZE_SCALED:
+            if (!aSize.IsEmpty())
+            {
+                sal_uInt16 nZ
+                    = std::min(o3tl::convert(aOutRect.GetWidth(), 100, aSize.Width()),
+                               o3tl::convert(aOutRect.GetHeight(), 100, aSize.Height()));
+                if (bIsPrintFrame && nZ > MINZOOM)
+                    nZ -= 10;
+                Fraction aFraction(std::clamp(nZ, MINZOOM, MAXZOOM), 100);
+
+                OutputMapMode = MapMode(SmMapUnit(), Point(), aFraction, aFraction);
+            }
+            else
+                OutputMapMode = MapMode(SmMapUnit());
+            break;
+
+        case PRINT_SIZE_ZOOMED:
+        {
+            Fraction aFraction(nZoomFactor, 100);
+
+            OutputMapMode = MapMode(SmMapUnit(), Point(), aFraction, aFraction);
+            break;
+        }
+    }
+
+    aSize = OutputDevice::LogicToLogic(aSize, OutputMapMode, MapMode(SmMapUnit()));
+
+    Point aPos(aOutRect.Left() + (aOutRect.GetWidth() - aSize.Width()) / 2,
+               aOutRect.Top() + (aOutRect.GetHeight() - aSize.Height()) / 2);
+
+    aPos = OutputDevice::LogicToLogic(aPos, MapMode(SmMapUnit()), OutputMapMode);
+    aOutRect = OutputDevice::LogicToLogic(aOutRect, MapMode(SmMapUnit()), OutputMapMode);
+
+    rOutDev.SetMapMode(OutputMapMode);
+    rOutDev.SetClipRegion(vcl::Region(aOutRect));
+    DrawFormula(rOutDev, aPos);
+    rOutDev.SetClipRegion();
+
+    rOutDev.Pop();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

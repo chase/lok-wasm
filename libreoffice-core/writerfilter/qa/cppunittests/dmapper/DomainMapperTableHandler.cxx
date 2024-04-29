@@ -7,7 +7,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-#include <test/unoapi_test.hxx>
+#include <test/unoapixml_test.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/table/BorderLine2.hpp>
@@ -19,24 +19,25 @@
 #include <com/sun/star/style/BreakType.hpp>
 #include <com/sun/star/text/XTextViewCursorSupplier.hpp>
 #include <com/sun/star/text/XPageCursor.hpp>
+#include <com/sun/star/qa/XDumper.hpp>
 
 using namespace ::com::sun::star;
 
 namespace
 {
 /// Tests for writerfilter/source/dmapper/DomainMapperTableHandler.cxx.
-class Test : public UnoApiTest
+class Test : public UnoApiXmlTest
 {
 public:
     Test()
-        : UnoApiTest("/writerfilter/qa/cppunittests/dmapper/data/")
+        : UnoApiXmlTest("/writerfilter/qa/cppunittests/dmapper/data/")
     {
     }
 };
 
 CPPUNIT_TEST_FIXTURE(Test, test1cellInsidevRightborder)
 {
-    loadFromURL(u"1cell-insidev-rightborder.docx");
+    loadFromFile(u"1cell-insidev-rightborder.docx");
     uno::Reference<text::XTextTablesSupplier> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xTables(xTextDocument->getTextTables(), uno::UNO_QUERY);
     uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
@@ -52,7 +53,7 @@ CPPUNIT_TEST_FIXTURE(Test, test1cellInsidevRightborder)
 
 CPPUNIT_TEST_FIXTURE(Test, testNestedFloatingTable)
 {
-    loadFromURL(u"nested-floating-table.docx");
+    loadFromFile(u"nested-floating-table.docx");
     // Normal outer table, floating inner tables.
     uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xIndexAccess(xTextTablesSupplier->getTextTables(),
@@ -64,7 +65,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFloatingTableBreakBefore)
 {
     // Given a 3 pages document: page break, then a multi-page floating table on pages 2 and 3:
     // When laying out that document:
-    loadFromURL(u"floattable-break-before.docx");
+    loadFromFile(u"floattable-break-before.docx");
 
     // Then make sure the page break property is on the anchor of the floating table, otherwise it
     // has no effect:
@@ -87,7 +88,7 @@ CPPUNIT_TEST_FIXTURE(Test, test3NestedFloatingTables)
 {
     // Given a document with nested tables: outer and inner one is normal, middle one is floating:
     // When laying out that document:
-    loadFromURL(u"floattable-nested-3tables.docx");
+    loadFromFile(u"floattable-nested-3tables.docx");
 
     // Then make sure we don't crash and create the 3 tables:
     // Without the accompanying fix in place, this would have crashed, layout can't handle nested
@@ -102,7 +103,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFloatingTablesOuterNonsplitInner)
 {
     // Given a document with a normal table, 3 outer floating tables and an inner floating table in
     // the last floating table:
-    loadFromURL(u"floattable-outer-nonsplit-inner.docx");
+    loadFromFile(u"floattable-outer-nonsplit-inner.docx");
 
     // When counting the floating tables in the document:
     uno::Reference<text::XTextFramesSupplier> xFramesSupplier(mxComponent, uno::UNO_QUERY);
@@ -120,9 +121,9 @@ CPPUNIT_TEST_FIXTURE(Test, testFloatingTablesOuterNonsplitInner)
 CPPUNIT_TEST_FIXTURE(Test, testDOCXFloatingTableHiddenAnchor)
 {
     // Given a document with a floating table, anchored in a paragraph that is hidden:
-    loadFromURL(u"floattable-hidden-anchor.docx");
+    loadFromFile(u"floattable-hidden-anchor.docx");
 
-    // When checking the visibility of the the anchor paragraph:
+    // When checking the visibility of the anchor paragraph:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XEnumerationAccess> xText(xTextDocument->getText(), uno::UNO_QUERY);
     uno::Reference<container::XEnumeration> xParagraphs = xText->createEnumeration();
@@ -140,7 +141,7 @@ CPPUNIT_TEST_FIXTURE(Test, testDOCXFloatingTableNested)
 {
     // Given a document with nested, multi-page floating tables:
     // When loading that document:
-    loadFromURL(u"floattable-nested.docx");
+    loadFromFile(u"floattable-nested.docx");
 
     // Then make sure that both floating tables are allowed to split:
     uno::Reference<text::XTextFramesSupplier> xFramesSupplier(mxComponent, uno::UNO_QUERY);
@@ -167,7 +168,7 @@ CPPUNIT_TEST_FIXTURE(Test, testDOCXFloatingTableHeader)
 {
     // Given a document with a header that has a floating table and some large images in the body
     // text:
-    loadFromURL(u"floattable-header.docx");
+    loadFromFile(u"floattable-header.docx");
 
     // When breaking that document into pages:
     uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
@@ -182,6 +183,51 @@ CPPUNIT_TEST_FIXTURE(Test, testDOCXFloatingTableHeader)
     // Without the accompanying fix in place, this test would have failed, the page count went to
     // 2233 pages and then there was a layout loop.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(2), nLastPage);
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testDOCXFloatingTableFootnoteRedline)
+{
+    // Given a document with a floating table in a footnote, with track changes recorded (but not
+    // visible):
+    // When importing that document:
+    loadFromFile(u"floattable-footnote-redline.docx");
+
+    // Then make sure the table is imported as inline, till Writer layout is ready to handle
+    // floating tables in footnotes:
+    uno::Reference<drawing::XDrawPageSupplier> xModel(mxComponent, uno::UNO_QUERY);
+    uno::Reference<drawing::XDrawPage> xDrawPage = xModel->getDrawPage();
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), xDrawPage->getCount());
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testDOCXFloatingTableHeaderBodyOverlap)
+{
+    // Given a document with a floating table in a header, the floating table extends the header
+    // frame:
+    // When importing that document:
+    loadFromFile(u"floattable-header-overlap.docx");
+
+    // Then make sure the fly bottom is less than the top of the body text:
+    uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
+    css::uno::Reference<qa::XDumper> xDumper(xModel->getCurrentController(), uno::UNO_QUERY);
+    OString aDump = xDumper->dump("layout").toUtf8();
+    auto pCharBuffer = reinterpret_cast<const xmlChar*>(aDump.getStr());
+    xmlDocUniquePtr pXmlDoc(xmlParseDoc(pCharBuffer));
+    sal_Int32 nFlyBottom = getXPath(pXmlDoc, "//fly/infos/bounds"_ostr, "bottom"_ostr).toInt32();
+    // Body text top is body top + height of the first line, that's just a fly portion (kind of a
+    // top margin).
+    sal_Int32 nBodyTop
+        = getXPath(pXmlDoc, "//page[1]/body/txt[1]/infos/bounds"_ostr, "top"_ostr).toInt32();
+    // Without the accompanying fix in place, this test would have failed, the first line was not a
+    // fly portion but it was actual text, above the floating table.
+    assertXPath(pXmlDoc, "//page[1]/body/txt[1]/SwParaPortion/SwLineLayout[1]/child::*"_ostr,
+                "type"_ostr, "PortionType::Fly");
+    sal_Int32 nBodyFlyPortionHeight
+        = getXPath(pXmlDoc, "//page[1]/body/txt[1]/SwParaPortion/SwLineLayout[1]"_ostr,
+                   "height"_ostr)
+              .toInt32();
+    sal_Int32 nBodyTextTop = nBodyTop + nBodyFlyPortionHeight;
+    // Fly bottom was 3063, body text top was 7148.
+    CPPUNIT_ASSERT_LESS(nBodyTextTop, nFlyBottom);
 }
 }
 

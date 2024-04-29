@@ -18,6 +18,7 @@
  */
 #include <numeric>
 #include <algorithm>
+#include <stack>
 
 #include <basegfx/numeric/ftools.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
@@ -1204,8 +1205,8 @@ namespace basegfx::utils
         void applyLineDashing(
             const B2DPolygon& rCandidate,
             const std::vector<double>& rDotDashArray,
-            std::function<void(const basegfx::B2DPolygon& rSnippet)> aLineTargetCallback,
-            std::function<void(const basegfx::B2DPolygon& rSnippet)> aGapTargetCallback,
+            const std::function<void(const basegfx::B2DPolygon& rSnippet)>& rLineTargetCallback,
+            const std::function<void(const basegfx::B2DPolygon& rSnippet)>& rGapTargetCallback,
             double fDotDashLength)
         {
             const sal_uInt32 nPointCount(rCandidate.count());
@@ -1216,18 +1217,14 @@ namespace basegfx::utils
                 fDotDashLength = std::accumulate(rDotDashArray.begin(), rDotDashArray.end(), 0.0);
             }
 
-            if(fTools::lessOrEqual(fDotDashLength, 0.0) || (!aLineTargetCallback && !aGapTargetCallback) || !nPointCount)
+            if(fTools::lessOrEqual(fDotDashLength, 0.0) || (!rLineTargetCallback && !rGapTargetCallback) || !nPointCount)
             {
                 // parameters make no sense, just add source to targets
-                if(aLineTargetCallback)
-                {
-                    aLineTargetCallback(rCandidate);
-                }
+                if (rLineTargetCallback)
+                    rLineTargetCallback(rCandidate);
 
-                if(aGapTargetCallback)
-                {
-                    aGapTargetCallback(rCandidate);
-                }
+                if (rGapTargetCallback)
+                    rGapTargetCallback(rCandidate);
 
                 return;
             }
@@ -1255,7 +1252,6 @@ namespace basegfx::utils
                 // to enlarge these as needed
                 const double fFactor(fCandidateLength / fAllowedLength);
                 std::for_each(aDotDashArray.begin(), aDotDashArray.end(), [&fFactor](double &f){ f *= fFactor; });
-                fDotDashLength *= fFactor;
             }
 
             // prepare current edge's start
@@ -1299,8 +1295,8 @@ namespace basegfx::utils
                         while(fTools::less(fDotDashMovingLength, fEdgeLength))
                         {
                             // new split is inside edge, create and append snippet [fLastDotDashMovingLength, fDotDashMovingLength]
-                            const bool bHandleLine(bIsLine && aLineTargetCallback);
-                            const bool bHandleGap(!bIsLine && aGapTargetCallback);
+                            const bool bHandleLine(bIsLine && rLineTargetCallback);
+                            const bool bHandleGap(!bIsLine && rGapTargetCallback);
 
                             if(bHandleLine || bHandleGap)
                             {
@@ -1317,12 +1313,12 @@ namespace basegfx::utils
 
                                 if(bHandleLine)
                                 {
-                                    implHandleSnippet(aSnippet, aLineTargetCallback, aFirstLine, aLastLine);
+                                    implHandleSnippet(aSnippet, rLineTargetCallback, aFirstLine, aLastLine);
                                 }
 
                                 if(bHandleGap)
                                 {
-                                    implHandleSnippet(aSnippet, aGapTargetCallback, aFirstGap, aLastGap);
+                                    implHandleSnippet(aSnippet, rGapTargetCallback, aFirstGap, aLastGap);
                                 }
 
                                 aSnippet.clear();
@@ -1335,8 +1331,8 @@ namespace basegfx::utils
                         }
 
                         // append closing snippet [fLastDotDashMovingLength, fEdgeLength]
-                        const bool bHandleLine(bIsLine && aLineTargetCallback);
-                        const bool bHandleGap(!bIsLine && aGapTargetCallback);
+                        const bool bHandleLine(bIsLine && rLineTargetCallback);
+                        const bool bHandleGap(!bIsLine && rGapTargetCallback);
 
                         if(bHandleLine || bHandleGap)
                         {
@@ -1367,8 +1363,8 @@ namespace basegfx::utils
                         while(fTools::less(fDotDashMovingLength, fEdgeLength))
                         {
                             // new split is inside edge, create and append snippet [fLastDotDashMovingLength, fDotDashMovingLength]
-                            const bool bHandleLine(bIsLine && aLineTargetCallback);
-                            const bool bHandleGap(!bIsLine && aGapTargetCallback);
+                            const bool bHandleLine(bIsLine && rLineTargetCallback);
+                            const bool bHandleGap(!bIsLine && rGapTargetCallback);
 
                             if(bHandleLine || bHandleGap)
                             {
@@ -1381,12 +1377,12 @@ namespace basegfx::utils
 
                                 if(bHandleLine)
                                 {
-                                    implHandleSnippet(aSnippet, aLineTargetCallback, aFirstLine, aLastLine);
+                                    implHandleSnippet(aSnippet, rLineTargetCallback, aFirstLine, aLastLine);
                                 }
 
                                 if(bHandleGap)
                                 {
-                                    implHandleSnippet(aSnippet, aGapTargetCallback, aFirstGap, aLastGap);
+                                    implHandleSnippet(aSnippet, rGapTargetCallback, aFirstGap, aLastGap);
                                 }
 
                                 aSnippet.clear();
@@ -1399,8 +1395,8 @@ namespace basegfx::utils
                         }
 
                         // append snippet [fLastDotDashMovingLength, fEdgeLength]
-                        const bool bHandleLine(bIsLine && aLineTargetCallback);
-                        const bool bHandleGap(!bIsLine && aGapTargetCallback);
+                        const bool bHandleLine(bIsLine && rLineTargetCallback);
+                        const bool bHandleGap(!bIsLine && rGapTargetCallback);
 
                         if(bHandleLine || bHandleGap)
                         {
@@ -1424,28 +1420,28 @@ namespace basegfx::utils
             // append last intermediate results (if exists)
             if(aSnippet.count())
             {
-                const bool bHandleLine(bIsLine && aLineTargetCallback);
-                const bool bHandleGap(!bIsLine && aGapTargetCallback);
+                const bool bHandleLine(bIsLine && rLineTargetCallback);
+                const bool bHandleGap(!bIsLine && rGapTargetCallback);
 
                 if(bHandleLine)
                 {
-                    implHandleSnippet(aSnippet, aLineTargetCallback, aFirstLine, aLastLine);
+                    implHandleSnippet(aSnippet, rLineTargetCallback, aFirstLine, aLastLine);
                 }
 
                 if(bHandleGap)
                 {
-                    implHandleSnippet(aSnippet, aGapTargetCallback, aFirstGap, aLastGap);
+                    implHandleSnippet(aSnippet, rGapTargetCallback, aFirstGap, aLastGap);
                 }
             }
 
-            if(bIsClosed && aLineTargetCallback)
+            if(bIsClosed && rLineTargetCallback)
             {
-                implHandleFirstLast(aLineTargetCallback, aFirstLine, aLastLine);
+                implHandleFirstLast(rLineTargetCallback, aFirstLine, aLastLine);
             }
 
-            if(bIsClosed && aGapTargetCallback)
+            if(bIsClosed && rGapTargetCallback)
             {
-                implHandleFirstLast(aGapTargetCallback, aFirstGap, aLastGap);
+                implHandleFirstLast(rGapTargetCallback, aFirstGap, aLastGap);
             }
         }
 
@@ -3574,6 +3570,105 @@ namespace basegfx::utils
                 rFlagSequenceRetval.realloc(0);
             }
         }
+
+B2DPolygon createSimplifiedPolygon(const B2DPolygon& rCandidate, const double fTolerance)
+{
+    const sal_uInt32 nPointCount(rCandidate.count());
+    if (nPointCount < 3 || rCandidate.areControlPointsUsed())
+        return rCandidate;
+
+    // The solution does not use recursion directly, since this could lead to a stack overflow if
+    // nPointCount is very large. Instead, an own stack is used. This does not contain points, but
+    // pairs of low and high index of a range in rCandidate. A parallel boolean vector is used to note
+    // whether a point of rCandidate belongs to the output polygon or not.
+    std::vector<bool> bIsKeptVec(nPointCount, false);
+    bIsKeptVec[0] = true;
+    bIsKeptVec[nPointCount - 1] = true;
+    sal_uInt32 nKept = 2;
+    std::stack<std::pair<sal_uInt32, sal_uInt32>> aUnfinishedRangesStack;
+
+    // The RDP algorithm draws a straight line from the first point to the last point of a range.
+    // Then, from the inner points of the range, the point that has the largest distance to the line
+    // is determined. If the distance is greater than the tolerance, this point is kept and the lower
+    // and upper sub-segments of the range are treated in the same way. If the distance is smaller
+    // than the tolerance, none of the inner points will be kept.
+    sal_uInt32 nLowIndex = 0;
+    sal_uInt32 nHighIndex = nPointCount - 1;
+    bool bContinue = true;
+    do
+    {
+        bContinue = false;
+        if (nHighIndex - nLowIndex < 2) // maximal two points, range is finished.
+        {
+            // continue with sibling upper range if any
+            if (!aUnfinishedRangesStack.empty())
+            {
+                std::pair<sal_uInt32, sal_uInt32> aIndexPair = aUnfinishedRangesStack.top();
+                aUnfinishedRangesStack.pop();
+                nLowIndex = aIndexPair.first;
+                nHighIndex = aIndexPair.second;
+                bContinue = true;
+            }
+        }
+        else // the range needs examine the max distance
+        {
+            // Get maximal distance of inner points of the range to the straight line from start to
+            // end point of the range.
+            // For calculation of the distance we use the Hesse normal form of the straight line.
+            B2DPoint aLowPoint = rCandidate.getB2DPoint(nLowIndex);
+            B2DPoint aHighPoint = rCandidate.getB2DPoint(nHighIndex);
+            B2DVector aNormalVec
+                = basegfx::getNormalizedPerpendicular(B2DVector(aHighPoint) - B2DVector(aLowPoint));
+            double fLineOriginDistance = aNormalVec.scalar(B2DVector(aLowPoint));
+            double fMaxDist = 0;
+            sal_uInt32 nMaxPointIndex = nLowIndex;
+            for (sal_uInt32 i = nLowIndex + 1; i < nHighIndex; i++)
+            {
+                double fDistance
+                    = aNormalVec.scalar(B2DVector(rCandidate.getB2DPoint(i))) - fLineOriginDistance;
+                if (std::fabs(fDistance) > fMaxDist)
+                {
+                    fMaxDist = std::fabs(fDistance);
+                    nMaxPointIndex = i;
+                }
+            }
+
+            if (fMaxDist >= fTolerance)
+            {
+                // We need to divide the current range into two sub ranges.
+                bIsKeptVec[nMaxPointIndex] = true;
+                nKept++;
+                // continue with lower sub range and push upper sub range to stack
+                aUnfinishedRangesStack.push(std::make_pair(nMaxPointIndex, nHighIndex));
+                nHighIndex = nMaxPointIndex;
+                bContinue = true;
+            }
+            else
+            {
+                // We do not keep any of the inner points of the current range.
+                // continue with sibling upper range if any
+                if (!aUnfinishedRangesStack.empty())
+                {
+                    std::pair<sal_uInt32, sal_uInt32> aIndexPair = aUnfinishedRangesStack.top();
+                    aUnfinishedRangesStack.pop();
+                    nLowIndex = aIndexPair.first;
+                    nHighIndex = aIndexPair.second;
+                    bContinue = true;
+                }
+            }
+        }
+    } while (bContinue);
+
+    // Put all points which are marked as "keep" into the result polygon
+    B2DPolygon aResultPolygon;
+    aResultPolygon.reserve(nKept);
+    for (sal_uInt32 i = 0; i < nPointCount; i++)
+    {
+        if (bIsKeptVec[i])
+            aResultPolygon.append(rCandidate.getB2DPoint(i));
+    }
+    return aResultPolygon;
+}
 
 } // end of namespace
 

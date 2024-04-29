@@ -99,7 +99,7 @@ public:
      which indicates that the indent attributes at a paragraph style should
      be reset in case that a list style is applied to the paragraph style and
      no indent attributes are applied. */
-    void                    SetItemSet( const SfxItemSet& rSet,
+    void                    SetItemSet( const SfxItemSet& rSet, const bool bBroadcast = true,
                                         const bool bResetIndentAttrsAtParagraphStyle = false );
 
     virtual SfxItemSet&     GetItemSet() override;
@@ -181,6 +181,7 @@ class SwStyleSheetIterator final : public SfxStyleSheetIterator, public SfxListe
     sal_uInt32          m_nLastPos;
     bool                m_bFirstCalled;
 
+    bool IsUsedInComments(const OUString& rName) const;
     void                AppendStyleList(const std::vector<OUString>& rLst,
                                         bool        bUsed,
                                         bool        bTestHidden,
@@ -207,6 +208,7 @@ public:
 class SwDocStyleSheetPool final : public SfxStyleSheetBasePool
 {
     rtl::Reference< SwDocStyleSheet > mxStyleSheet;
+    rtl::Reference< SfxStyleSheetPool > mxEEStyleSheetPool;
     SwDoc&              m_rDoc;
     bool                m_bOrganizer : 1;     ///< Organizer
 
@@ -222,10 +224,7 @@ public:
             SfxStyleSearchBits nMask = SfxStyleSearchBits::All) override;
 
     virtual SfxStyleSheetBase* Find( const OUString&, SfxStyleFamily eFam,
-                                    SfxStyleSearchBits n=SfxStyleSearchBits::All ) const override;
-
-    virtual bool SetParent( SfxStyleFamily eFam, const OUString &rStyle,
-                            const OUString &rParent ) override;
+                                    SfxStyleSearchBits n=SfxStyleSearchBits::All ) override;
 
     virtual void Remove( SfxStyleSheetBase* pStyle) override;
 
@@ -234,6 +233,7 @@ public:
     virtual std::unique_ptr<SfxStyleSheetIterator> CreateIterator( SfxStyleFamily, SfxStyleSearchBits nMask = SfxStyleSearchBits::All) override;
 
     SwDoc& GetDoc() const { return m_rDoc; }
+    SfxStyleSheetPool* GetEEStyleSheetPool() const { return mxEEStyleSheetPool.get(); }
 
     void dispose();
 

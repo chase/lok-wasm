@@ -996,7 +996,7 @@ std::size_t XclTxo::GetLen() const
 
 // --- class XclObjOle -------------------------------------------
 
-XclObjOle::XclObjOle( XclExpObjectManager& rObjMgr, const SdrObject& rObj ) :
+XclObjOle::XclObjOle( XclExpObjectManager& rObjMgr, const SdrOle2Obj& rObj ) :
     XclObj( rObjMgr, EXC_OBJTYPE_PICTURE ),
     rOleObj( rObj ),
     pRootStorage( rObjMgr.GetRoot().GetRootStorage().get() )
@@ -1020,7 +1020,7 @@ void XclObjOle::WriteSubRecs( XclExpStream& rStrm )
     if( !xOleStg.is() )
         return;
 
-    uno::Reference < embed::XEmbeddedObject > xObj( static_cast<const SdrOle2Obj&>(rOleObj).GetObjRef() );
+    uno::Reference < embed::XEmbeddedObject > xObj( rOleObj.GetObjRef() );
     if ( !xObj.is() )
         return;
 
@@ -1051,7 +1051,7 @@ void XclObjOle::WriteSubRecs( XclExpStream& rStrm )
     // OBJFLAGS subrecord, undocumented as usual
     rStrm.StartRecord( EXC_ID_OBJFLAGS, 2 );
     sal_uInt16 nFlags = EXC_OBJ_PIC_MANUALSIZE;
-    ::set_flag( nFlags, EXC_OBJ_PIC_SYMBOL, static_cast<const SdrOle2Obj&>(rOleObj).GetAspect() == embed::Aspects::MSOLE_ICON );
+    ::set_flag( nFlags, EXC_OBJ_PIC_SYMBOL, rOleObj.GetAspect() == embed::Aspects::MSOLE_ICON );
     rStrm << nFlags;
     rStrm.EndRecord();
 
@@ -1591,10 +1591,10 @@ void ExcEScenario::SaveXml( XclExpXmlStream& rStrm )
 {
     sax_fastparser::FSHelperPtr& rWorkbook = rStrm.GetCurrentStream();
     rWorkbook->startElement( XML_scenario,
-            XML_name,       XclXmlUtils::ToOString( sName ).getStr(),
+            XML_name,       XclXmlUtils::ToOString( sName ),
             XML_locked,     ToPsz( bProtected ),
             // OOXTODO: XML_hidden,
-            XML_count,      OString::number(  aCells.size() ).getStr(),
+            XML_count,      OString::number(  aCells.size() ),
             XML_user,       XESTRING_TO_PSZ( sUserName ),
             XML_comment,    XESTRING_TO_PSZ( sComment ) );
 

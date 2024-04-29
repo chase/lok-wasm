@@ -24,11 +24,17 @@
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/accessibility/XAccessible.hpp>
+#include <com/sun/star/accessibility/XAccessibleAction.hpp>
 #include <com/sun/star/accessibility/XAccessibleContext.hpp>
+#include <com/sun/star/awt/KeyModifier.hpp>
 
+#include <rtl/ustrbuf.hxx>
 #include <sal/log.hxx>
+#include <toolkit/awt/vclxaccessiblecomponent.hxx>
 #include <vcl/scheduler.hxx>
 #include <vcl/timer.hxx>
+#include <vcl/window.hxx>
+#include <o3tl/string_view.hxx>
 
 using namespace css;
 
@@ -80,6 +86,26 @@ AccessibilityTools::getAccessibleObjectForRole(
     const css::uno::Reference<css::accessibility::XAccessible>& xacc, sal_Int16 role)
 {
     return getAccessibleObjectForRole(xacc->getAccessibleContext(), role);
+}
+
+/* this is basically the same as getAccessibleObjectForPredicate() but specialized for efficiency,
+ * and because the template version will not work with getAccessibleObjectForPredicate() anyway */
+css::uno::Reference<css::accessibility::XAccessibleContext>
+AccessibilityTools::getAccessibleObjectForName(
+    const css::uno::Reference<css::accessibility::XAccessibleContext>& xCtx, const sal_Int16 role,
+    std::u16string_view name)
+{
+    if (xCtx->getAccessibleRole() == role && nameEquals(xCtx, name))
+        return xCtx;
+
+    auto nChildren = xCtx->getAccessibleChildCount();
+    for (decltype(nChildren) i = 0; i < nChildren && i < AccessibilityTools::MAX_CHILDREN; i++)
+    {
+        if (auto xMatchChild = getAccessibleObjectForName(xCtx->getAccessibleChild(i), role, name))
+            return xMatchChild;
+    }
+
+    return nullptr;
 }
 
 bool AccessibilityTools::equals(const uno::Reference<accessibility::XAccessible>& xacc1,
@@ -136,6 +162,51 @@ bool AccessibilityTools::equals(const uno::Reference<accessibility::XAccessibleC
     return equals(xctx1->getAccessibleParent(), xctx2->getAccessibleParent());
 }
 
+bool AccessibilityTools::nameEquals(const uno::Reference<accessibility::XAccessibleContext>& xCtx,
+                                    const std::u16string_view name)
+{
+    auto ctxName = xCtx->getAccessibleName();
+    std::u16string_view rest;
+
+    if (!o3tl::starts_with(ctxName, name, &rest))
+        return false;
+    if (rest == u"")
+        return true;
+
+#if defined(_WIN32)
+    // see OAccessibleMenuItemComponent::GetAccessibleName():
+    // on Win32, ignore a \tSHORTCUT suffix on a menu item
+    switch (xCtx->getAccessibleRole())
+    {
+        case accessibility::AccessibleRole::MENU_ITEM:
+        case accessibility::AccessibleRole::RADIO_MENU_ITEM:
+        case accessibility::AccessibleRole::CHECK_MENU_ITEM:
+            return rest[0] == '\t';
+
+        default:
+            break;
+    }
+#endif
+
+#if OSL_DEBUG_LEVEL > 0
+    // see VCLXAccessibleComponent::getAccessibleName()
+    static const char* pEnvAppendType = getenv("LIBO_APPEND_WINDOW_TYPE_TO_ACCESSIBLE_NAME");
+    if (pEnvAppendType && OUString::createFromAscii(pEnvAppendType) != u"0")
+    {
+        auto pVCLXAccessibleComponent = dynamic_cast<VCLXAccessibleComponent*>(xCtx.get());
+        if (pVCLXAccessibleComponent)
+        {
+            auto windowType = pVCLXAccessibleComponent->GetWindow()->GetType();
+            if (rest
+                == Concat2View(u" (Type = " + OUString::number(static_cast<sal_Int32>(windowType))
+                               + ")"))
+                return true;
+        }
+    }
+#endif
+    return false;
+}
+
 static OUString unknownName(const sal_Int64 value)
 {
     return "unknown (" + OUString::number(value) + ")";
@@ -149,6 +220,8 @@ OUString AccessibilityTools::getRoleName(const sal_Int16 role)
             return "UNKNOWN";
         case accessibility::AccessibleRole::ALERT:
             return "ALERT";
+        case accessibility::AccessibleRole::BLOCK_QUOTE:
+            return "BLOCK_QUOTE";
         case accessibility::AccessibleRole::BUTTON_DROPDOWN:
             return "BUTTON_DROPDOWN";
         case accessibility::AccessibleRole::BUTTON_MENU:
@@ -343,6 +416,9 @@ OUString AccessibilityTools::debugAccessibleStateSet(const sal_Int64 nCombinedSt
                 break;
             case accessibility::AccessibleStateType::BUSY:
                 name = "BUSY";
+                break;
+            case accessibility::AccessibleStateType::CHECKABLE:
+                name = "CHECKABLE";
                 break;
             case accessibility::AccessibleStateType::CHECKED:
                 name = "CHECKED";
@@ -584,6 +660,59 @@ OUString AccessibilityTools::debugName(accessibility::XAccessibleContext* ctx)
 OUString AccessibilityTools::debugName(accessibility::XAccessible* acc)
 {
     return debugName(acc->getAccessibleContext().get());
+}
+
+OUString AccessibilityTools::debugName(accessibility::XAccessibleAction* xAct)
+{
+    OUStringBuffer r = "actions=[";
+
+    const sal_Int32 nActions = xAct->getAccessibleActionCount();
+    for (sal_Int32 i = 0; i < nActions; i++)
+    {
+        if (i > 0)
+            r.append(", ");
+
+        r.append("description=\"" + xAct->getAccessibleActionDescription(i) + "\"");
+
+        const auto& xKeyBinding = xAct->getAccessibleActionKeyBinding(i);
+        if (xKeyBinding)
+        {
+            r.append(" keybindings=[");
+            const sal_Int32 nKeyBindings = xKeyBinding->getAccessibleKeyBindingCount();
+            for (sal_Int32 j = 0; j < nKeyBindings; j++)
+            {
+                if (j > 0)
+                    r.append(", ");
+
+                int k = 0;
+                for (const auto& keyStroke : xKeyBinding->getAccessibleKeyBinding(j))
+                {
+                    if (k++ > 0)
+                        r.append(", ");
+
+                    r.append('"');
+                    if (keyStroke.Modifiers & awt::KeyModifier::MOD1)
+                        r.append("<Mod1>");
+                    if (keyStroke.Modifiers & awt::KeyModifier::MOD2)
+                        r.append("<Mod2>");
+                    if (keyStroke.Modifiers & awt::KeyModifier::MOD3)
+                        r.append("<Mod3>");
+                    if (keyStroke.Modifiers & awt::KeyModifier::SHIFT)
+                        r.append("<Shift>");
+                    r.append(OUStringChar(keyStroke.KeyChar) + "\"");
+                }
+            }
+            r.append("]");
+        }
+    }
+    r.append("]");
+    return r.makeStringAndClear();
+}
+
+OUString AccessibilityTools::debugName(accessibility::XAccessibleText* xTxt)
+{
+    uno::Reference<accessibility::XAccessibleContext> xCtx(xTxt, uno::UNO_QUERY);
+    return debugName(xCtx.get());
 }
 
 OUString AccessibilityTools::debugName(const accessibility::AccessibleEventObject* evobj)

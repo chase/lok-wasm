@@ -66,7 +66,7 @@ void EmbeddedFontsHelper::clearTemporaryFontFiles()
 }
 
 bool EmbeddedFontsHelper::addEmbeddedFont( const uno::Reference< io::XInputStream >& stream, const OUString& fontName,
-    const char* extra, std::vector< unsigned char > const & key, bool eot )
+    std::u16string_view extra, std::vector< unsigned char > const & key, bool eot )
 {
     OUString fileUrl = EmbeddedFontsHelper::fileUrlForTemporaryFont( fontName, extra );
     osl::File file( fileUrl );
@@ -189,7 +189,7 @@ void EmbeddedFontsHelper::activateFonts()
     m_aAccumulatedFonts.clear();
 }
 
-OUString EmbeddedFontsHelper::fileUrlForTemporaryFont( const OUString& fontName, const char* extra )
+OUString EmbeddedFontsHelper::fileUrlForTemporaryFont( const OUString& fontName, std::u16string_view extra )
 {
     OUString path = "${$BRAND_BASE_DIR/" LIBO_ETC_FOLDER "/" SAL_CONFIGFILE( "bootstrap") "::UserInstallation}";
     rtl::Bootstrap::expandMacros( path );
@@ -197,10 +197,10 @@ OUString EmbeddedFontsHelper::fileUrlForTemporaryFont( const OUString& fontName,
     osl::Directory::createPath( path );
     OUString filename = fontName;
     static int uniqueCounter = 0;
-    if( strcmp( extra, "?" ) == 0 )
+    if( extra == u"?" )
         filename += OUString::number( uniqueCounter++ );
     else
-        filename += OStringToOUString( extra, RTL_TEXTENCODING_ASCII_US );
+        filename += extra;
     filename += ".ttf"; // TODO is it always ttf?
     return path + filename;
 }
@@ -261,6 +261,15 @@ OUString EmbeddedFontsHelper::fontFileUrl( std::u16string_view familyName, FontF
     graphics->GetDevFontList( &fonts );
     std::unique_ptr< vcl::font::PhysicalFontFaceCollection > fontInfo( fonts.GetFontFaceCollection());
     vcl::font::PhysicalFontFace* selected = nullptr;
+
+    // Maybe we don't find the perfect match for the font. E.G. we have fonts with the same family name
+    // but not same bold or italic etc...
+    // In this case we add all the fonts having the family name of the used font:
+    //  - we store all these fonts in familyNameFonts during loop
+    //  - if we haven't found the perfect match we store all fonts in familyNameFonts
+    typedef std::vector<vcl::font::PhysicalFontFace*> FontList;
+    FontList familyNameFonts;
+
     for( int i = 0;
          i < fontInfo->Count();
          ++i )
@@ -288,11 +297,29 @@ OUString EmbeddedFontsHelper::fontFileUrl( std::u16string_view familyName, FontF
             { // Some fonts specify 'DONTKNOW' for some things, still a good match, if we don't find a better one.
                 selected = f;
             }
+            // adding "not perfect match" to familyNameFonts vector
+            familyNameFonts.push_back(f);
+
         }
     }
-    if( selected != nullptr )
+
+    // if we have found a perfect match we will add only "selected", otherwise all familyNameFonts
+    FontList fontsToAdd = (selected ? FontList(1, selected) : std::move(familyNameFonts));
+
+    for (vcl::font::PhysicalFontFace* f : fontsToAdd)
     {
-        auto aFontData(selected->GetRawFontData(0));
+        if (!selected) { // recalculate file not for "not perfect match"
+            filename = OUString::Concat(familyName) + "_" + OUString::number(f->GetFamilyType()) + "_" +
+                OUString::number(f->GetItalic()) + "_" + OUString::number(f->GetWeight()) + "_" +
+                OUString::number(f->GetPitch()) + ".ttf"; // TODO is it always ttf?
+            url = path + filename;
+            if (osl::File(url).open(osl_File_OpenFlag_Read) == osl::File::E_None) // = exists()
+            {
+                // File with contents of the font file already exists, assume it's been created by a previous call.
+                continue;
+            }
+        }
+        auto aFontData(f->GetRawFontData(0));
         if (!aFontData.empty())
         {
             auto data = aFontData.data();

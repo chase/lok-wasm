@@ -56,6 +56,7 @@
 #include <DateHelper.hxx>
 #include <ExplicitCategoriesProvider.hxx>
 #include <defines.hxx>
+#include <comphelper/dumpxmltostring.hxx>
 #include <unonames.hxx>
 #include <editeng/frmdiritem.hxx>
 #include <editeng/eeitem.hxx>
@@ -74,6 +75,7 @@
 #include <osl/mutex.hxx>
 #include <svx/unofill.hxx>
 #include <drawinglayer/XShapeDumper.hxx>
+#include <sfx2/objsh.hxx>
 
 #include <time.h>
 
@@ -111,12 +113,9 @@
 #include <memory>
 #include <libxml/xmlwriter.h>
 
-namespace com::sun::star::chart2 { class XChartDocument; }
-
 namespace chart {
 
 using namespace ::com::sun::star;
-using namespace ::com::sun::star::chart2;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
 using ::com::sun::star::uno::Any;
@@ -164,7 +163,6 @@ ChartView::ChartView(
         ChartModel& rModel)
     : m_xCC(std::move(xContext))
     , mrChartModel(rModel)
-    , m_aListenerContainer( m_aMutex )
     , m_bViewDirty(true)
     , m_bInViewUpdate(false)
     , m_bViewUpdatePending(false)
@@ -226,10 +224,10 @@ void ChartView::impl_deleteCoordinateSystems()
 // datatransfer::XTransferable
 namespace
 {
-constexpr OUStringLiteral lcl_aGDIMetaFileMIMEType(
-    u"application/x-openoffice-gdimetafile;windows_formatname=\"GDIMetaFile\"" );
-constexpr OUStringLiteral lcl_aGDIMetaFileMIMETypeHighContrast(
-    u"application/x-openoffice-highcontrast-gdimetafile;windows_formatname=\"GDIMetaFile\"" );
+constexpr OUString lcl_aGDIMetaFileMIMEType(
+    u"application/x-openoffice-gdimetafile;windows_formatname=\"GDIMetaFile\""_ustr );
+constexpr OUString lcl_aGDIMetaFileMIMETypeHighContrast(
+    u"application/x-openoffice-highcontrast-gdimetafile;windows_formatname=\"GDIMetaFile\""_ustr );
 } // anonymous namespace
 
 void ChartView::getMetaFile( const uno::Reference< io::XOutputStream >& xOutStream
@@ -307,12 +305,6 @@ sal_Bool SAL_CALL ChartView::isDataFlavorSupported( const datatransfer::DataFlav
              aFlavor.MimeType == lcl_aGDIMetaFileMIMETypeHighContrast );
 }
 
-// ____ XUnoTunnel ___
-::sal_Int64 SAL_CALL ChartView::getSomething( const uno::Sequence< ::sal_Int8 >& aIdentifier )
-{
-    return comphelper::getSomethingImpl<ExplicitValueProvider>(aIdentifier, this);
-}
-
 // lang::XServiceInfo
 
 OUString SAL_CALL ChartView::getImplementationName()
@@ -350,13 +342,13 @@ bool lcl_IsPieOrDonut( const rtl::Reference< Diagram >& xDiagram )
     //the size is checked after complete creation to get the datalabels into the given space
 
     //todo: this is just a workaround at the moment for pie and donut labels
-    return DiagramHelper::isPieOrDonutChart( xDiagram );
+    return xDiagram->isPieOrDonutChart();
 }
 
 void lcl_setDefaultWritingMode( const std::shared_ptr< DrawModelWrapper >& pDrawModelWrapper, ChartModel& rModel)
 {
     //get writing mode from parent document:
-    if( !SvtCTLOptions().IsCTLFontEnabled() )
+    if( !SvtCTLOptions::IsCTLFontEnabled() )
         return;
 
     try
@@ -511,7 +503,7 @@ awt::Rectangle ChartView::impl_createDiagramAndContent( const CreateShapeParam2D
     if( !xDiagram.is())
         return aUsedOuterRect;
 
-    sal_Int32 nDimensionCount = DiagramHelper::getDimension( xDiagram );
+    sal_Int32 nDimensionCount = xDiagram->getDimension();
     if(!nDimensionCount)
     {
         //@todo handle mixed dimension
@@ -786,7 +778,7 @@ awt::Rectangle ChartView::impl_createDiagramAndContent( const CreateShapeParam2D
 }
 
 bool ChartView::getExplicitValuesForAxis(
-                     uno::Reference< XAxis > xAxis
+                     rtl::Reference< Axis > xAxis
                      , ExplicitScaleData&  rExplicitScale
                      , ExplicitIncrementData& rExplicitIncrement )
 {
@@ -933,7 +925,9 @@ bool getAvailablePosAndSizeForDiagram(
     rParam.mbUseFixedInnerSize = false;
 
     //@todo: we need a size dependent on the axis labels
-    rtl::Reference<ChartType> xChartType(DiagramHelper::getChartTypeByIndex(xDiagram, 0));
+    rtl::Reference<ChartType> xChartType;
+    if (xDiagram)
+        xChartType = xDiagram->getChartTypeByIndex(0);
 
     sal_Int32 nXDistance = sal_Int32(rPageSize.Width * constPageLayoutDistancePercentage);
     sal_Int32 nYDistance = sal_Int32(rPageSize.Height * constPageLayoutDistancePercentage);
@@ -1076,7 +1070,7 @@ std::shared_ptr<VTitle> lcl_createTitle( TitleHelper::eTitleType eType
         nXDistance = 450; // 1/100 mm
     }
 
-    uno::Reference< XTitle > xTitle( TitleHelper::getTitle( eType, rModel ) );
+    rtl::Reference< Title > xTitle( TitleHelper::getTitle( eType, rModel ) );
     OUString aCompleteString = TitleHelper::getCompleteString(xTitle);
     if (aCompleteString.isEmpty() || !VTitle::isVisible(xTitle))
         return apVTitle;
@@ -1113,8 +1107,7 @@ std::shared_ptr<VTitle> lcl_createTitle( TitleHelper::eTitleType eType
     rbAutoPosition = true;
     awt::Point aNewPosition(0,0);
     chart2::RelativePosition aRelativePosition;
-    uno::Reference<beans::XPropertySet> xProp(xTitle, uno::UNO_QUERY);
-    if (xProp.is() && (xProp->getPropertyValue("RelativePosition") >>= aRelativePosition))
+    if (xTitle.is() && (xTitle->getPropertyValue("RelativePosition") >>= aRelativePosition))
     {
         rbAutoPosition = false;
 
@@ -1362,7 +1355,7 @@ void ChartView::createShapes()
 {
     SolarMutexGuard aSolarGuard;
 
-    osl::MutexGuard aTimedGuard(maTimeMutex);
+    std::unique_lock aTimedGuard(maTimeMutex);
     if(mrChartModel.isTimeBased())
     {
         maTimeBased.bTimeBased = true;
@@ -1418,6 +1411,35 @@ void SAL_CALL ChartView::disposing( const lang::EventObject& /* rSource */ )
 {
 }
 
+namespace
+{
+// Disables setting the chart's modified state, as well as its parent's (if exists).
+// Painting a chart must not set these states.
+struct ChartModelDisableSetModified
+{
+    ChartModel& mrChartModel;
+    SfxObjectShell* mpParentShell;
+    bool mbWasUnmodified;
+    ChartModelDisableSetModified(ChartModel& rChartModel)
+        : mrChartModel(rChartModel)
+        , mpParentShell(SfxObjectShell::GetShellFromComponent(rChartModel.getParent()))
+        , mbWasUnmodified(!rChartModel.isModified())
+    {
+        if (mpParentShell && mpParentShell->IsEnableSetModified())
+            mpParentShell->EnableSetModified(false);
+        else
+            mpParentShell = nullptr;
+    }
+    ~ChartModelDisableSetModified()
+    {
+        if (mbWasUnmodified && mrChartModel.isModified())
+            mrChartModel.setModified(false);
+        if (mpParentShell)
+            mpParentShell->EnableSetModified(true);
+    }
+};
+}
+
 void ChartView::impl_updateView( bool bCheckLockedCtrler )
 {
     if( !m_pDrawModelWrapper )
@@ -1447,6 +1469,9 @@ void ChartView::impl_updateView( bool bCheckLockedCtrler )
             SolarMutexGuard aSolarGuard;
             m_pDrawModelWrapper->lockControllers();
         }
+
+        // Rendering the chart must not set its (or its parent) modified status
+        ChartModelDisableSetModified dontSetModified(mrChartModel);
 
         //create chart view
         {
@@ -1564,16 +1589,11 @@ void ChartView::impl_notifyModeChangeListener( const OUString& rNewMode )
 {
     try
     {
-        comphelper::OInterfaceContainerHelper2* pIC = m_aListenerContainer
-            .getContainer( cppu::UnoType<util::XModeChangeListener>::get());
-        if( pIC )
+        std::unique_lock g(m_aMutex);
+        if( m_aModeChangeListeners.getLength(g) )
         {
             util::ModeChangeEvent aEvent( static_cast< uno::XWeak* >( this ), rNewMode );
-            comphelper::OInterfaceIteratorHelper2 aIt( *pIC );
-            while( aIt.hasMoreElements() )
-            {
-                static_cast< util::XModeChangeListener* >( aIt.next() )->modeChanged( aEvent );
-            }
+            m_aModeChangeListeners.notifyEach( g, &css::util::XModeChangeListener::modeChanged, aEvent);
         }
     }
     catch( const uno::Exception& )
@@ -1586,13 +1606,13 @@ void ChartView::impl_notifyModeChangeListener( const OUString& rNewMode )
 
 void SAL_CALL ChartView::addModeChangeListener( const uno::Reference< util::XModeChangeListener >& xListener )
 {
-    m_aListenerContainer.addInterface(
-        cppu::UnoType<util::XModeChangeListener>::get(), xListener );
+    std::unique_lock g(m_aMutex);
+    m_aModeChangeListeners.addInterface(g, xListener );
 }
 void SAL_CALL ChartView::removeModeChangeListener( const uno::Reference< util::XModeChangeListener >& xListener )
 {
-    m_aListenerContainer.removeInterface(
-        cppu::UnoType<util::XModeChangeListener>::get(), xListener );
+    std::unique_lock g(m_aMutex);
+    m_aModeChangeListeners.removeInterface(g, xListener );
 }
 void SAL_CALL ChartView::addModeChangeApproveListener( const uno::Reference< util::XModeChangeApproveListener >& /* _rxListener */ )
 {
@@ -1796,8 +1816,13 @@ uno::Sequence< OUString > ChartView::getAvailableServiceNames()
     return aServiceNames;
 }
 
-OUString ChartView::dump(const OUString& /*rKind*/)
+OUString ChartView::dump(OUString const & kind)
 {
+    if (kind.isEmpty()) {
+        return comphelper::dumpXmlToString([this](auto writer) { return dumpAsXml(writer); });
+    }
+
+    // kind == "shapes":
 #if HAVE_FEATURE_DESKTOP
     // Used for unit tests and in chartcontroller only, no need to drag in this when cross-compiling
     // for non-desktop
@@ -1844,7 +1869,7 @@ void ChartView::dumpAsXml(xmlTextWriterPtr pWriter) const
 
 void ChartView::setViewDirty()
 {
-    osl::MutexGuard aGuard(maTimeMutex);
+    std::unique_lock aGuard(maTimeMutex);
     m_bViewDirty = true;
 }
 
@@ -1935,7 +1960,7 @@ void ChartView::createShapes2D( const awt::Size& rPageSize )
         return;
 
     bool bDummy = false;
-    bool bIsVertical = DiagramHelper::getVertical(xDiagram, bDummy, bDummy);
+    bool bIsVertical = xDiagram && xDiagram->getVertical(bDummy, bDummy);
 
     if (getAvailablePosAndSizeForDiagram(aParam, rPageSize, xDiagram))
     {
@@ -1998,8 +2023,13 @@ bool ChartView::createAxisTitleShapes2D( CreateShapeParam2D& rParam, const css::
 {
     rtl::Reference<Diagram> xDiagram = mrChartModel.getFirstChartDiagram();
 
-    rtl::Reference< ChartType > xChartType( DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) );
-    sal_Int32 nDimension = DiagramHelper::getDimension( xDiagram );
+    rtl::Reference< ChartType > xChartType;
+    sal_Int32 nDimension = 0;
+    if (xDiagram)
+    {
+        xChartType = xDiagram->getChartTypeByIndex( 0 );
+        nDimension = xDiagram->getDimension();
+    }
 
     if( ChartTypeHelper::isSupportingMainAxis( xChartType, nDimension, 0 ) )
         rParam.mpVTitleX = lcl_createTitle( TitleHelper::TITLE_AT_STANDARD_X_AXIS_POSITION, mxRootShape, mrChartModel
@@ -2020,7 +2050,7 @@ bool ChartView::createAxisTitleShapes2D( CreateShapeParam2D& rParam, const css::
         return false;
 
     bool bDummy = false;
-    bool bIsVertical = DiagramHelper::getVertical( xDiagram, bDummy, bDummy );
+    bool bIsVertical = xDiagram && xDiagram->getVertical( bDummy, bDummy );
 
     if( ChartTypeHelper::isSupportingSecondaryAxis( xChartType, nDimension ) )
         rParam.mpVTitleSecondX = lcl_createTitle( TitleHelper::SECONDARY_X_AXIS_TITLE, mxRootShape, mrChartModel

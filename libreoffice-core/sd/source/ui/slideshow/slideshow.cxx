@@ -104,26 +104,26 @@ namespace {
     };
 }
 
-static o3tl::span<const SfxItemPropertyMapEntry> ImplGetPresentationPropertyMap()
+static std::span<const SfxItemPropertyMapEntry> ImplGetPresentationPropertyMap()
 {
     // NOTE: First member must be sorted
     static const SfxItemPropertyMapEntry aPresentationPropertyMap_Impl[] =
     {
-        { u"AllowAnimations",          ATTR_PRESENT_ANIMATION_ALLOWED, cppu::UnoType<bool>::get(),                0, 0 },
-        { u"CustomShow",               ATTR_PRESENT_CUSTOMSHOW,        ::cppu::UnoType<OUString>::get(),     0, 0 },
-        { u"Display",                  ATTR_PRESENT_DISPLAY,           ::cppu::UnoType<sal_Int32>::get(),    0, 0 },
-        { u"FirstPage",                ATTR_PRESENT_DIANAME,           ::cppu::UnoType<OUString>::get(),     0, 0 },
-        { u"IsAlwaysOnTop",            ATTR_PRESENT_ALWAYS_ON_TOP,     cppu::UnoType<bool>::get(),                0, 0 },
-        { u"IsAutomatic",              ATTR_PRESENT_MANUEL,            cppu::UnoType<bool>::get(),                0, 0 },
-        { u"IsEndless",                ATTR_PRESENT_ENDLESS,           cppu::UnoType<bool>::get(),                0, 0 },
-        { u"IsFullScreen",             ATTR_PRESENT_FULLSCREEN,        cppu::UnoType<bool>::get(),                0, 0 },
-        { u"IsShowAll",                ATTR_PRESENT_ALL,               cppu::UnoType<bool>::get(),                0, 0 },
-        { u"IsMouseVisible",           ATTR_PRESENT_MOUSE,             cppu::UnoType<bool>::get(),                0, 0 },
-        { u"IsShowLogo",               ATTR_PRESENT_SHOW_PAUSELOGO,    cppu::UnoType<bool>::get(),                0, 0 },
-        { u"IsTransitionOnClick",      ATTR_PRESENT_CHANGE_PAGE,       cppu::UnoType<bool>::get(),                0, 0 },
-        { u"Pause",                    ATTR_PRESENT_PAUSE_TIMEOUT,     ::cppu::UnoType<sal_Int32>::get(),    0, 0 },
-        { u"StartWithNavigator",       ATTR_PRESENT_NAVIGATOR,         cppu::UnoType<bool>::get(),                0, 0 },
-        { u"UsePen",                   ATTR_PRESENT_PEN,               cppu::UnoType<bool>::get(),                0, 0 },
+        { u"AllowAnimations"_ustr,          ATTR_PRESENT_ANIMATION_ALLOWED,       cppu::UnoType<bool>::get(),                0, 0 },
+        { u"CustomShow"_ustr,               ATTR_PRESENT_CUSTOMSHOW,              ::cppu::UnoType<OUString>::get(),     0, 0 },
+        { u"Display"_ustr,                  ATTR_PRESENT_DISPLAY,                 ::cppu::UnoType<sal_Int32>::get(),    0, 0 },
+        { u"FirstPage"_ustr,                ATTR_PRESENT_DIANAME,                 ::cppu::UnoType<OUString>::get(),     0, 0 },
+        { u"IsAlwaysOnTop"_ustr,            ATTR_PRESENT_ALWAYS_ON_TOP,           cppu::UnoType<bool>::get(),                0, 0 },
+        { u"IsAutomatic"_ustr,              ATTR_PRESENT_MANUEL,                  cppu::UnoType<bool>::get(),                0, 0 },
+        { u"IsEndless"_ustr,                ATTR_PRESENT_ENDLESS,                 cppu::UnoType<bool>::get(),                0, 0 },
+        { u"IsFullScreen"_ustr,             ATTR_PRESENT_FULLSCREEN,              cppu::UnoType<bool>::get(),                0, 0 },
+        { u"IsShowAll"_ustr,                ATTR_PRESENT_ALL,                     cppu::UnoType<bool>::get(),                0, 0 },
+        { u"IsMouseVisible"_ustr,           ATTR_PRESENT_MOUSE,                   cppu::UnoType<bool>::get(),                0, 0 },
+        { u"IsShowLogo"_ustr,               ATTR_PRESENT_SHOW_PAUSELOGO,          cppu::UnoType<bool>::get(),                0, 0 },
+        { u"IsTransitionOnClick"_ustr,      ATTR_PRESENT_CHANGE_PAGE,             cppu::UnoType<bool>::get(),                0, 0 },
+        { u"Pause"_ustr,                    ATTR_PRESENT_PAUSE_TIMEOUT,           ::cppu::UnoType<sal_Int32>::get(),    0, 0 },
+        { u"StartWithNavigator"_ustr,       ATTR_PRESENT_NAVIGATOR,               cppu::UnoType<bool>::get(),                0, 0 },
+        { u"UsePen"_ustr,                   ATTR_PRESENT_PEN,                     cppu::UnoType<bool>::get(),                0, 0 },
     };
 
     return aPresentationPropertyMap_Impl;
@@ -736,7 +736,7 @@ void SAL_CALL SlideShow::end()
                 else
                 {
                     DrawController& rDrawController =
-                        mpCurrentViewShellBase->GetDrawController();
+                        *mpCurrentViewShellBase->GetDrawController();
                     rDrawController.setCurrentPage(
                         Reference<XDrawPage>(
                             mpDoc->GetSdPage(xController->getRestoreSlide(), PageKind::Standard)->getUnoPage(),

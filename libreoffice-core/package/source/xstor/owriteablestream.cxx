@@ -28,7 +28,6 @@
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/ucb/SimpleFileAccess.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/lang/XTypeProvider.hpp>
 #include <com/sun/star/io/NotConnectedException.hpp>
 #include <com/sun/star/io/TempFile.hpp>
@@ -47,7 +46,6 @@
 #include <comphelper/servicehelper.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <comphelper/ofopxmlhelper.hxx>
-#include <comphelper/multicontainer2.hxx>
 #include <comphelper/refcountedmutex.hxx>
 #include <comphelper/sequence.hxx>
 
@@ -66,21 +64,6 @@
 
 using namespace ::com::sun::star;
 
-struct WSInternalData_Impl
-{
-    rtl::Reference<comphelper::RefCountedMutex> m_xSharedMutex;
-    ::std::unique_ptr< ::cppu::OTypeCollection> m_pTypeCollection;
-    comphelper::OMultiTypeInterfaceContainerHelper2 m_aListenersContainer; // list of listeners
-    sal_Int32 m_nStorageType;
-
-    // the mutex reference MUST NOT be empty
-    WSInternalData_Impl( const rtl::Reference<comphelper::RefCountedMutex>& rMutexRef, sal_Int32 nStorageType )
-    : m_xSharedMutex( rMutexRef )
-    , m_aListenersContainer( rMutexRef->GetMutex() )
-    , m_nStorageType( nStorageType )
-    {}
-};
-
 namespace package
 {
 
@@ -90,12 +73,7 @@ static void CopyInputToOutput(
 {
     static const sal_Int32 nConstBufferSize = 32000;
 
-    uno::Reference< css::lang::XUnoTunnel > xInputTunnel( xInput, uno::UNO_QUERY );
-    comphelper::ByteReader* pByteReader = nullptr;
-    if (xInputTunnel)
-        pByteReader = reinterpret_cast< comphelper::ByteReader* >( xInputTunnel->getSomething( comphelper::ByteReader::getUnoTunnelId() ) );
-
-    if (pByteReader)
+    if (auto pByteReader = dynamic_cast< comphelper::ByteReader* >( xInput.get() ))
     {
         sal_Int32 nRead;
         sal_Int8 aTempBuf[ nConstBufferSize ];
@@ -329,8 +307,8 @@ void OWriteStream_Impl::InsertIntoPackageFolder( const OUString& aName,
     if ( m_bFlushed )
     {
         SAL_WARN_IF( !m_xPackageStream.is(), "package.xstor", "An inserted stream is incomplete!" );
-        uno::Reference< lang::XUnoTunnel > xTunnel( m_xPackageStream, uno::UNO_QUERY_THROW );
-        xParentPackageFolder->insertByName( aName, uno::Any( xTunnel ) );
+        uno::Reference< uno::XInterface > xTmp( m_xPackageStream, uno::UNO_QUERY_THROW );
+        xParentPackageFolder->insertByName( aName, uno::Any( xTmp ) );
 
         m_bFlushed = false;
         m_bHasInsertedStreamOptimization = false;
@@ -996,8 +974,8 @@ uno::Sequence< beans::PropertyValue > OWriteStream_Impl::ReadPackageStreamProper
     // The "Compressed" property must be set after "MediaType" property,
     // since the setting of the last one can change the value of the first one
     static constexpr OUStringLiteral sMediaType = u"MediaType";
-    static constexpr OUStringLiteral sCompressed = u"Compressed";
-    static constexpr OUStringLiteral sSize = u"Size";
+    static constexpr OUString sCompressed = u"Compressed"_ustr;
+    static constexpr OUString sSize = u"Size"_ustr;
     static constexpr OUStringLiteral sEncrypted = u"Encrypted";
     if ( m_nStorageType == embed::StorageFormats::OFOPXML || m_nStorageType == embed::StorageFormats::PACKAGE )
     {
@@ -1135,7 +1113,7 @@ uno::Reference< io::XStream > OWriteStream_Impl::GetStream( sal_Int32 nStreamMod
         }
         catch ( const uno::Exception& ex )
         {
-            TOOLS_WARN_EXCEPTION( "package.xstor", "Can't write encryption related properties");
+            TOOLS_WARN_EXCEPTION("package.xstor", "GetStream: decrypting stream failed");
             SetEncryptionKeyProperty_Impl( xPropertySet, uno::Sequence< beans::NamedValue >() );
             throw io::IOException(ex.Message); // TODO:
         }
@@ -1259,10 +1237,11 @@ uno::Reference< io::XStream > OWriteStream_Impl::GetStream_Impl( sal_Int32 nStre
         }
 
         rtl::Reference<OWriteStream> tmp;
+        assert(m_xMutex.is() && "No mutex!");
         if ( !xStream.is() )
-            tmp = new OWriteStream( this, bHierarchyAccess );
+            tmp = new OWriteStream( *this, bHierarchyAccess );
         else
-            tmp = new OWriteStream( this, xStream, bHierarchyAccess );
+            tmp = new OWriteStream( *this, xStream, bHierarchyAccess );
 
         m_pAntiImpl = tmp.get();
         return tmp;
@@ -1313,7 +1292,7 @@ uno::Reference< io::XInputStream > OWriteStream_Impl::GetRawInStream()
 void OWriteStream_Impl::InputStreamDisposed( OInputCompStream* pStream )
 {
     ::osl::MutexGuard aGuard( m_xMutex->GetMutex() );
-    m_aInputStreamsVector.erase(std::remove(m_aInputStreamsVector.begin(), m_aInputStreamsVector.end(), pStream ));
+    std::erase(m_aInputStreamsVector, pStream);
 }
 
 void OWriteStream_Impl::CreateReadonlyCopyBasedOnData( const uno::Reference< io::XInputStream >& xDataToCopy, const uno::Sequence< beans::PropertyValue >& aProps, uno::Reference< io::XStream >& xTargetStream )
@@ -1326,9 +1305,7 @@ void OWriteStream_Impl::CreateReadonlyCopyBasedOnData( const uno::Reference< io:
 
     uno::Reference < io::XSeekable > xTempSeek( xTempFile, uno::UNO_QUERY_THROW );
 
-    uno::Reference < io::XOutputStream > xTempOut = xTempFile->getOutputStream();
-    if ( !xTempOut.is() )
-        throw uno::RuntimeException();
+    uno::Reference < io::XOutputStream > xTempOut(xTempFile->getOutputStream(), uno::UNO_SET_THROW);
 
     if ( xDataToCopy.is() )
         ::comphelper::OStorageHelper::CopyInputToOutput( xDataToCopy, xTempOut );
@@ -1343,9 +1320,7 @@ void OWriteStream_Impl::CreateReadonlyCopyBasedOnData( const uno::Reference< io:
     // TODO: remember last state of m_bUseCommonEncryption
     if ( !xTargetStream.is() )
         xTargetStream.set(
-            static_cast< ::cppu::OWeakObject* >(
-                new OInputSeekStream( xInStream, InsertOwnProps( aProps, m_bUseCommonEncryption ), m_nStorageType ) ),
-            uno::UNO_QUERY_THROW );
+            new OInputSeekStream( xInStream, InsertOwnProps( aProps, m_bUseCommonEncryption ), m_nStorageType ) );
 }
 
 void OWriteStream_Impl::GetCopyOfLastCommit( uno::Reference< io::XStream >& xTargetStream )
@@ -1547,37 +1522,28 @@ void OWriteStream_Impl::CommitStreamRelInfo( const uno::Reference< embed::XStora
 
 // OWriteStream implementation
 
-OWriteStream::OWriteStream( OWriteStream_Impl* pImpl, bool bTransacted )
-: m_pImpl( pImpl )
+OWriteStream::OWriteStream( OWriteStream_Impl& rImpl, bool bTransacted )
+: m_pImpl( &rImpl )
+, m_xSharedMutex( rImpl.m_xMutex )
+, m_aListenersContainer( rImpl.m_xMutex->GetMutex() )
+, m_nStorageType( m_pImpl->m_nStorageType )
 , m_bInStreamDisconnected( false )
 , m_bInitOnDemand( true )
 , m_nInitPosition( 0 )
 , m_bTransacted( bTransacted )
 {
-    OSL_ENSURE( pImpl, "No base implementation!" );
-    OSL_ENSURE( m_pImpl->m_xMutex.is(), "No mutex!" );
-
-    if ( !m_pImpl || !m_pImpl->m_xMutex.is() )
-        throw uno::RuntimeException(); // just a disaster
-
-    m_pData.reset(new WSInternalData_Impl(pImpl->m_xMutex, m_pImpl->m_nStorageType));
 }
 
-OWriteStream::OWriteStream( OWriteStream_Impl* pImpl, uno::Reference< io::XStream > const & xStream, bool bTransacted )
-: m_pImpl( pImpl )
+OWriteStream::OWriteStream( OWriteStream_Impl& rImpl, uno::Reference< io::XStream > const & xStream, bool bTransacted )
+: m_pImpl( &rImpl )
+, m_xSharedMutex( rImpl.m_xMutex )
+, m_aListenersContainer( rImpl.m_xMutex->GetMutex() )
+, m_nStorageType( m_pImpl->m_nStorageType )
 , m_bInStreamDisconnected( false )
 , m_bInitOnDemand( false )
 , m_nInitPosition( 0 )
 , m_bTransacted( bTransacted )
 {
-    OSL_ENSURE( pImpl && xStream.is(), "No base implementation!" );
-    OSL_ENSURE( m_pImpl->m_xMutex.is(), "No mutex!" );
-
-    if ( !m_pImpl || !m_pImpl->m_xMutex.is() )
-        throw uno::RuntimeException(); // just a disaster
-
-    m_pData.reset(new WSInternalData_Impl(pImpl->m_xMutex, m_pImpl->m_nStorageType));
-
     if ( xStream.is() )
     {
         m_xInStream = xStream->getInputStream();
@@ -1589,7 +1555,7 @@ OWriteStream::OWriteStream( OWriteStream_Impl* pImpl, uno::Reference< io::XStrea
 
 OWriteStream::~OWriteStream()
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
     if ( m_pImpl )
     {
         osl_atomic_increment(&m_refCount);
@@ -1644,7 +1610,7 @@ void OWriteStream::CheckInitOnDemand()
 
 void OWriteStream::CopyToStreamInternally_Impl( const uno::Reference< io::XStream >& xDest )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     CheckInitOnDemand();
 
@@ -1693,12 +1659,12 @@ void OWriteStream::CopyToStreamInternally_Impl( const uno::Reference< io::XStrea
     // the order of the properties setting is not important for StorageStream API
     OUString aPropName ("Compressed");
     xDestProps->setPropertyValue( aPropName, getPropertyValue( aPropName ) );
-    if ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE || m_pData->m_nStorageType == embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType == embed::StorageFormats::PACKAGE || m_nStorageType == embed::StorageFormats::OFOPXML )
     {
         aPropName = "MediaType";
         xDestProps->setPropertyValue( aPropName, getPropertyValue( aPropName ) );
 
-        if ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE )
+        if ( m_nStorageType == embed::StorageFormats::PACKAGE )
         {
             aPropName = "UseCommonStoragePasswordEncryption";
             xDestProps->setPropertyValue( aPropName, getPropertyValue( aPropName ) );
@@ -1734,20 +1700,19 @@ uno::Any SAL_CALL OWriteStream::queryInterface( const uno::Type& rType )
                     ,   static_cast<io::XSeekable*> ( this )
                     ,   static_cast<io::XTruncate*> ( this )
                     ,   static_cast<lang::XComponent*> ( this )
-                    ,   static_cast<beans::XPropertySet*> ( this )
-                    ,   static_cast<lang::XUnoTunnel*> ( this ) );
+                    ,   static_cast<beans::XPropertySet*> ( this ) );
 
     if ( aReturn.hasValue() )
         return aReturn ;
 
-    if ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE )
+    if ( m_nStorageType == embed::StorageFormats::PACKAGE )
     {
         aReturn = ::cppu::queryInterface
                     (   rType
                         ,   static_cast<embed::XEncryptionProtectedSource2*> ( this )
                         ,   static_cast<embed::XEncryptionProtectedSource*> ( this ) );
     }
-    else if ( m_pData->m_nStorageType == embed::StorageFormats::OFOPXML )
+    else if ( m_nStorageType == embed::StorageFormats::OFOPXML )
     {
         aReturn = ::cppu::queryInterface
                     (   rType
@@ -1783,15 +1748,15 @@ void SAL_CALL OWriteStream::release() noexcept
 
 uno::Sequence< uno::Type > SAL_CALL OWriteStream::getTypes()
 {
-    if (! m_pData->m_pTypeCollection)
+    if (! m_oTypeCollection)
     {
-        ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+        ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
-        if (! m_pData->m_pTypeCollection)
+        if (! m_oTypeCollection)
         {
             if ( m_bTransacted )
             {
-                if ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE )
+                if ( m_nStorageType == embed::StorageFormats::PACKAGE )
                 {
                     ::cppu::OTypeCollection aTmpCollection
                                     (   cppu::UnoType<lang::XTypeProvider>::get()
@@ -1807,14 +1772,14 @@ uno::Sequence< uno::Type > SAL_CALL OWriteStream::getTypes()
                                     ,   cppu::UnoType<embed::XTransactedObject>::get()
                                     ,   cppu::UnoType<embed::XTransactionBroadcaster>::get());
 
-                    m_pData->m_pTypeCollection.reset(new ::cppu::OTypeCollection
-                                    (   cppu::UnoType<beans::XPropertySet>::get()
-                                    ,   aTmpCollection.getTypes()));
+                    m_oTypeCollection.emplace(
+                                        cppu::UnoType<beans::XPropertySet>::get()
+                                    ,   aTmpCollection.getTypes());
                 }
-                else if ( m_pData->m_nStorageType == embed::StorageFormats::OFOPXML )
+                else if ( m_nStorageType == embed::StorageFormats::OFOPXML )
                 {
-                    m_pData->m_pTypeCollection.reset(new ::cppu::OTypeCollection
-                                    (   cppu::UnoType<lang::XTypeProvider>::get()
+                    m_oTypeCollection.emplace(
+                                        cppu::UnoType<lang::XTypeProvider>::get()
                                     ,   cppu::UnoType<io::XInputStream>::get()
                                     ,   cppu::UnoType<io::XOutputStream>::get()
                                     ,   cppu::UnoType<io::XStream>::get()
@@ -1825,12 +1790,12 @@ uno::Sequence< uno::Type > SAL_CALL OWriteStream::getTypes()
                                     ,   cppu::UnoType<embed::XExtendedStorageStream>::get()
                                     ,   cppu::UnoType<embed::XTransactedObject>::get()
                                     ,   cppu::UnoType<embed::XTransactionBroadcaster>::get()
-                                    ,   cppu::UnoType<beans::XPropertySet>::get()));
+                                    ,   cppu::UnoType<beans::XPropertySet>::get());
                 }
                 else // if ( m_pData->m_nStorageType == embed::StorageFormats::ZIP )
                 {
-                    m_pData->m_pTypeCollection.reset(new ::cppu::OTypeCollection
-                                    (   cppu::UnoType<lang::XTypeProvider>::get()
+                    m_oTypeCollection.emplace(
+                                        cppu::UnoType<lang::XTypeProvider>::get()
                                     ,   cppu::UnoType<io::XInputStream>::get()
                                     ,   cppu::UnoType<io::XOutputStream>::get()
                                     ,   cppu::UnoType<io::XStream>::get()
@@ -1840,15 +1805,15 @@ uno::Sequence< uno::Type > SAL_CALL OWriteStream::getTypes()
                                     ,   cppu::UnoType<embed::XExtendedStorageStream>::get()
                                     ,   cppu::UnoType<embed::XTransactedObject>::get()
                                     ,   cppu::UnoType<embed::XTransactionBroadcaster>::get()
-                                    ,   cppu::UnoType<beans::XPropertySet>::get()));
+                                    ,   cppu::UnoType<beans::XPropertySet>::get());
                 }
             }
             else
             {
-                if ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE )
+                if ( m_nStorageType == embed::StorageFormats::PACKAGE )
                 {
-                    m_pData->m_pTypeCollection.reset(new ::cppu::OTypeCollection
-                                    (   cppu::UnoType<lang::XTypeProvider>::get()
+                    m_oTypeCollection.emplace(
+                                        cppu::UnoType<lang::XTypeProvider>::get()
                                     ,   cppu::UnoType<io::XInputStream>::get()
                                     ,   cppu::UnoType<io::XOutputStream>::get()
                                     ,   cppu::UnoType<io::XStream>::get()
@@ -1857,12 +1822,12 @@ uno::Sequence< uno::Type > SAL_CALL OWriteStream::getTypes()
                                     ,   cppu::UnoType<lang::XComponent>::get()
                                     ,   cppu::UnoType<embed::XEncryptionProtectedSource2>::get()
                                     ,   cppu::UnoType<embed::XEncryptionProtectedSource>::get()
-                                    ,   cppu::UnoType<beans::XPropertySet>::get()));
+                                    ,   cppu::UnoType<beans::XPropertySet>::get());
                 }
-                else if ( m_pData->m_nStorageType == embed::StorageFormats::OFOPXML )
+                else if ( m_nStorageType == embed::StorageFormats::OFOPXML )
                 {
-                    m_pData->m_pTypeCollection.reset(new ::cppu::OTypeCollection
-                                    (   cppu::UnoType<lang::XTypeProvider>::get()
+                    m_oTypeCollection.emplace(
+                                        cppu::UnoType<lang::XTypeProvider>::get()
                                     ,   cppu::UnoType<io::XInputStream>::get()
                                     ,   cppu::UnoType<io::XOutputStream>::get()
                                     ,   cppu::UnoType<io::XStream>::get()
@@ -1870,25 +1835,25 @@ uno::Sequence< uno::Type > SAL_CALL OWriteStream::getTypes()
                                     ,   cppu::UnoType<io::XTruncate>::get()
                                     ,   cppu::UnoType<lang::XComponent>::get()
                                     ,   cppu::UnoType<embed::XRelationshipAccess>::get()
-                                    ,   cppu::UnoType<beans::XPropertySet>::get()));
+                                    ,   cppu::UnoType<beans::XPropertySet>::get());
                 }
                 else // if ( m_pData->m_nStorageType == embed::StorageFormats::ZIP )
                 {
-                    m_pData->m_pTypeCollection.reset(new ::cppu::OTypeCollection
-                                    (   cppu::UnoType<lang::XTypeProvider>::get()
+                    m_oTypeCollection.emplace(
+                                        cppu::UnoType<lang::XTypeProvider>::get()
                                     ,   cppu::UnoType<io::XInputStream>::get()
                                     ,   cppu::UnoType<io::XOutputStream>::get()
                                     ,   cppu::UnoType<io::XStream>::get()
                                     ,   cppu::UnoType<io::XSeekable>::get()
                                     ,   cppu::UnoType<io::XTruncate>::get()
                                     ,   cppu::UnoType<lang::XComponent>::get()
-                                    ,   cppu::UnoType<beans::XPropertySet>::get()));
+                                    ,   cppu::UnoType<beans::XPropertySet>::get());
                 }
             }
         }
     }
 
-    return m_pData->m_pTypeCollection->getTypes() ;
+    return m_oTypeCollection->getTypes() ;
 }
 
 uno::Sequence< sal_Int8 > SAL_CALL OWriteStream::getImplementationId()
@@ -1899,7 +1864,7 @@ uno::Sequence< sal_Int8 > SAL_CALL OWriteStream::getImplementationId()
 
 sal_Int32 SAL_CALL OWriteStream::readBytes( uno::Sequence< sal_Int8 >& aData, sal_Int32 nBytesToRead )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     CheckInitOnDemand();
 
@@ -1917,7 +1882,7 @@ sal_Int32 SAL_CALL OWriteStream::readBytes( uno::Sequence< sal_Int8 >& aData, sa
 
 sal_Int32 SAL_CALL OWriteStream::readSomeBytes( uno::Sequence< sal_Int8 >& aData, sal_Int32 nMaxBytesToRead )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     CheckInitOnDemand();
 
@@ -1935,7 +1900,7 @@ sal_Int32 SAL_CALL OWriteStream::readSomeBytes( uno::Sequence< sal_Int8 >& aData
 
 void SAL_CALL OWriteStream::skipBytes( sal_Int32 nBytesToSkip )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     CheckInitOnDemand();
 
@@ -1953,7 +1918,7 @@ void SAL_CALL OWriteStream::skipBytes( sal_Int32 nBytesToSkip )
 
 sal_Int32 SAL_CALL OWriteStream::available(  )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     CheckInitOnDemand();
 
@@ -1972,7 +1937,7 @@ sal_Int32 SAL_CALL OWriteStream::available(  )
 
 void SAL_CALL OWriteStream::closeInput(  )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -1995,7 +1960,7 @@ void SAL_CALL OWriteStream::closeInput(  )
 
 uno::Reference< io::XInputStream > SAL_CALL OWriteStream::getInputStream()
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2011,7 +1976,7 @@ uno::Reference< io::XInputStream > SAL_CALL OWriteStream::getInputStream()
 
 uno::Reference< io::XOutputStream > SAL_CALL OWriteStream::getOutputStream()
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     try
     {
@@ -2020,7 +1985,7 @@ uno::Reference< io::XOutputStream > SAL_CALL OWriteStream::getOutputStream()
     catch( const io::IOException& r )
     {
         throw lang::WrappedTargetRuntimeException("OWriteStream::getOutputStream: Could not create backing temp file",
-                static_cast < OWeakObject * > ( this ), css::uno::Any ( r ) );
+                getXWeak(), css::uno::Any ( r ) );
     }
 
     if ( !m_pImpl )
@@ -2037,7 +2002,7 @@ uno::Reference< io::XOutputStream > SAL_CALL OWriteStream::getOutputStream()
 
 void SAL_CALL OWriteStream::writeBytes( const uno::Sequence< sal_Int8 >& aData )
 {
-    osl::ClearableMutexGuard aGuard(m_pData->m_xSharedMutex->GetMutex());
+    osl::ClearableMutexGuard aGuard(m_xSharedMutex->GetMutex());
 
     // the write method makes initialization itself, since it depends from the aData length
     // NO CheckInitOnDemand()!
@@ -2103,7 +2068,7 @@ void OWriteStream::writeBytes( const sal_Int8* pData, sal_Int32 nBytesToWrite )
 {
     assert(nBytesToWrite >= 0);
 
-    osl::ClearableMutexGuard aGuard(m_pData->m_xSharedMutex->GetMutex());
+    osl::ClearableMutexGuard aGuard(m_xSharedMutex->GetMutex());
 
     // the write method makes initialization itself, since it depends from the aData length
     // NO CheckInitOnDemand()!
@@ -2159,11 +2124,7 @@ void OWriteStream::writeBytes( const sal_Int8* pData, sal_Int32 nBytesToWrite )
     if ( !m_xOutStream.is() )
         throw io::NotConnectedException();
 
-    uno::Reference< css::lang::XUnoTunnel > xOutputTunnel( m_xOutStream, uno::UNO_QUERY );
-    comphelper::ByteWriter* pByteWriter = nullptr;
-    if (xOutputTunnel)
-        pByteWriter = reinterpret_cast< comphelper::ByteWriter* >( xOutputTunnel->getSomething( comphelper::ByteWriter::getUnoTunnelId() ) );
-    if (pByteWriter)
+    if (auto pByteWriter = dynamic_cast< comphelper::ByteWriter* >( m_xOutStream.get() ))
         pByteWriter->writeBytes(pData, nBytesToWrite);
     else
     {
@@ -2175,13 +2136,6 @@ void OWriteStream::writeBytes( const sal_Int8* pData, sal_Int32 nBytesToWrite )
     ModifyParentUnlockMutex_Impl( aGuard );
 }
 
-sal_Int64 SAL_CALL OWriteStream::getSomething( const css::uno::Sequence< sal_Int8 >& rIdentifier )
-{
-    if (rIdentifier == comphelper::ByteWriter::getUnoTunnelId())
-        return reinterpret_cast<sal_Int64>(static_cast<comphelper::ByteWriter*>(this));
-    return 0;
-}
-
 void SAL_CALL OWriteStream::flush()
 {
     // In case stream is flushed its current version becomes visible
@@ -2189,7 +2143,7 @@ void SAL_CALL OWriteStream::flush()
     // during own commit but a user can explicitly flush the stream
     // so the changes will be available through cloning functionality.
 
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2231,7 +2185,7 @@ void OWriteStream::CloseOutput_Impl()
 
 void SAL_CALL OWriteStream::closeOutput()
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     CheckInitOnDemand();
 
@@ -2252,7 +2206,7 @@ void SAL_CALL OWriteStream::closeOutput()
 
 void SAL_CALL OWriteStream::seek( sal_Int64 location )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     CheckInitOnDemand();
 
@@ -2270,7 +2224,7 @@ void SAL_CALL OWriteStream::seek( sal_Int64 location )
 
 sal_Int64 SAL_CALL OWriteStream::getPosition()
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     CheckInitOnDemand();
 
@@ -2288,7 +2242,7 @@ sal_Int64 SAL_CALL OWriteStream::getPosition()
 
 sal_Int64 SAL_CALL OWriteStream::getLength()
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     CheckInitOnDemand();
 
@@ -2306,7 +2260,7 @@ sal_Int64 SAL_CALL OWriteStream::getLength()
 
 void SAL_CALL OWriteStream::truncate()
 {
-    osl::ClearableMutexGuard aGuard(m_pData->m_xSharedMutex->GetMutex());
+    osl::ClearableMutexGuard aGuard(m_xSharedMutex->GetMutex());
 
     CheckInitOnDemand();
 
@@ -2331,7 +2285,7 @@ void SAL_CALL OWriteStream::dispose()
 {
     // should be an internal method since it can be called only from parent storage
     {
-        ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+        ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
         if ( !m_pImpl )
         {
@@ -2371,7 +2325,7 @@ void SAL_CALL OWriteStream::dispose()
                 uno::Any aCaught( ::cppu::getCaughtException() );
                 SAL_INFO("package.xstor", "Rethrow: " << exceptionToString(aCaught));
                 throw lang::WrappedTargetRuntimeException("Can not commit/revert the storage!",
-                                                static_cast< OWeakObject* >( this ),
+                                                getXWeak(),
                                                 aCaught );
             }
         }
@@ -2383,14 +2337,14 @@ void SAL_CALL OWriteStream::dispose()
     // for now the listener is just notified at the end of the method to workaround the problem
     // in future a more elegant way should be found
 
-    lang::EventObject aSource( static_cast< ::cppu::OWeakObject* >(this) );
-    m_pData->m_aListenersContainer.disposeAndClear( aSource );
+    lang::EventObject aSource( getXWeak() );
+    m_aListenersContainer.disposeAndClear( aSource );
 }
 
 void SAL_CALL OWriteStream::addEventListener(
             const uno::Reference< lang::XEventListener >& xListener )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2398,14 +2352,14 @@ void SAL_CALL OWriteStream::addEventListener(
         throw lang::DisposedException();
     }
 
-    m_pData->m_aListenersContainer.addInterface( cppu::UnoType<lang::XEventListener>::get(),
+    m_aListenersContainer.addInterface( cppu::UnoType<lang::XEventListener>::get(),
                                                  xListener );
 }
 
 void SAL_CALL OWriteStream::removeEventListener(
             const uno::Reference< lang::XEventListener >& xListener )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2413,13 +2367,13 @@ void SAL_CALL OWriteStream::removeEventListener(
         throw lang::DisposedException();
     }
 
-    m_pData->m_aListenersContainer.removeInterface( cppu::UnoType<lang::XEventListener>::get(),
+    m_aListenersContainer.removeInterface( cppu::UnoType<lang::XEventListener>::get(),
                                                     xListener );
 }
 
 void SAL_CALL OWriteStream::setEncryptionPassword( const OUString& aPass )
 {
-    osl::ClearableMutexGuard aGuard(m_pData->m_xSharedMutex->GetMutex());
+    osl::ClearableMutexGuard aGuard(m_xSharedMutex->GetMutex());
 
     CheckInitOnDemand();
 
@@ -2438,7 +2392,7 @@ void SAL_CALL OWriteStream::setEncryptionPassword( const OUString& aPass )
 
 void SAL_CALL OWriteStream::removeEncryption()
 {
-    osl::ClearableMutexGuard aGuard(m_pData->m_xSharedMutex->GetMutex());
+    osl::ClearableMutexGuard aGuard(m_xSharedMutex->GetMutex());
 
     CheckInitOnDemand();
 
@@ -2457,7 +2411,7 @@ void SAL_CALL OWriteStream::removeEncryption()
 
 void SAL_CALL OWriteStream::setEncryptionData( const uno::Sequence< beans::NamedValue >& aEncryptionData )
 {
-    osl::ClearableMutexGuard aGuard(m_pData->m_xSharedMutex->GetMutex());
+    osl::ClearableMutexGuard aGuard(m_xSharedMutex->GetMutex());
 
     CheckInitOnDemand();
 
@@ -2476,7 +2430,7 @@ void SAL_CALL OWriteStream::setEncryptionData( const uno::Sequence< beans::Named
 
 sal_Bool SAL_CALL OWriteStream::hasEncryptionData()
 {
-    osl::ClearableMutexGuard aGuard(m_pData->m_xSharedMutex->GetMutex());
+    osl::ClearableMutexGuard aGuard(m_xSharedMutex->GetMutex());
 
     if (!m_pImpl)
         return false;
@@ -2500,7 +2454,7 @@ sal_Bool SAL_CALL OWriteStream::hasEncryptionData()
         uno::Any aCaught( ::cppu::getCaughtException() );
         SAL_INFO("package.xstor", "Rethrow: " << exceptionToString(aCaught));
         throw lang::WrappedTargetRuntimeException( "Problems on hasEncryptionData!",
-                                  static_cast< ::cppu::OWeakObject* >( this ),
+                                  getXWeak(),
                                   aCaught );
     }
 
@@ -2509,7 +2463,7 @@ sal_Bool SAL_CALL OWriteStream::hasEncryptionData()
 
 sal_Bool SAL_CALL OWriteStream::hasByID(  const OUString& sID )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2517,7 +2471,7 @@ sal_Bool SAL_CALL OWriteStream::hasByID(  const OUString& sID )
         throw lang::DisposedException();
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType != embed::StorageFormats::OFOPXML )
         throw uno::RuntimeException();
 
     try
@@ -2535,7 +2489,7 @@ sal_Bool SAL_CALL OWriteStream::hasByID(  const OUString& sID )
 
 OUString SAL_CALL OWriteStream::getTargetByID(  const OUString& sID  )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2543,7 +2497,7 @@ OUString SAL_CALL OWriteStream::getTargetByID(  const OUString& sID  )
         throw lang::DisposedException();
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType != embed::StorageFormats::OFOPXML )
         throw uno::RuntimeException();
 
     const uno::Sequence< beans::StringPair > aSeq = getRelationshipByID( sID );
@@ -2556,7 +2510,7 @@ OUString SAL_CALL OWriteStream::getTargetByID(  const OUString& sID  )
 
 OUString SAL_CALL OWriteStream::getTypeByID(  const OUString& sID  )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2564,7 +2518,7 @@ OUString SAL_CALL OWriteStream::getTypeByID(  const OUString& sID  )
         throw lang::DisposedException();
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType != embed::StorageFormats::OFOPXML )
         throw uno::RuntimeException();
 
     const uno::Sequence< beans::StringPair > aSeq = getRelationshipByID( sID );
@@ -2577,7 +2531,7 @@ OUString SAL_CALL OWriteStream::getTypeByID(  const OUString& sID  )
 
 uno::Sequence< beans::StringPair > SAL_CALL OWriteStream::getRelationshipByID(  const OUString& sID  )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2585,7 +2539,7 @@ uno::Sequence< beans::StringPair > SAL_CALL OWriteStream::getRelationshipByID(  
         throw lang::DisposedException();
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType != embed::StorageFormats::OFOPXML )
         throw uno::RuntimeException();
 
     // TODO/LATER: in future the unification of the ID could be checked
@@ -2602,7 +2556,7 @@ uno::Sequence< beans::StringPair > SAL_CALL OWriteStream::getRelationshipByID(  
 
 uno::Sequence< uno::Sequence< beans::StringPair > > SAL_CALL OWriteStream::getRelationshipsByType(  const OUString& sType  )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2610,7 +2564,7 @@ uno::Sequence< uno::Sequence< beans::StringPair > > SAL_CALL OWriteStream::getRe
         throw lang::DisposedException();
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType != embed::StorageFormats::OFOPXML )
         throw uno::RuntimeException();
 
     // TODO/LATER: in future the unification of the ID could be checked
@@ -2628,7 +2582,7 @@ uno::Sequence< uno::Sequence< beans::StringPair > > SAL_CALL OWriteStream::getRe
 
 uno::Sequence< uno::Sequence< beans::StringPair > > SAL_CALL OWriteStream::getAllRelationships()
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2636,7 +2590,7 @@ uno::Sequence< uno::Sequence< beans::StringPair > > SAL_CALL OWriteStream::getAl
         throw lang::DisposedException();
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType != embed::StorageFormats::OFOPXML )
         throw uno::RuntimeException();
 
     return m_pImpl->GetAllRelationshipsIfAny();
@@ -2644,7 +2598,7 @@ uno::Sequence< uno::Sequence< beans::StringPair > > SAL_CALL OWriteStream::getAl
 
 void SAL_CALL OWriteStream::insertRelationshipByID(  const OUString& sID, const uno::Sequence< beans::StringPair >& aEntry, sal_Bool bReplace  )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2652,7 +2606,7 @@ void SAL_CALL OWriteStream::insertRelationshipByID(  const OUString& sID, const 
         throw lang::DisposedException();
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType != embed::StorageFormats::OFOPXML )
         throw uno::RuntimeException();
 
     const beans::StringPair aIDRel("Id", sID);
@@ -2694,7 +2648,7 @@ void SAL_CALL OWriteStream::insertRelationshipByID(  const OUString& sID, const 
 
 void SAL_CALL OWriteStream::removeRelationshipByID(  const OUString& sID  )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2702,7 +2656,7 @@ void SAL_CALL OWriteStream::removeRelationshipByID(  const OUString& sID  )
         throw lang::DisposedException();
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType != embed::StorageFormats::OFOPXML )
         throw uno::RuntimeException();
 
     uno::Sequence< uno::Sequence< beans::StringPair > > aSeq = getAllRelationships();
@@ -2728,7 +2682,7 @@ void SAL_CALL OWriteStream::removeRelationshipByID(  const OUString& sID  )
 
 void SAL_CALL OWriteStream::insertRelationships(  const uno::Sequence< uno::Sequence< beans::StringPair > >& aEntries, sal_Bool bReplace  )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2736,7 +2690,7 @@ void SAL_CALL OWriteStream::insertRelationships(  const uno::Sequence< uno::Sequ
         throw lang::DisposedException();
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType != embed::StorageFormats::OFOPXML )
         throw uno::RuntimeException();
 
     OUString aIDTag( "Id" );
@@ -2781,7 +2735,7 @@ void SAL_CALL OWriteStream::insertRelationships(  const uno::Sequence< uno::Sequ
 
 void SAL_CALL OWriteStream::clearRelationships()
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2789,7 +2743,7 @@ void SAL_CALL OWriteStream::clearRelationships()
         throw lang::DisposedException();
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::OFOPXML )
+    if ( m_nStorageType != embed::StorageFormats::OFOPXML )
         throw uno::RuntimeException();
 
     m_pImpl->m_aNewRelInfo.realloc( 0 );
@@ -2799,7 +2753,7 @@ void SAL_CALL OWriteStream::clearRelationships()
 
 uno::Reference< beans::XPropertySetInfo > SAL_CALL OWriteStream::getPropertySetInfo()
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     //TODO:
     return uno::Reference< beans::XPropertySetInfo >();
@@ -2807,7 +2761,7 @@ uno::Reference< beans::XPropertySetInfo > SAL_CALL OWriteStream::getPropertySetI
 
 void SAL_CALL OWriteStream::setPropertyValue( const OUString& aPropertyName, const uno::Any& aValue )
 {
-    osl::ClearableMutexGuard aGuard(m_pData->m_xSharedMutex->GetMutex());
+    osl::ClearableMutexGuard aGuard(m_xSharedMutex->GetMutex());
 
     if ( !m_pImpl )
     {
@@ -2816,9 +2770,9 @@ void SAL_CALL OWriteStream::setPropertyValue( const OUString& aPropertyName, con
     }
 
     m_pImpl->GetStreamProperties();
-    static constexpr OUStringLiteral aCompressedString( u"Compressed" );
-    static constexpr OUStringLiteral aMediaTypeString( u"MediaType" );
-    if ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE && aPropertyName == aMediaTypeString )
+    static constexpr OUString aCompressedString( u"Compressed"_ustr );
+    static constexpr OUString aMediaTypeString( u"MediaType"_ustr );
+    if ( m_nStorageType == embed::StorageFormats::PACKAGE && aPropertyName == aMediaTypeString )
     {
         // if the "Compressed" property is not set explicitly, the MediaType can change the default value
         bool bCompressedValueFromType = true;
@@ -2849,7 +2803,7 @@ void SAL_CALL OWriteStream::setPropertyValue( const OUString& aPropertyName, con
                 rProp.Value = aValue;
         }
     }
-    else if ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE
+    else if ( m_nStorageType == embed::StorageFormats::PACKAGE
             && aPropertyName == "UseCommonStoragePasswordEncryption" )
     {
         bool bUseCommonEncryption = false;
@@ -2872,7 +2826,7 @@ void SAL_CALL OWriteStream::setPropertyValue( const OUString& aPropertyName, con
         else
             m_pImpl->m_bUseCommonEncryption = false;
     }
-    else if ( m_pData->m_nStorageType == embed::StorageFormats::OFOPXML && aPropertyName == aMediaTypeString )
+    else if ( m_nStorageType == embed::StorageFormats::OFOPXML && aPropertyName == aMediaTypeString )
     {
         for ( auto& rProp : asNonConstRange(m_pImpl->m_aProps) )
         {
@@ -2880,7 +2834,7 @@ void SAL_CALL OWriteStream::setPropertyValue( const OUString& aPropertyName, con
                 rProp.Value = aValue;
         }
     }
-    else if ( m_pData->m_nStorageType == embed::StorageFormats::OFOPXML && aPropertyName == "RelationsInfoStream" )
+    else if ( m_nStorageType == embed::StorageFormats::OFOPXML && aPropertyName == "RelationsInfoStream" )
     {
         uno::Reference< io::XInputStream > xInRelStream;
         if ( !( aValue >>= xInRelStream ) || !xInRelStream.is() )
@@ -2899,14 +2853,14 @@ void SAL_CALL OWriteStream::setPropertyValue( const OUString& aPropertyName, con
         m_pImpl->m_aNewRelInfo = uno::Sequence< uno::Sequence< beans::StringPair > >();
         m_pImpl->m_nRelInfoStatus = RELINFO_CHANGED_STREAM;
     }
-    else if ( m_pData->m_nStorageType == embed::StorageFormats::OFOPXML && aPropertyName == "RelationsInfo" )
+    else if ( m_nStorageType == embed::StorageFormats::OFOPXML && aPropertyName == "RelationsInfo" )
     {
         if ( !(aValue >>= m_pImpl->m_aNewRelInfo) )
             throw lang::IllegalArgumentException(); // TODO
     }
     else if ( aPropertyName == "Size" )
         throw beans::PropertyVetoException(); // TODO
-    else if ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE
+    else if ( m_nStorageType == embed::StorageFormats::PACKAGE
            && ( aPropertyName == "IsEncrypted" || aPropertyName == "Encrypted" ) )
         throw beans::PropertyVetoException(); // TODO
     else if ( aPropertyName == "RelId" )
@@ -2922,7 +2876,7 @@ void SAL_CALL OWriteStream::setPropertyValue( const OUString& aPropertyName, con
 
 uno::Any SAL_CALL OWriteStream::getPropertyValue( const OUString& aProp )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2941,9 +2895,9 @@ uno::Any SAL_CALL OWriteStream::getPropertyValue( const OUString& aProp )
     else
         aPropertyName = aProp;
 
-    if ( ( ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE || m_pData->m_nStorageType == embed::StorageFormats::OFOPXML )
+    if ( ( ( m_nStorageType == embed::StorageFormats::PACKAGE || m_nStorageType == embed::StorageFormats::OFOPXML )
             && aPropertyName == "MediaType" )
-      || ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE && aPropertyName == "Encrypted" )
+      || ( m_nStorageType == embed::StorageFormats::PACKAGE && aPropertyName == "Encrypted" )
       || aPropertyName == "Compressed" )
     {
         m_pImpl->GetStreamProperties();
@@ -2953,7 +2907,7 @@ uno::Any SAL_CALL OWriteStream::getPropertyValue( const OUString& aProp )
         if (pProp != std::cend(m_pImpl->m_aProps))
             return pProp->Value;
     }
-    else if ( m_pData->m_nStorageType == embed::StorageFormats::PACKAGE
+    else if ( m_nStorageType == embed::StorageFormats::PACKAGE
             && aPropertyName == "UseCommonStoragePasswordEncryption" )
         return uno::Any( m_pImpl->m_bUseCommonEncryption );
     else if ( aPropertyName == "Size" )
@@ -2980,7 +2934,7 @@ void SAL_CALL OWriteStream::addPropertyChangeListener(
     const OUString& /*aPropertyName*/,
     const uno::Reference< beans::XPropertyChangeListener >& /*xListener*/ )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -2995,7 +2949,7 @@ void SAL_CALL OWriteStream::removePropertyChangeListener(
     const OUString& /*aPropertyName*/,
     const uno::Reference< beans::XPropertyChangeListener >& /*aListener*/ )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -3010,7 +2964,7 @@ void SAL_CALL OWriteStream::addVetoableChangeListener(
     const OUString& /*PropertyName*/,
     const uno::Reference< beans::XVetoableChangeListener >& /*aListener*/ )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -3025,7 +2979,7 @@ void SAL_CALL OWriteStream::removeVetoableChangeListener(
     const OUString& /*PropertyName*/,
     const uno::Reference< beans::XVetoableChangeListener >& /*aListener*/ )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -3053,10 +3007,10 @@ void OWriteStream::BroadcastTransaction( sal_Int8 nMessage )
         throw lang::DisposedException();
     }
 
-    lang::EventObject aSource( static_cast< ::cppu::OWeakObject* >(this) );
+    lang::EventObject aSource( getXWeak() );
 
     comphelper::OInterfaceContainerHelper2* pContainer =
-            m_pData->m_aListenersContainer.getContainer(
+            m_aListenersContainer.getContainer(
                 cppu::UnoType<embed::XTransactionListener>::get());
     if ( !pContainer )
            return;
@@ -3099,7 +3053,7 @@ void SAL_CALL OWriteStream::commit()
     try {
         BroadcastTransaction( STOR_MESS_PRECOMMIT );
 
-        osl::ClearableMutexGuard aGuard(m_pData->m_xSharedMutex->GetMutex());
+        osl::ClearableMutexGuard aGuard(m_xSharedMutex->GetMutex());
 
         if ( !m_pImpl )
         {
@@ -3132,7 +3086,7 @@ void SAL_CALL OWriteStream::commit()
         uno::Any aCaught( ::cppu::getCaughtException() );
         SAL_INFO("package.xstor", "Rethrow: " << exceptionToString(aCaught));
         throw embed::StorageWrappedTargetException( "Problems on commit!",
-                                  static_cast< ::cppu::OWeakObject* >( this ),
+                                  getXWeak(),
                                   aCaught );
     }
 
@@ -3157,7 +3111,7 @@ void SAL_CALL OWriteStream::revert()
     BroadcastTransaction( STOR_MESS_PREREVERT );
 
     {
-        osl::MutexGuard aGuard(m_pData->m_xSharedMutex->GetMutex());
+        osl::MutexGuard aGuard(m_xSharedMutex->GetMutex());
 
         if (!m_pImpl)
         {
@@ -3188,7 +3142,7 @@ void SAL_CALL OWriteStream::revert()
             uno::Any aCaught(::cppu::getCaughtException());
             SAL_INFO("package.xstor", "Rethrow: " << exceptionToString(aCaught));
             throw embed::StorageWrappedTargetException("Problems on revert!",
-                static_cast<::cppu::OWeakObject*>(this),
+                getXWeak(),
                 aCaught);
         }
     }
@@ -3200,7 +3154,7 @@ void SAL_CALL OWriteStream::revert()
 
 void SAL_CALL OWriteStream::addTransactionListener( const uno::Reference< embed::XTransactionListener >& aListener )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -3211,13 +3165,13 @@ void SAL_CALL OWriteStream::addTransactionListener( const uno::Reference< embed:
     if ( !m_bTransacted )
         throw uno::RuntimeException();
 
-    m_pData->m_aListenersContainer.addInterface( cppu::UnoType<embed::XTransactionListener>::get(),
+    m_aListenersContainer.addInterface( cppu::UnoType<embed::XTransactionListener>::get(),
                                                 aListener );
 }
 
 void SAL_CALL OWriteStream::removeTransactionListener( const uno::Reference< embed::XTransactionListener >& aListener )
 {
-    ::osl::MutexGuard aGuard( m_pData->m_xSharedMutex->GetMutex() );
+    ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )
     {
@@ -3228,7 +3182,7 @@ void SAL_CALL OWriteStream::removeTransactionListener( const uno::Reference< emb
     if ( !m_bTransacted )
         throw uno::RuntimeException();
 
-    m_pData->m_aListenersContainer.removeInterface( cppu::UnoType<embed::XTransactionListener>::get(),
+    m_aListenersContainer.removeInterface( cppu::UnoType<embed::XTransactionListener>::get(),
                                                     aListener );
 }
 

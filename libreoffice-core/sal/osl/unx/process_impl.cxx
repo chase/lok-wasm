@@ -25,6 +25,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <osl/diagnose.h>
 #include <osl/file.hxx>
@@ -32,7 +33,6 @@
 #include <osl/thread.h>
 #include <rtl/alloc.h>
 #include <rtl/ustring.hxx>
-#include <rtl/strbuf.h>
 #include <sal/log.hxx>
 
 #include "file_path_helper.hxx"
@@ -247,10 +247,8 @@ void SAL_CALL osl_setCommandArgs (int argc, char ** argv)
                 /* see @ osl_getExecutableFile(). */
                 if (rtl_ustr_indexOfChar (rtl_uString_getStr(ppArgs[0]), '/') == -1)
                 {
-                    const OUString PATH ("PATH");
-
                     rtl_uString * pSearchPath = nullptr;
-                    osl_getEnvironment (PATH.pData, &pSearchPath);
+                    osl_getEnvironment (u"PATH"_ustr.pData, &pSearchPath);
                     if (pSearchPath)
                     {
                         rtl_uString * pSearchResult = nullptr;

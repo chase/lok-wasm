@@ -66,6 +66,7 @@ FontWorkGalleryDialog::FontWorkGalleryDialog(weld::Window* pParent, SdrView& rSd
     maCtlFavorites->set_size_request(aSize.Width(), aSize.Height());
 
     maCtlFavorites->connect_item_activated( LINK( this, FontWorkGalleryDialog, DoubleClickFavoriteHdl ) );
+    maCtlFavorites->connect_query_tooltip(LINK(this, FontWorkGalleryDialog, QueryTooltipHandler));
     mxOKButton->connect_clicked(LINK(this, FontWorkGalleryDialog, ClickOKHdl));
 
     initFavorites( GALLERY_THEME_FONTWORK );
@@ -125,10 +126,16 @@ void FontWorkGalleryDialog::fillFavorites(sal_uInt16 nThemeId)
     auto nFavCount = maFavoritesHorizontal.size();
 
     maCtlFavorites->clear();
+    maIdToTitleMap.clear();
+
+    std::vector<OUString> aTitles;
+    (void)GalleryExplorer::FillObjListTitle(nThemeId, aTitles);
+    assert(aTitles.size() == nFavCount);
 
     for( size_t nFavorite = 1; nFavorite <= nFavCount; nFavorite++ )
     {
         OUString sId = OUString::number(static_cast<sal_uInt16>(nFavorite));
+        maIdToTitleMap.emplace(sId, aTitles.at(nFavorite - 1));
         maCtlFavorites->insert(-1, nullptr, &sId, maFavoritesHorizontal[nFavorite - 1], nullptr);
     }
 
@@ -262,6 +269,13 @@ IMPL_LINK_NOARG(FontWorkGalleryDialog, DoubleClickFavoriteHdl, weld::IconView&, 
     return true;
 }
 
+IMPL_LINK(FontWorkGalleryDialog, QueryTooltipHandler, const weld::TreeIter&, iter, OUString)
+{
+    const OUString id = maCtlFavorites->get_id(iter);
+    auto it = maIdToTitleMap.find(id);
+    return it != maIdToTitleMap.end() ? it->second : OUString();
+}
+
 namespace {
 
 class FontworkAlignmentWindow final : public WeldToolbarPopup
@@ -289,7 +303,7 @@ private:
 
 }
 
-constexpr OUStringLiteral gsFontworkAlignment(u".uno:FontworkAlignment");
+constexpr OUString gsFontworkAlignment(u".uno:FontworkAlignment"_ustr);
 
 FontworkAlignmentWindow::FontworkAlignmentWindow(svt::PopupWindowController* pControl, weld::Widget* pParent)
     : WeldToolbarPopup(pControl->getFrameInterface(), pParent, "svx/ui/fontworkalignmentcontrol.ui", "FontworkAlignmentControl")
@@ -362,7 +376,7 @@ IMPL_LINK(FontworkAlignmentWindow, SelectHdl, weld::Toggleable&, rButton, void)
         nAlignment = 4;
 
     Sequence< PropertyValue > aArgs{ comphelper::makePropertyValue(
-        OUString(gsFontworkAlignment).copy(5), nAlignment) };
+        gsFontworkAlignment.copy(5), nAlignment) };
 
     mxControl->dispatchCommand( gsFontworkAlignment, aArgs );
 
@@ -419,7 +433,7 @@ void SAL_CALL FontworkAlignmentControl::initialize( const css::uno::Sequence< cs
     if (m_pToolbar)
     {
         mxPopoverContainer.reset(new ToolbarPopupContainer(m_pToolbar));
-        m_pToolbar->set_item_popover(m_aCommandURL.toUtf8(), mxPopoverContainer->getTopLevel());
+        m_pToolbar->set_item_popover(m_aCommandURL, mxPopoverContainer->getTopLevel());
     }
 
     ToolBox* pToolBox = nullptr;
@@ -484,8 +498,8 @@ private:
 
 }
 
-constexpr OUStringLiteral gsFontworkCharacterSpacing(u".uno:FontworkCharacterSpacing");
-constexpr OUStringLiteral gsFontworkKernCharacterPairs(u".uno:FontworkKernCharacterPairs");
+constexpr OUString gsFontworkCharacterSpacing(u".uno:FontworkCharacterSpacing"_ustr);
+constexpr OUString gsFontworkKernCharacterPairs(u".uno:FontworkKernCharacterPairs"_ustr);
 
 FontworkCharacterSpacingWindow::FontworkCharacterSpacingWindow(svt::PopupWindowController* pControl, weld::Widget* pParent)
     : WeldToolbarPopup(pControl->getFrameInterface(), pParent, "svx/ui/fontworkcharacterspacingcontrol.ui", "FontworkCharacterSpacingControl")
@@ -610,7 +624,7 @@ IMPL_LINK_NOARG(FontworkCharacterSpacingWindow, KernSelectHdl, weld::Toggleable&
 
     bool bKernOnOff = mxKernPairs->get_active();
     Sequence< PropertyValue > aArgs{ comphelper::makePropertyValue(
-        OUString(gsFontworkKernCharacterPairs).copy(5), bKernOnOff) };
+        gsFontworkKernCharacterPairs.copy(5), bKernOnOff) };
 
     mxControl->dispatchCommand( gsFontworkKernCharacterPairs, aArgs );
     mbCommandDispatched = true;
@@ -623,7 +637,7 @@ IMPL_LINK_NOARG(FontworkCharacterSpacingWindow, KernSelectHdl, weld::Toggleable&
 void FontworkCharacterSpacingWindow::DispatchSpacingDialog()
 {
     Sequence< PropertyValue > aArgs{ comphelper::makePropertyValue(
-        OUString(gsFontworkCharacterSpacing).copy(5), mnCharacterSpacing) };
+        gsFontworkCharacterSpacing.copy(5), mnCharacterSpacing) };
 
     rtl::Reference<svt::PopupWindowController> xControl(mxControl);
     xControl->EndPopupMode();
@@ -662,7 +676,7 @@ IMPL_LINK(FontworkCharacterSpacingWindow, SelectHdl, weld::Toggleable&, rButton,
             nCharacterSpacing = 100;
 
         Sequence< PropertyValue > aArgs{ comphelper::makePropertyValue(
-            OUString(gsFontworkCharacterSpacing).copy(5), nCharacterSpacing) };
+            gsFontworkCharacterSpacing.copy(5), nCharacterSpacing) };
 
         mxControl->dispatchCommand( gsFontworkCharacterSpacing,  aArgs );
         mbCommandDispatched = true;
@@ -739,7 +753,7 @@ void SAL_CALL FontworkCharacterSpacingControl::initialize( const css::uno::Seque
     if (m_pToolbar)
     {
         mxPopoverContainer.reset(new ToolbarPopupContainer(m_pToolbar));
-        m_pToolbar->set_item_popover(m_aCommandURL.toUtf8(), mxPopoverContainer->getTopLevel());
+        m_pToolbar->set_item_popover(m_aCommandURL, mxPopoverContainer->getTopLevel());
     }
 
     ToolBox* pToolBox = nullptr;

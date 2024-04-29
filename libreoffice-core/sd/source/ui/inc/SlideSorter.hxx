@@ -68,14 +68,6 @@ public:
     SlideSorter(const SlideSorter&) = delete;
     SlideSorter& operator=(const SlideSorter&) = delete;
 
-    /** Return whether the called SlideSorter object is valid and calling
-        its Get(Model,View,Controller) methods is safe.  When <FALSE/> is
-        called then no other methods should be called.
-        Calling this method should be necessary only during startup and
-        shutdown (when that can be detected).
-    */
-    bool IsValid() const { return mbIsValid;}
-
     /** Create a new slide sorter that is strongly coupled to the given view
         shell.  Use this function for a slide sorter in the left pane.
         @param rViewShell
@@ -92,20 +84,6 @@ public:
         sd::Window* pContentWindow,
         ScrollAdaptor* pHorizontalScrollBar,
         ScrollAdaptor* pVerticalScrollBar);
-
-    /** Create a new slide sorter that is loosely coupled to the given view
-        shell.  The view shell may even be missing.
-        @param rBase
-            ViewShellBase object of the enclosing application.
-        @param pViewShell
-            Supply when at hand.
-        @param rParentWindow
-            The parent window of the internally created content window and
-            scroll bars.
-    */
-    static std::shared_ptr<SlideSorter> CreateSlideSorter (
-        ViewShellBase& rBase,
-        vcl::Window& rParentWindow);
 
     /** Return the control of the vertical scroll bar.
     */
@@ -143,8 +121,6 @@ public:
             May be empty.
     */
     ViewShellBase* GetViewShellBase() const { return mpViewShellBase;}
-
-    void Paint (const ::tools::Rectangle& rRepaintArea);
 
     /** Place and size the controls and windows.  You may want to call this
         method when something has changed that for instance affects the
@@ -186,8 +162,6 @@ private:
     */
     model::SlideSorterModel* CreateModel();
 
-    bool mbIsValid;
-
     std::unique_ptr<controller::SlideSorterController> mpSlideSorterController;
     std::unique_ptr<model::SlideSorterModel> mpSlideSorterModel;
     std::unique_ptr<view::SlideSorterView> mpSlideSorterView;
@@ -209,9 +183,6 @@ private:
         sd::Window* pContentWindow,
         ScrollAdaptor* pHorizontalScrollBar,
         ScrollAdaptor* pVerticalScrollBar);
-    SlideSorter (
-        ViewShellBase& rBase,
-        vcl::Window& rParentWindow);
 
     void Init();
     /** Create the controls for the slide sorter.  This are the tab bar

@@ -120,10 +120,6 @@
     constructor="i18npool_IndexEntrySupplier_asian_get_implementation">
     <service name="com.sun.star.i18n.IndexEntrySupplier_asian"/>
   </implementation>
-  <implementation name="com.sun.star.i18n.IndexEntrySupplier_ja_phonetic (alphanumeric first)"
-    constructor="i18npool_IndexEntrySupplier_ja_phonetic_alphanumeric_first_by_syllable_get_implementation">
-    <service name="com.sun.star.i18n.IndexEntrySupplier_ja_phonetic (alphanumeric first)"/>
-  </implementation>
   <implementation name="com.sun.star.i18n.IndexEntrySupplier_ja_phonetic (alphanumeric first) (grouped by consonant)"
     constructor="i18npool_IndexEntrySupplier_ja_phonetic_alphanumeric_first_by_consonant_get_implementation">
     <service name="com.sun.star.i18n.IndexEntrySupplier_ja_phonetic (alphanumeric first) (grouped by consonant)"/>
@@ -131,10 +127,6 @@
   <implementation name="com.sun.star.i18n.IndexEntrySupplier_ja_phonetic (alphanumeric first) (grouped by syllable)"
     constructor="i18npool_IndexEntrySupplier_ja_phonetic_alphanumeric_first_by_syllable_get_implementation">
     <service name="com.sun.star.i18n.IndexEntrySupplier_ja_phonetic (alphanumeric first) (grouped by syllable)"/>
-  </implementation>
-  <implementation name="com.sun.star.i18n.IndexEntrySupplier_ja_phonetic (alphanumeric last)"
-    constructor="i18npool_IndexEntrySupplier_ja_phonetic_alphanumeric_last_by_syllable_get_implementation">
-    <service name="com.sun.star.i18n.IndexEntrySupplier_ja_phonetic (alphanumeric last)"/>
   </implementation>
   <implementation name="com.sun.star.i18n.IndexEntrySupplier_ja_phonetic (alphanumeric last) (grouped by consonant)"
     constructor="i18npool_IndexEntrySupplier_ja_phonetic_alphanumeric_last_by_consonant_get_implementation">
@@ -293,7 +285,8 @@
   <implementation name="com.sun.star.i18n.Transliteration.LOWERCASE_UPPERCASE">
     <service name="com.sun.star.i18n.Transliteration.l10n"/>
   </implementation>
-  <implementation name="com.sun.star.i18n.Transliteration.NumToCharEastIndic_ar">
+  <implementation name="com.sun.star.i18n.Transliteration.NumToCharEastIndic_ar"
+      constructor="i18npool_NumToCharEastIndic_ar_get_implementation">
     <service name="com.sun.star.i18n.Transliteration.l10n"/>
   </implementation>
   <implementation name="com.sun.star.i18n.Transliteration.NumToCharFullwidth">
@@ -338,7 +331,8 @@
   <implementation name="com.sun.star.i18n.Transliteration.NumToChar_th">
     <service name="com.sun.star.i18n.Transliteration.l10n"/>
   </implementation>
-  <implementation name="com.sun.star.i18n.Transliteration.NumToTextAIUFullWidth_ja_JP">
+  <implementation name="com.sun.star.i18n.Transliteration.NumToTextAIUFullWidth_ja_JP"
+      constructor="i18npool_NumToTextAIUFullWidth_ja_JP_get_implementation">
     <service name="com.sun.star.i18n.Transliteration.l10n"/>
   </implementation>
   <implementation name="com.sun.star.i18n.Transliteration.NumToTextAIUHalfWidth_ja_JP"
@@ -511,9 +505,6 @@
     <service name="com.sun.star.i18n.Transliteration.l10n"/>
   </implementation>
   <implementation name="com.sun.star.i18n.Transliteration.ignoreIterationMark_ja_JP">
-    <service name="com.sun.star.i18n.Transliteration.l10n"/>
-  </implementation>
-  <implementation name="com.sun.star.i18n.Transliteration.ignoreKana">
     <service name="com.sun.star.i18n.Transliteration.l10n"/>
   </implementation>
   <implementation name="com.sun.star.i18n.Transliteration.ignoreKiKuFollowedBySa_ja_JP">

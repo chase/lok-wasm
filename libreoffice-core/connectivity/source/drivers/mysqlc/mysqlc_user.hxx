@@ -34,10 +34,36 @@ public:
     // XAuthorizable
     virtual void SAL_CALL changePassword(const OUString&, const OUString& newPassword) override;
     virtual sal_Int32 SAL_CALL getPrivileges(const OUString&, sal_Int32) override;
+    // return the privileges and additional the grant rights
+    /// @throws css::sdbc::SQLException
+    /// @throws css::uno::RuntimeException
+    void findPrivilegesAndGrantPrivileges(const OUString& objName, sal_Int32 objType,
+                                          sal_Int32& nRights, sal_Int32& nRightsWithGrant);
+
     virtual sal_Int32 SAL_CALL getGrantablePrivileges(const OUString&, sal_Int32) override;
 
     // IRefreshableGroups::
     virtual void refreshGroups() override;
+};
+
+class OUserExtend;
+typedef ::comphelper::OPropertyArrayUsageHelper<OUserExtend> OUserExtend_PROP;
+
+class OUserExtend : public User, public OUserExtend_PROP
+{
+    OUString m_Password;
+
+protected:
+    // OPropertyArrayUsageHelper
+    virtual ::cppu::IPropertyArrayHelper* createArrayHelper() const override;
+    // OPropertySetHelper
+    virtual ::cppu::IPropertyArrayHelper& SAL_CALL getInfoHelper() override;
+
+public:
+    OUserExtend(const css::uno::Reference<css::sdbc::XConnection>& _xConnection,
+                const OUString& rName);
+
+    virtual void construct() override;
 };
 
 } // namespace connectivity::mysqlc

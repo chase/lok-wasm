@@ -51,12 +51,6 @@ using namespace ::osl;
 
 constexpr OUStringLiteral SERVICE_SDBC_DRIVER = u"com.sun.star.sdbc.Driver";
 
-/// @throws NoSuchElementException
-static void throwNoSuchElementException()
-{
-    throw NoSuchElementException();
-}
-
 class ODriverEnumeration : public ::cppu::WeakImplHelper< XEnumeration >
 {
     friend class OSDBCDriverManager;
@@ -98,7 +92,7 @@ sal_Bool SAL_CALL ODriverEnumeration::hasMoreElements(  )
 Any SAL_CALL ODriverEnumeration::nextElement(  )
 {
     if ( !hasMoreElements() )
-        throwNoSuchElementException();
+        throw NoSuchElementException();
 
     return Any( *m_aPos++ );
 }
@@ -158,22 +152,11 @@ namespace
     };
 
     // predicate for checking whether or not a driver accepts a given URL
-    class AcceptsURL
+    bool AcceptsURL( const OUString& _rURL, const Reference<XDriver>& _rDriver )
     {
-    protected:
-        const OUString& m_rURL;
-
-    public:
-        // ctor
-        explicit AcceptsURL( const OUString& _rURL ) : m_rURL( _rURL ) { }
-
-
-        bool operator()( const Reference<XDriver>& _rDriver ) const
-        {
-            // ask the driver
-            return _rDriver.is() && _rDriver->acceptsURL( m_rURL );
-        }
-    };
+        // ask the driver
+        return _rDriver.is() && _rDriver->acceptsURL( _rURL );
+    }
 
 #if !ENABLE_FUZZERS
     sal_Int32 lcl_getDriverPrecedence( const Reference<XComponentContext>& _rContext, Sequence< OUString >& _rPrecedence )
@@ -529,7 +512,7 @@ Reference< XInterface > SAL_CALL OSDBCDriverManager::getRegisteredObject( const 
     MutexGuard aGuard(m_aMutex);
     DriverCollection::const_iterator aSearch = m_aDriversRT.find(_rName);
     if (aSearch == m_aDriversRT.end())
-        throwNoSuchElementException();
+        throw NoSuchElementException();
 
     return aSearch->second;
 }
@@ -571,7 +554,7 @@ void SAL_CALL OSDBCDriverManager::revokeObject( const OUString& _rName )
 
     DriverCollection::iterator aSearch = m_aDriversRT.find(_rName);
     if (aSearch == m_aDriversRT.end())
-        throwNoSuchElementException();
+        throw NoSuchElementException();
 
     m_aDriversRT.erase(aSearch); // we already have the iterator so we could use it
 
@@ -608,8 +591,8 @@ Reference< XDriver > OSDBCDriverManager::implGetDriverForURL(const OUString& _rU
     {
         const OUString sDriverFactoryName = m_aDriverConfig.getDriverFactoryName(_rURL);
 
-        EqualDriverAccessToName aEqual(sDriverFactoryName);
-        DriverAccessArray::const_iterator aFind = std::find_if(m_aDriversBS.begin(),m_aDriversBS.end(),aEqual);
+        DriverAccessArray::const_iterator aFind = std::find_if(m_aDriversBS.begin(), m_aDriversBS.end(),
+                                                               EqualDriverAccessToName(sDriverFactoryName));
         if ( aFind == m_aDriversBS.end() )
         {
             // search all bootstrapped drivers
@@ -627,7 +610,7 @@ Reference< XDriver > OSDBCDriverManager::implGetDriverForURL(const OUString& _rU
 #pragma GCC diagnostic pop
 #endif
                     const Reference<XDriver> driver = ExtractDriverFromAccess()(ensuredAccess);
-                    return AcceptsURL(_rURL)(driver);
+                    return AcceptsURL(_rURL, driver);
                 });
         } // if ( m_aDriversBS.find(sDriverFactoryName ) == m_aDriversBS.end() )
         else
@@ -650,7 +633,7 @@ Reference< XDriver > OSDBCDriverManager::implGetDriverForURL(const OUString& _rU
             [&_rURL] (const DriverCollection::value_type& element) {
                 // extract the driver from the collection element, then ask the resulting driver for acceptance
                 const Reference<XDriver> driver = ExtractDriverFromCollectionElement()(element);
-                return AcceptsURL(_rURL)(driver);
+                return AcceptsURL(_rURL, driver);
             });
 
         if ( m_aDriversRT.end() != aPos )

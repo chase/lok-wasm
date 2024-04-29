@@ -153,6 +153,7 @@ public:
     virtual void FillOptions( SwAsciiOptions& rOptions ) override;
 };
 
+/// Interface implementation for the insert -> fields -> page number wizard dialog
 class AbstractSwPageNumberDlg_Impl : public AbstractSwPageNumberDlg
 {
     std::shared_ptr<SwPageNumberDlg> m_xDlg;
@@ -203,6 +204,26 @@ public:
     {
     }
     virtual short Execute() override;
+};
+
+class AbstractNumBulletDialog_Impl : public AbstractNumBulletDialog
+{
+protected:
+    std::shared_ptr<SfxTabDialogController> m_xDlg;
+public:
+    explicit AbstractNumBulletDialog_Impl(std::shared_ptr<SfxTabDialogController> p)
+        : m_xDlg(std::move(p))
+    {
+    }
+    virtual short Execute() override;
+    virtual bool  StartExecuteAsync(AsyncContext &rCtx) override;
+    virtual void                SetCurPageId( const OUString &rName ) override;
+    virtual const SfxItemSet*   GetOutputItemSet() const override;
+    virtual const SfxItemSet*   GetInputItemSet() const override;
+    virtual WhichRangesContainer GetInputRanges( const SfxItemPool& pItem ) override;
+    virtual void                SetInputSet( const SfxItemSet* pInSet ) override;
+        //From class Window.
+    virtual void        SetText( const OUString& rStr ) override;
 };
 
 class AbstractSwBreakDlg_Impl : public AbstractSwBreakDlg
@@ -291,7 +312,7 @@ public:
     }
     virtual short Execute() override;
     virtual bool  StartExecuteAsync(AsyncContext &rCtx) override;
-    virtual void                SetCurPageId( const OString &rName ) override;
+    virtual void                SetCurPageId( const OUString &rName ) override;
     virtual const SfxItemSet*   GetOutputItemSet() const override;
     virtual WhichRangesContainer GetInputRanges( const SfxItemPool& pItem ) override;
     virtual void                SetInputSet( const SfxItemSet* pInSet ) override;
@@ -384,7 +405,7 @@ public:
     {
     }
     virtual short Execute() override;
-    virtual void                SetCurPageId( const OString &rName ) override;
+    virtual void                SetCurPageId( const OUString &rName ) override;
     virtual const SfxItemSet*   GetOutputItemSet() const override;
     virtual WhichRangesContainer GetInputRanges( const SfxItemPool& pItem ) override;
     virtual void                SetInputSet( const SfxItemSet* pInSet ) override;
@@ -430,7 +451,7 @@ public:
     }
     virtual short Execute() override;
     virtual bool StartExecuteAsync(AsyncContext &rCtx) override;
-    virtual void                SetCurPageId( const OString &rName ) override;
+    virtual void                SetCurPageId( const OUString &rName ) override;
     virtual const SfxItemSet*   GetOutputItemSet() const override;
     virtual WhichRangesContainer GetInputRanges( const SfxItemPool& pItem ) override;
     virtual void                SetInputSet( const SfxItemSet* pInSet ) override;
@@ -445,13 +466,14 @@ public:
 
 class AbstractSwRenameXNamedDlg_Impl : public AbstractSwRenameXNamedDlg
 {
-    std::unique_ptr<SwRenameXNamedDlg> m_xDlg;
+    std::shared_ptr<SwRenameXNamedDlg> m_xDlg;
 public:
     explicit AbstractSwRenameXNamedDlg_Impl(std::unique_ptr<SwRenameXNamedDlg> p)
         : m_xDlg(std::move(p))
     {
     }
     virtual short Execute() override;
+    virtual bool StartExecuteAsync(VclAbstractDialog::AsyncContext &rCtx) override;
     virtual void SetForbiddenChars( const OUString& rSet ) override;
     virtual void SetAlternativeAccess(
              css::uno::Reference< css::container::XNameAccess > & xSecond,
@@ -531,14 +553,13 @@ public:
     virtual bool            IsEndNote() override;
     virtual OUString        GetStr() override;
     //from class Window
-    virtual void    SetHelpId( const OString& sHelpId ) override;
+    virtual void    SetHelpId( const OUString& sHelpId ) override;
     virtual void    SetText( const OUString& rStr ) override;
 };
 
 class SwInsTableDlg;
 class AbstractInsTableDlg_Impl : public AbstractInsTableDlg
 {
-protected:
     std::shared_ptr<weld::DialogController> m_xDlg;
 public:
     explicit AbstractInsTableDlg_Impl(std::shared_ptr<weld::DialogController> p)
@@ -619,7 +640,6 @@ public:
 class SwMultiTOXTabDialog;
 class AbstractMultiTOXTabDialog_Impl : public AbstractMultiTOXTabDialog
 {
-protected:
     std::shared_ptr<SwMultiTOXTabDialog> m_xDlg;
 public:
     explicit AbstractMultiTOXTabDialog_Impl(std::shared_ptr<SwMultiTOXTabDialog> p)
@@ -760,7 +780,7 @@ public:
                                                     SwView& rVw,
                                                     const SfxItemSet& rCoreSet,
                                                     bool bDraw,
-                                                    const OString& sDefPage = OString()) override;
+                                                    const OUString& sDefPage = {}) override;
 
     virtual VclPtr<VclAbstractDialog> CreateSwAutoMarkDialog(weld::Window *pParent, SwWrtShell &rSh) override;
     virtual VclPtr<AbstractSwSelGlossaryDlg> CreateSwSelGlossaryDlg(weld::Window *pParent, const OUString &rShortName) override;
@@ -787,18 +807,18 @@ public:
 
     virtual VclPtr<VclAbstractDialog>          CreateTableMergeDialog(weld::Window* pParent, bool& rWithPrev) override;
     virtual VclPtr<SfxAbstractTabDialog>       CreateFrameTabDialog( const OUString &rDialogType,
-                                                SfxViewFrame *pFrame, weld::Window *pParent,
+                                                SfxViewFrame& rFrame, weld::Window *pParent,
                                                 const SfxItemSet& rCoreSet,
                                                 bool bNewFrame  = true,
-                                                const OString& sDefPage = OString()) override;
+                                                const OUString& sDefPage = {}) override;
     virtual VclPtr<SfxAbstractApplyTabDialog>  CreateTemplateDialog(
                                                 weld::Window *pParent,
                                                 SfxStyleSheetBase&  rBase,
                                                 SfxStyleFamily      nRegion,
-                                                const OString&      sPage,
+                                                const OUString&     sPage,
                                                 SwWrtShell*         pActShell,
                                                 bool                bNew) override;
-    virtual VclPtr<AbstractGlossaryDlg>        CreateGlossaryDlg(SfxViewFrame* pViewFrame,
+    virtual VclPtr<AbstractGlossaryDlg>        CreateGlossaryDlg(SfxViewFrame& rViewFrame,
                                                 SwGlossaryHdl* pGlosHdl,
                                                 SwWrtShell *pWrtShell) override;
     virtual VclPtr<AbstractFieldInputDlg>        CreateFieldInputDlg(weld::Widget *pParent,
@@ -821,8 +841,8 @@ public:
     virtual VclPtr<VclAbstractDialog>          CreateMultiTOXMarkDlg(weld::Window* pParent, SwTOXMgr &rTOXMgr) override;
     virtual VclPtr<SfxAbstractTabDialog>       CreateOutlineTabDialog(weld::Window* pParent, const SfxItemSet* pSwItemSet,
                                                 SwWrtShell &) override;
-    virtual VclPtr<SfxAbstractTabDialog>       CreateSvxNumBulletTabDialog(weld::Window* pParent,
-                                                const SfxItemSet* pSwItemSet,
+    virtual VclPtr<AbstractNumBulletDialog>    CreateSvxNumBulletTabDialog(weld::Window* pParent,
+                                                const SfxItemSet& rSwItemSet,
                                                 SwWrtShell &) override;
     virtual VclPtr<AbstractMultiTOXTabDialog>  CreateMultiTOXTabDialog(
                                                 weld::Widget* pParent, const SfxItemSet& rSet,

@@ -50,6 +50,8 @@
 #include <redline.hxx>
 #include <comphelper/lok.hxx>
 #include <flyfrms.hxx>
+#include <frmtool.hxx>
+#include <layouter.hxx>
 
 // Tolerance in formatting and text output
 #define SLOPPY_TWIPS    5
@@ -1079,6 +1081,54 @@ void SwTextFrame::ChangeOffset( SwTextFrame* pFrame, TextFrameIndex nNew )
         MoveFlyInCnt( pFrame, nNew, TextFrameIndex(COMPLETE_STRING) );
 }
 
+static bool isFirstVisibleFrameInBody(const SwTextFrame* pFrame)
+{
+    const SwFrame* pBodyFrame = pFrame->FindBodyFrame();
+    if (!pBodyFrame)
+        return false;
+    for (const SwFrame* pCur = pFrame;;)
+    {
+        for (const SwFrame* pPrev = pCur->GetPrev(); pPrev; pPrev = pPrev->GetPrev())
+            if (!pPrev->IsHiddenNow())
+                return false;
+        pCur = pCur->GetUpper();
+        assert(pCur); // We found pBodyFrame, right?
+        if (pCur->IsBodyFrame())
+            return true;
+    }
+}
+
+static bool hasFly(const SwTextFrame* pFrame)
+{
+    if (auto pDrawObjs = pFrame->GetDrawObjs(); pDrawObjs && pDrawObjs->size())
+    {
+        auto anchorId = (*pDrawObjs)[0]->GetFrameFormat()->GetAnchor().GetAnchorId();
+        if (anchorId == RndStdIds::FLY_AT_PARA || anchorId == RndStdIds::FLY_AT_CHAR)
+            return true;
+    }
+    return false;
+}
+
+static bool hasAtPageFly(const SwFrame* pFrame)
+{
+    auto pPageFrame = pFrame->FindPageFrame();
+    if (!pPageFrame)
+        return false;
+    auto pPageDrawObjs = pPageFrame->GetDrawObjs();
+    if (pPageDrawObjs)
+    {
+        for (const auto pObject : *pPageDrawObjs)
+            if (pObject->GetFrameFormat()->GetAnchor().GetAnchorId() == RndStdIds::FLY_AT_PAGE)
+                return true;
+    }
+    return false;
+}
+
+static bool isReallyEmptyMaster(const SwTextFrame* pFrame)
+{
+    return pFrame->IsEmptyMaster() && (!pFrame->GetDrawObjs() || !pFrame->GetDrawObjs()->size());
+}
+
 void SwTextFrame::FormatAdjust( SwTextFormatter &rLine,
                              WidowsAndOrphans &rFrameBreak,
                              TextFrameIndex const nStrLen,
@@ -1106,35 +1156,61 @@ void SwTextFrame::FormatAdjust( SwTextFormatter &rLine,
                      ? 1 : 0;
 
     SwTextFormatInfo& rInf = rLine.GetInfo();
+    bool bEmptyWithSplitFly = false;
     if (nNew == 0 && !nStrLen && !rInf.GetTextFly().IsOn() && IsEmptyWithSplitFly())
     {
         // Empty paragraph, so IsBreakNow() is not called, but we should split the fly portion and
         // the paragraph marker.
         nNew = 1;
+        bEmptyWithSplitFly = true;
     }
+
+    const SwFrame *pBodyFrame = FindBodyFrame();
 
     // i#84870
     // no split of text frame, which only contains an as-character anchored object
-    bool bOnlyContainsAsCharAnchoredObj =
+    bool bLoneAsCharAnchoredObj =
+            pBodyFrame &&
             !IsFollow() && nStrLen == TextFrameIndex(1) &&
             GetDrawObjs() && GetDrawObjs()->size() == 1 &&
-            (*GetDrawObjs())[0]->GetFrameFormat().GetAnchor().GetAnchorId() == RndStdIds::FLY_AS_CHAR;
+            (*GetDrawObjs())[0]->GetFrameFormat()->GetAnchor().GetAnchorId() == RndStdIds::FLY_AS_CHAR;
 
-    // Still try split text frame if we have columns.
-    if (FindColFrame())
-        bOnlyContainsAsCharAnchoredObj = false;
-
-    if ( nNew && bOnlyContainsAsCharAnchoredObj )
+    if (bLoneAsCharAnchoredObj)
     {
-        nNew = 0;
+        // Still try split text frame if we have columns.
+        if (FindColFrame())
+            bLoneAsCharAnchoredObj = false;
+        // tdf#160526: only no split if there is no preceding frames on same page
+        else if (!isFirstVisibleFrameInBody(this))
+            bLoneAsCharAnchoredObj = false;
+        else
+            nNew = 0;
+    }
+    else if (nNew)
+    {
+        if (IsFollow())
+        {
+            // tdf#160549: do not split the frame at the very beginning again, if its master was empty
+            auto precede = static_cast<SwTextFrame*>(GetPrecede());
+            assert(precede);
+            auto precedeText = precede->DynCastTextFrame();
+            assert(precedeText);
+            if (isReallyEmptyMaster(precedeText))
+                nNew = 0;
+        }
+        else if (!bEmptyWithSplitFly)
+        {
+            // Do not split immediately in the beginning of page (unless there is an at-para or
+            // at-char or at-page fly, which pushes the rest down)
+            if (isFirstVisibleFrameInBody(this) && !hasFly(this) && !hasAtPageFly(pBodyFrame))
+                nNew = 0;
+        }
     }
 
     if ( nNew )
     {
         SplitFrame( nEnd );
     }
-
-    const SwFrame *pBodyFrame = FindBodyFrame();
 
     const tools::Long nBodyHeight = pBodyFrame ? ( IsVertical() ?
                                           pBodyFrame->getFrameArea().Width() :
@@ -1237,9 +1313,10 @@ void SwTextFrame::FormatAdjust( SwTextFormatter &rLine,
             // content or contains no content, but has a numbering.
             // i#84870 - No split, if text frame only contains one
             // as-character anchored object.
-            if ( !bOnlyContainsAsCharAnchoredObj &&
-                 (nStrLen > TextFrameIndex(0) ||
-                   bHasVisibleNumRule )
+            if (!bLoneAsCharAnchoredObj
+                && (bHasVisibleNumRule
+                    || (nStrLen > TextFrameIndex(0)
+                        && (nEnd != rLine.GetStart() || rInf.GetRest())))
                )
             {
                 SplitFrame( nEnd );
@@ -1263,7 +1340,7 @@ void SwTextFrame::FormatAdjust( SwTextFormatter &rLine,
     SwTwips nChg = rLine.CalcBottomLine() - nDocPrtTop - nOldHeight;
 
     //#i84870# - no shrink of text frame, if it only contains one as-character anchored object.
-    if ( nChg < 0 && !bDelta && bOnlyContainsAsCharAnchoredObj )
+    if (nChg < 0 && !bDelta && bLoneAsCharAnchoredObj)
     {
         nChg = 0;
     }
@@ -1290,7 +1367,7 @@ void SwTextFrame::FormatAdjust( SwTextFormatter &rLine,
 }
 
 // bPrev is set whether Reformat.Start() was called because of Prev().
-// Else, wo don't know whether we can limit the repaint or not.
+// Else, we don't know whether we can limit the repaint or not.
 bool SwTextFrame::FormatLine( SwTextFormatter &rLine, const bool bPrev )
 {
     OSL_ENSURE( ! IsVertical() || IsSwapped(),
@@ -1827,7 +1904,8 @@ void SwTextFrame::FormatOnceMore( SwTextFormatter &rLine, SwTextFormatInfo &rInf
     }
 }
 
-void SwTextFrame::Format_( vcl::RenderContext* pRenderContext, SwParaPortion *pPara )
+void SwTextFrame::FormatImpl(vcl::RenderContext* pRenderContext, SwParaPortion *pPara,
+        std::vector<SwAnchoredObject *> & rIntersectingObjs)
 {
     const bool bIsEmpty = GetText().isEmpty();
 
@@ -1861,6 +1939,18 @@ void SwTextFrame::Format_( vcl::RenderContext* pRenderContext, SwParaPortion *pP
 
     if( aLine.IsOnceMore() )
         FormatOnceMore( aLine, aInf );
+
+    if (aInf.GetTextFly().IsOn())
+    {
+        SwRect const aRect(aInf.GetTextFly().GetFrameArea());
+        for (SwAnchoredObject *const pObj : aInf.GetTextFly().GetAnchoredObjList())
+        {
+            if (!aInf.GetTextFly().AnchoredObjToRect(pObj, aRect).IsEmpty())
+            {
+                rIntersectingObjs.push_back(pObj);
+            }
+        }
+    }
 
     if ( IsVertical() )
         SwapWidthAndHeight();
@@ -1897,9 +1987,7 @@ void SwTextFrame::Format( vcl::RenderContext* pRenderContext, const SwBorderAttr
     if( aRectFnSet.GetWidth(getFramePrintArea()) <= 0 )
     {
         // If MustFit is set, we shrink to the Upper's bottom edge if needed.
-        // Else we just take a standard size of 12 Pt. (240 twip).
         SwTextLineAccess aAccess( this );
-        tools::Long nFrameHeight = aRectFnSet.GetHeight(getFrameArea());
 
         if( aAccess.GetPara()->IsPrepMustFit() )
         {
@@ -1908,16 +1996,8 @@ void SwTextFrame::Format( vcl::RenderContext* pRenderContext, const SwBorderAttr
             if( nDiff > 0 )
                 Shrink( nDiff );
         }
-        else if( 240 < nFrameHeight )
-        {
-            Shrink( nFrameHeight - 240 );
-        }
-        else if( 240 > nFrameHeight )
-        {
-            Grow( 240 - nFrameHeight );
-        }
 
-        nFrameHeight = aRectFnSet.GetHeight(getFrameArea());
+        tools::Long nFrameHeight = aRectFnSet.GetHeight(getFrameArea());
         const tools::Long nTop = aRectFnSet.GetTopMargin(*this);
 
         if( nTop > nFrameHeight )
@@ -2053,7 +2133,13 @@ void SwTextFrame::Format( vcl::RenderContext* pRenderContext, const SwBorderAttr
             }
             do
             {
-                Format_( pRenderContext, aAccess.GetPara() );
+                ::std::vector<SwAnchoredObject *> intersectingObjs;
+                ::std::vector<SwFrame const*> nexts;
+                for (SwFrame const* pNext = GetNext(); pNext; pNext = pNext->GetNext())
+                {
+                    nexts.push_back(pNext);
+                }
+                FormatImpl(pRenderContext, aAccess.GetPara(), intersectingObjs);
                 if( pFootnoteBoss && nFootnoteHeight )
                 {
                     const SwFootnoteContFrame* pCont = pFootnoteBoss->FindFootnoteCont();
@@ -2061,12 +2147,79 @@ void SwTextFrame::Format( vcl::RenderContext* pRenderContext, const SwBorderAttr
                     // If we lost some footnotes, we may have more space
                     // for our main text, so we have to format again ...
                     if( nNewHeight < nFootnoteHeight )
+                    {
                         nFootnoteHeight = nNewHeight;
-                    else
-                        break;
+                        continue;
+                    }
                 }
-                else
-                    break;
+                if (!intersectingObjs.empty())
+                {
+                    // assumption is that FormatImpl() only moves frames
+                    // in the next-chain to next page
+                    SwPageFrame *const pPage(FindPageFrame());
+                    SwTextFrame * pLastMovedAnchor(nullptr);
+                    auto lastIter(nexts.end());
+                    for (SwAnchoredObject *const pObj : intersectingObjs)
+                    {
+                        SwFrame *const pAnchor(pObj->AnchorFrame());
+                        SwPageFrame *const pAnchorPage(pAnchor->FindPageFrame());
+                        if (pAnchorPage != pPage)
+                        {
+                            auto const iter(::std::find(nexts.begin(), nexts.end(), pAnchor));
+                            if (iter != nexts.end())
+                            {
+                                assert(pAnchor->IsTextFrame());
+                                // (can't check SwOszControl::IsInProgress()?)
+                                // called in loop in FormatAnchorFrameAndItsPrevs()
+                                if (static_cast<SwTextFrame const*>(pAnchor)->IsJoinLocked()
+                                    // called in loop in SwFrame::PrepareMake()
+                                    || pAnchor->IsDeleteForbidden())
+                                {
+                                    // when called via FormatAnchorFrameAndItsPrevs():
+                                    // don't do anything, caller will handle it
+                                    pLastMovedAnchor = nullptr;
+                                    break;
+                                }
+                                assert(pPage->GetPhyPageNum() < pAnchorPage->GetPhyPageNum()); // how could it move backward?
+
+                                if (!pLastMovedAnchor || iter < lastIter)
+                                {
+                                    pLastMovedAnchor = static_cast<SwTextFrame *>(pAnchor);
+                                    lastIter = iter;
+                                }
+                            }
+                        }
+                    }
+                    SwPageFrame const*const pPrevPage(static_cast<SwPageFrame const*>(pPage->GetPrev()));
+                    if (pLastMovedAnchor)
+                    {
+                        for (SwAnchoredObject *const pObj : intersectingObjs)
+                        {
+                            if (pObj->AnchorFrame() == pLastMovedAnchor)
+                            {
+                                SwPageFrame *const pAnchorPage(pLastMovedAnchor->FindPageFrame());
+                                SAL_INFO("sw.layout", "SwTextFrame::Format: move anchored " << pObj << " from " << pPage->GetPhyPageNum() << " to " << pAnchorPage->GetPhyPageNum());
+                                pObj->RegisterAtPage(*pAnchorPage);
+                                // tdf#143239 if the position remains valid, it may not be
+                                // positioned again so would remain on the wrong page!
+                                pObj->InvalidateObjPos();
+                                ::Notify_Background(pObj->GetDrawObj(), pPage,
+                                    pObj->GetObjRect(), PrepareHint::FlyFrameLeave, false);
+                                pObj->SetForceNotifyNewBackground(true);
+                            }
+                        }
+                        if (GetFollow() // this frame was split
+                            && (!pPrevPage // prev page is still valid
+                                || (!pPrevPage->IsInvalid()
+                                    && (!pPrevPage->GetSortedObjs() || !pPrevPage->IsInvalidFly()))))
+                        {   // this seems a bit risky...
+                            SwLayouter::InsertMovedFwdFrame(GetTextNodeFirst()->GetDoc(),
+                                *pLastMovedAnchor, FindPageFrame()->GetPhyPageNum() + 1);
+                        }
+                        continue; // try again without the fly
+                    }
+                }
+                break;
             } while ( pFootnoteBoss );
             if( bOrphan )
             {

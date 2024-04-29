@@ -50,7 +50,7 @@ namespace HelperNotifyChanges
     static void NotifyIfChangesListeners(const ScDocShell& rDocShell, const ScAddress &rPos,
         const ScUndoEnterData::ValuesType &rOldValues, const OUString& rType = OUString("cell-change"))
     {
-        ScModelObj* pModelObj = getModel(rDocShell);
+        ScModelObj* pModelObj = rDocShell.GetModel();
         if (pModelObj)
         {
             ScRangeList aChangeRanges;
@@ -84,17 +84,17 @@ ScUndoCursorAttr::ScUndoCursorAttr( ScDocShell* pNewDocShell,
     pNewEditData( static_cast<EditTextObject*>(nullptr) )
 {
     ScDocumentPool* pPool = pDocShell->GetDocument().GetPool();
-    pNewPattern = const_cast<ScPatternAttr*>( &pPool->Put( *pNewPat ) );
-    pOldPattern = const_cast<ScPatternAttr*>( &pPool->Put( *pOldPat ) );
-    pApplyPattern = const_cast<ScPatternAttr*>( &pPool->Put( *pApplyPat ) );
+    pNewPattern = const_cast<ScPatternAttr*>( &pPool->DirectPutItemInPool( *pNewPat ) );
+    pOldPattern = const_cast<ScPatternAttr*>( &pPool->DirectPutItemInPool( *pOldPat ) );
+    pApplyPattern = const_cast<ScPatternAttr*>( &pPool->DirectPutItemInPool( *pApplyPat ) );
 }
 
 ScUndoCursorAttr::~ScUndoCursorAttr()
 {
     ScDocumentPool* pPool = pDocShell->GetDocument().GetPool();
-    pPool->Remove(*pNewPattern);
-    pPool->Remove(*pOldPattern);
-    pPool->Remove(*pApplyPattern);
+    pPool->DirectRemoveItemFromPool(*pNewPattern);
+    pPool->DirectRemoveItemFromPool(*pOldPattern);
+    pPool->DirectRemoveItemFromPool(*pApplyPattern);
 }
 
 OUString ScUndoCursorAttr::GetComment() const
@@ -812,7 +812,7 @@ void ScUndoReplaceNote::DoInsertNote( const ScNoteData& rNoteData )
         OSL_ENSURE( !rDoc.GetNote(maPos), "ScUndoReplaceNote::DoInsertNote - unexpected cell note" );
         ScPostIt* pNote = new ScPostIt( rDoc, maPos, rNoteData, false );
         rDoc.SetNote( maPos, std::unique_ptr<ScPostIt>(pNote) );
-        ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Add, &rDoc, maPos, pNote);
+        ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Add, rDoc, maPos, pNote);
     }
 }
 
@@ -829,7 +829,7 @@ void ScUndoReplaceNote::DoRemoveNote( const ScNoteData& rNoteData )
             caption object from the drawing layer while deleting pNote
             (removing the caption is done by a drawing undo action). */
         pNote->ForgetCaption();
-        ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Remove, &rDoc, maPos, pNote.get());
+        ScDocShell::LOKCommentNotify(LOKCommentNotificationType::Remove, rDoc, maPos, pNote.get());
     }
 }
 

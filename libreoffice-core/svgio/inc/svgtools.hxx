@@ -35,10 +35,10 @@ namespace svgio::svgreader
         // common non-token strings
         struct commonStrings
         {
-            static constexpr OUStringLiteral aStrUserSpaceOnUse = u"userSpaceOnUse";
-            static constexpr OUStringLiteral aStrObjectBoundingBox = u"objectBoundingBox";
-            static constexpr OUStringLiteral aStrNonzero = u"nonzero";
-            static constexpr OUStringLiteral aStrEvenOdd = u"evenodd";
+            static constexpr OUString aStrUserSpaceOnUse = u"userSpaceOnUse"_ustr;
+            static constexpr OUString aStrObjectBoundingBox = u"objectBoundingBox"_ustr;
+            static constexpr OUString aStrNonzero = u"nonzero"_ustr;
+            static constexpr OUString aStrEvenOdd = u"evenodd"_ustr;
         };
 
         enum class SvgUnits
@@ -109,6 +109,7 @@ namespace svgio::svgreader
         bool match_colorKeyword(basegfx::BColor& rColor, const OUString& rName);
         bool read_color(const OUString& rCandidate, basegfx::BColor& rColor, SvgNumber& rOpacity);
         basegfx::B2DRange readViewBox(std::u16string_view rCandidate, InfoProvider const & rInfoProvider);
+        std::vector<double> readFilterMatrix(std::u16string_view rCandidate, InfoProvider const & rInfoProvider);
         basegfx::B2DHomMatrix readTransform(std::u16string_view rCandidate, InfoProvider const & rInfoProvider);
         bool readSingleNumber(std::u16string_view rCandidate, SvgNumber& aNum);
         bool readLocalLink(std::u16string_view rCandidate, OUString& rURL);
@@ -123,7 +124,7 @@ namespace svgio::svgreader
         typedef ::std::vector< OUString > SvgStringVector;
         bool readSvgStringVector(std::u16string_view rCandidate, SvgStringVector& rSvgStringVector);
 
-        void readImageLink(const OUString& rCandidate, OUString& rXLink, OUString& rUrl, OUString& rMimeType, OUString& rData);
+        void readImageLink(const OUString& rCandidate, OUString& rXLink, OUString& rUrl, OUString& rData);
 
         OUString consolidateContiguousSpace(const OUString& rCandidate);
 

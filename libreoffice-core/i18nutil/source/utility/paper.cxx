@@ -356,7 +356,7 @@ PaperInfo PaperInfo::getSystemDefaultPaper()
     if (aLocaleStr.isEmpty())
         aLocaleStr = officecfg::System::L10N::Locale::get();
 
-    static const OUStringLiteral EN_US = u"en-US";
+    static constexpr OUStringLiteral EN_US = u"en-US";
     if (aLocaleStr.isEmpty())
         aLocaleStr = EN_US;
 
@@ -400,8 +400,7 @@ PaperInfo::PaperInfo(tools::Long nPaperWidth, tools::Long nPaperHeight)
 
 OString PaperInfo::toPSName(Paper ePaper)
 {
-    return static_cast<size_t>(ePaper) < nTabSize ?
-        OString(aDinTab[ePaper].m_pPSName) : OString();
+    return static_cast<size_t>(ePaper) < nTabSize && aDinTab[ePaper].m_pPSName ?  OString(aDinTab[ePaper].m_pPSName) : OString();
 }
 
 Paper PaperInfo::fromPSName(const OString &rName)

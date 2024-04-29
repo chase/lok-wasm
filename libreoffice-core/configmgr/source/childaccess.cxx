@@ -56,12 +56,6 @@
 
 namespace configmgr {
 
-css::uno::Sequence< sal_Int8 > const & ChildAccess::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theChildAccessUnoTunnelId;
-    return theChildAccessUnoTunnelId.getSeq();
-}
-
 ChildAccess::ChildAccess(
     Components & components, rtl::Reference< RootAccess > const & root,
     rtl::Reference< Access > const & parent, OUString name,
@@ -147,7 +141,7 @@ css::uno::Reference< css::uno::XInterface > ChildAccess::getParent()
     assert(thisIs(IS_ANY));
     osl::MutexGuard g(*lock_);
     checkLocalizedPropertyAccess();
-    return static_cast< cppu::OWeakObject * >(parent_.get());
+    return cppu::getXWeak(parent_.get());
 }
 
 void ChildAccess::setParent(css::uno::Reference< css::uno::XInterface > const &)
@@ -156,16 +150,7 @@ void ChildAccess::setParent(css::uno::Reference< css::uno::XInterface > const &)
     osl::MutexGuard g(*lock_);
     checkLocalizedPropertyAccess();
     throw css::lang::NoSupportException(
-        "setParent", static_cast< cppu::OWeakObject * >(this));
-}
-
-sal_Int64 ChildAccess::getSomething(
-    css::uno::Sequence< sal_Int8 > const & aIdentifier)
-{
-    assert(thisIs(IS_ANY));
-    osl::MutexGuard g(*lock_);
-    checkLocalizedPropertyAccess();
-    return comphelper::getSomethingImpl(aIdentifier, this);
+        "setParent", getXWeak());
 }
 
 void ChildAccess::bind(
@@ -260,8 +245,7 @@ css::uno::Any ChildAccess::asValue()
                 return child.is() ? child->asValue() : css::uno::Any();
             }
         }
-        value <<= css::uno::Reference< css::uno::XInterface >(
-                            static_cast< cppu::OWeakObject * >(this));
+        value <<= css::uno::Reference(getXWeak());
     }
     return value;
 }
@@ -295,11 +279,11 @@ void ChildAccess::commitChanges(bool valid, Modifications * globalModifications)
         switch (node_->kind()) {
         case Node::KIND_PROPERTY:
             static_cast< PropertyNode * >(node_.get())->setValue(
-                Data::NO_LAYER, *changedValue_);
+                Data::NO_LAYER, *changedValue_, true);
             break;
         case Node::KIND_LOCALIZED_VALUE:
             static_cast< LocalizedValueNode * >(node_.get())->setValue(
-                Data::NO_LAYER, *changedValue_);
+                Data::NO_LAYER, *changedValue_, true);
             break;
         default:
             assert(false); // this cannot happen
@@ -341,8 +325,7 @@ css::uno::Any ChildAccess::queryInterface(css::uno::Type const & aType)
     return res.hasValue()
         ? res
         : cppu::queryInterface(
-            aType, static_cast< css::container::XChild * >(this),
-            static_cast< css::lang::XUnoTunnel * >(this));
+            aType, static_cast< css::container::XChild * >(this));
 }
 
 }

@@ -121,8 +121,7 @@ namespace accessibility
 
         void SetEventSource( const uno::Reference< XAccessible >& rInterface )
         {
-
-            mxThis = rInterface;
+            mpThis = rInterface.get();
         }
 
         void SetOffset( const Point& );
@@ -163,8 +162,8 @@ namespace accessibility
 
         // our frontend class (the one implementing the actual
         // interface). That's not necessarily the one containing the impl
-        // pointer
-        uno::Reference< XAccessible > mxThis;
+        // pointer. Note that this is not an uno::Reference to prevent ref-counting cycles and leaks.
+        XAccessible* mpThis;
 
         // implements our functionality, we're just an adapter (guarded by solar mutex)
         mutable rtl::Reference<AccessibleEditableTextPara> mxTextParagraph;
@@ -177,8 +176,9 @@ namespace accessibility
     // AccessibleStaticTextBase_Impl implementation
 
 
-    AccessibleStaticTextBase_Impl::AccessibleStaticTextBase_Impl() :
-        mxTextParagraph( new AccessibleEditableTextPara(nullptr) )
+    AccessibleStaticTextBase_Impl::AccessibleStaticTextBase_Impl()
+        : mpThis(nullptr)
+        , mxTextParagraph(new AccessibleEditableTextPara(nullptr))
     {
 
         // TODO: this is still somewhat of a hack, all the more since
@@ -207,7 +207,7 @@ namespace accessibility
             mxTextParagraph->Dispose();
 
         // drop references
-        mxThis = nullptr;
+        mpThis = nullptr;
         mxTextParagraph.clear();
     }
 
@@ -215,7 +215,7 @@ namespace accessibility
     {
 
         if( !mxTextParagraph.is() )
-            throw lang::DisposedException ("object has been already disposed", mxThis );
+            throw lang::DisposedException ("object has been already disposed", mpThis );
 
         // TODO: Have a different method on AccessibleEditableTextPara
         // that does not care about state changes
@@ -273,7 +273,7 @@ namespace accessibility
 
         if( nFlatIndex < 0 )
             throw lang::IndexOutOfBoundsException("AccessibleStaticTextBase_Impl::Index2Internal: character index out of bounds",
-                                                  mxThis);
+                                                  mpThis);
         // gratuitously accepting larger indices here, AccessibleEditableTextPara will throw eventually
 
         sal_Int32 nCurrPara, nCurrIndex, nParas, nCurrCount;
@@ -305,7 +305,7 @@ namespace accessibility
 
         // not found? Out of bounds
         throw lang::IndexOutOfBoundsException("AccessibleStaticTextBase_Impl::Index2Internal: character index out of bounds",
-                                              mxThis);
+                                              mpThis);
     }
 
     bool AccessibleStaticTextBase_Impl::SetSelection( sal_Int32 nStartPara, sal_Int32 nStartIndex,
@@ -701,8 +701,7 @@ namespace accessibility
             // paragraphs inbetween are fully included
             for( ; i<aEndIndex.nPara; ++i )
             {
-                aRes.append(cNewLine);
-                aRes.append(mpImpl->GetParagraph(i).getText());
+                aRes.append(OUStringChar(cNewLine) + mpImpl->GetParagraph(i).getText());
             }
 
             if( i<=aEndIndex.nPara )

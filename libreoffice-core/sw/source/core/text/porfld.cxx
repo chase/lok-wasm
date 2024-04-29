@@ -22,10 +22,14 @@
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <utility>
+
+#include <comphelper/string.hxx>
 #include <vcl/graph.hxx>
 #include <editeng/brushitem.hxx>
 #include <vcl/metric.hxx>
 #include <vcl/outdev.hxx>
+#include <vcl/pdfextoutdevdata.hxx>
+#include <vcl/pdfwriter.hxx>
 #include <viewopt.hxx>
 #include <SwPortionHandler.hxx>
 #include "porlay.hxx"
@@ -44,6 +48,7 @@
 #include <editeng/lrspitem.hxx>
 #include <unicode/ubidi.h>
 #include <bookmark.hxx>
+#include <docufld.hxx>
 
 using namespace ::com::sun::star;
 
@@ -59,7 +64,7 @@ SwFieldPortion *SwFieldPortion::Clone( const OUString &rExpand ) const
     }
     // #i107143#
     // pass placeholder property to created <SwFieldPortion> instance.
-    SwFieldPortion* pClone = new SwFieldPortion( rExpand, std::move(pNewFnt), m_bPlaceHolder );
+    SwFieldPortion* pClone = new SwFieldPortion(rExpand, std::move(pNewFnt));
     pClone->SetNextOffset( m_nNextOffset );
     pClone->m_bNoLength = m_bNoLength;
     return pClone;
@@ -73,15 +78,14 @@ void SwFieldPortion::TakeNextOffset( const SwFieldPortion* pField )
     m_bFollow = true;
 }
 
-SwFieldPortion::SwFieldPortion(OUString aExpand, std::unique_ptr<SwFont> pFont, bool bPlaceHold, TextFrameIndex const nFieldLen)
+SwFieldPortion::SwFieldPortion(OUString aExpand, std::unique_ptr<SwFont> pFont, TextFrameIndex const nFieldLen)
     : m_aExpand(std::move(aExpand)), m_pFont(std::move(pFont)), m_nNextOffset(0)
     , m_nNextScriptChg(COMPLETE_STRING), m_nFieldLen(nFieldLen), m_nViewWidth(0)
     , m_bFollow( false ), m_bLeft( false), m_bHide( false)
     , m_bCenter (false), m_bHasFollow( false )
     , m_bAnimated( false), m_bNoPaint( false)
-    , m_bReplace( false), m_bPlaceHolder( bPlaceHold )
+    , m_bReplace(false)
     , m_bNoLength( false )
-    , m_nAttrFieldType(0)
 {
     SetWhichPor( PortionType::Field );
 }
@@ -101,9 +105,7 @@ SwFieldPortion::SwFieldPortion( const SwFieldPortion& rField )
     , m_bAnimated ( rField.m_bAnimated )
     , m_bNoPaint( rField.m_bNoPaint)
     , m_bReplace( rField.m_bReplace )
-    , m_bPlaceHolder( rField.m_bPlaceHolder )
     , m_bNoLength( rField.m_bNoLength )
-    , m_nAttrFieldType( rField.m_nAttrFieldType)
 {
     if ( rField.HasFont() )
         m_pFont.reset( new SwFont( *rField.GetFont() ) );
@@ -143,6 +145,7 @@ class SwFieldSlot
     OUString aText;
     TextFrameIndex nIdx;
     TextFrameIndex nLen;
+    sal_Unicode nOrigHookChar;
     SwTextFormatInfo *pInf;
     bool bOn;
 public:
@@ -156,6 +159,7 @@ SwFieldSlot::SwFieldSlot( const SwTextFormatInfo* pNew, const SwFieldPortion *pP
     : pOldText(nullptr)
     , nIdx(0)
     , nLen(0)
+    , nOrigHookChar(0)
     , pInf(nullptr)
 {
     bOn = pPor->GetExpText( *pNew, aText );
@@ -168,6 +172,7 @@ SwFieldSlot::SwFieldSlot( const SwTextFormatInfo* pNew, const SwFieldPortion *pP
     nIdx = pInf->GetIdx();
     nLen = pInf->GetLen();
     pOldText = &(pInf->GetText());
+    nOrigHookChar = pInf->GetHookChar();
     m_pOldCachedVclData = pInf->GetCachedVclData();
     pInf->SetLen(TextFrameIndex(aText.getLength()));
     pInf->SetCachedVclData(nullptr);
@@ -198,6 +203,13 @@ SwFieldSlot::~SwFieldSlot()
     {
         pInf->SetCachedVclData(m_pOldCachedVclData);
         pInf->SetText( *pOldText );
+        // ofz#64109 at last for ruby-text when we restore the original text to
+        // continue laying out the 'body' text of the ruby, then a tab or other
+        // 'hook char' in the text drawn above it shouldn't affect the 'body'
+        // While there are other cases, such as tdf#148360, where the tab in an
+        // inline expanded field, that should affect the body.
+        if (pInf->IsRuby())
+            pInf->SetHookChar(nOrigHookChar);
         pInf->SetIdx( nIdx );
         pInf->SetLen( nLen );
         pInf->SetFakeLineStart( false );
@@ -390,25 +402,37 @@ bool SwFieldPortion::Format( SwTextFormatInfo &rInf )
             // These characters should not be contained in the follow
             // field portion. They are handled via the HookChar mechanism.
             const sal_Unicode nNew = !aNew.isEmpty() ? aNew[0] : 0;
-            switch (nNew)
+            auto IsHook = [](const sal_Unicode cNew, bool const isSpace = false) -> bool
             {
-                case CH_BREAK  : bFull = true;
-                    [[fallthrough]];
-                case ' ' :
-                case CH_TAB    :
-                case CHAR_HARDHYPHEN:               // non-breaking hyphen
-                case CHAR_SOFTHYPHEN:
-                case CHAR_HARDBLANK:
-                case CHAR_ZWSP :
-                case CHAR_WJ :
-                case CH_TXTATR_BREAKWORD:
-                case CH_TXTATR_INWORD:
+                switch (cNew)
                 {
-                    aNew = aNew.copy( 1 );
-                    ++nNextOfst;
-                    break;
+                    case ' ': // tdf#159101 this one is not in ScanPortionEnd
+                              // but is required for justified text
+                        return isSpace;
+                    case CH_BREAK:
+                    case CH_TAB:
+                    case CHAR_HARDHYPHEN: // non-breaking hyphen
+                    case CHAR_SOFTHYPHEN:
+                    case CHAR_HARDBLANK:
+                    case CHAR_ZWSP:
+                    case CHAR_WJ:
+                    case CH_TXTATR_BREAKWORD:
+                    case CH_TXTATR_INWORD:
+                    {
+                        return true;
+                    }
+                    default:
+                        return false;
                 }
-                default: ;
+            };
+            if (IsHook(nNew, true))
+            {
+                if (nNew == CH_BREAK)
+                {
+                    bFull = true;
+                }
+                aNew = aNew.copy(1);
+                ++nNextOfst;
             }
 
             // Even if there is no more text left for a follow field,
@@ -419,8 +443,17 @@ bool SwFieldPortion::Format( SwTextFormatInfo &rInf )
             {
                 pField->SetFont( std::make_unique<SwFont>( *rInf.GetFont() ) );
             }
-            pField->SetFollow( true );
-            SetHasFollow( true );
+            if (IsFollow() || Compress())
+            {   // empty this will be deleted in SwLineLayout::CalcLine()
+                // anyway so make sure pField doesn't have a stale flag
+                pField->SetFollow( true );
+            }
+            if (pField->Compress() && !std::all_of(std::u16string_view(aNew).begin(),
+                        std::u16string_view(aNew).end(), IsHook))
+            {   // empty pField will be deleted in SwLineLayout::CalcLine()
+                // anyway so make sure this one doesn't have a stale flag
+                SetHasFollow( true );
+            }
 
             // For a newly created field, nNextOffset contains the Offset
             // of its start of the original string
@@ -442,7 +475,7 @@ void SwFieldPortion::Paint( const SwTextPaintInfo &rInf ) const
     SwFontSave aSave( rInf, m_pFont.get() );
 
 //    OSL_ENSURE(GetLen() <= TextFrameIndex(1), "SwFieldPortion::Paint: rest-portion pollution?");
-    if( Width() && ( !m_bPlaceHolder || rInf.GetOpt().IsShowPlaceHolderFields() ) && !m_bContentControl )
+    if (Width() && !m_bContentControl)
     {
         // A very liberal use of the background
         rInf.DrawViewOpt( *this, PortionType::Field );
@@ -477,15 +510,7 @@ void SwFieldPortion::dumpAsXml(xmlTextWriterPtr pWriter, const OUString& rText,
 
     if (m_pFont)
     {
-        // do not use Color::AsRGBHexString() as that omits the transparency
-        (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("font-color"), "%08" SAL_PRIxUINT32, sal_uInt32(m_pFont->GetColor()));
-        (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("font-height"), BAD_CAST(OString::number(m_pFont->GetSize(m_pFont->GetActual()).Height()).getStr()));
-        (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("font-width"), BAD_CAST(OString::number(m_pFont->GetSize(m_pFont->GetActual()).Width()).getStr()));
-        {
-            std::stringstream ss;
-            ss << m_pFont->GetWeight();
-            (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("font-weight"), BAD_CAST(ss.str().c_str()));
-        }
+        m_pFont->dumpAsXml(pWriter);
     }
 
     (void)xmlTextWriterEndElement(pWriter);
@@ -528,10 +553,10 @@ SwNumberPortion::SwNumberPortion( const OUString &rExpand,
                                   const bool bCntr,
                                   const sal_uInt16 nMinDst,
                                   const bool bLabelAlignmentPosAndSpaceModeActive )
-        : SwFieldPortion( rExpand, std::move(pFont) ),
-          m_nFixWidth(0),
-          m_nMinDist( nMinDst ),
-          mbLabelAlignmentPosAndSpaceModeActive( bLabelAlignmentPosAndSpaceModeActive )
+    : SwFieldPortion(rExpand, std::move(pFont), TextFrameIndex(0))
+    , m_nFixWidth(0)
+    , m_nMinDist(nMinDst)
+    , mbLabelAlignmentPosAndSpaceModeActive(bLabelAlignmentPosAndSpaceModeActive)
 {
     SetWhichPor( PortionType::Number );
     SetLeft( bLft );
@@ -586,7 +611,7 @@ bool SwNumberPortion::Format( SwTextFormatInfo &rInf )
             {
                 nDiff = rInf.Left()
                     + rInf.GetTextFrame()->GetTextNodeForParaProps()->
-                    GetSwAttrSet().GetLRSpace().GetTextFirstLineOffset()
+                        GetSwAttrSet().GetFirstLineIndent().GetTextFirstLineOffset()
                     - rInf.First()
                     + rInf.ForcedLeftMargin();
             }
@@ -1385,6 +1410,59 @@ void SwFieldFormDatePortion::Paint( const SwTextPaintInfo &rInf ) const
         else
             pDateField->SetPortionPaintAreaEnd(aPaintArea);
     }
+}
+
+SwFieldPortion* SwJumpFieldPortion::Clone(const OUString& rExpand) const
+{
+    auto pRet = new SwJumpFieldPortion(*this);
+    pRet->m_aExpand = rExpand;
+    return pRet;
+}
+
+bool SwJumpFieldPortion::DescribePDFControl(const SwTextPaintInfo& rInf) const
+{
+    auto pPDFExtOutDevData
+        = dynamic_cast<vcl::PDFExtOutDevData*>(rInf.GetOut()->GetExtOutDevData());
+    if (!pPDFExtOutDevData)
+        return false;
+
+    if (!pPDFExtOutDevData->GetIsExportFormFields())
+        return false;
+
+    if (m_nFormat != SwJumpEditFormat::JE_FMT_TEXT)
+        return false;
+
+    vcl::PDFWriter::EditWidget aDescriptor;
+
+    aDescriptor.Border = true;
+    aDescriptor.BorderColor = COL_BLACK;
+
+    SwRect aLocation;
+    rInf.CalcRect(*this, &aLocation);
+    aDescriptor.Location = aLocation.SVRect();
+
+    // Map the text of the field to the descriptor's text.
+    static sal_Unicode constexpr aForbidden[] = { CH_TXTATR_BREAKWORD, 0 };
+    aDescriptor.Text = comphelper::string::removeAny(GetExp(), aForbidden);
+
+    // Description for accessibility purposes.
+    if (!m_sHelp.isEmpty())
+        aDescriptor.Description = m_sHelp;
+
+    pPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::Form);
+    pPDFExtOutDevData->CreateControl(aDescriptor);
+    pPDFExtOutDevData->EndStructureElement();
+
+    return true;
+}
+
+void SwJumpFieldPortion::Paint(const SwTextPaintInfo& rInf) const
+{
+    if (Width() && DescribePDFControl(rInf))
+        return;
+
+    if (rInf.GetOpt().IsShowPlaceHolderFields())
+        SwFieldPortion::Paint(rInf);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

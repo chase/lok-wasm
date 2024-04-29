@@ -43,7 +43,6 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::xml::sax;
 
-using ::xmloff::token::IsXMLToken;
 using ::xmloff::token::XML_TEXT_PROPERTIES;
 using ::xmloff::token::XML_GRAPHIC_PROPERTIES;
 using ::xmloff::token::XML_PARAGRAPH_PROPERTIES;
@@ -120,7 +119,7 @@ void XMLGraphicsDefaultStyle::SetDefaults()
     ) )
         bWordWrapDefault = false;
 
-    static const OUStringLiteral sTextWordWrap( u"TextWordWrap" );
+    static constexpr OUString sTextWordWrap( u"TextWordWrap"_ustr );
     Reference< XPropertySetInfo > xInfo( xDefaults->getPropertySetInfo() );
     if ( xInfo->hasPropertyByName( sTextWordWrap ) )
         xDefaults->setPropertyValue( sTextWordWrap, Any( bWordWrapDefault ) );

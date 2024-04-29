@@ -7,17 +7,16 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-#ifndef INCLUDED_VCL_VCLSTATUSLISTENER_HXX
-#define INCLUDED_VCL_VCLSTATUSLISTENER_HXX
+#pragma once
 
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/processfactory.hxx>
 #include <vcl/vclptr.hxx>
 
-#include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/frame/XStatusListener.hpp>
 #include <com/sun/star/frame/XDispatch.hpp>
 #include <com/sun/star/frame/XDispatchProvider.hpp>
+#include <com/sun/star/frame/XFrame.hpp>
 #include <com/sun/star/util/URL.hpp>
 #include <com/sun/star/util/URLTransformer.hpp>
 
@@ -89,8 +88,5 @@ void VclStatusListener<T>::dispose()
     mxFrame.clear();
     mWidget.clear();
 }
-
-
-#endif // INCLUDED_VCL_VCLSTATUSLISTENER_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

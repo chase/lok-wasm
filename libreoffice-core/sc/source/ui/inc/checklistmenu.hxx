@@ -238,6 +238,7 @@ private:
 
     DECL_LINK(PopupModeEndHdl, weld::Popover&, void);
 
+    DECL_LINK(SearchEditTimeoutHdl, Timer*, void);
     DECL_LINK(ComboChangedHdl, weld::ComboBox&, void);
 
     DECL_LINK(EdModifyHdl, weld::Entry&, void);
@@ -332,6 +333,7 @@ private:
     SubMenuItemData   maOpenTimer;
     SubMenuItemData   maCloseTimer;
 
+    Timer maSearchEditTimer;
     bool mbIsMultiField;
 };
 

@@ -11,14 +11,12 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.PixelFormat;
-import android.graphics.SurfaceTexture;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
@@ -37,8 +35,6 @@ import org.mozilla.gecko.OnSlideSwipeListener;
  *
  * This view delegates to LayerRenderer to actually do the drawing. Its role is largely that of a
  * mediator between the LayerRenderer and the LayerController.
- *
- * Note that LayerView is accessed by Robocop via reflection.
  */
 public class LayerView extends FrameLayout {
     private static String LOGTAG = LayerView.class.getName();
@@ -49,59 +45,22 @@ public class LayerView extends FrameLayout {
     private InputConnectionHandler mInputConnectionHandler;
     private LayerRenderer mRenderer;
 
-    /* Must be a PAINT_xxx constant */
-    private int mPaintState = PAINT_NONE;
-    private boolean mFullScreen = false;
-
     private SurfaceView mSurfaceView;
-    private TextureView mTextureView;
 
     private Listener mListener;
     private OnInterceptTouchListener mTouchIntercepter;
-    //TODO static because of registerCxxCompositor() function, should be fixed in the future
-    private static LibreOfficeMainActivity mContext;
-
-    /* Flags used to determine when to show the painted surface. The integer
-     * order must correspond to the order in which these states occur. */
-    public static final int PAINT_NONE = 0;
-    public static final int PAINT_BEFORE_FIRST = 1;
-    public static final int PAINT_AFTER_FIRST = 2;
-
-    boolean shouldUseTextureView() {
-        // we can only use TextureView on ICS or higher
-        /*if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-            Log.i(LOGTAG, "Not using TextureView: not on ICS+");
-            return false;
-        }
-
-        try {
-            // and then we can only use it if we have a hardware accelerated window
-            Method m = View.class.getMethod("isHardwareAccelerated", new Class[0]);
-            return (Boolean) m.invoke(this);
-        } catch (Exception e) {
-            Log.i(LOGTAG, "Not using TextureView: caught exception checking for hw accel: " + e.toString());
-            return false;
-        }*/
-        return false;
-    }
+    private LibreOfficeMainActivity mContext;
 
     public LayerView(Context context, AttributeSet attrs) {
         super(context, attrs);
         mContext = (LibreOfficeMainActivity) context;
 
-        if (shouldUseTextureView()) {
-            mTextureView = new TextureView(context);
-            mTextureView.setSurfaceTextureListener(new SurfaceTextureListener());
+        mSurfaceView = new SurfaceView(context);
+        addView(mSurfaceView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
 
-            addView(mTextureView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        } else {
-            mSurfaceView = new SurfaceView(context);
-            addView(mSurfaceView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-
-            SurfaceHolder holder = mSurfaceView.getHolder();
-            holder.addCallback(new SurfaceListener());
+        SurfaceHolder holder = mSurfaceView.getHolder();
+        holder.addCallback(new SurfaceListener());
             holder.setFormat(PixelFormat.RGB_565);
-        }
 
         mGLController = new GLController(this);
     }
@@ -219,13 +178,6 @@ public class LayerView extends FrameLayout {
         return mInputConnectionHandler != null && mInputConnectionHandler.onKeyUp(keyCode, event);
     }
 
-    public boolean isIMEEnabled() {
-        /*if (mInputConnectionHandler != null) {
-            return mInputConnectionHandler.isIMEEnabled();
-        }*/
-        return false;
-    }
-
     public void requestRender() {
         if (mListener != null) {
             mListener.renderRequested();
@@ -250,19 +202,6 @@ public class LayerView extends FrameLayout {
 
     public LayerRenderer getLayerRenderer() {
         return mRenderer;
-    }
-
-    /* paintState must be a PAINT_xxx constant. The state will only be changed
-     * if paintState represents a state that occurs after the current state. */
-    public void setPaintState(int paintState) {
-        if (paintState > mPaintState) {
-            Log.d(LOGTAG, "LayerView paint state set to " + paintState);
-            mPaintState = paintState;
-        }
-    }
-
-    public int getPaintState() {
-        return mPaintState;
     }
 
     public LayerRenderer getRenderer() {
@@ -320,29 +259,13 @@ public class LayerView extends FrameLayout {
     }
 
     public Object getNativeWindow() {
-        if (mSurfaceView != null)
-            return mSurfaceView.getHolder();
-
-        return mTextureView.getSurfaceTexture();
-    }
-
-    /** This function is invoked by Gecko (compositor thread) via JNI; be careful when modifying signature. */
-    public static GLController registerCxxCompositor() {
-        try {
-            LayerView layerView = mContext.getLayerClient().getView();
-            layerView.mListener.compositorCreated();
-            return layerView.getGLController();
-        } catch (Exception e) {
-            Log.e(LOGTAG, "Error registering compositor!", e);
-            return null;
-        }
+        return mSurfaceView.getHolder();
     }
 
     public interface Listener {
         void compositorCreated();
         void renderRequested();
         void compositionPauseRequested();
-        void compositionResumeRequested(int width, int height);
         void surfaceChanged(int width, int height);
     }
 
@@ -368,29 +291,6 @@ public class LayerView extends FrameLayout {
         super.onLayout(changed, left, top, right, bottom);
         if (changed) {
             mLayerClient.setViewportSize(new FloatSize(right - left, bottom - top), true);
-        }
-    }
-
-    private class SurfaceTextureListener implements TextureView.SurfaceTextureListener {
-        public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-            // We don't do this for surfaceCreated above because it is always followed by a surfaceChanged,
-            // but that is not the case here.
-            if (mRenderControllerThread != null) {
-                mRenderControllerThread.surfaceCreated();
-            }
-            onSizeChanged(width, height);
-        }
-
-        public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-            onDestroyed();
-            return true; // allow Android to call release() on the SurfaceTexture, we are done drawing to it
-        }
-
-        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-            onSizeChanged(width, height);
-        }
-
-        public void onSurfaceTextureUpdated(SurfaceTexture surface) {
         }
     }
 
@@ -433,13 +333,5 @@ public class LayerView extends FrameLayout {
         LayerViewException(String e) {
             super(e);
         }
-    }
-
-    public void setFullScreen(boolean fullScreen) {
-        mFullScreen = fullScreen;
-    }
-
-    public boolean isFullScreen() {
-        return mFullScreen;
     }
 }

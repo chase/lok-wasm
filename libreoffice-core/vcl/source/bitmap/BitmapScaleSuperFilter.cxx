@@ -21,7 +21,7 @@
 #include <comphelper/threadpool.hxx>
 #include <tools/helpers.hxx>
 
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <bitmap/BitmapScaleSuperFilter.hxx>
 
 #include <algorithm>
@@ -100,7 +100,7 @@ struct ScaleContext
             double fTemp = i * fRevScale;
             if (bMirrored)
                 fTemp = nTempX - fTemp;
-            rMapIX[i] = MinMax(sal_Int32(fTemp), 0, nTemp);
+            rMapIX[i] = std::clamp(sal_Int32(fTemp), sal_Int32(0), nTemp);
             rMapFX[i] = BilinearWeightType((fTemp - rMapIX[i]) * (BilinearWeightType(1) << MAP_PRECISION));
         }
     }
@@ -894,7 +894,7 @@ BitmapEx BitmapScaleSuperFilter::execute(BitmapEx const& rBitmap) const
     }
 
     {
-        Bitmap::ScopedReadAccess pReadAccess(aBitmap);
+        BitmapScopedReadAccess pReadAccess(aBitmap);
 
         // If source format is less than 24BPP, use 24BPP
         auto eSourcePixelFormat = aBitmap.getPixelFormat();

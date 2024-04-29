@@ -83,7 +83,7 @@ void SwHTMLWriter::SetNextNumInfo( std::unique_ptr<SwHTMLNumRuleInfo> pNxt )
     m_pNextNumRuleInfo = std::move(pNxt);
 }
 
-Writer& OutHTML_NumberBulletListStart( SwHTMLWriter& rWrt,
+SwHTMLWriter& OutHTML_NumberBulletListStart( SwHTMLWriter& rWrt,
                                  const SwHTMLNumRuleInfo& rInfo )
 {
     SwHTMLNumRuleInfo& rPrevInfo = rWrt.GetNumInfo();
@@ -211,21 +211,16 @@ Writer& OutHTML_NumberBulletListStart( SwHTMLWriter& rWrt,
         {
             // Unordered list: <UL>
             sOut += OOO_STRING_SVTOOLS_HTML_unorderlist;
-            rWrt.Strm().WriteOString( sOut );
-            OutHTML_BulletImage( rWrt,
-                                    nullptr,
-                                    rNumFormat.GetBrush(),
-                                    rWrt.m_aBulletGrfs[i]);
         }
         else
         {
             // Ordered list: <OL>
             sOut += OOO_STRING_SVTOOLS_HTML_orderlist;
 
-            // determine the type by the format
-            char cType = 0;
-            if (!rWrt.mbReqIF) // No 'type' attribute in ReqIF
+            if (!rWrt.mbReqIF) // No 'type' nor 'start' attribute in ReqIF
             {
+                // determine the type by the format
+                char cType = 0;
                 switch (eType)
                 {
                 case SVX_NUM_CHARS_UPPER_LETTER:
@@ -243,33 +238,35 @@ Writer& OutHTML_NumberBulletListStart( SwHTMLWriter& rWrt,
                     cType = 'i';
                     break;
                 }
-            }
-            if( cType )
-            {
-                sOut += " " OOO_STRING_SVTOOLS_HTML_O_type "=\"" + OStringChar(cType) + "\"";
-            }
+                if( cType )
+                {
+                    sOut += " " OOO_STRING_SVTOOLS_HTML_O_type "=\"" + OStringChar(cType) + "\"";
+                }
 
-            sal_uInt16 nStartVal = rNumFormat.GetStart();
-            if( bStartValue && 1 == nStartVal && i == rInfo.GetDepth()-1 )
-            {
-                if ( rWrt.m_pCurrentPam->GetPointNode().GetTextNode()->GetNum() )
+                sal_uInt16 nStartVal = rNumFormat.GetStart();
+                if( bStartValue && 1 == nStartVal && i == rInfo.GetDepth()-1 )
                 {
-                    nStartVal = static_cast< sal_uInt16 >( rWrt.m_pCurrentPam->GetPointNode()
-                                .GetTextNode()->GetNumberVector()[i] );
+                    if ( rWrt.m_pCurrentPam->GetPointNode().GetTextNode()->GetNum() )
+                    {
+                        nStartVal = static_cast< sal_uInt16 >( rWrt.m_pCurrentPam->GetPointNode()
+                                    .GetTextNode()->GetNumberVector()[i] );
+                    }
+                    else
+                    {
+                        OSL_FAIL( "<OutHTML_NumberBulletListStart(..) - text node has no number." );
+                    }
                 }
-                else
+                if( nStartVal != 1 )
                 {
-                    OSL_FAIL( "<OutHTML_NumberBulletListStart(..) - text node has no number." );
+                    sOut += " " OOO_STRING_SVTOOLS_HTML_O_start "=\"" + OString::number(static_cast<sal_Int32>(nStartVal)) + "\"";
                 }
-            }
-            if( nStartVal != 1 )
-            {
-                sOut += " " OOO_STRING_SVTOOLS_HTML_O_start "=\"" + OString::number(static_cast<sal_Int32>(nStartVal)) + "\"";
             }
         }
 
-        if (!sOut.isEmpty() && SVX_NUM_BITMAP != eType)  // second condition to avoid adding extra ul, already done before.
-            rWrt.Strm().WriteOString( sOut );
+        rWrt.Strm().WriteOString(sOut);
+
+        if (eType == SVX_NUM_BITMAP)
+            OutHTML_BulletImage(rWrt, nullptr, rNumFormat.GetBrush(), rWrt.m_aBulletGrfs[i]);
 
         if( rWrt.m_bCfgOutStyles )
             OutCSS1_NumberBulletListStyleOpt( rWrt, *rInfo.GetNumRule(), static_cast<sal_uInt8>(i) );
@@ -282,7 +279,7 @@ Writer& OutHTML_NumberBulletListStart( SwHTMLWriter& rWrt,
     return rWrt;
 }
 
-Writer& OutHTML_NumberBulletListEnd( SwHTMLWriter& rWrt,
+SwHTMLWriter& OutHTML_NumberBulletListEnd( SwHTMLWriter& rWrt,
                                const SwHTMLNumRuleInfo& rNextInfo )
 {
     SwHTMLNumRuleInfo& rInfo = rWrt.GetNumInfo();
@@ -312,25 +309,25 @@ Writer& OutHTML_NumberBulletListEnd( SwHTMLWriter& rWrt,
     for( sal_uInt16 i=rInfo.GetDepth(); i>nNextDepth; i-- )
     {
         rWrt.DecIndentLevel(); // indent content of <OL>
-        if( rWrt.m_bLFPossible )
+        if (rWrt.IsLFPossible())
             rWrt.OutNewLine(); // </OL>/</UL> in a new line
 
         // a list is started or ended:
         sal_Int16 eType = rInfo.GetNumRule()->Get( i-1 ).GetNumberingType();
         OString aTag;
         if( SVX_NUM_CHAR_SPECIAL == eType || SVX_NUM_BITMAP == eType)
-            aTag = OOO_STRING_SVTOOLS_HTML_unorderlist;
+            aTag = OOO_STRING_SVTOOLS_HTML_unorderlist ""_ostr;
         else
-            aTag = OOO_STRING_SVTOOLS_HTML_orderlist;
+            aTag = OOO_STRING_SVTOOLS_HTML_orderlist ""_ostr;
         HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + aTag), false );
-        if (rWrt.mbXHTML && i != nNextDepth + 1)
+        if (rWrt.mbXHTML && (i != nNextDepth + 1 || (i != 1 && rNextInfo.IsNumbered())))
         {
             // for all skipped sublevels, close a li
             HTMLOutFuncs::Out_AsciiTag(
                 rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_li),
                 /*bOn=*/false);
         }
-        rWrt.m_bLFPossible = true;
+        rWrt.SetLFPossible(true);
     }
 
     return rWrt;

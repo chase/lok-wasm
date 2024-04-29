@@ -25,9 +25,14 @@
 #include <com/sun/star/util/URLTransformer.hpp>
 #include <com/sun/star/util/XURLTransformer.hpp>
 
+#include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/embed/StorageFormats.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
 #include <com/sun/star/io/XSeekable.hpp>
+#include <com/sun/star/packages/zip/ZipIOException.hpp>
 #include <com/sun/star/task/XInteractionHandler.hpp>
+
+#include <sfx2/brokenpackageint.hxx>
 #include <o3tl/string_view.hxx>
 #include <tools/wldcrd.hxx>
 #include <sal/log.hxx>
@@ -35,7 +40,9 @@
 #include <comphelper/diagnose_ex.hxx>
 #include <tools/urlobj.hxx>
 #include <comphelper/fileurl.hxx>
+#include <comphelper/lok.hxx>
 #include <comphelper/sequence.hxx>
+#include <comphelper/scopeguard.hxx>
 #include <utility>
 
 #define DEBUG_TYPE_DETECTION 0
@@ -73,7 +80,7 @@ OUString SAL_CALL TypeDetection::queryTypeByURL(const OUString& sURL)
     OUString sType;
 
     // SAFE ->
-    osl::MutexGuard aLock(m_aMutex);
+    std::unique_lock aLock(m_aMutex);
 
     css::util::URL  aURL;
     aURL.Complete = sURL;
@@ -211,6 +218,7 @@ int getFlatTypeRank(std::u16string_view rType)
         "calc_SYLK",
         "calc_DIF",
         "calc_dBase",
+        "Apache Parquet",
 
         // Binary (raster and vector image files)
         "emf_MS_Windows_Metafile",
@@ -379,7 +387,7 @@ OUString SAL_CALL TypeDetection::queryTypeByDescriptor(css::uno::Sequence< css::
     try
     {
         // SAFE -> ----------------------------------
-        osl::ClearableMutexGuard aLock(m_aMutex);
+        std::unique_lock aLock(m_aMutex);
 
         // parse given URL to split it into e.g. main and jump marks ...
         sURL = stlDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_URL, OUString());
@@ -405,9 +413,9 @@ OUString SAL_CALL TypeDetection::queryTypeByDescriptor(css::uno::Sequence< css::
         }
 
         FlatDetection lFlatTypes;
-        impl_getAllFormatTypes(aURL, stlDescriptor, lFlatTypes);
+        impl_getAllFormatTypes(aLock, aURL, stlDescriptor, lFlatTypes);
 
-        aLock.clear();
+        aLock.unlock();
         // <- SAFE ----------------------------------
 
         // Properly prioritize all candidate types.
@@ -489,7 +497,7 @@ void TypeDetection::impl_checkResultsAndAddBestFilter(utl::MediaDescriptor& rDes
             OUString sRealType = sType;
 
             // SAFE ->
-            ::osl::ResettableMutexGuard aLock(m_aMutex);
+            std::unique_lock aLock(m_aMutex);
 
             // Attention: For executing next lines of code, We must be sure that
             // all filters already loaded :-(
@@ -501,13 +509,13 @@ void TypeDetection::impl_checkResultsAndAddBestFilter(utl::MediaDescriptor& rDes
                 { PROPNAME_TYPE, uno::Any(sRealType) } };
             std::vector<OUString> lFilters = cache.getMatchingItemsByProps(FilterCache::E_FILTER, lIProps);
 
-            aLock.clear();
+            aLock.unlock();
             // <- SAFE
 
             for (auto const& filter : lFilters)
             {
                 // SAFE ->
-                aLock.reset();
+                aLock.lock();
                 try
                 {
                     CacheItem aFilter = cache.getItem(FilterCache::E_FILTER, filter);
@@ -520,7 +528,7 @@ void TypeDetection::impl_checkResultsAndAddBestFilter(utl::MediaDescriptor& rDes
                         break;
                 }
                 catch(const css::uno::Exception&) {}
-                aLock.clear();
+                aLock.unlock();
                 // <- SAFE
             }
 
@@ -546,15 +554,9 @@ void TypeDetection::impl_checkResultsAndAddBestFilter(utl::MediaDescriptor& rDes
     sFilter.clear();
     try
     {
-        // SAFE ->
-        osl::ClearableMutexGuard aLock(m_aMutex);
-
         CacheItem aType = cache.getItem(FilterCache::E_TYPE, sType);
         aType[PROPNAME_PREFERREDFILTER] >>= sFilter;
         cache.getItem(FilterCache::E_FILTER, sFilter);
-
-        aLock.clear();
-        // <- SAFE
 
         // no exception => found valid type and filter => set it on the given descriptor
         rDescriptor[utl::MediaDescriptor::PROP_TYPENAME  ] <<= sType  ;
@@ -569,9 +571,6 @@ void TypeDetection::impl_checkResultsAndAddBestFilter(utl::MediaDescriptor& rDes
     sFilter.clear();
     try
     {
-        // SAFE ->
-        ::osl::ResettableMutexGuard aLock(m_aMutex);
-
         // Attention: For executing next lines of code, We must be sure that
         // all filters already loaded :-(
         // That can disturb our "load on demand feature". But we have no other chance!
@@ -581,15 +580,10 @@ void TypeDetection::impl_checkResultsAndAddBestFilter(utl::MediaDescriptor& rDes
             { PROPNAME_TYPE, uno::Any(sType) } };
         std::vector<OUString> lFilters = cache.getMatchingItemsByProps(FilterCache::E_FILTER, lIProps);
 
-        aLock.clear();
-        // <- SAFE
-
         for (auto const& filter : lFilters)
         {
             sFilter = filter;
 
-            // SAFE ->
-            aLock.reset();
             try
             {
                 CacheItem aFilter = cache.getItem(FilterCache::E_FILTER, sFilter);
@@ -601,8 +595,6 @@ void TypeDetection::impl_checkResultsAndAddBestFilter(utl::MediaDescriptor& rDes
             }
             catch(const css::uno::Exception&)
                 { continue; }
-            aLock.clear();
-            // <- SAFE
 
             sFilter.clear();
         }
@@ -620,6 +612,7 @@ void TypeDetection::impl_checkResultsAndAddBestFilter(utl::MediaDescriptor& rDes
 
 
 bool TypeDetection::impl_getPreselectionForType(
+    std::unique_lock<std::mutex>& /*rGuard*/,
     const OUString& sPreSelType, const util::URL& aParsedURL, FlatDetection& rFlatTypes, bool bDocService)
 {
     // Can be used to suppress execution of some parts of this method
@@ -641,10 +634,7 @@ bool TypeDetection::impl_getPreselectionForType(
     CacheItem       aType;
     try
     {
-        // SAFE -> --------------------------
-        osl::MutexGuard aLock(m_aMutex);
         aType = GetTheFilterCache().getItem(FilterCache::E_TYPE, sType);
-        // <- SAFE --------------------------
     }
     catch(const css::container::NoSuchElementException&)
     {
@@ -721,15 +711,13 @@ bool TypeDetection::impl_getPreselectionForType(
 }
 
 void TypeDetection::impl_getPreselectionForDocumentService(
+    std::unique_lock<std::mutex>& rGuard,
     const OUString& sPreSelDocumentService, const util::URL& aParsedURL, FlatDetection& rFlatTypes)
 {
     // get all filters, which match to this doc service
     std::vector<OUString> lFilters;
     try
     {
-        // SAFE -> --------------------------
-        osl::MutexGuard aLock(m_aMutex);
-
         // Attention: For executing next lines of code, We must be sure that
         // all filters already loaded :-(
         // That can disturb our "load on demand feature". But we have no other chance!
@@ -739,7 +727,6 @@ void TypeDetection::impl_getPreselectionForDocumentService(
         css::beans::NamedValue lIProps[] {
             { PROPNAME_DOCUMENTSERVICE, css::uno::Any(sPreSelDocumentService) } };
         lFilters = cache.getMatchingItemsByProps(FilterCache::E_FILTER, lIProps);
-        // <- SAFE --------------------------
     }
     catch (const css::container::NoSuchElementException&)
     {
@@ -753,20 +740,19 @@ void TypeDetection::impl_getPreselectionForDocumentService(
     // is an easier job than removing them .-)
     for (auto const& filter : lFilters)
     {
-        OUString aType = impl_getTypeFromFilter(filter);
+        OUString aType = impl_getTypeFromFilter(rGuard, filter);
         if (aType.isEmpty())
             continue;
 
-        impl_getPreselectionForType(aType, aParsedURL, rFlatTypes, true);
+        impl_getPreselectionForType(rGuard, aType, aParsedURL, rFlatTypes, true);
     }
 }
 
-OUString TypeDetection::impl_getTypeFromFilter(const OUString& rFilterName)
+OUString TypeDetection::impl_getTypeFromFilter(std::unique_lock<std::mutex>& /*rGuard*/, const OUString& rFilterName)
 {
     CacheItem aFilter;
     try
     {
-        osl::MutexGuard aLock(m_aMutex);
         aFilter = GetTheFilterCache().getItem(FilterCache::E_FILTER, rFilterName);
     }
     catch (const container::NoSuchElementException&)
@@ -780,6 +766,7 @@ OUString TypeDetection::impl_getTypeFromFilter(const OUString& rFilterName)
 }
 
 void TypeDetection::impl_getAllFormatTypes(
+    std::unique_lock<std::mutex>& rGuard,
     const util::URL& aParsedURL, utl::MediaDescriptor const & rDescriptor, FlatDetection& rFlatTypes)
 {
     rFlatTypes.clear();
@@ -788,7 +775,6 @@ void TypeDetection::impl_getAllFormatTypes(
     std::vector<OUString> aFilterNames;
     try
     {
-        osl::MutexGuard aLock(m_aMutex);
         auto & cache = GetTheFilterCache();
         cache.load(FilterCache::E_CONTAINS_FILTERS);
         aFilterNames = cache.getItemNames(FilterCache::E_FILTER);
@@ -801,7 +787,7 @@ void TypeDetection::impl_getAllFormatTypes(
     // Retrieve the default type for each of these filters, and store them.
     for (auto const& filterName : aFilterNames)
     {
-        OUString aType = impl_getTypeFromFilter(filterName);
+        OUString aType = impl_getTypeFromFilter(rGuard, filterName);
 
         if (aType.isEmpty())
             continue;
@@ -844,12 +830,81 @@ void TypeDetection::impl_getAllFormatTypes(
     // Mark pre-selected type (if any) to have it prioritized.
     OUString sSelectedType = rDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_TYPENAME, OUString());
     if (!sSelectedType.isEmpty())
-        impl_getPreselectionForType(sSelectedType, aParsedURL, rFlatTypes, false);
+        impl_getPreselectionForType(rGuard, sSelectedType, aParsedURL, rFlatTypes, false);
 
     // Mark all types preferred by the current document service, to have it prioritized.
     OUString sSelectedDoc = rDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_DOCUMENTSERVICE, OUString());
     if (!sSelectedDoc.isEmpty())
-        impl_getPreselectionForDocumentService(sSelectedDoc, aParsedURL, rFlatTypes);
+        impl_getPreselectionForDocumentService(rGuard, sSelectedDoc, aParsedURL, rFlatTypes);
+}
+
+
+static bool isBrokenZIP(const css::uno::Reference<css::io::XInputStream>& xStream,
+                        const css::uno::Reference<css::uno::XComponentContext>& xContext)
+{
+    try
+    {
+        // Only consider seekable streams starting with "PK", to avoid false detections
+        css::uno::Reference<css::io::XSeekable> xSeek(xStream, css::uno::UNO_QUERY_THROW);
+        comphelper::ScopeGuard restorePos(
+            [xSeek, nPos = xSeek->getPosition()]
+            {
+                try
+                {
+                    xSeek->seek(nPos);
+                }
+                catch (const css::uno::Exception&)
+                {
+                }
+            });
+        css::uno::Sequence<sal_Int8> magic(2);
+        xStream->readBytes(magic, 2);
+        if (magic.getLength() < 2 || magic[0] != 'P' || magic[1] != 'K')
+            return false;
+    }
+    catch (const css::uno::Exception&)
+    {
+        return false;
+    }
+
+    std::vector<css::uno::Any> aArguments{
+        css::uno::Any(xStream),
+        css::uno::Any(css::beans::NamedValue("AllowRemoveOnInsert", css::uno::Any(false))),
+        css::uno::Any(css::beans::NamedValue("StorageFormat",
+                                             css::uno::Any(css::embed::StorageFormats::ZIP))),
+    };
+    try
+    {
+        // If this is a broken ZIP package, or not a ZIP, this would throw ZipIOException
+        xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
+            "com.sun.star.packages.comp.ZipPackage", comphelper::containerToSequence(aArguments),
+            xContext);
+    }
+    catch (const css::packages::zip::ZipIOException&)
+    {
+        // Now test if repair will succeed
+        aArguments.emplace_back(css::beans::NamedValue("RepairPackage", css::uno::Any(true)));
+        try
+        {
+            // If this is a broken ZIP package that can be repaired, this would succeed,
+            // and the result will be not empty
+            if (css::uno::Reference<css::beans::XPropertySet> xPackage{
+                    xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
+                        "com.sun.star.packages.comp.ZipPackage",
+                        comphelper::containerToSequence(aArguments), xContext),
+                    css::uno::UNO_QUERY })
+                if (bool bHasElements; xPackage->getPropertyValue("HasElements") >>= bHasElements)
+                    return bHasElements;
+        }
+        catch (const css::uno::Exception&)
+        {
+        }
+    }
+    catch (const css::uno::Exception&)
+    {
+    }
+    // The package is either not broken, or is not a repairable ZIP
+    return false;
 }
 
 
@@ -861,6 +916,65 @@ OUString TypeDetection::impl_detectTypeFlatAndDeep(      utl::MediaDescriptor& r
     // reset it everytimes, so the outside code can distinguish between
     // a set and a not set value.
     rLastChance.clear();
+
+    // tdf#96401: First of all, check if this is a broken ZIP package. Not doing this here would
+    // make some filters silently not recognize their content in broken packages, and some filters
+    // show a warning and mistakenly claim own content based on user choice.
+    if (bAllowDeep && !rDescriptor.getUnpackedValueOrDefault("RepairPackage", false)
+        && rDescriptor.getUnpackedValueOrDefault("RepairAllowed", true)
+        && rDescriptor.contains(utl::MediaDescriptor::PROP_INTERACTIONHANDLER))
+    {
+        try
+        {
+            impl_openStream(rDescriptor);
+            if (auto xStream = rDescriptor.getUnpackedValueOrDefault(
+                    utl::MediaDescriptor::PROP_INPUTSTREAM,
+                    css::uno::Reference<css::io::XInputStream>()))
+            {
+                css::uno::Reference<css::uno::XComponentContext> xContext;
+
+                // SAFE ->
+                {
+                    std::unique_lock aLock(m_aMutex);
+                    xContext = m_xContext;
+                }
+                // <- SAFE
+
+                if (isBrokenZIP(xStream, xContext))
+                {
+                    if (css::uno::Reference<css::task::XInteractionHandler> xInteraction{
+                            rDescriptor.getValue(utl::MediaDescriptor::PROP_INTERACTIONHANDLER),
+                            css::uno::UNO_QUERY })
+                    {
+                        INetURLObject aURL(rDescriptor.getUnpackedValueOrDefault(
+                            utl::MediaDescriptor::PROP_URL, OUString()));
+                        OUString aDocumentTitle
+                            = aURL.getName(INetURLObject::LAST_SEGMENT, true,
+                                           INetURLObject::DecodeMechanism::WithCharset);
+
+                        // Ask the user whether they wants to try to repair
+                        RequestPackageReparation aRequest(aDocumentTitle);
+                        xInteraction->handle(aRequest.GetRequest());
+
+                        if (aRequest.isApproved())
+                        {
+                            // lok: we want to overwrite file in jail, so don't use template flag
+                            const bool bIsLOK = comphelper::LibreOfficeKit::isActive();
+                            rDescriptor[utl::MediaDescriptor::PROP_DOCUMENTTITLE] <<= aDocumentTitle;
+                            rDescriptor[utl::MediaDescriptor::PROP_ASTEMPLATE] <<= !bIsLOK;
+                            rDescriptor["RepairPackage"] <<= true;
+                        }
+                        else
+                            rDescriptor["RepairAllowed"] <<= false; // Do not ask again
+                    }
+                }
+            }
+        }
+        catch (const css::uno::Exception&)
+        {
+            // No problem
+        }
+    }
 
     // step over all possible types for this URL.
     // solutions:
@@ -898,9 +1012,9 @@ OUString TypeDetection::impl_detectTypeFlatAndDeep(      utl::MediaDescriptor& r
         try
         {
             // SAFE -> ----------------------------------
-            osl::ClearableMutexGuard aLock(m_aMutex);
+            std::unique_lock aLock(m_aMutex);
             CacheItem aType = GetTheFilterCache().getItem(FilterCache::E_TYPE, sFlatType);
-            aLock.clear();
+            aLock.unlock();
 
             OUString sDetectService;
             aType[PROPNAME_DETECTSERVICE] >>= sDetectService;
@@ -976,7 +1090,7 @@ OUString TypeDetection::impl_askDetectService(const OUString&               sDet
 
     // SAFE ->
     {
-        osl::MutexGuard aLock(m_aMutex);
+        std::unique_lock aLock(m_aMutex);
         xContext = m_xContext;
     }
     // <- SAFE
@@ -1092,7 +1206,6 @@ OUString TypeDetection::impl_askUserForTypeAndFilterIfAllowed(utl::MediaDescript
         OUString sFilter = aRequest.getFilter();
         if (!impl_validateAndSetFilterOnDescriptor(rDescriptor, sFilter))
             return OUString();
-
         OUString sType;
         rDescriptor[utl::MediaDescriptor::PROP_TYPENAME] >>= sType;
         return sType;
@@ -1120,7 +1233,7 @@ void TypeDetection::impl_openStream(utl::MediaDescriptor& rDescriptor)
     if ( !bSuccess )
         throw css::uno::Exception(
             "Could not open stream for <" + sURL + ">",
-            static_cast<OWeakObject *>(this));
+            getXWeak());
 
     if ( !bRequestedReadOnly )
     {
@@ -1147,16 +1260,11 @@ void TypeDetection::impl_removeTypeFilterFromDescriptor(utl::MediaDescriptor& rD
 bool TypeDetection::impl_validateAndSetTypeOnDescriptor(      utl::MediaDescriptor& rDescriptor,
                                                             const OUString&               sType      )
 {
-    // SAFE ->
+    if (GetTheFilterCache().hasItem(FilterCache::E_TYPE, sType))
     {
-        osl::MutexGuard aLock(m_aMutex);
-        if (GetTheFilterCache().hasItem(FilterCache::E_TYPE, sType))
-        {
-            rDescriptor[utl::MediaDescriptor::PROP_TYPENAME] <<= sType;
-            return true;
-        }
+        rDescriptor[utl::MediaDescriptor::PROP_TYPENAME] <<= sType;
+        return true;
     }
-    // <- SAFE
 
     // remove all related information from the descriptor
     impl_removeTypeFilterFromDescriptor(rDescriptor);
@@ -1164,21 +1272,15 @@ bool TypeDetection::impl_validateAndSetTypeOnDescriptor(      utl::MediaDescript
 }
 
 
-bool TypeDetection::impl_validateAndSetFilterOnDescriptor(      utl::MediaDescriptor& rDescriptor,
-                                                              const OUString&               sFilter    )
+bool TypeDetection::impl_validateAndSetFilterOnDescriptor( utl::MediaDescriptor& rDescriptor,
+                                                           const OUString&               sFilter    )
 {
     try
     {
-        // SAFE ->
-        osl::ClearableMutexGuard aLock(m_aMutex);
-
         auto & cache = GetTheFilterCache();
         CacheItem aFilter = cache.getItem(FilterCache::E_FILTER, sFilter);
         OUString sType;
         aFilter[PROPNAME_TYPE] >>= sType;
-
-        aLock.clear();
-        // <- SAFE
 
         // found valid type and filter => set it on the given descriptor
         rDescriptor[utl::MediaDescriptor::PROP_TYPENAME  ] <<= sType  ;

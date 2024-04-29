@@ -11,6 +11,7 @@
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
 #include <cppuhelper/implbase.hxx>
+#include <cppuhelper/supportsservice.hxx>
 
 #include <unotools/mediadescriptor.hxx>
 
@@ -47,17 +48,17 @@ OrcusFormatDetect::OrcusFormatDetect()
 
 OUString OrcusFormatDetect::getImplementationName()
 {
-    return OUString();
+    return "com.sun.star.comp.sc.OrcusFilterDetect";
 }
 
-sal_Bool OrcusFormatDetect::supportsService(const OUString& /*rServiceName*/)
+sal_Bool OrcusFormatDetect::supportsService(const OUString& rServiceName)
 {
-    return false;
+    return cppu::supportsService(this, rServiceName);
 }
 
 css::uno::Sequence<OUString> OrcusFormatDetect::getSupportedServiceNames()
 {
-    return css::uno::Sequence<OUString>();
+    return {"com.sun.star.frame.ExtendedTypeDetection"};
 }
 
 OUString OrcusFormatDetect::detect(css::uno::Sequence<css::beans::PropertyValue>& rMediaDescSeq)
@@ -80,7 +81,8 @@ OUString OrcusFormatDetect::detect(css::uno::Sequence<css::beans::PropertyValue>
         aContent.WriteBytes(aSeq.getConstArray(), nReadBytes);
     }
 
-    orcus::format_t eFormat = orcus::detect(static_cast<const unsigned char*>(aContent.GetData()), aContent.GetSize());
+    std::string_view aStream(static_cast<const char*>(aContent.GetData()), aContent.GetSize());
+    orcus::format_t eFormat = orcus::detect(aStream);
 
     switch (eFormat)
     {
@@ -88,6 +90,8 @@ OUString OrcusFormatDetect::detect(css::uno::Sequence<css::beans::PropertyValue>
             return "Gnumeric XML";
         case orcus::format_t::xls_xml:
             return "calc_MS_Excel_2003_XML";
+        case orcus::format_t::parquet:
+            return "Apache Parquet";
         default:
             ;
     }

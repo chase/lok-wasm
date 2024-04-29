@@ -37,6 +37,7 @@
 #include <svx/svxids.hrc>
 #include <bitmaps.hlst>
 #include <svx/fontwork.hxx>
+#include <svl/itemset.hxx>
 
 #define WIDTH_CHARS 10
 
@@ -315,7 +316,7 @@ void SvxFontWorkDialog::SetStyle_Impl(const XFormTextStyleItem* pItem)
 {
     if ( pItem )
     {
-        OString sId = "off";
+        OUString sId = "off";
 
         switch ( pItem->GetValue() )
         {
@@ -355,7 +356,7 @@ void SvxFontWorkDialog::SetAdjust_Impl(const XFormTextAdjustItem* pItem)
 {
     if ( pItem )
     {
-        OString sId;
+        OUString sId;
 
         m_xTbxAdjust->set_sensitive(true);
         m_xMtrFldDistance->set_sensitive(true);
@@ -441,7 +442,7 @@ void SvxFontWorkDialog::SetShadow_Impl(const XFormTextShadowItem* pItem,
 {
     if ( pItem )
     {
-        OString sId;
+        OUString sId;
 
         m_xTbxShadow->set_sensitive(true);
 
@@ -599,7 +600,7 @@ void SvxFontWorkDialog::SetShadowYVal_Impl(const XFormTextShadowYValItem* pItem)
     }
 }
 
-IMPL_LINK(SvxFontWorkDialog, SelectStyleHdl_Impl, const OString&, rId, void)
+IMPL_LINK(SvxFontWorkDialog, SelectStyleHdl_Impl, const OUString&, rId, void)
 {
     // Execute this block when a different toolbox item has been clicked or
     // when the off item has been clicked.  The later is necessary to
@@ -627,7 +628,7 @@ IMPL_LINK(SvxFontWorkDialog, SelectStyleHdl_Impl, const OString&, rId, void)
     m_sLastStyleTbxId = rId;
 }
 
-IMPL_LINK(SvxFontWorkDialog, SelectAdjustHdl_Impl, const OString&, rId, void)
+IMPL_LINK(SvxFontWorkDialog, SelectAdjustHdl_Impl, const OUString&, rId, void)
 {
     if (rId == "orientation")
     {
@@ -654,7 +655,7 @@ IMPL_LINK(SvxFontWorkDialog, SelectAdjustHdl_Impl, const OString&, rId, void)
     }
 }
 
-IMPL_LINK(SvxFontWorkDialog, SelectShadowHdl_Impl, const OString&, rId, void)
+IMPL_LINK(SvxFontWorkDialog, SelectShadowHdl_Impl, const OUString&, rId, void)
 {
     if (rId == "contour")
     {

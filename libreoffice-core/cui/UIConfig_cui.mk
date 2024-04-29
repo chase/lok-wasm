@@ -24,7 +24,6 @@ endif
 $(eval $(call gb_UIConfig_add_uifiles,cui,\
 	cui/uiconfig/ui/aboutdialog \
 	cui/uiconfig/ui/aboutconfigdialog\
-	cui/uiconfig/ui/aboutconfigvaluedialog \
 	cui/uiconfig/ui/accelconfigpage \
 	cui/uiconfig/ui/additionsdialog \
 	cui/uiconfig/ui/additionsfragment \
@@ -114,6 +113,7 @@ $(eval $(call gb_UIConfig_add_uifiles,cui,\
 	cui/uiconfig/ui/linetabpage \
 	cui/uiconfig/ui/lineendstabpage \
 	cui/uiconfig/ui/linestyletabpage \
+	cui/uiconfig/ui/listdialog \
 	cui/uiconfig/ui/macroassigndialog \
 	cui/uiconfig/ui/macroassignpage \
 	cui/uiconfig/ui/macroselectordialog \
@@ -125,6 +125,7 @@ $(eval $(call gb_UIConfig_add_uifiles,cui,\
 	cui/uiconfig/ui/newlibdialog \
 	cui/uiconfig/ui/newtabledialog \
 	cui/uiconfig/ui/newtoolbardialog \
+	cui/uiconfig/ui/numberdialog \
 	cui/uiconfig/ui/numberingformatpage \
 	cui/uiconfig/ui/numberingoptionspage \
 	cui/uiconfig/ui/numberingpositionpage \
@@ -192,6 +193,7 @@ $(eval $(call gb_UIConfig_add_uifiles,cui,\
 	cui/uiconfig/ui/querynosavefiledialog \
 	cui/uiconfig/ui/querysavelistdialog \
 	cui/uiconfig/ui/queryupdategalleryfilelistdialog \
+	cui/uiconfig/ui/querysetinsmodedialog \
 	cui/uiconfig/ui/recordnumberdialog \
 	cui/uiconfig/ui/rotationtabpage \
 	cui/uiconfig/ui/scriptorganizer \

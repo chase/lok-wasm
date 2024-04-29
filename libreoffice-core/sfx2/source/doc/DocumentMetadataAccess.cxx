@@ -87,9 +87,9 @@ bool isValidNCName(std::u16string_view i_rIdref)
 }
 
 
-constexpr OUStringLiteral s_content = u"content.xml";
-constexpr OUStringLiteral s_styles = u"styles.xml";
-constexpr OUStringLiteral s_manifest = u"manifest.rdf";
+constexpr OUString s_content = u"content.xml"_ustr;
+constexpr OUString s_styles = u"styles.xml"_ustr;
+constexpr OUString s_manifest = u"manifest.rdf"_ustr;
 const char s_odfmime [] = "application/vnd.oasis.opendocument.";
 
 
@@ -156,10 +156,9 @@ uno::Reference<rdf::XURI> createBaseURI(
 
     // #i108078# workaround non-hierarchical vnd.sun.star.expand URIs
     // this really should be done somewhere else, not here.
-    if (pkgURI.matchIgnoreAsciiCase("vnd.sun.star.expand:"))
+    if (pkgURI.startsWithIgnoreAsciiCase("vnd.sun.star.expand:", &pkgURI))
     {
         // expand it here (makeAbsolute requires hierarchical URI)
-        pkgURI = pkgURI.copy( RTL_CONSTASCII_LENGTH("vnd.sun.star.expand:") );
         if (!pkgURI.isEmpty()) {
             pkgURI = ::rtl::Uri::decode(
                     pkgURI, rtl_UriDecodeStrict, RTL_TEXTENCODING_UTF8);
@@ -196,8 +195,7 @@ uno::Reference<rdf::XURI> createBaseURI(
     }
     if (!i_rSubDocument.empty())
     {
-        buf.append(i_rSubDocument);
-        buf.append('/');
+        buf.append(OUString::Concat(i_rSubDocument) + "/");
     }
     if (!buf.isEmpty())
     {
@@ -490,18 +488,14 @@ mkException( OUString const & i_rMessage,
     ucb::IOErrorCode const i_ErrorCode,
     OUString const & i_rUri, OUString const & i_rResource)
 {
-    ucb::InteractiveAugmentedIOException iaioe;
-    iaioe.Message = i_rMessage;
-    iaioe.Classification = task::InteractionClassification_ERROR;
-    iaioe.Code = i_ErrorCode;
-
     const beans::PropertyValue uriProp("Uri",
         -1, uno::Any(i_rUri), static_cast<beans::PropertyState>(0));
     const beans::PropertyValue rnProp(
         "ResourceName",
         -1, uno::Any(i_rResource), static_cast<beans::PropertyState>(0));
-    iaioe.Arguments = { uno::Any(uriProp), uno::Any(rnProp) };
-    return iaioe;
+    return ucb::InteractiveAugmentedIOException(i_rMessage, {},
+                                                task::InteractionClassification_ERROR, i_ErrorCode,
+                                                { uno::Any(uriProp), uno::Any(rnProp) });
 }
 
 /** error handling policy.
@@ -1363,13 +1357,13 @@ DocumentMetadataAccess::storeMetadataToMedium(
     const bool bOk = aMedium.Commit();
     aMedium.Close();
     if ( !bOk ) {
-        ErrCode nError = aMedium.GetError();
+        ErrCodeMsg nError = aMedium.GetErrorIgnoreWarning();
         if ( nError == ERRCODE_NONE ) {
             nError = ERRCODE_IO_GENERAL;
         }
         task::ErrorCodeIOException ex(
             "DocumentMetadataAccess::storeMetadataToMedium Commit failed: " + nError.toString(),
-            uno::Reference< uno::XInterface >(), sal_uInt32(nError));
+            uno::Reference< uno::XInterface >(), sal_uInt32(nError.GetCode()));
         throw lang::WrappedTargetException(OUString(), *this,
                 uno::Any(ex));
     }

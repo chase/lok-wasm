@@ -41,8 +41,10 @@
 #include <com/sun/star/text/XTextFramesSupplier.hpp>
 #include <com/sun/star/document/XDocumentInsertable.hpp>
 #include <com/sun/star/style/ParagraphAdjust.hpp>
+#include <com/sun/star/document/MacroExecMode.hpp>
 
 #include <comphelper/propertysequence.hxx>
+#include <comphelper/propertyvalue.hxx>
 #include <editeng/boxitem.hxx>
 #include <vcl/scheduler.hxx>
 
@@ -57,6 +59,13 @@
 #include <docsh.hxx>
 #include <unotxdoc.hxx>
 #include <frmatr.hxx>
+
+#if defined(_WIN32)
+#include <officecfg/Office/Common.hxx>
+#include <unotools/securityoptions.hxx>
+#include <systools/win32/comtools.hxx>
+#include <urlmon.h>
+#endif
 
 typedef std::map<OUString, css::uno::Sequence< css::table::BorderLine> > AllBordersMap;
 typedef std::pair<OUString, css::uno::Sequence< css::table::BorderLine> > StringSequencePair;
@@ -836,8 +845,8 @@ CPPUNIT_TEST_FIXTURE(Test, testSpellmenuRedline)
     // Make sure that if we show the spellcheck popup menu (for the current
     // document, which contains redlines), then the last two entries will be
     // always 'go to next/previous change'.
-    CPPUNIT_ASSERT_EQUAL(OString("next"), rMenu.GetItemIdent(rMenu.GetItemId(rMenu.GetItemCount() - 2)));
-    CPPUNIT_ASSERT_EQUAL(OString("prev"), rMenu.GetItemIdent(rMenu.GetItemId(rMenu.GetItemCount() - 1)));
+    CPPUNIT_ASSERT_EQUAL(OUString("next"), rMenu.GetItemIdent(rMenu.GetItemId(rMenu.GetItemCount() - 2)));
+    CPPUNIT_ASSERT_EQUAL(OUString("prev"), rMenu.GetItemIdent(rMenu.GetItemId(rMenu.GetItemCount() - 1)));
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf107776)
@@ -909,18 +918,18 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf92586)
 CPPUNIT_TEST_FIXTURE(Test, testTdf103025)
 {
     createSwDoc("tdf103025.odt");
-    CPPUNIT_ASSERT_EQUAL(OUString("2014-01"), parseDump("/root/page[1]/header/tab[2]/row[2]/cell[3]/txt/SwParaPortion/SwLineLayout/SwFieldPortion", "expand"));
-    CPPUNIT_ASSERT_EQUAL(OUString("2014-01"), parseDump("/root/page[2]/header/tab[2]/row[2]/cell[3]/txt/SwParaPortion/SwLineLayout/SwFieldPortion", "expand"));
-    CPPUNIT_ASSERT_EQUAL(OUString("2014-02"), parseDump("/root/page[3]/header/tab[2]/row[2]/cell[3]/txt/SwParaPortion/SwLineLayout/SwFieldPortion", "expand"));
-    CPPUNIT_ASSERT_EQUAL(OUString("2014-03"), parseDump("/root/page[4]/header/tab[2]/row[2]/cell[3]/txt/SwParaPortion/SwLineLayout/SwFieldPortion", "expand"));
-    CPPUNIT_ASSERT_EQUAL(OUString("2014-03"), parseDump("/root/page[5]/header/tab[2]/row[2]/cell[3]/txt/SwParaPortion/SwLineLayout/SwFieldPortion", "expand"));
+    CPPUNIT_ASSERT_EQUAL(OUString("2014-01"), parseDump("/root/page[1]/header/tab[2]/row[2]/cell[3]/txt/SwParaPortion/SwLineLayout/SwFieldPortion"_ostr, "expand"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("2014-01"), parseDump("/root/page[2]/header/tab[2]/row[2]/cell[3]/txt/SwParaPortion/SwLineLayout/SwFieldPortion"_ostr, "expand"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("2014-02"), parseDump("/root/page[3]/header/tab[2]/row[2]/cell[3]/txt/SwParaPortion/SwLineLayout/SwFieldPortion"_ostr, "expand"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("2014-03"), parseDump("/root/page[4]/header/tab[2]/row[2]/cell[3]/txt/SwParaPortion/SwLineLayout/SwFieldPortion"_ostr, "expand"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("2014-03"), parseDump("/root/page[5]/header/tab[2]/row[2]/cell[3]/txt/SwParaPortion/SwLineLayout/SwFieldPortion"_ostr, "expand"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf76322_columnBreakInHeader)
 {
     createSwDoc("tdf76322_columnBreakInHeader.docx");
 // column breaks were ignored. First line should start in column 2
-    CPPUNIT_ASSERT_EQUAL( OUString("Test1"), parseDump("/root/page[1]/header/section/column[2]/body/txt/text()") );
+    CPPUNIT_ASSERT_EQUAL( OUString("Test1"), parseDump("/root/page[1]/header/section/column[2]/body/txt/text()"_ostr) );
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf76349_1columnBreak)
@@ -949,16 +958,16 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf75221)
     // When "Don't add space between paragraphs of the same style" setting set,
     // spacing between same-style paragraphs must be equal to their line spacing.
     // It used to be 0.
-    OUString top = parseDump("/root/page/body/txt[2]/infos/prtBounds", "top");
+    OUString top = parseDump("/root/page/body/txt[2]/infos/prtBounds"_ostr, "top"_ostr);
     CPPUNIT_ASSERT(top.toInt32() > 0);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf101729)
 {
     createSwDoc("tdf101729.odt");
-    sal_Int32 l = parseDump("/root/page/body/tab/row/cell[1]/infos/bounds", "left").toInt32();
-    sal_Int32 w = parseDump("/root/page/body/tab/row/cell[1]/infos/bounds", "width").toInt32();
-    sal_Int32 x = parseDump("/root/page/body/tab/row/cell[1]/txt/infos/bounds", "left").toInt32();
+    sal_Int32 l = parseDump("/root/page/body/tab/row/cell[1]/infos/bounds"_ostr, "left"_ostr).toInt32();
+    sal_Int32 w = parseDump("/root/page/body/tab/row/cell[1]/infos/bounds"_ostr, "width"_ostr).toInt32();
+    sal_Int32 x = parseDump("/root/page/body/tab/row/cell[1]/txt/infos/bounds"_ostr, "left"_ostr).toInt32();
     // Make sure the text does not go outside and verify it is centered roughly
     CPPUNIT_ASSERT( l + w / 4 < x  );
     CPPUNIT_ASSERT( x < l + 3 * w / 4);
@@ -1022,14 +1031,14 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf109080_loext_ns)
     // Test we can import <loext:header-first> and <loext:footer-first>
 
     CPPUNIT_ASSERT_EQUAL(OUString("This is the first page header"),
-        parseDump("/root/page[1]/header/txt/text()"));
+        parseDump("/root/page[1]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("This is the non-first-page header"),
-        parseDump("/root/page[2]/header/txt/text()"));
+        parseDump("/root/page[2]/header/txt/text()"_ostr));
 
     CPPUNIT_ASSERT_EQUAL(OUString("This is the first page footer"),
-        parseDump("/root/page[1]/footer/txt/text()"));
+        parseDump("/root/page[1]/footer/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("This is the non-first-page footer"),
-        parseDump("/root/page[2]/footer/txt/text()"));
+        parseDump("/root/page[2]/footer/txt/text()"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf109080_style_ns)
@@ -1039,14 +1048,14 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf109080_style_ns)
     // (produced by LibreOffice 4.0 - 5.x)
 
     CPPUNIT_ASSERT_EQUAL(OUString("This is the first page header"),
-        parseDump("/root/page[1]/header/txt/text()"));
+        parseDump("/root/page[1]/header/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("This is the non-first-page header"),
-        parseDump("/root/page[2]/header/txt/text()"));
+        parseDump("/root/page[2]/header/txt/text()"_ostr));
 
     CPPUNIT_ASSERT_EQUAL(OUString("This is the first page footer"),
-        parseDump("/root/page[1]/footer/txt/text()"));
+        parseDump("/root/page[1]/footer/txt/text()"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("This is the non-first-page footer"),
-        parseDump("/root/page[2]/footer/txt/text()"));
+        parseDump("/root/page[2]/footer/txt/text()"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf109228)
@@ -1064,7 +1073,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf94882)
     //  due to the page number being even)
     OUString headertext = parseDump(
         "/root/page[starts-with(body/txt/text(),'The paragraph style on this')]"
-        "/header/txt/text()"
+        "/header/txt/text()"_ostr
     );
     // This header should be the first page header
     CPPUNIT_ASSERT_EQUAL(OUString("This is the first page header"), headertext);
@@ -1077,7 +1086,7 @@ CPPUNIT_TEST_FIXTURE(Test, testBlankBeforeFirstPage)
     // blank page inserted before it to make it a left page
 
     CPPUNIT_ASSERT_EQUAL_MESSAGE("There should be 1 pages output",
-        OUString("1"), parseDump("count(/root/page)")
+        OUString("1"), parseDump("count(/root/page)"_ostr)
     );
 }
 
@@ -1091,15 +1100,15 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf108482)
 {
     createSwDoc("tdf108482.odt");
     CPPUNIT_ASSERT_EQUAL_MESSAGE("The table on second page must have two rows",
-        OUString("2"), parseDump("count(/root/page[2]/body/tab/row)")
+        OUString("2"), parseDump("count(/root/page[2]/body/tab/row)"_ostr)
     );
     CPPUNIT_ASSERT_EQUAL_MESSAGE("The second page table's first row must be the repeated headline",
-        OUString("Header"), parseDump("/root/page[2]/body/tab/row[1]/cell/txt")
+        OUString("Header"), parseDump("/root/page[2]/body/tab/row[1]/cell/txt"_ostr)
     );
     // The first (repeated headline) row with vertical text orientation must have non-zero height
     // (in my tests, it was 1135)
     CPPUNIT_ASSERT_GREATER(
-        sal_Int32(1000), parseDump("/root/page[2]/body/tab/row[1]/infos/bounds", "height").toInt32()
+        sal_Int32(1000), parseDump("/root/page[2]/body/tab/row[1]/infos/bounds"_ostr, "height"_ostr).toInt32()
     );
 }
 
@@ -1108,7 +1117,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf116195)
     createSwDoc("tdf116195.odt");
     // The image was set to zero height due to a regression
     CPPUNIT_ASSERT_EQUAL(
-        sal_Int32(12960), parseDump("/root/page/anchored/fly/notxt/infos/bounds", "height").toInt32()
+        sal_Int32(12960), parseDump("/root/page/anchored/fly/notxt/infos/bounds"_ostr, "height"_ostr).toInt32()
     );
 }
 
@@ -1158,9 +1167,21 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf123968)
     SwTextNode& rStart = dynamic_cast<SwTextNode&>(pShellCursor->Start()->GetNode());
 
     // The field is now editable like any text, thus the field content "New value" shows up for the cursor.
+    // This field's variable is declared as string and used as string - typical.
     CPPUNIT_ASSERT_EQUAL(OUString("inputfield: " + OUStringChar(CH_TXT_ATR_INPUTFIELDSTART)
                                   + "New value" + OUStringChar(CH_TXT_ATR_INPUTFIELDEND)),
                          rStart.GetText());
+
+    // This field's variable is declared as float and used as string - not
+    // typical; this can easily happen if the input field is in a header/footer,
+    // because only content.xml contains the variable-decls, styles.xml is
+    // imported before content.xml, and apparently the default variable type is
+    // numeric.
+    SwTextNode& rEnd = dynamic_cast<SwTextNode&>(pShellCursor->End()->GetNode());
+    CPPUNIT_ASSERT_EQUAL(OUString("inputfield: " + OUStringChar(CH_TXT_ATR_INPUTFIELDSTART)
+                                  + "String input for num variable" + OUStringChar(CH_TXT_ATR_INPUTFIELDEND)),
+                         rEnd.GetText());
+
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf133459)
@@ -1301,7 +1322,7 @@ CPPUNIT_TEST_FIXTURE(Test, testVerticallyMergedCellBorder)
     xmlDocUniquePtr pXmlSettings = parseExport("content.xml");
     // Without the accompanying fix in place, this test would have failed with:
     // - In <...>, XPath '//table:covered-table-cell' no attribute 'style-name' exist
-    assertXPath(pXmlSettings, "//table:covered-table-cell", "style-name", "Table1.A2");
+    assertXPath(pXmlSettings, "//table:covered-table-cell"_ostr, "style-name"_ostr, "Table1.A2");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testPageAnchorZIndexFirstPage)
@@ -1383,6 +1404,127 @@ CPPUNIT_TEST_FIXTURE(Test, testForcepoint108)
     mxComponent = mxDesktop->loadComponentFromURL(createFileURL(u"forcepoint108.fodt"), "_default", 0, {});
 }
 
+#ifdef _WIN32
+template <class T>
+static void runWindowsFileZoneTests(css::uno::Reference<css::frame::XDesktop2> const & aDesktop,
+                             const OUString& sFileName, sal_Int32 configValue, sal_Int32 zoneId,
+                             bool expectedResult)
+{
+    // Set desired configuration params
+    auto xChanges = comphelper::ConfigurationChanges::create();
+    T::set(configValue, xChanges);
+    xChanges->commit();
+
+    // Set Windows Security Zone for temp file
+    sal::systools::COMReference<IZoneIdentifier> pZoneId;
+    pZoneId.CoCreateInstance(CLSID_PersistentZoneIdentifier);
+
+    // ignore setting of Zone 0, since at least for Windows Server
+    // setups, that always leads to E_ACCESSDENIED - presumably since
+    // the file is already local?
+    //
+    // See below for the workaround (calling tests for ZONE_LOCAL
+    // first)
+    if( zoneId != 0 )
+    {
+        CPPUNIT_ASSERT(SUCCEEDED(pZoneId->SetId(zoneId)));
+        sal::systools::COMReference<IPersistFile> pPersist(pZoneId, sal::systools::COM_QUERY_THROW);
+        OUString sTempFileWinPath;
+        osl::FileBase::getSystemPathFromFileURL(sFileName, sTempFileWinPath);
+        CPPUNIT_ASSERT(
+            SUCCEEDED(pPersist->Save(reinterpret_cast<LPCOLESTR>(sTempFileWinPath.getStr()), TRUE)));
+    }
+
+    // Load doc with default for UI settings: do not suppress macro
+    uno::Sequence<beans::PropertyValue> aLoadArgs{ comphelper::makePropertyValue(
+        "MacroExecutionMode", css::document::MacroExecMode::USE_CONFIG) };
+    auto aComponent = aDesktop->loadComponentFromURL(sFileName, "_default", 0, aLoadArgs);
+
+    // Are macro enabled in doc?
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(aComponent.get());
+    CPPUNIT_ASSERT_EQUAL(expectedResult, bool(pTextDoc->getAllowMacroExecution()));
+
+    aComponent->dispose();
+}
+#endif
+
+CPPUNIT_TEST_FIXTURE(Test, testWindowsFileZone)
+{
+// This makes sense only for Windows
+#ifdef _WIN32
+    // Create a temp copy of zone test file
+    utl::TempFileNamed aTempFile;
+    aTempFile.EnableKillingFile();
+    SvStream& aStreamDst = *aTempFile.GetStream(StreamMode::WRITE);
+    SvFileStream aStreamSrc(createFileURL(u"ZoneMacroTest.odt"), StreamMode::READ);
+    aStreamDst.WriteStream(aStreamSrc);
+    aTempFile.CloseStream();
+
+    // Tweak macro security to 1
+    SvtSecurityOptions::SetMacroSecurityLevel(1);
+
+    // Run all tests: set for temp file security zone and then check if macro are enabled
+    // depending on configuration values for given zone
+    // There is no easy way to check default (0) variant, so macro are disabled by default in these tests.
+
+    // run tests for ZoneLocal first, since runWindowsFileZoneTests
+    // ignores Zone 0 (see above) - assuming the initial file state is
+    // local after a copy, we're still triggering the expected
+    // behaviour
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneLocal>(
+        mxDesktop, aTempFile.GetURL(), 0, 0, false);
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneLocal>(
+        mxDesktop, aTempFile.GetURL(), 1, 0, true);
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneLocal>(
+        mxDesktop, aTempFile.GetURL(), 2, 0, false);
+
+    // run tests for other zones (these actually set the Windows
+    // Security Zone at the file)
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneUntrusted>(
+        mxDesktop, aTempFile.GetURL(), 0, 4, false);
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneUntrusted>(
+        mxDesktop, aTempFile.GetURL(), 1, 4, true);
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneUntrusted>(
+        mxDesktop, aTempFile.GetURL(), 2, 4, false);
+
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneInternet>(
+        mxDesktop, aTempFile.GetURL(), 0, 3, false);
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneInternet>(
+        mxDesktop, aTempFile.GetURL(), 1, 3, true);
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneInternet>(
+        mxDesktop, aTempFile.GetURL(), 2, 3, false);
+
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneTrusted>(
+        mxDesktop, aTempFile.GetURL(), 0, 2, false);
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneTrusted>(
+        mxDesktop, aTempFile.GetURL(), 1, 2, true);
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneTrusted>(
+        mxDesktop, aTempFile.GetURL(), 2, 2, false);
+
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneIntranet>(
+        mxDesktop, aTempFile.GetURL(), 0, 1, false);
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneIntranet>(
+        mxDesktop, aTempFile.GetURL(), 1, 1, true);
+    runWindowsFileZoneTests<
+        officecfg::Office::Common::Security::Scripting::WindowsSecurityZone::ZoneIntranet>(
+        mxDesktop, aTempFile.GetURL(), 2, 1, false);
+#endif
+}
+
 CPPUNIT_TEST_FIXTURE(Test, testEmptyTrailingSpans)
 {
     createSwDoc("emptyParagraphLoosesFontHeight.fodt");
@@ -1398,10 +1540,25 @@ CPPUNIT_TEST_FIXTURE(Test, testEmptyTrailingSpans)
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
 
-    auto height1 = getXPath(pXmlDoc, "/root/page/body/txt[1]/infos/bounds", "height").toInt32();
-    auto height2 = getXPath(pXmlDoc, "/root/page/body/txt[2]/infos/bounds", "height").toInt32();
+    auto height1 = getXPath(pXmlDoc, "/root/page/body/txt[1]/infos/bounds"_ostr, "height"_ostr).toInt32();
+    auto height2 = getXPath(pXmlDoc, "/root/page/body/txt[2]/infos/bounds"_ostr, "height"_ostr).toInt32();
     CPPUNIT_ASSERT_EQUAL(height1, height2);
     CPPUNIT_ASSERT_DOUBLES_EQUAL(184, height2, 1); // allow a bit of room for rounding just in case
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testBrokenPackage_Tdf159474)
+{
+    // Given an invalid ODF having a stream not referenced in manifest.xml
+    const OUString url = createFileURL(u"unreferenced_stream.odt");
+    // It expectedly fails to load normally:
+    CPPUNIT_ASSERT_ASSERTION_FAIL(loadFromDesktop(url, {}, {}));
+    // importing it must succeed with RepairPackage set to true.
+    mxComponent
+        = loadFromDesktop(url, {}, { comphelper::makePropertyValue(u"RepairPackage"_ustr, true) });
+    // The document imports in repair mode; the original broken package is used as a template,
+    // and the loaded document has no URL:
+    CPPUNIT_ASSERT(mxComponent.queryThrow<frame::XModel>()->getURL().isEmpty());
+    CPPUNIT_ASSERT_EQUAL(u"Empty document"_ustr, getParagraph(1)->getString());
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

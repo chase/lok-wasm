@@ -300,6 +300,7 @@ protected:
     /// If set, this is the parent of the currently handled shape.
     css::uno::Reference<css::drawing::XShape> m_xParent;
     bool                                      mbIsBackgroundDark;
+    static sal_Int32 mnChartCount;
 
     /// True when exporting presentation placeholder shape.
     bool mbPlaceholder;
@@ -505,6 +506,7 @@ public:
 
     static sal_Int32 getNewDrawingUniqueId() { return ++mnDrawingMLCount; }
     static sal_Int32 getNewVMLUniqueId() { return ++mnVmlCount; }
+    static sal_Int32 getNewChartUniqueId() { return ++mnChartCount; }
 
     // A Helper to decide the script type for given text in order to call WriteRunProperties.
     static sal_Int16 GetScriptType(const OUString& rStr);
@@ -519,8 +521,8 @@ public:
                                         const OUString& sFullStream,
                                         std::u16string_view sRelativeStream,
                                         const css::uno::Reference< css::io::XOutputStream >& xParentRelation,
-                                        const char* sContentType,
-                                        const char* sRelationshipType,
+                                        const OUString& sContentType,
+                                        const OUString& sRelationshipType,
                                         OUString* pRelationshipId );
 
     std::shared_ptr<GraphicExport> createGraphicExport();

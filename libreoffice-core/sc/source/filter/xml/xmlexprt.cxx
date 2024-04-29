@@ -120,6 +120,7 @@
 #include <svx/svdoashp.hxx>
 #include <svx/svdobj.hxx>
 #include <svx/svdocapt.hxx>
+#include <svx/svdomeas.hxx>
 #include <svx/svdmodel.hxx>
 #include <vcl/svapp.hxx>
 #include <docmodel/theme/Theme.hxx>
@@ -166,7 +167,7 @@ namespace com::sun::star::uno { class XComponentContext; }
 
 
 //! not found in unonames.hxx
-constexpr OUStringLiteral SC_LAYERID = u"LayerID";
+constexpr OUString SC_LAYERID = u"LayerID"_ustr;
 
 #define SC_VIEWCHANGES_COUNT                        13
 #define SC_SHOW_CHANGES                             0
@@ -394,6 +395,8 @@ ScXMLExport::ScXMLExport(
     GetAutoStylePool()->AddFamily(XmlStyleFamily::TABLE_TABLE, XML_STYLE_FAMILY_TABLE_TABLE_STYLES_NAME,
         xTableStylesExportPropertySetMapper, XML_STYLE_FAMILY_TABLE_TABLE_STYLES_PREFIX);
 
+    GetShapeExport(); // make sure the graphics styles family is added
+
     if( !(getExportFlags() & (SvXMLExportFlags::STYLES|SvXMLExportFlags::AUTOSTYLES|SvXMLExportFlags::MASTERSTYLES|SvXMLExportFlags::CONTENT)) )
         return;
 
@@ -553,7 +556,6 @@ void ScXMLExport::CollectSharedData(SCTAB& nTableCount, sal_Int32& nShapesCount)
                 aMyShape.nEndX = pAnchor->maEndOffset.X();
                 aMyShape.nEndY = pAnchor->maEndOffset.Y();
                 aMyShape.xShape = xShape;
-                aMyShape.bResizeWithCell = ScDrawLayer::IsResizeWithCell(*pSdrObj);
                 pSharedData->AddNewShape(aMyShape);
                 pSharedData->SetLastColumn(nTable, pAnchor->maStart.Col());
                 pSharedData->SetLastRow(nTable, pAnchor->maStart.Row());
@@ -583,7 +585,6 @@ void ScXMLExport::CollectShapesAutoStyles(SCTAB nTableCount)
     }
     if (pSharedData->HasDrawPage())
     {
-        css::uno::Sequence<OUString> aAutoStylePropNames = GetAutoStylePool()->GetPropertyNames();
         for (SCTAB nTable = 0; nTable < nTableCount; ++nTable)
         {
             uno::Reference<drawing::XDrawPage> xDrawPage(pSharedData->GetDrawPage(nTable));
@@ -602,7 +603,7 @@ void ScXMLExport::CollectShapesAutoStyles(SCTAB nTableCount)
                 {
                     for (const auto& rxShape : (*pTableShapes)[nTable])
                     {
-                        GetShapeExport()->collectShapeAutoStyles(rxShape, aAutoStylePropNames);
+                        GetShapeExport()->collectShapeAutoStyles(rxShape);
                         IncrementProgressBar(false);
                     }
                 }
@@ -611,7 +612,7 @@ void ScXMLExport::CollectShapesAutoStyles(SCTAB nTableCount)
                     ScMyShapeList::const_iterator aEndItr(pShapeList->end());
                     while ( aShapeItr != aEndItr && ( aShapeItr->aAddress.Tab() == nTable ) )
                     {
-                        GetShapeExport()->collectShapeAutoStyles(aShapeItr->xShape, aAutoStylePropNames);
+                        GetShapeExport()->collectShapeAutoStyles(aShapeItr->xShape);
                         IncrementProgressBar(false);
                         ++aShapeItr;
                     }
@@ -622,7 +623,7 @@ void ScXMLExport::CollectShapesAutoStyles(SCTAB nTableCount)
                     for (const auto& rNoteShape : rNoteShapes)
                     {
                         if ( rNoteShape.aPos.Tab() == nTable )
-                            GetShapeExport()->collectShapeAutoStyles(rNoteShape.xShape, aAutoStylePropNames);
+                            GetShapeExport()->collectShapeAutoStyles(rNoteShape.xShape);
                     }
                 }
             }
@@ -894,7 +895,7 @@ void ScXMLExport::ExportExternalRefCacheStyles()
     // Export each unique number format used in the external ref cache.
     vector<sal_uInt32> aNumFmts;
     pRefMgr->getAllCachedNumberFormats(aNumFmts);
-    const OUString aDefaultStyle = OUString("Default").intern();
+    static constexpr OUString aDefaultStyle(u"Default"_ustr);
     for (const auto& rNumFmt : aNumFmts)
     {
         sal_Int32 nNumFmt = static_cast<sal_Int32>(rNumFmt);
@@ -1749,17 +1750,17 @@ void ScXMLExport::SetBodyAttributes()
 
 static bool lcl_CopyStreamElement( const uno::Reference< io::XInputStream >& xInput,
                             const uno::Reference< io::XOutputStream >& xOutput,
-                            sal_Int32 nCount )
+                            sal_Int64 nCount )
 {
     const sal_Int32 nBufSize = 16*1024;
     uno::Sequence<sal_Int8> aSequence(nBufSize);
 
-    sal_Int32 nRemaining = nCount;
+    sal_Int64 nRemaining = nCount;
     bool bFirst = true;
 
     while ( nRemaining > 0 )
     {
-        sal_Int32 nRead = xInput->readBytes( aSequence, std::min( nRemaining, nBufSize ) );
+        sal_Int32 nRead = xInput->readBytes( aSequence, std::min( nRemaining, static_cast<sal_Int64>(nBufSize) ) );
         if (bFirst)
         {
             // safety check: Make sure the copied part actually points to the start of an element
@@ -1796,17 +1797,17 @@ static bool lcl_CopyStreamElement( const uno::Reference< io::XInputStream >& xIn
     return true;    // successful
 }
 
-static void lcl_SkipBytesInBlocks( const uno::Reference< io::XInputStream >& xInput, sal_Int32 nBytesToSkip )
+static void lcl_SkipBytesInBlocks( const uno::Reference< io::XInputStream >& xInput, sal_Int64 nBytesToSkip )
 {
     // skipBytes in zip stream is implemented as reading.
     // For now, split into several calls to avoid allocating a large buffer.
     // Later, skipBytes should be changed.
 
-    const sal_Int32 nMaxSize = 32*1024;
+    const sal_Int64 nMaxSize = 32*1024;
 
     if ( nBytesToSkip > 0 )
     {
-        sal_Int32 nRemaining = nBytesToSkip;
+        sal_Int64 nRemaining = nBytesToSkip;
         while ( nRemaining > 0 )
         {
             sal_Int32 nSkip = std::min( nRemaining, nMaxSize );
@@ -1816,7 +1817,7 @@ static void lcl_SkipBytesInBlocks( const uno::Reference< io::XInputStream >& xIn
     }
 }
 
-void ScXMLExport::CopySourceStream( sal_Int32 nStartOffset, sal_Int32 nEndOffset, sal_Int32& rNewStart, sal_Int32& rNewEnd )
+void ScXMLExport::CopySourceStream( sal_Int64 nStartOffset, sal_Int64 nEndOffset, sal_Int64& rNewStart, sal_Int64& rNewEnd )
 {
     uno::Reference<xml::sax::XDocumentHandler> xHandler = GetDocHandler();
     uno::Reference<io::XActiveDataSource> xDestSource( xHandler, uno::UNO_QUERY );
@@ -1833,12 +1834,12 @@ void ScXMLExport::CopySourceStream( sal_Int32 nStartOffset, sal_Int32 nEndOffset
 
     if ( getExportFlags() & SvXMLExportFlags::PRETTY )
     {
-        const OString aOutStr("\n   ");
+        static constexpr OString aOutStr("\n   "_ostr);
         uno::Sequence<sal_Int8> aOutSeq( reinterpret_cast<sal_Int8 const *>(aOutStr.getStr()), aOutStr.getLength() );
         xDestStream->writeBytes( aOutSeq );
     }
 
-    rNewStart = static_cast<sal_Int32>(xDestSeek->getPosition());
+    rNewStart = xDestSeek->getPosition();
 
     if ( nStartOffset > nSourceStreamPos )
         lcl_SkipBytesInBlocks( xSourceStream, nStartOffset - nSourceStreamPos );
@@ -1853,7 +1854,7 @@ void ScXMLExport::CopySourceStream( sal_Int32 nStartOffset, sal_Int32 nEndOffset
     }
     nSourceStreamPos = nEndOffset;
 
-    rNewEnd = static_cast<sal_Int32>(xDestSeek->getPosition());
+    rNewEnd = xDestSeek->getPosition();
 }
 
 const ScXMLEditAttributeMap& ScXMLExport::GetEditAttributeMap() const
@@ -1928,15 +1929,15 @@ void ScXMLExport::ExportContent_()
         WriteTheLabelRanges( xSpreadDoc );
         for (sal_Int32 nTable = 0; nTable < nTableCount; ++nTable)
         {
-            sal_Int32 nStartOffset = -1;
-            sal_Int32 nEndOffset = -1;
+            sal_Int64 nStartOffset = -1;
+            sal_Int64 nEndOffset = -1;
             if (pSheetData && pDoc && pDoc->IsStreamValid(static_cast<SCTAB>(nTable)) && !pDoc->GetChangeTrack())
                 pSheetData->GetStreamPos( nTable, nStartOffset, nEndOffset );
 
             if ( nStartOffset >= 0 && nEndOffset >= 0 && xSourceStream.is() )
             {
-                sal_Int32 nNewStart = -1;
-                sal_Int32 nNewEnd = -1;
+                sal_Int64 nNewStart = -1;
+                sal_Int64 nNewEnd = -1;
                 CopySourceStream( nStartOffset, nEndOffset, nNewStart, nNewEnd );
 
                 // store position of copied sheet in output
@@ -1988,17 +1989,14 @@ void ScXMLExport::ExportStyles_( bool bUsed )
             uno::Reference <beans::XPropertySet> xProperties(xMultiServiceFactory->createInstance("com.sun.star.sheet.Defaults"), uno::UNO_QUERY);
             if (xProperties.is())
                 aStylesExp->exportDefaultStyle(xProperties, XML_STYLE_FAMILY_TABLE_CELL_STYLES_NAME, xCellStylesExportPropertySetMapper);
-            if (pSharedData->HasShapes())
-            {
-                GetShapeExport()->ExportGraphicDefaults();
-            }
+            GetShapeExport()->ExportGraphicDefaults();
         }
         collectDataStyles(false);
     }
     exportDataStyles();
 
-    aStylesExp->exportStyleFamily(OUString("CellStyles"),
-        OUString(XML_STYLE_FAMILY_TABLE_CELL_STYLES_NAME), xCellStylesExportPropertySetMapper, false, XmlStyleFamily::TABLE_CELL);
+    aStylesExp->exportStyleFamily("CellStyles",
+        XML_STYLE_FAMILY_TABLE_CELL_STYLES_NAME, xCellStylesExportPropertySetMapper, false, XmlStyleFamily::TABLE_CELL);
 
     SvXMLExport::ExportStyles_(bUsed);
 
@@ -2366,7 +2364,6 @@ void ScXMLExport::collectAutoStyles()
             // stored styles for notes
 
             rtl::Reference<SvXMLExportPropertyMapper> xShapeMapper = XMLShapeExport::CreateShapePropMapper( *this );
-            GetShapeExport(); // make sure the graphics styles family is added
 
             const std::vector<ScNoteStyleEntry>& rNoteEntries = pSheetData->GetNoteStyles();
             for (const auto& rNoteEntry : rNoteEntries)
@@ -3049,7 +3046,7 @@ void writeContent(
     if (pField)
     {
         // Write a field item.
-        OUString aFieldVal = ScEditUtil::GetCellFieldValue(*pField, rExport.GetDocument(), nullptr);
+        OUString aFieldVal = ScEditUtil::GetCellFieldValue(*pField, rExport.GetDocument(), nullptr, nullptr);
         switch (pField->GetClassId())
         {
             case text::textfield::Type::URL:
@@ -3077,13 +3074,11 @@ void writeContent(
                 Date aDate(Date::SYSTEM);
                 OUStringBuffer aBuf;
                 sal_Int32 nVal = aDate.GetYear();
-                aBuf.append(nVal);
-                aBuf.append('-');
+                aBuf.append(OUString::number(nVal) + "-");
                 nVal = aDate.GetMonth();
                 if (nVal < 10)
                     aBuf.append('0');
-                aBuf.append(nVal);
-                aBuf.append('-');
+                aBuf.append(OUString::number(nVal) + "-");
                 nVal = aDate.GetDay();
                 if (nVal < 10)
                     aBuf.append('0');
@@ -3436,7 +3431,7 @@ void ScXMLExport::ExportShape(const uno::Reference < drawing::XShape >& xShape, 
                                     if ( !sRanges.isEmpty() )
                                     {
                                         bIsChart = true;
-                                        rtl::Reference<SvXMLAttributeList> pAttrList = new SvXMLAttributeList();
+                                        rtl::Reference<comphelper::AttributeList> pAttrList = new comphelper::AttributeList();
                                         pAttrList->AddAttribute(
                                             GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_DRAW, GetXMLToken( XML_NOTIFY_ON_UPDATE_OF_RANGES ) ), sRanges );
                                         GetShapeExport()->exportShape( xShape, SEF_DEFAULT, pPoint, pAttrList.get() );
@@ -3461,7 +3456,7 @@ void ScXMLExport::ExportShape(const uno::Reference < drawing::XShape >& xShape, 
                                 bIsChart = true;
                                 uno::Sequence< OUString > aRepresentations(
                                     xReceiver->getUsedRangeRepresentations());
-                                rtl::Reference<SvXMLAttributeList> pAttrList;
+                                rtl::Reference<comphelper::AttributeList> pAttrList;
                                 try
                                 {
                                     if (aRepresentations.hasElements())
@@ -3471,7 +3466,7 @@ void ScXMLExport::ExportShape(const uno::Reference < drawing::XShape >& xShape, 
                                         // load (when the chart is not yet loaded)
                                         uno::Reference< chart2::data::XRangeXMLConversion > xRangeConverter( xChartDoc->getDataProvider(), uno::UNO_QUERY );
                                         sRanges = lcl_RangeSequenceToString( aRepresentations, xRangeConverter );
-                                        pAttrList = new SvXMLAttributeList();
+                                        pAttrList = new comphelper::AttributeList();
                                         pAttrList->AddAttribute(
                                             GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_DRAW, GetXMLToken(XML_NOTIFY_ON_UPDATE_OF_RANGES) ), sRanges );
                                     }
@@ -3516,134 +3511,148 @@ void ScXMLExport::WriteShapes(const ScMyCell& rMyCell)
 
     for (const auto& rShape : rMyCell.aShapeList)
     {
-        if (rShape.xShape.is())
+        // Skip the shape if requirements are not met. The tests should not fail, but allow
+        // shorter conditions in main part below.
+        if (!rShape.xShape.is())
+            continue;
+        SdrObject* pObj = SdrObject::getSdrObjectFromXShape(rShape.xShape);
+        if (!pObj)
+            continue;
+        ScDrawObjData* pObjData = ScDrawLayer::GetObjData(pObj);
+        if (!pObjData)
+            continue;
+        ScAddress aSnapStartAddress = pObjData->maStart;
+        if (!aSnapStartAddress.IsValid())
+            continue;
+
+        // The current object geometry is based on bHiddenAsZero=true, but ODF file format
+        // needs it as if there were no hidden rows or columns. We determine a fictive snap
+        // rectangle from the anchor as if all column/rows are shown. Then we move and resize
+        // (in case of "resize with cell") the object to meet this snap rectangle. We need to
+        // manipulate the object itself, because the used methods in xmloff do not evaluate the
+        // ObjData. We remember the transformations and restore them later.
+        Point aMoveBy(0, 0);
+        bool bNeedsRestorePosition = false;
+        Fraction aScaleWidth(1, 1);
+        Fraction aScaleHeight(1, 1);
+        bool bNeedsRestoreSize = false;
+
+        // Determine top point of fictive snap rectangle ('Full' rectangle).
+        SCTAB aTab(aSnapStartAddress.Tab());
+        SCCOL aCol(aSnapStartAddress.Col());
+        SCROW aRow(aSnapStartAddress.Row());
+        tools::Rectangle aFullStartCellRect
+            = pDoc->GetMMRect(aCol, aRow, aCol, aRow, aTab, false /*bHiddenAsZero*/);
+        // The reference corner for the offset is top-left in case of LTR and top-right for RTL.
+        Point aFullTopPoint;
+        if (bNegativePage)
+            aFullTopPoint.setX(aFullStartCellRect.Right() - pObjData->maStartOffset.X());
+        else
+            aFullTopPoint.setX(aFullStartCellRect.Left() + pObjData->maStartOffset.X());
+        aFullTopPoint.setY(aFullStartCellRect.Top() + pObjData->maStartOffset.Y());
+
+        // Compare actual top point and full top point and move object accordingly.
+        tools::Rectangle aOrigSnapRect(pObj->GetSnapRect());
+        Point aActualTopPoint = bNegativePage ? aOrigSnapRect.TopRight() : aOrigSnapRect.TopLeft();
+        if (aFullTopPoint != aActualTopPoint)
         {
-            // The current object geometry is based on bHiddenAsZero=true, but ODF file format
-            // needs it as if there were no hidden rows or columns. We manipulate the geometry
-            // accordingly for writing xml markup and restore geometry later.
-            bool bNeedsRestore = false;
-            SdrObject* pObj = SdrObject::getSdrObjectFromXShape(rShape.xShape);
-            // Remember original geometry
-            std::unique_ptr<SdrObjGeoData> pGeoData;
-            if (pObj)
-                pGeoData = pObj->GetGeoData();
+            bNeedsRestorePosition = true;
+            aMoveBy = aFullTopPoint - aActualTopPoint;
+            pObj->NbcMove(Size(aMoveBy.X(), aMoveBy.Y()));
+        }
 
-            // Hiding row or column affects the shape based on its snap rect. So we need start and
-            // end cell address of snap rect. In case of a transformed shape, it is not in rMyCell.
-            ScAddress aSnapStartAddress = rMyCell.maCellAddress;
-            ScDrawObjData* pObjData = nullptr;
-            if (pObj)
-            {
-                pObjData = ScDrawLayer::GetObjData(pObj);
-                if (pObjData)
-                    aSnapStartAddress = pObjData->maStart;
-            }
+        ScAddress aSnapEndAddress = pObjData->maEnd;
+        // tdf#154005: We treat the combination of "To cell (resize with cell)" with 'size protected'
+        // as being "To cell".
+        if (pObjData->mbResizeWithCell && aSnapEndAddress.IsValid() && !pObj->IsResizeProtect())
+        {
+            // Object is anchored "To cell (resize with cell)". Compare size of actual snap rectangle
+            // and fictive full one. Resize object accordingly.
+            tools::Rectangle aActualSnapRect(pObj->GetSnapRect());
 
-            // In case rows or columns are hidden above or before the snap rect, move the shape to the
-            // position it would have, if these rows and columns are visible.
-            tools::Rectangle aRectFull = pDoc->GetMMRect(
-                aSnapStartAddress.Col(), aSnapStartAddress.Row(), aSnapStartAddress.Col(),
-                aSnapStartAddress.Row(), aSnapStartAddress.Tab(), false /*bHiddenAsZero*/);
-            tools::Rectangle aRectReduced = pDoc->GetMMRect(
-                aSnapStartAddress.Col(), aSnapStartAddress.Row(), aSnapStartAddress.Col(),
-                aSnapStartAddress.Row(), aSnapStartAddress.Tab(), true /*bHiddenAsZero*/);
-            const tools::Long nLeftDiff(aRectFull.Left() - aRectReduced.Left());
-            const tools::Long nTopDiff(aRectFull.Top() - aRectReduced.Top());
-            if (pObj && (abs(nLeftDiff) > 1 || abs(nTopDiff) > 1))
-            {
-                bNeedsRestore = true;
-                pObj->NbcMove(Size(nLeftDiff, nTopDiff));
-            }
+            Point aSnapEndOffset(pObjData->maEndOffset);
+            aCol = aSnapEndAddress.Col();
+            aRow = aSnapEndAddress.Row();
+            tools::Rectangle aFullEndCellRect
+                = pDoc->GetMMRect(aCol, aRow, aCol, aRow, aTab, false /*bHiddenAsZero*/);
+            Point aFullBottomPoint;
+            if (bNegativePage)
+                aFullBottomPoint.setX(aFullEndCellRect.Right() - aSnapEndOffset.X());
+            else
+                aFullBottomPoint.setX(aFullEndCellRect.Left() + aSnapEndOffset.X());
+            aFullBottomPoint.setY(aFullEndCellRect.Top() + aSnapEndOffset.Y());
+            tools::Rectangle aFullSnapRect(aFullTopPoint, aFullBottomPoint);
+            aFullSnapRect.Normalize();
 
-            // tdf#137033 In case the shape is anchored "To Cell (resize with cell)" hiding rows or
-            // columns inside the snap rect has not only changed size of the shape but rotate and shear
-            // angle too. We resize the shape to full size. That will recover the original angles too.
-            if (rShape.bResizeWithCell && pObjData) // implies pObj & aSnapStartAddress = pObjData->maStart
+            if (aFullSnapRect != aActualSnapRect)
             {
-                // Get original size from anchor
-                const Point aSnapStartOffset = pObjData->maStartOffset;
-                // In case of 'resize with cell' maEnd and maEndOffset should be valid.
-                const ScAddress aSnapEndAddress(pObjData->maEnd);
-                const Point aSnapEndOffset = pObjData->maEndOffset;
-                const tools::Rectangle aStartCellRect = pDoc->GetMMRect(
-                    aSnapStartAddress.Col(), aSnapStartAddress.Row(), aSnapStartAddress.Col(),
-                    aSnapStartAddress.Row(), aSnapStartAddress.Tab(), false /*bHiddenAsZero*/);
-                const tools::Rectangle aEndCellRect = pDoc->GetMMRect(
-                    aSnapEndAddress.Col(), aSnapEndAddress.Row(), aSnapEndAddress.Col(),
-                    aSnapEndAddress.Row(), aSnapEndAddress.Tab(), false /*bHiddenAsZero*/);
-                if (bNegativePage)
-                {
-                    aRectFull.SetLeft(aEndCellRect.Right() - aSnapEndOffset.X());
-                    aRectFull.SetRight(aStartCellRect.Right() - aSnapStartOffset.X());
-                }
-                else
-                {
-                    aRectFull.SetLeft(aStartCellRect.Left() + aSnapStartOffset.X());
-                    aRectFull.SetRight(aEndCellRect.Left() + aSnapEndOffset.X());
-                }
-                aRectFull.SetTop(aStartCellRect.Top() + aSnapStartOffset.Y());
-                aRectFull.SetBottom(aEndCellRect.Top() + aSnapEndOffset.Y());
-                aRectReduced = pObjData->getShapeRect();
-                if(abs(aRectFull.getOpenWidth() - aRectReduced.getOpenWidth()) > 1
-                   || abs(aRectFull.getOpenHeight() - aRectReduced.getOpenHeight()) > 1)
-                {
-                    bNeedsRestore = true;
-                    Fraction aScaleWidth(aRectFull.getOpenWidth(), aRectReduced.getOpenWidth());
-                    if (!aScaleWidth.IsValid())
-                        aScaleWidth = Fraction(1.0);
-                    Fraction aScaleHeight(aRectFull.getOpenHeight(), aRectReduced.getOpenHeight());
-                    if (!aScaleHeight.IsValid())
-                        aScaleHeight = Fraction(1.0);
-                    pObj->NbcResize(pObj->GetRelativePos(), aScaleWidth, aScaleHeight);
-                }
+                bNeedsRestoreSize = true;
+                aScaleWidth
+                    = Fraction(aFullSnapRect.getOpenWidth(), aActualSnapRect.getOpenWidth());
+                if (!aScaleWidth.IsValid())
+                    aScaleWidth = Fraction(1, 1);
+                aScaleHeight
+                    = Fraction(aFullSnapRect.getOpenHeight(), aActualSnapRect.getOpenHeight());
+                if (!aScaleHeight.IsValid())
+                    aScaleHeight = Fraction(1, 1);
+                pObj->NbcResize(aFullTopPoint, aScaleWidth, aScaleHeight);
             }
+        }
 
-            // We only write the end address if we want the shape to resize with the cell
-            if ( rShape.bResizeWithCell &&
-                rShape.xShape->getShapeType() != "com.sun.star.drawing.CaptionShape" )
-            {
-                OUString sEndAddress;
-                ScRangeStringConverter::GetStringFromAddress(sEndAddress, rShape.aEndAddress, pDoc, FormulaGrammar::CONV_OOO);
-                AddAttribute(XML_NAMESPACE_TABLE, XML_END_CELL_ADDRESS, sEndAddress);
-                OUStringBuffer sBuffer;
-                GetMM100UnitConverter().convertMeasureToXML(
-                        sBuffer, rShape.nEndX);
-                AddAttribute(XML_NAMESPACE_TABLE, XML_END_X, sBuffer.makeStringAndClear());
-                GetMM100UnitConverter().convertMeasureToXML(
-                        sBuffer, rShape.nEndY);
-                AddAttribute(XML_NAMESPACE_TABLE, XML_END_Y, sBuffer.makeStringAndClear());
-            }
+        // The existence of an end address is equivalent to anchor mode "To Cell (resize with cell)".
+        // XML needs end address in regard of untransformed shape. Those are contained in rShape but
+        // could be received from NonRotatedObjData as well.
+        // tdf#154005: We treat the combination of "To Cell (resize with cell)" anchor with 'size
+        // protected' property as being "To cell" anchor.
+        if (pObjData->mbResizeWithCell && !pObj->IsResizeProtect())
+        {
+            OUString sEndAddress;
+            ScRangeStringConverter::GetStringFromAddress(sEndAddress, rShape.aEndAddress, pDoc,
+                                                         FormulaGrammar::CONV_OOO);
+            AddAttribute(XML_NAMESPACE_TABLE, XML_END_CELL_ADDRESS, sEndAddress);
+            OUStringBuffer sBuffer;
+            GetMM100UnitConverter().convertMeasureToXML(sBuffer, rShape.nEndX);
+            AddAttribute(XML_NAMESPACE_TABLE, XML_END_X, sBuffer.makeStringAndClear());
+            GetMM100UnitConverter().convertMeasureToXML(sBuffer, rShape.nEndY);
+            AddAttribute(XML_NAMESPACE_TABLE, XML_END_Y, sBuffer.makeStringAndClear());
+        }
 
-            // Correct above calculated reference point for some cases:
-            // a) For a RTL-sheet translate from matrix is not suitable, because the shape
-            // from xml (which is always LTR) is not mirrored to negative page but shifted.
-            // b) In case of horizontal mirrored, 'resize with cell' anchored custom shape, translate
-            // has wrong values. FixMe: Why is translate wrong?
-            // c) Measure lines do not use transformation matrix but use start and end point directly.
-            ScDrawObjData* pNRObjData = nullptr;
-            if (pObj && bNegativePage
-                && rShape.xShape->getShapeType() == "com.sun.star.drawing.MeasureShape")
+        // Correct above calculated reference point for these cases:
+        // a) For a RTL-sheet translate from matrix is not suitable, because the shape
+        // from xml (which is always LTR) is not mirrored to negative page but shifted.
+        // b) In case of horizontal mirrored, 'resize with cell' anchored custom shape, translate from
+        // matrix has wrong values. FixMe: Why is translate wrong?
+        if (bNegativePage
+            || (pObj->GetObjIdentifier() == SdrObjKind::CustomShape
+                && static_cast<SdrObjCustomShape*>(pObj)->IsMirroredX()
+                && pObjData->mbResizeWithCell))
+        {
+            // In these cases we set reference point so that the offset calculation in XML export
+            // (=  matrix translate - reference point) results in maStartOffset.
+            ScDrawObjData* pNRObjData = ScDrawLayer::GetNonRotatedObjData(pObj);
+            if (pNRObjData)
             {
-                // inverse of shift when import
-                tools::Rectangle aSnapRect = pObj->GetSnapRect();
-                aPoint.X = aSnapRect.Left() + aSnapRect.Right() - aPoint.X;
-            }
-            else if (pObj && (pNRObjData = ScDrawLayer::GetNonRotatedObjData(pObj))
-                     && ((rShape.bResizeWithCell && pObj->GetObjIdentifier() == SdrObjKind::CustomShape
-                          && static_cast<SdrObjCustomShape*>(pObj)->IsMirroredX())
-                         || bNegativePage))
-            {
-                //In these cases we set reference Point = matrix translate - startOffset.
                 awt::Point aMatrixTranslate = rShape.xShape->getPosition();
                 aPoint.X = aMatrixTranslate.X - pNRObjData->maStartOffset.X();
                 aPoint.Y = aMatrixTranslate.Y - pNRObjData->maStartOffset.Y();
             }
+        }
 
-            ExportShape(rShape.xShape, &aPoint);
+        ExportShape(rShape.xShape, &aPoint);
 
-            // Restore object geometry
-            if (bNeedsRestore && pObj && pGeoData)
-                pObj->SetGeoData(*pGeoData);
+        if (bNeedsRestoreSize)
+        {
+            Fraction aScaleWidthInvers(aScaleWidth.GetDenominator(), aScaleWidth.GetNumerator());
+            if (!aScaleWidthInvers.IsValid())
+                aScaleWidthInvers = Fraction(1, 1);
+            Fraction aScaleHeightInvers(aScaleHeight.GetDenominator(), aScaleHeight.GetNumerator());
+            if (!aScaleHeightInvers.IsValid())
+                aScaleHeightInvers = Fraction(1, 1);
+            pObj->NbcResize(aFullTopPoint, aScaleWidthInvers, aScaleHeightInvers);
+        }
+        if (bNeedsRestorePosition)
+        {
+            pObj->NbcMove(Size(-aMoveBy.X(), -aMoveBy.Y()));
         }
     }
 }
@@ -3726,16 +3735,22 @@ void ScXMLExport::exportAnnotationMeta( const uno::Reference < drawing::XShape >
     if (xCurrentShape.get()!=xShape.get())
         return;
 
+    bool bRemovePersonalInfo = SvtSecurityOptions::IsOptionSet(
+        SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo) && !SvtSecurityOptions::IsOptionSet(
+            SvtSecurityOptions::EOption::DocWarnKeepNoteAuthorDateInfo);
+
     const OUString& sAuthor(pNote->GetAuthor());
     if (!sAuthor.isEmpty())
     {
         SvXMLElementExport aCreatorElem( *this, XML_NAMESPACE_DC,
                                             XML_CREATOR, true,
                                             false );
-        Characters(sAuthor);
+        Characters( bRemovePersonalInfo
+            ? "Author" + OUString::number(SvXMLExport::GetInfoID(sAuthor))
+            : sAuthor );
     }
 
-    const OUString& aDate(pNote->GetDate());
+    const OUString& aDate(bRemovePersonalInfo ? OUString("1970-01-01") : pNote->GetDate()); // Epoch time
     if (pDoc)
     {
         SvNumberFormatter* pNumForm = pDoc->GetFormatTable();
@@ -4530,8 +4545,7 @@ void ScXMLExport::WriteNamedRange(ScRangeName* pRangeName)
         assert(!sBaseCellAddress.isEmpty());
         AddAttribute(XML_NAMESPACE_TABLE, XML_BASE_CELL_ADDRESS, sBaseCellAddress);
 
-        OUString sSymbol = rxEntry.second->GetSymbol(pDoc->GetStorageGrammar());
-        OUString sTempSymbol(sSymbol);
+        OUString sTempSymbol(rxEntry.second->GetSymbol(pDoc->GetStorageGrammar()));
         ScRange aRange;
         if (rxEntry.second->IsReference(aRange))
         {
@@ -4560,6 +4574,12 @@ void ScXMLExport::WriteNamedRange(ScRangeName* pRangeName)
                 if (!sBufferRangeType.isEmpty())
                     sBufferRangeType.append(" ");
                 sBufferRangeType.append(GetXMLToken(XML_PRINT_RANGE));
+            }
+            if ((nRangeType & sheet::NamedRangeFlag::HIDDEN) == sheet::NamedRangeFlag::HIDDEN)
+            {
+                if (!sBufferRangeType.isEmpty())
+                    sBufferRangeType.append(" ");
+                sBufferRangeType.append(GetXMLToken(XML_HIDDEN));
             }
             OUString sRangeType = sBufferRangeType.makeStringAndClear();
             if (!sRangeType.isEmpty())
@@ -4676,42 +4696,36 @@ void ScXMLExport::ExportConditionalFormat(SCTAB nTab)
                 switch(pEntry->GetOperation())
                 {
                     case ScConditionMode::Equal:
-                        aCond.append('=');
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append("=" + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
                         break;
                     case ScConditionMode::Less:
-                        aCond.append('<');
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append("<" + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
                         break;
                     case ScConditionMode::Greater:
-                        aCond.append('>');
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(">" + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
                         break;
                     case ScConditionMode::EqLess:
-                        aCond.append("<=");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append("<=" + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
                         break;
                     case ScConditionMode::EqGreater:
-                        aCond.append(">=");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(">=" + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
                         break;
                     case ScConditionMode::NotEqual:
-                        aCond.append("!=");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append("!=" + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
                         break;
                     case ScConditionMode::Between:
-                        aCond.append("between(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(',');
-                        aCond.append(pEntry->GetExpression(aPos, 1, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(')');
+                        aCond.append("between("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ","
+                            + pEntry->GetExpression(aPos, 1, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::NotBetween:
-                        aCond.append("not-between(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(',');
-                        aCond.append(pEntry->GetExpression(aPos, 1, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(')');
+                        aCond.append("not-between("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ","
+                            + pEntry->GetExpression(aPos, 1, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::Duplicate:
                         aCond.append("duplicate");
@@ -4720,29 +4734,29 @@ void ScXMLExport::ExportConditionalFormat(SCTAB nTab)
                         aCond.append("unique");
                         break;
                     case ScConditionMode::Direct:
-                        aCond.append("formula-is(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(')');
+                        aCond.append("formula-is("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::Top10:
-                        aCond.append("top-elements(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(")");
+                        aCond.append("top-elements("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::Bottom10:
-                        aCond.append("bottom-elements(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(")");
+                        aCond.append("bottom-elements("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::TopPercent:
-                        aCond.append("top-percent(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(")");
+                        aCond.append("top-percent("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::BottomPercent:
-                        aCond.append("bottom-percent(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(")");
+                        aCond.append("bottom-percent("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::AboveAverage:
                         aCond.append("above-average");
@@ -4763,24 +4777,24 @@ void ScXMLExport::ExportConditionalFormat(SCTAB nTab)
                         aCond.append("is-no-error");
                         break;
                     case ScConditionMode::BeginsWith:
-                        aCond.append("begins-with(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(")");
+                        aCond.append("begins-with("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::EndsWith:
-                        aCond.append("ends-with(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(")");
+                        aCond.append("ends-with("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::ContainsText:
-                        aCond.append("contains-text(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(")");
+                        aCond.append("contains-text("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::NotContainsText:
-                        aCond.append("not-contains-text(");
-                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                        aCond.append(")");
+                        aCond.append("not-contains-text("
+                            + pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF)
+                            + ")");
                         break;
                     case ScConditionMode::NONE:
                         continue;
@@ -5104,9 +5118,7 @@ void ScXMLExport::WriteExternalRefCaches()
                             case svDouble:
                             {
                                 AddAttribute(XML_NAMESPACE_OFFICE, XML_VALUE_TYPE, XML_FLOAT);
-                                OUStringBuffer aVal;
-                                aVal.append(pToken->GetDouble());
-                                aStrVal = aVal.makeStringAndClear();
+                                aStrVal = OUString::number(pToken->GetDouble());
                                 AddAttribute(XML_NAMESPACE_OFFICE, XML_VALUE, aStrVal);
                             }
                             break;
@@ -5476,13 +5488,6 @@ void SAL_CALL ScXMLExport::initialize( const css::uno::Sequence< css::uno::Any >
 {
     SolarMutexGuard aGuard;
     SvXMLExport::initialize(aArguments);
-}
-
-// XUnoTunnel
-sal_Int64 SAL_CALL ScXMLExport::getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier )
-{
-    SolarMutexGuard aGuard;
-    return SvXMLExport::getSomething(aIdentifier);
 }
 
 void ScXMLExport::DisposingModel()

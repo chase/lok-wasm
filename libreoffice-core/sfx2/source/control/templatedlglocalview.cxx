@@ -19,6 +19,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/event.hxx>
 #include <sfx2/doctempl.hxx>
+#include <helpids.h>
 #include <bitmaps.hlst>
 
 TemplateDlgLocalView::TemplateDlgLocalView(std::unique_ptr<weld::ScrolledWindow> xWindow,
@@ -113,6 +114,15 @@ void TemplateDlgLocalView::createContextMenu(const bool bIsDefault, const bool b
     mxContextMenu->append("move", SfxResId(STR_MOVE), BMP_MENU_MOVE);
     mxContextMenu->append("export", SfxResId(STR_EXPORT), BMP_MENU_EXPORT);
 
+    // Set the help IDs of all context menu entries
+    mxContextMenu->set_item_help_id("open", HID_TEMPLATEDLG_OPEN);
+    mxContextMenu->set_item_help_id("edit", HID_TEMPLATEDLG_EDIT);
+    mxContextMenu->set_item_help_id("default", HID_TEMPLATEDLG_DEFAULT);
+    mxContextMenu->set_item_help_id("rename", HID_TEMPLATEDLG_RENAME);
+    mxContextMenu->set_item_help_id("delete", HID_TEMPLATEDLG_DELETE);
+    mxContextMenu->set_item_help_id("move", HID_TEMPLATEDLG_MOVE);
+    mxContextMenu->set_item_help_id("export", HID_TEMPLATEDLG_EXPORT);
+
     if (!bIsSingleSel)
     {
         mxContextMenu->set_sensitive("open", false);
@@ -136,13 +146,13 @@ void TemplateDlgLocalView::createContextMenu(const bool bIsDefault, const bool b
             mxTreeView.get(), tools::Rectangle(maPosition, Size(1, 1))));
 }
 
-void TemplateDlgLocalView::ContextMenuSelectHdl(std::string_view rIdent)
+void TemplateDlgLocalView::ContextMenuSelectHdl(std::u16string_view rIdent)
 {
-    if (rIdent == "open")
+    if (rIdent == u"open")
         maOpenTemplateHdl.Call(maSelectedItem);
-    else if (rIdent == "edit")
+    else if (rIdent == u"edit")
         maEditTemplateHdl.Call(maSelectedItem);
-    else if (rIdent == "rename")
+    else if (rIdent == u"rename")
     {
         InputDialog aTitleEditDlg(GetDrawingArea(), SfxResId(STR_RENAME_TEMPLATE));
         aTitleEditDlg.set_title(SfxResId(STR_WINDOW_TITLE_RENAME_TEMPLATE));
@@ -178,7 +188,7 @@ void TemplateDlgLocalView::ContextMenuSelectHdl(std::string_view rIdent)
             ListView::rename(OUString::number(maSelectedItem->mnId), maSelectedItem->maTitle);
         }
     }
-    else if (rIdent == "delete")
+    else if (rIdent == u"delete")
     {
         std::unique_ptr<weld::MessageDialog> xQueryDlg(Application::CreateMessageDialog(
             GetDrawingArea(), VclMessageType::Question, VclButtonsType::YesNo,
@@ -189,16 +199,16 @@ void TemplateDlgLocalView::ContextMenuSelectHdl(std::string_view rIdent)
         maDeleteTemplateHdl.Call(maSelectedItem);
         reload();
     }
-    else if (rIdent == "default")
+    else if (rIdent == u"default")
     {
         maDefaultTemplateHdl.Call(maSelectedItem);
         ListView::refreshDefaultColumn();
     }
-    else if (rIdent == "move")
+    else if (rIdent == u"move")
     {
         maMoveTemplateHdl.Call(maSelectedItem);
     }
-    else if (rIdent == "export")
+    else if (rIdent == u"export")
     {
         maExportTemplateHdl.Call(maSelectedItem);
     }
@@ -266,7 +276,6 @@ void TemplateDlgLocalView::syncCursor()
         {
             if ((*it)->mbSelected)
             {
-                nIndex = -1;
                 nIndex = ListView::get_index((*it)->mnId);
                 if (nIndex >= 0)
                 {

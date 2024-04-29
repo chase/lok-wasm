@@ -21,6 +21,7 @@
 #include <helper/accresmgr.hxx>
 #include <strings.hrc>
 
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <comphelper/accessiblekeybindinghelper.hxx>
 #include <com/sun/star/awt/KeyModifier.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
@@ -77,6 +78,9 @@ void VCLXAccessibleButton::FillAccessibleStateSet( sal_Int64& rStateSet )
 
     rStateSet |= AccessibleStateType::FOCUSABLE;
 
+    if (pButton->isToggleButton())
+        rStateSet |= AccessibleStateType::CHECKABLE;
+
     if ( pButton->GetState() == TRISTATE_TRUE )
         rStateSet |= AccessibleStateType::CHECKED;
 
@@ -93,18 +97,6 @@ void VCLXAccessibleButton::FillAccessibleStateSet( sal_Int64& rStateSet )
         rStateSet |= AccessibleStateType::DEFAULT;
     }
 }
-
-
-// XInterface
-
-
-IMPLEMENT_FORWARD_XINTERFACE2( VCLXAccessibleButton, VCLXAccessibleTextComponent, VCLXAccessibleButton_BASE )
-
-
-// XTypeProvider
-
-
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( VCLXAccessibleButton, VCLXAccessibleTextComponent, VCLXAccessibleButton_BASE )
 
 
 // XServiceInfo
@@ -178,7 +170,18 @@ sal_Bool VCLXAccessibleButton::doAccessibleAction ( sal_Int32 nIndex )
 
     VclPtr< PushButton > pButton = GetAs< PushButton >();
     if ( pButton )
-        pButton->Click();
+    {
+        if (pButton->isToggleButton())
+        {
+            // PushButton::Click doesn't toggle when it's a toggle button
+            pButton->Check(!pButton->IsChecked());
+            pButton->Toggle();
+        }
+        else
+        {
+            pButton->Click();
+        }
+    }
 
     return true;
 }

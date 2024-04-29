@@ -16,14 +16,7 @@
 #include <limits>
 #include <vector>
 
-extern "C" {
-    //TODO: <https://bugzilla.gnome.org/show_bug.cgi?id=754245>
-    // "common/dconf-changeset.h etc. lack extern "C" wrapper for C++", fixed on current dconf
-    // master (towards 0.40?) now with
-    // <https://gitlab.gnome.org/GNOME/dconf/-/commit/db3d4df6d1a763698f27b013dc42da8d4ae02639>
-    // "Merge branch 'wip/issue-23' into 'master'"
 #include <dconf/dconf.h>
-}
 
 #include <com/sun/star/uno/Sequence.hxx>
 #include <o3tl/safeint.hxx>
@@ -221,7 +214,7 @@ private:
 };
 
 OString getRoot() {
-    return "/org/libreoffice/registry";
+    return "/org/libreoffice/registry"_ostr;
 }
 
 bool decode(OUString * string, bool slash) {
@@ -980,7 +973,7 @@ void readDir(
                     case ReadValue::Error:
                         continue;
                     case ReadValue::Value:
-                        prop->setValue(layer, value);
+                        prop->setValue(layer, value, false);
                         finalize(client, path, member, layer);
                         break;
                     case ReadValue::Remove:
@@ -1012,7 +1005,7 @@ void readDir(
                         continue;
                     }
                     static_cast<LocalizedValueNode *>(member.get())->setValue(
-                        layer, value);
+                        layer, value, false);
                     finalize(client, path, member, layer);
                     break;
                 }

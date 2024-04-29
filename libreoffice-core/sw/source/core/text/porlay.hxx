@@ -268,7 +268,7 @@ class SwParaPortion : public SwLineLayout
     bool m_bFollowField   : 1; // We have a bit of field left for the Follow
 
     bool m_bFixLineHeight : 1; // Fixed line height
-    bool m_bFootnoteNum   : 1; // contains a footnotenumberportion
+    bool m_bFootnoteNum   : 1; // is the frame that may contain a footnotenumberportion
     bool m_bMargin        : 1; // contains a hanging punctuation in the margin
 
 public:
@@ -319,6 +319,9 @@ public:
     bool IsFootnoteNum() const { return m_bFootnoteNum; }
     void SetMargin( const bool bNew = true ) { m_bMargin = bNew; }
     bool IsMargin() const { return m_bMargin; }
+    enum FootnoteOrNot { OnlyNumbering, FootnoteToo };
+    bool HasNumberingPortion(FootnoteOrNot) const;
+    bool HasContentPortions() const;
 
     // Set nErgo in the QuoVadisPortion
     void SetErgoSumNum( const OUString &rErgo );

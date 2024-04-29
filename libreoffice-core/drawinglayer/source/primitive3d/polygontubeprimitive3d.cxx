@@ -485,10 +485,7 @@ namespace drawinglayer::primitive3d
 
                 Primitive3DContainer aRetval(aResultVector.size());
 
-                for(size_t a(0); a < aResultVector.size(); a++)
-                {
-                    aRetval[a] = Primitive3DReference(aResultVector[a]);
-                }
+                std::transform(aResultVector.cbegin(), aResultVector.cend(), aRetval.begin(), [](auto &rResult){return Primitive3DReference(rResult);});
 
                 return aRetval;
             }
@@ -707,10 +704,7 @@ using namespace com::sun::star;
             // prepare return value
             Primitive3DContainer aRetval(aResultVector.size());
 
-            for(size_t a(0); a < aResultVector.size(); a++)
-            {
-                aRetval[a] = Primitive3DReference(aResultVector[a]);
-            }
+            std::transform(aResultVector.cbegin(), aResultVector.cend(), aRetval.begin(), [](auto &rResult){return Primitive3DReference(rResult);});
 
             return aRetval;
         }
@@ -749,7 +743,7 @@ using namespace com::sun::star;
 
         Primitive3DContainer PolygonTubePrimitive3D::get3DDecomposition(const geometry::ViewInformation3D& rViewInformation) const
         {
-            ::osl::MutexGuard aGuard( m_aMutex );
+            std::unique_lock aGuard( m_aMutex );
 
             if(getLast3DDecomposition().empty())
             {

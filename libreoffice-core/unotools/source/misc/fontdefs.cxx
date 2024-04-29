@@ -18,179 +18,13 @@
  */
 
 #include <o3tl/safeint.hxx>
+#include <o3tl/string_view.hxx>
 #include <unotools/fontdefs.hxx>
 #include <unotools/fontcfg.hxx>
 #include <rtl/ustrbuf.hxx>
 
 #include <string_view>
 #include <unordered_map>
-
-sal_Unicode const aBatang[] = { 0xBC14, 0xD0D5, 0 };
-sal_Unicode const aBatangChe[] = { 0xBC14, 0xD0D5, 0xCCB4, 0 };
-sal_Unicode const aGungsuh[] = { 0xAD81, 0xC11C, 0 };
-sal_Unicode const aGungsuhChe[] = { 0xAD81, 0xC11C, 0xCCB4, 0 };
-sal_Unicode const aGulim[] = { 0xAD74, 0xB9BC, 0 };
-sal_Unicode const aGulimChe[] = { 0xAD74, 0xB9BC, 0xCCB4, 0 };
-sal_Unicode const aDotum[] = { 0xB3CB, 0xC6C0, 0 };
-sal_Unicode const aDotumChe[] = { 0xB3CB, 0xC6C0, 0xCCB4, 0 };
-sal_Unicode const aSimSun[] = { 0x5B8B, 0x4F53, 0 };
-sal_Unicode const aNSimSun[] = { 0x65B0, 0x5B8B, 0x4F53, 0 };
-sal_Unicode const aSimHei[] = { 0x9ED1, 0x4F53, 0 };
-sal_Unicode const aSimKai[] = { 0x6977, 0x4F53, 0 };
-sal_Unicode const azycjkSun[] = { 0x4E2D, 0x6613, 0x5B8B, 0x4F53, 0 };
-sal_Unicode const azycjkHei[] = { 0x4E2D, 0x6613, 0x9ED1, 0x4F53, 0 };
-sal_Unicode const azycjkKai[] = { 0x4E2D, 0x6613, 0x6977, 0x4F53, 0 };
-sal_Unicode const aFZHei[] = { 0x65B9, 0x6B63, 0x9ED1, 0x4F53, 0 };
-sal_Unicode const aFZKai[] = { 0x65B9, 0x6B63, 0x6977, 0x4F53, 0 };
-sal_Unicode const aFZSongYI[] = { 0x65B9, 0x6B63, 0x5B8B, 0x4E00, 0 };
-sal_Unicode const aFZShuSong[] = { 0x65B9, 0x6B63, 0x4E66, 0x5B8B, 0 };
-sal_Unicode const aFZFangSong[] = { 0x65B9, 0x6B63, 0x4EFF, 0x5B8B, 0 };
-// Attention: this fonts includes the wrong encoding vector - so we double the names with correct and wrong encoding
-// First one is the GB-Encoding (we think the correct one), second is the big5 encoded name
-sal_Unicode const aMHei1[] = { 'm', 0x7B80, 0x9ED1, 0 };
-sal_Unicode const aMHei2[] = { 'm', 0x6F60, 0x7AAA, 0 };
-sal_Unicode const aMKai1[] = { 'm', 0x7B80, 0x6977, 0x566C, 0 };
-sal_Unicode const aMKai2[] = { 'm', 0x6F60, 0x7FF1, 0x628E, 0 };
-sal_Unicode const aMSong1[] = { 'm', 0x7B80, 0x5B8B, 0 };
-sal_Unicode const aMSong2[] = { 'm', 0x6F60, 0x51BC, 0 };
-sal_Unicode const aCFangSong1[] = { 'm', 0x7B80, 0x592B, 0x5B8B, 0 };
-sal_Unicode const aCFangSong2[] = { 'm', 0x6F60, 0x6E98, 0x51BC, 0 };
-sal_Unicode const aMingLiU[] = { 0x7D30, 0x660E, 0x9AD4, 0 };
-sal_Unicode const aPMingLiU[] = { 0x65B0, 0x7D30, 0x660E, 0x9AD4, 0 };
-sal_Unicode const aHei[] = { 0x6865, 0 };
-sal_Unicode const aKai[] = { 0x6B61, 0 };
-sal_Unicode const aMing[] = { 0x6D69, 0x6E67, 0 };
-sal_Unicode const aMSGothic[] = { 'm','s',       0x30B4, 0x30B7, 0x30C3, 0x30AF, 0 };
-sal_Unicode const aMSPGothic[] = { 'm','s','p',  0x30B4, 0x30B7, 0x30C3, 0x30AF, 0 };
-sal_Unicode const aMSMincho[] = { 'm', 's',      0x660E, 0x671D, 0 };
-sal_Unicode const aMSPMincho[] = { 'm','s','p',  0x660E, 0x671D, 0 };
-sal_Unicode const aMSYaHei[] = { 0x5FAE, 0x8F6F, 0x96C5, 0x9ED1, 0 };
-sal_Unicode const aMSJhengHei[] = { 0x5FAE, 0x8EDF, 0x6B63, 0x9ED1, 0x9AD4, 0 };
-sal_Unicode const aMeiryo[]    = { 0x30e1, 0x30a4, 0x30ea, 0x30aa, 0 };
-sal_Unicode const aHGMinchoL[] = { 'h','g',      0x660E, 0x671D, 'l', 0 };
-sal_Unicode const aHGGothicB[] = { 'h','g',      0x30B4, 0x30B7, 0x30C3, 0x30AF, 'b', 0 };
-sal_Unicode const aHGPMinchoL[] = { 'h','g','p', 0x660E, 0x671D, 'l', 0 };
-sal_Unicode const aHGPGothicB[] = { 'h','g','p', 0x30B4, 0x30B7, 0x30C3, 0x30AF, 'b', 0 };
-sal_Unicode const aHGMinchoLSun[] = { 'h','g',   0x660E, 0x671D, 'l', 's', 'u', 'n', 0 };
-sal_Unicode const aHGPMinchoLSun[] = { 'h','g','p', 0x660E, 0x671D, 'l', 's', 'u', 'n', 0 };
-sal_Unicode const aHGGothicBSun[] = { 'h', 'g', 0x30B4, 0x30B7, 0x30C3, 0x30AF, 'b', 's', 'u', 'n', 0 };
-sal_Unicode const aHGPGothicBSun[] = { 'h', 'g', 'p', 0x30B4, 0x30B7, 0x30C3, 0x30AF, 'b', 's', 'u', 'n', 0 };
-sal_Unicode const aHGHeiseiMin1[] = { 'h', 'g', 0x5E73, 0x6210, 0x660E, 0x671D, 0x4F53, 0 };
-sal_Unicode const aHGHeiseiMin2[] = { 'h', 'g', 0x5E73, 0x6210, 0x660E, 0x671D, 0x4F53, 'w', '3', 'x', '1', '2', 0 };
-sal_Unicode const aIPAMincho[] =  { 'i', 'p', 'a', 0x660E, 0x671D, 0 };
-sal_Unicode const aIPAPMincho[] = { 'i', 'p', 'a', 'p', 0x660E, 0x671D, 0 };
-sal_Unicode const aIPAGothic[] =  { 'i', 'p', 'a',  0x30B4, 0x30B7, 0x30C3, 0x30AF, 0 };
-sal_Unicode const aIPAPGothic[] =  { 'i', 'p', 'a', 'p', 0x30B4, 0x30B7, 0x30C3, 0x30AF, 0 };
-sal_Unicode const aIPAUIGothic[] =  { 'i', 'p', 'a', 'u', 'i', 0x30B4, 0x30B7, 0x30C3, 0x30AF, 0 };
-sal_Unicode const aTakaoMincho[] =  { 't', 'a', 'k', 'a', 'o', 0x660E, 0x671D, 0 };
-sal_Unicode const aTakaoPMincho[] = { 't', 'a', 'k', 'a', 'o', 'p', 0x660E, 0x671D, 0 };
-sal_Unicode const aTakaoGothic[] =  { 't', 'a', 'k', 'a', 'o',  0x30B4, 0x30B7, 0x30C3, 0x30AF, 0 };
-sal_Unicode const aTakaoPGothic[] =  { 't', 'a', 'k', 'a', 'o', 'p', 0x30B4, 0x30B7, 0x30C3, 0x30AF, 0 };
-sal_Unicode const aSazanamiMincho[] = { 0x3055, 0x3056, 0x306A, 0x307F, 0x660E, 0x671D, 0 };
-sal_Unicode const aSazanamiGothic[] = { 0x3055, 0x3056, 0x306A, 0x307F, 0x30B4, 0x30B7, 0x30C3, 0x30AF, 0 };
-sal_Unicode const aKochiMincho[] = { 0x6771, 0x98A8, 0x660E, 0x671D, 0 };
-sal_Unicode const aKochiGothic[] = { 0x6771, 0x98A8, 0x30B4, 0x30B7, 0x30C3, 0x30AF, 0 };
-sal_Unicode const aSunDotum[] = { 0xC36C, 0xB3CB, 0xC6C0, 0 };
-sal_Unicode const aSunGulim[] = { 0xC36C, 0xAD74, 0xB9BC, 0 };
-sal_Unicode const aSunBatang[] = { 0xC36C, 0xBC14, 0xD0D5, 0 };
-sal_Unicode const aBaekmukDotum[] = { 0xBC31, 0xBB35, 0xB3CB, 0xC6C0, 0 };
-sal_Unicode const aBaekmukGulim[] = { 0xBC31, 0xBB35, 0xAD74, 0xB9BC, 0 };
-sal_Unicode const aBaekmukBatang[] = { 0xBC31, 0xBB35, 0xBC14, 0xD0D5, 0 };
-sal_Unicode const aFzMingTi[] = { 0x65B9, 0x6B63, 0x660E, 0x9AD4, 0 };
-sal_Unicode const aFzHeiTiTW[]= { 0x65B9, 0x6B63, 0x9ED1, 0x9AD4, 0 };
-sal_Unicode const aFzKaiTiTW[]= { 0x65B9, 0x6B63, 0x6977, 0x9AD4, 0 };
-sal_Unicode const aFzHeiTiCN[]= { 0x65B9, 0x6B63, 0x9ED1, 0x4F53, 0 };
-sal_Unicode const aFzKaiTiCN[]= { 0x65B9, 0x6B63, 0x6977, 0x4F53, 0 };
-sal_Unicode const aFzSongTi[] = { 0x65B9, 0x6B63, 0x5B8B, 0x4F53, 0 };
-sal_Unicode const aHYMyeongJoExtra[]         = { 'h', 'y', 0xACAC, 0xBA85, 0xC870, 0 };
-sal_Unicode const aHYSinMyeongJoMedium[]     = { 'h', 'y', 0xC2E0, 0xBA85, 0xC870, 0 };
-sal_Unicode const aHYGothicMedium[]          = { 'h', 'y', 0xC911, 0xACE0, 0xB515, 0 };
-sal_Unicode const aHYGraphicMedium[]         = { 'h', 'y', 0xADF8, 0xB798, 0xD53D, 'm', 0 };
-sal_Unicode const aHYGraphic[]               = { 'h', 'y', 0xADF8, 0xB798, 0xD53D, 0 };
-sal_Unicode const aNewGulim[]                = { 0xC0C8, 0xAD74, 0xB9BC, 0 };
-sal_Unicode const aSunGungseo[]              = { 0xC36C, 0xAD81, 0xC11C, 0 };
-sal_Unicode const aHYGungSoBold[]            = { 'h','y', 0xAD81, 0xC11C, 'b', 0 };
-sal_Unicode const aHYGungSo[]                 = { 'h','y', 0xAD81, 0xC11C, 0 };
-sal_Unicode const aSunHeadLine[]             = { 0xC36C, 0xD5E4, 0xB4DC, 0xB77C, 0xC778, 0 };
-sal_Unicode const aHYHeadLineMedium[]        = { 'h', 'y', 0xD5E4, 0xB4DC, 0xB77C, 0xC778, 'm', 0 };
-sal_Unicode const aHYHeadLine[]              = { 'h', 'y', 0xD5E4, 0xB4DC, 0xB77C, 0xC778, 0 };
-sal_Unicode const aYetR[]                    = { 0xD734, 0xBA3C, 0xC61B, 0xCCB4, 0 };
-sal_Unicode const aHYGothicExtra[]           = { 'h', 'y', 0xACAC, 0xACE0, 0xB515, 0 };
-sal_Unicode const aSunMokPan[]               = { 0xC36C, 0xBAA9, 0xD310, 0 };
-sal_Unicode const aSunYeopseo[]              = { 0xC36C, 0xC5FD, 0xC11C, 0 };
-sal_Unicode const aSunBaekSong[]              = { 0xC36C, 0xBC31, 0xC1A1, 0 };
-sal_Unicode const aHYPostLight[]             = { 'h', 'y', 0xC5FD, 0xC11C, 'l', 0 };
-sal_Unicode const aHYPost[]                  = { 'h', 'y', 0xC5FD, 0xC11C, 0 };
-sal_Unicode const aMagicR[]                  = { 0xD734, 0xBA3C, 0xB9E4, 0xC9C1, 0xCCB4, 0 };
-sal_Unicode const aSunCrystal[]              = { 0xC36C, 0xD06C, 0xB9AC, 0xC2A4, 0xD0C8, 0 };
-sal_Unicode const aSunSaemmul[]              = { 0xC36C, 0xC0D8, 0xBB3C, 0 };
-sal_Unicode const aHaansoftBatang[]          = { 0xD55C, 0xCEF4, 0xBC14, 0xD0D5, 0 };
-sal_Unicode const aHaansoftDotum[]           = { 0xD55C, 0xCEF4, 0xB3CB, 0xC6C0, 0 };
-sal_Unicode const aHyhaeseo[]                = { 0xD55C, 0xC591, 0xD574, 0xC11C, 0 };
-sal_Unicode const aMDSol[]                   = { 'm', 'd', 0xC194, 0xCCB4, 0 };
-sal_Unicode const aMDGaesung[]               = { 'm', 'd', 0xAC1C, 0xC131, 0xCCB4, 0 };
-sal_Unicode const aMDArt[]                   = { 'm', 'd', 0xC544, 0xD2B8, 0xCCB4, 0 };
-sal_Unicode const aMDAlong[]                 = { 'm', 'd', 0xC544, 0xB871, 0xCCB4, 0 };
-sal_Unicode const aMDEasop[]                 = { 'm', 'd', 0xC774, 0xC19D, 0xCCB4, 0 };
-sal_Unicode const aHYShortSamulMedium[]      = { 'h', 'y', 0xC595, 0xC740, 0xC0D8, 0xBB3C, 'm', 0 };
-sal_Unicode const aHYShortSamul[]            = { 'h', 'y', 0xC595, 0xC740, 0xC0D8, 0xBB3C, 0 };
-sal_Unicode const aHGGothicE[]               = { 'h','g', 0xFF7A, 0xFF9E, 0xFF7C, 0xFF6F, 0xFF78, 'e', 0 };
-sal_Unicode const aHGPGothicE[]              = { 'h','g','p', 0xFF7A, 0xFF9E, 0xFF7C, 0xFF6F, 0xFF78, 'e', 0 };
-sal_Unicode const aHGSGothicE[]              = { 'h','g','s', 0xFF7A, 0xFF9E, 0xFF7C, 0xFF6F, 0xFF78, 'e', 0 };
-sal_Unicode const aHGGothicM[]               = { 'h','g', 0xFF7A, 0xFF9E, 0xFF7C, 0xFF6F, 0xFF78, 'm', 0 };
-sal_Unicode const aHGPGothicM[]              = { 'h','g','p', 0xFF7A, 0xFF9E, 0xFF7C, 0xFF6F, 0xFF78, 'm', 0 };
-sal_Unicode const aHGSGothicM[]              = { 'h','g','s', 0xFF7A, 0xFF9E, 0xFF7C, 0xFF6F, 0xFF78, 'm', 0 };
-sal_Unicode const aHGGyoshotai[]             = { 'h','g', 0x884C, 0x66F8, 0x4F53, 0 };
-sal_Unicode const aHGPGyoshotai[]            = { 'h','g','p', 0x884C, 0x66F8, 0x4F53, 0 };
-sal_Unicode const aHGSGyoshotai[]            = { 'h','g','s', 0x884C, 0x66F8, 0x4F53, 0 };
-sal_Unicode const aHGKyokashotai[]           = { 'h','g', 0x6559, 0x79D1, 0x66F8, 0x4F53, 0 };
-sal_Unicode const aHGPKyokashotai[]          = { 'h','g','p', 0x6559, 0x79D1, 0x66F8, 0x4F53, 0 };
-sal_Unicode const aHGSKyokashotai[]          = { 'h','g','s', 0x6559, 0x79D1, 0x66F8, 0x4F53, 0 };
-sal_Unicode const aHGMinchoB[]               = { 'h','g', 0x660E, 0x671D, 'b', 0 };
-sal_Unicode const aHGPMinchoB[]              = { 'h','g','p', 0x660E, 0x671D, 'b', 0 };
-sal_Unicode const aHGSMinchoB[]              = { 'h','g','s', 0x660E, 0x671D, 'b', 0 };
-sal_Unicode const aHGMinchoE[]               = { 'h','g', 0x660E, 0x671D, 'e', 0 };
-sal_Unicode const aHGPMinchoE[]              = { 'h','g','p', 0x660E, 0x671D, 'e', 0 };
-sal_Unicode const aHGSMinchoE[]              = { 'h','g','s', 0x660E, 0x671D, 'e', 0 };
-sal_Unicode const aHGSoeiKakupoptai[]        = { 'h','g', 0x5275,0x82F1,0x89D2,0xFF8E,
-                            0xFF9F,0xFF6F,0xFF8C,0xFF9F,0x4F53,0};
-sal_Unicode const aHGPSoeiKakupoptai[]       = { 'h','g', 'p', 0x5275,0x82F1,0x89D2,0xFF8E,
-                            0xFF9F,0xFF6F,0xFF8C,0xFF9F,0x4F53,0};
-sal_Unicode const aHGSSoeiKakupoptai[]       = { 'h','g', 's', 0x5275,0x82F1,0x89D2,0xFF8E,
-                            0xFF9F,0xFF6F,0xFF8C,0xFF9F,0x4F53,0};
-sal_Unicode const aHGSoeiPresenceEB[]        = { 'h','g', 0x5275,0x82F1,0xFF8C,0xFF9F,
-                            0xFF9A,0xFF7E,0xFF9E,0xFF9D,0xFF7D, 'e','b',0};
-sal_Unicode const aHGPSoeiPresenceEB[]       = { 'h','g','p', 0x5275,0x82F1,0xFF8C,0xFF9F,
-                            0xFF9A,0xFF7E,0xFF9E,0xFF9D,0xFF7D, 'e','b',0};
-sal_Unicode const aHGSSoeiPresenceEB[]       = { 'h','g','s', 0x5275,0x82F1,0xFF8C,0xFF9F,
-                            0xFF9A,0xFF7E,0xFF9E,0xFF9D,0xFF7D, 'e','b',0};
-sal_Unicode const aHGSoeiKakugothicUB[]      = { 'h','g', 0x5275,0x82F1,0x89D2,0xFF7A,
-                            0xFF9E,0xFF7C,0xFF6F,0xFF78,'u','b',0};
-sal_Unicode const aHGPSoeiKakugothicUB[]     = { 'h','g','p', 0x5275,0x82F1,0x89D2,0xFF7A,
-                            0xFF9E,0xFF7C,0xFF6F,0xFF78,'u','b',0};
-sal_Unicode const aHGSSoeiKakugothicUB[]     = { 'h','g','s', 0x5275,0x82F1,0x89D2,0xFF7A,
-                            0xFF9E,0xFF7C,0xFF6F,0xFF78,'u','b',0};
-sal_Unicode const aHGSeikaishotaiPRO[]       = { 'h','g', 0x6B63,0x6977,0x66F8,0x4F53, '-','p','r','o',0};
-sal_Unicode const aHGMaruGothicMPRO[]        = { 'h','g', 0x4E38,0xFF7A,0xFF9E,0xFF7C,0xFF6F,0xFF78, '-','p','r','o',0};
-sal_Unicode const aHiraginoMinchoPro[]       = { 0x30D2, 0x30E9, 0x30AE, 0x30CE, 0x660E, 0x671D, 'p','r','o',0};
-sal_Unicode const aHiraginoMinchoProN[]      = { 0x30D2, 0x30E9, 0x30AE, 0x30CE, 0x660E, 0x671D, 'p','r','o','n',0};
-sal_Unicode const aHiraginoKakuGothic[]      = { 0x30D2, 0x30E9, 0x30AE, 0x30CE, 0x89D2, 0x30B4, 0x30B7, 0x30C3, 0x30AF,0};
-sal_Unicode const aHiraginoKakuGothicPro[]   = { 0x30D2, 0x30E9, 0x30AE, 0x30CE, 0x89D2, 0x30B4, 'p','r','o',0};
-sal_Unicode const aHiraginoKakuGothicProN[]  = { 0x30D2, 0x30E9, 0x30AE, 0x30CE, 0x89D2, 0x30B4, 'p','r','o','n',0};
-sal_Unicode const aHiraginoMaruGothicPro[]   = { 0x30D2, 0x30E9, 0x30AE, 0x30CE, 0x4E38, 0x30B4, 'p','r','o',0};
-sal_Unicode const aHiraginoMaruGothicProN[]  = { 0x30D2, 0x30E9, 0x30AE, 0x30CE, 0x4E38, 0x30B4, 'p','r','o','n',0};
-sal_Unicode const aYuGothic[] = { 0x6E38, 0x30B4, 0x30B7, 0x30C3, 0x30AF, 0};
-sal_Unicode const aYuGothicTai[] = { 0x6E38, 0x30B4, 0x30B7, 0x30C3, 0x30AF, 0x4F53, 0};
-sal_Unicode const aYuMincho[] = { 0x6E38, 0x660E, 0x671D, 0};
-sal_Unicode const aYuMinchoTai[] = { 0x6E38, 0x660E, 0x671D, 0x4F53, 0};
-sal_Unicode const aGennoKakuGothic[] = { 0x6E90, 0x30CE, 0x89D2, 0x30B4, 0x30B7, 0x30C3, 0x30AF, 0};
-sal_Unicode const aGennoKakuGothicJP[] = { 0x6E90, 0x30CE, 0x89D2, 0x30B4, 0x30B7, 0x30C3, 0x30AF, 'j', 'p', 0};
-sal_Unicode const aGennoKakuGothicHW[] = { 0x6E90, 0x30CE, 0x89D2, 0x30B4, 0x30B7, 0x30C3, 0x30AF, 'h','w', 0};
-sal_Unicode const aGennoMincho[] = { 0x6E90, 0x30CE, 0x660E, 0x671D, 0};
-sal_Unicode const aGennoMinchoJP[] = { 0x6E90, 0x30CE, 0x660E, 0x671D, 'j', 'p', 0};
-sal_Unicode const aIPAmjMincho[] = { 'i', 'p', 'a', 'm', 'j', 0x660E, 0x671D, 0};
-sal_Unicode const aIPAexGothic[] = { 'i', 'p', 'a', 'e', 'x', 0x30B4, 0x30B7, 0x30C3, 0x30AF, 0};
-sal_Unicode const aIPAexMincho[] = { 'i', 'p', 'a', 'e', 'x', 0x660E, 0x671D, 0};
 
 OUString StripScriptFromName(const OUString& _aName)
 {
@@ -298,162 +132,166 @@ OUString GetEnglishSearchFontName(std::u16string_view rInName)
     {
         typedef std::unordered_map<OUString, OUString> FontNameDictionary;
         static FontNameDictionary const aDictionary = {
-            {aBatang, "batang"},
-            {aBatangChe, "batangche"},
-            {aGungsuh, "gungshu"},
-            {aGungsuhChe, "gungshuche"},
-            {aGulim, "gulim"},
-            {aGulimChe, "gulimche"},
-            {aDotum, "dotum"},
-            {aDotumChe, "dotumche"},
-            {aSimSun, "simsun"},
-            {aNSimSun, "nsimsun"},
-            {aSimHei, "simhei"},
-            {aSimKai, "simkai"},
-            {azycjkSun, "zycjksun"},
-            {azycjkHei, "zycjkhei"},
-            {azycjkKai, "zycjkkai"},
-            {aFZHei, "fzhei"},
-            {aFZKai, "fzkai"},
-            {aFZSongYI, "fzsong"},
-            {aFZShuSong, "fzshusong"},
-            {aFZFangSong, "fzfangsong"},
-            {aMHei1, "mhei"},
-            {aMHei2, "mhei"},
-            {aMKai1, "mkai"},
-            {aMKai2, "mkai"},
-            {aMSong1, "msong"},
-            {aMSong2, "msong"},
-            {aCFangSong1, "cfangsong"},
-            {aCFangSong2, "cfangsong"},
-            {aMingLiU, "mingliu"},
-            {aPMingLiU, "pmingliu"},
-            {aHei, "hei"},
-            {aKai, "kai"},
-            {aMing, "ming"},
-            {aMSGothic, "msgothic"},
-            {aMSPGothic, "mspgothic"},
-            {aMSMincho, "msmincho"},
-            {aMSPMincho, "mspmincho"},
-            {aMSJhengHei, "microsoftjhenghei"},
-            {aMSYaHei, "microsoftyahei"},
-            {aMeiryo, "meiryo"},
-            {aHGMinchoL, "hgminchol"},
-            {aHGGothicB, "hggothicb"},
-            {aHGPMinchoL, "hgpminchol"},
-            {aHGPGothicB, "hgpgothicb"},
-            {aHGMinchoLSun, "hgmincholsun"},
-            {aHGGothicBSun, "hggothicbsun"},
-            {aHGPMinchoLSun, "hgpmincholsun"},
-            {aHGPGothicBSun, "hgpgothicbsun"},
-            {aHGHeiseiMin1, "hgheiseimin"},
-            {aHGHeiseiMin2, "hgheiseimin"},
-            {aIPAMincho, "ipamincho"},
-            {aIPAPMincho, "ipapmincho"},
-            {aIPAGothic, "ipagothic"},
-            {aIPAPGothic, "ipapgothic"},
-            {aIPAUIGothic, "ipauigothic"},
-            {aTakaoMincho, "takaomincho"},
-            {aTakaoPMincho, "takaopmincho"},
-            {aTakaoGothic, "takaogothic"},
-            {aTakaoPGothic, "takaopgothic"},
-            {aSazanamiMincho, "sazanamimincho"},
-            {aSazanamiGothic, "sazanamigothic"},
-            {aKochiMincho, "kochimincho"},
-            {aKochiGothic, "kochigothic"},
-            {aSunDotum, "sundotum"},
-            {aSunGulim, "sungulim"},
-            {aSunBatang, "sunbatang"},
-            {aBaekmukDotum, "baekmukdotum"},
-            {aBaekmukGulim, "baekmukgulim"},
-            {aBaekmukBatang, "baekmukbatang"},
-            {aFzHeiTiCN, "fzheiti"},
-            {aFzHeiTiTW, "fzheiti"},
-            {aFzKaiTiCN, "fzkaiti"},
-            {aFzKaiTiTW, "fzkaitib"},
-            {aFzMingTi, "fzmingtib"},
-            {aFzSongTi, "fzsongti"},
-            {aHYMyeongJoExtra, "hymyeongjoextra"},
-            {aHYSinMyeongJoMedium, "hysinmyeongjomedium"},
-            {aHYGothicMedium, "hygothicmedium"},
-            {aHYGraphicMedium, "hygraphicmedium"},
-            {aHYGraphic, "hygraphic"},
-            {aNewGulim, "newgulim"},
-            {aSunGungseo, "sungungseo"},
-            {aHYGungSoBold, "hygungsobold"},
-            {aHYGungSo, "hygungso"},
-            {aSunHeadLine, "sunheadline"},
-            {aHYHeadLineMedium, "hyheadlinemedium"},
-            {aHYHeadLine, "hyheadline"},
-            {aYetR, "yetr"},
-            {aHYGothicExtra, "hygothicextra"},
-            {aSunMokPan, "sunmokpan"},
-            {aSunYeopseo, "sunyeopseo"},
-            {aSunBaekSong, "sunbaeksong"},
-            {aHYPostLight, "hypostlight"},
-            {aHYPost, "hypost"},
-            {aMagicR, "magicr"},
-            {aSunCrystal, "suncrystal"},
-            {aSunSaemmul, "sunsaemmul"},
-            {aHYShortSamulMedium, "hyshortsamulmedium"},
-            {aHYShortSamul, "hyshortsamul"},
-            {aHaansoftBatang, "haansoftbatang"},
-            {aHaansoftDotum, "haansoftdotum"},
-            {aHyhaeseo, "hyhaeseo"},
-            {aMDSol, "mdsol"},
-            {aMDGaesung, "mdgaesung"},
-            {aMDArt, "mdart"},
-            {aMDAlong, "mdalong"},
-            {aMDEasop, "mdeasop"},
-            {aHGGothicE, "hggothice"},
-            {aHGPGothicE, "hgpgothice"},
-            {aHGSGothicE, "hgsgothice"},
-            {aHGGothicM, "hggothicm"},
-            {aHGPGothicM, "hgpgothicm"},
-            {aHGSGothicM, "hgsgothicm"},
-            {aHGGyoshotai, "hggyoshotai"},
-            {aHGPGyoshotai, "hgpgyoshotai"},
-            {aHGSGyoshotai, "hgsgyoshotai"},
-            {aHGKyokashotai, "hgkyokashotai"},
-            {aHGPKyokashotai, "hgpkyokashotai"},
-            {aHGSKyokashotai, "hgskyokashotai"},
-            {aHGMinchoB, "hgminchob"},
-            {aHGPMinchoB, "hgpminchob"},
-            {aHGSMinchoB, "hgsminchob"},
-            {aHGMinchoE, "hgminchoe"},
-            {aHGPMinchoE, "hgpminchoe"},
-            {aHGSMinchoE, "hgsminchoe"},
-            {aHGSoeiKakupoptai, "hgsoeikakupoptai"},
-            {aHGPSoeiKakupoptai, "hgpsoeikakupopta"},
-            {aHGSSoeiKakupoptai, "hgssoeikakupopta"},
-            {aHGSoeiPresenceEB, "hgsoeipresenceeb"},
-            {aHGPSoeiPresenceEB, "hgpsoeipresenceeb"},
-            {aHGSSoeiPresenceEB, "hgssoeipresenceeb"},
-            {aHGSoeiKakugothicUB, "hgsoeikakugothicub"},
-            {aHGPSoeiKakugothicUB, "hgpsoeikakugothicub"},
-            {aHGSSoeiKakugothicUB, "hgssoeikakugothicub"},
-            {aHGSeikaishotaiPRO, "hgseikaishotaipro"},
-            {aHGMaruGothicMPRO, "hgmarugothicmpro"},
-            {aHiraginoMinchoPro, "hiraginominchopro"},
-            {aHiraginoMinchoProN, "hiraginominchopron"},
-            {aHiraginoKakuGothic, "hiraginosans"},
-            {aHiraginoKakuGothicPro, "hiraginokakugothicpro"},
-            {aHiraginoKakuGothicProN, "hiraginokakugothicpron"},
-            {aHiraginoMaruGothicPro, "hiraginomarugothicpro"},
-            {aHiraginoMaruGothicProN, "hiraginomarugothicpron"},
-            {aHiraginoMaruGothicProN, "hiraginomarugothicpron"},
-            {aYuGothic, "yugothic"},
-            {aYuGothicTai, "yugothictai"},
-            {aYuMincho, "yumincho"},
-            {aYuMinchoTai, "yuminchotai"},
-            {aGennoKakuGothic, "sourcehansans"},
-            {aGennoKakuGothicJP, "sourcehansansjp"},
-            {aGennoKakuGothicHW, "sourcehansanshw"},
-            {aGennoMincho, "sourcehanserif"},
-            {aGennoMinchoJP, "sourcehanserifjp"},
-            {aIPAmjMincho, "ipamjmincho"},
-            {aIPAexGothic, "ipaexgothic"},
-            {aIPAexMincho, "ipaexmimcho"}};
+            {u"\uBC14\uD0D5"_ustr, "batang"},
+            {u"\uBC14\uD0D5\uCCB4"_ustr, "batangche"},
+            {u"\uAD81\uC11C"_ustr, "gungshu"},
+            {u"\uAD81\uC11C\uCCB4"_ustr, "gungshuche"},
+            {u"\uAD74\uB9BC"_ustr, "gulim"},
+            {u"\uAD74\uB9BC\uCCB4"_ustr, "gulimche"},
+            {u"\uB3CB\uC6C0"_ustr, "dotum"},
+            {u"\uB3CB\uC6C0\uCCB4"_ustr, "dotumche"},
+            {u"\u5B8B\u4F53"_ustr, "simsun"},
+            {u"\u65B0\u5B8B\u4F53"_ustr, "nsimsun"},
+            {u"\u9ED1\u4F53"_ustr, "simhei"},
+            {u"\u6977\u4F53"_ustr, "simkai"},
+            {u"\u4E2D\u6613\u5B8B\u4F53"_ustr, "zycjksun"},
+            {u"\u4E2D\u6613\u9ED1\u4F53"_ustr, "zycjkhei"},
+            {u"\u4E2D\u6613\u6977\u4F53"_ustr, "zycjkkai"},
+            {u"\u65B9\u6B63\u9ED1\u4F53"_ustr, "fzhei"},
+            {u"\u65B9\u6B63\u6977\u4F53"_ustr, "fzkai"},
+            {u"\u65B9\u6B63\u5B8B\u4E00"_ustr, "fzsong"},
+            {u"\u65B9\u6B63\u4E66\u5B8B"_ustr, "fzshusong"},
+            {u"\u65B9\u6B63\u4EFF\u5B8B"_ustr, "fzfangsong"},
+            // Attention: this fonts includes the wrong encoding vector - so we double the names with correct and wrong encoding
+            // First one is the GB-Encoding (we think the correct one), second is the big5 encoded name
+            {u"m\u7B80\u9ED1"_ustr, "mhei"},
+            {u"m\u6F60\u7AAA"_ustr, "mhei"},
+            {u"m\u7B80\u6977\u566C"_ustr, "mkai"},
+            {u"m\u6F60\u7FF1\u628E"_ustr, "mkai"},
+            {u"m\u7B80\u5B8B"_ustr, "msong"},
+            {u"m\u6F60\u51BC"_ustr, "msong"},
+            {u"m\u7B80\u592B\u5B8B"_ustr, "cfangsong"},
+            {u"m\u6F60\u6E98\u51BC"_ustr, "cfangsong"},
+            {u"\u7D30\u660E\u9AD4"_ustr, "mingliu"},
+            {u"\u65B0\u7D30\u660E\u9AD4"_ustr, "pmingliu"},
+            {u"\u6865"_ustr, "hei"},
+            {u"\u6B61"_ustr, "kai"},
+            {u"\u6D69\u6E67"_ustr, "ming"},
+            {u"ms\u30B4\u30B7\u30C3\u30AF"_ustr, "msgothic"},
+            {u"msp\u30B4\u30B7\u30C3\u30AF"_ustr, "mspgothic"},
+            {u"ms\u660E\u671D"_ustr, "msmincho"},
+            {u"msp\u660E\u671D"_ustr, "mspmincho"},
+            {u"\u5FAE\u8EDF\u6B63\u9ED1\u9AD4"_ustr, "microsoftjhenghei"},
+            {u"\u5FAE\u8F6F\u96C5\u9ED1"_ustr, "microsoftyahei"},
+            {u"\u30e1\u30a4\u30ea\u30aa"_ustr, "meiryo"},
+            {u"hg\u660E\u671Dl"_ustr, "hgminchol"},
+            {u"hg\u30B4\u30B7\u30C3\u30AFb"_ustr, "hggothicb"},
+            {u"hgp\u660E\u671Dl"_ustr, "hgpminchol"},
+            {u"hgp\u30B4\u30B7\u30C3\u30AFb"_ustr, "hgpgothicb"},
+            {u"hg\u660E\u671Dlsun"_ustr, "hgmincholsun"},
+            {u"hg\u30B4\u30B7\u30C3\u30AFbsun"_ustr, "hggothicbsun"},
+            {u"hgp\u660E\u671Dlsun"_ustr, "hgpmincholsun"},
+            {u"hgp\u30B4\u30B7\u30C3\u30AFbsun"_ustr, "hgpgothicbsun"},
+            {u"hg\u5E73\u6210\u660E\u671D\u4F53"_ustr, "hgheiseimin"},
+            {u"hg\u5E73\u6210\u660E\u671D\u4F53w3x12"_ustr, "hgheiseimin"},
+            {u"ipa\u660E\u671D"_ustr, "ipamincho"},
+            {u"ipap\u660E\u671D"_ustr, "ipapmincho"},
+            {u"ipa\u30B4\u30B7\u30C3\u30AF"_ustr, "ipagothic"},
+            {u"ipap\u30B4\u30B7\u30C3\u30AF"_ustr, "ipapgothic"},
+            {u"ipaui\u30B4\u30B7\u30C3\u30AF"_ustr, "ipauigothic"},
+            {u"takao\u660E\u671D"_ustr, "takaomincho"},
+            {u"takaop\u660E\u671D"_ustr, "takaopmincho"},
+            {u"takao\u30B4\u30B7\u30C3\u30AF"_ustr, "takaogothic"},
+            {u"takaop\u30B4\u30B7\u30C3\u30AF"_ustr, "takaopgothic"},
+            {u"\u3055\u3056\u306A\u307F\u660E\u671D"_ustr, "sazanamimincho"},
+            {u"\u3055\u3056\u306A\u307F\u30B4\u30B7\u30C3\u30AF"_ustr, "sazanamigothic"},
+            {u"\u6771\u98A8\u660E\u671D"_ustr, "kochimincho"},
+            {u"\u6771\u98A8\u30B4\u30B7\u30C3\u30AF"_ustr, "kochigothic"},
+            {u"\uC36C\uB3CB\uC6C0"_ustr, "sundotum"},
+            {u"\uC36C\uAD74\uB9BC"_ustr, "sungulim"},
+            {u"\uC36C\uBC14\uD0D5"_ustr, "sunbatang"},
+            {u"\uBC31\uBB35\uB3CB\uC6C0"_ustr, "baekmukdotum"},
+            {u"\uBC31\uBB35\uAD74\uB9BC"_ustr, "baekmukgulim"},
+            {u"\uBC31\uBB35\uBC14\uD0D5"_ustr, "baekmukbatang"},
+            {u"\u65B9\u6B63\u9ED1\u4F53"_ustr, "fzheiti"},
+            {u"\u65B9\u6B63\u9ED1\u9AD4"_ustr, "fzheiti"},
+            {u"\u65B9\u6B63\u6977\u4F53"_ustr, "fzkaiti"},
+            {u"\u65B9\u6B63\u6977\u9AD4"_ustr, "fzkaitib"},
+            {u"\u65B9\u6B63\u660E\u9AD4"_ustr, "fzmingtib"},
+            {u"\u65B9\u6B63\u5B8B\u4F53"_ustr, "fzsongti"},
+            {u"hy\uACAC\uBA85\uC870"_ustr, "hymyeongjoextra"},
+            {u"hy\uC2E0\uBA85\uC870"_ustr, "hysinmyeongjomedium"},
+            {u"hy\uC911\uACE0\uB515"_ustr, "hygothicmedium"},
+            {u"hy\uADF8\uB798\uD53Dm"_ustr, "hygraphicmedium"},
+            {u"hy\uADF8\uB798\uD53D"_ustr, "hygraphic"},
+            {u"\uC0C8\uAD74\uB9BC"_ustr, "newgulim"},
+            {u"\uC36C\uAD81\uC11C"_ustr, "sungungseo"},
+            {u"hy\uAD81\uC11Cb"_ustr, "hygungsobold"},
+            {u"hy\uAD81\uC11C"_ustr, "hygungso"},
+            {u"\uC36C\uD5E4\uB4DC\uB77C\uC778"_ustr, "sunheadline"},
+            {u"hy\uD5E4\uB4DC\uB77C\uC778m"_ustr, "hyheadlinemedium"},
+            {u"hy\uD5E4\uB4DC\uB77C\uC778"_ustr, "hyheadline"},
+            {u"\uD734\uBA3C\uC61B\uCCB4"_ustr, "yetr"},
+            {u"hy\uACAC\uACE0\uB515"_ustr, "hygothicextra"},
+            {u"\uC36C\uBAA9\uD310"_ustr, "sunmokpan"},
+            {u"\uC36C\uC5FD\uC11C"_ustr, "sunyeopseo"},
+            {u"\uC36C\uBC31\uC1A1"_ustr, "sunbaeksong"},
+            {u"hy\uC5FD\uC11Cl"_ustr, "hypostlight"},
+            {u"hy\uC5FD\uC11C"_ustr, "hypost"},
+            {u"\uD734\uBA3C\uB9E4\uC9C1\uCCB4"_ustr, "magicr"},
+            {u"\uC36C\uD06C\uB9AC\uC2A4\uD0C8"_ustr, "suncrystal"},
+            {u"\uC36C\uC0D8\uBB3C"_ustr, "sunsaemmul"},
+            {u"hy\uC595\uC740\uC0D8\uBB3Cm"_ustr, "hyshortsamulmedium"},
+            {u"hy\uC595\uC740\uC0D8\uBB3C"_ustr, "hyshortsamul"},
+            {u"\uD55C\uCEF4\uBC14\uD0D5"_ustr, "haansoftbatang"},
+            {u"\uD55C\uCEF4\uB3CB\uC6C0"_ustr, "haansoftdotum"},
+            {u"\uD55C\uC591\uD574\uC11C"_ustr, "hyhaeseo"},
+            {u"md\uC194\uCCB4"_ustr, "mdsol"},
+            {u"md\uAC1C\uC131\uCCB4"_ustr, "mdgaesung"},
+            {u"md\uC544\uD2B8\uCCB4"_ustr, "mdart"},
+            {u"md\uC544\uB871\uCCB4"_ustr, "mdalong"},
+            {u"md\uC774\uC19D\uCCB4"_ustr, "mdeasop"},
+            {u"hg\uFF7A\uFF9E\uFF7C\uFF6F\uFF78e"_ustr, "hggothice"},
+            {u"hgp\uFF7A\uFF9E\uFF7C\uFF6F\uFF78e"_ustr, "hgpgothice"},
+            {u"hgs\uFF7A\uFF9E\uFF7C\uFF6F\uFF78e"_ustr, "hgsgothice"},
+            {u"hg\uFF7A\uFF9E\uFF7C\uFF6F\uFF78m"_ustr, "hggothicm"},
+            {u"hgp\uFF7A\uFF9E\uFF7C\uFF6F\uFF78m"_ustr, "hgpgothicm"},
+            {u"hgs\uFF7A\uFF9E\uFF7C\uFF6F\uFF78m"_ustr, "hgsgothicm"},
+            {u"hg\u884C\u66F8\u4F53"_ustr, "hggyoshotai"},
+            {u"hgp\u884C\u66F8\u4F53"_ustr, "hgpgyoshotai"},
+            {u"hgs\u884C\u66F8\u4F53"_ustr, "hgsgyoshotai"},
+            {u"hg\u6559\u79D1\u66F8\u4F53"_ustr, "hgkyokashotai"},
+            {u"hgp\u6559\u79D1\u66F8\u4F53"_ustr, "hgpkyokashotai"},
+            {u"hgs\u6559\u79D1\u66F8\u4F53"_ustr, "hgskyokashotai"},
+            {u"hg\u660E\u671Db"_ustr, "hgminchob"},
+            {u"hgp\u660E\u671Db"_ustr, "hgpminchob"},
+            {u"hgs\u660E\u671Db"_ustr, "hgsminchob"},
+            {u"hg\u660E\u671De"_ustr, "hgminchoe"},
+            {u"hgp\u660E\u671De"_ustr, "hgpminchoe"},
+            {u"hgs\u660E\u671De"_ustr, "hgsminchoe"},
+            {u"hg\u5275\u82F1\u89D2\uFF8E\uFF9F\uFF6F\uFF8C\uFF9F\u4F53"_ustr, "hgsoeikakupoptai"},
+            {u"hgp\u5275\u82F1\u89D2\uFF8E\uFF9F\uFF6F\uFF8C\uFF9F\u4F53"_ustr, "hgpsoeikakupopta"},
+            {u"hgs\u5275\u82F1\u89D2\uFF8E\uFF9F\uFF6F\uFF8C\uFF9F\u4F53"_ustr, "hgssoeikakupopta"},
+            {u"hg\u5275\u82F1\uFF8C\uFF9F\uFF9A\uFF7E\uFF9E\uFF9D\uFF7Deb"_ustr,
+             "hgsoeipresenceeb"},
+            {u"hgp\u5275\u82F1\uFF8C\uFF9F\uFF9A\uFF7E\uFF9E\uFF9D\uFF7Deb"_ustr,
+             "hgpsoeipresenceeb"},
+            {u"hgs\u5275\u82F1\uFF8C\uFF9F\uFF9A\uFF7E\uFF9E\uFF9D\uFF7Deb"_ustr,
+             "hgssoeipresenceeb"},
+            {u"hg\u5275\u82F1\u89D2\uFF7A\uFF9E\uFF7C\uFF6F\uFF78ub"_ustr, "hgsoeikakugothicub"},
+            {u"hgp\u5275\u82F1\u89D2\uFF7A\uFF9E\uFF7C\uFF6F\uFF78ub"_ustr, "hgpsoeikakugothicub"},
+            {u"hgs\u5275\u82F1\u89D2\uFF7A\uFF9E\uFF7C\uFF6F\uFF78ub"_ustr, "hgssoeikakugothicub"},
+            {u"hg\u6B63\u6977\u66F8\u4F53-pro"_ustr, "hgseikaishotaipro"},
+            {u"hg\u4E38\uFF7A\uFF9E\uFF7C\uFF6F\uFF78-pro"_ustr, "hgmarugothicmpro"},
+            {u"\u30D2\u30E9\u30AE\u30CE\u660E\u671Dpro"_ustr, "hiraginominchopro"},
+            {u"\u30D2\u30E9\u30AE\u30CE\u660E\u671Dpron"_ustr, "hiraginominchopron"},
+            {u"\u30D2\u30E9\u30AE\u30CE\u89D2\u30B4\u30B7\u30C3\u30AF"_ustr, "hiraginosans"},
+            {u"\u30D2\u30E9\u30AE\u30CE\u89D2\u30B4pro"_ustr, "hiraginokakugothicpro"},
+            {u"\u30D2\u30E9\u30AE\u30CE\u89D2\u30B4pron"_ustr, "hiraginokakugothicpron"},
+            {u"\u30D2\u30E9\u30AE\u30CE\u4E38\u30B4pro"_ustr, "hiraginomarugothicpro"},
+            {u"\u30D2\u30E9\u30AE\u30CE\u4E38\u30B4pron"_ustr, "hiraginomarugothicpron"},
+            {u"\u6E38\u30B4\u30B7\u30C3\u30AF"_ustr, "yugothic"},
+            {u"\u6E38\u30B4\u30B7\u30C3\u30AF\u4F53"_ustr, "yugothictai"},
+            {u"\u6E38\u660E\u671D"_ustr, "yumincho"},
+            {u"\u6E38\u660E\u671D\u4F53"_ustr, "yuminchotai"},
+            {u"\u6E90\u30CE\u89D2\u30B4\u30B7\u30C3\u30AF"_ustr, "sourcehansans"},
+            {u"\u6E90\u30CE\u89D2\u30B4\u30B7\u30C3\u30AFjp"_ustr, "sourcehansansjp"},
+            {u"\u6E90\u30CE\u89D2\u30B4\u30B7\u30C3\u30AFhw"_ustr, "sourcehansanshw"},
+            {u"\u6E90\u30CE\u660E\u671D"_ustr, "sourcehanserif"},
+            {u"\u6E90\u30CE\u660E\u671Djp"_ustr, "sourcehanserifjp"},
+            {u"ipamj\u660E\u671D"_ustr, "ipamjmincho"},
+            {u"ipaex\u30B4\u30B7\u30C3\u30AF"_ustr, "ipaexgothic"},
+            {u"ipaex\u660E\u671D"_ustr, "ipaexmimcho"}};
 
         FontNameDictionary::const_iterator it = aDictionary.find( rNameStr );
         if( it != aDictionary.end() )
@@ -509,11 +347,10 @@ std::u16string_view GetNextFontToken( std::u16string_view rTokenStr, sal_Int32& 
 
 static bool ImplIsFontToken( std::u16string_view rName, std::u16string_view rToken )
 {
-    OUString      aTempName;
     sal_Int32  nIndex = 0;
     do
     {
-        aTempName = GetNextFontToken( rName, nIndex );
+        std::u16string_view aTempName = GetNextFontToken( rName, nIndex );
         if ( rToken == aTempName )
             return true;
     }
@@ -572,9 +409,9 @@ OUString GetSubsFontName( std::u16string_view rName, SubsFontFlags nFlags )
 bool IsOpenSymbol(std::u16string_view rFontName)
 {
     sal_Int32 nIndex = 0;
-    OUString sFamilyNm(GetNextFontToken(rFontName, nIndex));
-    return (sFamilyNm.equalsIgnoreAsciiCase("starsymbol") ||
-        sFamilyNm.equalsIgnoreAsciiCase("opensymbol"));
+    std::u16string_view sFamilyNm(GetNextFontToken(rFontName, nIndex));
+    return (o3tl::equalsIgnoreAsciiCase(sFamilyNm, "starsymbol") ||
+        o3tl::equalsIgnoreAsciiCase(sFamilyNm, "opensymbol"));
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

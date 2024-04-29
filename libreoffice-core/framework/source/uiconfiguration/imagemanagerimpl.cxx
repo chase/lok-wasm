@@ -45,6 +45,7 @@
 #include <vcl/filter/PngImageReader.hxx>
 #include <vcl/filter/PngImageWriter.hxx>
 #include <memory>
+#include <unordered_set>
 
 using ::com::sun::star::uno::Sequence;
 using ::com::sun::star::uno::XInterface;
@@ -63,8 +64,8 @@ using namespace ::cppu;
 
 const sal_Int16 MAX_IMAGETYPE_VALUE       = css::ui::ImageType::SIZE_32;
 
-constexpr OUStringLiteral IMAGE_FOLDER = u"images";
-constexpr OUStringLiteral BITMAPS_FOLDER = u"Bitmaps";
+constexpr OUString IMAGE_FOLDER = u"images"_ustr;
+constexpr OUString BITMAPS_FOLDER = u"Bitmaps"_ustr;
 
 const o3tl::enumarray<vcl::ImageType, const char*> IMAGELIST_XML_FILE =
 {
@@ -627,7 +628,7 @@ Sequence< OUString > ImageManagerImpl::getAllImageNames( ::sal_Int16 nImageType 
     if ( m_bDisposed )
         throw DisposedException();
 
-    ImageNameMap aImageCmdNameMap;
+    std::unordered_set< OUString > aImageCmdNames;
 
     vcl::ImageType nIndex = implts_convertImageTypeToIndex( nImageType );
 
@@ -639,12 +640,12 @@ Sequence< OUString > ImageManagerImpl::getAllImageNames( ::sal_Int16 nImageType 
         const std::vector< OUString >& rGlobalImageNameVector = rGlobalImageList->getImageCommandNames();
         const sal_uInt32 nGlobalCount = rGlobalImageNameVector.size();
         for ( i = 0; i < nGlobalCount; i++ )
-            aImageCmdNameMap.emplace( rGlobalImageNameVector[i], true );
+            aImageCmdNames.insert( rGlobalImageNameVector[i] );
 
         const std::vector< OUString >& rModuleImageNameVector = implts_getDefaultImageList()->getImageCommandNames();
         const sal_uInt32 nModuleCount = rModuleImageNameVector.size();
         for ( i = 0; i < nModuleCount; i++ )
-            aImageCmdNameMap.emplace( rModuleImageNameVector[i], true );
+            aImageCmdNames.insert( rModuleImageNameVector[i] );
     }
 
     ImageList* pImageList = implts_getUserImageList(nIndex);
@@ -652,9 +653,9 @@ Sequence< OUString > ImageManagerImpl::getAllImageNames( ::sal_Int16 nImageType 
     pImageList->GetImageNames( rUserImageNames );
     const sal_uInt32 nUserCount = rUserImageNames.size();
     for ( i = 0; i < nUserCount; i++ )
-        aImageCmdNameMap.emplace( rUserImageNames[i], true );
+        aImageCmdNames.insert( rUserImageNames[i] );
 
-    return comphelper::mapKeysToSequence( aImageCmdNameMap );
+    return comphelper::containerToSequence( aImageCmdNames );
 }
 
 bool ImageManagerImpl::hasImage( ::sal_Int16 nImageType, const OUString& aCommandURL )
@@ -1169,6 +1170,7 @@ void ImageManagerImpl::implts_notifyContainerListener( const ConfigurationEvent&
 {
     std::unique_lock aGuard(m_mutex);
     comphelper::OInterfaceIteratorHelper4 pIterator( aGuard, m_aConfigListeners );
+    aGuard.unlock();
     while ( pIterator.hasMoreElements() )
     {
         try
@@ -1188,7 +1190,9 @@ void ImageManagerImpl::implts_notifyContainerListener( const ConfigurationEvent&
         }
         catch( const css::uno::RuntimeException& )
         {
+            aGuard.lock();
             pIterator.remove(aGuard);
+            aGuard.unlock();
         }
     }
 }

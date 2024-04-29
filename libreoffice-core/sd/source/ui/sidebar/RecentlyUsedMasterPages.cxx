@@ -33,7 +33,6 @@
 #include <osl/doublecheckedlocking.h>
 #include <osl/getglobalmutex.hxx>
 
-using namespace ::std;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 
@@ -116,8 +115,8 @@ void RecentlyUsedMasterPages::LoadPersistentValues()
         if ( ! xSet.is())
             return;
 
-        static const OUStringLiteral sURLMemberName(u"URL");
-        static const OUStringLiteral sNameMemberName(u"Name");
+        static constexpr OUStringLiteral sURLMemberName(u"URL");
+        static constexpr OUStringLiteral sNameMemberName(u"Name");
         OUString sURL;
         OUString sName;
 
@@ -184,8 +183,8 @@ void RecentlyUsedMasterPages::SavePersistentValues()
             xSet->removeByName (rKey);
 
         // Fill it with the URLs of this object.
-        static const OUStringLiteral sURLMemberName(u"URL");
-        static const OUStringLiteral sNameMemberName(u"Name");
+        static constexpr OUStringLiteral sURLMemberName(u"URL");
+        static constexpr OUStringLiteral sNameMemberName(u"Name");
         Any aValue;
         Reference<lang::XSingleServiceFactory> xChildFactory (
             xSet, UNO_QUERY);

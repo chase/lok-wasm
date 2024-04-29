@@ -24,7 +24,9 @@
 #include <o3tl/string_view.hxx>
 #include <svl/eitem.hxx>
 #include <svl/intitem.hxx>
+#include <dialmgr.hxx>
 #include "optsave.hxx"
+#include <strings.hrc>
 #include <treeopt.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <comphelper/processfactory.hxx>
@@ -38,11 +40,11 @@
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/docfilt.hxx>
-#include <svtools/restartdialog.hxx>
 #include <unotools/optionsdlg.hxx>
 #include <osl/diagnose.h>
 #include <comphelper/diagnose_ex.hxx>
 #include <officecfg/Office/Recovery.hxx>
+#include <unotools/confignode.hxx>
 
 #include <sfx2/fcontnr.hxx>
 
@@ -78,18 +80,33 @@ SvxSaveTabPage_Impl::SvxSaveTabPage_Impl() : bInitialized( false )
 SvxSaveTabPage::SvxSaveTabPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rCoreSet)
     : SfxTabPage( pPage, pController, "cui/ui/optsavepage.ui", "OptSavePage", &rCoreSet )
     , pImpl(new SvxSaveTabPage_Impl)
+    , m_xLoadViewPosAnyUserCB(m_xBuilder->weld_check_button("load_anyuser"))
+    , m_xLoadViewPosAnyUserImg(m_xBuilder->weld_widget("lockload_anyuser"))
     , m_xLoadUserSettingsCB(m_xBuilder->weld_check_button("load_settings"))
+    , m_xLoadUserSettingsImg(m_xBuilder->weld_widget("lockload_settings"))
     , m_xLoadDocPrinterCB(m_xBuilder->weld_check_button("load_docprinter"))
+    , m_xLoadDocPrinterImg(m_xBuilder->weld_widget("lockload_docprinter"))
     , m_xDocInfoCB(m_xBuilder->weld_check_button("docinfo"))
+    , m_xDocInfoImg(m_xBuilder->weld_widget("lockdocinfo"))
     , m_xBackupCB(m_xBuilder->weld_check_button("backup"))
+    , m_xBackupImg(m_xBuilder->weld_widget("lockbackup"))
+    , m_xBackupIntoDocumentFolderCB(m_xBuilder->weld_check_button("backupintodocumentfolder"))
+    , m_xBackupIntoDocumentFolderImg(m_xBuilder->weld_widget("lockbackupintodoc"))
     , m_xAutoSaveCB(m_xBuilder->weld_check_button("autosave"))
+    , m_xAutoSaveImg(m_xBuilder->weld_widget("lockautosave"))
     , m_xAutoSaveEdit(m_xBuilder->weld_spin_button("autosave_spin"))
     , m_xMinuteFT(m_xBuilder->weld_label("autosave_mins"))
     , m_xUserAutoSaveCB(m_xBuilder->weld_check_button("userautosave"))
+    , m_xUserAutoSaveImg(m_xBuilder->weld_widget("lockuserautosave"))
     , m_xRelativeFsysCB(m_xBuilder->weld_check_button("relative_fsys"))
+    , m_xRelativeFsysImg(m_xBuilder->weld_widget("lockrelative_fsys"))
     , m_xRelativeInetCB(m_xBuilder->weld_check_button("relative_inet"))
+    , m_xRelativeInetImg(m_xBuilder->weld_widget("lockrelative_inet"))
     , m_xODFVersionLB(m_xBuilder->weld_combo_box("odfversion"))
+    , m_xODFVersionFT(m_xBuilder->weld_label("label5"))
+    , m_xODFVersionImg(m_xBuilder->weld_widget("lockodfversion"))
     , m_xWarnAlienFormatCB(m_xBuilder->weld_check_button("warnalienformat"))
+    , m_xWarnAlienFormatImg(m_xBuilder->weld_widget("lockwarnalienformat"))
     , m_xDocTypeLB(m_xBuilder->weld_combo_box("doctype"))
     , m_xSaveAsFT(m_xBuilder->weld_label("saveas_label"))
     , m_xSaveAsLB(m_xBuilder->weld_combo_box("saveas"))
@@ -97,6 +114,7 @@ SvxSaveTabPage::SvxSaveTabPage(weld::Container* pPage, weld::DialogController* p
     , m_xODFWarningFT(m_xBuilder->weld_label("odfwarning_label"))
 {
     m_xAutoSaveEdit->set_max_length(2);
+    m_xBackupIntoDocumentFolderCB->set_accessible_description(CuiResId(RID_CUISTR_A11Y_DESC_BACKUP));
 
     m_xODFVersionLB->set_id(0, OUString::number(SvtSaveOptions::ODFVER_011)); // 1.0/1.1
     m_xODFVersionLB->set_id(1, OUString::number(SvtSaveOptions::ODFVER_012)); // 1.2
@@ -105,15 +123,23 @@ SvxSaveTabPage::SvxSaveTabPage(weld::Container* pPage, weld::DialogController* p
     m_xODFVersionLB->set_id(4, OUString::number(SvtSaveOptions::ODFVER_013)); // 1.3
     m_xODFVersionLB->set_id(5, OUString::number(SvtSaveOptions::ODFVER_LATEST)); // 1.3 Extended (recommended)
 
-    m_xDocTypeLB->set_id(0, OUString::number(APP_WRITER)       );
-    m_xDocTypeLB->set_id(1, OUString::number(APP_WRITER_WEB)   );
-    m_xDocTypeLB->set_id(2, OUString::number(APP_WRITER_GLOBAL));
-    m_xDocTypeLB->set_id(3, OUString::number(APP_CALC)         );
-    m_xDocTypeLB->set_id(4, OUString::number(APP_IMPRESS)      );
-    m_xDocTypeLB->set_id(5, OUString::number(APP_DRAW)         );
-    m_xDocTypeLB->set_id(6, OUString::number(APP_MATH)         );
+    auto aFilterClassesNode = utl::OConfigurationTreeRoot::createWithComponentContext(
+            comphelper::getProcessComponentContext(),
+            "org.openoffice.Office.UI/FilterClassification/GlobalFilters/Classes",
+            -1,
+            utl::OConfigurationTreeRoot::CM_READONLY
+        );
+
+    m_xDocTypeLB->append(OUString::number(APP_WRITER), aFilterClassesNode.getNodeValue("com.sun.star.text.TextDocument/DisplayName").get<OUString>());
+    m_xDocTypeLB->append(OUString::number(APP_WRITER_WEB), aFilterClassesNode.getNodeValue("com.sun.star.text.WebDocument/DisplayName").get<OUString>());
+    m_xDocTypeLB->append(OUString::number(APP_WRITER_GLOBAL), aFilterClassesNode.getNodeValue("com.sun.star.text.GlobalDocument/DisplayName").get<OUString>());
+    m_xDocTypeLB->append(OUString::number(APP_CALC), aFilterClassesNode.getNodeValue("com.sun.star.sheet.SpreadsheetDocument/DisplayName").get<OUString>());
+    m_xDocTypeLB->append(OUString::number(APP_IMPRESS), aFilterClassesNode.getNodeValue("com.sun.star.presentation.PresentationDocument/DisplayName").get<OUString>());
+    m_xDocTypeLB->append(OUString::number(APP_DRAW), aFilterClassesNode.getNodeValue("com.sun.star.drawing.DrawingDocument/DisplayName").get<OUString>());
+    m_xDocTypeLB->append(OUString::number(APP_MATH), aFilterClassesNode.getNodeValue("com.sun.star.formula.FormulaProperties/DisplayName").get<OUString>());
 
     m_xAutoSaveCB->connect_toggled( LINK( this, SvxSaveTabPage, AutoClickHdl_Impl ) );
+    m_xBackupCB->connect_toggled(LINK(this, SvxSaveTabPage, BackupClickHdl_Impl));
 
     SvtModuleOptions aModuleOpt;
     if ( !aModuleOpt.IsModuleInstalled( SvtModuleOptions::EModule::MATH ) )
@@ -206,6 +232,7 @@ void SvxSaveTabPage::DetectHiddenControls()
     {
         // hide controls of "Backup"
         m_xBackupCB->hide();
+        m_xBackupIntoDocumentFolderCB->hide();
     }
 
     if ( aOptionsDlgOpt.IsOptionHidden( u"AutoSave", CFG_PAGE_AND_GROUP ) )
@@ -224,10 +251,40 @@ void SvxSaveTabPage::DetectHiddenControls()
 
 }
 
+OUString SvxSaveTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label1", "label2", "autosave_mins", "label3",
+                          "label5", "label6", "saveas_label",  "odfwarning_label" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[]
+        = { "load_settings", "load_docprinter", "load_anyuser",   "autosave",
+            "userautosave",  "docinfo",         "backup",         "backupintodocumentfolder",
+            "relative_fsys", "relative_inet",   "warnalienformat" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
+}
+
 bool SvxSaveTabPage::FillItemSet( SfxItemSet* rSet )
 {
     auto xChanges = comphelper::ConfigurationChanges::create();
-    bool bModified = false, bRequestRestart = false;
+    bool bModified = false;
+    if (m_xLoadViewPosAnyUserCB->get_state_changed_from_saved())
+    {
+        officecfg::Office::Common::Load::ViewPositionForAnyUser::set(m_xLoadViewPosAnyUserCB->get_active(), xChanges);
+    }
     if(m_xLoadUserSettingsCB->get_state_changed_from_saved())
         officecfg::Office::Common::Load::UserDefinedSettings::set(m_xLoadUserSettingsCB->get_active(), xChanges);
 
@@ -253,11 +310,19 @@ bool SvxSaveTabPage::FillItemSet( SfxItemSet* rSet )
         bModified = true;
     }
 
+    if (m_xBackupIntoDocumentFolderCB->get_sensitive()
+        && m_xBackupIntoDocumentFolderCB->get_state_changed_from_saved())
+    {
+        rSet->Put(
+            SfxBoolItem(SID_ATTR_BACKUP_BESIDE_ORIGINAL, m_xBackupIntoDocumentFolderCB->get_active()));
+        bModified = true;
+    }
+
     if ( m_xAutoSaveCB->get_state_changed_from_saved() )
     {
         rSet->Put( SfxBoolItem( SID_ATTR_AUTOSAVE,
                                m_xAutoSaveCB->get_active() ) );
-        bModified = bRequestRestart = true;
+        bModified = true;
     }
     if ( m_xWarnAlienFormatCB->get_state_changed_from_saved() )
     {
@@ -270,7 +335,7 @@ bool SvxSaveTabPage::FillItemSet( SfxItemSet* rSet )
     {
         rSet->Put( SfxUInt16Item( SID_ATTR_AUTOSAVEMINUTE,
                                  static_cast<sal_uInt16>(m_xAutoSaveEdit->get_value()) ) );
-        bModified = bRequestRestart = true;
+        bModified = true;
     }
 
     if ( m_xUserAutoSaveCB->get_state_changed_from_saved() )
@@ -324,14 +389,6 @@ bool SvxSaveTabPage::FillItemSet( SfxItemSet* rSet )
         aModuleOpt.SetFactoryDefaultFilter(SvtModuleOptions::EFactory::WRITERGLOBAL, pImpl->aDefaultArr[APP_WRITER_GLOBAL]);
 
     xChanges->commit();
-
-    if (bRequestRestart)
-    {
-        OfaTreeOptionsDialog* pParentDlg(static_cast<OfaTreeOptionsDialog*>(GetDialogController()));
-        if (pParentDlg)
-            pParentDlg->SetNeedsRestart(svtools::RESTART_REASON_SAVE);
-    }
-
     return bModified;
 }
 
@@ -371,12 +428,20 @@ static bool isODFFormat( std::u16string_view sFilter )
 
 void SvxSaveTabPage::Reset( const SfxItemSet* )
 {
+    m_xLoadViewPosAnyUserCB->set_active(officecfg::Office::Common::Load::ViewPositionForAnyUser::get());
+    m_xLoadViewPosAnyUserCB->save_state();
+    m_xLoadViewPosAnyUserCB->set_sensitive(!officecfg::Office::Common::Load::ViewPositionForAnyUser::isReadOnly());
+    m_xLoadViewPosAnyUserImg->set_visible(officecfg::Office::Common::Load::ViewPositionForAnyUser::isReadOnly());
+
     m_xLoadUserSettingsCB->set_active(officecfg::Office::Common::Load::UserDefinedSettings::get());
     m_xLoadUserSettingsCB->save_state();
     m_xLoadUserSettingsCB->set_sensitive(!officecfg::Office::Common::Load::UserDefinedSettings::isReadOnly());
+    m_xLoadUserSettingsImg->set_visible(officecfg::Office::Common::Load::UserDefinedSettings::isReadOnly());
+
     m_xLoadDocPrinterCB->set_active( officecfg::Office::Common::Save::Document::LoadPrinter::get() );
     m_xLoadDocPrinterCB->save_state();
     m_xLoadDocPrinterCB->set_sensitive(!officecfg::Office::Common::Save::Document::LoadPrinter::isReadOnly());
+    m_xLoadDocPrinterImg->set_visible(officecfg::Office::Common::Save::Document::LoadPrinter::isReadOnly());
 
     if ( !pImpl->bInitialized )
     {
@@ -406,7 +471,7 @@ void SvxSaveTabPage::Reset( const SfxItemSet* )
                         case  APP_IMPRESS       : sReplace = "com.sun.star.presentation.PresentationDocument";break;
                         case  APP_DRAW          : sReplace = "com.sun.star.drawing.DrawingDocument";break;
                         case  APP_MATH          : sReplace = "com.sun.star.formula.FormulaProperties";break;
-                        default: OSL_FAIL("illegal user data");
+                        default: SAL_WARN("cui.options", "illegal user data");
                     }
                     sCommand = sCommand.replaceFirst("%1", sReplace);
                     Reference< XEnumeration > xList = xQuery->createSubSetEnumerationByQuery(sCommand);
@@ -426,7 +491,23 @@ void SvxSaveTabPage::Reset( const SfxItemSet* )
                     pImpl->aODFArr[nData] = lODFList;
                 }
             }
-            m_xDocTypeLB->set_active(0);
+            OUString sModule = OfaTreeOptionsDialog::getCurrentFactory_Impl(GetFrame());
+            sal_Int32 docId = 0;
+            if (sModule == "com.sun.star.text.TextDocument")
+                docId = APP_WRITER;
+            else if (sModule == "com.sun.star.text.WebDocument")
+                docId = APP_WRITER_WEB;
+            else if (sModule == "com.sun.star.text.GlobalDocument")
+                docId = APP_WRITER_GLOBAL;
+            else if (sModule == "com.sun.star.sheet.SpreadsheetDocument")
+                docId = APP_CALC;
+            else if (sModule == "com.sun.star.presentation.PresentationDocument")
+                docId = APP_IMPRESS;
+            else if (sModule == "com.sun.star.drawing.DrawingDocument")
+                docId = APP_DRAW;
+            else if (sModule == "com.sun.star.formula.FormulaProperties")
+                docId = APP_MATH;
+            m_xDocTypeLB->set_active_id(OUString::number(docId));
             FilterHdl_Impl(*m_xDocTypeLB);
         }
         catch(Exception const &)
@@ -439,38 +520,56 @@ void SvxSaveTabPage::Reset( const SfxItemSet* )
 
     m_xDocInfoCB->set_active(officecfg::Office::Common::Save::Document::EditProperty::get());
     m_xDocInfoCB->set_sensitive(!officecfg::Office::Common::Save::Document::EditProperty::isReadOnly());
+    m_xDocInfoImg->set_visible(officecfg::Office::Common::Save::Document::EditProperty::isReadOnly());
 
     m_xBackupCB->set_active(officecfg::Office::Common::Save::Document::CreateBackup::get());
     m_xBackupCB->set_sensitive(!officecfg::Office::Common::Save::Document::CreateBackup::isReadOnly());
+    m_xBackupImg->set_visible(officecfg::Office::Common::Save::Document::CreateBackup::isReadOnly());
 
-    m_xAutoSaveCB->set_active(officecfg::Office::Common::Save::Document::AutoSave::get());
-    m_xAutoSaveCB->set_sensitive(!officecfg::Office::Common::Save::Document::AutoSave::isReadOnly());
+    m_xBackupIntoDocumentFolderCB->set_active(
+        officecfg::Office::Common::Save::Document::BackupIntoDocumentFolder::get());
+    m_xBackupIntoDocumentFolderCB->set_sensitive(
+        !officecfg::Office::Common::Save::Document::BackupIntoDocumentFolder::isReadOnly()
+        && m_xBackupCB->get_active());
+    m_xBackupIntoDocumentFolderImg->set_visible(
+        officecfg::Office::Common::Save::Document::BackupIntoDocumentFolder::isReadOnly());
+
+    m_xAutoSaveCB->set_active(officecfg::Office::Recovery::AutoSave::Enabled::get());
+    m_xAutoSaveCB->set_sensitive(!officecfg::Office::Recovery::AutoSave::Enabled::isReadOnly());
+    m_xAutoSaveImg->set_visible(officecfg::Office::Recovery::AutoSave::Enabled::isReadOnly());
 
     m_xUserAutoSaveCB->set_active(officecfg::Office::Recovery::AutoSave::UserAutoSaveEnabled::get());
     m_xUserAutoSaveCB->set_sensitive(!officecfg::Office::Recovery::AutoSave::UserAutoSaveEnabled::isReadOnly());
+    m_xUserAutoSaveImg->set_visible(officecfg::Office::Recovery::AutoSave::UserAutoSaveEnabled::isReadOnly());
 
     m_xWarnAlienFormatCB->set_active(officecfg::Office::Common::Save::Document::WarnAlienFormat::get());
     m_xWarnAlienFormatCB->set_sensitive(!officecfg::Office::Common::Save::Document::WarnAlienFormat::isReadOnly());
+    m_xWarnAlienFormatImg->set_visible(officecfg::Office::Common::Save::Document::WarnAlienFormat::isReadOnly());
 
-    m_xAutoSaveEdit->set_value(officecfg::Office::Common::Save::Document::AutoSaveTimeIntervall::get());
-    m_xAutoSaveEdit->set_sensitive(!officecfg::Office::Common::Save::Document::AutoSaveTimeIntervall::isReadOnly());
+    m_xAutoSaveEdit->set_value(officecfg::Office::Recovery::AutoSave::TimeIntervall::get());
+    m_xAutoSaveEdit->set_sensitive(!officecfg::Office::Recovery::AutoSave::TimeIntervall::isReadOnly());
 
     // save relatively
     m_xRelativeFsysCB->set_active(officecfg::Office::Common::Save::URL::FileSystem::get());
     m_xRelativeFsysCB->set_sensitive(!officecfg::Office::Common::Save::URL::FileSystem::isReadOnly());
+    m_xRelativeFsysImg->set_visible(officecfg::Office::Common::Save::URL::FileSystem::isReadOnly());
 
     m_xRelativeInetCB->set_active(officecfg::Office::Common::Save::URL::Internet::get());
     m_xRelativeInetCB->set_sensitive(!officecfg::Office::Common::Save::URL::Internet::isReadOnly());
+    m_xRelativeInetImg->set_visible(officecfg::Office::Common::Save::URL::Internet::isReadOnly());
 
     sal_Int32 nDefaultVersion = GetODFDefaultVersion();
     m_xODFVersionLB->set_active_id(OUString::number(nDefaultVersion));
     m_xODFVersionLB->set_sensitive(!officecfg::Office::Common::Save::ODF::DefaultVersion::isReadOnly());
+    m_xODFVersionFT->set_sensitive(!officecfg::Office::Common::Save::ODF::DefaultVersion::isReadOnly());
+    m_xODFVersionImg->set_visible(officecfg::Office::Common::Save::ODF::DefaultVersion::isReadOnly());
 
     AutoClickHdl_Impl(*m_xAutoSaveCB);
     ODFVersionHdl_Impl(*m_xODFVersionLB);
 
     m_xDocInfoCB->save_state();
     m_xBackupCB->save_state();
+    m_xBackupIntoDocumentFolderCB->save_state();
     m_xWarnAlienFormatCB->save_state();
     m_xAutoSaveCB->save_state();
     m_xAutoSaveEdit->save_value();
@@ -489,9 +588,9 @@ IMPL_LINK(SvxSaveTabPage, AutoClickHdl_Impl, weld::Toggleable&, rBox, void)
 
     if (m_xAutoSaveCB->get_active())
     {
-        m_xAutoSaveEdit->set_sensitive(true);
-        m_xMinuteFT->set_sensitive(true);
-        m_xUserAutoSaveCB->set_sensitive(true);
+        m_xAutoSaveEdit->set_sensitive(!officecfg::Office::Recovery::AutoSave::Enabled::isReadOnly());
+        m_xMinuteFT->set_sensitive(!officecfg::Office::Recovery::AutoSave::Enabled::isReadOnly());
+        m_xUserAutoSaveCB->set_sensitive(!officecfg::Office::Recovery::AutoSave::UserAutoSaveEnabled::isReadOnly());
     }
     else
     {
@@ -499,6 +598,12 @@ IMPL_LINK(SvxSaveTabPage, AutoClickHdl_Impl, weld::Toggleable&, rBox, void)
         m_xMinuteFT->set_sensitive(false);
         m_xUserAutoSaveCB->set_sensitive(false);
     }
+}
+
+IMPL_LINK_NOARG(SvxSaveTabPage, BackupClickHdl_Impl, weld::Toggleable&, void)
+{
+    m_xBackupIntoDocumentFolderCB->set_sensitive(m_xBackupCB->get_active() &&
+        !officecfg::Office::Common::Save::Document::BackupIntoDocumentFolder::isReadOnly());
 }
 
 static OUString lcl_ExtracUIName(const Sequence<PropertyValue> &rProperties, std::u16string_view rExtension)

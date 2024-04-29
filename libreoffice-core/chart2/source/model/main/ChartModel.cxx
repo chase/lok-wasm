@@ -35,7 +35,9 @@
 #include <ChartView.hxx>
 #include <PopupRequest.hxx>
 #include <ModifyListenerHelper.hxx>
+#include <RangeHighlighter.hxx>
 #include <Diagram.hxx>
+#include <comphelper/dumpxmltostring.hxx>
 
 #include <com/sun/star/chart/ChartDataRowSource.hpp>
 #include <com/sun/star/chart2/data/XPivotTableDataProvider.hpp>
@@ -73,10 +75,10 @@ using namespace ::chart::CloneHelper;
 
 namespace
 {
-constexpr OUStringLiteral lcl_aGDIMetaFileMIMEType(
-    u"application/x-openoffice-gdimetafile;windows_formatname=\"GDIMetaFile\"");
-constexpr OUStringLiteral lcl_aGDIMetaFileMIMETypeHighContrast(
-    u"application/x-openoffice-highcontrast-gdimetafile;windows_formatname=\"GDIMetaFile\"");
+constexpr OUString lcl_aGDIMetaFileMIMEType(
+    u"application/x-openoffice-gdimetafile;windows_formatname=\"GDIMetaFile\""_ustr);
+constexpr OUString lcl_aGDIMetaFileMIMETypeHighContrast(
+    u"application/x-openoffice-highcontrast-gdimetafile;windows_formatname=\"GDIMetaFile\""_ustr);
 
 } // anonymous namespace
 
@@ -150,22 +152,27 @@ ChartModel::ChartModel( const ChartModel & rOther )
         m_xOldModelAgg->setDelegator( *this );
 
         Reference< util::XModifyListener > xListener;
-        Reference< chart2::XTitle > xNewTitle = CreateRefClone< chart2::XTitle >()( rOther.m_xTitle );
+        rtl::Reference< Title > xNewTitle;
+        if ( rOther.m_xTitle )
+            xNewTitle = new Title(*rOther.m_xTitle);
         rtl::Reference< ::chart::Diagram > xNewDiagram;
         if (rOther.m_xDiagram.is())
             xNewDiagram = new ::chart::Diagram( *rOther.m_xDiagram );
         rtl::Reference< ::chart::PageBackground > xNewPageBackground = new PageBackground( *rOther.m_xPageBackground );
-        rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager; // does not implement XCloneable
-        rtl::Reference< ::chart::NameContainer > xXMLNamespaceMap = new NameContainer( *rOther.m_xXMLNamespaceMap );
 
         {
-            MutexGuard aGuard( m_aModelMutex );
-            xListener = this;
-            m_xTitle = xNewTitle;
-            m_xDiagram = xNewDiagram;
-            m_xPageBackground = xNewPageBackground;
-            m_xChartTypeManager = xChartTypeManager;
-            m_xXMLNamespaceMap = xXMLNamespaceMap;
+            rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager; // does not implement XCloneable
+            rtl::Reference< ::chart::NameContainer > xXMLNamespaceMap = new NameContainer( *rOther.m_xXMLNamespaceMap );
+
+            {
+                MutexGuard aGuard( m_aModelMutex );
+                xListener = this;
+                m_xTitle = xNewTitle;
+                m_xDiagram = xNewDiagram;
+                m_xPageBackground = std::move(xNewPageBackground);
+                m_xChartTypeManager = std::move(xChartTypeManager);
+                m_xXMLNamespaceMap = std::move(xXMLNamespaceMap);
+            }
         }
 
         ModifyListenerHelper::addListener( xNewTitle, xListener );
@@ -249,16 +256,11 @@ uno::Reference< frame::XController > ChartModel::impl_getCurrentController()
 
 void ChartModel::impl_notifyCloseListeners()
 {
-    ::comphelper::OInterfaceContainerHelper2* pIC = m_aLifeTimeManager.m_aListenerContainer
-        .getContainer( cppu::UnoType<util::XCloseListener>::get());
-    if( pIC )
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    if( m_aLifeTimeManager.m_aCloseListeners.getLength(aGuard) )
     {
         lang::EventObject aEvent( static_cast< lang::XComponent*>(this) );
-        ::comphelper::OInterfaceIteratorHelper2 aIt( *pIC );
-        while( aIt.hasMoreElements() )
-        {
-            static_cast< util::XCloseListener* >( aIt.next() )->notifyClosing( aEvent );
-        }
+        m_aLifeTimeManager.m_aCloseListeners.notifyEach(aGuard, &util::XCloseListener::notifyClosing, aEvent);
     }
 }
 
@@ -396,7 +398,11 @@ void SAL_CALL ChartModel::disconnectController( const uno::Reference< frame::XCo
     if( m_xCurrentController == xController )
         m_xCurrentController.clear();
 
-    DisposeHelper::DisposeAndClear( m_xRangeHighlighter );
+    if (m_xRangeHighlighter)
+    {
+        m_xRangeHighlighter->dispose();
+        m_xRangeHighlighter.clear();
+    }
     DisposeHelper::DisposeAndClear(m_xPopupRequest);
 }
 
@@ -481,7 +487,11 @@ void SAL_CALL ChartModel::setCurrentController( const uno::Reference< frame::XCo
 
     m_xCurrentController = xController;
 
-    DisposeHelper::DisposeAndClear( m_xRangeHighlighter );
+    if (m_xRangeHighlighter)
+    {
+        m_xRangeHighlighter->dispose();
+        m_xRangeHighlighter.clear();
+    }
     DisposeHelper::DisposeAndClear(m_xPopupRequest);
 }
 
@@ -544,7 +554,7 @@ void SAL_CALL ChartModel::dispose()
     m_xOwnNumberFormatsSupplier.clear();
     m_xChartTypeManager.clear();
     m_xDiagram.clear();
-    DisposeHelper::DisposeAndClear( m_xTitle );
+    m_xTitle.clear();
     m_xPageBackground.clear();
     m_xXMLNamespaceMap.clear();
 
@@ -562,7 +572,11 @@ void SAL_CALL ChartModel::dispose()
     m_aControllers.disposeAndClear( lang::EventObject( static_cast< cppu::OWeakObject * >( this )));
     m_xCurrentController.clear();
 
-    DisposeHelper::DisposeAndClear( m_xRangeHighlighter );
+    if (m_xRangeHighlighter)
+    {
+        m_xRangeHighlighter->dispose();
+        m_xRangeHighlighter.clear();
+    }
     DisposeHelper::DisposeAndClear(m_xPopupRequest);
 
     if( m_xOldModelAgg.is())
@@ -574,7 +588,8 @@ void SAL_CALL ChartModel::addEventListener( const uno::Reference< lang::XEventLi
     if( m_aLifeTimeManager.impl_isDisposedOrClosed() )
         return; //behave passive if already disposed or closed
 
-    m_aLifeTimeManager.m_aListenerContainer.addInterface( cppu::UnoType<lang::XEventListener>::get(), xListener );
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aEventListeners.addInterface( aGuard, xListener );
 }
 
 void SAL_CALL ChartModel::removeEventListener( const uno::Reference< lang::XEventListener > & xListener )
@@ -582,7 +597,8 @@ void SAL_CALL ChartModel::removeEventListener( const uno::Reference< lang::XEven
     if( m_aLifeTimeManager.impl_isDisposedOrClosed(false) )
         return; //behave passive if already disposed or closed
 
-    m_aLifeTimeManager.m_aListenerContainer.removeInterface( cppu::UnoType<lang::XEventListener>::get(), xListener );
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aEventListeners.removeInterface( aGuard, xListener );
 }
 
 // util::XCloseBroadcaster (base of XCloseable)
@@ -596,7 +612,8 @@ void SAL_CALL ChartModel::removeCloseListener( const uno::Reference< util::XClos
     if( m_aLifeTimeManager.impl_isDisposedOrClosed(false) )
         return; //behave passive if already disposed or closed
 
-    m_aLifeTimeManager.m_aListenerContainer.removeInterface( cppu::UnoType<util::XCloseListener>::get(), xListener );
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aCloseListeners.removeInterface( aGuard, xListener );
 }
 
 // util::XCloseable
@@ -876,7 +893,7 @@ Reference< chart2::data::XDataSource > SAL_CALL ChartModel::getUsedData()
 Reference< chart2::data::XRangeHighlighter > SAL_CALL ChartModel::getRangeHighlighter()
 {
     if( ! m_xRangeHighlighter.is())
-        m_xRangeHighlighter.set( ChartModelHelper::createRangeHighlighter( this ));
+        m_xRangeHighlighter = new RangeHighlighter( this );
     return m_xRangeHighlighter;
 }
 
@@ -929,7 +946,20 @@ uno::Reference< chart2::XTitle > SAL_CALL ChartModel::getTitleObject()
     return m_xTitle;
 }
 
-void SAL_CALL ChartModel::setTitleObject( const uno::Reference< chart2::XTitle >& xTitle )
+rtl::Reference< Title > ChartModel::getTitleObject2() const
+{
+    MutexGuard aGuard( m_aModelMutex );
+    return m_xTitle;
+}
+
+void SAL_CALL ChartModel::setTitleObject( const uno::Reference< chart2::XTitle >& xNewTitle )
+{
+    rtl::Reference<Title> xTitle = dynamic_cast<Title*>(xNewTitle.get());
+    assert(!xNewTitle || xTitle);
+    setTitleObject(xTitle);
+}
+
+void ChartModel::setTitleObject( const rtl::Reference< Title >& xTitle )
 {
     {
         MutexGuard aGuard( m_aModelMutex );
@@ -1257,12 +1287,17 @@ uno::Sequence< Reference< chart2::data::XLabeledDataSequence > > SAL_CALL ChartM
 }
 
 //XDumper
-OUString SAL_CALL ChartModel::dump(const OUString& rKind)
+OUString SAL_CALL ChartModel::dump(OUString const & kind)
 {
+    if (kind.isEmpty()) {
+        return comphelper::dumpXmlToString([this](auto writer) { return dumpAsXml(writer); });
+    }
+
+    // kind == "shapes":
     uno::Reference< qa::XDumper > xDumper(
             createInstance( CHART_VIEW_SERVICE_NAME ), uno::UNO_QUERY );
     if (xDumper.is())
-        return xDumper->dump(rKind);
+        return xDumper->dump(kind);
 
     return OUString();
 }

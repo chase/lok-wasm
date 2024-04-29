@@ -722,7 +722,9 @@ bool SdDrawDocument::InsertBookmarkAsPage(
                     }
                 }
 
-                if( bMustRename )
+                // tdf#39519 - rename page if its name is not unique, e.g., if a slide is copied by
+                // ctrl + drag and drop (DND_ACTION_COPY)
+                if (bMustRename || !mpDocSh->IsPageNameUnique(aPgName))
                 {
                     // Page name already in use -> use default name for default and
                     // notes page
@@ -975,17 +977,17 @@ bool SdDrawDocument::InsertBookmarkAsPage(
         {
             for(sal_uInt32 p = nInsertPos; p < sal_uInt32(nInsertPos) + sal_uInt32(nBMSdPageCount); p++)
             {
-                SdPage *pPg = static_cast<SdPage *>( GetPage(p) );
-                for(size_t i = 0; pPg && (i < pPg->GetObjCount()); ++i)
-                {
-                    if(pPg->GetObj(i)->GetStyleSheet())
+                if (SdPage *pPg = static_cast<SdPage *>( GetPage(p) ))
+                    for (const rtl::Reference<SdrObject>& pObj : *pPg)
                     {
-                        OUString aStyleName = pPg->GetObj(i)->GetStyleSheet()->GetName();
-                        SfxStyleSheet *pSheet = lcl_findStyle(aNewGraphicStyles, Concat2View(aStyleName + aRenameStr));
-                        if(pSheet != nullptr)
-                            pPg->GetObj(i)->SetStyleSheet(pSheet, true);
+                        if(pObj->GetStyleSheet())
+                        {
+                            OUString aStyleName = pObj->GetStyleSheet()->GetName();
+                            SfxStyleSheet *pSheet = lcl_findStyle(aNewGraphicStyles, Concat2View(aStyleName + aRenameStr));
+                            if(pSheet != nullptr)
+                                pObj->SetStyleSheet(pSheet, true);
+                        }
                     }
-                }
             }
         }
         catch(...)
@@ -1075,7 +1077,7 @@ bool SdDrawDocument::InsertBookmarkAsObject(
 
                 if (pPage->IsMasterPage())
                 {
-                    pPV = pBMView->ShowSdrPage(pBMView->GetModel()->GetMasterPage(pPage->GetPageNum()));
+                    pPV = pBMView->ShowSdrPage(pBMView->GetModel().GetMasterPage(pPage->GetPageNum()));
                 }
                 else
                 {

@@ -27,6 +27,7 @@
 #include <rtl/strbuf.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/tencinfo.h>
+#include <tools/debug.hxx>
 #include <tools/inetmime.hxx>
 #include <rtl/character.hxx>
 
@@ -139,30 +140,34 @@ void writeUTF8(OStringBuffer & rSink, sal_uInt32 nChar)
     if (nChar < 0x80)
         rSink.append(char(nChar));
     else if (nChar < 0x800)
-        rSink.append(char(nChar >> 6 | 0xC0))
-             .append(char((nChar & 0x3F) | 0x80));
+        rSink.append(OStringChar(char(nChar >> 6 | 0xC0))
+                + OStringChar(char((nChar & 0x3F) | 0x80)));
     else if (nChar < 0x10000)
-        rSink.append(char(nChar >> 12 | 0xE0))
-             .append(char((nChar >> 6 & 0x3F) | 0x80))
-             .append(char((nChar & 0x3F) | 0x80));
+        rSink.append(
+            OStringChar(char(nChar >> 12 | 0xE0))
+             + OStringChar(char((nChar >> 6 & 0x3F) | 0x80))
+             + OStringChar(char((nChar & 0x3F) | 0x80)));
     else if (nChar < 0x200000)
-        rSink.append(char(nChar >> 18 | 0xF0))
-             .append(char((nChar >> 12 & 0x3F) | 0x80))
-             .append(char((nChar >> 6 & 0x3F) | 0x80))
-             .append(char((nChar & 0x3F) | 0x80));
+        rSink.append(
+            OStringChar(char(nChar >> 18 | 0xF0))
+             + OStringChar(char((nChar >> 12 & 0x3F) | 0x80))
+             + OStringChar(char((nChar >> 6 & 0x3F) | 0x80))
+             + OStringChar(char((nChar & 0x3F) | 0x80)));
     else if (nChar < 0x4000000)
-        rSink.append(char(nChar >> 24 | 0xF8))
-             .append(char((nChar >> 18 & 0x3F) | 0x80))
-             .append(char((nChar >> 12 & 0x3F) | 0x80))
-             .append(char((nChar >> 6 & 0x3F) | 0x80))
-             .append(char((nChar & 0x3F) | 0x80));
+        rSink.append(
+            OStringChar(char(nChar >> 24 | 0xF8))
+            + OStringChar(char((nChar >> 18 & 0x3F) | 0x80))
+            + OStringChar(char((nChar >> 12 & 0x3F) | 0x80))
+            + OStringChar(char((nChar >> 6 & 0x3F) | 0x80))
+            + OStringChar(char((nChar & 0x3F) | 0x80)));
     else
-        rSink.append(char(nChar >> 30 | 0xFC))
-             .append(char((nChar >> 24 & 0x3F) | 0x80))
-             .append(char((nChar >> 18 & 0x3F) | 0x80))
-             .append(char((nChar >> 12 & 0x3F) | 0x80))
-             .append(char((nChar >> 6 & 0x3F) | 0x80))
-             .append(char((nChar & 0x3F) | 0x80));
+        rSink.append(
+            OStringChar(char(nChar >> 30 | 0xFC))
+            + OStringChar(char((nChar >> 24 & 0x3F) | 0x80))
+            + OStringChar(char((nChar >> 18 & 0x3F) | 0x80))
+            + OStringChar(char((nChar >> 12 & 0x3F) | 0x80))
+            + OStringChar(char((nChar >> 6 & 0x3F) | 0x80))
+            + OStringChar(char((nChar & 0x3F) | 0x80)));
 }
 
 bool translateUTF8Char(const char *& rBegin,
@@ -1266,10 +1271,11 @@ OUString INetMIME::decodeHeaderFieldBody(const OString& rBody)
                                         bDone = true;
                                         break;
                                     }
-                                    sText.append(rBody.subView(
-                                        (pEncodedTextCopyBegin - pBegin),
-                                        (q - 1 - pEncodedTextCopyBegin)));
-                                    sText.append(char(nDigit1 << 4 | nDigit2));
+                                    sText.append(
+                                        rBody.subView(
+                                            (pEncodedTextCopyBegin - pBegin),
+                                            (q - 1 - pEncodedTextCopyBegin))
+                                        + OStringChar(char(nDigit1 << 4 | nDigit2)));
                                     q += 2;
                                     pEncodedTextCopyBegin = q;
                                     break;
@@ -1286,10 +1292,11 @@ OUString INetMIME::decodeHeaderFieldBody(const OString& rBody)
                                     break;
 
                                 case '_':
-                                    sText.append(rBody.subView(
-                                        (pEncodedTextCopyBegin - pBegin),
-                                        (q - 1 - pEncodedTextCopyBegin)));
-                                    sText.append(' ');
+                                    sText.append(
+                                        rBody.subView(
+                                            (pEncodedTextCopyBegin - pBegin),
+                                            (q - 1 - pEncodedTextCopyBegin))
+                                        + OString::Concat(" "));
                                     pEncodedTextCopyBegin = q;
                                     break;
 

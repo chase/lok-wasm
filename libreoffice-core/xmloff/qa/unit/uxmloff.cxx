@@ -202,7 +202,7 @@ void Test::testMetaGenerator()
         { "LibreOfficeDev/24.2.0.0.alpha0$Linux_X86_64 LibreOffice_project/b81e7b6f3c71fb3ade1cb665444ac730dac0a9a9", ";24.2.0.0.", SvXMLImport::LO_New },
     };
 
-    for (size_t i = 0; i < SAL_N_ELEMENTS(tests); ++i)
+    for (auto const[pGenerator, pBuildId, nResult] : tests)
     {
         // the DocumentInfo instance is cached so need fresh SvXMLImport
         rtl::Reference<SvXMLImport> const pImport(new SvXMLImport(
@@ -211,19 +211,18 @@ void Test::testMetaGenerator()
 
         pImport->initialize(uno::Sequence<uno::Any>{ uno::Any(xInfoSet) });
 
-        SvXMLMetaDocumentContext::setBuildId(
-                OUString::createFromAscii(tests[i].generator), xInfoSet);
-        if (tests[i].buildId[0] != '\0')
+        SvXMLMetaDocumentContext::setBuildId(OUString::createFromAscii(pGenerator), xInfoSet);
+        if (pBuildId[0] != '\0')
         {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(tests[i].generator,
-                                 OUString::createFromAscii(tests[i].buildId),
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(pGenerator,
+                                 OUString::createFromAscii(pBuildId),
                                  xInfoSet->getPropertyValue("BuildId").get<OUString>());
         }
         else
         {
-            CPPUNIT_ASSERT_MESSAGE(tests[i].generator, !xInfoSet->getPropertyValue("BuildId").hasValue());
+            CPPUNIT_ASSERT_MESSAGE(pGenerator, !xInfoSet->getPropertyValue("BuildId").hasValue());
         }
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(tests[i].generator, tests[i].result, pImport->getGeneratorVersion());
+        CPPUNIT_ASSERT_EQUAL_MESSAGE(pGenerator, nResult, pImport->getGeneratorVersion());
     }
 }
 

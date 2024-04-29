@@ -25,10 +25,8 @@
 #include <com/sun/star/datatransfer/dnd/XDropTarget.hpp>
 #include <com/sun/star/datatransfer/dnd/XDropTargetDragContext.hpp>
 #include <com/sun/star/datatransfer/dnd/XDropTargetDropContext.hpp>
-#include <cppuhelper/compbase.hxx>
-#include <cppuhelper/basemutex.hxx>
-
-#include <vcl/unohelp2.hxx>
+#include <comphelper/compbase.hxx>
+#include <comphelper/interfacecontainer4.hxx>
 
 class GenericDropTargetDropContext :
     public ::cppu::WeakImplHelper<css::datatransfer::dnd::XDropTargetDropContext>
@@ -53,8 +51,8 @@ public:
     virtual void SAL_CALL rejectDrag() override;
 };
 
-class DNDListenerContainer final : public cppu::BaseMutex,
-                                public ::cppu::WeakComponentImplHelper<
+class DNDListenerContainer final :
+                                public ::comphelper::WeakComponentImplHelper<
     css::datatransfer::dnd::XDragGestureRecognizer,
     css::datatransfer::dnd::XDropTargetDragContext,
     css::datatransfer::dnd::XDropTargetDropContext,
@@ -62,7 +60,8 @@ class DNDListenerContainer final : public cppu::BaseMutex,
 {
     bool m_bActive;
     sal_Int8 m_nDefaultActions;
-
+    comphelper::OInterfaceContainerHelper4<css::datatransfer::dnd::XDragGestureListener> maDragGestureListeners;
+    comphelper::OInterfaceContainerHelper4<css::datatransfer::dnd::XDropTargetListener> maDropTargetListeners;
     css::uno::Reference< css::datatransfer::dnd::XDropTargetDragContext > m_xDropTargetDragContext;
     css::uno::Reference< css::datatransfer::dnd::XDropTargetDropContext > m_xDropTargetDropContext;
 

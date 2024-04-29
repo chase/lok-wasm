@@ -19,10 +19,10 @@
 
 #pragma once
 
-#include <osl/mutex.hxx>
+#include <mutex>
 #include <osl/conditn.hxx>
 #include <cppuhelper/weak.hxx>
-#include <comphelper/interfacecontainer3.hxx>
+#include <comphelper/interfacecontainer4.hxx>
 #include <com/sun/star/ucb/XDynamicResultSet.hpp>
 #include <com/sun/star/ucb/XSourceInitialization.hpp>
 #include <com/sun/star/ucb/XDynamicResultSetListener.hpp>
@@ -41,9 +41,8 @@ private:
     //management of listeners
     bool                    m_bDisposed; ///Dispose call ready.
     bool                    m_bInDispose;///In dispose call
-    osl::Mutex              m_aContainerMutex;
-    std::unique_ptr<comphelper::OInterfaceContainerHelper3<css::lang::XEventListener>>
-                            m_pDisposeEventListeners;
+    comphelper::OInterfaceContainerHelper4<css::lang::XEventListener>
+                            m_aDisposeEventListeners;
 protected:
     rtl::Reference<DynamicResultSetWrapperListener>
                             m_xMyListenerImpl;
@@ -51,7 +50,7 @@ protected:
     css::uno::Reference< css::uno::XComponentContext >
                             m_xContext;
 
-    osl::Mutex              m_aMutex;
+    std::mutex              m_aMutex;
     bool                    m_bStatic;
     bool                    m_bGotWelcome;
 
@@ -150,7 +149,7 @@ class DynamicResultSetWrapperListener
                 , public css::ucb::XDynamicResultSetListener
 {
     DynamicResultSetWrapper*    m_pOwner;
-    osl::Mutex                  m_aMutex;
+    std::mutex                  m_aMutex;
 
 public:
     DynamicResultSetWrapperListener( DynamicResultSetWrapper* pOwner );

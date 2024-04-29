@@ -589,14 +589,11 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/ifc/text/_BaseFrame \
     qadevOOo/tests/java/ifc/text/_BaseFrameProperties \
     qadevOOo/tests/java/ifc/text/_BaseIndex \
-    qadevOOo/tests/java/ifc/text/_BaseIndexMark \
     qadevOOo/tests/java/ifc/text/_CellProperties \
     qadevOOo/tests/java/ifc/text/_CellRange \
     qadevOOo/tests/java/ifc/text/_Defaults \
     qadevOOo/tests/java/ifc/text/_DocumentIndex \
-    qadevOOo/tests/java/ifc/text/_DocumentIndexMark \
     qadevOOo/tests/java/ifc/text/_DocumentSettings \
-    qadevOOo/tests/java/ifc/text/_Footnote \
     qadevOOo/tests/java/ifc/text/_FootnoteSettings \
     qadevOOo/tests/java/ifc/text/_GenericTextDocument \
     qadevOOo/tests/java/ifc/text/_LineNumberingProperties \
@@ -617,7 +614,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/ifc/text/_TextTable \
     qadevOOo/tests/java/ifc/text/_TextTableRow \
     qadevOOo/tests/java/ifc/text/_ViewSettings \
-    qadevOOo/tests/java/ifc/text/_XAutoTextContainer \
     qadevOOo/tests/java/ifc/text/_XAutoTextEntry \
     qadevOOo/tests/java/ifc/text/_XAutoTextGroup \
     qadevOOo/tests/java/ifc/text/_XBookmarksSupplier \
@@ -626,7 +622,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/ifc/text/_XDocumentIndex \
     qadevOOo/tests/java/ifc/text/_XDocumentIndexesSupplier \
     qadevOOo/tests/java/ifc/text/_XEndnotesSupplier \
-    qadevOOo/tests/java/ifc/text/_XFootnote \
     qadevOOo/tests/java/ifc/text/_XFootnotesSettingsSupplier \
     qadevOOo/tests/java/ifc/text/_XFootnotesSupplier \
     qadevOOo/tests/java/ifc/text/_XLineNumberingProperties \
@@ -1005,7 +1000,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_simreg/SimpleRegistry \
     qadevOOo/tests/java/mod/_smgr/OServiceManager \
     qadevOOo/tests/java/mod/_smplmail/SimpleSystemMail \
-    qadevOOo/tests/java/mod/_sm/SmEditAccessible \
     qadevOOo/tests/java/mod/_sm/SmGraphicAccessible \
     qadevOOo/tests/java/mod/_sm/SmModel \
     qadevOOo/tests/java/mod/_sm/XMLExporter \
@@ -1090,25 +1084,18 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sw/SwAccessibleTextEmbeddedObject \
     qadevOOo/tests/java/mod/_sw/SwAccessibleTextFrameView \
     qadevOOo/tests/java/mod/_sw/SwAccessibleTextGraphicObject \
-    qadevOOo/tests/java/mod/_sw/SwXAutoTextContainer \
     qadevOOo/tests/java/mod/_sw/SwXAutoTextEntry \
     qadevOOo/tests/java/mod/_sw/SwXAutoTextGroup \
     qadevOOo/tests/java/mod/_sw/SwXBodyText \
-    qadevOOo/tests/java/mod/_sw/SwXBookmark \
-    qadevOOo/tests/java/mod/_sw/SwXBookmarks \
     qadevOOo/tests/java/mod/_sw/SwXCell \
     qadevOOo/tests/java/mod/_sw/SwXCellRange \
     qadevOOo/tests/java/mod/_sw/SwXChapterNumbering \
-    qadevOOo/tests/java/mod/_sw/SwXDocumentIndex \
-    qadevOOo/tests/java/mod/_sw/SwXDocumentIndexes \
     qadevOOo/tests/java/mod/_sw/SwXDocumentIndexMark \
     qadevOOo/tests/java/mod/_sw/SwXDrawPage \
     qadevOOo/tests/java/mod/_sw/SwXEndnoteProperties \
-    qadevOOo/tests/java/mod/_sw/SwXFieldEnumeration \
     qadevOOo/tests/java/mod/_sw/SwXFieldMaster \
     qadevOOo/tests/java/mod/_sw/SwXFootnote \
     qadevOOo/tests/java/mod/_sw/SwXFootnoteProperties \
-    qadevOOo/tests/java/mod/_sw/SwXFootnotes \
     qadevOOo/tests/java/mod/_sw/SwXFootnoteText \
     qadevOOo/tests/java/mod/_sw/SwXFrames \
     qadevOOo/tests/java/mod/_sw/SwXHeadFootText \
@@ -1117,15 +1104,11 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sw/SwXModule \
     qadevOOo/tests/java/mod/_sw/SwXNumberingRules \
     qadevOOo/tests/java/mod/_sw/SwXParagraph \
-    qadevOOo/tests/java/mod/_sw/SwXParagraphEnumeration \
     qadevOOo/tests/java/mod/_sw/SwXPrintSettings \
     qadevOOo/tests/java/mod/_sw/SwXPropertySet \
     qadevOOo/tests/java/mod/_sw/SwXPropertySetInfo \
-    qadevOOo/tests/java/mod/_sw/SwXReferenceMark \
-    qadevOOo/tests/java/mod/_sw/SwXReferenceMarks \
     qadevOOo/tests/java/mod/_sw/SwXShape \
     qadevOOo/tests/java/mod/_sw/SwXStyle \
-    qadevOOo/tests/java/mod/_sw/SwXStyleFamilies \
     qadevOOo/tests/java/mod/_sw/SwXStyleFamily \
     qadevOOo/tests/java/mod/_sw/SwXTableCellText \
     qadevOOo/tests/java/mod/_sw/SwXTableColumns \
@@ -1135,10 +1118,7 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sw/SwXTextDefaults \
     qadevOOo/tests/java/mod/_sw/SwXTextDocument \
     qadevOOo/tests/java/mod/_sw/SwXTextEmbeddedObject \
-    qadevOOo/tests/java/mod/_sw/SwXTextEmbeddedObjects \
     qadevOOo/tests/java/mod/_sw/SwXTextField \
-    qadevOOo/tests/java/mod/_sw/SwXTextFieldMasters \
-    qadevOOo/tests/java/mod/_sw/SwXTextFieldTypes \
     qadevOOo/tests/java/mod/_sw/SwXTextFrame \
     qadevOOo/tests/java/mod/_sw/SwXTextFrameText \
     qadevOOo/tests/java/mod/_sw/SwXTextGraphicObject \
@@ -1149,11 +1129,9 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sw/SwXTextRanges \
     qadevOOo/tests/java/mod/_sw/SwXTextSearch \
     qadevOOo/tests/java/mod/_sw/SwXTextSection \
-    qadevOOo/tests/java/mod/_sw/SwXTextSections \
     qadevOOo/tests/java/mod/_sw/SwXTextTable \
     qadevOOo/tests/java/mod/_sw/SwXTextTableCursor \
     qadevOOo/tests/java/mod/_sw/SwXTextTableRow \
-    qadevOOo/tests/java/mod/_sw/SwXTextTables \
     qadevOOo/tests/java/mod/_sw/SwXTextView \
     qadevOOo/tests/java/mod/_sw/SwXTextViewCursor \
     qadevOOo/tests/java/mod/_sw/SwXViewSettings \
@@ -1254,7 +1232,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_ucpchelp/CHelpContentProvider \
     qadevOOo/tests/java/mod/_ucpdav/WebDAVContentProvider \
     qadevOOo/tests/java/mod/_ucpfile/FileProvider \
-    qadevOOo/tests/java/mod/_ucpftp/FTPContentProvider \
     qadevOOo/tests/java/mod/_ucphier/HierarchyContentProvider \
     qadevOOo/tests/java/mod/_ucphier/HierarchyDataSource \
     qadevOOo/tests/java/mod/_ucppkg/PackageContentProvider \

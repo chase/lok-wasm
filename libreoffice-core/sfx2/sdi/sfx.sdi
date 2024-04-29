@@ -1103,6 +1103,24 @@ SfxVoidItem EditStyle SID_STYLE_EDIT
 ]
 
 
+SfxVoidItem EditStyleFont SID_STYLE_FONT
+(SfxStringItem Param SID_STYLE_FONT,SfxUInt16Item Family SID_STYLE_FAMILY)
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::Template;
+]
+
+
 SfxVoidItem HideStyle SID_STYLE_HIDE
 (SfxStringItem Param SID_STYLE_HIDE,SfxUInt16Item Family SID_STYLE_FAMILY)
 [
@@ -2757,6 +2775,43 @@ SfxVoidItem ObjectCatalog SID_BASICIDE_OBJCAT
 ]
 
 
+SfxVoidItem WatchWindow SID_BASICIDE_WATCH
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = TRUE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+    Asynchron;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Macro;
+]
+
+
+SfxVoidItem StackWindow SID_BASICIDE_STACK
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = TRUE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+    Asynchron;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Macro;
+]
+
 SfxVoidItem ObjectMenue SID_OBJECT
 (SfxInt16Item VerbID SID_OBJECT)
 [
@@ -3327,7 +3382,7 @@ SfxBoolItem PrintPreview SID_PRINTPREVIEW
 
 
 SfxVoidItem SetDocumentProperties SID_DOCINFO
-(SfxDocumentInfoItem Properties SID_DOCINFO, SfxUnoAnyItem UpdatedProperties FN_PARAM_1)
+(SfxDocumentInfoItem Properties SID_DOCINFO, SfxUnoAnyItem UpdatedProperties FN_PARAM_1, SfxStringItem FileSize FN_PARAM_2)
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
@@ -3875,6 +3930,22 @@ SfxVoidItem ScrollBodyPageDown SID_MAIL_SCROLLBODY_PAGEDOWN
     GroupId = SfxGroupId::Explorer;
 ]
 
+SfxBoolItem FocusToFindbar SID_SEARCH
+[
+    AutoUpdate = TRUE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Edit;
+]
+
 
 SfxBoolItem SearchDialog SID_SEARCH_DLG
 [
@@ -4299,7 +4370,7 @@ SfxVoidItem StylePreview SID_STYLE_PREVIEW
 ]
 
 SfxVoidItem SidebarDeck SID_SIDEBAR_DECK
-(SfxStringItem SidebarDeck SID_SIDEBAR_DECK)
+(SfxStringItem SidebarDeck SID_SIDEBAR_DECK, SfxBoolItem SidebarDeckToggle SID_SIDEBAR_DECK_TOGGLE)
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
@@ -4565,7 +4636,7 @@ SfxBoolItem FormatPaintbrush SID_FORMATPAINTBRUSH ( SfxBoolItem PersistentCopy S
       RecordAbsolute = FALSE,
       RecordPerSet;
 
-      AccelConfig = TRUE,
+      AccelConfig = FALSE,
       MenuConfig = TRUE,
       ToolBoxConfig = TRUE,
       GroupId = SfxGroupId::Edit;
@@ -5426,6 +5497,23 @@ SfxVoidItem MoreDictionaries SID_MORE_DICTIONARIES
         GroupId = SfxGroupId::Options;
 ]
 
+SfxVoidItem OptionsSecurityDialog SID_OPTIONS_SECURITY
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = TRUE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = TRUE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Options;
+]
+
 SfxVoidItem ActivateStyleApply SID_ACTIVATE_STYLE_APPLY
 ()
 [
@@ -5769,9 +5857,9 @@ SfxVoidItem AdditionsDialog SID_ADDITIONS_DIALOG
     RecordAbsolute = FALSE,
     RecordPerSet;
 
-    AccelConfig = TRUE,
-    MenuConfig = TRUE,
-    ToolBoxConfig = TRUE,
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
     GroupId = SfxGroupId::Application;
 ]
 

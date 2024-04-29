@@ -10,17 +10,16 @@
 
 #include <vcl/bitmapex.hxx>
 #include <vcl/BitmapAlphaClampFilter.hxx>
-
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 
 BitmapEx BitmapAlphaClampFilter::execute(BitmapEx const& rBitmapEx) const
 {
     if (!rBitmapEx.IsAlpha())
         return rBitmapEx;
 
-    AlphaMask aBitmapAlpha(rBitmapEx.GetAlpha());
+    AlphaMask aBitmapAlpha(rBitmapEx.GetAlphaMask());
     {
-        AlphaScopedWriteAccess pWriteAlpha(aBitmapAlpha);
+        BitmapScopedWriteAccess pWriteAlpha(aBitmapAlpha);
         const Size aSize(rBitmapEx.GetSizePixel());
 
         for (sal_Int32 nY = 0; nY < sal_Int32(aSize.Height()); ++nY)
@@ -30,9 +29,9 @@ BitmapEx BitmapAlphaClampFilter::execute(BitmapEx const& rBitmapEx) const
             for (sal_Int32 nX = 0; nX < sal_Int32(aSize.Width()); ++nX)
             {
                 BitmapColor aBitmapAlphaValue(pWriteAlpha->GetPixelFromData(pScanAlpha, nX));
-                if (aBitmapAlphaValue.GetIndex() > mcThreshold)
+                if ((255 - aBitmapAlphaValue.GetIndex()) > mcThreshold)
                 {
-                    aBitmapAlphaValue.SetIndex(255);
+                    aBitmapAlphaValue.SetIndex(0);
                     pWriteAlpha->SetPixelOnData(pScanAlpha, nX, aBitmapAlphaValue);
                 }
             }

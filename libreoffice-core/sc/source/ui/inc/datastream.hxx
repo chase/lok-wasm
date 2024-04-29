@@ -15,7 +15,7 @@
 #include <rtl/ustring.hxx>
 #include <vcl/timer.hxx>
 #include <address.hxx>
-
+#include <optional>
 #include <vector>
 
 #include <documentstreamaccess.hxx>
@@ -62,15 +62,14 @@ public:
     typedef std::vector<Line> LinesType;
 
     enum MoveType { NO_MOVE, RANGE_DOWN, MOVE_DOWN, MOVE_UP };
-    enum { VALUES_IN_LINE = 2 };
 
     static void MakeToolbarVisible();
     static DataStream* Set(ScDocShell *pShell, const OUString& rURL, const ScRange& rRange,
-            sal_Int32 nLimit, MoveType eMove, sal_uInt32 nSettings);
+            sal_Int32 nLimit, MoveType eMove);
 
     DataStream(
         ScDocShell *pShell, const OUString& rURL, const ScRange& rRange,
-        sal_Int32 nLimit, MoveType eMove, sal_uInt32 nSettings);
+        sal_Int32 nLimit, MoveType eMove);
 
     ~DataStream();
 
@@ -81,7 +80,7 @@ public:
 
     void Decode(
         const OUString& rURL, const ScRange& rRange, sal_Int32 nLimit,
-        MoveType eMove, const sal_uInt32 nSettings);
+        MoveType eMove);
 
     bool ImportData();
     void StartImport();
@@ -101,13 +100,12 @@ private:
     ScDocShell* mpDocShell;
     DocumentStreamAccess maDocAccess;
     OUString msURL;
-    sal_uInt32 mnSettings;
     MoveType meOrigMove; // Initial move setting. This one gets saved to file.
     MoveType meMove; // move setting during streaming, which may change in the middle.
     bool mbRunning;
     bool mbValuesInLine;
     bool mbRefreshOnEmptyLine;
-    std::unique_ptr<LinesType> mpLines;
+    std::optional<LinesType> moLines;
     size_t mnLinesCount;
     size_t mnLinesSinceRefresh;
     double mfLastRefreshTime;

@@ -420,7 +420,7 @@ void SwTextFormatter::BuildPortions( SwTextFormatInfo &rInf )
                 if (pAnchoredObj->RestartLayoutProcess()
                     && !pAnchoredObj->IsTmpConsiderWrapInfluence())
                 {
-                    SwFormatAnchor const& rAnchor(pAnchoredObj->GetFrameFormat().GetAnchor());
+                    SwFormatAnchor const& rAnchor(pAnchoredObj->GetFrameFormat()->GetAnchor());
                     assert(rAnchor.GetAnchorId() == RndStdIds::FLY_AT_CHAR || rAnchor.GetAnchorId() == RndStdIds::FLY_AT_PARA);
                     TextFrameIndex const nAnchor(GetTextFrame()->MapModelToViewPos(*rAnchor.GetContentAnchor()));
                     if (pFollow->GetOffset() <= nAnchor
@@ -534,12 +534,23 @@ void SwTextFormatter::BuildPortions( SwTextFormatInfo &rInf )
                 nLstHeight /= 5;
                 // does the kerning portion still fit into the line?
                 if( bAllowBefore && ( nLstActual != nNxtActual ) &&
+                    // tdf#89288 we want to insert space between CJK and non-CJK text only.
+                    ( nLstActual == SwFontScript::CJK || nNxtActual == SwFontScript::CJK ) &&
                     nLstHeight && rInf.X() + nLstHeight <= rInf.Width() &&
                     ! pPor->InTabGrp() )
                 {
                     SwKernPortion* pKrn =
                         new SwKernPortion( *rInf.GetLast(), nLstHeight,
                                            pLast->InFieldGrp() && pPor->InFieldGrp() );
+
+                    // ofz#58550 Direct-leak, pKrn adds itself as the NextPortion
+                    // of rInf.GetLast(), but may use CopyLinePortion to add a copy
+                    // of itself, which will then be left dangling with the following
+                    // SetNextPortion(nullptr)
+                    SwLinePortion *pNext = rInf.GetLast()->GetNextPortion();
+                    if (pNext != pKrn)
+                        delete pNext;
+
                     rInf.GetLast()->SetNextPortion( nullptr );
                     InsertPortion( rInf, pKrn );
                 }
@@ -841,6 +852,7 @@ void SwTextFormatter::CalcAscent( SwTextFormatInfo &rInf, SwLinePortion *pPor )
 
         // In empty lines the attributes are switched on via SeekStart
         const bool bFirstPor = rInf.GetLineStart() == rInf.GetIdx();
+
         if ( pPor->IsQuoVadisPortion() )
             bChg = SeekStartAndChg( rInf, true );
         else
@@ -849,10 +861,16 @@ void SwTextFormatter::CalcAscent( SwTextFormatInfo &rInf, SwLinePortion *pPor )
             {
                 if( !rInf.GetText().isEmpty() )
                 {
-                    if ( pPor->GetLen() || !rInf.GetIdx()
-                         || ( m_pCurr != pLast && !pLast->IsFlyPortion() )
-                         || !m_pCurr->IsRest() ) // instead of !rInf.GetRest()
+                    if ((rInf.GetIdx() != TextFrameIndex(rInf.GetText().getLength())
+                            || rInf.GetRest() // field continued - not empty
+                            || !GetTextFrame()->GetDoc().getIDocumentSettingAccess().get(
+                                DocumentSettingId::APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH))
+                        && (pPor->GetLen() || !rInf.GetIdx()
+                            || (m_pCurr != pLast && !pLast->IsFlyPortion())
+                            || !m_pCurr->IsRest())) // instead of !rInf.GetRest()
+                    {
                         bChg = SeekAndChg( rInf );
+                    }
                     else
                         bChg = SeekAndChgBefore( rInf );
                 }
@@ -998,6 +1016,8 @@ bool SwContentControlPortion::DescribePDFControl(const SwTextPaintInfo& rInf) co
         case SwContentControlType::PLAIN_TEXT:
         {
             pDescriptor = std::make_unique<vcl::PDFWriter::EditWidget>();
+            auto pEditWidget = static_cast<vcl::PDFWriter::EditWidget*>(pDescriptor.get());
+            pEditWidget->MultiLine = true;
             break;
         }
         case SwContentControlType::CHECKBOX:
@@ -1096,7 +1116,7 @@ bool SwContentControlPortion::DescribePDFControl(const SwTextPaintInfo& rInf) co
     aLocation.Union(aEndRect);
     pDescriptor->Location = aLocation.SVRect();
 
-    pPDFExtOutDevData->BeginStructureElement(vcl::PDFWriter::Form);
+    pPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::Form);
     pPDFExtOutDevData->CreateControl(*pDescriptor);
     pPDFExtOutDevData->EndStructureElement();
 
@@ -1127,8 +1147,8 @@ namespace sw::mark {
                     dynamic_cast<ICheckboxFieldmark const*>(pBM));
             assert(pCheckboxFm);
             return pCheckboxFm->IsChecked()
-                    ? OUString(u"\u2612")
-                    : OUString(u"\u2610");
+                    ? u"\u2612"_ustr
+                    : u"\u2610"_ustr;
         }
         assert(pBM->GetFieldname() == ODF_FORMDROPDOWN);
         const IFieldmark::parameter_map_t* const pParameters = pBM->GetParameters();
@@ -1137,7 +1157,7 @@ namespace sw::mark {
         if(pResult != pParameters->end())
             pResult->second >>= nCurrentIdx;
 
-        const IFieldmark::parameter_map_t::const_iterator pListEntries = pParameters->find(OUString(ODF_FORMDROPDOWN_LISTENTRY));
+        const IFieldmark::parameter_map_t::const_iterator pListEntries = pParameters->find(ODF_FORMDROPDOWN_LISTENTRY);
         if (pListEntries != pParameters->end())
         {
             uno::Sequence< OUString > vListEntries;
@@ -1176,7 +1196,7 @@ SwTextPortion *SwTextFormatter::WhichTextPor( SwTextFormatInfo &rInf ) const
                 }
             }
             assert(2 <= sal_Int32(nFieldLen));
-            pPor = new SwFieldPortion(aFieldName, nullptr, false, nFieldLen);
+            pPor = new SwFieldPortion(aFieldName, nullptr, nFieldLen);
         }
         else
         {
@@ -1256,10 +1276,10 @@ SwTextPortion *SwTextFormatter::WhichTextPor( SwTextFormatInfo &rInf ) const
             // If pCurr does not have a width, it can however already have content.
             // E.g. for non-displayable characters
 
-            auto const ch(rInf.GetText()[sal_Int32(rInf.GetIdx())]);
+            auto const ch(rInf.GetChar(rInf.GetIdx()));
             SwTextFrame const*const pFrame(rInf.GetTextFrame());
             SwPosition aPosition(pFrame->MapViewToModelPos(rInf.GetIdx()));
-            sw::mark::IFieldmark *pBM = pFrame->GetDoc().getIDocumentMarkAccess()->getFieldmarkFor(aPosition);
+            sw::mark::IFieldmark *pBM = pFrame->GetDoc().getIDocumentMarkAccess()->getInnerFieldmarkFor(aPosition);
             if(pBM != nullptr && pBM->GetFieldname( ) == ODF_FORMDATE)
             {
                 if (ch == CH_TXT_ATR_FIELDSTART)
@@ -2004,7 +2024,15 @@ TextFrameIndex SwTextFormatter::FormatLine(TextFrameIndex const nStartPos)
                      || GetInfo().CheckFootnotePortion(m_pCurr);
             if( bBuild )
             {
-                GetInfo().SetNumDone( bOldNumDone );
+                // fdo44018-2.doc: only restore m_bNumDone if a SwNumberPortion will be truncated
+                for (SwLinePortion * pPor = m_pCurr->GetNextPortion(); pPor; pPor = pPor->GetNextPortion())
+                {
+                    if (pPor->InNumberGrp())
+                    {
+                        GetInfo().SetNumDone( bOldNumDone );
+                        break;
+                    }
+                }
                 GetInfo().ResetMaxWidthDiff();
 
                 // delete old rest
@@ -2766,7 +2794,7 @@ void SwTextFormatter::CalcFlyWidth( SwTextFormatInfo &rInf )
     aLine.Left( rInf.X() + nLeftMar );
     bool bForced = false;
     bool bSplitFly = false;
-    for (const auto& pObj : *rTextFly.GetAnchoredObjList())
+    for (const auto& pObj : rTextFly.GetAnchoredObjList())
     {
         auto pFlyFrame = pObj->DynCastFlyFrame();
         if (!pFlyFrame)
@@ -2790,7 +2818,7 @@ void SwTextFormatter::CalcFlyWidth( SwTextFormatInfo &rInf )
             nFrameLeft += GetTextFrame()->getFramePrintArea().Left();
         if( aInter.Left() < nFrameLeft )
         {
-            aInter.Left( nFrameLeft );
+            aInter.Left(nFrameLeft); // both sets left and reduces width
             if (bSplitFly && nFramePrintAreaLeft > 0 && nFramePrintAreaLeft < aInter.Width())
             {
                 // We wrap around a split fly, the fly portion is on the
@@ -2803,9 +2831,9 @@ void SwTextFormatter::CalcFlyWidth( SwTextFormatInfo &rInf )
         }
 
         tools::Long nAddMar = 0;
-        if ( m_pFrame->IsRightToLeft() )
+        if (GetTextFrame()->IsRightToLeft())
         {
-            nAddMar = m_pFrame->getFrameArea().Right() - Right();
+            nAddMar = GetTextFrame()->getFrameArea().Right() - Right();
             if ( nAddMar < 0 )
                 nAddMar = 0;
         }

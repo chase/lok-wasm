@@ -101,7 +101,7 @@ using namespace ::com::sun::star::container;
 using namespace ::cppu;
 using namespace ::sfx2;
 
-void SetTemplate_Impl( const OUString &rFileName,
+void SetTemplate_Impl( std::u16string_view rFileName,
                         const OUString &rLongName,
                         SfxObjectShell *pDoc)
 {
@@ -115,16 +115,19 @@ namespace {
 class SfxDocPasswordVerifier : public ::comphelper::IDocPasswordVerifier
 {
 public:
-    explicit     SfxDocPasswordVerifier( const Reference< embed::XStorage >& rxStorage ) :
-                            mxStorage( rxStorage ) {}
+    explicit SfxDocPasswordVerifier(SfxMedium& rMedium)
+        : m_rMedium(rMedium)
+        , mxStorage(rMedium.GetStorage())
+    {
+    }
 
     virtual ::comphelper::DocPasswordVerifierResult
                         verifyPassword( const OUString& rPassword, uno::Sequence< beans::NamedValue >& o_rEncryptionData ) override;
     virtual ::comphelper::DocPasswordVerifierResult
                         verifyEncryptionData( const uno::Sequence< beans::NamedValue >& rEncryptionData ) override;
 
-
 private:
+    SfxMedium & m_rMedium;
     Reference< embed::XStorage > mxStorage;
 };
 
@@ -147,9 +150,14 @@ private:
         // and immediately closed
         ::comphelper::OStorageHelper::SetCommonStorageEncryptionData( mxStorage, rEncryptionData );
 
-        mxStorage->openStreamElement(
+        // for new ODF encryption, try to extract the encrypted inner package
+        // (it will become the SfxObjectShell storage)
+        if (!m_rMedium.TryEncryptedInnerPackage(mxStorage))
+        {   // ... old ODF encryption:
+            mxStorage->openStreamElement(
                 "content.xml",
                 embed::ElementModes::READ | embed::ElementModes::NOCREATE );
+        }
 
         // no exception -> success
         eResult = ::comphelper::DocPasswordVerifierResult::OK;
@@ -214,67 +222,64 @@ ErrCode CheckPasswd_Impl
 
                     nRet = ERRCODE_SFX_CANTGETPASSWD;
 
-                    SfxItemSet *pSet = pFile->GetItemSet();
-                    if( pSet )
+                    SfxItemSet& rSet = pFile->GetItemSet();
+                    Reference< css::task::XInteractionHandler > xInteractionHandler = pFile->GetInteractionHandler();
+                    if( xInteractionHandler.is() )
                     {
-                        Reference< css::task::XInteractionHandler > xInteractionHandler = pFile->GetInteractionHandler();
-                        if( xInteractionHandler.is() )
+                        // use the comphelper password helper to request a password
+                        OUString aPassword;
+                        const SfxStringItem* pPasswordItem = rSet.GetItem(SID_PASSWORD, false);
+                        if ( pPasswordItem )
+                            aPassword = pPasswordItem->GetValue();
+
+                        uno::Sequence< beans::NamedValue > aEncryptionData;
+                        const SfxUnoAnyItem* pEncryptionDataItem = rSet.GetItem(SID_ENCRYPTIONDATA, false);
+                        if ( pEncryptionDataItem )
+                            pEncryptionDataItem->GetValue() >>= aEncryptionData;
+
+                        // try if one of the public key entries is
+                        // decryptable, then extract session key
+                        // from it
+                        if ( !aEncryptionData.hasElements() && aGpgProperties.hasElements() )
+                            aEncryptionData = ::comphelper::DocPasswordHelper::decryptGpgSession(aGpgProperties);
+
+                        // tdf#93389: if recovering a document, encryption data should contain
+                        // entries for the real filter, not only for recovery ODF, to keep it
+                        // encrypted. Pass this in encryption data.
+                        // TODO: pass here the real filter (from AutoRecovery::implts_openDocs)
+                        // to marshal this to requestAndVerifyDocPassword
+                        if (rSet.GetItemState(SID_DOC_SALVAGE, false) == SfxItemState::SET)
                         {
-                            // use the comphelper password helper to request a password
-                            OUString aPassword;
-                            const SfxStringItem* pPasswordItem = SfxItemSet::GetItem<SfxStringItem>(pSet, SID_PASSWORD, false);
-                            if ( pPasswordItem )
-                                aPassword = pPasswordItem->GetValue();
-
-                            uno::Sequence< beans::NamedValue > aEncryptionData;
-                            const SfxUnoAnyItem* pEncryptionDataItem = SfxItemSet::GetItem<SfxUnoAnyItem>(pSet, SID_ENCRYPTIONDATA, false);
-                            if ( pEncryptionDataItem )
-                                pEncryptionDataItem->GetValue() >>= aEncryptionData;
-
-                            // try if one of the public key entries is
-                            // decryptable, then extract session key
-                            // from it
-                            if ( !aEncryptionData.hasElements() && aGpgProperties.hasElements() )
-                                aEncryptionData = ::comphelper::DocPasswordHelper::decryptGpgSession(aGpgProperties);
-
-                            // tdf#93389: if recovering a document, encryption data should contain
-                            // entries for the real filter, not only for recovery ODF, to keep it
-                            // encrypted. Pass this in encryption data.
-                            // TODO: pass here the real filter (from AutoRecovery::implts_openDocs)
-                            // to marshal this to requestAndVerifyDocPassword
-                            if (pSet->GetItemState(SID_DOC_SALVAGE, false) == SfxItemState::SET)
-                            {
-                                aEncryptionData = comphelper::concatSequences(
-                                    aEncryptionData, std::initializer_list<beans::NamedValue>{
-                                                         { "ForSalvage", css::uno::Any(true) } });
-                            }
-
-                            SfxDocPasswordVerifier aVerifier( xStorage );
-                            aEncryptionData = ::comphelper::DocPasswordHelper::requestAndVerifyDocPassword(
-                                aVerifier, aEncryptionData, aPassword, xInteractionHandler, pFile->GetOrigURL(), comphelper::DocPasswordRequestType::Standard );
-
-                            pSet->ClearItem( SID_PASSWORD );
-                            pSet->ClearItem( SID_ENCRYPTIONDATA );
-
-                            if ( aEncryptionData.hasElements() )
-                            {
-                                pSet->Put( SfxUnoAnyItem( SID_ENCRYPTIONDATA, uno::Any( aEncryptionData ) ) );
-
-                                try
-                                {
-                                    // update the version list of the medium using the new password
-                                    pFile->GetVersionList();
-                                }
-                                catch( uno::Exception& )
-                                {
-                                    // TODO/LATER: set the error code
-                                }
-
-                                nRet = ERRCODE_NONE;
-                            }
-                            else
-                                nRet = ERRCODE_IO_ABORT;
+                            aEncryptionData = comphelper::concatSequences(
+                                aEncryptionData, std::initializer_list<beans::NamedValue>{
+                                                     { "ForSalvage", css::uno::Any(true) } });
                         }
+
+                        SfxDocPasswordVerifier aVerifier(*pFile);
+                        aEncryptionData = ::comphelper::DocPasswordHelper::requestAndVerifyDocPassword(
+                            aVerifier, aEncryptionData, aPassword, xInteractionHandler, pFile->GetOrigURL(), comphelper::DocPasswordRequestType::Standard );
+
+                        rSet.ClearItem( SID_PASSWORD );
+                        rSet.ClearItem( SID_ENCRYPTIONDATA );
+
+                        if ( aEncryptionData.hasElements() )
+                        {
+                            rSet.Put( SfxUnoAnyItem( SID_ENCRYPTIONDATA, uno::Any( aEncryptionData ) ) );
+
+                            try
+                            {
+                                // update the version list of the medium using the new password
+                                pFile->GetVersionList();
+                            }
+                            catch( uno::Exception& )
+                            {
+                                // TODO/LATER: set the error code
+                            }
+
+                            nRet = ERRCODE_NONE;
+                        }
+                        else
+                            nRet = ERRCODE_IO_ABORT;
                     }
                 }
             }
@@ -290,7 +295,7 @@ ErrCode CheckPasswd_Impl
 }
 
 
-ErrCode SfxApplication::LoadTemplate( SfxObjectShellLock& xDoc, const OUString &rFileName, std::unique_ptr<SfxItemSet> pSet )
+ErrCodeMsg SfxApplication::LoadTemplate( SfxObjectShellLock& xDoc, const OUString &rFileName, std::unique_ptr<SfxItemSet> pSet )
 {
     std::shared_ptr<const SfxFilter> pFilter;
     SfxMedium aMedium( rFileName,  ( StreamMode::READ | StreamMode::SHARE_DENYNONE ) );
@@ -298,7 +303,7 @@ ErrCode SfxApplication::LoadTemplate( SfxObjectShellLock& xDoc, const OUString &
     if ( !aMedium.GetStorage( false ).is() )
         aMedium.GetInStream();
 
-    if ( aMedium.GetError() )
+    if ( aMedium.GetErrorIgnoreWarning() )
     {
         return aMedium.GetErrorCode();
     }
@@ -322,15 +327,15 @@ ErrCode SfxApplication::LoadTemplate( SfxObjectShellLock& xDoc, const OUString &
         SfxStringItem aReferer( SID_REFERER, "private:user" );
         SfxStringItem aFlags( SID_OPTIONS, "T" );
         SfxBoolItem aHidden( SID_HIDDEN, true );
-        const SfxPoolItem *pRet = GetDispatcher_Impl()->ExecuteList(
+        const SfxPoolItemHolder aRet(GetDispatcher_Impl()->ExecuteList(
             SID_OPENDOC, SfxCallMode::SYNCHRON,
-            { &aName, &aHidden, &aReferer, &aFlags } );
-        const SfxObjectItem *pObj = dynamic_cast<const SfxObjectItem*>( pRet  );
+            { &aName, &aHidden, &aReferer, &aFlags } ));
+        const SfxObjectItem* pObj(dynamic_cast<const SfxObjectItem*>(aRet.getItem()));
         if ( pObj )
             xDoc = dynamic_cast<SfxObjectShell*>( pObj->GetShell()  );
         else
         {
-            const SfxViewFrameItem *pView = dynamic_cast<const SfxViewFrameItem*>( pRet  );
+            const SfxViewFrameItem* pView(dynamic_cast<const SfxViewFrameItem*>(aRet.getItem()));
             if ( pView )
             {
                 SfxViewFrame *pFrame = pView->GetFrame();
@@ -351,7 +356,7 @@ ErrCode SfxApplication::LoadTemplate( SfxObjectShellLock& xDoc, const OUString &
         SfxMedium *pMedium = new SfxMedium( rFileName, StreamMode::STD_READ, pFilter, std::move(pSet) );
         if(!xDoc->DoLoad(pMedium))
         {
-            ErrCode nErrCode = xDoc->GetErrorCode();
+            ErrCodeMsg nErrCode = xDoc->GetErrorCode();
             xDoc->DoClose();
             xDoc.Clear();
             return nErrCode;
@@ -390,7 +395,7 @@ ErrCode SfxApplication::LoadTemplate( SfxObjectShellLock& xDoc, const OUString &
     css::uno::Reference< css::frame::XModel >  xModel = xDoc->GetModel();
     if ( xModel.is() )
     {
-        std::unique_ptr<SfxItemSet> pNew = xDoc->GetMedium()->GetItemSet()->Clone();
+        std::unique_ptr<SfxItemSet> pNew = xDoc->GetMedium()->GetItemSet().Clone();
         pNew->ClearItem( SID_PROGRESS_STATUSBAR_CONTROL );
         pNew->ClearItem( SID_FILTER_NAME );
         css::uno::Sequence< css::beans::PropertyValue > aArgs;
@@ -430,9 +435,9 @@ void SfxApplication::NewDocDirectExec_Impl( SfxRequest& rReq )
         aReq.AppendItem( *pDefaultNameItem );
 
     SfxGetpApp()->ExecuteSlot( aReq );
-    const SfxViewFrameItem* pItem = dynamic_cast<const SfxViewFrameItem*>( aReq.GetReturnValue()  );
-    if ( pItem )
-        rReq.SetReturnValue( SfxFrameItem( 0, pItem->GetFrame() ) );
+    const SfxViewFrameItem* pItem(dynamic_cast<const SfxViewFrameItem*>(aReq.GetReturnValue().getItem()));
+    if (nullptr != pItem)
+        rReq.SetReturnValue(SfxFrameItem(0, pItem->GetFrame()));
 }
 
 void SfxApplication::NewDocDirectState_Impl( SfxItemSet &rSet )
@@ -529,8 +534,7 @@ void SfxApplication::NewDocExec_Impl( SfxRequest& rReq )
     else
     {
         SfxCallMode eMode = SfxCallMode::SYNCHRON;
-
-        const SfxPoolItem *pRet=nullptr;
+        SfxPoolItemHolder aRet;
         SfxStringItem aReferer( SID_REFERER, "private:user" );
         SfxStringItem aTarget( SID_TARGETNAME, "_default" );
         if ( !aTemplateFileName.isEmpty() )
@@ -540,18 +544,18 @@ void SfxApplication::NewDocExec_Impl( SfxRequest& rReq )
             SfxStringItem aName( SID_FILE_NAME, aObj.GetMainURL( INetURLObject::DecodeMechanism::NONE ) );
             SfxStringItem aTemplName( SID_TEMPLATE_NAME, aTemplateName );
             SfxStringItem aTemplRegionName( SID_TEMPLATE_REGIONNAME, aTemplateRegion );
-            pRet = GetDispatcher_Impl()->ExecuteList(SID_OPENDOC, eMode,
+            aRet = GetDispatcher_Impl()->ExecuteList(SID_OPENDOC, eMode,
                 {&aName, &aTarget, &aReferer, &aTemplName, &aTemplRegionName});
         }
         else
         {
             SfxStringItem aName( SID_FILE_NAME, "private:factory" );
-            pRet = GetDispatcher_Impl()->ExecuteList(SID_OPENDOC, eMode,
+            aRet = GetDispatcher_Impl()->ExecuteList(SID_OPENDOC, eMode,
                     { &aName, &aTarget, &aReferer } );
         }
 
-        if ( pRet )
-            rReq.SetReturnValue( *pRet );
+        if ( nullptr != aRet.getItem() )
+            rReq.SetReturnValue( *aRet.getItem() );
     }
 }
 
@@ -959,8 +963,11 @@ void SfxApplication::OpenDocExec_Impl( SfxRequest& rReq )
             xTargetFrame = pUnoFrameItem->GetFrame();
     }
 
-    if ( !pTargetFrame && !xTargetFrame.is() && SfxViewFrame::Current() )
-        pTargetFrame = &SfxViewFrame::Current()->GetFrame();
+    if (!pTargetFrame && !xTargetFrame.is())
+    {
+        if (const SfxViewFrame* pViewFrame = SfxViewFrame::Current())
+            pTargetFrame = &pViewFrame->GetFrame();
+    }
 
     // check if caller has set a callback
     std::unique_ptr<SfxLinkItem> pLinkItem;
@@ -1105,7 +1112,7 @@ void SfxApplication::OpenDocExec_Impl( SfxRequest& rReq )
         {
             if ( pShell->GetController() == xController )
             {
-                pCntrFrame = &pShell->GetViewFrame()->GetFrame();
+                pCntrFrame = &pShell->GetViewFrame().GetFrame();
                 break;
             }
         }
@@ -1124,7 +1131,7 @@ void SfxApplication::OpenDocExec_Impl( SfxRequest& rReq )
 
     if (pLinkItem)
     {
-        const SfxPoolItem* pRetValue = rReq.GetReturnValue();
+        const SfxPoolItem* pRetValue(rReq.GetReturnValue().getItem());
         if (pRetValue)
         {
             pLinkItem->GetValue().Call(pRetValue);

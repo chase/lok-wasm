@@ -39,6 +39,7 @@
 #include <com/sun/star/text/WritingMode2.hpp>
 #include <com/sun/star/text/XTextField.hpp>
 #include <com/sun/star/text/XTextRangeCompare.hpp>
+#include <com/sun/star/text/RelOrientation.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/container/XEnumeration.hpp>
@@ -54,7 +55,6 @@
 #include <comphelper/propertyvalue.hxx>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/style/BreakType.hpp>
-#include <boost/lexical_cast.hpp>
 #include <officecfg/Office/Writer.hxx>
 
 #ifdef DBG_UTIL
@@ -66,7 +66,6 @@
 namespace writerfilter::dmapper {
 
 using namespace ::com::sun::star;
-using namespace ::std;
 
 #define DEF_BORDER_DIST 190  //0,19cm
 #define CNF_FIRST_ROW               0x800
@@ -1090,13 +1089,14 @@ void DomainMapperTableHandler::ApplyParagraphPropertiesFromTableStyle(TableParag
     // 1. Collect all the table-style-defined properties, that aren't overridden by the
     //    paragraph style or direct formatting
     std::vector<beans::PropertyValue> aProps;
+    std::optional<OUString> oParagraphText;
 
     for( auto const& eId : aAllTableParaProperties )
     {
         // apply paragraph and character properties of the table style on table paragraphs
         // if there is no direct paragraph formatting
-        bool bIsParaLevel = rParaProp.m_pPropertyMap->isSet(eId);
-        if ( !bIsParaLevel || isCharacterProperty(eId) )
+        bool bSetDirectlyInParaLevel = rParaProp.m_pPropertyMap->isSet(eId);
+        if ( !bSetDirectlyInParaLevel || isCharacterProperty(eId) )
         {
             if ( (eId == PROP_PARA_LEFT_MARGIN || eId == PROP_PARA_FIRST_LINE_INDENT) &&
                     rParaProp.m_pPropertyMap->isSet(PROP_NUMBERING_RULES) )
@@ -1112,19 +1112,27 @@ void DomainMapperTableHandler::ApplyParagraphPropertiesFromTableStyle(TableParag
             // this cell applies the table style property
             if (pCellProp != rCellProperties.end())
             {
-                bool bDocDefault;
+                if (bSetDirectlyInParaLevel) // it is a character property set directly in the paragraph
+                {
+                    if (!oParagraphText) // do it only once
+                    {
+                        uno::Reference<text::XParagraphCursor> xParagraph(
+                            rParaProp.m_rEndParagraph->getText()->createTextCursorByRange(rParaProp.m_rEndParagraph), uno::UNO_QUERY_THROW );
+                        // select paragraph
+                        xParagraph->gotoStartOfParagraph( true );
+                        oParagraphText = xParagraph->getString();
+                    }
+                    // don't overwrite empty paragraph with table style, if it has a direct paragraph formatting
+                    if (oParagraphText->isEmpty())
+                        continue;
+                }
                 // handle paragraph background color defined in CellColorHandler
                 if (eId == PROP_FILL_COLOR)
                 {
-                    // table style defines paragraph background color, use the correct property name
                     auto pFillStyleProp = std::find_if(rCellProperties.begin(), rCellProperties.end(),
                         [](const beans::PropertyValue& rProp) { return rProp.Name == "FillStyle"; });
-                    if ( pFillStyleProp != rCellProperties.end() &&
-                         pFillStyleProp->Value == uno::Any(drawing::FillStyle_SOLID) )
-                    {
-                        sPropertyName = "ParaBackColor";
-                    }
-                    else
+                    if ( pFillStyleProp == rCellProperties.end() ||
+                         pFillStyleProp->Value != uno::Any(drawing::FillStyle_SOLID) )
                     {
                         // FillStyle_NONE, skip table style usage for paragraph background color
                         continue;
@@ -1132,8 +1140,10 @@ void DomainMapperTableHandler::ApplyParagraphPropertiesFromTableStyle(TableParag
                 }
                 OUString sParaStyleName;
                 rParaProp.m_rPropertySet->getPropertyValue("ParaStyleName") >>= sParaStyleName;
-                StyleSheetEntryPtr pEntry = m_rDMapper_Impl.GetStyleSheetTable()->FindStyleSheetByConvertedStyleName(sParaStyleName);
-                uno::Any aParaStyle = m_rDMapper_Impl.GetPropertyFromStyleSheet(eId, pEntry, true, true, &bDocDefault);
+                bool bDocDefault;
+                uno::Any aParaStyle = m_rDMapper_Impl.GetPropertyFromStyleSheet(eId,
+                        m_rDMapper_Impl.GetStyleSheetTable()->FindStyleSheetByConvertedStyleName(sParaStyleName),
+                        true, true, &bDocDefault);
                 // A very strange compatibility rule says that the DEFAULT style's specified fontsize of 11 or 12
                 // or a specified left justify will always be overridden by the table-style.
                 // Normally this rule is applied, so always do this unless a compatSetting indicates otherwise.
@@ -1156,25 +1166,13 @@ void DomainMapperTableHandler::ApplyParagraphPropertiesFromTableStyle(TableParag
                 }
 
                 // use table style when no paragraph style setting or a docDefault value is applied instead of it
-                if ( aParaStyle == uno::Any() || bDocDefault || bCompatOverride ) try
+                if (!aParaStyle.hasValue() || bDocDefault || bCompatOverride) try
                 {
-                    uno::Reference<text::XParagraphCursor> xParagraph(
-                        rParaProp.m_rEndParagraph->getText()->createTextCursorByRange(rParaProp.m_rEndParagraph), uno::UNO_QUERY_THROW );
-                    // select paragraph
-                    xParagraph->gotoStartOfParagraph( true );
-                    // don't overwrite empty paragraph with table style, if it has a direct paragraph formatting
-                    if ( bIsParaLevel && xParagraph->getString().getLength() == 0 )
-                        continue;
-
-                    if ( eId != PROP_FILL_COLOR )
-                    {
-                        // apply style setting when the paragraph doesn't modify it
-                        aProps.push_back(comphelper::makePropertyValue(sPropertyName, pCellProp->Value));
-                    }
-                    else
+                    // apply style setting when the paragraph doesn't modify it
+                    aProps.push_back(comphelper::makePropertyValue(sPropertyName, pCellProp->Value));
+                    if (eId == PROP_FILL_COLOR)
                     {
                         // we need this for complete import of table-style based paragraph background color
-                        aProps.push_back(comphelper::makePropertyValue("FillColor",  pCellProp->Value));
                         aProps.push_back(comphelper::makePropertyValue("FillStyle",  uno::Any(drawing::FillStyle_SOLID)));
                     }
                 }
@@ -1281,15 +1279,16 @@ static void lcl_convertFormulaRanges(const uno::Reference<text::XTextTable> & xT
                                         sLastCell = xCell->getPropertyValue("CellName").get<OUString>();
                                         if (sNextCell.isEmpty())
                                             sNextCell = sLastCell;
-                                        try
-                                        {
-                                            // accept numbers with comma and percent
-                                            OUString sCellText = xText->getString().replace(',', '.');
-                                            if (sCellText.endsWith("%"))
-                                                sCellText = sCellText.copy(0, sCellText.getLength()-1);
-                                            boost::lexical_cast<double>(sCellText);
-                                        }
-                                        catch( boost::bad_lexical_cast const& )
+
+                                        // accept numbers with comma and percent
+                                        OUString sCellText = xText->getString().replace(',', '.');
+                                        if (sCellText.endsWith("%"))
+                                            sCellText = sCellText.copy(0, sCellText.getLength()-1);
+
+                                        rtl_math_ConversionStatus eConversionStatus;
+                                        sal_Int32 nParsedEnd;
+                                        rtl::math::stringToDouble(sCellText, '.', ',', &eConversionStatus, &nParsedEnd);
+                                        if ( eConversionStatus != rtl_math_ConversionStatus_Ok || nParsedEnd == 0 )
                                         {
                                             if ( !bFoundFirst )
                                             {
@@ -1588,8 +1587,25 @@ void DomainMapperTableHandler::endTable(unsigned int nestedTableLevel)
                 // Floating tables inside a table always stay inside the cell.
                 // Also extend the header/footer area if needed, so an in-header floating table
                 // typically doesn't overlap with body test.
+                bool bIsFollowingTextFlow = true;
+
+                sal_Int16 nVertOrientRelation{};
+                auto it = std::find_if(aFrameProperties.begin(), aFrameProperties.end(),
+                                       [](const beans::PropertyValue& rPropertyValue) -> bool
+                                       { return rPropertyValue.Name == "VertOrientRelation"; });
+                if (it != aFrameProperties.end())
+                {
+                    it->Value >>= nVertOrientRelation;
+                    if (nVertOrientRelation == text::RelOrientation::PAGE_FRAME)
+                    {
+                        // If vertical relation is page, follow-text-flow is not useful and causes
+                        // unwanted wrap of body text around in-header floating table, so avoid it.
+                        bIsFollowingTextFlow = false;
+                    }
+                }
+
                 aFrameProperties.push_back(
-                    comphelper::makePropertyValue("IsFollowingTextFlow", true));
+                    comphelper::makePropertyValue("IsFollowingTextFlow", bIsFollowingTextFlow));
             }
 
             // A text frame created for floating tables is always allowed to split.
@@ -1602,7 +1618,12 @@ void DomainMapperTableHandler::endTable(unsigned int nestedTableLevel)
             // m_xText points to the body text, get the current xText from m_rDMapper_Impl, in case e.g. we would be in a header.
             uno::Reference<text::XTextAppendAndConvert> xTextAppendAndConvert(m_rDMapper_Impl.GetTopTextAppend(), uno::UNO_QUERY);
             uno::Reference<beans::XPropertySet> xFrameAnchor;
-            if (xTextAppendAndConvert.is())
+
+            // Writer layout has problems with redlines on floating table rows in footnotes, avoid
+            // them.
+            bool bInFootnote = m_rDMapper_Impl.IsInFootOrEndnote();
+            bool bRecordChanges = m_rDMapper_Impl.GetSettingsTable()->GetRecordChanges();
+            if (xTextAppendAndConvert.is() && !(bInFootnote && bRecordChanges))
             {
                 std::deque<css::uno::Any> aFramedRedlines = m_rDMapper_Impl.m_aStoredRedlines[StoredRedlines::FRAME];
                 std::vector<sal_Int32> redPos, redLen;

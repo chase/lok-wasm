@@ -522,6 +522,19 @@
       </object>
     </child>
     <child>
+      <object class="GtkMenuItem" id="MenuData-FormatSparklineMenu">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="action_name">.uno:FormatSparklineMenu</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="MenuData-separator4b">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+      </object>
+    </child>
+    <child>
       <object class="GtkMenuItem" id="MenuData-Calculate">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
@@ -644,94 +657,10 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuData-SamplingDialog">
+      <object class="GtkMenuItem" id="MenuData-Statistics">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
-        <property name="action_name">.uno:SamplingDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-DescriptiveStatisticsDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:DescriptiveStatisticsDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-AnalysisOfVarianceDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:AnalysisOfVarianceDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-CorrelationDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:CorrelationDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-CovarianceDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:CovarianceDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-ExponentialSmoothingDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:ExponentialSmoothingDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-MovingAverageDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:MovingAverageDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-RegressionDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:RegressionDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-TTestDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:TTestDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-FTestDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:FTestDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-ZTestDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:ZTestDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-ChiSquareTestDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:ChiSquareTestDialog</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuData-FourierAnalysisDialog">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:FourierAnalysisDialog</property>
+        <property name="action_name">.uno:StatisticsMenu</property>
       </object>
     </child>
   </object>
@@ -1142,31 +1071,10 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuEdit-DefinePrintArea">
+      <object class="GtkMenuItem" id="MenuEdit-PrintRangesMenu">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
-        <property name="action_name">.uno:DefinePrintArea</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuEdit-AddPrintArea">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:AddPrintArea</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuEdit-EditPrintArea">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:EditPrintArea</property>
-      </object>
-    </child>
-    <child>
-      <object class="GtkMenuItem" id="MenuEdit-DeletePrintArea">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:DeletePrintArea</property>
+        <property name="action_name">.uno:PrintRangesMenu</property>
       </object>
     </child>
     <child>
@@ -1329,8 +1237,15 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuFile-PrintDefault">
+      <object class="GtkMenuItem" id="MenuFile-Print">
         <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="action_name">.uno:Print</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="MenuFile-PrintDefault">
+        <property name="visible">False</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:PrintDefault</property>
       </object>
@@ -1970,13 +1885,6 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuInsert-InsertObjectFloatingFrame">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="action_name">.uno:InsertObjectFloatingFrame</property>
-      </object>
-    </child>
-    <child>
       <object class="GtkSeparatorMenuItem" id="MenuInsert-separator4">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
@@ -2021,6 +1929,13 @@
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:InsertCurrentTime</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="MenuInsert-RandomNumberGeneratorDialog">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="action_name">.uno:RandomNumberGeneratorDialog</property>
       </object>
     </child>
     <child>
@@ -2255,14 +2170,14 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <child>
-      <object class="GtkMenuItem" id="MenuParagraph-ParaLeftToRight">
+      <object class="GtkRadioMenuItem" id="MenuParagraph-ParaLeftToRight">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:ParaLeftToRight</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuParagraph-ParaRightToLeft">
+      <object class="GtkRadioMenuItem" id="MenuParagraph-ParaRightToLeft">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:ParaRightToLeft</property>
@@ -2295,21 +2210,21 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuParagraph-CommonAlignTop">
+      <object class="GtkRadioMenuItem" id="MenuParagraph-CommonAlignTop">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:CommonAlignTop</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuParagraph-CommonAlignVerticalCenter">
+      <object class="GtkRadioMenuItem" id="MenuParagraph-CommonAlignVerticalCenter">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:CommonAlignVerticalCenter</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuParagraph-CommonAlignBottom">
+      <object class="GtkRadioMenuItem" id="MenuParagraph-CommonAlignBottom">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:CommonAlignBottom</property>
@@ -2601,7 +2516,7 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Default">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Default">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Default&amp;FamilyName:string=CellStyles</property>
@@ -2615,7 +2530,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Accent1">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Accent1">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Accent 1&amp;FamilyName:string=CellStyles</property>
@@ -2623,7 +2538,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Accent2">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Accent2">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Accent 2&amp;FamilyName:string=CellStyles</property>
@@ -2631,7 +2546,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Accent3">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Accent3">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Accent 3&amp;FamilyName:string=CellStyles</property>
@@ -2645,7 +2560,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Header1">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Header1">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Heading 1&amp;FamilyName:string=CellStyles</property>
@@ -2653,7 +2568,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Header2">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Header2">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Heading 2&amp;FamilyName:string=CellStyles</property>
@@ -2667,7 +2582,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Bad">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Bad">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Bad&amp;FamilyName:string=CellStyles</property>
@@ -2675,7 +2590,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Good">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Good">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Good&amp;FamilyName:string=CellStyles</property>
@@ -2683,7 +2598,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Neutral">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Neutral">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Neutral&amp;FamilyName:string=CellStyles</property>
@@ -2691,7 +2606,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Error">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Error">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Error&amp;FamilyName:string=CellStyles</property>
@@ -2699,7 +2614,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Warning">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Warning">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Warning&amp;FamilyName:string=CellStyles</property>
@@ -2713,7 +2628,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Footnote">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Footnote">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Footnote&amp;FamilyName:string=CellStyles</property>
@@ -2721,7 +2636,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuStyle-Note">
+      <object class="GtkRadioMenuItem" id="MenuStyle-Note">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:StyleApply?Style:string=Note&amp;FamilyName:string=CellStyles</property>
@@ -3011,14 +2926,14 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <child>
-      <object class="GtkMenuItem" id="MenuView-PagebreakMode">
+      <object class="GtkRadioMenuItem" id="MenuView-PagebreakMode">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:PagebreakMode</property>
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="MenuView-NormalViewMode">
+      <object class="GtkRadioMenuItem" id="MenuView-NormalViewMode">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="action_name">.uno:NormalViewMode</property>

@@ -302,7 +302,44 @@ bool SwTextPortion::Format_( SwTextFormatInfo &rInf )
     }
 
     SwTextGuess aGuess;
-    const bool bFull = !aGuess.Guess( *this, rInf, Height() );
+    bool bFull = !aGuess.Guess( *this, rInf, Height() );
+
+    // tdf#158776 for the last full text portion, call Guess() again to allow more text in the
+    // adjusted line by shrinking spaces using the know space count from the first Guess() call
+    const SvxAdjust& rAdjust = rInf.GetTextFrame()->GetTextNodeForParaProps()->GetSwAttrSet().GetAdjust().GetAdjust();
+    if ( bFull && rAdjust == SvxAdjust::Block &&
+         aGuess.BreakPos() != TextFrameIndex(COMPLETE_STRING) &&
+         rInf.GetTextFrame()->GetDoc().getIDocumentSettingAccess().get(
+                    DocumentSettingId::JUSTIFY_LINES_WITH_SHRINKING) &&
+         // tdf#158436 avoid shrinking at underflow, e.g. no-break space after a
+         // very short word resulted endless loop
+         !rInf.IsUnderflow() )
+    {
+        sal_Int32 nSpacesInLine(0);
+        for (sal_Int32 i = sal_Int32(rInf.GetLineStart()); i < sal_Int32(aGuess.BreakPos()); ++i)
+        {
+            sal_Unicode cChar = rInf.GetText()[i];
+            if ( cChar == CH_BLANK )
+                ++nSpacesInLine;
+        }
+
+        // call with an extra space: shrinking can result a new word in the line
+        // and a new space before that, which is also a shrank space
+        // (except if the line was already broken inside a word with hyphenation)
+        // TODO: handle the case, if the line contains extra amount of spaces
+        if (
+             // no automatic hyphenation
+             !aGuess.HyphWord().is() &&
+             // no hyphenation at soft hyphen
+             aGuess.BreakPos() < TextFrameIndex(rInf.GetText().getLength()) &&
+             rInf.GetText()[sal_Int32(aGuess.BreakPos())] != CHAR_SOFTHYPHEN )
+        {
+            ++nSpacesInLine;
+        }
+
+        if ( nSpacesInLine > 0 )
+            bFull = !aGuess.Guess( *this, rInf, Height(), nSpacesInLine );
+    }
 
     // these are the possible cases:
     // A Portion fits to current line
@@ -337,7 +374,7 @@ bool SwTextPortion::Format_( SwTextFormatInfo &rInf )
             new SwKernPortion( *this, nKern );
     }
     // special case: hanging portion
-    else if( bFull && aGuess.GetHangingPortion() )
+    else if( aGuess.GetHangingPortion() )
     {
         Width( aGuess.BreakWidth() );
         SetLen( aGuess.BreakPos() - rInf.GetIdx() );
@@ -394,12 +431,7 @@ bool SwTextPortion::Format_( SwTextFormatInfo &rInf )
                           ! rInf.GetLast()->IsErgoSumPortion() &&
                           lcl_HasContent(*static_cast<SwFieldPortion*>(rInf.GetLast()),rInf ) ) ) ) )
         {
-            // GetLineWidth() takes care of DocumentSettingId::TAB_OVER_MARGIN.
-            if (aGuess.BreakWidth() <= rInf.GetLineWidth())
-                Width( aGuess.BreakWidth() );
-            else
-                // this actually should not happen
-                Width( sal_uInt16(rInf.Width() - rInf.X()) );
+            Width( aGuess.BreakWidth() );
 
             SetLen( aGuess.BreakPos() - rInf.GetIdx() );
 
@@ -413,6 +445,11 @@ bool SwTextPortion::Format_( SwTextFormatInfo &rInf )
                 pNew->Width(0);
                 pNew->ExtraBlankWidth( aGuess.ExtraBlankWidth() );
                 Insert( pNew );
+
+                // UAX #14 Unicode Line Breaking Algorithm Non-tailorable Line breaking rule LB6:
+                // https://www.unicode.org/reports/tr14/#LB6 Do not break before hard line breaks
+                if (auto ch = rInf.GetChar(aGuess.BreakStart()); !ch || ch == CH_BREAK)
+                    bFull = false; // Keep following SwBreakPortion / para break in the same line
             }
         }
         else    // case C2, last exit
@@ -546,6 +583,8 @@ void SwTextPortion::Paint( const SwTextPaintInfo &rInf ) const
         rInf.DrawBackBrush( *this );
         rInf.DrawBorder( *this );
 
+        rInf.DrawCSDFHighlighting(*this);
+
         // do we have to repaint a post it portion?
         if( rInf.OnWin() && mpNextPortion && !mpNextPortion->Width() )
             mpNextPortion->PrePaint( rInf, this );
@@ -587,7 +626,10 @@ TextFrameIndex SwTextPortion::GetSpaceCnt(const SwTextSizeInfo &rInf,
 
     if ( InExpGrp() || PortionType::InputField == GetWhichPor() )
     {
-        if( !IsBlankPortion() && !InNumberGrp() && !IsCombinedPortion() )
+        if (OUString ExpOut;
+            (!IsBlankPortion()
+             || (GetExpText(rInf, ExpOut) && OUStringChar(CH_BLANK) == ExpOut))
+            && !InNumberGrp() && !IsCombinedPortion())
         {
             // OnWin() likes to return a blank instead of an empty string from
             // time to time. We cannot use that here at all, however.
@@ -611,7 +653,7 @@ TextFrameIndex SwTextPortion::GetSpaceCnt(const SwTextSizeInfo &rInf,
     return nCnt;
 }
 
-tools::Long SwTextPortion::CalcSpacing( tools::Long nSpaceAdd, const SwTextSizeInfo &rInf ) const
+SwTwips SwTextPortion::CalcSpacing( tools::Long nSpaceAdd, const SwTextSizeInfo &rInf ) const
 {
     TextFrameIndex nCnt(0);
 
@@ -624,7 +666,10 @@ tools::Long SwTextPortion::CalcSpacing( tools::Long nSpaceAdd, const SwTextSizeI
 
     if ( InExpGrp() || PortionType::InputField == GetWhichPor() )
     {
-        if( !IsBlankPortion() && !InNumberGrp() && !IsCombinedPortion() )
+        if (OUString ExpOut;
+            (!IsBlankPortion()
+             || (GetExpText(rInf, ExpOut) && OUStringChar(CH_BLANK) == ExpOut))
+            && !InNumberGrp() && !IsCombinedPortion())
         {
             // OnWin() likes to return a blank instead of an empty string from
             // time to time. We cannot use that here at all, however.
@@ -665,7 +710,8 @@ tools::Long SwTextPortion::CalcSpacing( tools::Long nSpaceAdd, const SwTextSizeI
         }
     }
 
-    return sal_Int32(nCnt) * nSpaceAdd / SPACING_PRECISION_FACTOR;
+    return sal_Int32(nCnt) * (nSpaceAdd > LONG_MAX/2 ? LONG_MAX/2 - nSpaceAdd : nSpaceAdd)
+             / SPACING_PRECISION_FACTOR;
 }
 
 void SwTextPortion::HandlePortion( SwPortionHandler& rPH ) const

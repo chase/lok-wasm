@@ -361,7 +361,7 @@ static bool DoSearch(SwPaM & rSearchPam,
     bool bSrchForward, bool bRegSearch, bool bChkEmptyPara, bool bChkParaEnd,
     AmbiguousIndex & nStart, AmbiguousIndex & nEnd, AmbiguousIndex nTextLen,
     SwTextNode const* pNode, SwTextFrame const* pTextFrame,
-    SwRootFrame const* pLayout, SwPaM* pPam);
+    SwRootFrame const* pLayout, SwPaM& rPam);
 
 namespace sw {
 
@@ -677,7 +677,7 @@ bool FindTextImpl(SwPaM & rSearchPam,
                                        bRegSearch, bChkEmptyPara, bChkParaEnd,
                                        nStartInside, nEndInside, nTextLen,
                                        pNode->GetTextNode(), pFrame, pLayout,
-                                       oPam ? &*oPam : nullptr );
+                                       *oPam);
                     if ( bFound )
                         break;
                     else
@@ -710,7 +710,7 @@ bool FindTextImpl(SwPaM & rSearchPam,
                                    bRegSearch, bChkEmptyPara, bChkParaEnd,
                                    nStart, nEnd, nTextLen,
                                    pNode->GetTextNode(), pFrame, pLayout,
-                                   oPam ? &*oPam : nullptr );
+                                   *oPam);
             }
             if (bFound)
                 break;
@@ -727,10 +727,9 @@ bool DoSearch(SwPaM & rSearchPam,
                       bool bChkEmptyPara, bool bChkParaEnd,
         AmbiguousIndex & nStart, AmbiguousIndex & nEnd, AmbiguousIndex const nTextLen,
         SwTextNode const*const pNode, SwTextFrame const*const pFrame,
-        SwRootFrame const*const pLayout, SwPaM* pPam)
+        SwRootFrame const*const pLayout, SwPaM& rPam)
 {
     bool bFound = false;
-    SwPosition& rPtPos = *pPam->GetPoint();
     OUString sCleanStr;
     std::vector<AmbiguousIndex> aFltArr;
     LanguageType eLastLang = LANGUAGE_SYSTEM;
@@ -803,7 +802,7 @@ bool DoSearch(SwPaM & rSearchPam,
                 {
                     const lang::Locale aLocale(
                             g_pBreakIt->GetLocale( eCurrLang ) );
-                    rSText.SetLocale( utl::TextSearch::UpgradeToSearchOptions2( rSearchOpt), aLocale );
+                    rSText.SetLocale(rSearchOpt, aLocale);
                     eLastLang = eCurrLang;
                 }
             }
@@ -818,7 +817,7 @@ bool DoSearch(SwPaM & rSearchPam,
             nStart = nProxyStart;
             nEnd = nProxyEnd;
             // set section correctly
-            *rSearchPam.GetPoint() = *pPam->GetPoint();
+            *rSearchPam.GetPoint() = *rPam.GetPoint();
             rSearchPam.SetMark();
 
             // adjust start and end
@@ -872,39 +871,43 @@ bool DoSearch(SwPaM & rSearchPam,
 
     if ( bFound )
         return true;
-    else if ((bChkEmptyPara && !nStart.GetAnyIndex() && !nTextLen.GetAnyIndex())
-             || bChkParaEnd)
+
+    if (!bChkEmptyPara && !bChkParaEnd)
+        return false;
+
+    if (bChkEmptyPara && bSrchForward && nTextLen.GetAnyIndex())
+        return false; // the length is not zero - there is content here
+
+    // move to the end (or start) of the paragraph
+    *rSearchPam.GetPoint() = *rPam.GetPoint();
+    if (pLayout)
     {
-        *rSearchPam.GetPoint() = *pPam->GetPoint();
-        if (pLayout)
-        {
-            *rSearchPam.GetPoint() = pFrame->MapViewToModelPos(
-                bChkParaEnd ? nTextLen.GetFrameIndex() : TextFrameIndex(0));
-        }
-        else
-        {
-            rSearchPam.GetPoint()->SetContent( bChkParaEnd ? nTextLen.GetModelIndex() : 0 );
-        }
-        rSearchPam.SetMark();
-        const SwNode *const pSttNd = bSrchForward
-            ? &rSearchPam.GetPoint()->GetNode() // end of the frame
-            : &rPtPos.GetNode(); // keep the bug as-is for now...
-        /* FIXME: this condition does not work for !bSrchForward backward
-         * search, it probably never did. (pSttNd != &rNdIdx.GetNode())
-         * is never true in this case. */
-        if( (bSrchForward || pSttNd != &rPtPos.GetNode()) &&
-            rSearchPam.Move(fnMoveForward, GoInContent) &&
-            (!bSrchForward || pSttNd != &rSearchPam.GetPoint()->GetNode()) &&
-            SwNodeOffset(1) == abs(rSearchPam.GetPoint()->GetNodeIndex() -
-                                   rSearchPam.GetMark()->GetNodeIndex()))
-        {
-            // if backward search, switch point and mark
-            if( !bSrchForward )
-                rSearchPam.Exchange();
-            return true;
-        }
+        *rSearchPam.GetPoint() = pFrame->MapViewToModelPos(
+            bSrchForward ? nTextLen.GetFrameIndex() : TextFrameIndex(0));
     }
-    return bFound;
+    else
+    {
+        rSearchPam.GetPoint()->SetContent(bSrchForward ? nTextLen.GetModelIndex() : 0);
+    }
+    rSearchPam.SetMark();
+
+    if (!rSearchPam.Move(fnMove, GoInContent))
+        return false; // at start or end of the document
+
+    // selection must not be outside of the search area
+    if (!rPam.ContainsPosition(*rSearchPam.GetPoint()))
+        return false;
+
+    if (SwNodeOffset(1) == abs(rSearchPam.GetPoint()->GetNodeIndex() -
+                               rSearchPam.GetMark()->GetNodeIndex()))
+    {
+        if (bChkEmptyPara && !bSrchForward && rSearchPam.GetPoint()->GetContentIndex())
+            return false; // the length is not zero - there is content here
+
+        return true;
+    }
+
+    return false;
 }
 
 namespace {
@@ -924,7 +927,7 @@ struct SwFindParaText : public SwFindParas
         : m_rSearchOpt( rOpt )
         , m_rCursor( rCursor )
         , m_pLayout(pLayout)
-        , m_aSText( utl::TextSearch::UpgradeToSearchOptions2(rOpt) )
+        , m_aSText(rOpt)
         , m_bReplace( bRepl )
         , m_bSearchInNotes( bSearchInNotes )
     {}
@@ -1127,12 +1130,12 @@ std::optional<OUString> ReplaceBackReferences(const i18nutil::SearchOptions2& rS
                 ? sw::FrameContainsNode(*pFrame, pPam->GetMark()->GetNodeIndex())
                 : pTextNode == pMarkTextNode))
         {
-            utl::TextSearch aSText( utl::TextSearch::UpgradeToSearchOptions2( rSearchOpt) );
+            utl::TextSearch aSText(rSearchOpt);
             SearchResult aResult;
             OUString aReplaceStr( rSearchOpt.replaceString );
             if (bParaEnd)
             {
-                OUString const aStr("\\n");
+                static constexpr OUString aStr(u"\\n"_ustr);
                 aResult.subRegExpressions = 1;
                 aResult.startOffset = { 0 };
                 aResult.endOffset = { aStr.getLength() };

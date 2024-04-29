@@ -23,7 +23,6 @@
 #include <svx/svxids.hrc>
 #include <view.hxx>
 #include <ndtxt.hxx>
-#include <swdtflvr.hxx>
 #include <wrtsh.hxx>
 #include <IDocumentRedlineAccess.hxx>
 #include <flyfrm.hxx>
@@ -35,6 +34,7 @@
 #include <fmtfsize.hxx>
 #include <comphelper/scopeguard.hxx>
 #include <editeng/acorrcfg.hxx>
+#include <editeng/lrspitem.hxx>
 #include <swacorr.hxx>
 #include <redline.hxx>
 #include <frameformats.hxx>
@@ -49,21 +49,6 @@ public:
     SwUiWriterTest2()
         : SwModelTestBase("/sw/qa/extras/uiwriter/data/")
     {
-    }
-
-    virtual std::unique_ptr<Resetter> preTest(const char* filename) override
-    {
-        m_aSavedSettings = Application::GetSettings();
-        if (OString(filename).indexOf("LocaleArabic") != -1)
-        {
-            std::unique_ptr<Resetter> pResetter(
-                new Resetter([this]() { Application::SetSettings(this->m_aSavedSettings); }));
-            AllSettings aSettings(m_aSavedSettings);
-            aSettings.SetLanguageTag(LanguageTag("ar"));
-            Application::SetSettings(aSettings);
-            return pResetter;
-        }
-        return nullptr;
     }
 
 protected:
@@ -94,7 +79,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf47471_paraStyleBackground)
                          getProperty<OUString>(getParagraph(3), "ParaStyleName"));
 
     // Save it and load it back.
-    reload("writer8", "tdf47471_paraStyleBackgroundRT.odt");
+    saveAndReload("writer8");
 
     CPPUNIT_ASSERT_EQUAL(Color(0xdedce6), getProperty<Color>(getParagraph(2), "FillColor"));
     // on round-trip, the paragraph style name was lost
@@ -117,17 +102,20 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdfChangeNumberingListAutoFormat)
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
 
     // Check that we actually test the line we need
-    assertXPathContent(pXmlDoc, "/root/page/body/tab/row/cell/txt[3]", "GHI GHI GHI GHI");
-    assertXPath(pXmlDoc,
-                "/root/page/body/tab/row/cell/txt[3]/SwParaPortion/SwLineLayout/SwFieldPortion",
-                "type", "PortionType::Number");
-    assertXPath(pXmlDoc,
-                "/root/page/body/tab/row/cell/txt[3]/SwParaPortion/SwLineLayout/SwFieldPortion",
-                "expand", "2.");
+    assertXPathContent(pXmlDoc, "/root/page/body/tab/row/cell/txt[3]"_ostr, "GHI GHI GHI GHI");
+    assertXPath(
+        pXmlDoc,
+        "/root/page/body/tab/row/cell/txt[3]/SwParaPortion/SwLineLayout/SwFieldPortion"_ostr,
+        "type"_ostr, "PortionType::Number");
+    assertXPath(
+        pXmlDoc,
+        "/root/page/body/tab/row/cell/txt[3]/SwParaPortion/SwLineLayout/SwFieldPortion"_ostr,
+        "expand"_ostr, "2.");
     // The numbering height was 960 in DOC format.
-    assertXPath(pXmlDoc,
-                "/root/page/body/tab/row/cell/txt[3]/SwParaPortion/SwLineLayout/SwFieldPortion",
-                "font-height", "220");
+    assertXPath(
+        pXmlDoc,
+        "/root/page/body/tab/row/cell/txt[3]/SwParaPortion/SwLineLayout/SwFieldPortion/SwFont"_ostr,
+        "height"_ostr, "220");
 
     // tdf#127606: now it's possible to change formatting of numbering
     // increase font size (220 -> 260)
@@ -136,12 +124,13 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdfChangeNumberingListAutoFormat)
     pViewShell->Reformat();
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc,
-                "/root/page/body/tab/row/cell/txt[3]/SwParaPortion/SwLineLayout/SwFieldPortion",
-                "font-height", "260");
+    assertXPath(
+        pXmlDoc,
+        "/root/page/body/tab/row/cell/txt[3]/SwParaPortion/SwLineLayout/SwFieldPortion/SwFont"_ostr,
+        "height"_ostr, "260");
 
     // save it to DOCX
-    reload("Office Open XML Text", "tdf117923.docx");
+    saveAndReload("Office Open XML Text");
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     pViewShell
         = pTextDoc->GetDocShell()->GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell();
@@ -149,9 +138,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdfChangeNumberingListAutoFormat)
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
     // this was 220
-    assertXPath(pXmlDoc,
-                "/root/page/body/tab/row/cell/txt[3]/SwParaPortion/SwLineLayout/SwFieldPortion",
-                "font-height", "260");
+    assertXPath(
+        pXmlDoc,
+        "/root/page/body/tab/row/cell/txt[3]/SwParaPortion/SwLineLayout/SwFieldPortion/SwFont"_ostr,
+        "height"_ostr, "260");
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf101534)
@@ -166,9 +156,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf101534)
     // Go to the second paragraph, assert that we have margins as direct
     // formatting.
     pWrtShell->Down(/*bSelect=*/false);
-    SfxItemSet aSet(pWrtShell->GetAttrPool(), svl::Items<RES_LR_SPACE, RES_LR_SPACE>);
+    SfxItemSet aSet(pWrtShell->GetAttrPool(),
+                    svl::Items<RES_MARGIN_FIRSTLINE, RES_MARGIN_TEXTLEFT>);
     pWrtShell->GetCurAttr(aSet);
-    CPPUNIT_ASSERT(aSet.HasItem(RES_LR_SPACE));
+    CPPUNIT_ASSERT(!aSet.HasItem(RES_MARGIN_FIRSTLINE));
+    CPPUNIT_ASSERT(aSet.HasItem(RES_MARGIN_TEXTLEFT));
+    CPPUNIT_ASSERT_EQUAL(::tools::Long(0), aSet.GetItem(RES_MARGIN_TEXTLEFT)->GetTextLeft());
 
     // Make sure that direct formatting is preserved during paste.
     pWrtShell->EndPara(/*bSelect=*/false);
@@ -176,7 +169,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf101534)
     aSet.ClearItem();
     pWrtShell->GetCurAttr(aSet);
     // This failed, direct formatting was lost.
-    CPPUNIT_ASSERT(aSet.HasItem(RES_LR_SPACE));
+    CPPUNIT_ASSERT(!aSet.HasItem(RES_MARGIN_FIRSTLINE));
+    CPPUNIT_ASSERT(aSet.HasItem(RES_MARGIN_TEXTLEFT));
+    CPPUNIT_ASSERT_EQUAL(::tools::Long(0), aSet.GetItem(RES_MARGIN_TEXTLEFT)->GetTextLeft());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testExtendedSelectAllHang)
@@ -190,8 +185,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testExtendedSelectAllHang)
     SwView* pView = pDoc->GetDocShell()->GetView();
     SfxStringItem aLangString(SID_LANGUAGE_STATUS, "Default_Spanish (Bolivia)");
     // this looped
-    pView->GetViewFrame()->GetDispatcher()->ExecuteList(SID_LANGUAGE_STATUS, SfxCallMode::SYNCHRON,
-                                                        { &aLangString });
+    pView->GetViewFrame().GetDispatcher()->ExecuteList(SID_LANGUAGE_STATUS, SfxCallMode::SYNCHRON,
+                                                       { &aLangString });
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testRedlineMoveInsertInDelete)
@@ -224,7 +219,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testRedlineMoveInsertInDelete)
     CPPUNIT_ASSERT_EQUAL(OUString(" "),
                          pWrtShell->GetCursor()->GetPoint()->GetNode().GetTextNode()->GetText());
     pWrtShell->SetRedlineFlags(mode); // show again
-    CPPUNIT_ASSERT_EQUAL(OUString(u"\u0001 foo"),
+    CPPUNIT_ASSERT_EQUAL(u"\u0001 foo"_ustr,
                          pWrtShell->GetCursor()->GetPoint()->GetNode().GetTextNode()->GetText());
 }
 
@@ -353,56 +348,58 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf137318)
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
 
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt", 3);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion", 0);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[2]/SwParaPortion", 0);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt"_ostr, 3);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion"_ostr, 0);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[2]/SwParaPortion"_ostr, 0);
     // not sure why there's an empty text portion here, but it's not a problem
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[3]/SwParaPortion/SwLineLayout/SwParaPortion", 1);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[3]/SwParaPortion/SwLineLayout/SwParaPortion",
-                "type", "PortionType::Para");
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[3]/SwParaPortion/SwLineLayout/SwParaPortion",
-                "portion", "");
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[3]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr,
+                1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[3]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr,
+                "type"_ostr, "PortionType::Para");
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[3]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr,
+                "portion"_ostr, "");
 
     pWrtShell->Undo();
 
     // the problem was that here the "A" showed up again
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt", 2);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion", 0);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[2]/SwParaPortion", 1);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[2]/SwParaPortion/SwLineLayout/SwParaPortion",
-                "type", "PortionType::Para");
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[2]/SwParaPortion/SwLineLayout/SwParaPortion",
-                "portion", "");
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt"_ostr, 2);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion"_ostr, 0);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[2]/SwParaPortion"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[2]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr,
+                "type"_ostr, "PortionType::Para");
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[2]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr,
+                "portion"_ostr, "");
 
     pWrtShell->Undo();
 
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt", 1);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion", 1);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion",
-                "type", "PortionType::Para");
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion",
-                "portion", "");
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr,
+                "type"_ostr, "PortionType::Para");
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr,
+                "portion"_ostr, "");
 
     pWrtShell->Undo();
 
     // now the "A" is no longer deleted
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt", 1);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion", 1);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion",
-                "type", "PortionType::Para");
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr,
+                "type"_ostr, "PortionType::Para");
     assertXPath(pXmlDoc,
-                "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion[@portion]", 1);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion",
-                "length", "1");
+                "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion[@portion]"_ostr,
+                1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr,
+                "length"_ostr, "1");
 
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion",
-                "portion", "A");
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr,
+                "portion"_ostr, "A");
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf136704)
@@ -462,11 +459,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134250)
     dispatchCommand(mxComponent, ".uno:Paste", {});
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), xSections->getCount());
 
     // this would crash in 2 different ways
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
@@ -476,13 +472,11 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134250)
                          xTextContent->getAnchor()->getString());
 
     dispatchCommand(mxComponent, ".uno:Redo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), xSections->getCount());
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
@@ -490,10 +484,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134250)
                          xTextContent->getAnchor()->getString());
 
     dispatchCommand(mxComponent, ".uno:Redo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), xSections->getCount());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134436)
@@ -504,9 +497,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134436)
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
     CPPUNIT_ASSERT(pWrtShell);
 
-    uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
-    uno::Reference<text::XTextViewCursorSupplier> xTextViewCursorSupplier(
-        xModel->getCurrentController(), uno::UNO_QUERY);
     uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xTables(xTextTablesSupplier->getTextTables(),
                                                     uno::UNO_QUERY);
@@ -526,14 +516,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134436)
 
     // first, the section doesn't get deleted
     dispatchCommand(mxComponent, ".uno:Delete", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
     CPPUNIT_ASSERT_EQUAL(OUString(""), pWrtShell->GetCursor()->GetText());
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
@@ -541,14 +529,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134436)
 
     // second, the section does get deleted because point is at the end
     dispatchCommand(mxComponent, ".uno:Delete", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xSections->getCount());
     CPPUNIT_ASSERT_EQUAL(OUString(""), pWrtShell->GetCursor()->GetText());
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
@@ -556,21 +542,18 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134436)
 
     // the problem was that the section was not deleted on Redo
     dispatchCommand(mxComponent, ".uno:Redo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xSections->getCount());
     CPPUNIT_ASSERT_EQUAL(OUString(""), pWrtShell->GetCursor()->GetText());
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
     CPPUNIT_ASSERT_EQUAL(OUString("a\nb\n"), pWrtShell->GetCursor()->GetText());
 
     dispatchCommand(mxComponent, ".uno:Redo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xSections->getCount());
@@ -601,7 +584,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134252)
                          xCursor->getString());
 
     dispatchCommand(mxComponent, ".uno:Delete", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
@@ -609,7 +591,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134252)
 
     // this would crash
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2), xSections->getCount());
@@ -617,14 +598,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134252)
                          xCursor->getString());
 
     dispatchCommand(mxComponent, ".uno:Redo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
     CPPUNIT_ASSERT_EQUAL(OUString(""), xCursor->getString());
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2), xSections->getCount());
@@ -632,7 +611,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf134252)
                          xCursor->getString());
 
     dispatchCommand(mxComponent, ".uno:Redo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xTables->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
@@ -709,9 +687,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf136453)
 
     // check that every node has 1 frame
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt", 3);
-    assertXPath(pXmlDoc, "/root/page[1]/body/section", 1);
-    assertXPath(pXmlDoc, "/root/page[1]/body/section/txt", 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt"_ostr, 3);
+    assertXPath(pXmlDoc, "/root/page[1]/body/section"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/section/txt"_ostr, 1);
 
     pWrtShell->Redo();
 
@@ -720,8 +698,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf136453)
 
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt", 3);
-    assertXPath(pXmlDoc, "/root/page[1]/body/section", 0);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt"_ostr, 3);
+    assertXPath(pXmlDoc, "/root/page[1]/body/section"_ostr, 0);
 
     pWrtShell->Undo();
 
@@ -729,9 +707,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf136453)
 
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt", 3);
-    assertXPath(pXmlDoc, "/root/page[1]/body/section", 1);
-    assertXPath(pXmlDoc, "/root/page[1]/body/section/txt", 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt"_ostr, 3);
+    assertXPath(pXmlDoc, "/root/page[1]/body/section"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/section/txt"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf137245)
@@ -798,7 +776,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf137245)
         CPPUNIT_ASSERT(pFly != nullptr);
     }
 
-    const SwFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
+    const auto& rFormats = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(4), rFormats.size());
 
     // move cursor back to body
@@ -831,9 +809,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf132236)
 
     // check that the text frames exist inside their sections
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page[1]/body/section[1]/txt", 1);
-    assertXPath(pXmlDoc, "/root/page[1]/body/section[2]/txt", 2);
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt", 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/section[1]/txt"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page[1]/body/section[2]/txt"_ostr, 2);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf131912)
@@ -1838,7 +1816,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf147310)
 
     {
         xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-        assertXPath(pXmlDoc, "/root/page/body/tab", 0);
+        assertXPath(pXmlDoc, "/root/page/body/tab"_ostr, 0);
         discardDumpedLayout();
     }
     pWrtShell->Undo();
@@ -1847,14 +1825,14 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf147310)
     {
         xmlDocUniquePtr pXmlDoc = parseLayoutDump();
         // there are 2 tables
-        assertXPath(pXmlDoc, "/root/page/body/tab", 2);
+        assertXPath(pXmlDoc, "/root/page/body/tab"_ostr, 2);
         discardDumpedLayout();
     }
     pWrtShell->Redo();
     pWrtShell->Redo();
     {
         xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-        assertXPath(pXmlDoc, "/root/page/body/tab", 0);
+        assertXPath(pXmlDoc, "/root/page/body/tab"_ostr, 0);
         discardDumpedLayout();
     }
     pWrtShell->Undo();
@@ -1862,8 +1840,22 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf147310)
     {
         xmlDocUniquePtr pXmlDoc = parseLayoutDump();
         // there are 2 tables
-        assertXPath(pXmlDoc, "/root/page/body/tab", 2);
+        assertXPath(pXmlDoc, "/root/page/body/tab"_ostr, 2);
     }
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf80194_autoSubscript)
+{
+    createSwDoc();
+
+    CPPUNIT_ASSERT_EQUAL_MESSAGE(
+        "Automatic mode enabled", false,
+        getProperty<bool>(getRun(getParagraph(1), 1), "CharAutoEscapement"));
+    dispatchCommand(mxComponent, ".uno:SubScript", {});
+    // Writer has always had automatic mode enabled when creating subscript/superscripts.
+    CPPUNIT_ASSERT_EQUAL_MESSAGE(
+        "Automatic mode enabled", true,
+        getProperty<bool>(getRun(getParagraph(1), 1), "CharAutoEscapement"));
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf64242_optimizeTable)
@@ -2320,7 +2312,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf76817_round_trip)
     createSwDoc("tdf76817.fodt");
 
     // save it to DOCX
-    reload("Office Open XML Text", "tdf76817.docx");
+    saveAndReload("Office Open XML Text");
 
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     SwViewShell* pViewShell
@@ -2458,9 +2450,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf123102)
     dispatchCommand(mxComponent, ".uno:InsertRowsAfter", {});
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
     // This was "3." - caused by the hidden numbered paragraph of the new merged cell
-    assertXPath(pXmlDoc,
-                "/root/page/body/tab/row[6]/cell[1]/txt/SwParaPortion/SwLineLayout/SwFieldPortion",
-                "expand", "2.");
+    assertXPath(
+        pXmlDoc,
+        "/root/page/body/tab/row[6]/cell[1]/txt/SwParaPortion/SwLineLayout/SwFieldPortion"_ostr,
+        "expand"_ostr, "2.");
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testUnfloatButtonSmallTable)
@@ -2617,13 +2610,17 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testUnfloating)
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testRTLparaStyle_LocaleArabic)
 {
     // New documents, created in RTL locales, were not round-tripping the paragraph style as RTL.
-    // Set the locale to "ar" for this test - see preTest() at the top of this file.
-    std::unique_ptr<Resetter> const pChanges(preTest("LocaleArabic"));
+    // Set the locale to "ar" for this test.
+    m_aSavedSettings = Application::GetSettings();
+    AllSettings aSettings(m_aSavedSettings);
+    aSettings.SetLanguageTag(LanguageTag("ar"));
+    Application::SetSettings(aSettings);
+    comphelper::ScopeGuard g([this] { Application::SetSettings(this->m_aSavedSettings); });
 
     createSwDoc(); // new, empty doc - everything defaults to RTL with Arabic locale
 
     // Save it and load it back.
-    reload("Office Open XML Text", "tdf116404_paraStyleFrameDir.docx");
+    saveAndReload("Office Open XML Text");
 
     uno::Reference<beans::XPropertySet> xPageStyle(
         getStyles("ParagraphStyles")->getByName("Default Paragraph Style"), uno::UNO_QUERY_THROW);
@@ -2733,12 +2730,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf122942)
     pWrtShell->EndCreate(SdrCreateCmd::ForceEnd);
 
     // Make sure that the shape is inserted.
-    const SwFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
+    const auto& rFormats = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(2), rFormats.size());
 
-    reload("writer8", "tdf122942.odt");
+    saveAndReload("writer8");
     pDoc = getSwDoc();
-    const SwFrameFormats& rFormats2 = *pDoc->GetSpzFrameFormats();
+    const auto& rFormats2 = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(2), rFormats2.size());
 
     // Make sure the top of the inserted shape does not move outside the existing shape, even after
@@ -2955,11 +2952,11 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf137771)
     CPPUNIT_ASSERT(pXmlDoc);
 
     // This would be 5 without the new vertical redline mark
-    assertXPath(pXmlDoc, "/metafile/push/push/push/line", 6);
+    assertXPath(pXmlDoc, "/metafile/push/push/push/line"_ostr, 6);
 
     // This was the content of the next <text> (missing deletion on margin)
     // or only the first character of the deleted character sequence
-    assertXPathContent(pXmlDoc, "/metafile/push/push/push/textarray[9]/text", " saved.");
+    assertXPathContent(pXmlDoc, "/metafile/push/push/push/textarray[9]/text"_ostr, " saved.");
 
     // this would crash due to bad redline range
     for (int i = 0; i < 6; ++i)
@@ -2997,12 +2994,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf142130)
     // This was 6 (bad crossing out of the first, not deleted image)
     // (4 lines = 2 lines for crossing out of the second image + 2 lines =
     // vertical "changed line" indicator before the two paragraph lines)
-    assertXPath(pXmlDoc, "/metafile/push/push/push/line", 4);
+    assertXPath(pXmlDoc, "/metafile/push/push/push/line"_ostr, 4);
 
     // check line color
-    assertXPath(pXmlDoc, "/metafile/push[1]/push[1]/push[1]/linecolor", 5);
+    assertXPath(pXmlDoc, "/metafile/push[1]/push[1]/push[1]/linecolor"_ostr, 5);
     // tdf#142128 This was 3 (NON_PRINTING_CHARACTER_COLOR = #268bd2)
-    assertXPath(pXmlDoc, "/metafile/push[1]/push[1]/push[1]/linecolor[@color='#268bd2']", 0);
+    assertXPath(pXmlDoc, "/metafile/push[1]/push[1]/push[1]/linecolor[@color='#268bd2']"_ostr, 0);
 
     // reject deletion of the second image
     IDocumentRedlineAccess& rIDRA(pDoc->getIDocumentRedlineAccess());
@@ -3011,7 +3008,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf142130)
     xMetaFile = pShell->GetPreviewMetaFile();
     xmlDocUniquePtr pXmlDoc2 = dumpAndParse(dumper, *xMetaFile);
     // no crossing out and vertical redlines
-    assertXPath(pXmlDoc2, "/metafile/push/push/push/line", 0);
+    assertXPath(pXmlDoc2, "/metafile/push/push/push/line"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf142196)
@@ -3039,14 +3036,16 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf142196)
     // This was 1 (missing crossing out of the deleted image)
     // (2 lines = crossing out of the deleted image + 1 line for the
     // vertical "changed line" indicator before the paragraph line)
-    assertXPath(pXmlDoc, "//line", 3);
+    assertXPath(pXmlDoc, "//line"_ostr, 3);
 
     // check line color
-    assertXPath(pXmlDoc, "/metafile/push[1]/push[1]/push[1]/push[3]/push[1]/push[1]/linecolor", 1);
+    assertXPath(pXmlDoc, "/metafile/push[1]/push[1]/push[1]/push[3]/push[1]/push[1]/linecolor"_ostr,
+                1);
     // tdf#142128 This was NON_PRINTING_CHARACTER_COLOR (#268bd2)
     assertXPath(
         pXmlDoc,
-        "/metafile/push[1]/push[1]/push[1]/push[3]/push[1]/push[1]/linecolor[@color='#268bd2']", 0);
+        "/metafile/push[1]/push[1]/push[1]/push[3]/push[1]/push[1]/linecolor[@color='#268bd2']"_ostr,
+        0);
 
     // reject deletion of the image
     IDocumentRedlineAccess& rIDRA(pDoc->getIDocumentRedlineAccess());
@@ -3056,7 +3055,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf142196)
     xmlDocUniquePtr pXmlDoc2 = dumpAndParse(dumper, *xMetaFile);
 
     // no crossing out and vertical "changed line" indicator
-    assertXPath(pXmlDoc2, "//line", 0);
+    assertXPath(pXmlDoc2, "//line"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf142700)
@@ -3083,14 +3082,16 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf142700)
 
     // (2 lines = crossing out of the deleted image + 1 line for the
     // vertical "changed line" indicator before the paragraph line)
-    assertXPath(pXmlDoc, "//line", 3);
+    assertXPath(pXmlDoc, "//line"_ostr, 3);
 
     // check line color
-    assertXPath(pXmlDoc, "/metafile/push[1]/push[1]/push[1]/push[3]/push[1]/push[1]/linecolor", 1);
+    assertXPath(pXmlDoc, "/metafile/push[1]/push[1]/push[1]/push[3]/push[1]/push[1]/linecolor"_ostr,
+                1);
     // tdf#142128 This was NON_PRINTING_CHARACTER_COLOR (#268bd2)
     assertXPath(
         pXmlDoc,
-        "/metafile/push[1]/push[1]/push[1]/push[3]/push[1]/push[1]/linecolor[@color='#268bd2']", 0);
+        "/metafile/push[1]/push[1]/push[1]/push[3]/push[1]/push[1]/linecolor[@color='#268bd2']"_ostr,
+        0);
 
     // reject deletion of the image
     IDocumentRedlineAccess& rIDRA(pDoc->getIDocumentRedlineAccess());
@@ -3101,7 +3102,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf142700)
 
     // no crossing out and vertical "changed line" indicator
     // This was 2 (not removed strikethrough)
-    assertXPath(pXmlDoc2, "//line", 0);
+    assertXPath(pXmlDoc2, "//line"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf139120)
@@ -3132,7 +3133,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf139120)
         dispatchCommand(mxComponent, ".uno:Delete", {});
     }
 
-    uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(OUString("Lorem ipsum sit amet."), pTextDoc->getText()->getString());
 
     for (int i = 0; i < 6; ++i)
@@ -3151,7 +3151,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest2, testTdf139120)
     CPPUNIT_ASSERT(pXmlDoc);
 
     // This was the 3, containing the text "$2" instead of nothing
-    assertXPath(pXmlDoc, "/metafile/push/push/push/textarray", 2);
+    assertXPath(pXmlDoc, "/metafile/push/push/push/textarray"_ostr, 2);
 
     // switch off "Show changes in margin" mode
     dispatchCommand(mxComponent, ".uno:ShowChangesInMargin", {});

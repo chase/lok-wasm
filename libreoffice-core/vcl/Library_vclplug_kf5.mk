@@ -30,7 +30,7 @@ $(eval $(call gb_Library_set_include,vclplug_kf5,\
 ))
 
 $(eval $(call gb_Library_add_defs,vclplug_kf5,\
-    -DVCLPLUG_KF5_IMPLEMENTATION \
+    -DVCLPLUG_KF_IMPLEMENTATION \
 ))
 
 $(eval $(call gb_Library_use_sdk_api,vclplug_kf5))
@@ -63,8 +63,8 @@ $(eval $(call gb_Library_use_externals,vclplug_kf5,\
 ))
 
 $(eval $(call gb_Library_add_exception_objects,vclplug_kf5,\
-    vcl/unx/kf5/KF5FilePicker \
-    vcl/unx/kf5/KF5SalInstance \
+    vcl/unx/kf5/KFFilePicker \
+    vcl/unx/kf5/KFSalInstance \
 ))
 
 ifeq ($(OS),LINUX)

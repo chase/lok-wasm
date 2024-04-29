@@ -17,8 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_VCLEVENTLISTENERS_HXX
-#define INCLUDED_VCL_INC_VCLEVENTLISTENERS_HXX
+#pragma once
+
+#include <tools/link.hxx>
+#include <vcl/vclevent.hxx>
 
 #include <vector>
 
@@ -33,7 +35,5 @@ private:
     std::vector<Link<VclSimpleEvent&, void>> m_aListeners;
     mutable bool m_updated = false;
 };
-
-#endif // INCLUDED_VCL_INC_VCLEVENTLISTENERS_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

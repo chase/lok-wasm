@@ -30,11 +30,9 @@
 #endif
 
 #ifdef UNX
-#include <sys/time.h>
 #include <sys/resource.h>
 #endif
 
-#include <stdlib.h>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -43,13 +41,11 @@
 #include <cppunittester/protectorfactory.hxx>
 #include <osl/module.h>
 #include <osl/module.hxx>
+#include <osl/process.h>
 #include <osl/thread.h>
 #include <rtl/character.hxx>
-#include <rtl/process.h>
-#include <rtl/string.h>
 #include <rtl/string.hxx>
 #include <rtl/strbuf.hxx>
-#include <rtl/textcvt.h>
 #include <rtl/ustring.hxx>
 #include <sal/main.h>
 
@@ -64,7 +60,6 @@
 #include <cppunit/plugin/DynamicLibraryManagerException.h>
 #include <cppunit/portability/Stream.h>
 
-#include <memory>
 #include <boost/algorithm/string.hpp>
 
 #include <algorithm>
@@ -91,8 +86,7 @@ std::string convertLazy(std::u16string_view s16) {
     OString s8(OUStringToOString(s16, osl_getThreadTextEncoding()));
     static_assert(sizeof (sal_Int32) <= sizeof (std::string::size_type), "must be at least the same size");
         // ensure following cast is legitimate
-    return std::string(
-        s8.getStr(), static_cast< std::string::size_type >(s8.getLength()));
+    return std::string(s8);
 }
 
 //Output how long each test took
@@ -405,6 +399,14 @@ static bool main2()
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_DEBUG|_CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
 #endif
+    // Create a desktop, to avoid popups interfering with active user session,
+    // because on Windows, we don't use svp vcl plugin for unit testing
+    if (getenv("CPPUNIT_DEFAULT_DESKTOP") == nullptr)
+    {
+        if (HDESK hDesktop
+            = CreateDesktopW(L"LO_CPPUNIT_DESKTOP", nullptr, nullptr, 0, GENERIC_ALL, nullptr))
+            SetThreadDesktop(hDesktop);
+    }
 #endif
 
     std::vector<CppUnit::Protector *> protectors;
@@ -465,16 +467,17 @@ static bool main2()
             std::exit(EXIT_FAILURE);
         }
 #endif
-        CppUnit::Protector *protector = fn == nullptr
-            ? nullptr
-            : (*reinterpret_cast< cppunittester::ProtectorFactory * >(fn))();
-        if (protector == nullptr) {
+        if (fn == nullptr) {
             std::cerr
                 << "Failure instantiating protector \"" << convertLazy(lib)
                 << "\", \"" << convertLazy(sym) << '"' << std::endl;
             std::exit(EXIT_FAILURE);
         }
-        protectors.push_back(protector);
+        CppUnit::Protector *protector =
+            (*reinterpret_cast< cppunittester::ProtectorFactory * >(fn))();
+        if (protector != nullptr) {
+            protectors.push_back(protector);
+        }
         index+=3;
     }
 
@@ -502,6 +505,10 @@ static void printStack( PCONTEXT ctx )
     stack.AddrPC.Offset    = ctx->Rip;
     stack.AddrStack.Offset = ctx->Rsp;
     stack.AddrFrame.Offset = ctx->Rsp;
+#elif defined _M_ARM64
+    stack.AddrPC.Offset    = ctx->Pc;
+    stack.AddrStack.Offset = ctx->Sp;
+    stack.AddrFrame.Offset = ctx->Fp;
 #else
     stack.AddrPC.Offset    = ctx->Eip;
     stack.AddrStack.Offset = ctx->Esp;
@@ -528,6 +535,8 @@ static void printStack( PCONTEXT ctx )
         (
 #ifdef _M_AMD64
             IMAGE_FILE_MACHINE_AMD64,
+#elif defined _M_ARM64
+            IMAGE_FILE_MACHINE_ARM64,
 #else
             IMAGE_FILE_MACHINE_I386,
 #endif

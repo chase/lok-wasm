@@ -527,7 +527,7 @@ void ImplDockingWindowWrapper::ImplStartDocking( const Point& rPos )
     if ( !mpFloatWin )
         pWin.disposeAndClear();
 
-    Point   aPos    = GetWindow()->ImplOutputToFrame( Point() );
+    Point   aPos    = GetWindow()->OutputToScreenPixel( Point() );
     Size    aSize   = GetWindow()->GetOutputSizePixel();
     mnTrackX        = aPos.X();
     mnTrackY        = aPos.Y();
@@ -582,7 +582,7 @@ void ImplDockingWindowWrapper::Tracking( const TrackingEvent& rTEvt )
     else if ( !rTEvt.GetMouseEvent().IsSynthetic() || rTEvt.GetMouseEvent().IsModifierChanged() )
     {
         Point   aMousePos = rTEvt.GetMouseEvent().GetPosPixel();
-        Point   aFrameMousePos = GetWindow()->ImplOutputToFrame( aMousePos );
+        Point   aFrameMousePos = GetWindow()->OutputToScreenPixel( aMousePos );
         Size    aFrameSize = GetWindow()->ImplGetFrameWindow()->GetOutputSizePixel();
         if ( aFrameMousePos.X() < 0 )
             aFrameMousePos.setX( 0 );
@@ -592,10 +592,10 @@ void ImplDockingWindowWrapper::Tracking( const TrackingEvent& rTEvt )
             aFrameMousePos.setX( aFrameSize.Width()-1 );
         if ( aFrameMousePos.Y() > aFrameSize.Height()-1 )
             aFrameMousePos.setY( aFrameSize.Height()-1 );
-        aMousePos = GetWindow()->ImplFrameToOutput( aFrameMousePos );
+        aMousePos = GetWindow()->ScreenToOutputPixel( aFrameMousePos );
         aMousePos.AdjustX( -(maMouseOff.X()) );
         aMousePos.AdjustY( -(maMouseOff.Y()) );
-        Point aPos = GetWindow()->ImplOutputToFrame( aMousePos );
+        Point aPos = GetWindow()->OutputToScreenPixel( aMousePos );
         tools::Rectangle aTrackRect( aPos, Size( mnTrackWidth, mnTrackHeight ) );
         tools::Rectangle aCompRect = aTrackRect;
         aPos.AdjustX(maMouseOff.X() );
@@ -631,7 +631,7 @@ void ImplDockingWindowWrapper::Tracking( const TrackingEvent& rTEvt )
         else
             nTrackStyle = ShowTrackFlags::Big;
         tools::Rectangle aShowTrackRect = aTrackRect;
-        aShowTrackRect.SetPos( GetWindow()->ImplFrameToOutput( aShowTrackRect.TopLeft() ) );
+        aShowTrackRect.SetPos( GetWindow()->ScreenToOutputPixel( aShowTrackRect.TopLeft() ) );
 
         GetWindow()->ShowTracking( aShowTrackRect, nTrackStyle );
 
@@ -821,21 +821,12 @@ void ImplDockingWindowWrapper::StartPopupMode( ToolBox *pParentToolBox, FloatWin
     if( pParentToolBox->IsKeyEvent() )
         nFlags |= FloatWinPopupFlags::GrabFocus;
 
-    // tdf#140762, tdf#152671, tdf#154470, tdf#156100: Without client window being visible
-    // before showing popup, at least NVDA on Windows does not announce items in the popup,
-    // so make the client window visible first. This is problematic for gtk VCL plugins though,
-    // so don't do it there and use different code paths for now.
-    // For further analysis of the root causes, there's tdf#156561.
-    const OUString sToolkit = Application::GetToolkitName();
-    if (sToolkit == "gtk3" || sToolkit == "gtk4")
-    {
-        mpFloatWin->StartPopupMode( pParentToolBox, nFlags);
-        GetWindow()->Show();
-    }
-    else
-    {
-        mpFloatWin->StartPopupMode( pParentToolBox, nFlags | FloatWinPopupFlags::MakeClientWindowVisibleBeforePopup);
-    }
+    mpFloatWin->StartPopupMode( pParentToolBox, nFlags );
+    GetWindow()->Show();
+    // grab focus (again) after showing docking window, as e.g. a11y focus
+    // events require window to be visible first
+    if (nFlags & FloatWinPopupFlags::GrabFocus)
+        mpFloatWin->GrabFocus();
 
     if( pParentToolBox->IsKeyEvent() )
     {
@@ -852,7 +843,12 @@ void ImplDockingWindowWrapper::StartPopupMode( const tools::Rectangle& rRect, Fl
         return;
 
     ImplPreparePopupMode();
-    mpFloatWin->StartPopupMode( rRect, nFlags | FloatWinPopupFlags::MakeClientWindowVisibleBeforePopup);
+    mpFloatWin->StartPopupMode( rRect, nFlags );
+    GetWindow()->Show();
+    // grab focus (again) after showing docking window, as e.g. a11y focus
+    // events require window to be visible first
+    if (nFlags & FloatWinPopupFlags::GrabFocus)
+        mpFloatWin->GrabFocus();
 }
 
 IMPL_LINK_NOARG(ImplDockingWindowWrapper, PopupModeEnd, FloatingWindow*, void)

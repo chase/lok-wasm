@@ -20,7 +20,7 @@
 
 #include <unotools/resmgr.hxx>
 
-#define NC_(Context, String) TranslateId(Context, reinterpret_cast<char const *>(u8##String))
+#define NC_(Context, String) TranslateId(Context, u8##String)
 
 /* Resource file for the function wizard / autopilot.
  *
@@ -3002,7 +3002,7 @@ const TranslateId SC_OPCODE_F_TEST_MS_ARY[] =
 // -=*# Resource for function TTEST #*=-
 const TranslateId SC_OPCODE_T_TEST_ARY[] =
 {
-    NC_("SC_OPCODE_T_TEST", "Calculates the T test."),
+    NC_("SC_OPCODE_T_TEST", "Calculates the t-test."),
     NC_("SC_OPCODE_T_TEST", "Data 1"),
     NC_("SC_OPCODE_T_TEST", "The first record array."),
     NC_("SC_OPCODE_T_TEST", "Data 2"),
@@ -3010,13 +3010,13 @@ const TranslateId SC_OPCODE_T_TEST_ARY[] =
     NC_("SC_OPCODE_T_TEST", "Mode"),
     NC_("SC_OPCODE_T_TEST", "Mode specifies the number of distribution tails to return. 1 = one-tailed, 2 = two-tailed distribution"),
     NC_("SC_OPCODE_T_TEST", "Type"),
-    NC_("SC_OPCODE_T_TEST", "The type of the T test.")
+    NC_("SC_OPCODE_T_TEST", "The type of the t-test.")
 };
 
 // -=*# Resource for function T.TEST #*=-
 const TranslateId SC_OPCODE_T_TEST_MS_ARY[] =
 {
-    NC_("SC_OPCODE_T_TEST_MS", "Calculates the T test."),
+    NC_("SC_OPCODE_T_TEST_MS", "Calculates the t-test."),
     NC_("SC_OPCODE_T_TEST_MS", "Data 1"),
     NC_("SC_OPCODE_T_TEST_MS", "The first record array."),
     NC_("SC_OPCODE_T_TEST_MS", "Data 2"),
@@ -3024,7 +3024,7 @@ const TranslateId SC_OPCODE_T_TEST_MS_ARY[] =
     NC_("SC_OPCODE_T_TEST_MS", "Mode"),
     NC_("SC_OPCODE_T_TEST_MS", "Mode specifies the number of distribution tails to return. 1 = one-tailed, 2 = two-tailed distribution"),
     NC_("SC_OPCODE_T_TEST_MS", "Type"),
-    NC_("SC_OPCODE_T_TEST_MS", "The type of the T test.")
+    NC_("SC_OPCODE_T_TEST_MS", "The type of the t-test.")
 };
 
 // -=*# Resource for function RSQ #*=-
@@ -3377,6 +3377,24 @@ const TranslateId SC_OPCODE_V_LOOKUP_ARY[] =
     NC_("SC_OPCODE_V_LOOKUP", "If the value is TRUE or not given, the search column of the array represents a series of ranges, and must be sorted in ascending order.")
 };
 
+// -=*# Resource for function XLOOKUP #*=-
+const TranslateId SC_OPCODE_X_LOOKUP_ARY[] =
+{
+    NC_("SC_OPCODE_X_LOOKUP", "Extended vertical search and reference to indicated cells."),
+    NC_("SC_OPCODE_X_LOOKUP", "Search criterion"),
+    NC_("SC_OPCODE_X_LOOKUP", "The value to be found in the first column."),
+    NC_("SC_OPCODE_X_LOOKUP", "Search Array"),
+    NC_("SC_OPCODE_X_LOOKUP", "The array or range to search."),
+    NC_("SC_OPCODE_X_LOOKUP", "Result Array"),
+    NC_("SC_OPCODE_X_LOOKUP", "The array or range to return."),
+    NC_("SC_OPCODE_X_LOOKUP", "Result if not found"),
+    NC_("SC_OPCODE_X_LOOKUP", "If given, return given text, otherwise return #N/A."),
+    NC_("SC_OPCODE_X_LOOKUP", "Match Mode"),
+    NC_("SC_OPCODE_X_LOOKUP", "0, -1, 1 or 2 "), // TODO : add explanation of values
+    NC_("SC_OPCODE_X_LOOKUP", "Search Mode"),
+    NC_("SC_OPCODE_X_LOOKUP", "1, -1, 2 or -2 ") // TODO : add explanation of values
+};
+
 // -=*# Resource for function INDEX #*=-
 const TranslateId SC_OPCODE_INDEX_ARY[] =
 {
@@ -3423,6 +3441,20 @@ const TranslateId SC_OPCODE_MATCH_ARY[] =
     NC_("SC_OPCODE_MATCH", "The array (range) in which the search is made."),
     NC_("SC_OPCODE_MATCH", "Type"),
     NC_("SC_OPCODE_MATCH", "Type can take the value 1 (first column array ascending), 0 (exact match or wildcard or regular expression match) or -1 (first column array descending) and determines the criteria to be used for comparison purposes.")
+};
+
+// -=*# Resource for function XMATCH #*=-
+const TranslateId SC_OPCODE_X_MATCH_ARY[] =
+{
+    NC_("SC_OPCODE_X_MATCH", "Defines a relative position in an array or range of cells after comparing values."),
+    NC_("SC_OPCODE_X_MATCH", "Search criterion"),
+    NC_("SC_OPCODE_X_MATCH", "The value to be used for comparison."),
+    NC_("SC_OPCODE_X_MATCH", "Search Array"),
+    NC_("SC_OPCODE_X_MATCH", "The array or range to search."),
+    NC_("SC_OPCODE_X_MATCH", "Match Mode"),
+    NC_("SC_OPCODE_X_MATCH", "0, -1, 1 or 2 "), // TODO : add explanation of values
+    NC_("SC_OPCODE_X_MATCH", "Search Mode"),
+    NC_("SC_OPCODE_X_MATCH", "1, -1, 2 or -2 ") // TODO : add explanation of values
 };
 
 // -=*# Resource for function OFFSET #*=-
@@ -4149,6 +4181,44 @@ const TranslateId SC_OPCODE_RANDBETWEEN_NV_ARY[] =
     NC_("SC_OPCODE_RANDBETWEEN_NV", "The smallest integer that can be returned."),
     NC_("SC_OPCODE_RANDBETWEEN_NV", "Top"),
     NC_("SC_OPCODE_RANDBETWEEN_NV", "The largest integer that can be returned.")
+};
+
+// -=*# Resource for function FILTER #*=-
+const TranslateId SC_OPCODE_FILTER_ARY[] =
+{
+    NC_("SC_OPCODE_FILTER", "Filters an array based on a Boolean (True/False) array."),
+    NC_("SC_OPCODE_FILTER", "Range"),
+    NC_("SC_OPCODE_FILTER", "The array, or range to filter."),
+    NC_("SC_OPCODE_FILTER", "Include"),
+    NC_("SC_OPCODE_FILTER", "A Boolean array whose height or width is the same as the array."),
+    NC_("SC_OPCODE_FILTER", "Result if empty"),
+    NC_("SC_OPCODE_FILTER", "The value to return if all values in the included array are empty (filter returns nothing).")
+};
+
+// -=*# Resource for function SORT #*=-
+const TranslateId SC_OPCODE_SORT_ARY[] =
+{
+    NC_("SC_OPCODE_SORT", "Sorts the contents of a range or array."),
+    NC_("SC_OPCODE_SORT", "Range"),
+    NC_("SC_OPCODE_SORT", "The range, or array to sort."),
+    NC_("SC_OPCODE_SORT", "Sort index"),
+    NC_("SC_OPCODE_SORT", "A number indicating the row or column to sort by."),
+    NC_("SC_OPCODE_SORT", "Sort order"),
+    NC_("SC_OPCODE_SORT", "A number indicating the desired sort order; 1 for ascending order (default), -1 for descending order."),
+    NC_("SC_OPCODE_SORT", "By col"),
+    NC_("SC_OPCODE_SORT", "A logical value indicating the desired sort direction; FALSE to sort by row (default), TRUE to sort by column.")
+};
+
+// -=*# Resource for function SORTBY #*=-
+const TranslateId SC_OPCODE_SORTBY_ARY[] =
+{
+    NC_("SC_OPCODE_SORTBY", "Sorts the contents of a range or array based on the values in a corresponding range or array."),
+    NC_("SC_OPCODE_SORTBY", "Sort range"),
+    NC_("SC_OPCODE_SORTBY", "The array or range to sort."),
+    NC_("SC_OPCODE_SORTBY", "Sort by range "),
+    NC_("SC_OPCODE_SORTBY", "Range 1, range 2,... are the arrays or ranges to sort on."),
+    NC_("SC_OPCODE_SORTBY", "Sort order "),
+    NC_("SC_OPCODE_SORTBY", "Order 1, order 2,... are the orders to use for sorting. 1 for ascending, -1 for descending. Default is ascending.")
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

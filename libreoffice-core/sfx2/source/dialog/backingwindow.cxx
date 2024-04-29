@@ -28,6 +28,7 @@
 
 #include <unotools/historyoptions.hxx>
 #include <unotools/moduleoptions.hxx>
+#include <unotools/configmgr.hxx>
 #include <svtools/openfiledroptargetlistener.hxx>
 #include <svtools/colorcfg.hxx>
 #include <svtools/langhelp.hxx>
@@ -39,6 +40,7 @@
 #include <sfx2/app.hxx>
 #include <officecfg/Office/Common.hxx>
 
+#include <i18nlangtag/languagetag.hxx>
 #include <comphelper/diagnose_ex.hxx>
 
 #include <com/sun/star/configuration/theDefaultProvider.hpp>
@@ -210,7 +212,7 @@ BackingWindow::BackingWindow(vcl::Window* i_pParent)
 IMPL_LINK(BackingWindow, ClickHelpHdl, weld::Button&, rButton, void)
 {
     if (Help* pHelp = Application::GetHelp())
-        pHelp->Start(OUString::fromUtf8(m_xContainer->get_help_id()), &rButton);
+        pHelp->Start(m_xContainer->get_help_id(), &rButton);
 }
 
 BackingWindow::~BackingWindow()
@@ -519,15 +521,10 @@ void BackingWindow::setOwningFrame( const css::uno::Reference< css::frame::XFram
         xFramesSupplier->setActiveFrame(mxFrame);
 }
 
-IMPL_LINK(BackingWindow, ExtLinkClickHdl, weld::Button&, rButton, void)
+IMPL_LINK(BackingWindow, ExtLinkClickHdl, weld::Button&, rButton,void)
 {
-    OUString aNode;
-
-    if (&rButton == mxExtensionsButton.get())
-        aNode = "AddFeatureURL";
-
-    if (aNode.isEmpty())
-        return;
+    if (&rButton != mxExtensionsButton.get())
+       return;
 
     try
     {
@@ -540,11 +537,9 @@ IMPL_LINK(BackingWindow, ExtLinkClickHdl, weld::Button&, rButton, void)
         Reference<container::XNameAccess> xNameAccess(xConfig->createInstanceWithArguments(SERVICENAME_CFGREADACCESS, args), UNO_QUERY);
         if (xNameAccess.is())
         {
-            OUString sURL;
-            Any value(xNameAccess->getByName(aNode));
-
-            sURL = value.get<OUString>();
-            localizeWebserviceURI(sURL);
+            OUString sURL(officecfg::Office::Common::Menus::ExtensionsURL::get() +
+                "?LOvers=" + utl::ConfigManager::getProductVersion() +
+                "&LOlocale=" + LanguageTag(utl::ConfigManager::getUILocale()).getBcp47() );
 
             Reference<css::system::XSystemShellExecute> const
                 xSystemShellExecute(
@@ -598,7 +593,7 @@ IMPL_LINK( BackingWindow, ToggleHdl, weld::Toggleable&, rButton, void )
         mxAllRecentThumbnails->GrabFocus();
         mxRecentButton->set_active(true);
         mxTemplateButton->set_active(false);
-        mxActions->set_sensitive(true);
+        mxActions->show();
     }
     else
     {
@@ -609,7 +604,7 @@ IMPL_LINK( BackingWindow, ToggleHdl, weld::Toggleable&, rButton, void )
         mxLocalView->GrabFocus();
         mxRecentButton->set_active(false);
         mxTemplateButton->set_active(true);
-        mxActions->set_sensitive(false);
+        mxActions->hide();
     }
     applyFilter();
 }
@@ -643,11 +638,11 @@ IMPL_LINK( BackingWindow, ClickHdl, weld::Button&, rButton, void )
     }
 }
 
-IMPL_LINK (BackingWindow, MenuSelectHdl, const OString&, rId, void)
+IMPL_LINK (BackingWindow, MenuSelectHdl, const OUString&, rId, void)
 {
     if (rId == "clear_all")
     {
-        SvtHistoryOptions::Clear(EHistoryType::PickList);
+        SvtHistoryOptions::Clear(EHistoryType::PickList, false);
         mxAllRecentThumbnails->Reload();
         return;
     }

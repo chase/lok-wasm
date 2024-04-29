@@ -18,7 +18,6 @@
  */
 
 #include "ShapeController.hxx"
-#include <ShapeController.h>
 #include <ChartController.hxx>
 #include <ViewElementListProvider.hxx>
 #include <dlg_ShapeFont.hxx>
@@ -60,7 +59,7 @@ ShapeController::~ShapeController()
 }
 
 // WeakComponentImplHelperBase
-void ShapeController::disposing()
+void ShapeController::disposing(std::unique_lock<std::mutex>& /*rGuard*/)
 {
 }
 
@@ -88,37 +87,37 @@ FeatureState ShapeController::getState( const OUString& rCommand )
     SupportedFeatures::const_iterator aIter = m_aSupportedFeatures.find( rCommand );
     if ( aIter != m_aSupportedFeatures.end() )
     {
-        sal_uInt16 nFeatureId = aIter->second.nFeatureId;
+        ChartCommandID nFeatureId = aIter->second.nFeatureId;
         switch ( nFeatureId )
         {
-            case COMMAND_ID_FORMAT_LINE:
-            case COMMAND_ID_FORMAT_AREA:
-            case COMMAND_ID_TEXT_ATTRIBUTES:
-            case COMMAND_ID_TRANSFORM_DIALOG:
-            case COMMAND_ID_OBJECT_TITLE_DESCRIPTION:
-            case COMMAND_ID_RENAME_OBJECT:
+            case ChartCommandID::ShapeFormatLine:
+            case ChartCommandID::ShapeFormatArea:
+            case ChartCommandID::ShapeTextAttributes:
+            case ChartCommandID::ShapeTransformDialog:
+            case ChartCommandID::ShapeObjectTitleDescription:
+            case ChartCommandID::ShapeRenameObject:
                 {
                     aReturn.bEnabled = bWritable;
                     aReturn.aState <<= false;
                 }
                 break;
-            case COMMAND_ID_BRING_TO_FRONT:
-            case COMMAND_ID_FORWARD:
+            case ChartCommandID::ShapeBringToFront:
+            case ChartCommandID::ShapeForward:
                 {
                     aReturn.bEnabled = ( bWritable && isForwardPossible() );
                     aReturn.aState <<= false;
                 }
                 break;
-            case COMMAND_ID_BACKWARD:
-            case COMMAND_ID_SEND_TO_BACK:
+            case ChartCommandID::ShapeBackward:
+            case ChartCommandID::ShapeSendToBack:
                 {
 
                     aReturn.bEnabled = ( bWritable && isBackwardPossible() );
                     aReturn.aState <<= false;
                 }
                 break;
-            case COMMAND_ID_FONT_DIALOG:
-            case COMMAND_ID_PARAGRAPH_DIALOG:
+            case ChartCommandID::ShapeFontDialog:
+            case ChartCommandID::ShapeParagraphDialog:
                 {
                     aReturn.bEnabled = bWritable;
                     aReturn.aState <<= false;
@@ -142,53 +141,53 @@ void ShapeController::execute( const OUString& rCommand, const Sequence< beans::
     if ( aIter == m_aSupportedFeatures.end() )
         return;
 
-    sal_uInt16 nFeatureId = aIter->second.nFeatureId;
+    ChartCommandID nFeatureId = aIter->second.nFeatureId;
     switch ( nFeatureId )
     {
-        case COMMAND_ID_FORMAT_LINE:
+        case ChartCommandID::ShapeFormatLine:
             {
                 executeDispatch_FormatLine();
             }
             break;
-        case COMMAND_ID_FORMAT_AREA:
+        case ChartCommandID::ShapeFormatArea:
             {
                 executeDispatch_FormatArea();
             }
             break;
-        case COMMAND_ID_TEXT_ATTRIBUTES:
+        case ChartCommandID::ShapeTextAttributes:
             {
                 executeDispatch_TextAttributes();
             }
             break;
-        case COMMAND_ID_TRANSFORM_DIALOG:
+        case ChartCommandID::ShapeTransformDialog:
             {
                 executeDispatch_TransformDialog();
             }
             break;
-        case COMMAND_ID_OBJECT_TITLE_DESCRIPTION:
+        case ChartCommandID::ShapeObjectTitleDescription:
             {
                 executeDispatch_ObjectTitleDescription();
             }
             break;
-        case COMMAND_ID_RENAME_OBJECT:
+        case ChartCommandID::ShapeRenameObject:
             {
                 executeDispatch_RenameObject();
             }
             break;
-        case COMMAND_ID_BRING_TO_FRONT:
-        case COMMAND_ID_FORWARD:
-        case COMMAND_ID_BACKWARD:
-        case COMMAND_ID_SEND_TO_BACK:
+        case ChartCommandID::ShapeBringToFront:
+        case ChartCommandID::ShapeForward:
+        case ChartCommandID::ShapeBackward:
+        case ChartCommandID::ShapeSendToBack:
             {
                 executeDispatch_ChangeZOrder( nFeatureId );
             }
             break;
-        case COMMAND_ID_FONT_DIALOG:
+        case ChartCommandID::ShapeFontDialog:
             {
                 executeDispatch_FontDialog();
             }
             break;
-        case COMMAND_ID_PARAGRAPH_DIALOG:
+        case ChartCommandID::ShapeParagraphDialog:
             {
                 executeDispatch_ParagraphDialog();
             }
@@ -202,18 +201,18 @@ void ShapeController::execute( const OUString& rCommand, const Sequence< beans::
 
 void ShapeController::describeSupportedFeatures()
 {
-    implDescribeSupportedFeature( ".uno:FormatLine",                COMMAND_ID_FORMAT_LINE,                 CommandGroup::FORMAT );
-    implDescribeSupportedFeature( ".uno:FormatArea",                COMMAND_ID_FORMAT_AREA,                 CommandGroup::FORMAT );
-    implDescribeSupportedFeature( ".uno:TextAttributes",            COMMAND_ID_TEXT_ATTRIBUTES,             CommandGroup::FORMAT );
-    implDescribeSupportedFeature( ".uno:TransformDialog",           COMMAND_ID_TRANSFORM_DIALOG,            CommandGroup::FORMAT );
-    implDescribeSupportedFeature( ".uno:ObjectTitleDescription",    COMMAND_ID_OBJECT_TITLE_DESCRIPTION,    CommandGroup::FORMAT );
-    implDescribeSupportedFeature( ".uno:RenameObject",              COMMAND_ID_RENAME_OBJECT,               CommandGroup::FORMAT );
-    implDescribeSupportedFeature( ".uno:BringToFront",              COMMAND_ID_BRING_TO_FRONT,              CommandGroup::FORMAT );
-    implDescribeSupportedFeature( ".uno:Forward",                   COMMAND_ID_FORWARD,                     CommandGroup::FORMAT );
-    implDescribeSupportedFeature( ".uno:Backward",                  COMMAND_ID_BACKWARD,                    CommandGroup::FORMAT );
-    implDescribeSupportedFeature( ".uno:SendToBack",                COMMAND_ID_SEND_TO_BACK,                CommandGroup::FORMAT );
-    implDescribeSupportedFeature( ".uno:FontDialog",                COMMAND_ID_FONT_DIALOG,                 CommandGroup::EDIT );
-    implDescribeSupportedFeature( ".uno:ParagraphDialog",           COMMAND_ID_PARAGRAPH_DIALOG,            CommandGroup::EDIT );
+    implDescribeSupportedFeature( ".uno:FormatLine",                ChartCommandID::ShapeFormatLine,                 CommandGroup::FORMAT );
+    implDescribeSupportedFeature( ".uno:FormatArea",                ChartCommandID::ShapeFormatArea,                 CommandGroup::FORMAT );
+    implDescribeSupportedFeature( ".uno:TextAttributes",            ChartCommandID::ShapeTextAttributes,             CommandGroup::FORMAT );
+    implDescribeSupportedFeature( ".uno:TransformDialog",           ChartCommandID::ShapeTransformDialog,            CommandGroup::FORMAT );
+    implDescribeSupportedFeature( ".uno:ObjectTitleDescription",    ChartCommandID::ShapeObjectTitleDescription,    CommandGroup::FORMAT );
+    implDescribeSupportedFeature( ".uno:RenameObject",              ChartCommandID::ShapeRenameObject,               CommandGroup::FORMAT );
+    implDescribeSupportedFeature( ".uno:BringToFront",              ChartCommandID::ShapeBringToFront,              CommandGroup::FORMAT );
+    implDescribeSupportedFeature( ".uno:Forward",                   ChartCommandID::ShapeForward,                     CommandGroup::FORMAT );
+    implDescribeSupportedFeature( ".uno:Backward",                  ChartCommandID::ShapeBackward,                    CommandGroup::FORMAT );
+    implDescribeSupportedFeature( ".uno:SendToBack",                ChartCommandID::ShapeSendToBack,                CommandGroup::FORMAT );
+    implDescribeSupportedFeature( ".uno:FontDialog",                ChartCommandID::ShapeFontDialog,                 CommandGroup::EDIT );
+    implDescribeSupportedFeature( ".uno:ParagraphDialog",           ChartCommandID::ShapeParagraphDialog,            CommandGroup::EDIT );
 }
 
 IMPL_LINK( ShapeController, CheckNameHdl, AbstractSvxObjectNameDialog&, rDialog, bool )
@@ -353,7 +352,7 @@ void ShapeController::executeDispatch_TransformDialog()
     if ( pSelectedObj && pSelectedObj->GetObjIdentifier() == SdrObjKind::Caption )
     {
         // item set for caption
-        SfxItemSet aAttr( pDrawViewWrapper->GetModel()->GetItemPool() );
+        SfxItemSet aAttr(pDrawViewWrapper->GetModel().GetItemPool());
         pDrawViewWrapper->GetAttributes( aAttr );
         // item set for position and size
         SfxItemSet aGeoAttr( pDrawViewWrapper->GetGeoAttrFromMarked() );
@@ -402,16 +401,19 @@ void ShapeController::executeDispatch_ObjectTitleDescription()
 
     OUString aTitle( pSelectedObj->GetTitle() );
     OUString aDescription( pSelectedObj->GetDescription() );
+    bool isDecorative(pSelectedObj->IsDecorative());
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     weld::Window* pChartWindow(m_pChartController->GetChartFrame());
     ScopedVclPtr< AbstractSvxObjectTitleDescDialog > pDlg(
-        pFact->CreateSvxObjectTitleDescDialog(pChartWindow, aTitle, aDescription));
+        pFact->CreateSvxObjectTitleDescDialog(pChartWindow, aTitle, aDescription, isDecorative));
     if ( pDlg->Execute() == RET_OK )
     {
         pDlg->GetTitle( aTitle );
         pDlg->GetDescription( aDescription );
+        pDlg->IsDecorative(isDecorative);
         pSelectedObj->SetTitle( aTitle );
         pSelectedObj->SetDescription( aDescription );
+        pSelectedObj->SetDecorative(isDecorative);
     }
 }
 
@@ -438,14 +440,14 @@ void ShapeController::executeDispatch_RenameObject()
     if ( pDlg->Execute() == RET_OK )
     {
         pDlg->GetName(aName);
-        if (pSelectedObj->GetName() == aName)
+        if (pSelectedObj->GetName() != aName)
         {
             pSelectedObj->SetName( aName );
         }
     }
 }
 
-void ShapeController::executeDispatch_ChangeZOrder( sal_uInt16 nId )
+void ShapeController::executeDispatch_ChangeZOrder( ChartCommandID nId )
 {
     SolarMutexGuard aGuard;
     DrawViewWrapper* pDrawViewWrapper = ( m_pChartController ? m_pChartController->GetDrawViewWrapper() : nullptr );
@@ -454,7 +456,7 @@ void ShapeController::executeDispatch_ChangeZOrder( sal_uInt16 nId )
 
     switch ( nId )
     {
-        case COMMAND_ID_BRING_TO_FRONT:
+        case ChartCommandID::ShapeBringToFront:
             {
                 if ( isForwardPossible() )
                 {
@@ -462,7 +464,7 @@ void ShapeController::executeDispatch_ChangeZOrder( sal_uInt16 nId )
                 }
             }
             break;
-        case COMMAND_ID_FORWARD:
+        case ChartCommandID::ShapeForward:
             {
                 if ( isForwardPossible() )
                 {
@@ -470,7 +472,7 @@ void ShapeController::executeDispatch_ChangeZOrder( sal_uInt16 nId )
                 }
             }
             break;
-        case COMMAND_ID_BACKWARD:
+        case ChartCommandID::ShapeBackward:
             {
                 if ( isBackwardPossible() )
                 {
@@ -478,7 +480,7 @@ void ShapeController::executeDispatch_ChangeZOrder( sal_uInt16 nId )
                 }
             }
             break;
-        case COMMAND_ID_SEND_TO_BACK:
+        case ChartCommandID::ShapeSendToBack:
             {
                 if ( isBackwardPossible() )
                 {
@@ -505,7 +507,7 @@ void ShapeController::executeDispatch_FontDialog()
     DrawViewWrapper* pDrawViewWrapper = m_pChartController->GetDrawViewWrapper();
     if ( pChartWindow && pDrawModelWrapper && pDrawViewWrapper )
     {
-        SfxItemSet aAttr( pDrawViewWrapper->GetModel()->GetItemPool() );
+        SfxItemSet aAttr(pDrawViewWrapper->GetModel().GetItemPool());
         pDrawViewWrapper->GetAttributes( aAttr );
         ViewElementListProvider aViewElementListProvider( pDrawModelWrapper );
         ShapeFontDialog aDlg(pChartWindow, &aAttr, &aViewElementListProvider);
@@ -528,7 +530,7 @@ void ShapeController::executeDispatch_ParagraphDialog()
     if ( !(pChartWindow && pDrawViewWrapper) )
         return;
 
-    SfxItemPool& rPool = pDrawViewWrapper->GetModel()->GetItemPool();
+    SfxItemPool& rPool = pDrawViewWrapper->GetModel().GetItemPool();
     SfxItemSet aAttr( rPool );
     pDrawViewWrapper->GetAttributes( aAttr );
 

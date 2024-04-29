@@ -62,7 +62,6 @@ sw::DocumentSettingManager::DocumentSettingManager(SwDoc &rDoc)
     mbUseHiResolutionVirtualDevice(true),
     mbMathBaselineAlignment(false), // default for *old* documents is 'off'
     mbStylesNoDefault(false),
-    mbFloattableNomargins(false),
     mEmbedFonts(false),
     mEmbedUsedFonts(false),
     mEmbedLatinScriptFonts(true),
@@ -71,7 +70,6 @@ sw::DocumentSettingManager::DocumentSettingManager(SwDoc &rDoc)
     mEmbedSystemFonts(false),
     mbOldNumbering(false),
     mbIgnoreFirstLineIndentInNumbering(false),
-    mbNoGapAfterNoteNumber(false),
     mbDoNotResetParaAttrsForNumFont(false),
     mbTableRowKeep(false),
     mbIgnoreTabsAndBlanksForLineCalculation(false),
@@ -108,7 +106,8 @@ sw::DocumentSettingManager::DocumentSettingManager(SwDoc &rDoc)
     mnImagePreferredDPI(0),
     mbAutoFirstLineIndentDisregardLineSpace(true),
     mbNoNumberingShowFollowBy(false),
-    mbDropCapPunctuation(true)
+    mbDropCapPunctuation(true),
+    mbUseVariableWidthNBSP(false)
 
     // COMPATIBILITY FLAGS END
 {
@@ -137,6 +136,8 @@ sw::DocumentSettingManager::DocumentSettingManager(SwDoc &rDoc)
         mbSubtractFlys                      = aOptions.GetDefault( SvtCompatibilityEntry::Index::SubtractFlysAnchoredAtFlys );
         mbEmptyDbFieldHidesPara
             = aOptions.GetDefault(SvtCompatibilityEntry::Index::EmptyDbFieldHidesPara);
+        mbUseVariableWidthNBSP
+            = aOptions.GetDefault(SvtCompatibilityEntry::Index::UseVariableWidthNBSP);
     }
     else
     {
@@ -156,6 +157,7 @@ sw::DocumentSettingManager::DocumentSettingManager(SwDoc &rDoc)
         mbMsWordCompTrailingBlanks          = false;
         mbSubtractFlys                      = false;
         mbEmptyDbFieldHidesPara             = true;
+        mbUseVariableWidthNBSP              = false;
     }
 
     // COMPATIBILITY FLAGS END
@@ -228,7 +230,6 @@ bool sw::DocumentSettingManager::get(/*[in]*/ DocumentSettingId id) const
         case DocumentSettingId::DO_NOT_RESET_PARA_ATTRS_FOR_NUM_FONT: return mbDoNotResetParaAttrsForNumFont;
         case DocumentSettingId::MATH_BASELINE_ALIGNMENT: return mbMathBaselineAlignment;
         case DocumentSettingId::STYLES_NODEFAULT: return mbStylesNoDefault;
-        case DocumentSettingId::FLOATTABLE_NOMARGINS: return mbFloattableNomargins;
         case DocumentSettingId::EMBED_FONTS: return mEmbedFonts;
         case DocumentSettingId::EMBED_USED_FONTS: return mEmbedUsedFonts;
         case DocumentSettingId::EMBED_LATIN_SCRIPT_FONTS: return mEmbedLatinScriptFonts;
@@ -249,12 +250,17 @@ bool sw::DocumentSettingManager::get(/*[in]*/ DocumentSettingId id) const
         case DocumentSettingId::AUTO_FIRST_LINE_INDENT_DISREGARD_LINE_SPACE:
             return mbAutoFirstLineIndentDisregardLineSpace;
         case DocumentSettingId::HYPHENATE_URLS: return mbHyphenateURLs;
+        case DocumentSettingId::APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH:
+            return mbApplyTextAttrToEmptyLineAtEndOfParagraph;
         case DocumentSettingId::DO_NOT_BREAK_WRAPPED_TABLES:
             return mbDoNotBreakWrappedTables;
         case DocumentSettingId::ALLOW_TEXT_AFTER_FLOATING_TABLE_BREAK:
             return mbAllowTextAfterFloatingTableBreak;
+        case DocumentSettingId::JUSTIFY_LINES_WITH_SHRINKING:
+            return mbJustifyLinesWithShrinking;
         case DocumentSettingId::NO_NUMBERING_SHOW_FOLLOWBY: return mbNoNumberingShowFollowBy;
         case DocumentSettingId::DROP_CAP_PUNCTUATION: return mbDropCapPunctuation;
+        case DocumentSettingId::USE_VARIABLE_WIDTH_NBSP: return mbUseVariableWidthNBSP;
         default:
             OSL_FAIL("Invalid setting id");
     }
@@ -440,6 +446,10 @@ void sw::DocumentSettingManager::set(/*[in]*/ DocumentSettingId id, /*[in]*/ boo
             mbHyphenateURLs = value;
             break;
 
+        case DocumentSettingId::APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH:
+            mbApplyTextAttrToEmptyLineAtEndOfParagraph = value;
+            break;
+
         case DocumentSettingId::DO_NOT_BREAK_WRAPPED_TABLES:
             mbDoNotBreakWrappedTables = value;
             break;
@@ -448,12 +458,20 @@ void sw::DocumentSettingManager::set(/*[in]*/ DocumentSettingId id, /*[in]*/ boo
             mbAllowTextAfterFloatingTableBreak = value;
             break;
 
+        case DocumentSettingId::JUSTIFY_LINES_WITH_SHRINKING:
+            mbJustifyLinesWithShrinking = value;
+            break;
+
         case DocumentSettingId::NO_NUMBERING_SHOW_FOLLOWBY:
             mbNoNumberingShowFollowBy = value;
             break;
 
         case DocumentSettingId::DROP_CAP_PUNCTUATION:
             mbDropCapPunctuation = value;
+            break;
+
+        case DocumentSettingId::USE_VARIABLE_WIDTH_NBSP:
+            mbUseVariableWidthNBSP = value;
             break;
 
         // COMPATIBILITY FLAGS END
@@ -498,9 +516,6 @@ void sw::DocumentSettingManager::set(/*[in]*/ DocumentSettingId id, /*[in]*/ boo
             break;
         case DocumentSettingId::STYLES_NODEFAULT:
             mbStylesNoDefault  = value;
-            break;
-        case DocumentSettingId::FLOATTABLE_NOMARGINS:
-            mbFloattableNomargins = value;
             break;
         case DocumentSettingId::EMBED_FONTS:
             mEmbedFonts = value;
@@ -690,7 +705,6 @@ void sw::DocumentSettingManager::ReplaceCompatibilityOptions(const DocumentSetti
     mbConsiderWrapOnObjPos = rSource.mbConsiderWrapOnObjPos;
     mbMathBaselineAlignment = rSource.mbMathBaselineAlignment;
     mbStylesNoDefault = rSource.mbStylesNoDefault;
-    mbFloattableNomargins = rSource.mbFloattableNomargins;
     mbOldNumbering = rSource.mbOldNumbering;
     mbIgnoreFirstLineIndentInNumbering = rSource.mbIgnoreFirstLineIndentInNumbering;
     mbNoGapAfterNoteNumber = rSource.mbNoGapAfterNoteNumber;
@@ -729,6 +743,7 @@ void sw::DocumentSettingManager::ReplaceCompatibilityOptions(const DocumentSetti
     mbFrameAutowidthWithMorePara = rSource.mbFrameAutowidthWithMorePara;
     mbFootnoteInColumnToPageEnd = rSource.mbFootnoteInColumnToPageEnd;
     mbDropCapPunctuation = rSource.mbDropCapPunctuation;
+    mbUseVariableWidthNBSP = rSource.mbUseVariableWidthNBSP;
 }
 
 sal_uInt32 sw::DocumentSettingManager::Getn32DummyCompatibilityOptions1() const
@@ -863,11 +878,6 @@ void sw::DocumentSettingManager::dumpAsXml(xmlTextWriterPtr pWriter) const
     (void)xmlTextWriterStartElement(pWriter, BAD_CAST("mbStylesNoDefault"));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("value"),
                                 BAD_CAST(OString::boolean(mbStylesNoDefault).getStr()));
-    (void)xmlTextWriterEndElement(pWriter);
-
-    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("mbFloattableNomargins"));
-    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("value"),
-                                BAD_CAST(OString::boolean(mbFloattableNomargins).getStr()));
     (void)xmlTextWriterEndElement(pWriter);
 
     (void)xmlTextWriterStartElement(pWriter, BAD_CAST("mbOldNumbering"));
@@ -1034,6 +1044,11 @@ void sw::DocumentSettingManager::dumpAsXml(xmlTextWriterPtr pWriter) const
                                 BAD_CAST(OString::boolean(mbEmptyDbFieldHidesPara).getStr()));
     (void)xmlTextWriterEndElement(pWriter);
 
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("mbUseVariableWidthNBSP"));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("value"),
+                                BAD_CAST(OString::boolean(mbUseVariableWidthNBSP).getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
+
     (void)xmlTextWriterStartElement(pWriter, BAD_CAST("mbContinuousEndnotes"));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("value"),
                                 BAD_CAST(OString::boolean(mbContinuousEndnotes).getStr()));
@@ -1074,9 +1089,19 @@ void sw::DocumentSettingManager::dumpAsXml(xmlTextWriterPtr pWriter) const
                                 BAD_CAST(OString::boolean(mbAllowTextAfterFloatingTableBreak).getStr()));
     (void)xmlTextWriterEndElement(pWriter);
 
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("mbJustifyLinesWithShrinking"));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("value"),
+                                BAD_CAST(OString::boolean(mbJustifyLinesWithShrinking).getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
+
     (void)xmlTextWriterStartElement(pWriter, BAD_CAST("mnImagePreferredDPI"));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("value"),
                                 BAD_CAST(OString::number(mnImagePreferredDPI).getStr()));
+
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("mbApplyTextAttrToEmptyLineAtEndOfParagraph"));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("value"),
+                                BAD_CAST(OString::boolean(mbApplyTextAttrToEmptyLineAtEndOfParagraph).getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
 
     (void)xmlTextWriterEndElement(pWriter);
 

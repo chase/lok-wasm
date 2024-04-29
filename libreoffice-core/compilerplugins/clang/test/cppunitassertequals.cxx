@@ -9,18 +9,23 @@
 
 #include "sal/config.h"
 
+#include <cstddef>
+
 #include <cppunit/TestAssert.h>
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
 #include <cppunit/plugin/TestPlugIn.h>
 
-#include "cppunitassertequals.hxx"
+#include "rtl/ustring.hxx"
 
 #define TEST1 CPPUNIT_ASSERT(b1 == b2)
 #define TEST2(x) x
 
+struct T { bool operator ==(T); };
+
 void test(
-    bool b1, bool b2, OUString const & s1, OUString const & s2, T t, void * p, std::nullptr_t n)
+    bool b1, bool b2, OUString const & s1, OUString const & s2, T t, void * p, std::nullptr_t n,
+    double d, int i)
 {
     CppUnit::Asserter::failIf(b1,"");
     CPPUNIT_ASSERT(b1 && b2); // expected-error {{rather split into two CPPUNIT_ASSERT [loplugin:cppunitassertequals]}}
@@ -70,6 +75,19 @@ void test(
     CPPUNIT_ASSERT_EQUAL_MESSAGE("foo", s1, OUString("xxx")); // expected-error {{CPPUNIT_ASSERT_EQUALS parameters look switched, expected value should be first param [loplugin:cppunitassertequals]}}
     CPPUNIT_ASSERT_EQUAL(OUString("xxx"), s1);
     CPPUNIT_ASSERT_EQUAL_MESSAGE("foo", OUString("xxx"), s1);
+
+    CPPUNIT_ASSERT_EQUAL(d, 1.0); // expected-error {{CPPUNIT_ASSERT_EQUALS parameters look switched, expected value should be first param [loplugin:cppunitassertequals]}}
+    CPPUNIT_ASSERT_EQUAL(1.0, d);
+
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(d, 1.0, 0.1); // expected-error {{CPPUNIT_ASSERT_DOUBLES_EQUALS parameters look switched, expected value should be first param [loplugin:cppunitassertequals]}}
+    CPPUNIT_ASSERT_DOUBLES_EQUAL_MESSAGE("foo", d, 1.0, 0.1); // expected-error {{CPPUNIT_ASSERT_DOUBLES_EQUALS parameters look switched, expected value should be first param [loplugin:cppunitassertequals]}}
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(1.0, d, 0.1);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL_MESSAGE("foo", 1.0, d, 0.1);
+
+    CPPUNIT_ASSERT_LESS(i, 1); // expected-error {{CPPUNIT_ASSERT_LESS parameters look switched, expected value should be first param [loplugin:cppunitassertequals]}}
+    CPPUNIT_ASSERT_LESSEQUAL(i, 1); // expected-error {{CPPUNIT_ASSERT_LESSEQUAL parameters look switched, expected value should be first param [loplugin:cppunitassertequals]}}
+    CPPUNIT_ASSERT_GREATER(i, 1); // expected-error {{CPPUNIT_ASSERT_GREATER parameters look switched, expected value should be first param [loplugin:cppunitassertequals]}}
+    CPPUNIT_ASSERT_GREATEREQUAL(i, 1); // expected-error {{CPPUNIT_ASSERT_GREATEREQUAL parameters look switched, expected value should be first param [loplugin:cppunitassertequals]}}
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab cinoptions=b1,g0,N-s cinkeys+=0=break: */

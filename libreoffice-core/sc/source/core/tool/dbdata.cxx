@@ -42,12 +42,6 @@
 #include <memory>
 #include <utility>
 
-using ::std::unique_ptr;
-using ::std::for_each;
-using ::std::find_if;
-using ::std::remove_if;
-using ::std::pair;
-
 bool ScDBData::less::operator() (const std::unique_ptr<ScDBData>& left, const std::unique_ptr<ScDBData>& right) const
 {
     return ScGlobal::GetTransliteration().compareString(left->GetUpperName(), right->GetUpperName()) < 0;
@@ -260,14 +254,9 @@ ScDBData::~ScDBData()
 
 OUString ScDBData::GetSourceString() const
 {
-    OUStringBuffer aBuf;
     if (mpImportParam->bImport)
-    {
-        aBuf.append(mpImportParam->aDBName);
-        aBuf.append('/');
-        aBuf.append(mpImportParam->aStatement);
-    }
-    return aBuf.makeStringAndClear();
+        return mpImportParam->aDBName + "/" + mpImportParam->aStatement;
+    return OUString();
 }
 
 OUString ScDBData::GetOperations() const
@@ -1265,7 +1254,7 @@ bool ScDBCollection::NamedDBs::insert(std::unique_ptr<ScDBData> pData)
     if (!pData->GetIndex())
         pData->SetIndex(mrParent.nEntryIndex++);
 
-    pair<DBsType::iterator, bool> r = m_DBs.insert(std::move(pData));
+    std::pair<DBsType::iterator, bool> r = m_DBs.insert(std::move(pData));
 
     if (r.second)
     {
@@ -1340,7 +1329,7 @@ const ScDBData* ScDBCollection::AnonDBs::findByRange(const ScRange& rRange) cons
 void ScDBCollection::AnonDBs::deleteOnTab(SCTAB nTab)
 {
     FindByTable func(nTab);
-    m_DBs.erase(std::remove_if(m_DBs.begin(), m_DBs.end(), func), m_DBs.end());
+    std::erase_if(m_DBs, func);
 }
 
 ScDBData* ScDBCollection::AnonDBs::getByRange(const ScRange& rRange)

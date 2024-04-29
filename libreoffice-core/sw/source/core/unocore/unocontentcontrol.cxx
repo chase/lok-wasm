@@ -25,7 +25,6 @@
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 
 #include <comphelper/interfacecontainer4.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
 #include <formatcontentcontrol.hxx>
@@ -54,7 +53,6 @@ private:
 
 protected:
     const SwStartNode* GetStartNode() const override;
-    uno::Reference<text::XTextCursor> CreateCursor() override;
 
 public:
     SwXContentControlText(SwDoc& rDoc, SwXContentControl& rContentControl);
@@ -70,9 +68,9 @@ public:
     uno::Sequence<sal_Int8> SAL_CALL getImplementationId() override;
 
     // XText
-    uno::Reference<text::XTextCursor> SAL_CALL createTextCursor() override;
-    uno::Reference<text::XTextCursor> SAL_CALL
-    createTextCursorByRange(const uno::Reference<text::XTextRange>& xTextPosition) override;
+    virtual rtl::Reference<SwXTextCursor> createXTextCursor() override;
+    virtual rtl::Reference<SwXTextCursor> createXTextCursorByRange(
+        const ::css::uno::Reference<::css::text::XTextRange>& aTextPosition) override;
 };
 }
 
@@ -84,7 +82,7 @@ SwXContentControlText::SwXContentControlText(SwDoc& rDoc, SwXContentControl& rCo
 
 const SwStartNode* SwXContentControlText::GetStartNode() const
 {
-    auto pParent = dynamic_cast<SwXText*>(m_rContentControl.GetParentText().get());
+    SwXText* pParent = m_rContentControl.GetParentText().get();
     return pParent ? pParent->GetStartNode() : nullptr;
 }
 
@@ -97,9 +95,9 @@ void SwXContentControlText::PrepareForAttach(uno::Reference<text::XTextRange>& x
                           *rPam.GetPoint(), (rPam.HasMark()) ? rPam.GetMark() : nullptr));
 }
 
-uno::Reference<text::XTextCursor> SwXContentControlText::CreateCursor()
+rtl::Reference<SwXTextCursor> SwXContentControlText::createXTextCursor()
 {
-    uno::Reference<text::XTextCursor> xRet;
+    rtl::Reference<SwXTextCursor> xRet;
     if (IsValid())
     {
         SwTextNode* pTextNode;
@@ -110,8 +108,8 @@ uno::Reference<text::XTextCursor> SwXContentControlText::CreateCursor()
         if (bSuccess)
         {
             SwPosition aPos(*pTextNode, nContentControlStart);
-            xRet = static_cast<text::XWordCursor*>(
-                new SwXTextCursor(*GetDoc(), &m_rContentControl, CursorType::ContentControl, aPos));
+            xRet = new SwXTextCursor(*GetDoc(), &m_rContentControl, CursorType::ContentControl,
+                                     aPos);
         }
     }
     return xRet;
@@ -123,15 +121,11 @@ uno::Sequence<sal_Int8> SAL_CALL SwXContentControlText::getImplementationId()
 }
 
 // XText
-uno::Reference<text::XTextCursor> SAL_CALL SwXContentControlText::createTextCursor()
-{
-    return CreateCursor();
-}
 
-uno::Reference<text::XTextCursor> SAL_CALL SwXContentControlText::createTextCursorByRange(
+rtl::Reference<SwXTextCursor> SwXContentControlText::createXTextCursorByRange(
     const uno::Reference<text::XTextRange>& xTextPosition)
 {
-    const uno::Reference<text::XTextCursor> xCursor(CreateCursor());
+    const rtl::Reference<SwXTextCursor> xCursor(createXTextCursor());
     xCursor->gotoRange(xTextPosition, false);
     return xCursor;
 }
@@ -154,7 +148,7 @@ public:
     // 3 possible states: not attached, attached, disposed
     bool m_bIsDisposed;
     bool m_bIsDescriptor;
-    uno::Reference<text::XText> m_xParentText;
+    css::uno::Reference<SwXText> m_xParentText;
     rtl::Reference<SwXContentControlText> m_xText;
     SwContentControl* m_pContentControl;
     bool m_bShowingPlaceHolder;
@@ -185,7 +179,7 @@ public:
     OUString m_aMultiLine;
 
     Impl(SwXContentControl& rThis, SwDoc& rDoc, SwContentControl* pContentControl,
-         uno::Reference<text::XText> xParentText, std::unique_ptr<const TextRangeList_t> pPortions)
+         css::uno::Reference<SwXText> xParentText, std::unique_ptr<const TextRangeList_t> pPortions)
         : m_pTextPortions(std::move(pPortions))
         , m_bIsDisposed(false)
         , m_bIsDescriptor(pContentControl == nullptr)
@@ -243,13 +237,13 @@ void SwXContentControl::Impl::Notify(const SfxHint& rHint)
     m_EventListeners.disposeAndClear(aGuard, aEvent);
 }
 
-const uno::Reference<text::XText>& SwXContentControl::GetParentText() const
+const css::uno::Reference<SwXText>& SwXContentControl::GetParentText() const
 {
     return m_pImpl->m_xParentText;
 }
 
 SwXContentControl::SwXContentControl(SwDoc* pDoc, SwContentControl* pContentControl,
-                                     const uno::Reference<text::XText>& xParentText,
+                                     const css::uno::Reference<SwXText>& xParentText,
                                      std::unique_ptr<const TextRangeList_t> pPortions)
     : m_pImpl(new SwXContentControl::Impl(*this, *pDoc, pContentControl, xParentText,
                                           std::move(pPortions)))
@@ -272,7 +266,7 @@ rtl::Reference<SwXContentControl> SwXContentControl::CreateXContentControl(SwDoc
 
 rtl::Reference<SwXContentControl>
 SwXContentControl::CreateXContentControl(SwContentControl& rContentControl,
-                                         const uno::Reference<text::XText>& xParent,
+                                         const css::uno::Reference<SwXText>& xParent,
                                          std::unique_ptr<const TextRangeList_t>&& pPortions)
 {
     // re-use existing SwXContentControl
@@ -288,7 +282,7 @@ SwXContentControl::CreateXContentControl(SwContentControl& rContentControl,
             if (xContentControl->m_pImpl->m_xParentText.get() != xParent.get())
             {
                 SAL_WARN("sw.uno", "SwXContentControl with different parent");
-                xContentControl->m_pImpl->m_xParentText.set(xParent);
+                xContentControl->m_pImpl->m_xParentText = xParent;
             }
         }
         return xContentControl;
@@ -301,7 +295,7 @@ SwXContentControl::CreateXContentControl(SwContentControl& rContentControl,
         SAL_WARN("sw.uno", "CreateXContentControl: no text node");
         return nullptr;
     }
-    uno::Reference<text::XText> xParentText(xParent);
+    css::uno::Reference<SwXText> xParentText(xParent);
     if (!xParentText.is())
     {
         SwTextContentControl* pTextAttr = rContentControl.GetTextAttr();
@@ -311,7 +305,7 @@ SwXContentControl::CreateXContentControl(SwContentControl& rContentControl,
             return nullptr;
         }
         SwPosition aPos(*pTextNode, pTextAttr->GetStart());
-        xParentText.set(sw::CreateParentXText(pTextNode->GetDoc(), aPos));
+        xParentText = sw::CreateParentXText(pTextNode->GetDoc(), aPos);
     }
     if (!xParentText.is())
     {
@@ -345,18 +339,6 @@ bool SwXContentControl::SetContentRange(SwTextNode*& rpNode, sal_Int32& rStart,
         }
     }
     return false;
-}
-
-const uno::Sequence<sal_Int8>& SwXContentControl::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXContentControlUnoTunnelId;
-    return theSwXContentControlUnoTunnelId.getSeq();
-}
-
-// XUnoTunnel
-sal_Int64 SAL_CALL SwXContentControl::getSomething(const uno::Sequence<sal_Int8>& rId)
-{
-    return comphelper::getSomethingImpl<SwXContentControl>(rId, this);
 }
 
 // XServiceInfo
@@ -394,7 +376,7 @@ void SAL_CALL SwXContentControl::dispose()
     if (m_pImpl->m_bIsDescriptor)
     {
         m_pImpl->m_pTextPortions.reset();
-        lang::EventObject aEvent(static_cast<::cppu::OWeakObject&>(*this));
+        lang::EventObject aEvent(getXWeak());
         std::unique_lock aGuard(m_pImpl->m_Mutex);
         m_pImpl->m_EventListeners.disposeAndClear(aGuard, aEvent);
         m_pImpl->m_bIsDisposed = true;
@@ -435,32 +417,23 @@ void SwXContentControl::AttachImpl(const uno::Reference<text::XTextRange>& xText
     if (!m_pImpl->m_bIsDescriptor)
     {
         throw uno::RuntimeException("SwXContentControl::AttachImpl(): already attached",
-                                    static_cast<::cppu::OWeakObject*>(this));
+                                    getXWeak());
     }
 
-    uno::Reference<lang::XUnoTunnel> xRangeTunnel(xTextRange, uno::UNO_QUERY);
-    if (!xRangeTunnel.is())
-    {
-        throw lang::IllegalArgumentException(
-            "SwXContentControl::AttachImpl(): argument is no XUnoTunnel",
-            static_cast<::cppu::OWeakObject*>(this), 0);
-    }
-    SwXTextRange* pRange = comphelper::getFromUnoTunnel<SwXTextRange>(xRangeTunnel);
+    SwXTextRange* pRange = dynamic_cast<SwXTextRange*>(xTextRange.get());
     OTextCursorHelper* pCursor
-        = pRange ? nullptr : comphelper::getFromUnoTunnel<OTextCursorHelper>(xRangeTunnel);
+        = pRange ? nullptr : dynamic_cast<OTextCursorHelper*>(xTextRange.get());
     if (!pRange && !pCursor)
     {
         throw lang::IllegalArgumentException(
-            "SwXContentControl::AttachImpl(): argument not supported type",
-            static_cast<::cppu::OWeakObject*>(this), 0);
+            "SwXContentControl::AttachImpl(): argument not supported type", getXWeak(), 0);
     }
 
     SwDoc* pDoc = pRange ? &pRange->GetDoc() : pCursor->GetDoc();
     if (!pDoc)
     {
         throw lang::IllegalArgumentException(
-            "SwXContentControl::AttachImpl(): argument has no SwDoc",
-            static_cast<::cppu::OWeakObject*>(this), 0);
+            "SwXContentControl::AttachImpl(): argument has no SwDoc", getXWeak(), 0);
     }
 
     SwUnoInternalPaM aPam(*pDoc);
@@ -511,14 +484,13 @@ void SwXContentControl::AttachImpl(const uno::Reference<text::XTextRange>& xText
     {
         throw lang::IllegalArgumentException(
             "SwXContentControl::AttachImpl(): cannot create content control: invalid range",
-            static_cast<::cppu::OWeakObject*>(this), 1);
+            getXWeak(), 1);
     }
     if (!pTextAttr)
     {
         SAL_WARN("sw.core", "content control inserted, but has no text attribute?");
         throw uno::RuntimeException(
-            "SwXContentControl::AttachImpl(): cannot create content control",
-            static_cast<::cppu::OWeakObject*>(this));
+            "SwXContentControl::AttachImpl(): cannot create content control", getXWeak());
     }
 
     m_pImpl->EndListeningAll();
@@ -547,8 +519,7 @@ uno::Reference<text::XTextRange> SAL_CALL SwXContentControl::getAnchor()
     }
     if (m_pImpl->m_bIsDescriptor)
     {
-        throw uno::RuntimeException("SwXContentControl::getAnchor(): not inserted",
-                                    static_cast<::cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("SwXContentControl::getAnchor(): not inserted", getXWeak());
     }
 
     SwTextNode* pTextNode;
@@ -558,8 +529,7 @@ uno::Reference<text::XTextRange> SAL_CALL SwXContentControl::getAnchor()
     if (!bSuccess)
     {
         SAL_WARN("sw.core", "no pam");
-        throw lang::DisposedException("SwXContentControl::getAnchor(): not attached",
-                                      static_cast<::cppu::OWeakObject*>(this));
+        throw lang::DisposedException("SwXContentControl::getAnchor(): not attached", getXWeak());
     }
 
     SwPosition aStart(*pTextNode, nContentControlStart - 1); // -1 due to CH_TXTATR
@@ -1417,8 +1387,7 @@ uno::Reference<container::XEnumeration> SAL_CALL SwXContentControl::createEnumer
     }
     if (m_pImpl->m_bIsDescriptor)
     {
-        throw uno::RuntimeException("createEnumeration(): not inserted",
-                                    static_cast<::cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("createEnumeration(): not inserted", getXWeak());
     }
 
     SwTextNode* pTextNode;
@@ -1455,24 +1424,14 @@ sal_Int32 SwXContentControls::getCount()
 {
     SolarMutexGuard aGuard;
 
-    if (!IsValid())
-    {
-        throw uno::RuntimeException();
-    }
-
-    return GetDoc()->GetContentControlManager().GetCount();
+    return GetDoc().GetContentControlManager().GetCount();
 }
 
 uno::Any SwXContentControls::getByIndex(sal_Int32 nIndex)
 {
     SolarMutexGuard aGuard;
 
-    if (!IsValid())
-    {
-        throw uno::RuntimeException();
-    }
-
-    SwContentControlManager& rManager = GetDoc()->GetContentControlManager();
+    SwContentControlManager& rManager = GetDoc().GetContentControlManager();
     if (nIndex < 0 || o3tl::make_unsigned(nIndex) >= rManager.GetCount())
     {
         throw lang::IndexOutOfBoundsException();
@@ -1493,12 +1452,7 @@ sal_Bool SwXContentControls::hasElements()
 {
     SolarMutexGuard aGuard;
 
-    if (!IsValid())
-    {
-        throw uno::RuntimeException();
-    }
-
-    return !GetDoc()->GetContentControlManager().IsEmpty();
+    return !GetDoc().GetContentControlManager().IsEmpty();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

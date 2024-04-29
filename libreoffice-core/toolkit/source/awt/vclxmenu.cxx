@@ -98,7 +98,7 @@ IMPL_LINK( VCLXMenu, MenuEventListener, VclMenuEvent&, rMenuEvent, void )
             if ( maMenuListeners.getLength() )
             {
                 css::awt::MenuEvent aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 aEvent.MenuId = mpMenu->GetCurItemId();
                 maMenuListeners.itemSelected( aEvent );
             }
@@ -114,7 +114,7 @@ IMPL_LINK( VCLXMenu, MenuEventListener, VclMenuEvent&, rMenuEvent, void )
             if ( maMenuListeners.getLength() )
             {
                 css::awt::MenuEvent aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 aEvent.MenuId = mpMenu->GetCurItemId();
                 maMenuListeners.itemHighlighted( aEvent );
             }
@@ -125,7 +125,7 @@ IMPL_LINK( VCLXMenu, MenuEventListener, VclMenuEvent&, rMenuEvent, void )
             if ( maMenuListeners.getLength() )
             {
                 css::awt::MenuEvent aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 aEvent.MenuId = mpMenu->GetCurItemId();
                 maMenuListeners.itemActivated( aEvent );
             }
@@ -136,7 +136,7 @@ IMPL_LINK( VCLXMenu, MenuEventListener, VclMenuEvent&, rMenuEvent, void )
             if ( maMenuListeners.getLength() )
             {
                 css::awt::MenuEvent aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 aEvent.MenuId = mpMenu->GetCurItemId();
                 maMenuListeners.itemDeactivated( aEvent );
             }
@@ -152,6 +152,7 @@ IMPL_LINK( VCLXMenu, MenuEventListener, VclMenuEvent&, rMenuEvent, void )
         case VclEventId::MenuSubmenuChanged:
         case VclEventId::MenuDehighlight:
         case VclEventId::MenuDisable:
+        case VclEventId::MenuItemRoleChanged:
         case VclEventId::MenuItemTextChanged:
         case VclEventId::MenuItemChecked:
         case VclEventId::MenuItemUnchecked:
@@ -214,21 +215,17 @@ css::uno::Any VCLXMenu::queryInterface(
                                         static_cast< css::awt::XMenu* >(static_cast<css::awt::XMenuBar*>(this)),
                                         static_cast< css::awt::XPopupMenu* >(this),
                                         static_cast< css::lang::XTypeProvider* >(this),
-                                        static_cast< css::lang::XServiceInfo* >(this),
-                                        static_cast< css::lang::XUnoTunnel* >(this) );
+                                        static_cast< css::lang::XServiceInfo* >(this) );
     else
         aRet = ::cppu::queryInterface(  rType,
                                         static_cast< css::awt::XMenu* >(static_cast<css::awt::XMenuBar*>(this)),
                                         static_cast< css::awt::XMenuBar* >(this),
                                         static_cast< css::lang::XTypeProvider* >(this),
-                                        static_cast< css::lang::XServiceInfo* >(this),
-                                        static_cast< css::lang::XUnoTunnel* >(this) );
+                                        static_cast< css::lang::XServiceInfo* >(this) );
 
     return (aRet.hasValue() ? aRet : OWeakObject::queryInterface( rType ));
 }
 
-
-UNO3_GETIMPLEMENTATION_IMPL( VCLXMenu );
 
 css::uno::Sequence< css::uno::Type > VCLXMenu::getTypes()
 {
@@ -286,7 +283,7 @@ void VCLXMenu::insertItem(
     std::unique_lock aGuard( maMutex );
 
     if ( mpMenu )
-        mpMenu->InsertItem(nItemId, aText, static_cast<MenuItemBits>(nItemStyle), OString(), nPos);
+        mpMenu->InsertItem(nItemId, aText, static_cast<MenuItemBits>(nItemStyle), {}, nPos);
 }
 
 void VCLXMenu::removeItem(
@@ -385,7 +382,7 @@ void VCLXMenu::setPopupMenu(
     SolarMutexGuard aSolarGuard;
     std::unique_lock aGuard( maMutex );
 
-    VCLXMenu* pVCLMenu = comphelper::getFromUnoTunnel<VCLXMenu>( rxPopupMenu );
+    VCLXMenu* pVCLMenu = dynamic_cast<VCLXMenu*>( rxPopupMenu.get() );
     DBG_ASSERT( pVCLMenu && pVCLMenu->GetMenu() && pVCLMenu->IsPopupMenu(), "setPopupMenu: Invalid Menu!" );
 
     if ( mpMenu && pVCLMenu && pVCLMenu->GetMenu() && pVCLMenu->IsPopupMenu() )
@@ -416,11 +413,30 @@ css::uno::Reference< css::awt::XPopupMenu > VCLXMenu::getPopupMenu(
                 break;
             }
         }
-        // it seems the popup menu is not insert into maPopupMenuRefs
-        // if the popup men is not created by stardiv.Toolkit.VCLXPopupMenu
+        /*
+           If the popup menu is not inserted via setPopupMenu then
+           maPopupMenuRefs won't have an entry for it, so create an XPopupMenu
+           for it now.
+
+           This means that this vcl PopupMenu "pMenu" either existed as a child
+           of the vcl Menu "mpMenu" before the VCLXMenu was created for that or
+           it was added directly via vcl.
+        */
         if( !aRef.is() )
         {
             aRef = new VCLXPopupMenu( static_cast<PopupMenu*>(pMenu) );
+            /*
+               In any case, the VCLXMenu has ownership of "mpMenu" and will
+               destroy it in the VCLXMenu dtor.
+
+               Similarly because VCLXPopupMenu takes ownership of the vcl
+               PopupMenu "pMenu", the underlying vcl popup will be destroyed
+               when VCLXPopupMenu is, so we should add it now to
+               maPopupMenuRefs to ensure its lifecycle is at least bound to
+               the VCLXMenu that owns the parent "mpMenu" similarly to
+               PopupMenus added via the more conventional setPopupMenu.
+            */
+            maPopupMenuRefs.push_back( aRef );
         }
     }
     return aRef;
@@ -434,7 +450,7 @@ void VCLXMenu::insertSeparator(
     std::unique_lock aGuard( maMutex );
 
     if ( mpMenu )
-        mpMenu->InsertSeparator(OString(), nPos);
+        mpMenu->InsertSeparator({}, nPos);
 }
 
 void VCLXMenu::setDefaultItem(
@@ -484,8 +500,13 @@ sal_Int16 VCLXMenu::execute(
         if ( !mpMenu || !IsPopupMenu() )
             return 0;
     }
+    PopupMenu* pPopupMenu = static_cast<PopupMenu*>(pMenu.get());
+    MenuFlags nMenuFlags = pPopupMenu->GetMenuFlags();
+    // #102790# context menus shall never show disabled entries
+    nMenuFlags |= MenuFlags::HideDisabledEntries;
+    pPopupMenu->SetMenuFlags(nMenuFlags);
     // cannot call this with mutex locked because it will call back into us
-    return static_cast<PopupMenu*>(pMenu.get())->Execute(
+    return pPopupMenu->Execute(
                 VCLUnoHelper::GetWindow( rxWindowPeer ),
                 VCLRectangle( rPos ),
                 static_cast<PopupMenuFlags>(nFlags) | PopupMenuFlags::NoMouseUpClose );

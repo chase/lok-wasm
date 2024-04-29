@@ -392,7 +392,7 @@ sal_uInt16 ScTabPageSortFields::GetFieldSelPos( SCCOLROW nField )
 void ScTabPageSortFields::SetLastSortKey( sal_uInt16 nItem )
 {
     // Extend local SortParam copy
-    const ScSortKeyState atempKeyState = { 0, false, true };
+    const ScSortKeyState atempKeyState = { 0, false, true, ScColorSortMode::None, Color() };
     aSortData.maKeyState.push_back( atempKeyState );
 
     // Add Sort Key Item
@@ -492,6 +492,10 @@ void ScTabPageSortFields::AddSortKey( sal_uInt16 nItem )
 ScTabPageSortOptions::ScTabPageSortOptions(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rArgSet)
     : SfxTabPage(pPage, pController, "modules/scalc/ui/sortoptionspage.ui", "SortOptionsPage", &rArgSet)
     , aStrUndefined(ScResId(SCSTR_UNDEFINED))
+    , aStrCommentsRowLabel(ScResId(SCSTR_NOTES_ROW_LABEL))
+    , aStrCommentsColLabel(ScResId(SCSTR_NOTES_COL_LABEL))
+    , aStrImgRowLabel(ScResId(SCSTR_IMAGES_ROW_LABEL))
+    , aStrImgColLabel(ScResId(SCSTR_IMAGES_COL_LABEL))
     , nWhichSort(rArgSet.GetPool()->GetWhich(SID_SORT))
     , aSortData(rArgSet.Get(nWhichSort).GetSortData())
     , pViewData(nullptr)
@@ -522,7 +526,7 @@ void ScTabPageSortOptions::Init()
     m_xColRes.reset(new CollatorResource);
 
     //! use CollatorWrapper from document?
-    m_xColWrap.reset(new CollatorWrapper(comphelper::getProcessComponentContext()));
+    m_oColWrap.emplace(comphelper::getProcessComponentContext());
 
     const ScSortItem& rSortItem = GetItemSet().Get( nWhichSort );
 
@@ -556,6 +560,9 @@ void ScTabPageSortOptions::Init()
         m_xLbOutPos->set_active(0);
         m_xEdOutPos->set_text(OUString());
     }
+
+    m_xBtnIncComments->set_label(aStrCommentsColLabel);
+    m_xBtnIncImages->set_label(aStrImgColLabel);
 
     FillUserSortListBox();
 
@@ -660,7 +667,7 @@ bool ScTabPageSortOptions::FillItemSet( SfxItemSet* rArgSet )
     OUString sAlg;
     if ( eLang != LANGUAGE_SYSTEM )
     {
-        uno::Sequence<OUString> aAlgos = m_xColWrap->listCollatorAlgorithms(
+        uno::Sequence<OUString> aAlgos = m_oColWrap->listCollatorAlgorithms(
                 aNewSortData.aCollatorLocale );
         const int nSel = m_xLbAlgorithm->get_active();
         if ( nSel < aAlgos.getLength() )
@@ -681,6 +688,17 @@ void ScTabPageSortOptions::ActivatePage( const SfxItemSet& rSet )
     ScSortDlg* pDlg = static_cast<ScSortDlg*>(GetDialogController());
     if (!pDlg)
         return;
+
+    if (aSortData.bByRow)
+    {
+        m_xBtnIncComments->set_label(aStrCommentsRowLabel);
+        m_xBtnIncImages->set_label(aStrImgRowLabel);
+    }
+    else
+    {
+        m_xBtnIncComments->set_label(aStrCommentsColLabel);
+        m_xBtnIncImages->set_label(aStrImgColLabel);
+    }
 }
 
 DeactivateRC ScTabPageSortOptions::DeactivatePage( SfxItemSet* pSetP )
@@ -830,7 +848,7 @@ void ScTabPageSortOptions::FillAlgor()
     else
     {
         lang::Locale aLocale( LanguageTag::convertToLocale( eLang ));
-        const uno::Sequence<OUString> aAlgos = m_xColWrap->listCollatorAlgorithms( aLocale );
+        const uno::Sequence<OUString> aAlgos = m_oColWrap->listCollatorAlgorithms( aLocale );
 
         nCount = aAlgos.getLength();
         for (const OUString& sAlg : aAlgos)

@@ -17,14 +17,13 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_SOURCE_FILTER_JPEG_JPEG_H
-#define INCLUDED_VCL_SOURCE_FILTER_JPEG_JPEG_H
+#pragma once
 
 #include <sal/config.h>
 
 #include <com/sun/star/uno/Reference.hxx>
 #include <basegfx/vector/b2dsize.hxx>
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 
 #include <jpeglib.h>
 
@@ -61,7 +60,5 @@ struct SourceManagerStruct {
     boolean     start_of_file;          /* have we gotten any data yet? */
     int         no_data_available_failures;
 };
-
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

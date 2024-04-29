@@ -77,7 +77,7 @@ using namespace ::com::sun::star::container;
 using namespace ::com::sun::star::ui;
 using namespace ::com::sun::star::frame;
 
-constexpr OUStringLiteral STATUS_BAR_ALIAS = u"private:resource/statusbar/statusbar";
+constexpr OUString STATUS_BAR_ALIAS = u"private:resource/statusbar/statusbar"_ustr;
 
 namespace framework
 {
@@ -130,6 +130,7 @@ LayoutManager::LayoutManager( const Reference< XComponentContext >& xContext ) :
     registerProperty( LAYOUTMANAGER_PROPNAME_MENUBARCLOSER, LAYOUTMANAGER_PROPHANDLE_MENUBARCLOSER, beans::PropertyAttribute::TRANSIENT, &m_bMenuBarCloseButton, cppu::UnoType<decltype(m_bMenuBarCloseButton)>::get() );
     registerPropertyNoMember( LAYOUTMANAGER_PROPNAME_ASCII_REFRESHVISIBILITY, LAYOUTMANAGER_PROPHANDLE_REFRESHVISIBILITY, beans::PropertyAttribute::TRANSIENT, cppu::UnoType<bool>::get(), css::uno::Any(false) );
     registerProperty( LAYOUTMANAGER_PROPNAME_ASCII_PRESERVE_CONTENT_SIZE, LAYOUTMANAGER_PROPHANDLE_PRESERVE_CONTENT_SIZE, beans::PropertyAttribute::TRANSIENT, &m_bPreserveContentSize, cppu::UnoType<decltype(m_bPreserveContentSize)>::get() );
+    registerPropertyNoMember( LAYOUTMANAGER_PROPNAME_ASCII_REFRESHTOOLTIP, LAYOUTMANAGER_PROPHANDLE_REFRESHTOOLTIP, beans::PropertyAttribute::TRANSIENT, cppu::UnoType<bool>::get(), css::uno::Any(false) );
 }
 
 LayoutManager::~LayoutManager()
@@ -153,7 +154,7 @@ void LayoutManager::implts_createMenuBar(const OUString& rMenuBarName)
     if (m_bInplaceMenuSet || m_xMenuBar.is())
         return;
 
-    m_xMenuBar = implts_createElement( rMenuBarName );
+    m_xMenuBar.set( static_cast< MenuBarWrapper* >(implts_createElement( rMenuBarName ).get()) );
     if ( !m_xMenuBar.is() )
         return;
 
@@ -163,25 +164,21 @@ void LayoutManager::implts_createMenuBar(const OUString& rMenuBarName)
 
     Reference< awt::XMenuBar > xMenuBar;
 
-    Reference< XPropertySet > xPropSet( m_xMenuBar, UNO_QUERY );
-    if ( xPropSet.is() )
+    try
     {
-        try
-        {
-            xPropSet->getPropertyValue("XMenuBar") >>= xMenuBar;
-        }
-        catch (const beans::UnknownPropertyException&)
-        {
-        }
-        catch (const lang::WrappedTargetException&)
-        {
-        }
+        m_xMenuBar->getPropertyValue("XMenuBar") >>= xMenuBar;
+    }
+    catch (const beans::UnknownPropertyException&)
+    {
+    }
+    catch (const lang::WrappedTargetException&)
+    {
     }
 
     if ( !xMenuBar.is() )
         return;
 
-    VCLXMenu* pAwtMenuBar = comphelper::getFromUnoTunnel<VCLXMenu>( xMenuBar );
+    VCLXMenu* pAwtMenuBar = dynamic_cast<VCLXMenu*>( xMenuBar.get() );
     if ( pAwtMenuBar )
     {
         MenuBar* pMenuBar = static_cast<MenuBar*>(pAwtMenuBar->GetMenu());
@@ -214,12 +211,11 @@ void LayoutManager::impl_clearUpMenuBar()
             {
                 Reference< awt::XMenuBar > xMenuBar;
 
-                Reference< XPropertySet > xPropSet( m_xMenuBar, UNO_QUERY );
-                if ( xPropSet.is() )
+                if ( m_xMenuBar.is() )
                 {
                     try
                     {
-                        xPropSet->getPropertyValue("XMenuBar") >>= xMenuBar;
+                        m_xMenuBar->getPropertyValue("XMenuBar") >>= xMenuBar;
                     }
                     catch (const beans::UnknownPropertyException&)
                     {
@@ -229,7 +225,7 @@ void LayoutManager::impl_clearUpMenuBar()
                     }
                 }
 
-                VCLXMenu* pAwtMenuBar = comphelper::getFromUnoTunnel<VCLXMenu>( xMenuBar );
+                VCLXMenu* pAwtMenuBar = dynamic_cast<VCLXMenu*>( xMenuBar.get() );
                 if ( pAwtMenuBar )
                     pSetMenuBar = static_cast<MenuBar*>(pAwtMenuBar->GetMenu());
             }
@@ -251,10 +247,11 @@ void LayoutManager::impl_clearUpMenuBar()
     pMenuBar.disposeAndClear();
     m_bInplaceMenuSet = false;
 
-    Reference< XComponent > xComp( m_xMenuBar, UNO_QUERY );
-    if ( xComp.is() )
-        xComp->dispose();
-    m_xMenuBar.clear();
+    if ( m_xMenuBar.is() )
+    {
+        m_xMenuBar->dispose();
+        m_xMenuBar.clear();
+    }
     implts_unlock();
 }
 
@@ -430,7 +427,7 @@ void LayoutManager::implts_reset( bool bAttached )
             if ( bAttached )
             {
                 xToolbarManager->attach( xFrame, xModCfgMgr, xDokCfgMgr, xPersistentWindowState );
-                uno::Reference< awt::XWindowPeer > xParent( xContainerWindow, UNO_QUERY );
+                uno::Reference< awt::XVclWindowPeer > xParent( xContainerWindow, UNO_QUERY );
                 xToolbarManager->setParentWindow( xParent );
                 if ( bAutomaticToolbars )
                     xToolbarManager->createStaticToolbars();
@@ -762,7 +759,7 @@ void LayoutManager::implts_updateUIElementsVisibleState( bool bSetVisible )
         implts_notifyListeners( frame::LayoutManagerEvents::INVISIBLE, a );
 
     SolarMutexResettableGuard aWriteLock;
-    Reference< XUIElement >   xMenuBar = m_xMenuBar;
+    rtl::Reference< MenuBarWrapper > xMenuBar = m_xMenuBar;
     Reference< awt::XWindow > xContainerWindow( m_xContainerWindow );
     rtl::Reference< MenuBarManager > xInplaceMenuBar( m_xInplaceMenuBar );
     aWriteLock.clear();
@@ -776,8 +773,7 @@ void LayoutManager::implts_updateUIElementsVisibleState( bool bSetVisible )
             pMenuBar = static_cast<MenuBar *>(xInplaceMenuBar->GetMenuBar());
         else
         {
-            MenuBarWrapper* pMenuBarWrapper = static_cast< MenuBarWrapper* >(xMenuBar.get());
-            pMenuBar = static_cast<MenuBar *>(pMenuBarWrapper->GetMenuBarManager()->GetMenuBar());
+            pMenuBar = static_cast<MenuBar *>(xMenuBar->GetMenuBarManager()->GetMenuBar());
         }
 
         SystemWindow* pSysWindow = getTopSystemWindow( xContainerWindow );
@@ -872,7 +868,7 @@ void LayoutManager::implts_createProgressBar()
 {
     Reference< XUIElement > xStatusBar;
     Reference< XUIElement > xProgressBar;
-    Reference< XUIElement > xProgressBarBackup;
+    rtl::Reference< ProgressBarWrapper > xProgressBarBackup;
     Reference< awt::XWindow > xContainerWindow;
 
     SolarMutexResettableGuard aWriteLock;
@@ -883,10 +879,10 @@ void LayoutManager::implts_createProgressBar()
     xContainerWindow = m_xContainerWindow;
     aWriteLock.clear();
 
-    bool                bRecycled = xProgressBarBackup.is();
+    bool bRecycled = xProgressBarBackup.is();
     rtl::Reference<ProgressBarWrapper> pWrapper;
     if ( bRecycled )
-        pWrapper = static_cast<ProgressBarWrapper*>(xProgressBarBackup.get());
+        pWrapper = xProgressBarBackup.get();
     else if ( xProgressBar.is() )
         pWrapper = static_cast<ProgressBarWrapper*>(xProgressBar.get());
     else
@@ -935,17 +931,13 @@ void LayoutManager::implts_backupProgressBarWrapper()
     // safe a backup copy of the current progress!
     // This copy will be used automatically inside createProgressBar() which is called
     // implicitly from implts_doLayout() .-)
-    m_xProgressBarBackup = m_aProgressBarElement.m_xUIElement;
+    m_xProgressBarBackup = static_cast<ProgressBarWrapper*>(m_aProgressBarElement.m_xUIElement.get());
 
     // remove the relation between this old progress bar and our old status bar.
     // Otherwise we work on disposed items ...
     // The internal used ProgressBarWrapper can handle a NULL reference.
     if ( m_xProgressBarBackup.is() )
-    {
-        ProgressBarWrapper* pWrapper = static_cast<ProgressBarWrapper*>(m_xProgressBarBackup.get());
-        if ( pWrapper )
-            pWrapper->setStatusBar( Reference< awt::XWindow >() );
-    }
+        m_xProgressBarBackup->setStatusBar( Reference< awt::XWindow >() );
 
     // prevent us from dispose() the m_aProgressBarElement.m_xUIElement inside implts_reset()
     m_aProgressBarElement.m_xUIElement.clear();
@@ -1187,12 +1179,11 @@ void LayoutManager::implts_resetInplaceMenuBar()
     if ( m_xContainerWindow.is() )
     {
         SolarMutexGuard aGuard;
-        MenuBarWrapper* pMenuBarWrapper = static_cast< MenuBarWrapper* >(m_xMenuBar.get());
         SystemWindow* pSysWindow = getTopSystemWindow( m_xContainerWindow );
         if ( pSysWindow )
         {
-            if ( pMenuBarWrapper )
-                pSysWindow->SetMenuBar(static_cast<MenuBar *>(pMenuBarWrapper->GetMenuBarManager()->GetMenuBar()));
+            if ( m_xMenuBar )
+                pSysWindow->SetMenuBar(static_cast<MenuBar *>(m_xMenuBar->GetMenuBarManager()->GetMenuBar()));
             else
                 pSysWindow->SetMenuBar(nullptr);
         }
@@ -1372,7 +1363,7 @@ void LayoutManager::implts_reparentChildWindows()
     aWriteLock.reset();
     ToolbarLayoutManager* pToolbarManager = m_xToolbarManager.get();
     if ( pToolbarManager )
-        pToolbarManager->setParentWindow( uno::Reference< awt::XWindowPeer >( xContainerWindow, uno::UNO_QUERY ));
+        pToolbarManager->setParentWindow( uno::Reference< awt::XVclWindowPeer >( xContainerWindow, uno::UNO_QUERY ));
     aWriteLock.clear();
 }
 
@@ -1649,7 +1640,7 @@ Reference< XUIElement > SAL_CALL LayoutManager::getElement( const OUString& aNam
 Sequence< Reference< ui::XUIElement > > SAL_CALL LayoutManager::getElements()
 {
     SolarMutexClearableGuard aReadLock;
-    uno::Reference< ui::XUIElement >  xMenuBar( m_xMenuBar );
+    rtl::Reference< MenuBarWrapper >  xMenuBar( m_xMenuBar );
     uno::Reference< ui::XUIElement >  xStatusBar( m_aStatusBarElement.m_xUIElement );
     ToolbarLayoutManager*             pToolbarManager( m_xToolbarManager.get() );
     aReadLock.clear();
@@ -2326,7 +2317,7 @@ bool LayoutManager::implts_resizeContainerWindow( const awt::Size& rContainerSiz
 
     // calculate the maximum size we have for the container window
     sal_Int32 nDisplay = xContainerTopWindow->getDisplay();
-    tools::Rectangle aWorkArea = Application::GetScreenPosSizePixel( nDisplay );
+    AbsoluteScreenPixelRectangle aWorkArea = Application::GetScreenPosSizePixel( nDisplay );
 
     if (!aWorkArea.IsEmpty())
     {
@@ -2464,12 +2455,8 @@ bool LayoutManager::implts_resetMenuBar()
     MenuBar* pSetMenuBar = nullptr;
     if ( m_xInplaceMenuBar.is() )
         pSetMenuBar = static_cast<MenuBar *>(m_xInplaceMenuBar->GetMenuBar());
-    else
-    {
-        MenuBarWrapper* pMenuBarWrapper = static_cast< MenuBarWrapper* >( m_xMenuBar.get() );
-        if ( pMenuBarWrapper )
-            pSetMenuBar = static_cast<MenuBar*>(pMenuBarWrapper->GetMenuBarManager()->GetMenuBar());
-    }
+    else if ( m_xMenuBar )
+        pSetMenuBar = static_cast<MenuBar*>(m_xMenuBar->GetMenuBarManager()->GetMenuBar());
 
     SystemWindow* pSysWindow = getTopSystemWindow( xContainerWindow );
     if ( pSysWindow && bMenuVisible && pSetMenuBar )
@@ -2487,9 +2474,8 @@ void LayoutManager::implts_createMSCompatibleMenuBar( const OUString& aName )
     SolarMutexGuard aWriteLock;
 
     // Find Form menu in the original menubar
-    m_xMenuBar = implts_createElement( aName );
-    uno::Reference< XUIElementSettings > xMenuBarSettings(m_xMenuBar, UNO_QUERY);
-    uno::Reference< container::XIndexReplace > xMenuIndex(xMenuBarSettings->getSettings(true), UNO_QUERY);
+    m_xMenuBar.set( static_cast< MenuBarWrapper* >(implts_createElement( aName ).get()) );
+    uno::Reference< container::XIndexReplace > xMenuIndex(m_xMenuBar->getSettings(true), UNO_QUERY);
 
     sal_Int32 nFormsMenu = -1;
     for (sal_Int32 nIndex = 0; nIndex < xMenuIndex->getCount(); ++nIndex)
@@ -2787,7 +2773,7 @@ void SAL_CALL LayoutManager::disposing( const lang::EventObject& rEvent )
             ToolbarLayoutManager* pToolbarManager = m_xToolbarManager.get();
             if (pToolbarManager)
             {
-                uno::Reference<awt::XWindowPeer> aEmptyWindowPeer;
+                uno::Reference<awt::XVclWindowPeer> aEmptyWindowPeer;
                 pToolbarManager->setParentWindow(aEmptyWindowPeer);
             }
             impl_clearUpMenuBar();
@@ -2869,7 +2855,7 @@ void SAL_CALL LayoutManager::elementRemoved( const ui::ConfigurationEvent& Event
     Reference< frame::XFrame >                xFrame( m_xFrame );
     rtl::Reference< ToolbarLayoutManager >    xToolbarManager( m_xToolbarManager );
     Reference< awt::XWindow >                 xContainerWindow( m_xContainerWindow );
-    Reference< ui::XUIElement >               xMenuBar( m_xMenuBar );
+    rtl::Reference< MenuBarWrapper >          xMenuBar( m_xMenuBar );
     Reference< ui::XUIConfigurationManager >  xModuleCfgMgr( m_xModuleCfgMgr );
     Reference< ui::XUIConfigurationManager >  xDocCfgMgr( m_xDocCfgMgr );
     aReadLock.clear();
@@ -2935,9 +2921,8 @@ void SAL_CALL LayoutManager::elementRemoved( const ui::ConfigurationEvent& Event
                     if ( pSysWindow && !m_bInplaceMenuSet )
                         pSysWindow->SetMenuBar( nullptr );
 
-                    Reference< XComponent > xComp( xMenuBar, UNO_QUERY );
-                    if ( xComp.is() )
-                        xComp->dispose();
+                    if ( xMenuBar.is() )
+                        xMenuBar->dispose();
 
                     SolarMutexGuard g;
                     m_xMenuBar.clear();
@@ -3001,7 +2986,7 @@ void SAL_CALL LayoutManager::elementReplaced( const ui::ConfigurationEvent& Even
 void SAL_CALL LayoutManager::setFastPropertyValue_NoBroadcast( sal_Int32       nHandle,
                                                                const uno::Any& aValue  )
 {
-    if ( nHandle != LAYOUTMANAGER_PROPHANDLE_REFRESHVISIBILITY )
+    if ( (nHandle != LAYOUTMANAGER_PROPHANDLE_REFRESHVISIBILITY) && (nHandle != LAYOUTMANAGER_PROPHANDLE_REFRESHTOOLTIP) )
         LayoutManager_PBase::setFastPropertyValue_NoBroadcast( nHandle, aValue );
 
     switch( nHandle )
@@ -3029,6 +3014,12 @@ void SAL_CALL LayoutManager::setFastPropertyValue_NoBroadcast( sal_Int32       n
         case LAYOUTMANAGER_PROPHANDLE_HIDECURRENTUI:
             implts_setCurrentUIVisibility( !m_bHideCurrentUI );
             break;
+
+        case LAYOUTMANAGER_PROPHANDLE_REFRESHTOOLTIP:
+            if (m_xToolbarManager.is())
+                m_xToolbarManager->updateToolbarsTips();
+            break;
+
         default: break;
     }
 }

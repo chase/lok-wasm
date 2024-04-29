@@ -33,7 +33,6 @@
 #include "threadpool.hxx"
 #include "thread.hxx"
 
-using namespace ::std;
 using namespace ::osl;
 using namespace ::rtl;
 
@@ -63,7 +62,7 @@ namespace cppu_threadpool
     void DisposedCallerAdmin::destroy( void const * nDisposeId )
     {
         std::scoped_lock guard( m_mutex );
-        m_vector.erase(std::remove(m_vector.begin(), m_vector.end(), nDisposeId), m_vector.end());
+        std::erase(m_vector, nDisposeId);
     }
 
     bool DisposedCallerAdmin::isDisposed( void const * nDisposeId )
@@ -237,7 +236,7 @@ namespace cppu_threadpool
 
             if( ii == m_mapQueue.end() )
             {
-                m_mapQueue[ aThreadId ] = pair < JobQueue * , JobQueue * > ( nullptr , nullptr );
+                m_mapQueue[ aThreadId ] = std::pair < JobQueue * , JobQueue * > ( nullptr , nullptr );
                 ii = m_mapQueue.find( aThreadId );
                 OSL_ASSERT( ii != m_mapQueue.end() );
             }
@@ -280,7 +279,7 @@ namespace cppu_threadpool
         if( ii == m_mapQueue.end() )
         {
             JobQueue *p = new JobQueue();
-            m_mapQueue[ aThreadId ] = pair< JobQueue * , JobQueue * > ( p , nullptr );
+            m_mapQueue[ aThreadId ] = std::pair< JobQueue * , JobQueue * > ( p , nullptr );
         }
         else if( nullptr == (*ii).second.first )
         {

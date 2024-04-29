@@ -146,21 +146,13 @@ static void copyJobDataToJobSetup( ImplJobSetup* pJobSetup, JobData& rData )
     }
 
     // copy the whole context
-    if( pJobSetup->GetDriverData() )
-        std::free( const_cast<sal_uInt8*>(pJobSetup->GetDriverData()) );
 
     sal_uInt32 nBytes;
-    void* pBuffer = nullptr;
+    std::unique_ptr<sal_uInt8[]> pBuffer;
     if( rData.getStreamBuffer( pBuffer, nBytes ) )
-    {
-        pJobSetup->SetDriverDataLen( nBytes );
-        pJobSetup->SetDriverData( static_cast<sal_uInt8*>(pBuffer) );
-    }
+        pJobSetup->SetDriverData( std::move(pBuffer), nBytes );
     else
-    {
-        pJobSetup->SetDriverDataLen( 0 );
-        pJobSetup->SetDriverData( nullptr );
-    }
+        pJobSetup->SetDriverData( nullptr, 0 );
 }
 
 // SalInstance
@@ -176,7 +168,6 @@ SalInfoPrinter* SvpSalInstance::CreateInfoPrinter( SalPrinterQueueInfo* pQueueIn
         PrinterInfoManager& rManager( PrinterInfoManager::get() );
         PrinterInfo aInfo( rManager.getPrinterInfo( pQueueInfo->maPrinterName ) );
         pPrinter->m_aJobData = aInfo;
-        pPrinter->m_aPrinterGfx.Init( pPrinter->m_aJobData );
 
         if( pJobSetup->GetDriverData() )
             JobData::constructFromStreamBuffer( pJobSetup->GetDriverData(),

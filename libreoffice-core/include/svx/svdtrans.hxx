@@ -200,19 +200,23 @@ tools::Long GetLen(const Point& rPnt);
 
 class GeoStat { // Geometric state for a rect
 public:
-    Degree100 nRotationAngle;
-    Degree100 nShearAngle;
+    Degree100 m_nRotationAngle;
+    Degree100 m_nShearAngle;
     double   mfTanShearAngle;      // tan(nShearAngle)
     double   mfSinRotationAngle;   // sin(nRotationAngle)
     double   mfCosRotationAngle;   // cos(nRotationAngle)
 
-    GeoStat(): nRotationAngle(0),nShearAngle(0),mfTanShearAngle(0.0),mfSinRotationAngle(0.0),mfCosRotationAngle(1.0) {}
+    GeoStat(): m_nRotationAngle(0),m_nShearAngle(0),mfTanShearAngle(0.0),mfSinRotationAngle(0.0),mfCosRotationAngle(1.0) {}
     void RecalcSinCos();
     void RecalcTan();
 };
 
 tools::Polygon Rect2Poly(const tools::Rectangle& rRect, const GeoStat& rGeo);
-void Poly2Rect(const tools::Polygon& rPol, tools::Rectangle& rRect, GeoStat& rGeo);
+
+namespace svx
+{
+tools::Rectangle polygonToRectangle(const tools::Polygon& rPolygon, GeoStat& rGeo);
+}
 
 void OrthoDistance8(const Point& rPt0, Point& rPt, bool bBigOrtho);
 void OrthoDistance4(const Point& rPt0, Point& rPt, bool bBigOrtho);
@@ -222,17 +226,17 @@ void OrthoDistance4(const Point& rPt0, Point& rPt, bool bBigOrtho);
 SVXCORE_DLLPUBLIC tools::Long BigMulDiv(tools::Long nVal, tools::Long nMul, tools::Long nDiv);
 
 class FrPair {
-    Fraction aX;
-    Fraction aY;
+    Fraction m_aX;
+    Fraction m_aY;
 public:
-    FrPair(const Fraction& rBoth)                     : aX(rBoth),aY(rBoth)         {}
-    FrPair(const Fraction& rX, const Fraction& rY)    : aX(rX),aY(rY)               {}
-    FrPair(tools::Long nMul, tools::Long nDiv)                      : aX(nMul,nDiv),aY(nMul,nDiv) {}
-    FrPair(tools::Long xMul, tools::Long xDiv, tools::Long yMul, tools::Long yDiv): aX(xMul,xDiv),aY(yMul,yDiv) {}
-    const Fraction& X() const { return aX; }
-    const Fraction& Y() const { return aY; }
-    Fraction& X()             { return aX; }
-    Fraction& Y()             { return aY; }
+    FrPair(const Fraction& rBoth)                     : m_aX(rBoth),m_aY(rBoth)         {}
+    FrPair(const Fraction& rX, const Fraction& rY)    : m_aX(rX),m_aY(rY)               {}
+    FrPair(tools::Long nMul, tools::Long nDiv)                      : m_aX(nMul,nDiv),m_aY(nMul,nDiv) {}
+    FrPair(tools::Long xMul, tools::Long xDiv, tools::Long yMul, tools::Long yDiv): m_aX(xMul,xDiv),m_aY(yMul,yDiv) {}
+    const Fraction& X() const { return m_aX; }
+    const Fraction& Y() const { return m_aY; }
+    Fraction& X()             { return m_aX; }
+    Fraction& Y()             { return m_aY; }
 };
 
 // To convert units of measurement
@@ -260,22 +264,22 @@ inline bool IsInch(FieldUnit eU) {
 }
 
 class SVXCORE_DLLPUBLIC SdrFormatter {
-    tools::Long      nMul_;
-    tools::Long      nDiv_;
-    short     nComma_;
-    bool      bDirty;
-    MapUnit   eSrcMU;
-    MapUnit   eDstMU;
+    tools::Long      m_nMul;
+    tools::Long      m_nDiv;
+    short     m_nComma;
+    bool      m_bDirty;
+    MapUnit   m_eSrcMU;
+    MapUnit   m_eDstMU;
 private:
     SVX_DLLPRIVATE void Undirty();
 public:
     SdrFormatter(MapUnit eSrc, MapUnit eDst)
-        : nMul_(0)
-        , nDiv_(0)
-        , nComma_(0)
-        , bDirty(true)
-        , eSrcMU(eSrc)
-        , eDstMU(eDst)
+        : m_nMul(0)
+        , m_nDiv(0)
+        , m_nComma(0)
+        , m_bDirty(true)
+        , m_eSrcMU(eSrc)
+        , m_eDstMU(eDst)
     {
     }
     OUString GetStr(tools::Long nVal) const;

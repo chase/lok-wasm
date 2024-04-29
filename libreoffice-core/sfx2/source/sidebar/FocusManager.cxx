@@ -193,17 +193,6 @@ bool FocusManager::IsDeckTitleVisible() const
     return mpDeckTitleBar != nullptr && mpDeckTitleBar->GetVisible();
 }
 
-bool FocusManager::IsPanelTitleVisible (const sal_Int32 nPanelIndex) const
-{
-    if (nPanelIndex<0 || o3tl::make_unsigned(nPanelIndex)>=maPanels.size())
-        return false;
-
-    TitleBar* pTitleBar = maPanels[nPanelIndex]->GetTitleBar();
-    if (!pTitleBar)
-        return false;
-    return pTitleBar->GetVisible();
-}
-
 void FocusManager::FocusPanel (
     const sal_Int32 nPanelIndex,
     const bool bFallbackToDeckTitle)
@@ -222,7 +211,10 @@ void FocusManager::FocusPanel (
         rPanel.SetExpanded(true);
         pTitleBar->GetExpander().grab_focus();
     }
-    else if (bFallbackToDeckTitle)
+    // Fallback to deck title should only be applicable when there is more than one panel,
+    // or else it will never be possible to enter the panel contents when there's a single panel
+    // without a titlebar and expander
+    else if (bFallbackToDeckTitle && maPanels.size() > 1)
     {
         // The panel title is not visible, fall back to the deck
         // title.
@@ -281,29 +273,6 @@ void FocusManager::MoveFocusInsidePanel (
     }
 }
 
-bool FocusManager::MoveFocusInsideDeckTitle (
-    const FocusLocation& rFocusLocation,
-    const sal_Int32 nDirection)
-{
-    bool bConsumed = false;
-    // Note that when the title bar of the first (and only) panel is
-    // not visible then the deck title takes its place and the focus
-    // is moved between a) deck closer and b) content of panel 0.
-    switch (rFocusLocation.meComponent)
-    {
-        case PC_DeckToolBox:
-            if (nDirection>0 && ! IsPanelTitleVisible(0))
-            {
-                FocusPanelContent(0);
-                bConsumed = true;
-            }
-            break;
-
-        default: break;
-    }
-    return bConsumed;
-}
-
 bool FocusManager::HandleKeyEvent(
     const vcl::KeyCode& rKeyCode,
     const FocusLocation& aLocation)
@@ -343,11 +312,6 @@ bool FocusManager::HandleKeyEvent(
         case KEY_RETURN:
             switch (aLocation.meComponent)
             {
-                case PC_DeckToolBox:
-                    FocusButton(0);
-                    bConsumed = true;
-                    break;
-
                 case PC_PanelTitle:
                     // Enter the panel.
                     FocusPanelContent(aLocation.mnIndex);
@@ -369,24 +333,42 @@ bool FocusManager::HandleKeyEvent(
             {
                 case PC_PanelTitle:
                 case PC_PanelToolBox:
+                    if (rKeyCode.IsShift())
+                        break;
                     MoveFocusInsidePanel(aLocation, nDirection);
                     bConsumed = true;
                     break;
 
                 case PC_DeckToolBox:
-                    bConsumed = MoveFocusInsideDeckTitle(aLocation, nDirection);
+                    {
+                        // Moves to the first deck activation button that is visible and sensitive
+                        sal_Int32 nIndex(0);
+                        sal_Int32 nButtons(maButtons.size());
+                        if (nButtons > 1)
+                        {
+                            nIndex = 1;
+                            // Finds the next visible button that is sensitive
+                            while((!maButtons[nIndex]->get_visible() ||
+                                   !maButtons[nIndex]->get_sensitive()) && ++nIndex < nButtons);
+                            // Wrap to the menu button when going past the last button
+                            if (nIndex >= nButtons)
+                                nIndex = 0;
+                        }
+                        FocusButton(nIndex);
+                        bConsumed = true;
+                    }
                     break;
 
                 case PC_TabBar:
                     if (rKeyCode.IsShift())
-                        FocusPanel(maPanels.size()-1, true);
-                    else
                     {
                         if (IsDeckTitleVisible())
                             FocusDeckTitle();
                         else
                             FocusPanel(0, true);
                     }
+                    else
+                        FocusPanel(0, true);
                     bConsumed = true;
                     break;
 
@@ -409,35 +391,32 @@ bool FocusManager::HandleKeyEvent(
                         FocusDeckTitle();
                     else
                     {
-                        // Focus the last button.
+                        // Set focus to the last visible sensitive button.
                         sal_Int32 nIndex(maButtons.size()-1);
-                        while(!maButtons[nIndex]->get_visible() && --nIndex > 0);
+                        while((!maButtons[nIndex]->get_visible() ||
+                               !maButtons[nIndex]->get_sensitive()) && --nIndex > 0);
                         FocusButton(nIndex);
                     }
                     bConsumed = true;
                     break;
-
-                case PC_DeckToolBox:
-                {
-                    // Focus the last button.
-                    sal_Int32 nIndex(maButtons.size()-1);
-                    while(!maButtons[nIndex]->get_visible() && --nIndex > 0);
-                    FocusButton(nIndex);
-                    bConsumed = true;
-                    break;
-                }
 
                 case PC_TabBar:
-                    // Go to previous tab bar item.
-                    if (aLocation.mnIndex == 0)
-                        FocusPanel(maPanels.size()-1, true);
-                    else
                     {
-                        sal_Int32 nIndex((aLocation.mnIndex + maButtons.size() - 1) % maButtons.size());
-                        while(!maButtons[nIndex]->get_visible() && --nIndex > 0);
+                        if (rKeyCode.GetCode() == KEY_LEFT)
+                            break;
+
+                        sal_Int32 nIndex;
+                        if (aLocation.mnIndex <= 0)
+                            nIndex = maButtons.size() - 1;
+                        else
+                            nIndex = aLocation.mnIndex - 1;
+
+                        // Finds the previous visible sensitive button
+                        while((!maButtons[nIndex]->get_visible() ||
+                               !maButtons[nIndex]->get_sensitive()) && --nIndex > 0);
                         FocusButton(nIndex);
+                        bConsumed = true;
                     }
-                    bConsumed = true;
                     break;
 
                 default:
@@ -459,33 +438,26 @@ bool FocusManager::HandleKeyEvent(
                     bConsumed = true;
                     break;
 
-                case PC_DeckToolBox:
-                    // Focus the first panel.
-                    if (IsPanelTitleVisible(0))
-                        FocusPanel(0, false);
-                    else
-                        FocusButton(0);
-                    bConsumed = true;
-                    break;
-
                 case PC_TabBar:
-                    // Go to next tab bar item.
-                    if (aLocation.mnIndex < static_cast<sal_Int32>(maButtons.size())-1)
                     {
-                        sal_Int32 nIndex(aLocation.mnIndex + 1);
-                        while(!maButtons[nIndex]->get_visible() && ++nIndex < static_cast<sal_Int32>(maButtons.size()));
-                        if (nIndex < static_cast<sal_Int32>(maButtons.size()))
-                        {
-                            FocusButton(nIndex);
-                            bConsumed = true;
+                        if (rKeyCode.GetCode() == KEY_RIGHT)
                             break;
-                        }
+
+                        sal_Int32 nButtons(maButtons.size());
+
+                        sal_Int32 nIndex = aLocation.mnIndex + 1;
+                        if (nIndex >= nButtons)
+                            nIndex = 0;
+
+                        // Finds the next visible sensitive button
+                        while((!maButtons[nIndex]->get_visible() ||
+                               !maButtons[nIndex]->get_sensitive()) && ++nIndex < nButtons);
+                        // Wrap to the menu button when going past the last button
+                        if (nIndex >= nButtons)
+                            nIndex = 0;
+                        FocusButton(nIndex);
+                        bConsumed = true;
                     }
-                    if (IsDeckTitleVisible())
-                        FocusDeckTitle();
-                    else
-                        FocusPanel(0, true);
-                    bConsumed = true;
                     break;
 
                 default:

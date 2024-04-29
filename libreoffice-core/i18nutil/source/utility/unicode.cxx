@@ -67,18 +67,108 @@ unicode::getUnicodeScriptEnd( UnicodeScript type) {
 }
 
 sal_Int16
-unicode::getUnicodeType( const sal_Unicode ch ) {
-    static sal_Unicode c = 0x00;
-    static sal_Int16 r = 0x00;
+unicode::getUnicodeType(const sal_uInt32 ch)
+{
+    static sal_uInt32 c = 0x00;
+    static sal_uInt32 r = 0x00;
 
     if (ch == c) return r;
     else c = ch;
 
-    sal_Int16 address = UnicodeTypeIndex[ch >> 8];
-    r = static_cast<sal_Int16>(
-            (address < UnicodeTypeNumberBlock)
-            ? UnicodeTypeBlockValue[address]
-            : UnicodeTypeValue[((address - UnicodeTypeNumberBlock) << 8) + (ch & 0xff)]);
+    switch (u_charType(ch))
+    {
+        case U_UNASSIGNED:
+            r = css::i18n::UnicodeType::UNASSIGNED;
+            break;
+        case U_UPPERCASE_LETTER:
+            r = css::i18n::UnicodeType::UPPERCASE_LETTER;
+            break;
+        case U_LOWERCASE_LETTER:
+            r = css::i18n::UnicodeType::LOWERCASE_LETTER;
+            break;
+        case U_TITLECASE_LETTER:
+            r = css::i18n::UnicodeType::TITLECASE_LETTER;
+            break;
+        case U_MODIFIER_LETTER:
+            r = css::i18n::UnicodeType::MODIFIER_LETTER;
+            break;
+        case U_OTHER_LETTER:
+            r = css::i18n::UnicodeType::OTHER_LETTER;
+            break;
+        case U_NON_SPACING_MARK:
+            r = css::i18n::UnicodeType::NON_SPACING_MARK;
+            break;
+        case U_ENCLOSING_MARK:
+            r = css::i18n::UnicodeType::ENCLOSING_MARK;
+            break;
+        case U_COMBINING_SPACING_MARK:
+            r = css::i18n::UnicodeType::COMBINING_SPACING_MARK;
+            break;
+        case U_DECIMAL_DIGIT_NUMBER:
+            r = css::i18n::UnicodeType::DECIMAL_DIGIT_NUMBER;
+            break;
+        case U_LETTER_NUMBER:
+            r = css::i18n::UnicodeType::LETTER_NUMBER;
+            break;
+        case U_OTHER_NUMBER:
+            r = css::i18n::UnicodeType::OTHER_NUMBER;
+            break;
+        case U_SPACE_SEPARATOR:
+            r = css::i18n::UnicodeType::SPACE_SEPARATOR;
+            break;
+        case U_LINE_SEPARATOR:
+            r = css::i18n::UnicodeType::LINE_SEPARATOR;
+            break;
+        case U_PARAGRAPH_SEPARATOR:
+            r = css::i18n::UnicodeType::PARAGRAPH_SEPARATOR;
+            break;
+        case U_CONTROL_CHAR:
+            r = css::i18n::UnicodeType::CONTROL;
+            break;
+        case U_FORMAT_CHAR:
+            r = css::i18n::UnicodeType::FORMAT;
+            break;
+        case U_PRIVATE_USE_CHAR:
+            r = css::i18n::UnicodeType::PRIVATE_USE;
+            break;
+        case U_SURROGATE:
+            r = css::i18n::UnicodeType::SURROGATE;
+            break;
+        case U_DASH_PUNCTUATION:
+            r = css::i18n::UnicodeType::DASH_PUNCTUATION;
+            break;
+        case U_INITIAL_PUNCTUATION:
+            r = css::i18n::UnicodeType::INITIAL_PUNCTUATION;
+            break;
+        case U_FINAL_PUNCTUATION:
+            r = css::i18n::UnicodeType::FINAL_PUNCTUATION;
+            break;
+        case U_CONNECTOR_PUNCTUATION:
+            r = css::i18n::UnicodeType::CONNECTOR_PUNCTUATION;
+            break;
+        case U_OTHER_PUNCTUATION:
+            r = css::i18n::UnicodeType::OTHER_PUNCTUATION;
+            break;
+        case U_MATH_SYMBOL:
+            r = css::i18n::UnicodeType::MATH_SYMBOL;
+            break;
+        case U_CURRENCY_SYMBOL:
+            r = css::i18n::UnicodeType::CURRENCY_SYMBOL;
+            break;
+        case U_MODIFIER_SYMBOL:
+            r = css::i18n::UnicodeType::MODIFIER_SYMBOL;
+            break;
+        case U_OTHER_SYMBOL:
+            r = css::i18n::UnicodeType::OTHER_SYMBOL;
+            break;
+        case U_START_PUNCTUATION:
+            r = css::i18n::UnicodeType::START_PUNCTUATION;
+            break;
+        case U_END_PUNCTUATION:
+            r = css::i18n::UnicodeType::END_PUNCTUATION;
+            break;
+    }
+
     return r;
 }
 
@@ -124,7 +214,7 @@ sal_uInt32 unicode::GetMirroredChar(sal_uInt32 nChar) {
             bit(UnicodeType::PARAGRAPH_SEPARATOR)
 
 #define IsType(func, mask)  \
-bool func( const sal_Unicode ch) {\
+bool func( const sal_uInt32 ch) {\
     return (bit(getUnicodeType(ch)) & (mask)) != 0;\
 }
 
@@ -135,70 +225,183 @@ IsType(unicode::isSpace, SPACEMASK)
 #define CONTROLSPACE    bit(0x09)|bit(0x0a)|bit(0x0b)|bit(0x0c)|bit(0x0d)|\
             bit(0x1c)|bit(0x1d)|bit(0x1e)|bit(0x1f)
 
-bool unicode::isWhiteSpace( const sal_Unicode ch) {
+bool unicode::isWhiteSpace(const sal_uInt32 ch)
+{
     return (ch != 0xa0 && isSpace(ch)) || (ch <= 0x1F && (bit(ch) & (CONTROLSPACE)));
 }
 
 sal_Int16 unicode::getScriptClassFromUScriptCode(UScriptCode eScript)
 {
     //See unicode/uscript.h
-    static const sal_Int16 scriptTypes[] =
-    {
-        ScriptType::WEAK, ScriptType::WEAK, ScriptType::COMPLEX, ScriptType::LATIN, ScriptType::COMPLEX,
-        ScriptType::ASIAN, ScriptType::LATIN, ScriptType::LATIN, ScriptType::LATIN, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::LATIN, ScriptType::LATIN, ScriptType::LATIN,
-    // 15
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::ASIAN, ScriptType::ASIAN, ScriptType::COMPLEX,
-        ScriptType::ASIAN, ScriptType::COMPLEX, ScriptType::ASIAN, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::LATIN, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::LATIN,
-    // 30
-        ScriptType::LATIN, ScriptType::COMPLEX, ScriptType::LATIN, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::LATIN, ScriptType::ASIAN, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-    // 45
-        ScriptType::COMPLEX, ScriptType::LATIN, ScriptType::LATIN, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::LATIN, ScriptType::LATIN, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::LATIN,
-        ScriptType::COMPLEX, ScriptType::LATIN, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-    // 60
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::LATIN, ScriptType::LATIN, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::ASIAN, ScriptType::ASIAN,
-    // 75
-        ScriptType::COMPLEX, ScriptType::LATIN, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::LATIN, ScriptType::LATIN, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-    // 90
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::WEAK, ScriptType::WEAK, ScriptType::COMPLEX,
-    // 105
-        ScriptType::ASIAN, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::ASIAN,
-    // 120
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::WEAK, ScriptType::WEAK,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-    // 135
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX, ScriptType::COMPLEX,
-        ScriptType::COMPLEX,
-        ScriptType::WEAK
-    };
-
     sal_Int16 nRet;
-    if (eScript < USCRIPT_COMMON)
-        nRet = ScriptType::WEAK;
-    else if (static_cast<size_t>(eScript) >= SAL_N_ELEMENTS(scriptTypes))
-        nRet = ScriptType::COMPLEX;         // anything new is going to be pretty wild
-    else
-        nRet = scriptTypes[eScript];
+    switch (eScript)
+    {
+        case USCRIPT_INVALID_CODE:
+        case USCRIPT_COMMON:
+        case USCRIPT_INHERITED:
+        case USCRIPT_UNWRITTEN_LANGUAGES:
+        case USCRIPT_UNKNOWN:
+        case USCRIPT_MATHEMATICAL_NOTATION:
+        case USCRIPT_SYMBOLS:
+        case USCRIPT_CODE_LIMIT:
+            nRet = ScriptType::WEAK;
+            break;
+        case USCRIPT_ARMENIAN:
+        case USCRIPT_CHEROKEE:
+        case USCRIPT_COPTIC:
+        case USCRIPT_CYRILLIC:
+        case USCRIPT_GEORGIAN:
+        case USCRIPT_GOTHIC:
+        case USCRIPT_GREEK:
+        case USCRIPT_LATIN:
+        case USCRIPT_OGHAM:
+        case USCRIPT_OLD_ITALIC:
+        case USCRIPT_RUNIC:
+        case USCRIPT_CANADIAN_ABORIGINAL:
+        case USCRIPT_BRAILLE:
+        case USCRIPT_CYPRIOT:
+        case USCRIPT_OSMANYA:
+        case USCRIPT_SHAVIAN:
+        case USCRIPT_KATAKANA_OR_HIRAGANA:
+        case USCRIPT_GLAGOLITIC:
+        case USCRIPT_CIRTH:
+        case USCRIPT_OLD_CHURCH_SLAVONIC_CYRILLIC:
+        case USCRIPT_OLD_HUNGARIAN:
+        case USCRIPT_LATIN_FRAKTUR:
+        case USCRIPT_LATIN_GAELIC:
+            nRet = ScriptType::LATIN;
+            break;
+        case USCRIPT_BOPOMOFO:
+        case USCRIPT_HAN:
+        case USCRIPT_HANGUL:
+        case USCRIPT_HIRAGANA:
+        case USCRIPT_KATAKANA:
+        case USCRIPT_YI:
+        case USCRIPT_SIMPLIFIED_HAN:
+        case USCRIPT_TRADITIONAL_HAN:
+        case USCRIPT_JAPANESE:
+        case USCRIPT_KOREAN:
+        case USCRIPT_TANGUT:
+        case USCRIPT_KHITAN_SMALL_SCRIPT:
+            nRet = ScriptType::ASIAN;
+            break;
+        case USCRIPT_ARABIC:
+        case USCRIPT_BENGALI:
+        case USCRIPT_DESERET:
+        case USCRIPT_DEVANAGARI:
+        case USCRIPT_ETHIOPIC:
+        case USCRIPT_GUJARATI:
+        case USCRIPT_GURMUKHI:
+        case USCRIPT_HEBREW:
+        case USCRIPT_KANNADA:
+        case USCRIPT_KHMER:
+        case USCRIPT_LAO:
+        case USCRIPT_MALAYALAM:
+        case USCRIPT_MONGOLIAN:
+        case USCRIPT_MYANMAR:
+        case USCRIPT_ORIYA:
+        case USCRIPT_SINHALA:
+        case USCRIPT_SYRIAC:
+        case USCRIPT_TAMIL:
+        case USCRIPT_TELUGU:
+        case USCRIPT_THAANA:
+        case USCRIPT_THAI:
+        case USCRIPT_TIBETAN:
+        case USCRIPT_TAGALOG:
+        case USCRIPT_HANUNOO:
+        case USCRIPT_BUHID:
+        case USCRIPT_TAGBANWA:
+        case USCRIPT_LIMBU:
+        case USCRIPT_LINEAR_B:
+        case USCRIPT_TAI_LE:
+        case USCRIPT_UGARITIC:
+        case USCRIPT_BUGINESE:
+        case USCRIPT_KHAROSHTHI:
+        case USCRIPT_SYLOTI_NAGRI:
+        case USCRIPT_NEW_TAI_LUE:
+        case USCRIPT_TIFINAGH:
+        case USCRIPT_OLD_PERSIAN:
+        case USCRIPT_BALINESE:
+        case USCRIPT_BATAK:
+        case USCRIPT_BLISSYMBOLS:
+        case USCRIPT_BRAHMI:
+        case USCRIPT_CHAM:
+        case USCRIPT_DEMOTIC_EGYPTIAN:
+        case USCRIPT_HIERATIC_EGYPTIAN:
+        case USCRIPT_EGYPTIAN_HIEROGLYPHS:
+        case USCRIPT_KHUTSURI:
+        case USCRIPT_PAHAWH_HMONG:
+        case USCRIPT_HARAPPAN_INDUS:
+        case USCRIPT_JAVANESE:
+        case USCRIPT_KAYAH_LI:
+        case USCRIPT_LEPCHA:
+        case USCRIPT_LINEAR_A:
+        case USCRIPT_MANDAEAN:
+        case USCRIPT_MAYAN_HIEROGLYPHS:
+        case USCRIPT_MEROITIC:
+        case USCRIPT_NKO:
+        case USCRIPT_ORKHON:
+        case USCRIPT_OLD_PERMIC:
+        case USCRIPT_PHAGS_PA:
+        case USCRIPT_PHOENICIAN:
+        case USCRIPT_PHONETIC_POLLARD:
+        case USCRIPT_RONGORONGO:
+        case USCRIPT_SARATI:
+        case USCRIPT_ESTRANGELO_SYRIAC:
+        case USCRIPT_WESTERN_SYRIAC:
+        case USCRIPT_EASTERN_SYRIAC:
+        case USCRIPT_TENGWAR:
+        case USCRIPT_VAI:
+        case USCRIPT_VISIBLE_SPEECH:
+        case USCRIPT_CUNEIFORM:
+        case USCRIPT_CARIAN:
+        case USCRIPT_LANNA:
+        case USCRIPT_LYCIAN:
+        case USCRIPT_LYDIAN:
+        case USCRIPT_OL_CHIKI:
+        case USCRIPT_REJANG:
+        case USCRIPT_SAURASHTRA:
+        case USCRIPT_SIGN_WRITING:
+        case USCRIPT_SUNDANESE:
+        case USCRIPT_MOON:
+        case USCRIPT_MEITEI_MAYEK:
+        case USCRIPT_IMPERIAL_ARAMAIC:
+        case USCRIPT_AVESTAN:
+        case USCRIPT_CHAKMA:
+        case USCRIPT_KAITHI:
+        case USCRIPT_MANICHAEAN:
+        case USCRIPT_INSCRIPTIONAL_PAHLAVI:
+        case USCRIPT_PSALTER_PAHLAVI:
+        case USCRIPT_BOOK_PAHLAVI:
+        case USCRIPT_INSCRIPTIONAL_PARTHIAN:
+        case USCRIPT_SAMARITAN:
+        case USCRIPT_TAI_VIET:
+        case USCRIPT_BAMUM:
+        case USCRIPT_LISU:
+        case USCRIPT_NAKHI_GEBA:
+        case USCRIPT_OLD_SOUTH_ARABIAN:
+        case USCRIPT_BASSA_VAH:
+        case USCRIPT_DUPLOYAN_SHORTAND:
+        case USCRIPT_ELBASAN:
+        case USCRIPT_GRANTHA:
+        case USCRIPT_KPELLE:
+        case USCRIPT_LOMA:
+        case USCRIPT_MENDE:
+        case USCRIPT_MEROITIC_CURSIVE:
+        case USCRIPT_OLD_NORTH_ARABIAN:
+        case USCRIPT_NABATAEAN:
+        case USCRIPT_PALMYRENE:
+        case USCRIPT_SINDHI:
+        case USCRIPT_WARANG_CITI:
+        default:         // anything new is going to be pretty wild
+            nRet = ScriptType::COMPLEX;
+            break;
+    }
     return nRet;
 }
 
 sal_Int16 unicode::getScriptClassFromLanguageTag( const LanguageTag& rLanguageTag )
 {
-    static UScriptCode nMaxScript = static_cast<UScriptCode>(u_getIntPropertyMaxValue(UCHAR_SCRIPT));
     constexpr int32_t nBuf = 42;
     UScriptCode aBuf[nBuf];
     if (rLanguageTag.hasScript())
@@ -222,8 +425,6 @@ sal_Int16 unicode::getScriptClassFromLanguageTag( const LanguageTag& rLanguageTa
         if (nScripts == 0 || !U_SUCCESS(status))
             return css::i18n::ScriptType::LATIN;
     }
-    if (aBuf[0] > nMaxScript)
-        return css::i18n::ScriptType::COMPLEX;
     return getScriptClassFromUScriptCode( aBuf[0]);
 }
 
@@ -234,612 +435,594 @@ OString unicode::getExemplarLanguageForUScriptCode(UScriptCode eScript)
     {
         case USCRIPT_CODE_LIMIT:
         case USCRIPT_INVALID_CODE:
-            sRet = "zxx";
+            sRet = "zxx"_ostr;
             break;
         case USCRIPT_COMMON:
         case USCRIPT_INHERITED:
-            sRet = "und";
+            sRet = "und"_ostr;
             break;
         case USCRIPT_MATHEMATICAL_NOTATION:
         case USCRIPT_SYMBOLS:
-            sRet = "zxx";
+            sRet = "zxx"_ostr;
             break;
         case USCRIPT_UNWRITTEN_LANGUAGES:
         case USCRIPT_UNKNOWN:
-            sRet = "und";
+            sRet = "und"_ostr;
             break;
         case USCRIPT_ARABIC:
-            sRet = "ar";
+            sRet = "ar"_ostr;
             break;
         case USCRIPT_ARMENIAN:
-            sRet = "hy";
+            sRet = "hy"_ostr;
             break;
         case USCRIPT_BENGALI:
-            sRet = "bn";
+            sRet = "bn"_ostr;
             break;
         case USCRIPT_BOPOMOFO:
-            sRet = "zh";
+            sRet = "zh"_ostr;
             break;
         case USCRIPT_CHEROKEE:
-            sRet = "chr";
+            sRet = "chr"_ostr;
             break;
         case USCRIPT_COPTIC:
-            sRet = "cop";
+            sRet = "cop"_ostr;
             break;
         case USCRIPT_CYRILLIC:
-            sRet = "ru";
+            sRet = "ru"_ostr;
             break;
         case USCRIPT_DESERET:
-            sRet = "en";
+            sRet = "en"_ostr;
             break;
         case USCRIPT_DEVANAGARI:
-            sRet = "hi";
+            sRet = "hi"_ostr;
             break;
         case USCRIPT_ETHIOPIC:
-            sRet = "am";
+            sRet = "am"_ostr;
             break;
         case USCRIPT_GEORGIAN:
-            sRet = "ka";
+            sRet = "ka"_ostr;
             break;
         case USCRIPT_GOTHIC:
-            sRet = "got";
+            sRet = "got"_ostr;
             break;
         case USCRIPT_GREEK:
-            sRet = "el";
+            sRet = "el"_ostr;
             break;
         case USCRIPT_GUJARATI:
-            sRet = "gu";
+            sRet = "gu"_ostr;
             break;
         case USCRIPT_GURMUKHI:
-            sRet = "pa";
+            sRet = "pa"_ostr;
             break;
         case USCRIPT_HAN:
-            sRet = "zh";
+            sRet = "zh"_ostr;
             break;
         case USCRIPT_HANGUL:
-            sRet = "ko";
+            sRet = "ko"_ostr;
             break;
         case USCRIPT_HEBREW:
-            sRet = "hr";
+            sRet = "hr"_ostr;
             break;
         case USCRIPT_HIRAGANA:
-            sRet = "ja";
+            sRet = "ja"_ostr;
             break;
         case USCRIPT_KANNADA:
-            sRet = "kn";
+            sRet = "kn"_ostr;
             break;
         case USCRIPT_KATAKANA:
-            sRet = "ja";
+            sRet = "ja"_ostr;
             break;
         case USCRIPT_KHMER:
-            sRet = "km";
+            sRet = "km"_ostr;
             break;
         case USCRIPT_LAO:
-            sRet = "lo";
+            sRet = "lo"_ostr;
             break;
         case USCRIPT_LATIN:
-            sRet = "en";
+            sRet = "en"_ostr;
             break;
         case USCRIPT_MALAYALAM:
-            sRet = "ml";
+            sRet = "ml"_ostr;
             break;
         case USCRIPT_MONGOLIAN:
-            sRet = "mn";
+            sRet = "mn"_ostr;
             break;
         case USCRIPT_MYANMAR:
-            sRet = "my";
+            sRet = "my"_ostr;
             break;
         case USCRIPT_OGHAM:
-            sRet = "pgl";
+            sRet = "pgl"_ostr;
             break;
         case USCRIPT_OLD_ITALIC:
-            sRet = "osc";
+            sRet = "osc"_ostr;
             break;
         case USCRIPT_ORIYA:
-            sRet = "or";
+            sRet = "or"_ostr;
             break;
         case USCRIPT_RUNIC:
-            sRet = "ang";
+            sRet = "ang"_ostr;
             break;
         case USCRIPT_SINHALA:
-            sRet = "si";
+            sRet = "si"_ostr;
             break;
         case USCRIPT_SYRIAC:
-            sRet = "syr";
+            sRet = "syr"_ostr;
             break;
         case USCRIPT_TAMIL:
-            sRet = "ta";
+            sRet = "ta"_ostr;
             break;
         case USCRIPT_TELUGU:
-            sRet = "te";
+            sRet = "te"_ostr;
             break;
         case USCRIPT_THAANA:
-            sRet = "dv";
+            sRet = "dv"_ostr;
             break;
         case USCRIPT_THAI:
-            sRet = "th";
+            sRet = "th"_ostr;
             break;
         case USCRIPT_TIBETAN:
-            sRet = "bo";
+            sRet = "bo"_ostr;
             break;
         case USCRIPT_CANADIAN_ABORIGINAL:
-            sRet = "iu";
+            sRet = "iu"_ostr;
             break;
         case USCRIPT_YI:
-            sRet = "ii";
+            sRet = "ii"_ostr;
             break;
         case USCRIPT_TAGALOG:
-            sRet = "tl";
+            sRet = "tl"_ostr;
             break;
         case USCRIPT_HANUNOO:
-            sRet = "hnn";
+            sRet = "hnn"_ostr;
             break;
         case USCRIPT_BUHID:
-            sRet = "bku";
+            sRet = "bku"_ostr;
             break;
         case USCRIPT_TAGBANWA:
-            sRet = "tbw";
+            sRet = "tbw"_ostr;
             break;
         case USCRIPT_BRAILLE:
-            sRet = "en";
+            sRet = "en"_ostr;
             break;
         case USCRIPT_CYPRIOT:
-            sRet = "ecy";
+            sRet = "ecy"_ostr;
             break;
         case USCRIPT_LIMBU:
-            sRet = "lif";
+            sRet = "lif"_ostr;
             break;
         case USCRIPT_LINEAR_B:
-            sRet = "gmy";
+            sRet = "gmy"_ostr;
             break;
         case USCRIPT_OSMANYA:
-            sRet = "so";
+            sRet = "so"_ostr;
             break;
         case USCRIPT_SHAVIAN:
-            sRet = "en";
+            sRet = "en"_ostr;
             break;
         case USCRIPT_TAI_LE:
-            sRet = "tdd";
+            sRet = "tdd"_ostr;
             break;
         case USCRIPT_UGARITIC:
-            sRet = "uga";
+            sRet = "uga"_ostr;
             break;
         case USCRIPT_KATAKANA_OR_HIRAGANA:
-            sRet = "ja";
+            sRet = "ja"_ostr;
             break;
         case USCRIPT_BUGINESE:
-            sRet = "bug";
+            sRet = "bug"_ostr;
             break;
         case USCRIPT_GLAGOLITIC:
-            sRet = "ch";
+            sRet = "ch"_ostr;
             break;
         case USCRIPT_KHAROSHTHI:
-            sRet = "pra";
+            sRet = "pra"_ostr;
             break;
         case USCRIPT_SYLOTI_NAGRI:
-            sRet = "syl";
+            sRet = "syl"_ostr;
             break;
         case USCRIPT_NEW_TAI_LUE:
-            sRet = "khb";
+            sRet = "khb"_ostr;
             break;
         case USCRIPT_TIFINAGH:
-            sRet = "tmh";
+            sRet = "tmh"_ostr;
             break;
         case USCRIPT_OLD_PERSIAN:
-            sRet = "peo";
+            sRet = "peo"_ostr;
             break;
         case USCRIPT_BALINESE:
-            sRet = "ban";
+            sRet = "ban"_ostr;
             break;
         case USCRIPT_BATAK:
-            sRet = "btk";
+            sRet = "btk"_ostr;
             break;
         case USCRIPT_BLISSYMBOLS:
-            sRet = "en";
+            sRet = "en"_ostr;
             break;
         case USCRIPT_BRAHMI:
-            sRet = "pra";
+            sRet = "pra"_ostr;
             break;
         case USCRIPT_CHAM:
-            sRet = "cja";
+            sRet = "cja"_ostr;
             break;
         case USCRIPT_CIRTH:
-            sRet = "sjn";
+            sRet = "sjn"_ostr;
             break;
         case USCRIPT_OLD_CHURCH_SLAVONIC_CYRILLIC:
-            sRet = "cu";
+            sRet = "cu"_ostr;
             break;
         case USCRIPT_DEMOTIC_EGYPTIAN:
         case USCRIPT_HIERATIC_EGYPTIAN:
         case USCRIPT_EGYPTIAN_HIEROGLYPHS:
-            sRet = "egy";
+            sRet = "egy"_ostr;
             break;
         case USCRIPT_KHUTSURI:
-            sRet = "ka";
+            sRet = "ka"_ostr;
             break;
         case USCRIPT_SIMPLIFIED_HAN:
-            sRet = "zh";
+            sRet = "zh"_ostr;
             break;
         case USCRIPT_TRADITIONAL_HAN:
-            sRet = "zh";
+            sRet = "zh"_ostr;
             break;
         case USCRIPT_PAHAWH_HMONG:
-            sRet = "blu";
+            sRet = "blu"_ostr;
             break;
         case USCRIPT_OLD_HUNGARIAN:
-            sRet = "ohu";
+            sRet = "ohu"_ostr;
             break;
         case USCRIPT_HARAPPAN_INDUS:
-            sRet = "xiv";
+            sRet = "xiv"_ostr;
             break;
         case USCRIPT_JAVANESE:
-            sRet = "kaw";
+            sRet = "kaw"_ostr;
             break;
         case USCRIPT_KAYAH_LI:
-            sRet = "eky";
+            sRet = "eky"_ostr;
             break;
         case USCRIPT_LATIN_FRAKTUR:
-            sRet = "de";
+            sRet = "de"_ostr;
             break;
         case USCRIPT_LATIN_GAELIC:
-            sRet = "ga";
+            sRet = "ga"_ostr;
             break;
         case USCRIPT_LEPCHA:
-            sRet = "lep";
+            sRet = "lep"_ostr;
             break;
         case USCRIPT_LINEAR_A:
-            sRet = "ecr";
+            sRet = "ecr"_ostr;
             break;
         case USCRIPT_MAYAN_HIEROGLYPHS:
-            sRet = "myn";
+            sRet = "myn"_ostr;
             break;
         case USCRIPT_MEROITIC:
-            sRet = "xmr";
+            sRet = "xmr"_ostr;
             break;
         case USCRIPT_NKO:
-            sRet = "nqo";
+            sRet = "nqo"_ostr;
             break;
         case USCRIPT_ORKHON:
-            sRet = "otk";
+            sRet = "otk"_ostr;
             break;
         case USCRIPT_OLD_PERMIC:
-            sRet = "kv";
+            sRet = "kv"_ostr;
             break;
         case USCRIPT_PHAGS_PA:
-            sRet = "xng";
+            sRet = "xng"_ostr;
             break;
         case USCRIPT_PHOENICIAN:
-            sRet = "phn";
+            sRet = "phn"_ostr;
             break;
         case USCRIPT_PHONETIC_POLLARD:
-            sRet = "hmd";
+            sRet = "hmd"_ostr;
             break;
         case USCRIPT_RONGORONGO:
-            sRet = "rap";
+            sRet = "rap"_ostr;
             break;
         case USCRIPT_SARATI:
-            sRet = "qya";
+            sRet = "qya"_ostr;
             break;
         case USCRIPT_ESTRANGELO_SYRIAC:
-            sRet = "syr";
+            sRet = "syr"_ostr;
             break;
         case USCRIPT_WESTERN_SYRIAC:
-            sRet = "tru";
+            sRet = "tru"_ostr;
             break;
         case USCRIPT_EASTERN_SYRIAC:
-            sRet = "aii";
+            sRet = "aii"_ostr;
             break;
         case USCRIPT_TENGWAR:
-            sRet = "sjn";
+            sRet = "sjn"_ostr;
             break;
         case USCRIPT_VAI:
-            sRet = "vai";
+            sRet = "vai"_ostr;
             break;
         case USCRIPT_VISIBLE_SPEECH:
-            sRet = "en";
+            sRet = "en"_ostr;
             break;
         case USCRIPT_CUNEIFORM:
-            sRet = "akk";
+            sRet = "akk"_ostr;
             break;
         case USCRIPT_CARIAN:
-            sRet = "xcr";
+            sRet = "xcr"_ostr;
             break;
         case USCRIPT_JAPANESE:
-            sRet = "ja";
+            sRet = "ja"_ostr;
             break;
         case USCRIPT_LANNA:
-            sRet = "nod";
+            sRet = "nod"_ostr;
             break;
         case USCRIPT_LYCIAN:
-            sRet = "xlc";
+            sRet = "xlc"_ostr;
             break;
         case USCRIPT_LYDIAN:
-            sRet = "xld";
+            sRet = "xld"_ostr;
             break;
         case USCRIPT_OL_CHIKI:
-            sRet = "sat";
+            sRet = "sat"_ostr;
             break;
         case USCRIPT_REJANG:
-            sRet = "rej";
+            sRet = "rej"_ostr;
             break;
         case USCRIPT_SAURASHTRA:
-            sRet = "saz";
+            sRet = "saz"_ostr;
             break;
         case USCRIPT_SIGN_WRITING:
-            sRet = "en";
+            sRet = "en"_ostr;
             break;
         case USCRIPT_SUNDANESE:
-            sRet = "su";
+            sRet = "su"_ostr;
             break;
         case USCRIPT_MOON:
-            sRet = "en";
+            sRet = "en"_ostr;
             break;
         case USCRIPT_MEITEI_MAYEK:
-            sRet = "mni";
+            sRet = "mni"_ostr;
             break;
         case USCRIPT_IMPERIAL_ARAMAIC:
-            sRet = "arc";
+            sRet = "arc"_ostr;
             break;
         case USCRIPT_AVESTAN:
-            sRet = "ae";
+            sRet = "ae"_ostr;
             break;
         case USCRIPT_CHAKMA:
-            sRet = "ccp";
+            sRet = "ccp"_ostr;
             break;
         case USCRIPT_KOREAN:
-            sRet = "ko";
+            sRet = "ko"_ostr;
             break;
         case USCRIPT_KAITHI:
-            sRet = "awa";
+            sRet = "awa"_ostr;
             break;
         case USCRIPT_MANICHAEAN:
-            sRet = "xmn";
+            sRet = "xmn"_ostr;
             break;
         case USCRIPT_INSCRIPTIONAL_PAHLAVI:
         case USCRIPT_PSALTER_PAHLAVI:
         case USCRIPT_BOOK_PAHLAVI:
         case USCRIPT_INSCRIPTIONAL_PARTHIAN:
-            sRet = "xpr";
+            sRet = "xpr"_ostr;
             break;
         case USCRIPT_SAMARITAN:
-            sRet = "heb";
+            sRet = "heb"_ostr;
             break;
         case USCRIPT_TAI_VIET:
-            sRet = "blt";
+            sRet = "blt"_ostr;
             break;
         case USCRIPT_MANDAEAN: /* Aliased to USCRIPT_MANDAIC in icu 4.6. */
-            sRet = "mic";
+            sRet = "mic"_ostr;
             break;
         case USCRIPT_NABATAEAN:
-            sRet = "mis-Nbat";  // Uncoded with script
+            sRet = "mis-Nbat"_ostr;  // Uncoded with script
             break;
         case USCRIPT_PALMYRENE:
-            sRet = "mis-Palm";  // Uncoded with script
+            sRet = "mis-Palm"_ostr;  // Uncoded with script
             break;
         case USCRIPT_BAMUM:
-            sRet = "bax";
+            sRet = "bax"_ostr;
             break;
         case USCRIPT_LISU:
-            sRet = "lis";
+            sRet = "lis"_ostr;
             break;
         case USCRIPT_NAKHI_GEBA:
-            sRet = "nxq";
+            sRet = "nxq"_ostr;
             break;
         case USCRIPT_OLD_SOUTH_ARABIAN:
-            sRet = "xsa";
+            sRet = "xsa"_ostr;
             break;
         case USCRIPT_BASSA_VAH:
-            sRet = "bsq";
+            sRet = "bsq"_ostr;
             break;
         case USCRIPT_DUPLOYAN_SHORTAND:
-            sRet = "fr";
+            sRet = "fr"_ostr;
             break;
         case USCRIPT_ELBASAN:
-            sRet = "sq";
+            sRet = "sq"_ostr;
             break;
         case USCRIPT_GRANTHA:
-            sRet = "ta";
+            sRet = "ta"_ostr;
             break;
         case USCRIPT_KPELLE:
-            sRet = "kpe";
+            sRet = "kpe"_ostr;
             break;
         case USCRIPT_LOMA:
-            sRet = "lom";
+            sRet = "lom"_ostr;
             break;
         case USCRIPT_MENDE:
-            sRet = "men";
+            sRet = "men"_ostr;
             break;
         case USCRIPT_MEROITIC_CURSIVE:
-            sRet = "xmr";
+            sRet = "xmr"_ostr;
             break;
         case USCRIPT_OLD_NORTH_ARABIAN:
-            sRet = "xna";
+            sRet = "xna"_ostr;
             break;
         case USCRIPT_SINDHI:
-            sRet = "sd";
+            sRet = "sd"_ostr;
             break;
         case USCRIPT_WARANG_CITI:
-            sRet = "hoc";
+            sRet = "hoc"_ostr;
             break;
-#if (U_ICU_VERSION_MAJOR_NUM > 4) || (U_ICU_VERSION_MAJOR_NUM == 4 && U_ICU_VERSION_MINOR_NUM >= 8)
         case USCRIPT_AFAKA:
-            sRet = "djk";
+            sRet = "djk"_ostr;
             break;
         case USCRIPT_JURCHEN:
-            sRet = "juc";
+            sRet = "juc"_ostr;
             break;
         case USCRIPT_MRO:
-            sRet = "cmr";
+            sRet = "cmr"_ostr;
             break;
         case USCRIPT_NUSHU:
-            sRet = "mis-Nshu";  // Uncoded with script
+            sRet = "mis-Nshu"_ostr;  // Uncoded with script
             break;
         case USCRIPT_SHARADA:
-            sRet = "sa";
+            sRet = "sa"_ostr;
             break;
         case USCRIPT_SORA_SOMPENG:
-            sRet = "srb";
+            sRet = "srb"_ostr;
             break;
         case USCRIPT_TAKRI:
-            sRet = "doi";
+            sRet = "doi"_ostr;
             break;
         case USCRIPT_TANGUT:
-            sRet = "txg";
+            sRet = "txg"_ostr;
             break;
         case USCRIPT_WOLEAI:
-            sRet = "woe";
+            sRet = "woe"_ostr;
             break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 49)
         case USCRIPT_ANATOLIAN_HIEROGLYPHS:
-            sRet = "hlu";
+            sRet = "hlu"_ostr;
             break;
         case USCRIPT_KHOJKI:
-            sRet = "gu";
+            sRet = "gu"_ostr;
             break;
         case USCRIPT_TIRHUTA:
-            sRet = "mai";
+            sRet = "mai"_ostr;
             break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 52)
         case USCRIPT_CAUCASIAN_ALBANIAN:
-            sRet = "xag";
+            sRet = "xag"_ostr;
             break;
         case USCRIPT_MAHAJANI:
-            sRet = "mwr";
+            sRet = "mwr"_ostr;
             break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 54)
         case USCRIPT_AHOM:
-            sRet = "aho";
+            sRet = "aho"_ostr;
             break;
         case USCRIPT_HATRAN:
-            sRet = "qly-Hatr";
+            sRet = "qly-Hatr"_ostr;
             break;
         case USCRIPT_MODI:
-            sRet = "mr-Modi";
+            sRet = "mr-Modi"_ostr;
             break;
         case USCRIPT_MULTANI:
-            sRet = "skr-Mutl";
+            sRet = "skr-Mutl"_ostr;
             break;
         case USCRIPT_PAU_CIN_HAU:
-            sRet = "ctd-Pauc";
+            sRet = "ctd-Pauc"_ostr;
             break;
         case USCRIPT_SIDDHAM:
-            sRet = "sa-Sidd";
+            sRet = "sa-Sidd"_ostr;
             break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 58)
         case USCRIPT_ADLAM:
-            sRet = "mis-Adlm";   // Adlam for Fulani, no language code
+            sRet = "mis-Adlm"_ostr;   // Adlam for Fulani, no language code
             break;
         case USCRIPT_BHAIKSUKI:
-            sRet = "mis-Bhks";   // Bhaiksuki for some Buddhist texts, no language code
+            sRet = "mis-Bhks"_ostr;   // Bhaiksuki for some Buddhist texts, no language code
             break;
         case USCRIPT_MARCHEN:
-            sRet = "bo-Marc";
+            sRet = "bo-Marc"_ostr;
             break;
         case USCRIPT_NEWA:
-            sRet = "new-Newa";
+            sRet = "new-Newa"_ostr;
             break;
         case USCRIPT_OSAGE:
-            sRet = "osa-Osge";
+            sRet = "osa-Osge"_ostr;
             break;
         case USCRIPT_HAN_WITH_BOPOMOFO:
-            sRet = "mis-Hanb";   // Han with Bopomofo, zh-Hanb ?
+            sRet = "mis-Hanb"_ostr;   // Han with Bopomofo, zh-Hanb ?
             break;
         case USCRIPT_JAMO:
-            sRet = "ko";   // Jamo - elements of Hangul Syllables
+            sRet = "ko"_ostr;   // Jamo - elements of Hangul Syllables
             break;
         case USCRIPT_SYMBOLS_EMOJI:
-            sRet = "mis-Zsye";   // Emoji variant
+            sRet = "mis-Zsye"_ostr;   // Emoji variant
             break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 60)
         case USCRIPT_MASARAM_GONDI:
-            sRet = "gon-Gonm";  // macro language code, could be wsg,esg,gno
+            sRet = "gon-Gonm"_ostr;  // macro language code, could be wsg,esg,gno
             break;
         case USCRIPT_SOYOMBO:
-            sRet = "mn-Soyo";   // abugida to write Mongolian, also Tibetan and Sanskrit
+            sRet = "mn-Soyo"_ostr;   // abugida to write Mongolian, also Tibetan and Sanskrit
             break;
         case USCRIPT_ZANABAZAR_SQUARE:
-            sRet = "mn-Zanb";   // abugida to write Mongolian
+            sRet = "mn-Zanb"_ostr;   // abugida to write Mongolian
             break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 62)
         case USCRIPT_DOGRA:
-            sRet = "dgo";       // Dogri proper
+            sRet = "dgo"_ostr;       // Dogri proper
             break;
         case USCRIPT_GUNJALA_GONDI:
-            sRet = "wsg";       // Adilabad Gondi
+            sRet = "wsg"_ostr;       // Adilabad Gondi
             break;
         case USCRIPT_MAKASAR:
-            sRet = "mak";
+            sRet = "mak"_ostr;
             break;
         case USCRIPT_MEDEFAIDRIN:
-            sRet = "dmf-Medf";
+            sRet = "dmf-Medf"_ostr;
             break;
         case USCRIPT_HANIFI_ROHINGYA:
-            sRet = "rhg";
+            sRet = "rhg"_ostr;
             break;
         case USCRIPT_SOGDIAN:
-            sRet = "sog";
+            sRet = "sog"_ostr;
             break;
         case USCRIPT_OLD_SOGDIAN:
-            sRet = "sog";
+            sRet = "sog"_ostr;
             break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 64)
         case USCRIPT_ELYMAIC:
-            sRet = "arc-Elym";
+            sRet = "arc-Elym"_ostr;
             break;
         case USCRIPT_NYIAKENG_PUACHUE_HMONG:
-            sRet = "hmn-Hmnp";  // macrolanguage code
+            sRet = "hmn-Hmnp"_ostr;  // macrolanguage code
             break;
         case USCRIPT_NANDINAGARI:
-            sRet = "sa-Nand";
+            sRet = "sa-Nand"_ostr;
             break;
         case USCRIPT_WANCHO:
-            sRet = "nnp-Wcho";
+            sRet = "nnp-Wcho"_ostr;
             break;
-#endif
-#if (U_ICU_VERSION_MAJOR_NUM >= 66)
         case USCRIPT_CHORASMIAN:
-            sRet = "xco-Chrs";
+            sRet = "xco-Chrs"_ostr;
             break;
         case USCRIPT_DIVES_AKURU:
-            sRet = "dv-Diak";
+            sRet = "dv-Diak"_ostr;
             break;
         case USCRIPT_KHITAN_SMALL_SCRIPT:
-            sRet = "zkt-Kits";
+            sRet = "zkt-Kits"_ostr;
             break;
         case USCRIPT_YEZIDI:
-            sRet = "kmr-Yezi";
+            sRet = "kmr-Yezi"_ostr;
             break;
-#endif
 #if (U_ICU_VERSION_MAJOR_NUM >= 70)
         case USCRIPT_CYPRO_MINOAN:
-            sRet = "mis-Cpmn";  // Uncoded with script
+            sRet = "mis-Cpmn"_ostr;  // Uncoded with script
             break;
         case USCRIPT_OLD_UYGHUR:
-            sRet = "oui-Ougr";
+            sRet = "oui-Ougr"_ostr;
             break;
         case USCRIPT_TANGSA:
-            sRet = "nst-Tnsa";
+            sRet = "nst-Tnsa"_ostr;
             break;
         case USCRIPT_TOTO:
-            sRet = "txo-Toto";
+            sRet = "txo-Toto"_ostr;
             break;
         case USCRIPT_VITHKUQI:
-            sRet = "sq-Vith";   // macrolanguage code
+            sRet = "sq-Vith"_ostr;   // macrolanguage code
             break;
 #endif
 #if (U_ICU_VERSION_MAJOR_NUM >= 72)
         case USCRIPT_KAWI:
-            sRet = "mis-Kawi";  // Uncoded with script
+            sRet = "mis-Kawi"_ostr;  // Uncoded with script
             break;
         case USCRIPT_NAG_MUNDARI:
-            sRet = "unr-Nagm";
+            sRet = "unr-Nagm"_ostr;
             break;
 #endif
     }
@@ -1127,8 +1310,7 @@ OUString ToggleUnicodeCodepoint::ReplacementString()
             //pad with zeros - minimum length of 4.
             for( sal_Int32 i = 4 - aTmp.getLength(); i > 0; --i )
                 aTmp.insert( 0,"0" );
-            output.append( "U+" );
-            output.append( aTmp );
+            output.append( "U+" + aTmp );
         }
     }
     return output.makeStringAndClear();

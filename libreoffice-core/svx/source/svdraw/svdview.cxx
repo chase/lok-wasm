@@ -165,8 +165,8 @@ bool SdrView::KeyInput(const KeyEvent& rKEvt, vcl::Window* pWin)
         bRet = true;
         switch (rKEvt.GetKeyCode().GetFullFunction()) {
             case KeyFuncType::DELETE: DeleteMarked(); break;
-            case KeyFuncType::UNDO: mpModel->Undo(); break;
-            case KeyFuncType::REDO: mpModel->Redo(); break;
+            case KeyFuncType::UNDO: GetModel().Undo(); break;
+            case KeyFuncType::REDO: GetModel().Redo(); break;
             default: {
                 switch (rKEvt.GetKeyCode().GetFullCode()) {
                     case KEY_ESCAPE: {
@@ -175,9 +175,9 @@ bool SdrView::KeyInput(const KeyEvent& rKEvt, vcl::Window* pWin)
                         if (pWin!=nullptr) pWin->ReleaseMouse();
                     } break;
                     case KEY_DELETE: DeleteMarked(); break;
-                    case KEY_UNDO: case KEY_BACKSPACE+KEY_MOD2: mpModel->Undo(); break;
-                    case KEY_BACKSPACE+KEY_MOD2+KEY_SHIFT: mpModel->Redo(); break;
-                    case KEY_REPEAT: case KEY_BACKSPACE+KEY_MOD2+KEY_MOD1: mpModel->Repeat(*this); break;
+                    case KEY_UNDO: case KEY_BACKSPACE+KEY_MOD2: GetModel().Undo(); break;
+                    case KEY_BACKSPACE+KEY_MOD2+KEY_SHIFT: GetModel().Redo(); break;
+                    case KEY_REPEAT: case KEY_BACKSPACE+KEY_MOD2+KEY_MOD1: GetModel().Repeat(*this); break;
                     case KEY_MOD1+KEY_A: MarkAll(); break;
                     default: bRet=false;
                 } // switch
@@ -449,7 +449,7 @@ SdrHitKind SdrView::PickAnything(const Point& rLogicPos, SdrViewEvent& rVEvt) co
             // includes grouping primitives (like TextHierarchyPrimitives we deed here)
             // but also all decomposed ones which lead to the creation of that primitive
             drawinglayer::primitive2d::Primitive2DContainer aHitContainer;
-            const bool bTEHit(pPV && SdrObjectPrimitiveHit(*pTextObj, aLocalLogicPosition, 0, *pPV, &pPV->GetVisibleLayers(), true, &aHitContainer));
+            const bool bTEHit(pPV && SdrObjectPrimitiveHit(*pTextObj, aLocalLogicPosition, {0, 0}, *pPV, &pPV->GetVisibleLayers(), true, &aHitContainer));
 
             if (bTEHit && !aHitContainer.empty())
             {
@@ -514,13 +514,21 @@ SdrHitKind SdrView::PickAnything(const Point& rLogicPos, SdrViewEvent& rVEvt) co
         (eHit==SdrHitKind::MarkedObject || eHit==SdrHitKind::UnmarkedObject) &&
         (IsTextTool() || (IsEditMode() && IsQuickTextEditMode())) && pHitObj->HasTextEdit())
     {
+        auto pTextObj = DynCastSdrTextObj(pHitObj);
+
         // Around the TextEditArea there's a border to select without going into text edit mode.
-        tools::Rectangle aBoundRect(pHitObj->GetCurrentBoundRect());
+        tools::Rectangle aBoundRect;
+        const GeoStat& rGeo = pTextObj->GetGeoStat();
+        if (pTextObj && !rGeo.m_nRotationAngle && !rGeo.m_nShearAngle)
+        {
+            pTextObj->TakeTextEditArea(nullptr, nullptr, &aBoundRect, nullptr);
+        }
+        else
+            aBoundRect = pHitObj->GetCurrentBoundRect();
 
         // Force to SnapRect when Fontwork
-        if( auto pTextObj = DynCastSdrTextObj(pHitObj) )
-            if( pTextObj->IsFontwork() )
-                aBoundRect = pHitObj->GetSnapRect();
+        if( pTextObj && pTextObj->IsFontwork() )
+            aBoundRect = pHitObj->GetSnapRect();
 
         sal_Int32 nTolerance(mnHitTolLog);
         bool bBoundRectHit(false);
@@ -538,10 +546,11 @@ SdrHitKind SdrView::PickAnything(const Point& rLogicPos, SdrViewEvent& rVEvt) co
             bBoundRectHit = true;
         }
 
-        if(!bBoundRectHit)
+        if(!bBoundRectHit && aBoundRect.Contains(aLocalLogicPosition))
         {
-            bool bTEHit(pPV &&
-                SdrObjectPrimitiveHit(*pHitObj, aLocalLogicPosition, 0, *pPV, &pPV->GetVisibleLayers(), true));
+            bool bTEHit(pPV
+                        && SdrObjectPrimitiveHit(*pHitObj, aLocalLogicPosition, { 2000.0, 0.0 },
+                                                 *pPV, &pPV->GetVisibleLayers(), true));
 
             // TextEdit attached to an object in a locked layer
             if (bTEHit && pPV->GetLockedLayers().IsSet(pHitObj->GetLayer()))
@@ -1161,7 +1170,7 @@ PointerStyle SdrView::GetPreferredPointer(const Point& rMousePos, const OutputDe
     return PointerStyle::Arrow;
 }
 
-constexpr OUStringLiteral STR_NOTHING = u"nothing";
+constexpr OUString STR_NOTHING = u"nothing"_ustr;
 OUString SdrView::GetStatusText()
 {
     OUString aName;

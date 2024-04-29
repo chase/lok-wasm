@@ -50,7 +50,7 @@ const int MAX_OUTLINERVIEWS = 4;
 |*
 \************************************************************************/
 
-class OutlineView
+class OutlineView final
     : public ::sd::View
 {
     friend class OutlineViewModelChangeGuard;
@@ -79,7 +79,7 @@ public:
     virtual void DeleteDeviceFromPaintView(OutputDevice& rDev) override;
 
     OutlinerView*   GetViewByWindow(vcl::Window const * pWin) const;
-    SdrOutliner&    GetOutliner() { return mrOutliner; }
+    SdOutliner&     GetOutliner() { return mrOutliner; }
 
     Paragraph*      GetPrevTitle(const Paragraph* pPara);
     Paragraph*      GetNextTitle(const Paragraph* pPara);
@@ -166,7 +166,7 @@ private:
     void UpdateDocument();
 
     OutlineViewShell&   mrOutlineViewShell;
-    SdrOutliner&        mrOutliner;
+    SdOutliner&         mrOutliner;
     std::unique_ptr<OutlinerView> mpOutlinerViews[MAX_OUTLINERVIEWS];
 
     std::vector<Paragraph*> maOldParaOrder;

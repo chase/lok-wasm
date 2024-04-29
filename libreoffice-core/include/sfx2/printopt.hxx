@@ -33,23 +33,33 @@ private:
     std::unique_ptr<weld::RadioButton> m_xPrinterOutputRB;
     std::unique_ptr<weld::RadioButton> m_xPrintFileOutputRB;
     std::unique_ptr<weld::CheckButton> m_xReduceTransparencyCB;
+    std::unique_ptr<weld::Widget> m_xReduceTransparencyImg;
     std::unique_ptr<weld::RadioButton> m_xReduceTransparencyAutoRB;
     std::unique_ptr<weld::RadioButton> m_xReduceTransparencyNoneRB;
+    std::unique_ptr<weld::Widget> m_xReduceTransparencyModeImg;
     std::unique_ptr<weld::CheckButton> m_xReduceGradientsCB;
+    std::unique_ptr<weld::Widget> m_xReduceGradientsImg;
     std::unique_ptr<weld::RadioButton> m_xReduceGradientsStripesRB;
     std::unique_ptr<weld::RadioButton> m_xReduceGradientsColorRB;
+    std::unique_ptr<weld::Widget> m_xReduceGradientsModeImg;
     std::unique_ptr<weld::SpinButton> m_xReduceGradientsStepCountNF;
     std::unique_ptr<weld::CheckButton> m_xReduceBitmapsCB;
+    std::unique_ptr<weld::Widget> m_xReduceBitmapsImg;
     std::unique_ptr<weld::RadioButton> m_xReduceBitmapsOptimalRB;
     std::unique_ptr<weld::RadioButton> m_xReduceBitmapsNormalRB;
     std::unique_ptr<weld::RadioButton> m_xReduceBitmapsResolutionRB;
+    std::unique_ptr<weld::Widget> m_xReduceBitmapsModeImg;
     std::unique_ptr<weld::ComboBox> m_xReduceBitmapsResolutionLB;
     std::unique_ptr<weld::CheckButton> m_xReduceBitmapsTransparencyCB;
+    std::unique_ptr<weld::Widget> m_xReduceBitmapsTransparencyImg;
     std::unique_ptr<weld::CheckButton> m_xConvertToGreyscalesCB;
-    std::unique_ptr<weld::CheckButton> m_xPDFCB;
+    std::unique_ptr<weld::Widget> m_xConvertToGreyscalesImg;
     std::unique_ptr<weld::CheckButton> m_xPaperSizeCB;
+    std::unique_ptr<weld::Widget> m_xPaperSizeImg;
     std::unique_ptr<weld::CheckButton> m_xPaperOrientationCB;
+    std::unique_ptr<weld::Widget> m_xPaperOrientationImg;
     std::unique_ptr<weld::CheckButton> m_xTransparencyCB;
+    std::unique_ptr<weld::Widget> m_xTransparencyImg;
 
 private:
 
@@ -75,6 +85,9 @@ public:
 
     SfxCommonPrintOptionsTabPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rSet);
     virtual             ~SfxCommonPrintOptionsTabPage() override;
+
+    virtual OUString GetAllStrings() override;
+
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;
 

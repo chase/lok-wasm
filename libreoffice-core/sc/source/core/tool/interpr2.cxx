@@ -22,11 +22,13 @@
 
 #include <comphelper/string.hxx>
 #include <o3tl/float_int_conversion.hxx>
+#include <o3tl/string_view.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <sfx2/objsh.hxx>
 #include <svl/numformat.hxx>
 #include <svl/zforlist.hxx>
+#include <tools/duration.hxx>
 #include <sal/macros.h>
 #include <osl/diagnose.h>
 
@@ -36,6 +38,7 @@
 #include <formulacell.hxx>
 #include <document.hxx>
 #include <dociter.hxx>
+#include <docsh.hxx>
 #include <unitconv.hxx>
 #include <hints.hxx>
 #include <dpobject.hxx>
@@ -120,21 +123,21 @@ void ScInterpreter::ScGetActTime()
 void ScInterpreter::ScGetYear()
 {
     Date aDate = pFormatter->GetNullDate();
-    aDate.AddDays( GetInt32());
+    aDate.AddDays( GetFloor32());
     PushDouble( static_cast<double>(aDate.GetYear()) );
 }
 
 void ScInterpreter::ScGetMonth()
 {
     Date aDate = pFormatter->GetNullDate();
-    aDate.AddDays( GetInt32());
+    aDate.AddDays( GetFloor32());
     PushDouble( static_cast<double>(aDate.GetMonth()) );
 }
 
 void ScInterpreter::ScGetDay()
 {
     Date aDate = pFormatter->GetNullDate();
-    aDate.AddDays( GetInt32());
+    aDate.AddDays( GetFloor32());
     PushDouble(static_cast<double>(aDate.GetDay()));
 }
 
@@ -198,7 +201,7 @@ void ScInterpreter::ScGetDayOfWeek()
         nFlag = 1;
 
     Date aDate = pFormatter->GetNullDate();
-    aDate.AddDays( GetInt32());
+    aDate.AddDays( GetFloor32());
     int nVal = static_cast<int>(aDate.GetDayOfWeek());  // MONDAY = 0
     switch (nFlag)
     {
@@ -239,7 +242,7 @@ void ScInterpreter::ScWeeknumOOo()
         sal_Int16 nFlag = GetInt16();
 
         Date aDate = pFormatter->GetNullDate();
-        aDate.AddDays( GetInt32());
+        aDate.AddDays( GetFloor32());
         PushInt( static_cast<int>(aDate.GetWeekOfYear( nFlag == 1 ? SUNDAY : MONDAY )));
     }
 }
@@ -253,7 +256,7 @@ void ScInterpreter::ScGetWeekOfYear()
     sal_Int16 nFlag = ( nParamCount == 1 ) ? 1 : GetInt16();
 
     Date aDate = pFormatter->GetNullDate();
-    aDate.AddDays( GetInt32());
+    aDate.AddDays( GetFloor32());
 
     sal_Int32 nMinimumNumberOfDaysInWeek;
     DayOfWeek eFirstDayOfWeek;
@@ -295,7 +298,7 @@ void ScInterpreter::ScGetIsoWeekOfYear()
     if ( MustHaveParamCount( GetByte(), 1 ) )
     {
         Date aDate = pFormatter->GetNullDate();
-        aDate.AddDays( GetInt32());
+        aDate.AddDays( GetFloor32());
         PushInt( static_cast<int>(aDate.GetWeekOfYear()) );
     }
 }
@@ -570,7 +573,7 @@ void ScInterpreter::ScWorkday_MS()
         PushError( nErr );
     else
     {
-        sal_Int32 nDays = GetInt32();
+        sal_Int32 nDays = GetFloor32();
         sal_uInt32 nDate = GetUInt32();
         if (nGlobalError != FormulaError::NONE || (nDate > SAL_MAX_UINT32 - nNullDate))
         {
@@ -700,8 +703,8 @@ void ScInterpreter::ScGetDiffDate360()
         return;
 
     bool bFlag = nParamCount == 3 && GetBool();
-    sal_Int32 nDate2 = GetInt32();
-    sal_Int32 nDate1 = GetInt32();
+    sal_Int32 nDate2 = GetFloor32();
+    sal_Int32 nDate1 = GetFloor32();
     if (nGlobalError != FormulaError::NONE)
         PushError( nGlobalError);
     else
@@ -765,8 +768,8 @@ void ScInterpreter::ScGetDateDif()
         return;
 
     OUString aInterval = GetString().getString();
-    sal_Int32 nDate2 = GetInt32();
-    sal_Int32 nDate1 = GetInt32();
+    sal_Int32 nDate2 = GetFloor32();
+    sal_Int32 nDate1 = GetFloor32();
 
     if (nGlobalError != FormulaError::NONE)
     {
@@ -921,6 +924,7 @@ void ScInterpreter::ScGetTimeValue()
             nFuncFmtType = SvNumFormatType::TIME;
             double fDateVal = rtl::math::approxFloor(fVal);
             double fTimeVal = fVal - fDateVal;
+            fTimeVal = ::tools::Duration(fTimeVal).GetInDays();  // force corrected
             PushDouble(fTimeVal);
         }
         else
@@ -2467,7 +2471,7 @@ void ScInterpreter::ScIntersect()
         }
         size_t n = pRefList->size();
         if (!n)
-            PushError( FormulaError::NoRef);
+            PushError( FormulaError::NoCode);
         else if (n == 1)
         {
             const ScComplexRefData& rRef = (*pRefList)[0];
@@ -2525,7 +2529,7 @@ void ScInterpreter::ScIntersect()
         SCROW nRow2 = ::std::min( nR2[0], nR2[1]);
         SCTAB nTab2 = ::std::min( nT2[0], nT2[1]);
         if (nCol2 < nCol1 || nRow2 < nRow1 || nTab2 < nTab1)
-            PushError( FormulaError::NoRef);
+            PushError( FormulaError::NoCode);
         else if (nCol2 == nCol1 && nRow2 == nRow1 && nTab2 == nTab1)
             PushSingleRef( nCol1, nRow1, nTab1);
         else
@@ -2658,7 +2662,7 @@ void ScInterpreter::ScStyle()
     // Execute request to apply style
     if ( !mrDoc.IsClipOrUndo() )
     {
-        SfxObjectShell* pShell = mrDoc.GetDocumentShell();
+        ScDocShell* pShell = mrDoc.GetDocumentShell();
         if (pShell)
         {
             // Normalize style names right here, making sure that character case is correct,
@@ -3077,7 +3081,7 @@ void ScInterpreter::ScRoman()
                     else
                         nSteps = nMode;
                 }
-                aRoman.append( pChars[ nIndex ] ).append( pChars[ nIndex2 ] );
+                aRoman.append( OUStringChar(pChars[ nIndex ]) + OUStringChar(pChars[ nIndex2 ]) );
                 nVal = sal::static_int_cast<sal_uInt16>( nVal + pValues[ nIndex ] );
                 nVal = sal::static_int_cast<sal_uInt16>( nVal - pValues[ nIndex2 ] );
             }
@@ -3266,7 +3270,7 @@ void ScInterpreter::ScHyperLink()
     http://ec.europa.eu/economy_finance/euro/adoption/conversion/
     http://ec.europa.eu/economy_finance/euro/countries/
  */
-static bool lclConvertMoney( const OUString& aSearchUnit, double& rfRate, int& rnDec )
+static bool lclConvertMoney( std::u16string_view aSearchUnit, double& rfRate, int& rnDec )
 {
     struct ConvertInfo
     {
@@ -3299,7 +3303,7 @@ static bool lclConvertMoney( const OUString& aSearchUnit, double& rfRate, int& r
     };
 
     for (const auto & i : aConvertTable)
-        if ( aSearchUnit.equalsIgnoreAsciiCaseAscii( i.pCurrText ) )
+        if ( o3tl::equalsIgnoreAsciiCase( aSearchUnit, i.pCurrText ) )
         {
             rfRate = i.fRate;
             rnDec  = i.nDec;

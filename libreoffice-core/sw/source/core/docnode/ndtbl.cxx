@@ -430,7 +430,7 @@ const SwTable* SwDoc::InsertTable( const SwInsertTableOptions& rInsTableOpts,
         {
             sal_uInt16 nFrameWidth = nLastPos;
             nLastPos = (*pColArr)[ pColArr->size()-2 ];
-            pTableFormat->SetFormatAttr( SvxLRSpaceItem( nSttPos, nFrameWidth - nLastPos, 0, 0, RES_LR_SPACE ) );
+            pTableFormat->SetFormatAttr( SvxLRSpaceItem( nSttPos, nFrameWidth - nLastPos, 0, RES_LR_SPACE ) );
         }
         nWidth = nLastPos - nSttPos;
     }
@@ -886,6 +886,34 @@ const SwTable* SwDoc::TextToTable( const SwInsertTableOptions& rInsTableOpts,
     getIDocumentState().SetModified();
     getIDocumentFieldsAccess().SetFieldsDirty(true, nullptr, SwNodeOffset(0));
     return &rNdTable;
+}
+
+static void lcl_RemoveBreaksTable(SwTableNode & rNode, SwTableFormat *const pTableFormat)
+{
+    // delete old layout frames, new ones need to be created...
+    rNode.DelFrames(nullptr);
+
+    // remove PageBreaks/PageDesc/ColBreak
+    SwFrameFormat & rFormat(*rNode.GetTable().GetFrameFormat());
+
+    if (const SvxFormatBreakItem* pItem = rFormat.GetItemIfSet(RES_BREAK, false))
+    {
+        if (pTableFormat)
+        {
+            pTableFormat->SetFormatAttr(*pItem);
+        }
+        rFormat.ResetFormatAttr(RES_BREAK);
+    }
+
+    SwFormatPageDesc const*const pPageDescItem(rFormat.GetItemIfSet(RES_PAGEDESC, false));
+    if (pPageDescItem && pPageDescItem->GetPageDesc())
+    {
+        if (pTableFormat)
+        {
+            pTableFormat->SetFormatAttr(*pPageDescItem);
+        }
+        rFormat.ResetFormatAttr(RES_PAGEDESC);
+    }
 }
 
 static void lcl_RemoveBreaks(SwContentNode & rNode, SwTableFormat *const pTableFormat)
@@ -1385,10 +1413,19 @@ SwTableNode* SwNodes::TextToTable( const SwNodes::TableRanges_t & rTableNodes,
     // delete frames of all contained content nodes
     for( nLines = 0; aNodeIndex <= rTableNodes.rbegin()->rbegin()->aEnd; ++aNodeIndex,++nLines )
     {
-        SwNode& rNode = aNodeIndex.GetNode();
-        if( rNode.IsContentNode() )
+        SwNode* pNode(&aNodeIndex.GetNode());
+        while (pNode->IsSectionNode()) // could be ToX field in table
         {
-            lcl_RemoveBreaks(static_cast<SwContentNode&>(rNode),
+            pNode = pNode->GetNodes()[pNode->GetIndex()+1];
+        }
+        if (pNode->IsTableNode())
+        {
+            lcl_RemoveBreaksTable(static_cast<SwTableNode&>(*pNode),
+                    (0 == nLines) ? pTableFormat : nullptr);
+        }
+        else if (pNode->IsContentNode())
+        {
+            lcl_RemoveBreaks(static_cast<SwContentNode&>(*pNode),
                     (0 == nLines) ? pTableFormat : nullptr);
         }
     }
@@ -1462,9 +1499,7 @@ bool SwDoc::TableToText( const SwTableNode* pTableNd, sal_Unicode cCh )
         pUndo.reset(new SwUndoTableToText( pTableNd->GetTable(), cCh ));
     }
 
-    SwTableFormulaUpdate aMsgHint( &pTableNd->GetTable() );
-    aMsgHint.m_eFlags = TBL_BOXNAME;
-    getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+    const_cast<SwTable*>(&pTableNd->GetTable())->SwitchFormulasToExternalRepresentation();
 
     bool bRet = GetNodes().TableToText( aRg, cCh, pUndo.get() );
     if( pUndoRg )
@@ -1673,8 +1708,7 @@ bool SwNodes::TableToText( const SwNodeRange& rRange, sal_Unicode cCh,
 
     // #i28006# Fly frames have to be restored even if the table was
     // #alone in the section
-    const SwFrameFormats& rFlyArr = *GetDoc().GetSpzFrameFormats();
-    for( auto pFly : rFlyArr )
+    for(sw::SpzFrameFormat* pFly: *GetDoc().GetSpzFrameFormats())
     {
         SwFrameFormat *const pFormat = pFly;
         const SwFormatAnchor& rAnchor = pFormat->GetAnchor();
@@ -1708,7 +1742,7 @@ void SwDoc::InsertCol( const SwCursor& rCursor, sal_uInt16 nCnt, bool bBehind )
         InsertCol( aBoxes, nCnt, bBehind );
 }
 
-bool SwDoc::InsertCol( const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind )
+bool SwDoc::InsertCol( const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind, bool bInsertDummy )
 {
     OSL_ENSURE( !rBoxes.empty(), "No valid Box list" );
     SwTableNode* pTableNd = const_cast<SwTableNode*>(rBoxes[0]->GetSttNd()->FindTableNode());
@@ -1732,11 +1766,8 @@ bool SwDoc::InsertCol( const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind )
     {
         ::sw::UndoGuard const undoGuard(GetIDocumentUndoRedo());
 
-        SwTableFormulaUpdate aMsgHint( &rTable );
-        aMsgHint.m_eFlags = TBL_BOXPTR;
-        getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
-
-        bRet = rTable.InsertCol(*this, rBoxes, nCnt, bBehind);
+        rTable.SwitchFormulasToInternalRepresentation();
+        bRet = rTable.InsertCol(*this, rBoxes, nCnt, bBehind, bInsertDummy);
         if (bRet)
         {
             getIDocumentState().SetModified();
@@ -1763,7 +1794,7 @@ void SwDoc::InsertRow( const SwCursor& rCursor, sal_uInt16 nCnt, bool bBehind )
         InsertRow( aBoxes, nCnt, bBehind );
 }
 
-bool SwDoc::InsertRow( const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind )
+bool SwDoc::InsertRow( const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind, bool bInsertDummy )
 {
     OSL_ENSURE( !rBoxes.empty(), "No valid Box list" );
     SwTableNode* pTableNd = const_cast<SwTableNode*>(rBoxes[0]->GetSttNd()->FindTableNode());
@@ -1786,12 +1817,9 @@ bool SwDoc::InsertRow( const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind )
     bool bRet(false);
     {
         ::sw::UndoGuard const undoGuard(GetIDocumentUndoRedo());
+        rTable.SwitchFormulasToInternalRepresentation();
 
-        SwTableFormulaUpdate aMsgHint( &rTable );
-        aMsgHint.m_eFlags = TBL_BOXPTR;
-        getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
-
-        bRet = rTable.InsertRow( this, rBoxes, nCnt, bBehind );
+        bRet = rTable.InsertRow( this, rBoxes, nCnt, bBehind, bInsertDummy );
         if (bRet)
         {
             getIDocumentState().SetModified();
@@ -2152,10 +2180,7 @@ bool SwDoc::DeleteRowCol(const SwSelBoxes& rBoxes, RowColMode const eMode)
     bool bRet(false);
     {
         ::sw::UndoGuard const undoGuard(GetIDocumentUndoRedo());
-
-        SwTableFormulaUpdate aMsgHint( &pTableNd->GetTable() );
-        aMsgHint.m_eFlags = TBL_BOXPTR;
-        getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+        rTable.SwitchFormulasToInternalRepresentation();
 
         if (rTable.IsNewModel())
         {
@@ -2222,10 +2247,7 @@ bool SwDoc::SplitTable( const SwSelBoxes& rBoxes, bool bVert, sal_uInt16 nCnt,
     bool bRet(false);
     {
         ::sw::UndoGuard const undoGuard(GetIDocumentUndoRedo());
-
-        SwTableFormulaUpdate aMsgHint( &rTable );
-        aMsgHint.m_eFlags = TBL_BOXPTR;
-        getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+        rTable.SwitchFormulasToInternalRepresentation();
 
         if (bVert)
             bRet = rTable.SplitCol(*this, rBoxes, nCnt);
@@ -2340,9 +2362,7 @@ TableMergeErr SwDoc::MergeTable( SwPaM& rPam )
         }
 
         // Merge them
-        SwTableFormulaUpdate aMsgHint( &pTableNd->GetTable() );
-        aMsgHint.m_eFlags = TBL_BOXPTR;
-        getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+        pTableNd->GetTable().SwitchFormulasToInternalRepresentation();
 
         if( pTableNd->GetTable().Merge( this, aBoxes, aMerged, pMergeBox, pUndo.get() ))
         {
@@ -2547,17 +2567,7 @@ void SwTableNode::dumpAsXml(xmlTextWriterPtr pWriter) const
 
     if (m_pTable)
     {
-        (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SwTable"));
-        (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", m_pTable.get());
-        m_pTable->GetFrameFormat()->dumpAsXml(pWriter);
-        for (const auto& pLine : m_pTable->GetTabLines())
-        {
-            (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SwTableLine"));
-            (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", pLine);
-            pLine->GetFrameFormat()->dumpAsXml(pWriter);
-            (void)xmlTextWriterEndElement(pWriter);
-        }
-        (void)xmlTextWriterEndElement(pWriter);
+        m_pTable->dumpAsXml(pWriter);
     }
 
     // (void)xmlTextWriterEndElement(pWriter); - it is a start node, so don't end, will make xml better nested
@@ -2966,15 +2976,14 @@ void SwDoc::SetRowsToRepeat( SwTable &rTable, sal_uInt16 nSet )
     }
 
     rTable.SetRowsToRepeat(nSet);
-    const SwMsgPoolItem aChg(RES_TBLHEADLINECHG);
-    rTable.GetFrameFormat()->CallSwClientNotify(sw::LegacyModifyHint(&aChg, &aChg));
+    rTable.GetFrameFormat()->CallSwClientNotify(sw::TableHeadingChange());
     getIDocumentState().SetModified();
 }
 
 void SwCollectTableLineBoxes::AddToUndoHistory( const SwContentNode& rNd )
 {
     if( m_pHistory )
-        m_pHistory->Add( rNd.GetFormatColl(), rNd.GetIndex(), SwNodeType::Text );
+        m_pHistory->AddColl(rNd.GetFormatColl(), rNd.GetIndex(), SwNodeType::Text);
 }
 
 void SwCollectTableLineBoxes::AddBox( const SwTableBox& rBox )
@@ -3168,33 +3177,22 @@ void SwDoc::SplitTable( const SwPosition& rPos, SplitTable_HeadlineOption eHdlnM
     SwTable& rTable = pTNd->GetTable();
     rTable.SetHTMLTableLayout(std::shared_ptr<SwHTMLTableLayout>()); // Delete HTML Layout
 
-    SwTableFormulaUpdate aMsgHint( &rTable );
-
     SwHistory aHistory;
-    if (GetIDocumentUndoRedo().DoesUndo())
-    {
-        aMsgHint.m_pHistory = &aHistory;
-    }
-
     {
         SwNodeOffset nSttIdx = pNd->FindTableBoxStartNode()->GetIndex();
-
         // Find top-level Line
-        SwTableBox* pBox = rTable.GetTableBox( nSttIdx );
-        if( pBox )
+        SwTableBox* pBox = rTable.GetTableBox(nSttIdx);
+        sal_uInt16 nSplitLine = 0;
+        if(pBox)
         {
             SwTableLine* pLine = pBox->GetUpper();
-            while( pLine->GetUpper() )
+            while(pLine->GetUpper())
                 pLine = pLine->GetUpper()->GetUpper();
 
             // pLine contains the top-level Line now
-            aMsgHint.m_nSplitLine = rTable.GetTabLines().GetPos( pLine );
+            nSplitLine = rTable.GetTabLines().GetPos(pLine);
         }
-
-        OUString sNewTableNm( GetUniqueTableName() );
-        aMsgHint.m_aData.pNewTableNm = &sNewTableNm;
-        aMsgHint.m_eFlags = TBL_SPLITTBL;
-        getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+        rTable.Split(GetUniqueTableName(), nSplitLine, GetIDocumentUndoRedo().DoesUndo() ? &aHistory : nullptr);
     }
 
     // Find Lines for the Layout update
@@ -3549,11 +3547,7 @@ bool SwDoc::MergeTable( const SwPosition& rPos, bool bWithPrev )
     }
 
     // Adapt all "TableFormulas"
-    SwTableFormulaUpdate aMsgHint( &pTableNd->GetTable() );
-    aMsgHint.m_aData.pDelTable = &pDelTableNd->GetTable();
-    aMsgHint.m_eFlags = TBL_MERGETBL;
-    aMsgHint.m_pHistory = pHistory.get();
-    getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
+    pTableNd->GetTable().Merge(pDelTableNd->GetTable(), pHistory.get());
 
     // The actual merge
     bool bRet = rNds.MergeTable( bWithPrev ? *pTableNd : *pDelTableNd, !bWithPrev );
@@ -3966,8 +3960,8 @@ OUString SwDoc::GetUniqueTableName() const
 
     for( size_t n = 0; n < mpTableFrameFormatTable->size(); ++n )
     {
-        const SwFrameFormat* pFormat = (*mpTableFrameFormatTable)[ n ];
-        if( !pFormat->IsDefault() && IsUsed( *pFormat )  &&
+        const SwTableFormat* pFormat = (*mpTableFrameFormatTable)[ n ];
+        if( !pFormat->IsDefault() && IsUsed( *pFormat ) &&
             pFormat->GetName().startsWith( aName ) )
         {
             // Get number and set the Flag
@@ -4028,10 +4022,7 @@ void SwDoc::SetColRowWidthHeight( SwTableBox& rCurrentBox, TableChgWidthHeightTy
     SwTableNode* pTableNd = const_cast<SwTableNode*>(rCurrentBox.GetSttNd()->FindTableNode());
     std::unique_ptr<SwUndo> pUndo;
 
-    SwTableFormulaUpdate aMsgHint( &pTableNd->GetTable() );
-    aMsgHint.m_eFlags = TBL_BOXPTR;
-    getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
-
+    pTableNd->GetTable().SwitchFormulasToInternalRepresentation();
     bool const bUndo(GetIDocumentUndoRedo().DoesUndo());
     bool bRet = false;
     switch( extractPosition(eType) )
@@ -4068,21 +4059,14 @@ void SwDoc::SetColRowWidthHeight( SwTableBox& rCurrentBox, TableChgWidthHeightTy
     }
 }
 
-bool SwDoc::IsNumberFormat( std::u16string_view aString, sal_uInt32& F_Index, double& fOutNumber )
+bool SwDoc::IsNumberFormat( const OUString& aString, sal_uInt32& F_Index, double& fOutNumber )
 {
-    if( aString.size() > 308 ) // optimization matches svl:IsNumberFormat arbitrary value
+    if( aString.getLength() > 308 ) // optimization matches svl:IsNumberFormat arbitrary value
         return false;
 
     // remove any comment anchor marks
-    OUStringBuffer sStringBuffer(aString);
-    sal_Int32 nCommentPosition = sStringBuffer.indexOf( CH_TXTATR_INWORD );
-    while( nCommentPosition != -1 )
-    {
-        sStringBuffer.remove( nCommentPosition, 1 );
-        nCommentPosition = sStringBuffer.indexOf( CH_TXTATR_INWORD, nCommentPosition );
-    }
-
-    return GetNumberFormatter()->IsNumberFormat( sStringBuffer.makeStringAndClear(), F_Index, fOutNumber );
+    return GetNumberFormatter()->IsNumberFormat(
+        aString.replaceAll(OUStringChar(CH_TXTATR_INWORD), u""), F_Index, fOutNumber);
 }
 
 void SwDoc::ChkBoxNumFormat( SwTableBox& rBox, bool bCallUpdate )
@@ -4212,8 +4196,7 @@ void SwDoc::ChkBoxNumFormat( SwTableBox& rBox, bool bCallUpdate )
     const SwTableNode* pTableNd = rBox.GetSttNd()->FindTableNode();
     if( bCallUpdate )
     {
-        SwTableFormulaUpdate aTableUpdate( &pTableNd->GetTable() );
-        getIDocumentFieldsAccess().UpdateTableFields( &aTableUpdate );
+        getIDocumentFieldsAccess().UpdateTableFields(&pTableNd->GetTable());
 
         // TL_CHART2: update charts (when cursor leaves cell and
         // automatic update is enabled)
@@ -4546,11 +4529,11 @@ void SwDoc::UnProtectTables( const SwPaM& rPam )
 
     bool bChgd = false, bHasSel = rPam.HasMark() ||
                                     rPam.GetNext() != &rPam;
-    SwFrameFormats& rFormats = *GetTableFrameFormats();
+    sw::TableFrameFormats& rFormats = *GetTableFrameFormats();
     SwTable* pTable;
     const SwTableNode* pTableNd;
     for( auto n = rFormats.size(); n ; )
-        if( nullptr != (pTable = SwTable::FindTable( rFormats[ --n ] )) &&
+        if( nullptr != (pTable = SwTable::FindTable( rFormats[ --n ])) &&
             nullptr != (pTableNd = pTable->GetTableNode() ) &&
             pTableNd->GetNodes().IsDocNodes() )
         {

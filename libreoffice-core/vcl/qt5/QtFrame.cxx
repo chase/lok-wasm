@@ -44,12 +44,12 @@
 #include <QtGui/QIcon>
 #include <QtGui/QWindow>
 #include <QtGui/QScreen>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+#include <QtGui/QStyleHints>
+#endif
 #include <QtWidgets/QStyle>
 #include <QtWidgets/QToolTip>
 #include <QtWidgets/QApplication>
-#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
-#include <QtWidgets/QDesktopWidget>
-#endif
 #include <QtWidgets/QMenuBar>
 #include <QtWidgets/QMainWindow>
 #if CHECK_QT5_USING_X11
@@ -65,10 +65,6 @@
 #include <headless/svpgdi.hxx>
 
 #include <unx/fontmanager.hxx>
-
-#if CHECK_QT5_USING_X11 && QT5_HAVE_XCB_ICCCM
-static bool g_bNeedsWmHintsWindowGroup = true;
-#endif
 
 static void SvpDamageHandler(void* handle, sal_Int32 nExtentsX, sal_Int32 nExtentsY,
                              sal_Int32 nExtentsWidth, sal_Int32 nExtentsHeight)
@@ -192,8 +188,6 @@ QtFrame::QtFrame(QtFrame* pParent, SalFrameStyleFlags nStyle, bool bUseCairo)
     }
 
     SetIcon(SV_ICON_ID_OFFICE);
-
-    fixICCCMwindowGroup();
 }
 
 void QtFrame::screenChanged(QScreen*) { m_pQWidget->fakeResize(); }
@@ -219,23 +213,6 @@ void QtFrame::FillSystemEnvData(SystemEnvData& rData, sal_IntPtr pWindow, QWidge
     rData.toolkit = SystemEnvData::Toolkit::Qt;
     rData.aShellWindow = pWindow;
     rData.pWidget = pWidget;
-}
-
-void QtFrame::fixICCCMwindowGroup()
-{
-#if CHECK_QT5_USING_X11 && QT5_HAVE_XCB_ICCCM
-    if (!g_bNeedsWmHintsWindowGroup)
-        return;
-    g_bNeedsWmHintsWindowGroup = false;
-
-    assert(m_aSystemData.platform != SystemEnvData::Platform::Invalid);
-    if (m_aSystemData.platform != SystemEnvData::Platform::Xcb)
-        return;
-
-    g_bNeedsWmHintsWindowGroup = QtX11Support::fixICCCMwindowGroup(asChild()->winId());
-#else
-    (void)this; // avoid loplugin:staticmethods
-#endif
 }
 
 QtFrame::~QtFrame()
@@ -338,16 +315,19 @@ QWindow* QtFrame::windowHandle() const
     return pChild->windowHandle();
 }
 
-QScreen* QtFrame::screen() const
+QScreen* QtFrame::screen() const { return asChild()->screen(); }
+
+bool QtFrame::GetUseDarkMode() const
 {
-#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
-    return asChild()->screen();
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    const QStyleHints* pStyleHints = QApplication::styleHints();
+    return pStyleHints->colorScheme() == Qt::ColorScheme::Dark;
 #else
-    // QWidget::screen only available from Qt 5.14 on, call windowHandle(),
-    // with the indirect result that mouse move events on Wayland will not be
-    // emitted reliably, s. QTBUG-75766
-    QWindow* const pWindow = windowHandle();
-    return pWindow ? pWindow->screen() : nullptr;
+    // use same mechanism for determining dark mode preference as xdg-desktop-portal-kde, s.
+    // https://invent.kde.org/plasma/xdg-desktop-portal-kde/-/blob/0a4237549debf9518f8cfbaf531456850c0729bd/src/settings.cpp#L213-227
+    const QPalette aPalette = QApplication::palette();
+    const int nWindowBackGroundGray = qGray(aPalette.window().color().rgb());
+    return nWindowBackGroundGray < 192;
 #endif
 }
 
@@ -362,7 +342,10 @@ void QtFrame::SetWindowStateImpl(Qt::WindowStates eState)
 
 void QtFrame::SetTitle(const OUString& rTitle)
 {
-    m_pQWidget->window()->setWindowTitle(toQString(rTitle));
+    QtInstance* pSalInst(GetQtInstance());
+    assert(pSalInst);
+    pSalInst->RunInMainThread(
+        [this, rTitle]() { m_pQWidget->window()->setWindowTitle(toQString(rTitle)); });
 }
 
 void QtFrame::SetIcon(sal_uInt16 nIcon)
@@ -393,6 +376,20 @@ void QtFrame::SetIcon(sal_uInt16 nIcon)
 
     QIcon aIcon = QIcon::fromTheme(appicon);
     m_pQWidget->window()->setWindowIcon(aIcon);
+
+    if (QGuiApplication::platformName() == "wayland" && m_pQWidget->window()->isVisible())
+    {
+        // Qt currently doesn't provide API to directly set the app_id for a single
+        // window/toplevel on Wayland, but the one set for the application is picked up
+        // on hide/show, so do that.
+        // An alternative would be to use private Qt API and low-level wayland API to set the
+        // app_id directly, s. discussion in QTBUG-77182.
+        const QString sOrigDesktopFileName = QGuiApplication::desktopFileName();
+        QGuiApplication::setDesktopFileName(appicon);
+        m_pQWidget->window()->hide();
+        m_pQWidget->window()->show();
+        QGuiApplication::setDesktopFileName(sOrigDesktopFileName);
+    }
 }
 
 void QtFrame::SetMenu(SalMenu*) {}
@@ -495,13 +492,7 @@ Size QtFrame::CalcDefaultSize()
         }
         else
         {
-#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
             QScreen* pScreen = QGuiApplication::screenAt(QPoint(0, 0));
-#else
-            // QGuiApplication::screenAt was added in Qt 5.10, use deprecated QDesktopWidget
-            int nLeftScreen = QApplication::desktop()->screenNumber(QPoint(0, 0));
-            QScreen* pScreen = QGuiApplication::screens()[nLeftScreen];
-#endif
             aSize = toSize(pScreen->availableVirtualGeometry().size());
         }
     }
@@ -591,7 +582,7 @@ void QtFrame::GetClientSize(tools::Long& rWidth, tools::Long& rHeight)
     rHeight = round(m_pQWidget->height() * devicePixelRatioF());
 }
 
-void QtFrame::GetWorkArea(tools::Rectangle& rRect)
+void QtFrame::GetWorkArea(AbsoluteScreenPixelRectangle& rRect)
 {
     if (!isWindow())
         return;
@@ -600,7 +591,7 @@ void QtFrame::GetWorkArea(tools::Rectangle& rRect)
         return;
 
     QSize aSize = pScreen->availableVirtualSize() * devicePixelRatioF();
-    rRect = tools::Rectangle(0, 0, aSize.width(), aSize.height());
+    rRect = AbsoluteScreenPixelRectangle(0, 0, aSize.width(), aSize.height());
 }
 
 SalFrame* QtFrame::GetParent() const { return m_pParent; }
@@ -741,19 +732,19 @@ void QtFrame::StartPresentation(bool bStart)
     // meh - so there's no Qt platform independent solution
     // https://forum.qt.io/topic/38504/solved-qdialog-in-fullscreen-disable-os-screensaver
     assert(m_aSystemData.platform != SystemEnvData::Platform::Invalid);
-    const bool bIsX11 = m_aSystemData.platform == SystemEnvData::Platform::Xcb;
-    std::optional<unsigned int> aRootWindow;
+    unsigned int nRootWindow(0);
     std::optional<Display*> aDisplay;
 
 #if CHECK_QT5_USING_X11
     if (QX11Info::isPlatformX11())
     {
-        aRootWindow = QX11Info::appRootWindow();
+        nRootWindow = QX11Info::appRootWindow();
         aDisplay = QX11Info::display();
     }
 #endif
 
-    m_ScreenSaverInhibitor.inhibit(bStart, u"presentation", bIsX11, aRootWindow, aDisplay);
+    m_SessionManagerInhibitor.inhibit(bStart, u"presentation", APPLICATION_INHIBIT_IDLE,
+                                      nRootWindow, aDisplay);
 #else
     Q_UNUSED(bStart)
 #endif
@@ -771,21 +762,25 @@ void QtFrame::SetAlwaysOnTop(bool bOnTop)
 
 void QtFrame::ToTop(SalFrameToTop nFlags)
 {
-    QWidget* const pWidget = asChild();
-    if (isWindow() && !(nFlags & SalFrameToTop::GrabFocusOnly))
-        pWidget->raise();
-    if ((nFlags & SalFrameToTop::RestoreWhenMin) || (nFlags & SalFrameToTop::ForegroundTask))
-    {
-        if (nFlags & SalFrameToTop::RestoreWhenMin)
-            pWidget->setWindowState(pWidget->windowState() & ~Qt::WindowMinimized);
-        pWidget->activateWindow();
-    }
-    else if ((nFlags & SalFrameToTop::GrabFocus) || (nFlags & SalFrameToTop::GrabFocusOnly))
-    {
-        if (!(nFlags & SalFrameToTop::GrabFocusOnly))
+    QtInstance* pSalInst(GetQtInstance());
+    assert(pSalInst);
+    pSalInst->RunInMainThread([this, nFlags]() {
+        QWidget* const pWidget = asChild();
+        if (isWindow() && !(nFlags & SalFrameToTop::GrabFocusOnly))
+            pWidget->raise();
+        if ((nFlags & SalFrameToTop::RestoreWhenMin) || (nFlags & SalFrameToTop::ForegroundTask))
+        {
+            if (nFlags & SalFrameToTop::RestoreWhenMin)
+                pWidget->setWindowState(pWidget->windowState() & ~Qt::WindowMinimized);
             pWidget->activateWindow();
-        pWidget->setFocus(Qt::OtherFocusReason);
-    }
+        }
+        else if ((nFlags & SalFrameToTop::GrabFocus) || (nFlags & SalFrameToTop::GrabFocusOnly))
+        {
+            if (!(nFlags & SalFrameToTop::GrabFocusOnly))
+                pWidget->activateWindow();
+            pWidget->setFocus(Qt::OtherFocusReason);
+        }
+    });
 }
 
 void QtFrame::SetPointer(PointerStyle ePointerStyle)
@@ -971,6 +966,12 @@ OUString QtFrame::GetKeyName(sal_uInt16 nKeyCode)
             case KEY_NUMBERSIGN:
                 nRetCode = Qt::Key_NumberSign;
                 break;
+            case KEY_XF86FORWARD:
+                nRetCode = Qt::Key_Forward;
+                break;
+            case KEY_XF86BACK:
+                nRetCode = Qt::Key_Back;
+                break;
             case KEY_COLON:
                 nRetCode = Qt::Key_Colon;
                 break;
@@ -1031,37 +1032,32 @@ static Color toColor(const QColor& rColor)
 
 static bool toVclFont(const QFont& rQFont, const css::lang::Locale& rLocale, vcl::Font& rVclFont)
 {
-    psp::FastPrintFontInfo aInfo;
-    QFontInfo qFontInfo(rQFont);
+    FontAttributes aFA;
+    QtFontFace::fillAttributesFromQFont(rQFont, aFA);
 
-    OUString sFamilyName = toOUString(rQFont.family());
-    aInfo.m_aFamilyName = sFamilyName;
-    aInfo.m_eItalic = QtFontFace::toFontItalic(qFontInfo.style());
-    aInfo.m_eWeight = QtFontFace::toFontWeight(qFontInfo.weight());
-    aInfo.m_eWidth = QtFontFace::toFontWidth(rQFont.stretch());
-
-    psp::PrintFontManager::get().matchFont(aInfo, rLocale);
+    bool bFound = psp::PrintFontManager::get().matchFont(aFA, rLocale);
     SAL_INFO("vcl.qt", "font match result for '"
-                           << sFamilyName << "': "
-                           << (aInfo.m_nID != 0 ? OUString::Concat("'") + aInfo.m_aFamilyName + "'"
-                                                : OUString("failed")));
+                           << rQFont.family() << "': "
+                           << (bFound ? OUString::Concat("'") + aFA.GetFamilyName() + "'"
+                                      : OUString("failed")));
 
-    if (aInfo.m_nID == 0)
+    if (!bFound)
         return false;
 
+    QFontInfo qFontInfo(rQFont);
     int nPointHeight = qFontInfo.pointSize();
     if (nPointHeight <= 0)
         nPointHeight = rQFont.pointSize();
 
-    vcl::Font aFont(aInfo.m_aFamilyName, Size(0, nPointHeight));
-    if (aInfo.m_eWeight != WEIGHT_DONTKNOW)
-        aFont.SetWeight(aInfo.m_eWeight);
-    if (aInfo.m_eWidth != WIDTH_DONTKNOW)
-        aFont.SetWidthType(aInfo.m_eWidth);
-    if (aInfo.m_eItalic != ITALIC_DONTKNOW)
-        aFont.SetItalic(aInfo.m_eItalic);
-    if (aInfo.m_ePitch != PITCH_DONTKNOW)
-        aFont.SetPitch(aInfo.m_ePitch);
+    vcl::Font aFont(aFA.GetFamilyName(), Size(0, nPointHeight));
+    if (aFA.GetWeight() != WEIGHT_DONTKNOW)
+        aFont.SetWeight(aFA.GetWeight());
+    if (aFA.GetWidthType() != WIDTH_DONTKNOW)
+        aFont.SetWidthType(aFA.GetWidthType());
+    if (aFA.GetItalic() != ITALIC_DONTKNOW)
+        aFont.SetItalic(aFA.GetItalic());
+    if (aFA.GetPitch() != PITCH_DONTKNOW)
+        aFont.SetPitch(aFA.GetPitch());
 
     rVclFont = aFont;
     return true;
@@ -1146,6 +1142,8 @@ void QtFrame::UpdateSettings(AllSettings& rSettings)
     style.SetWorkspaceColor(aMid);
 
     // Selection
+    // https://invent.kde.org/plasma/plasma-workspace/-/merge_requests/305
+    style.SetAccentColor(aHigh);
     style.SetHighlightColor(aHigh);
     style.SetHighlightTextColor(aHighText);
     style.SetListBoxWindowHighlightColor(aHigh);
@@ -1216,7 +1214,8 @@ void QtFrame::UpdateSettings(AllSettings& rSettings)
         style.SetMenuFont(aFont);
 
     // Icon theme
-    style.SetPreferredIconTheme(toOUString(QIcon::themeName()));
+    const bool bPreferDarkTheme = GetUseDarkMode();
+    style.SetPreferredIconTheme(toOUString(QIcon::themeName()), bPreferDarkTheme);
 
     // Scroll bar size
     style.SetScrollBarSize(QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent));
@@ -1299,13 +1298,7 @@ void QtFrame::SetScreenNumber(unsigned int nScreen)
         {
             assert(m_bFullScreen);
             // left-most screen
-#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
             QScreen* pScreen = QGuiApplication::screenAt(QPoint(0, 0));
-#else
-            // QGuiApplication::screenAt was added in Qt 5.10, use deprecated QDesktopWidget
-            int nLeftScreen = QApplication::desktop()->screenNumber(QPoint(0, 0));
-            QScreen* pScreen = QGuiApplication::screens()[nLeftScreen];
-#endif
             // entire virtual desktop
             screenGeo = pScreen->availableVirtualGeometry();
             pWindow->setScreen(pScreen);
@@ -1350,6 +1343,8 @@ void QtFrame::ResolveWindowHandle(SystemEnvData& rData) const
         rData.SetWindowHandle(static_cast<QWidget*>(rData.pWidget)->winId());
 }
 
+bool QtFrame::GetUseReducedAnimation() const { return GetQtInstance()->GetUseReducedAnimation(); }
+
 // Drag'n'drop foo
 
 void QtFrame::registerDragSource(QtDragSource* pDragSource)
@@ -1369,7 +1364,10 @@ void QtFrame::registerDropTarget(QtDropTarget* pDropTarget)
 {
     assert(!m_pDropTarget);
     m_pDropTarget = pDropTarget;
-    m_pQWidget->setAcceptDrops(true);
+
+    QtInstance* pSalInst(GetQtInstance());
+    assert(pSalInst);
+    pSalInst->RunInMainThread([this]() { m_pQWidget->setAcceptDrops(true); });
 }
 
 void QtFrame::deregisterDropTarget(QtDropTarget const* pDropTarget)

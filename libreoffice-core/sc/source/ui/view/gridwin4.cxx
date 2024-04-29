@@ -692,16 +692,18 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
         aGridColor = rOpts.GetGridColor();
     }
 
+    ScTabViewShell* pCurTabViewShell = mrViewData.GetViewShell();
+
     aOutputData.SetSyntaxMode       ( mrViewData.IsSyntaxMode() );
     aOutputData.SetGridColor        ( aGridColor );
     aOutputData.SetShowNullValues   ( rOpts.GetOption( VOPT_NULLVALS ) );
     aOutputData.SetShowFormulas     ( rOpts.GetOption( VOPT_FORMULAS ) );
-    aOutputData.SetShowSpellErrors  ( rDoc.GetDocOptions().IsAutoSpell() );
-    aOutputData.SetMarkClipped      ( rOpts.GetOption( VOPT_CLIPMARKS ) );
+    aOutputData.SetShowSpellErrors  ( pCurTabViewShell && pCurTabViewShell->IsAutoSpell() );
+    aOutputData.SetMarkClipped      ( SC_MOD()->GetColorConfig().GetColorValue(svtools::CALCTEXTOVERFLOW).bIsVisible );
 
     aOutputData.SetUseStyleColor( true );       // always set in table view
 
-    aOutputData.SetViewShell( mrViewData.GetViewShell() );
+    aOutputData.SetViewShell(pCurTabViewShell);
 
     bool bGrid = rOpts.GetOption( VOPT_GRID ) && mrViewData.GetShowGrid();
     bool bGridFirst = !rOpts.GetOption( VOPT_GRID_ONTOP );
@@ -800,13 +802,11 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
 
     {
         // init redraw
-        ScTabViewShell* pTabViewShell = mrViewData.GetViewShell();
-
-        if(pTabViewShell)
+        if (pCurTabViewShell)
         {
             MapMode aCurrentMapMode(pContentDev->GetMapMode());
             pContentDev->SetMapMode(aDrawMode);
-            SdrView* pDrawView = pTabViewShell->GetScDrawView();
+            SdrView* pDrawView = pCurTabViewShell->GetScDrawView();
 
             if(pDrawView)
             {
@@ -920,6 +920,9 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
     // Show Note Mark
     if ( rOpts.GetOption( VOPT_NOTES ) )
         aOutputData.DrawNoteMarks(*pContentDev);
+
+    if ( rOpts.GetOption( VOPT_FORMULAS_MARKS ) )
+        aOutputData.DrawFormulaMarks(*pContentDev);
 
     if ( !bLogicText )
         aOutputData.DrawStrings();     // in pixel MapMode
@@ -1041,9 +1044,7 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
 
     {
         // end redraw
-        ScTabViewShell* pTabViewShell = mrViewData.GetViewShell();
-
-        if(pTabViewShell)
+        if (pCurTabViewShell)
         {
             MapMode aCurrentMapMode(pContentDev->GetMapMode());
             pContentDev->SetMapMode(aDrawMode);
@@ -1070,7 +1071,7 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
                 rDevice.SetMapMode(aNew);
             }
 
-            SdrView* pDrawView = pTabViewShell->GetScDrawView();
+            SdrView* pDrawView = pCurTabViewShell->GetScDrawView();
 
             if(pDrawView)
             {
@@ -1158,8 +1159,8 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
             rDevice.SetMapMode(aDrawMode);
 
             // keep into account the zoom factor
-            Point aNewOrigin = Point((aOriginAbsPx.getX() * twipFactor) / static_cast<double>(aDrawMode.GetScaleX()),
-                                     (aOriginAbsPx.getY() * twipFactor) / static_cast<double>(aDrawMode.GetScaleY()));
+            Point aNewOrigin((aOriginAbsPx.getX() * twipFactor) / static_cast<double>(aDrawMode.GetScaleX()),
+                             (aOriginAbsPx.getY() * twipFactor) / static_cast<double>(aDrawMode.GetScaleY()));
 
             MapMode aNewMM = rDevice.GetMapMode();
             aNewMM.SetOrigin(aNewOrigin);
@@ -1419,7 +1420,7 @@ namespace
 
         virtual bool supportsGridOffsets() const override { return true; }
 
-        virtual void calculateGridOffsetForViewOjectContact(
+        virtual void calculateGridOffsetForViewObjectContact(
             basegfx::B2DVector& rTarget,
             const sdr::contact::ViewObjectContact& rClient) const override
         {
@@ -1541,8 +1542,14 @@ void ScGridWindow::PaintTile( VirtualDevice& rDevice,
     nBottomRightTileCol++;
     nBottomRightTileRow++;
 
+    if (nTopLeftTileCol > rDoc.MaxCol())
+        nTopLeftTileCol = rDoc.MaxCol();
+
     if (nBottomRightTileCol > rDoc.MaxCol())
         nBottomRightTileCol = rDoc.MaxCol();
+
+    if (nTopLeftTileRow > MAXTILEDROW)
+        nTopLeftTileRow = MAXTILEDROW;
 
     if (nBottomRightTileRow > MAXTILEDROW)
         nBottomRightTileRow = MAXTILEDROW;
@@ -1614,7 +1621,7 @@ void ScGridWindow::PaintTile( VirtualDevice& rDevice,
         }
 
         mpLOKDrawView->SetNegativeX(bLayoutRTL);
-        mpLOKDrawView->ShowSdrPage(mpLOKDrawView->GetModel()->GetPage(nTab));
+        mpLOKDrawView->ShowSdrPage(mpLOKDrawView->GetModel().GetPage(nTab));
         aOutputData.SetDrawView(mpLOKDrawView.get());
         aOutputData.SetSpellCheckContext(mpSpellCheckCxt.get());
     }

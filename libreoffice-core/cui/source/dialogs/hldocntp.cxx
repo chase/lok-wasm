@@ -199,7 +199,7 @@ void SvxHyperlinkNewDocTp::FillDocumentList()
 |*
 |************************************************************************/
 
-void SvxHyperlinkNewDocTp::GetCurentItemData ( OUString& rStrURL, OUString& aStrName,
+void SvxHyperlinkNewDocTp::GetCurrentItemData ( OUString& rStrURL, OUString& aStrName,
                                                OUString& aStrIntName, OUString& aStrFrame,
                                                SvxLinkInsertMode& eMode )
 {
@@ -274,12 +274,12 @@ IMPL_STATIC_LINK(SvxHyperlinkNewDocTp, DispatchDocument, void*, p, void)
         SfxStringItem aFlags (SID_OPTIONS, aStrFlags);
 
         // open url
-        const SfxPoolItem* pReturn = xExecuteInfo->pDispatcher->ExecuteList(
-                SID_OPENDOC, SfxCallMode::SYNCHRON,
-                { &aName, &aFlags, &aFrame, &aReferer });
+        const SfxPoolItemHolder aResult(xExecuteInfo->pDispatcher->ExecuteList(
+            SID_OPENDOC, SfxCallMode::SYNCHRON,
+            { &aName, &aFlags, &aFrame, &aReferer }));
 
         // save new doc
-        const SfxViewFrameItem *pItem = dynamic_cast<const SfxViewFrameItem*>( pReturn  );  // SJ: pReturn is NULL if the Hyperlink
+        const SfxViewFrameItem *pItem = dynamic_cast<const SfxViewFrameItem*>(aResult.getItem());  // aResult is NULL if the Hyperlink
         if ( pItem )                                                            // creation is cancelled #106216#
         {
             pViewFrame = pItem->GetFrame();
@@ -287,7 +287,6 @@ IMPL_STATIC_LINK(SvxHyperlinkNewDocTp, DispatchDocument, void*, p, void)
             {
                 SfxStringItem aNewName( SID_FILE_NAME, xExecuteInfo->aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ) );
                 SfxUnoFrameItem aDocFrame( SID_FILLFRAME, pViewFrame->GetFrame().GetFrameInterface() );
-                fprintf(stderr, "is there a frame int %p\n", pViewFrame->GetFrame().GetFrameInterface().get() );
                 pViewFrame->GetDispatcher()->ExecuteList(
                     SID_SAVEASDOC, SfxCallMode::SYNCHRON,
                     { &aNewName }, { &aDocFrame });

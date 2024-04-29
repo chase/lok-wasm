@@ -141,6 +141,7 @@ public:
 
     size_t GetObjCount() const;
     SdrObject* GetObj(size_t nNum) const;
+    SdrObject* GetObjByName(std::u16string_view sName) const;
 
     /// linked page or linked group object
     virtual bool IsReadOnly() const;
@@ -224,10 +225,17 @@ public:
 
     virtual void dumpAsXml(xmlTextWriterPtr pWriter) const;
 
+    typedef std::deque<rtl::Reference<SdrObject>> SdrObjectDeque;
+
+    SdrObjectDeque::const_iterator begin() const { return maList.begin(); }
+    SdrObjectDeque::const_iterator end() const { return maList.end(); }
+    SdrObjectDeque::const_reverse_iterator rbegin() const { return maList.rbegin(); }
+    SdrObjectDeque::const_reverse_iterator rend() const { return maList.rend(); }
+
 private:
     tools::Rectangle    maSdrObjListOutRect;
     tools::Rectangle    maSdrObjListSnapRect;
-    std::deque<rtl::Reference<SdrObject>> maList;
+    SdrObjectDeque maList;
     /// This list, if it exists, defines the navigation order. If it does
     /// not exist then maList defines the navigation order.
     std::optional<std::vector<unotools::WeakReference<SdrObject>>> mxNavigationOrder;
@@ -284,28 +292,28 @@ private:
 /// for the snap-to-grid in Writer
 class SdrPageGridFrame
 {
-    tools::Rectangle aPaper;
-    tools::Rectangle aUserArea;
+    tools::Rectangle m_aPaper;
+    tools::Rectangle m_aUserArea;
 public:
-    SdrPageGridFrame(const tools::Rectangle& rPaper, const tools::Rectangle& rUser): aPaper(rPaper), aUserArea(rUser) {}
-    const tools::Rectangle& GetPaperRect() const                  { return aPaper; }
-    const tools::Rectangle& GetUserArea() const                   { return aUserArea; }
+    SdrPageGridFrame(const tools::Rectangle& rPaper, const tools::Rectangle& rUser): m_aPaper(rPaper), m_aUserArea(rUser) {}
+    const tools::Rectangle& GetPaperRect() const                  { return m_aPaper; }
+    const tools::Rectangle& GetUserArea() const                   { return m_aUserArea; }
 };
 
 class SVXCORE_DLLPUBLIC SdrPageGridFrameList final
 {
-    std::vector<SdrPageGridFrame*> aList;
+    std::vector<SdrPageGridFrame*> m_aList;
 
     SdrPageGridFrameList(const SdrPageGridFrameList& rSrcList) = delete;
     void           operator=(const SdrPageGridFrameList& rSrcList) = delete;
-    SdrPageGridFrame* GetObject(sal_uInt16 i) const { return aList[i]; }
+    SdrPageGridFrame* GetObject(sal_uInt16 i) const { return m_aList[i]; }
 
 public:
     SdrPageGridFrameList()                                    {}
     ~SdrPageGridFrameList()                                            { Clear(); }
     void           Clear();
-    sal_uInt16     GetCount() const                                    { return sal_uInt16(aList.size()); }
-    void           Insert(const SdrPageGridFrame& rGF) { aList.push_back(new SdrPageGridFrame(rGF)); }
+    sal_uInt16     GetCount() const                                    { return sal_uInt16(m_aList.size()); }
+    void           Insert(const SdrPageGridFrame& rGF) { m_aList.push_back(new SdrPageGridFrame(rGF)); }
     SdrPageGridFrame&       operator[](sal_uInt16 nPos)                    { return *GetObject(nPos); }
     const SdrPageGridFrame& operator[](sal_uInt16 nPos) const              { return *GetObject(nPos); }
 };
@@ -397,6 +405,7 @@ private:
 public:
     void AddPageUser(sdr::PageUser& rNewUser);
     void RemovePageUser(sdr::PageUser& rOldUser);
+    const sdr::PageUserVector& GetPageUsers() const { return maPageUsers; };
 
     // SdrModel access on SdrPage level
     SdrModel& getSdrModelFromSdrPage() const { return mrSdrModelFromSdrPage; }
@@ -436,7 +445,7 @@ protected:
     // new MasterPageDescriptorVector
     std::unique_ptr<sdr::MasterPageDescriptor> mpMasterPageDescriptor;
 
-    sal_uInt16          nPageNum;
+    sal_uInt16          m_nPageNum;
 
     bool                mbMaster : 1;               // flag if this is a MasterPage
     bool                mbInserted : 1;

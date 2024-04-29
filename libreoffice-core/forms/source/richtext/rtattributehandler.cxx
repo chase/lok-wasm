@@ -304,8 +304,8 @@ namespace frm
     FontSizeHandler::FontSizeHandler( AttributeId _nAttributeId, WhichId _nWhichId )
         :AttributeHandler( _nAttributeId, _nWhichId )
     {
-        OSL_ENSURE( ( _nAttributeId == SID_ATTR_CHAR_FONTHEIGHT ) || ( _nAttributeId == SID_ATTR_CHAR_CTL_FONTHEIGHT )
-            || ( _nAttributeId == SID_ATTR_CHAR_CJK_FONTHEIGHT ) || ( _nAttributeId == SID_ATTR_CHAR_LATIN_FONTHEIGHT ),
+        OSL_ENSURE( ( _nAttributeId == sal_uInt16(SID_ATTR_CHAR_FONTHEIGHT) ) || ( _nAttributeId == sal_uInt16(SID_ATTR_CHAR_CTL_FONTHEIGHT) )
+            || ( _nAttributeId == sal_uInt16(SID_ATTR_CHAR_CJK_FONTHEIGHT) ) || ( _nAttributeId == sal_uInt16(SID_ATTR_CHAR_LATIN_FONTHEIGHT) ),
             "FontSizeHandler::FontSizeHandler: invalid attribute id!" );
     }
 
@@ -320,7 +320,7 @@ namespace frm
         if ( pFontHeightItem )
         {
             // by definition, the item should have the unit twip
-            sal_uLong nHeight = pFontHeightItem->GetHeight();
+            sal_uInt32 nHeight = pFontHeightItem->GetHeight();
             if ( _rAttribs.GetPool()->GetMetric( getWhich() ) != MapUnit::MapTwip )
             {
                 nHeight = OutputDevice::LogicToLogic(
@@ -347,7 +347,7 @@ namespace frm
         if ( !pFontHeightItem )
             return;
 
-        sal_uLong nHeight = pFontHeightItem->GetHeight();
+        sal_uInt32 nHeight = pFontHeightItem->GetHeight();
         if ( _rNewAttribs.GetPool()->GetMetric( getWhich() ) != MapUnit::MapTwip )
         {
             nHeight = OutputDevice::LogicToLogic(
@@ -360,7 +360,7 @@ namespace frm
         SvxFontHeightItem aNewItem( nHeight, 100, getWhich() );
         aNewItem.SetProp( pFontHeightItem->GetProp(), pFontHeightItem->GetPropUnit() );
 
-        if ( ( getAttributeId() == SID_ATTR_CHAR_FONTHEIGHT ) && _nForScriptType != SvtScriptType::NONE)
+        if ( ( getAttributeId() == sal_uInt16(SID_ATTR_CHAR_FONTHEIGHT) ) && _nForScriptType != SvtScriptType::NONE)
             putItemForScript( _rNewAttribs, aNewItem, _nForScriptType );
         else
             _rNewAttribs.Put( aNewItem );

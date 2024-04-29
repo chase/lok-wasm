@@ -22,8 +22,7 @@
 #include <com/sun/star/container/XIndexContainer.hpp>
 #include <com/sun/star/container/XNamed.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
-#include <comphelper/interfacecontainer3.hxx>
+#include <comphelper/interfacecontainer4.hxx>
 #include <osl/mutex.hxx>
 
 #include <cppuhelper/implbase.hxx>
@@ -39,7 +38,6 @@ class SdCustomShow;
 
 class SdXCustomPresentation :   public ::cppu::WeakImplHelper< css::container::XIndexContainer,
                                                                 css::container::XNamed,
-                                                                css::lang::XUnoTunnel,
                                                                 css::lang::XComponent,
                                                                 css::lang::XServiceInfo >
 {
@@ -48,8 +46,8 @@ private:
     SdXImpressDocument* mpModel;
 
     // for xComponent
-    ::osl::Mutex aDisposeContainerMutex;
-    ::comphelper::OInterfaceContainerHelper3<css::lang::XEventListener> aDisposeListeners;
+    std::mutex aDisposeContainerMutex;
+    ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> aDisposeListeners;
     bool bDisposing;
 
 public:
@@ -61,9 +59,6 @@ public:
     SdCustomShow* GetSdCustomShow() const noexcept { return mpSdCustomShow; }
     void SetSdCustomShow( SdCustomShow* pShow ) noexcept { mpSdCustomShow = pShow; }
     SdXImpressDocument* GetModel() const noexcept { return mpModel; }
-
-    // uno helper
-    UNO3_GETIMPLEMENTATION_DECL(SdXCustomPresentation)
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
@@ -102,7 +97,7 @@ class SdXCustomPresentationAccess : public ::cppu::WeakImplHelper< css::containe
 private:
     SdXImpressDocument& mrModel;
 
-    // intern
+    // internal
     inline SdCustomShowList* GetCustomShowList() const noexcept;
     SdCustomShow * getSdCustomShow( std::u16string_view Name ) const noexcept;
 

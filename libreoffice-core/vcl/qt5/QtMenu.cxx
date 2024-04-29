@@ -24,6 +24,11 @@
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QMenuBar>
 #include <QtWidgets/QPushButton>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <QtGui/QShortcut>
+#else
+#include <QtWidgets/QShortcut>
+#endif
 #include <QtWidgets/QStyle>
 
 #include <o3tl/safeint.hxx>
@@ -47,6 +52,8 @@ static inline void lcl_force_menubar_layout_update(QMenuBar& rMenuBar)
     // it unfortunatly has additional side effects; see QtMenu::GetMenuBarButtonRectPixel.
     rMenuBar.adjustSize();
 }
+
+OUString QtMenu::m_sCurrentHelpId = u""_ustr;
 
 QtMenu::QtMenu(bool bMenuBar)
     : mpVCLMenu(nullptr)
@@ -77,6 +84,7 @@ void QtMenu::InsertMenuItem(QtMenuItem* pSalMenuItem, unsigned nPos)
         if (validateQMenuBar())
         {
             QMenu* pQMenu = new QMenu(toQString(aText), nullptr);
+            connectHelpSignalSlots(pQMenu, pSalMenuItem);
             pSalMenuItem->mpMenu.reset(pQMenu);
 
             if ((nPos != MENU_APPEND)
@@ -108,12 +116,14 @@ void QtMenu::InsertMenuItem(QtMenuItem* pSalMenuItem, unsigned nPos)
             // no QMenu set, instantiate own one
             mpOwnedQMenu.reset(new QMenu);
             mpQMenu = mpOwnedQMenu.get();
+            connectHelpSignalSlots(mpQMenu, pSalMenuItem);
         }
 
         if (pSalMenuItem->mpSubMenu)
         {
             // submenu
             QMenu* pQMenu = new QMenu(toQString(aText), nullptr);
+            connectHelpSignalSlots(pQMenu, pSalMenuItem);
             pSalMenuItem->mpMenu.reset(pQMenu);
 
             if ((nPos != MENU_APPEND)
@@ -183,6 +193,8 @@ void QtMenu::InsertMenuItem(QtMenuItem* pSalMenuItem, unsigned nPos)
 
                 connect(pAction, &QAction::triggered, this,
                         [pSalMenuItem] { slotMenuTriggered(pSalMenuItem); });
+                connect(pAction, &QAction::hovered, this,
+                        [pSalMenuItem] { slotMenuHovered(pSalMenuItem); });
             }
         }
     }
@@ -478,7 +490,8 @@ void QtMenu::DoFullMenuUpdate(Menu* pMenuBar)
         const bool bShowDisabled
             = bool(pMenuBar->GetMenuFlags() & MenuFlags::AlwaysShowDisabledEntries)
               || !bool(pMenuBar->GetMenuFlags() & MenuFlags::HideDisabledEntries);
-        const bool bVisible = bShowDisabled || mpVCLMenu->IsItemEnabled(pSalMenuItem->mnId);
+        const bool bVisible = pSalMenuItem->mbVisible
+                              && (bShowDisabled || mpVCLMenu->IsItemEnabled(pSalMenuItem->mnId));
         pSalMenuItem->getAction()->setVisible(bVisible);
 
         if (pSalMenuItem->mpSubMenu != nullptr)
@@ -608,13 +621,20 @@ void QtMenu::ShowMenuBar(bool bVisible)
         lcl_force_menubar_layout_update(*mpQMenuBar);
 }
 
-const QtFrame* QtMenu::GetFrame() const
+void QtMenu::slotMenuHovered(QtMenuItem* pItem)
+{
+    const OUString sHelpId = pItem->mpParentMenu->GetMenu()->GetHelpId(pItem->mnId);
+    m_sCurrentHelpId = sHelpId;
+}
+
+void QtMenu::slotShowHelp()
 {
     SolarMutexGuard aGuard;
-    const QtMenu* pMenu = this;
-    while (pMenu && !pMenu->mpFrame)
-        pMenu = pMenu->mpParentSalMenu;
-    return pMenu ? pMenu->mpFrame : nullptr;
+    Help* pHelp = Application::GetHelp();
+    if (pHelp && !m_sCurrentHelpId.isEmpty())
+    {
+        pHelp->Start(m_sCurrentHelpId);
+    }
 }
 
 void QtMenu::slotMenuTriggered(QtMenuItem* pQItem)
@@ -771,6 +791,26 @@ void QtMenu::ImplRemoveMenuBarButton(int nId)
     lcl_force_menubar_layout_update(*mpQMenuBar);
 }
 
+void QtMenu::connectHelpShortcut(QMenu* pMenu)
+{
+    assert(pMenu);
+    QKeySequence sequence(QKeySequence::HelpContents);
+    QShortcut* pQShortcut = new QShortcut(sequence, pMenu);
+    connect(pQShortcut, &QShortcut::activated, this, QtMenu::slotShowHelp);
+    connect(pQShortcut, &QShortcut::activatedAmbiguously, this, QtMenu::slotShowHelp);
+}
+
+void QtMenu::connectHelpSignalSlots(QMenu* pMenu, QtMenuItem* pSalMenuItem)
+{
+    // connect hovered signal of the menu's own action
+    QAction* pAction = pMenu->menuAction();
+    assert(pAction);
+    connect(pAction, &QAction::hovered, this, [pSalMenuItem] { slotMenuHovered(pSalMenuItem); });
+
+    // connect slot to handle Help key (F1)
+    connectHelpShortcut(pMenu);
+}
+
 void QtMenu::RemoveMenuBarButton(sal_uInt16 nId) { ImplRemoveMenuBarButton(nId); }
 
 tools::Rectangle QtMenu::GetMenuBarButtonRectPixel(sal_uInt16 nId, SalFrame* pFrame)
@@ -836,11 +876,15 @@ bool QtMenu::ShowNativePopupMenu(FloatingWindow* pWin, const tools::Rectangle& r
     mpQMenu->setTearOffEnabled(bool(nFlags & FloatWinPopupFlags::AllowTearOff));
 
     const VclPtr<vcl::Window> xParent = pWin->ImplGetWindowImpl()->mpRealParent;
-    const QtFrame* pFrame = static_cast<QtFrame*>(xParent->ImplGetFrame());
+    AbsoluteScreenPixelRectangle aFloatRect = FloatingWindow::ImplConvertToAbsPos(xParent, rRect);
+
+    // tdf#154447 Menu bar height has to be added
+    QtFrame* pFrame = static_cast<QtFrame*>(pWin->ImplGetFrame());
     assert(pFrame);
-    const tools::Rectangle aFloatRect = FloatingWindow::ImplConvertToAbsPos(xParent, rRect);
+    aFloatRect.SetPosY(aFloatRect.getY() + pFrame->menuBarOffset());
+
     const QRect aRect = toQRect(aFloatRect, 1 / pFrame->devicePixelRatioF());
-    mpQMenu->exec(aRect.topLeft());
+    mpQMenu->exec(aRect.bottomLeft());
 
     return true;
 }

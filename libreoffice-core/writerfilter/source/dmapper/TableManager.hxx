@@ -121,7 +121,7 @@ class TableManager : public virtual SvRefBase
                 mpCellProps.clear();
         }
 
-        void setCellProps(TablePropertyMapPtr pProps)
+        void setCellProps(const TablePropertyMapPtr& pProps)
         {
             mpCellProps = pProps;
         }
@@ -150,7 +150,7 @@ class TableManager : public virtual SvRefBase
             return mpRowProps;
         }
 
-        void setTableExceptionProps(TablePropertyMapPtr pProps)
+        void setTableExceptionProps(const TablePropertyMapPtr& pProps)
         {
             mpTableExceptionProps = pProps;
             // set table exception properties of the first cell
@@ -466,7 +466,7 @@ public:
        @param data    array of characters
        @param len     number of characters to handle
      */
-    void utext(const sal_uInt8 * data, size_t len);
+    void utext(const sal_Unicode * data, size_t len);
 
     /**
        Handle properties of the current cell.

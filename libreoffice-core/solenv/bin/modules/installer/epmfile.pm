@@ -2041,10 +2041,6 @@ sub create_packages_without_epm
         {
             $target = "i586";
         }
-        elsif ( $installer::globals::platformid eq 'aix_powerpc')
-        {
-            $target = "ppc";
-        }
         elsif ( $installer::globals::os eq 'LINUX')
         {
             $target = (POSIX::uname())[4];
@@ -2068,7 +2064,7 @@ sub create_packages_without_epm
             $installer::globals::rpminfologged = 1;
         }
 
-        my $systemcall = "$rpmcommand -bb --define \"_unpackaged_files_terminate_build  0\" $specfilename --target $target $buildrootstring 2\>\&1 |";
+        my $systemcall = "$rpmcommand -bb --define \"_unpackaged_files_terminate_build  0\" --define \"_build_id_links none\" $specfilename --target $target $buildrootstring 2\>\&1 |";
 
         installer::logger::print_message( "... $systemcall ...\n" );
 
@@ -2256,11 +2252,6 @@ sub create_new_directory_structure
         if ( $installer::globals::platformid eq 'linux_x86')
         {
             $rpmdir = "$installer::globals::epmoutpath/RPMS/i586";
-        }
-        elsif ( $installer::globals::platformid eq 'aix_powerpc')
-        {
-            $machine = "ppc";
-            $rpmdir = "$installer::globals::epmoutpath/RPMS/$machine";
         }
         elsif ( $installer::globals::os eq 'LINUX')
         {

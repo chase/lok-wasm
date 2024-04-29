@@ -37,6 +37,7 @@
 #include <vcl/gdimtf.hxx>
 #include <vcl/animate/Animation.hxx>
 #include <vcl/graph.hxx>
+#include <vcl/skia/SkiaHelper.hxx>
 
 #include <tools.hxx>
 
@@ -268,9 +269,13 @@ bool getAnimationFromGraphic( VectorOfMtfAnimationFrames&   o_rFrames,
     pVDev->EnableMapMode( false );
 
     // setup mask VDev (alpha VDev is currently rather slow)
-    ScopedVclPtrInstance<VirtualDevice> pVDevMask(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pVDevMask(DeviceFormat::WITHOUT_ALPHA);
     pVDevMask->SetOutputSizePixel( aAnimSize );
     pVDevMask->EnableMapMode( false );
+
+    // tdf#156630 make erase calls fill with transparency
+    pVDev->SetBackground( Wallpaper( COL_BLACK ) );
+    pVDevMask->SetBackground( Wallpaper( COL_ALPHA_TRANSPARENT ) );
 
     o_rLoopCount = aAnimation.GetLoopCount();
 
@@ -283,7 +288,7 @@ bool getAnimationFromGraphic( VectorOfMtfAnimationFrames&   o_rFrames,
             {
                 pVDev->DrawBitmapEx(rAnimationFrame.maPositionPixel,
                                     rAnimationFrame.maBitmapEx);
-                Bitmap aMask = rAnimationFrame.maBitmapEx.GetAlpha();
+                AlphaMask aMask = rAnimationFrame.maBitmapEx.GetAlphaMask();
 
                 if( aMask.IsEmpty() )
                 {
@@ -295,7 +300,7 @@ bool getAnimationFromGraphic( VectorOfMtfAnimationFrames&   o_rFrames,
                 }
                 else
                 {
-                    BitmapEx aTmpMask(aMask, aMask);
+                    BitmapEx aTmpMask(aMask.GetBitmap(), aMask);
                     pVDevMask->DrawBitmapEx(rAnimationFrame.maPositionPixel,
                                             aTmpMask );
                 }
@@ -305,7 +310,7 @@ bool getAnimationFromGraphic( VectorOfMtfAnimationFrames&   o_rFrames,
             case Disposal::Back:
             {
                 // #i70772# react on no mask
-                const Bitmap aMask(rAnimationFrame.maBitmapEx.GetAlpha());
+                const AlphaMask aMask(rAnimationFrame.maBitmapEx.GetAlphaMask());
                 const Bitmap & rContent(rAnimationFrame.maBitmapEx.GetBitmap());
 
                 pVDevMask->Erase();
@@ -320,7 +325,7 @@ bool getAnimationFromGraphic( VectorOfMtfAnimationFrames&   o_rFrames,
                 }
                 else
                 {
-                    pVDevMask->DrawBitmap(rAnimationFrame.maPositionPixel, aMask);
+                    pVDevMask->DrawBitmap(rAnimationFrame.maPositionPixel, aMask.GetBitmap());
                 }
                 break;
             }
@@ -330,7 +335,7 @@ bool getAnimationFromGraphic( VectorOfMtfAnimationFrames&   o_rFrames,
                 pVDev->DrawBitmapEx(rAnimationFrame.maPositionPixel,
                                     rAnimationFrame.maBitmapEx);
                 pVDevMask->DrawBitmap(rAnimationFrame.maPositionPixel,
-                                      rAnimationFrame.maBitmapEx.GetAlpha());
+                                      rAnimationFrame.maBitmapEx.GetAlphaMask().GetBitmap());
                 break;
             }
         }
@@ -338,15 +343,37 @@ bool getAnimationFromGraphic( VectorOfMtfAnimationFrames&   o_rFrames,
         // extract current aVDev content into a new animation
         // frame
         GDIMetaFileSharedPtr pMtf = std::make_shared<GDIMetaFile>();
-        pMtf->AddAction(
-            new MetaBmpExAction( aEmptyPoint,
-                                 BitmapEx(
-                                     pVDev->GetBitmap(
-                                         aEmptyPoint,
-                                         aAnimSize ),
-                                     pVDevMask->GetBitmap(
-                                         aEmptyPoint,
-                                         aAnimSize ))));
+        bool useAlphaMask = false;
+#if defined(MACOSX) || defined(IOS)
+        useAlphaMask = true;
+#else
+        // GetBitmap()-> AlphaMask is optimized with SkiaSalBitmap::InterpretAs8Bit(), 1bpp mask is not.
+        if( SkiaHelper::isVCLSkiaEnabled())
+            useAlphaMask = true;
+#endif
+        if( useAlphaMask )
+        {
+            AlphaMask aAlphaMask(pVDevMask->GetBitmap(aEmptyPoint, aAnimSize));
+            pMtf->AddAction(
+                new MetaBmpExAction( aEmptyPoint,
+                                     BitmapEx(
+                                         pVDev->GetBitmap(
+                                             aEmptyPoint,
+                                             aAnimSize ),
+                                         aAlphaMask)));
+        }
+        else
+        {
+            Bitmap aAlphaMask = pVDevMask->GetBitmap(aEmptyPoint, aAnimSize);
+            aAlphaMask.Invert(); // convert from transparency to alpha
+            pMtf->AddAction(
+                new MetaBmpExAction( aEmptyPoint,
+                                     BitmapEx(
+                                         pVDev->GetBitmap(
+                                             aEmptyPoint,
+                                             aAnimSize ),
+                                         aAlphaMask)));
+        }
 
         // setup mtf dimensions and pref map mode (for
         // simplicity, keep it all in pixel. the metafile

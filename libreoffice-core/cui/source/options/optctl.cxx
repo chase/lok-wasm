@@ -58,6 +58,36 @@ std::unique_ptr<SfxTabPage> SvxCTLOptionsPage::Create( weld::Container* pPage, w
     return std::make_unique<SvxCTLOptionsPage>( pPage, pController, *rAttrSet );
 }
 
+OUString SvxCTLOptionsPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label1", "label2", "label3", "label4", "label5" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[] = { "sequencechecking", "restricted", "typeandreplace" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString radioButton[] = { "movementlogical", "movementvisual" };
+
+    for (const auto& radio : radioButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_radio_button(radio))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
+}
+
 bool SvxCTLOptionsPage::FillItemSet( SfxItemSet* )
 {
     bool bModified = false;
@@ -106,13 +136,11 @@ bool SvxCTLOptionsPage::FillItemSet( SfxItemSet* )
 
 void SvxCTLOptionsPage::Reset( const SfxItemSet* )
 {
-    SvtCTLOptions aCTLOptions;
+    m_xSequenceCheckingCB->set_active( SvtCTLOptions::IsCTLSequenceChecking() );
+    m_xRestrictedCB->set_active( SvtCTLOptions::IsCTLSequenceCheckingRestricted() );
+    m_xTypeReplaceCB->set_active( SvtCTLOptions::IsCTLSequenceCheckingTypeAndReplace() );
 
-    m_xSequenceCheckingCB->set_active( aCTLOptions.IsCTLSequenceChecking() );
-    m_xRestrictedCB->set_active( aCTLOptions.IsCTLSequenceCheckingRestricted() );
-    m_xTypeReplaceCB->set_active( aCTLOptions.IsCTLSequenceCheckingTypeAndReplace() );
-
-    SvtCTLOptions::CursorMovement eMovement = aCTLOptions.GetCTLCursorMovement();
+    SvtCTLOptions::CursorMovement eMovement = SvtCTLOptions::GetCTLCursorMovement();
     switch ( eMovement )
     {
         case SvtCTLOptions::MOVEMENT_LOGICAL :
@@ -127,7 +155,7 @@ void SvxCTLOptionsPage::Reset( const SfxItemSet* )
             SAL_WARN( "cui.options", "SvxCTLOptionsPage::Reset(): invalid movement enum" );
     }
 
-    sal_uInt16 nPos = static_cast<sal_uInt16>(aCTLOptions.GetCTLTextNumerals());
+    sal_uInt16 nPos = static_cast<sal_uInt16>(SvtCTLOptions::GetCTLTextNumerals());
     DBG_ASSERT( nPos < m_xNumeralsLB->get_count(), "SvxCTLOptionsPage::Reset(): invalid numerals enum" );
     m_xNumeralsLB->set_active(nPos);
 

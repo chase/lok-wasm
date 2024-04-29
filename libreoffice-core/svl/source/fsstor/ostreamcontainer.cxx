@@ -208,7 +208,7 @@ void SAL_CALL OFSStreamContainer::dispose()
     std::unique_lock aGuard( m_aMutex );
 
     if ( m_bDisposed )
-        throw lang::DisposedException();
+        return;
 
     if ( !m_xStream.is() )
         throw uno::RuntimeException();
@@ -225,7 +225,7 @@ void SAL_CALL OFSStreamContainer::dispose()
         m_bOutputClosed = true;
     }
 
-    lang::EventObject aSource( static_cast< ::cppu::OWeakObject*>( this ) );
+    lang::EventObject aSource( getXWeak() );
     m_aListenersContainer.disposeAndClear( aGuard, aSource );
     m_bDisposed = true;
 }

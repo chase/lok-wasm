@@ -21,6 +21,7 @@
 
 #include <config_features.h>
 
+#include <array>
 #include <memory>
 #include <osl/module.h>
 
@@ -52,6 +53,21 @@ class SkiaControlsCache;
 #define MAX_STOCKPEN            4
 #define MAX_STOCKBRUSH          4
 #define SAL_CLIPRECT_COUNT      16
+
+#define CACHESIZE_HDC       3
+#define CACHED_HDC_1        0
+#define CACHED_HDC_2        1
+#define CACHED_HDC_DRAW     2
+#define CACHED_HDC_DEFEXT   64
+
+struct HDCCache
+{
+    HDC         mhDC = nullptr;
+    HPALETTE    mhDefPal = nullptr;
+    HBITMAP     mhDefBmp = nullptr;
+    HBITMAP     mhSelBmp = nullptr;
+    HBITMAP     mhActBmp = nullptr;
+};
 
 struct SalIcon
 {
@@ -86,18 +102,17 @@ public:
     HGLOBAL                 mhDitherDIB;            // dither memory handle
     BYTE*                   mpDitherDIB;            // dither memory
     BYTE*                   mpDitherDIBData;        // beginning of DIB data
-    tools::Long*            mpDitherDiff;           // Dither mapping table
-    BYTE*                   mpDitherLow;            // Dither mapping table
-    BYTE*                   mpDitherHigh;           // Dither mapping table
+    std::unique_ptr<tools::Long[]> mpDitherDiff;    // Dither mapping table
+    std::unique_ptr<BYTE[]> mpDitherLow;            // Dither mapping table
+    std::unique_ptr<BYTE[]> mpDitherHigh;           // Dither mapping table
     HHOOK                   mhSalObjMsgHook;        // hook to get interesting msg for SalObject
     HWND                    mhWantLeaveMsg;         // window handle, that want a MOUSELEAVE message
-    AutoTimer*              mpMouseLeaveTimer;      // Timer for MouseLeave Test
     WinSalInstance*         mpInstance;
     WinSalFrame*            mpFirstFrame;           // pointer of first frame
     WinSalObject*           mpFirstObject;          // pointer of first object window
     WinSalVirtualDevice*    mpFirstVD;              // first VirDev
     WinSalPrinter*          mpFirstPrinter;         // first printing printer
-    HDCCache*               mpHDCCache;             // Cache for three DC's
+    std::array<HDCCache, CACHESIZE_HDC> maHDCCache; // Cache for three DC's
     HBITMAP                 mh50Bmp;                // 50% Bitmap
     HBRUSH                  mh50Brush;              // 50% Brush
     COLORREF                maStockPenColorAry[MAX_STOCKPEN];
@@ -139,21 +154,6 @@ struct SalShlData
 };
 
 extern SalShlData aSalShlData;
-
-#define CACHESIZE_HDC       3
-#define CACHED_HDC_1        0
-#define CACHED_HDC_2        1
-#define CACHED_HDC_DRAW     2
-#define CACHED_HDC_DEFEXT   64
-
-struct HDCCache
-{
-    HDC         mhDC;
-    HPALETTE    mhDefPal;
-    HBITMAP     mhDefBmp;
-    HBITMAP     mhSelBmp;
-    HBITMAP     mhActBmp;
-};
 
 void ImplClearHDCCache( SalData* pData );
 HDC ImplGetCachedDC( sal_uLong nID, HBITMAP hBmp = nullptr );
@@ -200,8 +200,6 @@ int ImplSalWICompareAscii( const wchar_t* pStr1, const char* pStr2 );
 #define SAL_OBJECT_CLASSNAMEW       L"SALOBJECT"
 #define SAL_OBJECT_CHILDCLASSNAMEW  L"SALOBJECTCHILD"
 #define SAL_COM_CLASSNAMEW          L"SALCOMWND"
-
-#define SAL_MOUSELEAVE_TIMEOUT      300
 
 // wParam == bWait; lParam == 0
 #define SAL_MSG_THREADYIELD         (WM_USER+111)

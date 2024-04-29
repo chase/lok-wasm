@@ -65,7 +65,6 @@ struct ScMyShape
     ScAddress       aEndAddress;
     sal_Int32       nEndX;
     sal_Int32       nEndY;
-    bool            bResizeWithCell;
     css::uno::Reference<css::drawing::XShape> xShape;
 
     bool operator<(const ScMyShape& aShape) const;
@@ -85,7 +84,6 @@ public:
 
                                 using ScMyIteratorBase::UpdateAddress;
     void                        AddNewShape(const ScMyShape& aShape);
-    bool                        HasShapes() const { return !aShapeList.empty(); }
     const ScMyShapeList&        GetShapes() const { return aShapeList; }
     virtual void                SetCellData( ScMyCell& rMyCell ) override;
     virtual void                Sort() override;

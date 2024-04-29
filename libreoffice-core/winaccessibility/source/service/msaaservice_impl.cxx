@@ -35,13 +35,13 @@
 #include <prewin.h>
 #include <postwin.h>
 
+#include <AccTopWindowListener.hxx>
+
 using namespace ::com::sun::star; // for odk interfaces
 using namespace ::com::sun::star::uno; // for basic types
 using namespace ::com::sun::star::accessibility;
 
 using namespace ::com::sun::star::awt;
-
-#include <AccTopWindowListener.hxx>
 
 namespace my_sc_impl
 {
@@ -85,7 +85,7 @@ public:
 sal_Int64 MSAAServiceImpl::getAccObjectPtr(
         sal_Int64 hWnd, sal_Int64 lParam, sal_Int64 wParam)
 {
-    SolarMutexGuard g;
+    // tdf#155794: this must complete without taking SolarMutex
 
     if (!m_pTopWindowListener.is())
     {

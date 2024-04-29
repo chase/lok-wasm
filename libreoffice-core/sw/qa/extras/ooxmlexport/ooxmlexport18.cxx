@@ -11,6 +11,7 @@
 
 #include <queue>
 
+#include <com/sun/star/awt/FontStrikeout.hpp>
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/document/XEmbeddedObjectSupplier.hpp>
 #include <com/sun/star/drawing/XShapes.hpp>
@@ -22,7 +23,6 @@
 #include <com/sun/star/text/XTextDocument.hpp>
 #include <com/sun/star/text/XTextFieldsSupplier.hpp>
 #include <com/sun/star/text/XTextField.hpp>
-#include <com/sun/star/text/XTextTable.hpp>
 #include <com/sun/star/util/XRefreshable.hpp>
 
 
@@ -56,7 +56,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf150197_predefinedNumbering)
 
     CPPUNIT_ASSERT_EQUAL(OUString("1."), getProperty<OUString>(getParagraph(1), "ListLabelString"));
 
-    reload("Office Open XML Text", "");
+    saveAndReload("Office Open XML Text");
     CPPUNIT_ASSERT_EQUAL(OUString("1."), getProperty<OUString>(getParagraph(1), "ListLabelString"));
 }
 
@@ -110,7 +110,7 @@ DECLARE_OOXMLEXPORT_TEST(testTdf147646, "tdf147646_mergedCellNumbering.docx")
     //Without the fix in place, it would have failed with
     //- Expected: 2.
     //- Actual  : 4.
-    CPPUNIT_ASSERT_EQUAL(OUString("2."),parseDump("/root/page/body/tab/row[4]/cell/txt/SwParaPortion/SwLineLayout/child::*[@type='PortionType::Number']","expand"));
+    CPPUNIT_ASSERT_EQUAL(OUString("2."),parseDump("/root/page/body/tab/row[4]/cell/txt/SwParaPortion/SwLineLayout/child::*[@type='PortionType::Number']"_ostr,"expand"_ostr));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf153526_commentInNumbering, "tdf153526_commentInNumbering.docx")
@@ -120,19 +120,114 @@ DECLARE_OOXMLEXPORT_TEST(testTdf153526_commentInNumbering, "tdf153526_commentInN
     CPPUNIT_ASSERT_EQUAL(13, getParagraphs());
 }
 
+DECLARE_OOXMLEXPORT_TEST(testTdf153042_largeTab, "tdf153042_largeTab.docx")
+{
+    // This is not the greatest test because it is slightly weird, and has a different layout
+    // in MS Word 2010/2003 than it does in Word 2019. This tests for the 2019 layout.
+    // Additionally (in Word 2019), going to paragraph properties and hitting OK changes the layout.
+    // It changes back by going to outline numbering properties and hitting OK.
+
+    // export does not keep the tabstop when exporting non-numbering. (Probably a good thing...)
+    if (isExported())
+        return;
+
+    const auto& pLayout = parseLayoutDump();
+    // Ensure a large tabstop is used in the pseudo-numbering (numbering::NONE followed by tabstop)
+    assertXPath(pLayout, "//SwFixPortion"_ostr, "width"_ostr, "1701");
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf153042_noTab, "tdf153042_noTab.docx")
+{
+    // This is not the greatest test because it is slightly weird.
+    // It is the same as the "largeTab" file, except the paragraph properties were viewed
+    // and OK'ed, and now it looks like how Word 2010 and 2003 were laying it out.
+    // Amazingly, LO is handling both documents correctly at the moment, so let's unit test that...
+
+    // export does not keep the tabstop when exporting non-numbering. (Probably a good thing...)
+    if (isExported())
+        return;
+
+    const auto& pLayout = parseLayoutDump();
+    // Ensure a miniscule tab is used in the pseudo-numbering (numbering::NONE followed by tabstop)
+    assertXPath(pLayout, "//SwFixPortion"_ostr, "width"_ostr, "10");
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf154751_dualStrikethrough, "tdf154751_dualStrikethrough.docx")
+{
+    auto nStrike = getProperty<sal_Int16>(getRun(getParagraph(1), 1), "CharStrikeout");
+    CPPUNIT_ASSERT_EQUAL(awt::FontStrikeout::SINGLE, nStrike);
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testTdf154478)
+{
+    loadAndSave("tdf154478.docx");
+    xmlDocUniquePtr pXmlDoc = parseExport("word/comments.xml");
+
+    OUString aValues[5] = { "Comment1 seen.", "Comment2 seen.", "Comment3 NOTseen.", "Comment4 NOTseen.", "Comment5 NOTseen." };
+    for (size_t i = 1; i < 6; ++i)
+    {
+        OString sPath = "/w:comments/w:comment[" + OString::number(i) + "]/w:p/w:r/w:t";
+
+        // Without the fix in place, this test would have failed with
+        // - In <>, XPath '/w:comments/w:comment[3]/w:p/w:r/w:t' not found
+        assertXPathContent(pXmlDoc, sPath, aValues[i - 1]);
+    }
+}
+
 CPPUNIT_TEST_FIXTURE(Test, testTdf153592_columnBreaks)
 {
     loadAndSave("tdf153592_columnBreaks.docx");
 
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
     // The two column breaks were lost on import. (I wouldn't complain if they were at 3,5)
-    assertXPath(pXmlDoc, "//w:br", 2);
+    assertXPath(pXmlDoc, "//w:br"_ostr, 2);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf104394_lostTextbox, "tdf104394_lostTextbox.docx")
 {
     // This was only one page b/c the textbox was missing.
     CPPUNIT_ASSERT_EQUAL(2, getPages());
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf146984_anchorInShape, "tdf146984_anchorInShape.docx")
+{
+    // This was only one page b/c the page break was missing.
+    CPPUNIT_ASSERT_EQUAL(2, getPages());
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf127622_framePr, "tdf127622_framePr.docx")
+{
+    // All the paragraphs end up with the same frame definition, so put them all in one frame
+    CPPUNIT_ASSERT_EQUAL(1, getShapes());
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf105035_framePrB, "tdf105035_framePrB.docx")
+{
+    // The paragraphs have different frame definitions, so they must be in separate frames,
+    // and the frames must not overlap - even though their vertical positions are identical.
+    const auto& pLayout = parseLayoutDump();
+    sal_Int32 n1stFlyBottom
+        = getXPath(pLayout, "//page[1]//anchored/fly[1]/infos/bounds"_ostr, "bottom"_ostr).toInt32();
+    sal_Int32 n2ndFlyTop
+        = getXPath(pLayout, "//page[1]//anchored/fly[2]/infos/bounds"_ostr, "top"_ostr).toInt32();
+    CPPUNIT_ASSERT_GREATER(n1stFlyBottom, n2ndFlyTop); //Top is greater than bottom
+
+    // Impossible layout TODO: the textboxes are in the wrong order.
+    OUString sTextBox1("Preparation of Papers for IEEE TRANSACTIONS and JOURNALS (November 2012)");
+    CPPUNIT_ASSERT_MESSAGE("DID YOU FIX ME? Wow - I didn't think this would be possible!",
+        !getXPathContent(pLayout, "//page[1]//anchored/fly[1]/txt"_ostr).startsWith(sTextBox1));
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf105035_framePrC, "tdf105035_framePrC.docx")
+{
+    // The paragraphs have different frame definitions, so they must be in separate frames,
+    // and the frames DO overlap this time.
+    const auto& pLayout = parseLayoutDump();
+    sal_Int32 n1stFlyTop
+        = getXPath(pLayout, "//page[1]//anchored/fly[1]/infos/bounds"_ostr, "top"_ostr).toInt32();
+    sal_Int32 n2ndFlyTop
+        = getXPath(pLayout, "//page[1]//anchored/fly[2]/infos/bounds"_ostr, "top"_ostr).toInt32();
+    CPPUNIT_ASSERT_EQUAL(n1stFlyTop, n2ndFlyTop); //both frames start at the same position
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf154129_framePr1, "tdf154129_framePr1.docx")
@@ -159,6 +254,17 @@ DECLARE_OOXMLEXPORT_TEST(testTdf154703_framePr2, "tdf154703_framePr2.rtf")
     // framePr frames are always imported as fully transparent
     CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(getShape(1), "FillTransparence"));
 
+    // as opposed to testLibreOfficeHang (RTF != INVERT_BORDER_SPACING) do not duplicate left/right
+    uno::Reference<text::XTextRange> xTextRange(getShape(1), uno::UNO_QUERY);
+    uno::Reference<text::XText> xText = xTextRange->getText();
+    CPPUNIT_ASSERT_EQUAL(OUString("framePr"), getParagraphOfText(1, xText)->getString());
+    sal_Int32 nFrame = getProperty<sal_Int32>(getShape(1), "LeftBorderDistance");
+    sal_Int32 nPara = getProperty<sal_Int32>(getParagraphOfText(1, xText), "LeftBorderDistance");
+    if (!isExported()) // RTF
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(529), nFrame + nPara);
+    else // DOCX
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(529*2), nFrame + nPara);
+
     if (!isExported())
     {
         // Fill the frame with a red background. It should be transferred on export to the paragraph
@@ -171,37 +277,72 @@ DECLARE_OOXMLEXPORT_TEST(testTdf154703_framePr2, "tdf154703_framePr2.rtf")
 
     // exported: framed paragraphs without a background should now have a red background
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
-    assertXPath(pXmlDoc, "//w:body/w:p[1]/w:pPr/w:shd", "fill", "800000");
-    assertXPath(pXmlDoc, "//w:body/w:p[2]/w:pPr/w:shd", "fill", "548DD4"); // was blue already, no change
-    assertXPath(pXmlDoc, "//w:body/w:p[3]/w:pPr/w:shd", "fill", "800000");
+    assertXPath(pXmlDoc, "//w:body/w:p[1]/w:pPr/w:shd"_ostr, "fill"_ostr, "800000");
+    assertXPath(pXmlDoc, "//w:body/w:p[2]/w:pPr/w:shd"_ostr, "fill"_ostr, "548DD4"); // was blue already, no change
+    assertXPath(pXmlDoc, "//w:body/w:p[3]/w:pPr/w:shd"_ostr, "fill"_ostr, "800000");
+    assertXPath(pXmlDoc, "//w:body/w:p[3]/w:pPr/w:framePr"_ostr, "yAlign"_ostr, "center");
+    assertXPathNoAttribute(pXmlDoc, "//w:body/w:p[3]/w:pPr/w:framePr"_ostr, "y"_ostr);
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf154703_framePrWrapSpacing, "tdf154703_framePrWrapSpacing.docx")
+{
+    CPPUNIT_ASSERT_EQUAL(2, getPages());
+    if (!isExported())
+        return;
+
+    xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
+    // before the fix, this was half of the correct value.
+    assertXPath(pXmlDoc, "//w:body/w:p/w:pPr/w:framePr"_ostr, "hSpace"_ostr, "2552");
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf154703_framePrTextDirection, "tdf154703_framePrTextDirection.docx")
+{
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::WritingMode2::TB_RL), getProperty<sal_Int16>(getShape(1), "WritingMode"));
+    if (!isExported())
+        return;
+
+    xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
+    assertXPath(pXmlDoc, "//w:body/w:p/w:pPr/w:textDirection"_ostr, "val"_ostr, "tbRl");
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf153613_anchoredAfterPgBreak, "tdf153613_anchoredAfterPgBreak.docx")
 {
     const auto& pLayout = parseLayoutDump();
     // An anchored TO character image anchors before the page break.
-    assertXPath(pLayout, "//page[1]//anchored", 1);
+    assertXPath(pLayout, "//page[1]//anchored"_ostr, 1);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf153613_anchoredAfterPgBreak2, "tdf153613_anchoredAfterPgBreak2.docx")
 {
     const auto& pLayout = parseLayoutDump();
     // An anchored TO character image, followed by more characters moves to the following page
-    assertXPath(pLayout, "//page[2]//anchored", 1);
+    assertXPath(pLayout, "//page[2]//anchored"_ostr, 1);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf153613_anchoredAfterPgBreak3, "tdf153613_anchoredAfterPgBreak3.docx")
 {
     const auto& pLayout = parseLayoutDump();
     // An anchored TO character image, with setting splitPgBreakAndParaMark moves to the following page
-    assertXPath(pLayout, "//page[2]//anchored", 1);
+    assertXPath(pLayout, "//page[2]//anchored"_ostr, 1);
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf153613_anchoredAfterPgBreak6, "tdf153613_anchoredAfterPgBreak6.docx")
+{
+    // An anchored TO character image, followed by more characters moves to the following page
+    // The difference from test 2 is that it is not the first character run
+    CPPUNIT_ASSERT_EQUAL(2, getPages());
+    CPPUNIT_ASSERT_EQUAL(4, getParagraphs());
+
+    const auto& pLayout = parseLayoutDump();
+    CPPUNIT_ASSERT_EQUAL(OUString("y"), getXPathContent(pLayout, "//page[2]/body/txt[1]"_ostr));
+    assertXPath(pLayout, "//page[1]//anchored"_ostr, 1); // DID YOU FIX ME? This should be page[2]
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf153613_inlineAfterPgBreak, "tdf153613_inlineAfterPgBreak.docx")
 {
     const auto& pLayout = parseLayoutDump();
     // An inline AS character image moves to the following page when after the page break.
-    assertXPath(pLayout, "//page[2]//anchored", 1);
+    assertXPath(pLayout, "//page[2]//anchored"_ostr, 1);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf153613_inlineAfterPgBreak2, "tdf153613_inlineAfterPgBreak2.docx")
@@ -212,30 +353,22 @@ DECLARE_OOXMLEXPORT_TEST(testTdf153613_inlineAfterPgBreak2, "tdf153613_inlineAft
     CPPUNIT_ASSERT_EQUAL(4, getParagraphs());
 
     const auto& pLayout = parseLayoutDump();
-    CPPUNIT_ASSERT_EQUAL(OUString("x"), getXPathContent(pLayout, "//page[1]/body/txt[2]"));
-    assertXPath(pLayout, "//page[2]//anchored", 1);
-}
-
-DECLARE_OOXMLEXPORT_TEST(testTdf153613_textboxAfterPgBreak, "tdf153613_textboxAfterPgBreak.docx")
-{
-    CPPUNIT_ASSERT_EQUAL(3, getParagraphs());
-
-    const auto& pLayout = parseLayoutDump();
-    assertXPathContent(pLayout, "//page[2]/body/txt", "There should be no prior carriage return.");
-}
-
-DECLARE_OOXMLEXPORT_TEST(testTdf153613_textboxAfterPgBreak2, "tdf153613_textboxAfterPgBreak2.docx")
-{
-    // same as previous example, except that it is the first paragraph in the section.
-    CPPUNIT_ASSERT_EQUAL(2, getParagraphs());
-
-    const auto& pLayout = parseLayoutDump();
-    assertXPathContent(pLayout, "//page[2]/body/txt", "There should be no prior carriage return.");
+    CPPUNIT_ASSERT_EQUAL(OUString("x"), getXPathContent(pLayout, "//page[1]/body/txt[2]"_ostr));
+    assertXPath(pLayout, "//page[2]//anchored"_ostr, 1);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf153613_sdtAfterPgBreak, "tdf153613_sdtAfterPgBreak.docx")
 {
     CPPUNIT_ASSERT_EQUAL(2, getPages());
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf153613_textboxAfterPgBreak3, "tdf153613_textboxAfterPgBreak3.docx")
+{
+    // both textboxes on on the second (last) page
+    CPPUNIT_ASSERT_EQUAL(2, getPages());
+
+    const auto& pLayout = parseLayoutDump();
+    assertXPath(pLayout, "//page[2]/body/txt/anchored/fly"_ostr, 2);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf153964_topMarginAfterBreak14, "tdf153964_topMarginAfterBreak14.docx")
@@ -245,42 +378,42 @@ DECLARE_OOXMLEXPORT_TEST(testTdf153964_topMarginAfterBreak14, "tdf153964_topMarg
     uno::Reference<beans::XPropertySet> xPara(getParagraph(2, "a w:br at the start of the document. Does it use 60 point top margin?"), uno::UNO_QUERY);
     //CPPUNIT_ASSERT_EQUAL(sal_Int32(2117), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
 
-    xPara.set(getParagraph(3, u"60 pt spacing before"), uno::UNO_QUERY);
+    xPara.set(getParagraph(3, u"60 pt spacing before"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2117), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
     CPPUNIT_ASSERT_EQUAL(Color(0xfbe4d5), getProperty<Color>(xPara, "ParaBackColor"));
 
     // The top margin was applied to paragraph 3, so it shouldn't apply here
-    xPara.set(getParagraph(4, u"column break1"), uno::UNO_QUERY);
+    xPara.set(getParagraph(4, u"column break1"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
-    //CPPUNIT_ASSERT_EQUAL(Color(0xfbe4d5), getProperty<Color>(xPara, "ParaBackColor"));
+    CPPUNIT_ASSERT_EQUAL(Color(0xfbe4d5), getProperty<Color>(xPara, "ParaBackColor"));
 
-    xPara.set(getParagraph(5, u"60 pt followed by page break"), uno::UNO_QUERY);
+    xPara.set(getParagraph(5, u"60 pt followed by page break"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2117), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
     CPPUNIT_ASSERT_EQUAL(Color(0xdeeaf6), getProperty<Color>(xPara, "ParaBackColor"));
 
     // The top margin was applied to paragraph 5, so it shouldn't apply here
-    xPara.set(getParagraph(6, u"page break1"), uno::UNO_QUERY);
+    xPara.set(getParagraph(6, u"page break1"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
     CPPUNIT_ASSERT_EQUAL(Color(0xdeeaf6), getProperty<Color>(xPara, "ParaBackColor"));
 
     // The top margin was not applied yet, so with compat14 it should apply here.
-    xPara.set(getParagraph(7, u"column break2"), uno::UNO_QUERY);
+    xPara.set(getParagraph(7, u"column break2"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2117), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
     CPPUNIT_ASSERT_EQUAL(Color(0xe2efd9), getProperty<Color>(xPara, "ParaBackColor"));
 
     // In an odd twist, the w:br was actually at the end of the previous w:p, so in that case
     // we ignore the top margin definition this time.
-    xPara.set(getParagraph(9, u"page break2"), uno::UNO_QUERY);
+    xPara.set(getParagraph(9, u"page break2"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
 
     // The top margin was not applied before the column break, so with compat14 it should apply here
-    xPara.set(getParagraph(10, u""), uno::UNO_QUERY); // after column break
+    xPara.set(getParagraph(10, u""_ustr), uno::UNO_QUERY); // after column break
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2117), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
-    //CPPUNIT_ASSERT_EQUAL(Color(0xfff2cc), getProperty<Color>(xPara, "ParaBackColor"));
+    CPPUNIT_ASSERT_EQUAL(Color(0xfff2cc), getProperty<Color>(xPara, "ParaBackColor"));
 
     // In an odd twist, the w:br was actually at the end of the previous w:p, so in that case
     // we ignore the top margin definition this time.
-    xPara.set(getParagraph(12, u""), uno::UNO_QUERY); // after page break
+    xPara.set(getParagraph(12, u""_ustr), uno::UNO_QUERY); // after page break
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
 }
 
@@ -291,54 +424,120 @@ DECLARE_OOXMLEXPORT_TEST(testTdf153964_topMarginAfterBreak15, "tdf153964_topMarg
     uno::Reference<beans::XPropertySet> xPara(getParagraph(2, "a w:br at the start of the document. Does it use 60 point top margin?"), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
 
-    xPara.set(getParagraph(3, u"60 pt spacing before"), uno::UNO_QUERY);
+    xPara.set(getParagraph(3, u"60 pt spacing before"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2117), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
     CPPUNIT_ASSERT_EQUAL(Color(0xfbe4d5), getProperty<Color>(xPara, "ParaBackColor"));
 
     // The top margin was applied to paragraph 3, so it shouldn't apply here
-    xPara.set(getParagraph(4, u"column break1"), uno::UNO_QUERY);
+    xPara.set(getParagraph(4, u"column break1"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
-    //CPPUNIT_ASSERT_EQUAL(Color(0xfbe4d5), getProperty<Color>(xPara, "ParaBackColor"));
+    CPPUNIT_ASSERT_EQUAL(Color(0xfbe4d5), getProperty<Color>(xPara, "ParaBackColor"));
 
-    xPara.set(getParagraph(5, u"60 pt followed by page break"), uno::UNO_QUERY);
+    xPara.set(getParagraph(5, u"60 pt followed by page break"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2117), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
     CPPUNIT_ASSERT_EQUAL(Color(0xdeeaf6), getProperty<Color>(xPara, "ParaBackColor"));
 
     // The top margin was applied to paragraph 5, so it shouldn't apply here
-    xPara.set(getParagraph(6, u"page break1"), uno::UNO_QUERY);
+    xPara.set(getParagraph(6, u"page break1"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
     CPPUNIT_ASSERT_EQUAL(Color(0xdeeaf6), getProperty<Color>(xPara, "ParaBackColor"));
 
     // The top margin was not applied to paragraph 6, and with compat15 it shouldn't apply here.
-    xPara.set(getParagraph(7, u"column break2"), uno::UNO_QUERY);
+    xPara.set(getParagraph(7, u"column break2"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
     CPPUNIT_ASSERT_EQUAL(Color(0xe2efd9), getProperty<Color>(xPara, "ParaBackColor"));
 
     // The top margin not was applied to paragraph 8, and with compat15 it shouldn't apply here.
-    xPara.set(getParagraph(9, u"page break2"), uno::UNO_QUERY);
+    xPara.set(getParagraph(9, u"page break2"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
 
     // The top margin was not applied to paragraph 9, and with compat15 it shouldn't apply here.
-    xPara.set(getParagraph(10, u""), uno::UNO_QUERY); // after column break
+    xPara.set(getParagraph(10, u""_ustr), uno::UNO_QUERY); // after column break
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
-    //CPPUNIT_ASSERT_EQUAL(Color(0xfff2cc), getProperty<Color>(xPara, "ParaBackColor"));
+    CPPUNIT_ASSERT_EQUAL(Color(0xfff2cc), getProperty<Color>(xPara, "ParaBackColor"));
 
     // The top margin was not applied to paragraph 11, and with compat15 it shouldn't apply here.
-    xPara.set(getParagraph(12, u""), uno::UNO_QUERY); // after page break
+    xPara.set(getParagraph(12, u""_ustr), uno::UNO_QUERY); // after page break
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaTopMargin"));
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf153964_numberingAfterBreak14, "tdf153964_numberingAfterBreak14.docx")
+{
+    //Numbering should only apply once in a split paragraph.
+    uno::Reference<beans::XPropertySet> xPara(getParagraph(2, "How numbering affected by a column break?"), uno::UNO_QUERY);
+    //CPPUNIT_ASSERT_EQUAL(OUString("1."), getProperty<OUString>(xPara, "ListLabelString"));
+    xPara.set(getParagraph(3, "How is numbering affected by a page break?"), uno::UNO_QUERY);
+    //CPPUNIT_ASSERT_EQUAL(OUString("2."), getProperty<OUString>(xPara, "ListLabelString"));
+    xPara.set(getParagraph(4, "x"), uno::UNO_QUERY);
+    //CPPUNIT_ASSERT_EQUAL(OUString("3."), getProperty<OUString>(xPara, "ListLabelString"));
+    xPara.set(getParagraph(5, "column break"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString(""), getProperty<OUString>(xPara, "ListLabelString"));
+    xPara.set(getParagraph(6, "y"), uno::UNO_QUERY);
+    //CPPUNIT_ASSERT_EQUAL(OUString("3."), getProperty<OUString>(xPara, "ListLabelString"));
+    xPara.set(getParagraph(7, "page break"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString(""), getProperty<OUString>(xPara, "ListLabelString"));
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf153964_firstIndentAfterBreak14, "tdf153964_firstIndentAfterBreak14.docx")
+{
+    //First line indents should only apply once in a split paragraph.
+    uno::Reference<beans::XPropertySet> xPara(getParagraph(2, "How is first line indent affected by a column break?"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2000), getProperty<sal_Int32>(xPara, "ParaFirstLineIndent"));
+    xPara.set(getParagraph(3, "How is first line indent affected by a page break?"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2000), getProperty<sal_Int32>(xPara, "ParaFirstLineIndent"));
+    xPara.set(getParagraph(4, "x"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2000), getProperty<sal_Int32>(xPara, "ParaFirstLineIndent"));
+    xPara.set(getParagraph(5, "column break"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaFirstLineIndent"));
+    xPara.set(getParagraph(6, "y"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2000), getProperty<sal_Int32>(xPara, "ParaFirstLineIndent"));
+    xPara.set(getParagraph(7, "page break"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaFirstLineIndent"));
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testTdf148834_lineNumbering)
+{
+    loadAndSave("tdf148834_lineNumbering.odt");
+
+    xmlDocUniquePtr pStylesXml = parseExport("word/styles.xml");
+    // user specified: do not include in line numbering
+    assertXPath(pStylesXml, "//w:style[@w:styleId='Normal']/w:pPr/w:suppressLineNumbers"_ostr, 1);
+    // even though it matches the parent style, these should always avoid showing line numbering
+    assertXPath(pStylesXml, "//w:style[@w:styleId='Footer']/w:pPr/w:suppressLineNumbers"_ostr, 1);
+    assertXPath(pStylesXml,
+                "//w:style[@w:styleId='0NUMBERED']/w:pPr/w:suppressLineNumbers"_ostr, "val"_ostr, "0");
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testTdf157598)
+{
+    loadAndSave("tdf157598.docx");
+
+    xmlDocUniquePtr pStylesXml = parseExport("word/styles.xml");
+
+    // Without the fix in place, this test would have failed with
+    // - Expected: 0
+    // - Actual  : 1
+    assertXPath(pStylesXml, "//w:style[@w:styleId='Normal']/w:rPr/w:rtl"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf76022_textboxWrap)
 {
-    // Granted, this is an ODT with a bit of an anomoly - tables ignore fly wrapping.
+    // Granted, this is an ODT with a bit of an anomaly - tables ignore fly wrapping.
     createSwDoc("tdf76022_textboxWrap.odt");
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Did you make wrapping sane/interoperable?", 1, getPages());
 
     // When saving to DOCX, the table should obey the fly wrapping
-    reload("Office Open XML Text", "");
+    saveAndReload("Office Open XML Text");
 
     // The fly takes up the whole page, so the table needs to shift down to the next page.
     CPPUNIT_ASSERT_EQUAL(2, getPages());
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf134114_allowOverlap, "tdf134114_allowOverlap.docx")
+{
+    // CPPUNIT_ASSERT_EQUAL(1, getPages());
+    CPPUNIT_ASSERT(!getProperty<bool>(getShape(1), "AllowOverlap"));
+    CPPUNIT_ASSERT(getProperty<bool>(getShape(2), "AllowOverlap"));
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf149551_mongolianVert)
@@ -361,7 +560,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf149551_mongolianVert)
     // Without fix the orientation was vert="vert".
     save("Office Open XML Text");
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
-    assertXPath(pXmlDoc, "//wps:bodyPr", "vert", "mongolianVert");
+    assertXPath(pXmlDoc, "//wps:bodyPr"_ostr, "vert"_ostr, "mongolianVert");
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf151912, "tdf151912.docx")
@@ -372,7 +571,7 @@ DECLARE_OOXMLEXPORT_TEST(testTdf151912, "tdf151912.docx")
     if (!isExported())
         return;
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
-    assertXPath(pXmlDoc, "//w:sdt//w:sdtPr/w:id", "val", "1802566103");
+    assertXPath(pXmlDoc, "//w:sdt//w:sdtPr/w:id"_ostr, "val"_ostr, "1802566103");
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf147724, "tdf147724.docx")
@@ -380,11 +579,11 @@ DECLARE_OOXMLEXPORT_TEST(testTdf147724, "tdf147724.docx")
     const auto& pLayout = parseLayoutDump();
 
     // Ensure we load field value from external XML correctly (it was "HERUNTERLADEN")
-    assertXPathContent(pLayout, "/root/page[1]/body/txt[1]", "Placeholder -> *ABC*");
+    assertXPathContent(pLayout, "/root/page[1]/body/txt[1]"_ostr, "Placeholder -> *ABC*");
 
     // This SDT has no storage id, it is not an error, but content can be taken from any suitable XML
     // There 2 variants possible, both are acceptable
-    OUString sFieldResult = getXPathContent(pLayout, "/root/page[1]/body/txt[2]");
+    OUString sFieldResult = getXPathContent(pLayout, "/root/page[1]/body/txt[2]"_ostr);
     CPPUNIT_ASSERT(sFieldResult == "Placeholder -> *HERUNTERLADEN*" || sFieldResult == "Placeholder -> *ABC*");
 }
 
@@ -417,7 +616,7 @@ CPPUNIT_TEST_FIXTURE(Test, testNumberPortionFormatFromODT)
     // - Actual  : 0
     // - XPath '//w:pPr/w:rPr/w:sz' number of nodes is incorrect
     // i.e. <w:sz> was missing under <w:pPr>'s <w:rPr>.
-    assertXPath(pXmlDoc, "//w:pPr/w:rPr/w:sz", "val", "48");
+    assertXPath(pXmlDoc, "//w:pPr/w:rPr/w:sz"_ostr, "val"_ostr, "48");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testParaStyleCharPosition)
@@ -435,7 +634,7 @@ CPPUNIT_TEST_FIXTURE(Test, testParaStyleCharPosition)
     // - Actual  : 0
     // - XPath '/w:styles/w:style[@w:styleId='Normal']/w:rPr/w:position' number of nodes is incorrect
     // i.e. we wrote <w:vertAlign w:val="subscript"> instead of <w:position>.
-    assertXPath(pXmlDoc, "/w:styles/w:style[@w:styleId='Normal']/w:rPr/w:position", "val", "-1");
+    assertXPath(pXmlDoc, "/w:styles/w:style[@w:styleId='Normal']/w:rPr/w:position"_ostr, "val"_ostr, "-1");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf150966_regularInset)
@@ -452,7 +651,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf150966_regularInset)
     // and Word displays no text at all.
     save("Office Open XML Text");
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
-    assertXPathAttrs(pXmlDoc, "//wps:bodyPr", { { "tIns", "179640" }, { "bIns", "360000" } });
+    assertXPathAttrs(pXmlDoc, "//wps:bodyPr"_ostr, { { "tIns", "179640" }, { "bIns", "360000" } });
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf152636_lostPageBreak)
@@ -483,7 +682,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSdtDuplicatedId)
     // - Expected: 2
     // - Actual  : 4
     // i.e. grab-bags introduced 2 unwanted duplicates.
-    assertXPath(pXmlDoc, "//w:sdt", 2);
+    assertXPath(pXmlDoc, "//w:sdt"_ostr, 2);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testImageCropping)
@@ -510,9 +709,9 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf152200)
 
     // Then make sure that fldChar with type 'end' goes prior to the at-char anchored fly.
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
-    const int nRunsBeforeFldCharEnd = countXPathNodes(pXmlDoc, "//w:fldChar[@w:fldCharType='end']/preceding::w:r");
+    const int nRunsBeforeFldCharEnd = countXPathNodes(pXmlDoc, "//w:fldChar[@w:fldCharType='end']/preceding::w:r"_ostr);
     CPPUNIT_ASSERT(nRunsBeforeFldCharEnd);
-    const int nRunsBeforeAlternateContent = countXPathNodes(pXmlDoc, "//mc:AlternateContent/preceding::w:r");
+    const int nRunsBeforeAlternateContent = countXPathNodes(pXmlDoc, "//mc:AlternateContent/preceding::w:r"_ostr);
     CPPUNIT_ASSERT(nRunsBeforeAlternateContent);
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected greater than: 6
@@ -520,9 +719,9 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf152200)
     CPPUNIT_ASSERT_GREATER(nRunsBeforeFldCharEnd, nRunsBeforeAlternateContent);
     // Make sure we only have one paragraph in body, and only three field characters overall,
     // located directly in runs of this paragraph
-    assertXPath(pXmlDoc, "/w:document/w:body/w:p");
-    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/w:fldChar", 3);
-    assertXPath(pXmlDoc, "//w:fldChar", 3); // no field characters elsewhere
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p"_ostr);
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/w:fldChar"_ostr, 3);
+    assertXPath(pXmlDoc, "//w:fldChar"_ostr, 3); // no field characters elsewhere
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf126477)
@@ -569,7 +768,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf153104)
     loadAndReload("tdf153104.docx");
 
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
-    OUString numId = getXPath(pXmlDoc, "/w:document/w:body/w:p[1]/w:pPr/w:numPr/w:numId", "val");
+    OUString numId = getXPath(pXmlDoc, "/w:document/w:body/w:p[1]/w:pPr/w:numPr/w:numId"_ostr, "val"_ostr);
 
     xmlDocUniquePtr pXmlNum = parseExport("word/numbering.xml");
     OString numPath = "/w:numbering/w:num[@w:numId='"
@@ -582,8 +781,8 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf153104)
     // - Expected: 1
     // - Actual  : 0
     // - In <>, XPath '/w:numbering/w:num[@w:numId='3']/w:lvlOverride[@w:ilvl='0']/w:startOverride' number of nodes is incorrect
-    assertXPath(pXmlNum, numPath + "w:lvlOverride[@w:ilvl='0']/w:startOverride", "val", "10");
-    assertXPath(pXmlNum, numPath + "w:lvlOverride[@w:ilvl='1']/w:startOverride", "val", "1");
+    assertXPath(pXmlNum, numPath + "w:lvlOverride[@w:ilvl='0']/w:startOverride", "val"_ostr, "10");
+    assertXPath(pXmlNum, numPath + "w:lvlOverride[@w:ilvl='1']/w:startOverride", "val"_ostr, "1");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf153128)
@@ -591,7 +790,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf153128)
     loadAndReload("tdf153128.docx");
     calcLayout();
     sal_Int32 nFirstLineHeight
-        = parseDump("/root/page/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion", "height")
+        = parseDump("/root/page/body/txt[1]/SwParaPortion/SwLineLayout/SwParaPortion"_ostr, "height"_ostr)
               .toInt32();
     CPPUNIT_ASSERT_GREATER(sal_Int32(0), nFirstLineHeight);
 
@@ -601,135 +800,58 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf153128)
     CPPUNIT_ASSERT_LESS(sal_Int32(30), nFirstLineHeight);
 }
 
-CPPUNIT_TEST_FIXTURE(Test, testTdf155945)
+CPPUNIT_TEST_FIXTURE(Test, testExportingUnknownStyleInRedline)
 {
-    createSwDoc("tdf155945.docx");
-
-    CPPUNIT_ASSERT_EQUAL(3, getParagraphs());
-    // Without a fix in place, this would fail with
-    // - Expected: 0
-    // - Actual  : 423
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(getParagraph(2), "ParaBottomMargin"));
+    // This must not fail assertions
+    loadAndReload("UnknownStyleInRedline.docx");
+    // Check that the original unknown style name "UnknownStyle" is roundtripped
+    // (maybe this is wrong, because Word does not do this).
+    xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
+    assertXPath(pXmlDoc,
+                "/w:document/w:body/w:p/w:pPr/w:pPrChange/w:pPr/w:pStyle[@w:val='UnknownStyle']"_ostr);
 }
 
-CPPUNIT_TEST_FIXTURE(Test, testTdf133560)
+CPPUNIT_TEST_FIXTURE(Test, testTdf148026)
 {
-    createSwDoc("lastEmptyLineWithDirectFormatting.docx");
-
-    CPPUNIT_ASSERT_EQUAL(4, getParagraphs());
-    // Without a fix in place, this would fail with
-    // - Expected: 12
-    // - Actual  : 48
-    CPPUNIT_ASSERT_EQUAL(12.0f, getProperty<float>(getParagraph(4), "CharHeight"));
+    loadAndReload("tdf148026.fodt");
+    xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 1
+    // - Actual  : 0
+    // - In <>, XPath '//w:hyperlink' number of nodes is incorrect
+    // i.e. a HYPERLINK field was exported instead of the hyperlink XML element.
+    assertXPath(pXmlDoc, "//w:hyperlink"_ostr, "tgtFrame"_ostr, "_self");
 }
 
-CPPUNIT_TEST_FIXTURE(Test, testTdf150408_isLvl_RoundTrip)
+CPPUNIT_TEST_FIXTURE(Test, testTdf153664)
 {
-    loadAndSave("listWithLgl.docx");
-
-    // Second level's numbering should use Arabic numbers for first level reference
-    auto xPara = getParagraph(1);
-    CPPUNIT_ASSERT_EQUAL(OUString("CH I"), getProperty<OUString>(xPara, "ListLabelString"));
-    xPara = getParagraph(2);
-    CPPUNIT_ASSERT_EQUAL(OUString("Sect 1.01"), getProperty<OUString>(xPara, "ListLabelString"));
-    xPara = getParagraph(3);
-    CPPUNIT_ASSERT_EQUAL(OUString("CH II"), getProperty<OUString>(xPara, "ListLabelString"));
-    xPara = getParagraph(4);
-    CPPUNIT_ASSERT_EQUAL(OUString("Sect 2.01"), getProperty<OUString>(xPara, "ListLabelString"));
-
-    xmlDocUniquePtr pXml = parseExport("word/numbering.xml");
-    assertXPath(pXml, "/w:numbering/w:abstractNum"); // Only one list
-    // The second list level must keep the isLgl element
-    assertXPath(pXml, "/w:numbering/w:abstractNum/w:lvl[2]/w:isLgl");
+    loadAndReload("Table-of-Figures.odt");
+    CPPUNIT_ASSERT_EQUAL(1, getPages());
+    xmlDocUniquePtr pXmlStyles = parseExport("word/styles.xml");
+    CPPUNIT_ASSERT(pXmlStyles);
+    // Without the fix this was styleId='FigureIndex1' and name was "Figure Index 1"
+    // This led to style settings being reset when ToF was updated in Word
+    // TOF's paragraph style should be exported as "Table of Figures" as that's the default Word style name
+    assertXPath(pXmlStyles, "/w:styles/w:style[12]"_ostr, "styleId"_ostr, "TableofFigures");
+    assertXPath(pXmlStyles, "/w:styles/w:style[@w:styleId='TableofFigures']/w:name"_ostr, "val"_ostr, "Table of Figures");
 }
 
-CPPUNIT_TEST_FIXTURE(Test, testTdf156548)
+DECLARE_OOXMLEXPORT_TEST(testTdf124472_hyperlink, "tdf124472.docx")
 {
-    // Given a document using two bookmarks with similar names longer than 40 characters
-    loadAndReload("longBookmarkName.fodt");
-
-    // After the export, the names must be no longer than 40 characters; they must be unique;
-    // and the hyperlinks must use the same names, to still point to the correct targets:
-
-    {
-        // 1st  paragraph - hyperlink to 4th paragraph
-        auto sURL = getProperty<OUString>(getRun(getParagraph(1), 1), "HyperLinkURL");
-        CPPUNIT_ASSERT_EQUAL(OUString("#A_bookmark_name_longer_than_forty_charac"), sURL);
-        // 4th paragraph - a bookmark
-        auto xBookmark = getProperty<uno::Reference<container::XNamed>>(getRun(getParagraph(4), 1),
-                                                                        "Bookmark");
-        CPPUNIT_ASSERT_EQUAL(OUString("A_bookmark_name_longer_than_forty_charac"),
-                             xBookmark->getName());
-    }
-
-    {
-        // 2nd  paragraph - hyperlink to 5th paragraph
-        auto sURL = getProperty<OUString>(getRun(getParagraph(2), 1), "HyperLinkURL");
-        CPPUNIT_ASSERT_EQUAL(OUString("#A_bookmark_name_longer_than_forty_chara1"), sURL);
-        // 5th paragraph - a bookmark
-        auto xBookmark = getProperty<uno::Reference<container::XNamed>>(getRun(getParagraph(5), 1),
-                                                                        "Bookmark");
-        CPPUNIT_ASSERT_EQUAL(OUString("A_bookmark_name_longer_than_forty_chara1"),
-                             xBookmark->getName());
-    }
+    CPPUNIT_ASSERT_EQUAL(OUString("https://www.libreoffice.org/"),
+                         getProperty<OUString>(getRun(getParagraph(1), 1), "HyperLinkURL"));
+    CPPUNIT_ASSERT_EQUAL(OUString("mailto:info@libreoffice.org"),
+                         getProperty<OUString>(getRun(getParagraph(2), 1), "HyperLinkURL"));
+    CPPUNIT_ASSERT_EQUAL(OUString(""),
+                         getProperty<OUString>(getRun(getParagraph(3), 1), "HyperLinkURL"));
 }
 
-CPPUNIT_TEST_FIXTURE(Test, testTdf157136)
+DECLARE_OOXMLEXPORT_TEST(testTdf135786, "tdf135786.docx")
 {
-    // Given a document with two content controls - one block, one inline
-    createSwDoc("tdf157136_TwoContentControls.docx");
-
-    // Both of them must import with the correct character style
-
-    {
-        // 1st paragraph - block content control
-        auto xRun = getRun(getParagraph(1), 1);
-        auto xContentControl
-            = getProperty<css::uno::Reference<css::text::XTextRange>>(xRun, "ContentControl");
-        CPPUNIT_ASSERT_EQUAL(OUString("Click or tap here to enter text."),
-                             xContentControl->getString());
-        // Without the fix in place, this would fail with
-        // - Expected: Placeholder Text
-        // - Actual  :
-        CPPUNIT_ASSERT_EQUAL(OUString("Placeholder Text"),
-                             getProperty<OUString>(xRun, "CharStyleName"));
-    }
-
-    {
-        // 2nd paragraph - inline content control
-        auto xRun = getRun(getParagraph(2), 1);
-        auto xContentControl
-            = getProperty<css::uno::Reference<css::text::XTextRange>>(xRun, "ContentControl");
-        CPPUNIT_ASSERT_EQUAL(OUString("Click or tap here to enter text."),
-                             xContentControl->getString());
-        CPPUNIT_ASSERT_EQUAL(OUString("Placeholder Text"),
-                             getProperty<OUString>(xRun, "CharStyleName"));
-    }
-
-    // Test the same after round-trip
-    saveAndReload("Office Open XML Text");
-
-    {
-        // 1st paragraph - becomes inline content control after roundtrip
-        auto xRun = getRun(getParagraph(1), 1);
-        auto xContentControl
-            = getProperty<css::uno::Reference<css::text::XTextRange>>(xRun, "ContentControl");
-        CPPUNIT_ASSERT_EQUAL(OUString("Click or tap here to enter text."),
-                             xContentControl->getString());
-        CPPUNIT_ASSERT_EQUAL(OUString("Placeholder Text"),
-                             getProperty<OUString>(xRun, "CharStyleName"));
-    }
-
-    {
-        // 2nd paragraph - inline content control
-        auto xRun = getRun(getParagraph(2), 1);
-        auto xContentControl
-            = getProperty<css::uno::Reference<css::text::XTextRange>>(xRun, "ContentControl");
-        CPPUNIT_ASSERT_EQUAL(OUString("Click or tap here to enter text."),
-                             xContentControl->getString());
-        CPPUNIT_ASSERT_EQUAL(OUString("Placeholder Text"),
-                             getProperty<OUString>(xRun, "CharStyleName"));
-    }
+    // Empty first line remain, if the section's initial dummy paragraph is not deleted:
+    // - Expected: 2
+    // - Actual  : 3
+    CPPUNIT_ASSERT_EQUAL(2, getParagraphs());
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf155736, "tdf155736_PageNumbers_footer.docx")
@@ -737,108 +859,19 @@ DECLARE_OOXMLEXPORT_TEST(testTdf155736, "tdf155736_PageNumbers_footer.docx")
     CPPUNIT_ASSERT_EQUAL(2, getPages());
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page[1]/footer");
-    assertXPath(pXmlDoc, "/root/page[2]/footer");
+    assertXPath(pXmlDoc, "/root/page[1]/footer"_ostr);
+    assertXPath(pXmlDoc, "/root/page[2]/footer"_ostr);
     //Without the fix in place, it would have failed with
     //- Expected: Page * of *
     //- Actual  : Page of
-    CPPUNIT_ASSERT_EQUAL(OUString("Page * of *"), parseDump("/root/page[1]/footer/txt/text()"));
-    CPPUNIT_ASSERT_EQUAL(OUString("Page * of *"), parseDump("/root/page[2]/footer/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Page * of *"), parseDump("/root/page[1]/footer/txt/text()"_ostr));
+    CPPUNIT_ASSERT_EQUAL(OUString("Page * of *"), parseDump("/root/page[2]/footer/txt/text()"_ostr));
 }
 
-CPPUNIT_TEST_FIXTURE(Test, testSvgExtensionsSupport)
+DECLARE_OOXMLEXPORT_TEST(testTdf155903, "tdf155903.odt")
 {
-    loadAndSave("SvgImageTest.odt");
-
-    xmlDocUniquePtr pXmlDocRels = parseExport("word/_rels/document.xml.rels");
-
-    // Check we have 2 relationships - one for PNG and one for SVG files
-    assertXPath(pXmlDocRels,
-                "/rels:Relationships/rels:Relationship[@Target='media/image1.png']", "Id",
-                "rId2");
-
-    assertXPath(pXmlDocRels,
-                "/rels:Relationships/rels:Relationship[@Target='media/image2.svg']", "Id",
-                "rId3");
-
-    // Check there is the extension present
-    xmlDocUniquePtr pXmlDocContent = parseExport("word/document.xml");
-
-    OString aPath(
-        "/w:document/w:body/w:p/w:r/w:drawing/wp:anchor/a:graphic/a:graphicData/pic:pic/pic:blipFill/a:blip");
-    assertXPath(pXmlDocContent, aPath, "embed", "rId2");
-
-    assertXPath(pXmlDocContent, aPath + "/a:extLst/a:ext", "uri",
-                "{96DAC541-7B7A-43D3-8B79-37D633B846F1}");
-    assertXPath(pXmlDocContent, aPath + "/a:extLst/a:ext/asvg:svgBlip", "embed", "rId3");
-}
-
-CPPUNIT_TEST_FIXTURE(Test, testTdf158855)
-{
-    // Given a table immediately followed by a section break
-    loadFromURL(u"section_break_after_table.docx");
-
-    // Check that the import doesn't produce an extra empty paragraph before a page break
-    CPPUNIT_ASSERT_EQUAL(2, getPages()); // was 3
-    CPPUNIT_ASSERT_EQUAL(2, getParagraphs()); // was 3
-    uno::Reference<text::XTextTable>(getParagraphOrTable(1), uno::UNO_QUERY_THROW);
-    getParagraph(2, "Next page"); // was empty, with the 3rd being "Next page"
-
-    saveAndReload(OUString::createFromAscii(mpFilter));
-
-    CPPUNIT_ASSERT_EQUAL(2, getPages());
-    CPPUNIT_ASSERT_EQUAL(2, getParagraphs());
-    uno::Reference<text::XTextTable>(getParagraphOrTable(1), uno::UNO_QUERY_THROW);
-    getParagraph(2, "Next page");
-}
-
-CPPUNIT_TEST_FIXTURE(Test, testTdf158971)
-{
-    // Given a section break and an SDT in the following paragraph
-    loadFromURL(u"sdt_after_section_break.docx");
-
-    // Check that the import doesn't introduce unwanted character properties in the paragraph after
-    // the section break
-    CPPUNIT_ASSERT_EQUAL(2, getParagraphs());
-    {
-        auto para = getParagraph(2, "text");
-        css::uno::Reference<css::beans::XPropertyState> xRunState(getRun(para, 1, ""),
-                                                                  css::uno::UNO_QUERY_THROW);
-        // without the fix, this would fail with
-        // - Expected: 1
-        // - Actual  : 0
-        CPPUNIT_ASSERT_EQUAL(css::beans::PropertyState_DEFAULT_VALUE,
-                             xRunState->getPropertyState("RubyAdjust"));
-        CPPUNIT_ASSERT_EQUAL(css::beans::PropertyState_DEFAULT_VALUE,
-                             xRunState->getPropertyState("RubyIsAbove"));
-        CPPUNIT_ASSERT_EQUAL(css::beans::PropertyState_DEFAULT_VALUE,
-                             xRunState->getPropertyState("RubyPosition"));
-        CPPUNIT_ASSERT_EQUAL(css::beans::PropertyState_DEFAULT_VALUE,
-                             xRunState->getPropertyState("UnvisitedCharStyleName"));
-        CPPUNIT_ASSERT_EQUAL(css::beans::PropertyState_DEFAULT_VALUE,
-                             xRunState->getPropertyState("VisitedCharStyleName"));
-    }
-
-    // Saving must not fail assertions
-    saveAndReload(OUString::createFromAscii(mpFilter));
-
-    // Check again
-    CPPUNIT_ASSERT_EQUAL(2, getParagraphs());
-    {
-        auto para = getParagraph(2, "text");
-        css::uno::Reference<css::beans::XPropertyState> xRunState(getRun(para, 1, ""),
-                                                                  css::uno::UNO_QUERY_THROW);
-        CPPUNIT_ASSERT_EQUAL(css::beans::PropertyState_DEFAULT_VALUE,
-                             xRunState->getPropertyState("RubyAdjust"));
-        CPPUNIT_ASSERT_EQUAL(css::beans::PropertyState_DEFAULT_VALUE,
-                             xRunState->getPropertyState("RubyIsAbove"));
-        CPPUNIT_ASSERT_EQUAL(css::beans::PropertyState_DEFAULT_VALUE,
-                             xRunState->getPropertyState("RubyPosition"));
-        CPPUNIT_ASSERT_EQUAL(css::beans::PropertyState_DEFAULT_VALUE,
-                             xRunState->getPropertyState("UnvisitedCharStyleName"));
-        CPPUNIT_ASSERT_EQUAL(css::beans::PropertyState_DEFAULT_VALUE,
-                             xRunState->getPropertyState("VisitedCharStyleName"));
-    }
+    // Without the accompanying fix in place, this test would have crashed,
+    // because the exported file was corrupted.
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

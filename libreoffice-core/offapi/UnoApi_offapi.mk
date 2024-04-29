@@ -149,9 +149,6 @@ $(eval $(call gb_UnoApi_add_idlfiles_nohdl,offapi,com/sun/star/drawing/framework
 	BasicPaneFactory \
 	BasicToolBarFactory \
 	BasicViewFactory \
-	Configuration \
-	ConfigurationController \
-	ModuleController \
 	ResourceId \
 ))
 $(eval $(call gb_UnoApi_add_idlfiles_nohdl,offapi,com/sun/star/embed,\
@@ -487,7 +484,6 @@ $(eval $(call gb_UnoApi_add_idlfiles_nohdl,offapi,com/sun/star/xml/xpath,\
 ))
 $(eval $(call gb_UnoApi_add_idlfiles_nohdl,offapi,com/sun/star/xml/xslt,\
 	XSLTTransformer \
-	XSLT2Transformer \
 ))
 
 
@@ -2087,6 +2083,7 @@ $(eval $(call gb_UnoApi_add_idlfiles,offapi,com/sun/star/configuration,\
 	InstallationIncompleteException \
 	InvalidBootstrapFileException \
 	MissingBootstrapFileException \
+    XDocumentation \
     XReadWriteAccess \
 	XTemplateContainer \
 	XTemplateInstance \
@@ -2233,8 +2230,10 @@ $(eval $(call gb_UnoApi_add_idlfiles,offapi,com/sun/star/document,\
 	XDocumentInsertable \
 	XDocumentLanguages \
 	XDocumentProperties \
+	XDocumentProperties2 \
 	XDocumentPropertiesSupplier \
 	XDocumentRecovery \
+	XDocumentRecovery2 \
 	XDocumentRevisionListPersistence \
 	XDocumentSubStorageSupplier \
 	XEmbeddedObjectResolver \
@@ -2987,6 +2986,7 @@ $(eval $(call gb_UnoApi_add_idlfiles,offapi,com/sun/star/presentation,\
 	XSlideShow \
 	XSlideShowController \
 	XSlideShowListener \
+    XSlideShowNavigationListener \
 	XSlideShowView \
 	XTransition \
 	XTransitionFactory \
@@ -3493,7 +3493,6 @@ $(eval $(call gb_UnoApi_add_idlfiles,offapi,com/sun/star/sheet,\
 	XCellSeries \
 	XColorScaleEntry \
 	XCompatibilityNames \
-	XConditionEntry \
 	XConditionalFormat \
 	XConditionalFormats \
 	XConditionEntry \
@@ -3702,6 +3701,7 @@ $(eval $(call gb_UnoApi_add_idlfiles,offapi,com/sun/star/task,\
 	DocumentPasswordRequest2 \
 	ErrorCodeIOException \
 	ErrorCodeRequest \
+	ErrorCodeRequest2 \
 	InteractionClassification \
 	MasterPasswordRequest \
 	NoMasterException \
@@ -4062,7 +4062,6 @@ $(eval $(call gb_UnoApi_add_idlfiles,offapi,com/sun/star/ui,\
 	XImageManager \
 	XModuleUIConfigurationManager \
 	XModuleUIConfigurationManager2 \
-	XModuleUIConfigurationManager3 \
 	XModuleUIConfigurationManagerSupplier \
 	XPanel \
 	XPanels \
@@ -4075,7 +4074,6 @@ $(eval $(call gb_UnoApi_add_idlfiles,offapi,com/sun/star/ui,\
 	XUIConfigurationListener \
 	XUIConfigurationManager \
 	XUIConfigurationManager2 \
-	XUIConfigurationManager3 \
 	XUIConfigurationManagerSupplier \
 	XUIConfigurationPersistence \
 	XUIConfigurationStorage \
@@ -4279,6 +4277,7 @@ $(eval $(call gb_UnoApi_add_idlfiles,offapi,com/sun/star/xml,\
 $(eval $(call gb_UnoApi_add_idlfiles,offapi,com/sun/star/xml/crypto,\
 	CipherID \
 	DigestID \
+	KDFID \
 	SecurityOperationStatus \
 	XCertificateCreator \
 	XCipherContext \

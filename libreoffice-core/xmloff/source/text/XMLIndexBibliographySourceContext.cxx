@@ -33,14 +33,12 @@ using namespace ::xmloff::token;
 
 using ::com::sun::star::beans::XPropertySet;
 using ::com::sun::star::uno::Reference;
-using ::com::sun::star::xml::sax::XAttributeList;
 
 
 XMLIndexBibliographySourceContext::XMLIndexBibliographySourceContext(
     SvXMLImport& rImport,
-    Reference<XPropertySet> & rPropSet) :
-        XMLIndexSourceBaseContext(rImport,
-                                  rPropSet, false)
+    Reference<XPropertySet> & rPropSet)
+    : XMLIndexSourceBaseContext(rImport, rPropSet, UseStyles::None)
 {
 }
 

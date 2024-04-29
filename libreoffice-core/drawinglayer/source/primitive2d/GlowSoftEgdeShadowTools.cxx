@@ -30,12 +30,17 @@ namespace drawinglayer::primitive2d
    Negative fErodeDilateRadius values mean erode, positive - dilate.
    nTransparency defines minimal transparency level.
 */
-AlphaMask ProcessAndBlurAlphaMask(const Bitmap& rMask, double fErodeDilateRadius,
+AlphaMask ProcessAndBlurAlphaMask(const AlphaMask& rMask, double fErodeDilateRadius,
                                   double fBlurRadius, sal_uInt8 nTransparency, bool bConvertTo1Bit)
 {
+    // Invert it to operate in the transparency domain. Trying to update this method to
+    // work in the alpha domain is fraught with hazards.
+    AlphaMask tmpMask = rMask;
+    tmpMask.Invert();
+
     // Only completely white pixels on the initial mask must be considered for transparency. Any
     // other color must be treated as black. This creates 1-bit B&W bitmap.
-    BitmapEx mask(bConvertTo1Bit ? rMask.CreateMask(COL_WHITE) : rMask);
+    BitmapEx mask(bConvertTo1Bit ? tmpMask.GetBitmap().CreateMask(COL_WHITE) : tmpMask.GetBitmap());
 
     // Scaling down increases performance without noticeable quality loss. Additionally,
     // current blur implementation can only handle blur radius between 2 and 254.
@@ -46,8 +51,7 @@ AlphaMask ProcessAndBlurAlphaMask(const Bitmap& rMask, double fErodeDilateRadius
         fScale /= 2;
         fBlurRadius /= 2;
         fErodeDilateRadius /= 2;
-        aSize.setHeight(aSize.Height() / 2);
-        aSize.setWidth(aSize.Width() / 2);
+        aSize /= 2;
     }
 
     // BmpScaleFlag::NearestNeighbor is important for following color replacement
@@ -71,6 +75,9 @@ AlphaMask ProcessAndBlurAlphaMask(const Bitmap& rMask, double fErodeDilateRadius
     BitmapFilter::Filter(mask, BitmapFilterStackBlur(fBlurRadius));
 
     mask.Scale(rMask.GetSizePixel());
+
+    // And switch to the alpha domain.
+    mask.Invert();
 
     return AlphaMask(mask.GetBitmap());
 }

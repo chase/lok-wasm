@@ -267,7 +267,7 @@ void StringHelper::appendHex( OUStringBuffer& rStr, sal_uInt8 nData, bool bPrefi
     static const sal_Unicode spcHexDigits[] = { '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F' };
     if( bPrefix )
         rStr.append( "0x" );
-    rStr.append( spcHexDigits[ (nData >> 4) & 0x0F ] ).append( spcHexDigits[ nData & 0x0F ] );
+    rStr.append( OUStringChar(spcHexDigits[ (nData >> 4) & 0x0F ] ) + OUStringChar( spcHexDigits[ nData & 0x0F ] ) );
 }
 
 void StringHelper::appendHex( OUStringBuffer& rStr, sal_Int8 nData, bool bPrefix )
@@ -524,7 +524,7 @@ void StringHelper::appendIndex( OUStringBuffer& rStr, sal_Int64 nIdx )
 {
     OUStringBuffer aToken;
     appendDec( aToken, nIdx );
-    rStr.append( '[' ).append( aToken ).append( ']' );
+    rStr.append( "[" +  aToken + "]" );
 }
 
 std::u16string_view StringHelper::getToken( std::u16string_view rData, sal_Int32& rnPos, sal_Unicode cSep )
@@ -1097,8 +1097,7 @@ OUString FlagsList::implGetName( const Config& /*rCfg*/, sal_Int64 nKey ) const
     setFlag( nKey, nFound, false );
     if( nKey != 0 )
     {
-        OUStringBuffer aUnknown( OOX_DUMP_UNKNOWN );
-        aUnknown.append( OOX_DUMP_ITEMSEP );
+        OUStringBuffer aUnknown( OUString::Concat(OOX_DUMP_UNKNOWN) + OUStringChar(OOX_DUMP_ITEMSEP) );
         StringHelper::appendShortHex( aUnknown, nKey );
         StringHelper::enclose( aUnknown, '(', ')' );
         StringHelper::appendToken( aName, aUnknown );
@@ -2439,7 +2438,7 @@ void XmlStreamObject::implDumpText( TextInputStream& rTextStrm )
                     entirely. */
                 mxOut->writeString( aElem );
                 mxOut->newLine();
-                if( !aText.trim().isEmpty() )
+                if( !o3tl::trim(aText).empty() )
                 {
                     mxOut->writeString( aText );
                     mxOut->newLine();

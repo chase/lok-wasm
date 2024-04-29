@@ -267,7 +267,7 @@ private:
     bool FindSelectedShapesChanges(const css::uno::Reference<css::drawing::XShapes>& xShapes) const;
 
     std::optional<ScAddress> GetAnchor(const uno::Reference<drawing::XShape>& xShape) const;
-    uno::Reference<XAccessibleRelationSet> GetRelationSet(const ScAccessibleShapeData* pData) const;
+    rtl::Reference<utl::AccessibleRelationSetHelper> GetRelationSet(const ScAccessibleShapeData* pData) const;
     void SetAnchor(const uno::Reference<drawing::XShape>& xShape, ScAccessibleShapeData* pData) const;
     void AddShape(const uno::Reference<drawing::XShape>& xShape, bool bCommitChange) const;
     void RemoveShape(const uno::Reference<drawing::XShape>& xShape) const;
@@ -288,17 +288,14 @@ ScChildrenShapes::ScChildrenShapes(ScAccessibleDocument* pAccessibleDocument, Sc
 {
     if (mpViewShell)
     {
-        SfxViewFrame* pViewFrame = mpViewShell->GetViewFrame();
-        if (pViewFrame)
+        SfxViewFrame& rViewFrame = mpViewShell->GetViewFrame();
+        xSelectionSupplier = uno::Reference<view::XSelectionSupplier>(rViewFrame.GetFrame().GetController(), uno::UNO_QUERY);
+        if (xSelectionSupplier.is())
         {
-            xSelectionSupplier = uno::Reference<view::XSelectionSupplier>(pViewFrame->GetFrame().GetController(), uno::UNO_QUERY);
-            if (xSelectionSupplier.is())
-            {
-                xSelectionSupplier->addSelectionChangeListener(mpAccessibleDocument);
-                uno::Reference<drawing::XShapes> xShapes(mpViewShell->getSelectedXShapes());
-                if (xShapes.is())
-                    mnShapesSelected = xShapes->getCount();
-            }
+            xSelectionSupplier->addSelectionChangeListener(mpAccessibleDocument);
+            uno::Reference<drawing::XShapes> xShapes(mpViewShell->getSelectedXShapes());
+            if (xShapes.is())
+                mnShapesSelected = xShapes->getCount();
         }
     }
 
@@ -435,6 +432,7 @@ bool ScChildrenShapes::ReplaceChild (::accessibility::AccessibleShape* pCurrentC
             aEvent.EventId = AccessibleEventId::CHILD;
             aEvent.Source = uno::Reference< XAccessibleContext >(mpAccessibleDocument);
             aEvent.OldValue <<= uno::Reference<XAccessible>(pCurrentChild);
+            aEvent.IndexHint = -1;
 
             mpAccessibleDocument->CommitChange(aEvent); // child is gone - event
 
@@ -452,6 +450,7 @@ bool ScChildrenShapes::ReplaceChild (::accessibility::AccessibleShape* pCurrentC
             aEvent.EventId = AccessibleEventId::CHILD;
             aEvent.Source = uno::Reference< XAccessibleContext >(mpAccessibleDocument);
             aEvent.NewValue <<= uno::Reference<XAccessible>(pReplacement);
+            aEvent.IndexHint = -1;
 
             mpAccessibleDocument->CommitChange(aEvent); // child is new - event
             bResult = true;
@@ -500,14 +499,10 @@ sal_Int32 ScChildrenShapes::GetCount() const
     {
         size_t nSdrObjCount = pDrawPage->GetObjCount();
         maZOrderedShapes.reserve(nSdrObjCount + 1); // the table is always in
-        for (size_t i = 0; i < nSdrObjCount; ++i)
+        for (const rtl::Reference<SdrObject>& pObj : *pDrawPage)
         {
-            SdrObject* pObj = pDrawPage->GetObj(i);
-            if (pObj/* && (pObj->GetLayer() != SC_LAYER_INTERN)*/)
-            {
-                uno::Reference< drawing::XShape > xShape (pObj->getUnoShape(), uno::UNO_QUERY);
-                AddShape(xShape, false); //inserts in the correct order
-            }
+            uno::Reference< drawing::XShape > xShape (pObj->getUnoShape(), uno::UNO_QUERY);
+            AddShape(xShape, false); //inserts in the correct order
         }
     }
     return maZOrderedShapes.size();
@@ -1130,7 +1125,7 @@ std::optional<ScAddress> ScChildrenShapes::GetAnchor(const uno::Reference<drawin
     return std::optional<ScAddress>();
 }
 
-uno::Reference<XAccessibleRelationSet> ScChildrenShapes::GetRelationSet(const ScAccessibleShapeData* pData) const
+rtl::Reference<utl::AccessibleRelationSetHelper> ScChildrenShapes::GetRelationSet(const ScAccessibleShapeData* pData) const
 {
     rtl::Reference<utl::AccessibleRelationSetHelper> pRelationSet = new utl::AccessibleRelationSetHelper();
 
@@ -1226,6 +1221,7 @@ void ScChildrenShapes::AddShape(const uno::Reference<drawing::XShape>& xShape, b
         aEvent.EventId = AccessibleEventId::CHILD;
         aEvent.Source = uno::Reference< XAccessibleContext >(mpAccessibleDocument);
         aEvent.NewValue <<= Get(pShape);
+        aEvent.IndexHint = -1;
 
         mpAccessibleDocument->CommitChange(aEvent); // new child - event
     }
@@ -1253,6 +1249,7 @@ void ScChildrenShapes::RemoveShape(const uno::Reference<drawing::XShape>& xShape
             aEvent.EventId = AccessibleEventId::CHILD;
             aEvent.Source = uno::Reference< XAccessibleContext >(mpAccessibleDocument);
             aEvent.OldValue <<= xOldAccessible;
+            aEvent.IndexHint = -1;
 
             mpAccessibleDocument->CommitChange(aEvent); // child is gone - event
         }
@@ -1455,7 +1452,7 @@ void ScAccessibleDocument::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
                 static_cast< ::accessibility::AccessibleShape* >(xAccessible.get())->
                     CommitChange(AccessibleEventId::STATE_CHANGED,
                                 aNewValue,
-                                uno::Any() );
+                                uno::Any(), -1 );
             }
             else
             {
@@ -1759,7 +1756,7 @@ OUString SAL_CALL
     if (!pScDoc)
         return aName;
 
-    SfxObjectShell* pObjSh = pScDoc->GetDocumentShell();
+    ScDocShell* pObjSh = pScDoc->GetDocumentShell();
     if (!pObjSh)
         return aName;
 
@@ -2010,7 +2007,7 @@ Point ScAccessibleDocument::LogicToPixel (const Point& rPoint) const
     if (pWin)
     {
         aPoint = pWin->LogicToPixel(rPoint, pWin->GetDrawMapMode());
-        aPoint += pWin->GetWindowExtentsRelative(nullptr).TopLeft();
+        aPoint += Point(pWin->GetWindowExtentsAbsolute().TopLeft());
     }
     return aPoint;
 }
@@ -2053,14 +2050,14 @@ OUString
     return sName;
 }
 
-tools::Rectangle ScAccessibleDocument::GetBoundingBoxOnScreen() const
+AbsoluteScreenPixelRectangle ScAccessibleDocument::GetBoundingBoxOnScreen() const
 {
-    tools::Rectangle aRect;
+    AbsoluteScreenPixelRectangle aRect;
     if (mpViewShell)
     {
         vcl::Window* pWindow = mpViewShell->GetWindowByPos(meSplitPos);
         if (pWindow)
-            aRect = pWindow->GetWindowExtentsRelative(nullptr);
+            aRect = pWindow->GetWindowExtentsAbsolute();
     }
     return aRect;
 }
@@ -2072,7 +2069,7 @@ tools::Rectangle ScAccessibleDocument::GetBoundingBox() const
     {
         vcl::Window* pWindow = mpViewShell->GetWindowByPos(meSplitPos);
         if (pWindow)
-            aRect = pWindow->GetWindowExtentsRelative(pWindow->GetAccessibleParentWindow());
+            aRect = pWindow->GetWindowExtentsRelative(*pWindow->GetAccessibleParentWindow());
     }
     return aRect;
 }
@@ -2139,6 +2136,7 @@ void ScAccessibleDocument::AddChild(const uno::Reference<XAccessible>& xAcc, boo
             aEvent.Source = uno::Reference<XAccessibleContext>(this);
             aEvent.EventId = AccessibleEventId::CHILD;
             aEvent.NewValue <<= mxTempAcc;
+            aEvent.IndexHint = getAccessibleChildCount() - 1;
             CommitChange( aEvent );
         }
     }
@@ -2157,6 +2155,7 @@ void ScAccessibleDocument::RemoveChild(const uno::Reference<XAccessible>& xAcc, 
         aEvent.Source = uno::Reference<XAccessibleContext>(this);
         aEvent.EventId = AccessibleEventId::CHILD;
         aEvent.OldValue <<= mxTempAcc;
+        aEvent.IndexHint = -1;
         CommitChange( aEvent );
     }
     mxTempAcc = nullptr;

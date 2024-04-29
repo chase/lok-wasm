@@ -387,11 +387,7 @@ Graphic SdrGrafObj::GetTransformedGraphic( SdrGrafObjTransformsAttrs nTransformF
 {
     // Refactored most of the code to GraphicObject, where
     // everybody can use e.g. the cropping functionality
-    MapMode aDestMap(
-        getSdrModelFromSdrObject().GetScaleUnit(),
-        Point(),
-        getSdrModelFromSdrObject().GetScaleFraction(),
-        getSdrModelFromSdrObject().GetScaleFraction());
+    MapMode aDestMap(getSdrModelFromSdrObject().GetScaleUnit());
     const Size aDestSize( GetLogicRect().GetSize() );
     GraphicAttr aActAttr = GetGraphicAttr(nTransformFlags);
 
@@ -414,7 +410,7 @@ GraphicAttr SdrGrafObj::GetGraphicAttr( SdrGrafObjTransformsAttrs nTransformFlag
     {
         const bool      bMirror = bool( nTransformFlags & SdrGrafObjTransformsAttrs::MIRROR );
         const bool      bRotate = bool( nTransformFlags & SdrGrafObjTransformsAttrs::ROTATE ) &&
-            (maGeo.nRotationAngle && maGeo.nRotationAngle != 18000_deg100);
+            (maGeo.m_nRotationAngle && maGeo.m_nRotationAngle != 18000_deg100);
 
         // Need cropping info earlier
         const_cast<SdrGrafObj*>(this)->ImpSetAttrToGrafInfo();
@@ -425,7 +421,7 @@ GraphicAttr SdrGrafObj::GetGraphicAttr( SdrGrafObjTransformsAttrs nTransformFlag
 
         if( bMirror )
         {
-            sal_uInt16      nMirrorCase = ( maGeo.nRotationAngle == 18000_deg100 ) ? ( bMirrored ? 3 : 4 ) : ( bMirrored ? 2 : 1 );
+            sal_uInt16      nMirrorCase = ( maGeo.m_nRotationAngle == 18000_deg100 ) ? ( bMirrored ? 3 : 4 ) : ( bMirrored ? 2 : 1 );
             bool bHMirr = nMirrorCase == 2 || nMirrorCase == 4;
             bool bVMirr = nMirrorCase == 3 || nMirrorCase == 4;
 
@@ -433,7 +429,7 @@ GraphicAttr SdrGrafObj::GetGraphicAttr( SdrGrafObjTransformsAttrs nTransformFlag
         }
 
         if( bRotate )
-            aActAttr.SetRotation( to<Degree10>(maGeo.nRotationAngle ) );
+            aActAttr.SetRotation( to<Degree10>(maGeo.m_nRotationAngle ) );
     }
 
     return aActAttr;
@@ -563,9 +559,9 @@ void SdrGrafObj::TakeObjInfo(SdrObjTransformInfoRec& rInfo) const
 {
     bool bNoPresGrf = ( mpGraphicObject->GetType() != GraphicType::NONE ) && !m_bEmptyPresObj;
 
-    rInfo.bResizeFreeAllowed = maGeo.nRotationAngle.get() % 9000 == 0 ||
-                               maGeo.nRotationAngle.get() % 18000 == 0 ||
-                               maGeo.nRotationAngle.get() % 27000 == 0;
+    rInfo.bResizeFreeAllowed = maGeo.m_nRotationAngle.get() % 9000 == 0 ||
+                               maGeo.m_nRotationAngle.get() % 18000 == 0 ||
+                               maGeo.m_nRotationAngle.get() % 27000 == 0;
 
     rInfo.bResizePropAllowed = true;
     rInfo.bRotateFreeAllowed = bNoPresGrf;
@@ -667,9 +663,7 @@ OUString SdrGrafObj::TakeObjNameSingul() const
 
     if (!aName.isEmpty())
     {
-        sName.append(" '");
-        sName.append(aName);
-        sName.append('\'' );
+        sName.append(" '" + aName + "\'" );
     }
 
     return sName.makeStringAndClear();
@@ -742,9 +736,7 @@ OUString SdrGrafObj::TakeObjNamePlural() const
 
     if (!aName.isEmpty())
     {
-        sName.append(" '");
-        sName.append(aName);
-        sName.append('\'');
+        sName.append(" '" + aName + "\'");
     }
 
     return sName.makeStringAndClear();
@@ -867,11 +859,7 @@ GDIMetaFile SdrGrafObj::getMetafileFromEmbeddedVectorGraphicData() const
     {
         ScopedVclPtrInstance< VirtualDevice > pOut;
         const tools::Rectangle aBoundRect(GetCurrentBoundRect());
-        const MapMode aMap(
-            getSdrModelFromSdrObject().GetScaleUnit(),
-            Point(),
-            getSdrModelFromSdrObject().GetScaleFraction(),
-            getSdrModelFromSdrObject().GetScaleFraction());
+        const MapMode aMap(getSdrModelFromSdrObject().GetScaleUnit());
 
         pOut->EnableOutput(false);
         pOut->SetMapMode(aMap);
@@ -919,7 +907,7 @@ rtl::Reference<SdrObject> SdrGrafObj::DoConvertToPolyObj(bool bBezier, bool bAdd
             ImpSdrGDIMetaFileImport aFilter(
                 getSdrModelFromSdrObject(),
                 GetLayer(),
-                maRect);
+                getRectangle());
             rtl::Reference<SdrObjGroup> pGrp = new SdrObjGroup(getSdrModelFromSdrObject());
 
             if(aFilter.DoImport(aMtf, *pGrp->GetSubList(), 0))
@@ -928,16 +916,16 @@ rtl::Reference<SdrObject> SdrGrafObj::DoConvertToPolyObj(bool bBezier, bool bAdd
                         // copy transformation
                     GeoStat aGeoStat(GetGeoStat());
 
-                    if(aGeoStat.nShearAngle)
+                    if(aGeoStat.m_nShearAngle)
                     {
                         aGeoStat.RecalcTan();
-                        pGrp->NbcShear(maRect.TopLeft(), aGeoStat.nShearAngle, aGeoStat.mfTanShearAngle, false);
+                        pGrp->NbcShear(getRectangle().TopLeft(), aGeoStat.m_nShearAngle, aGeoStat.mfTanShearAngle, false);
                     }
 
-                    if(aGeoStat.nRotationAngle)
+                    if(aGeoStat.m_nRotationAngle)
                     {
                         aGeoStat.RecalcSinCos();
-                        pGrp->NbcRotate(maRect.TopLeft(), aGeoStat.nRotationAngle, aGeoStat.mfSinRotationAngle, aGeoStat.mfCosRotationAngle);
+                        pGrp->NbcRotate(getRectangle().TopLeft(), aGeoStat.m_nRotationAngle, aGeoStat.mfSinRotationAngle, aGeoStat.mfCosRotationAngle);
                     }
                 }
 
@@ -1103,7 +1091,7 @@ void SdrGrafObj::AdjustToMaxRect( const tools::Rectangle& rMaxRect, bool bShrink
     }
 
     if( bShrinkOnly )
-        aPos = maRect.TopLeft();
+        aPos = getRectangle().TopLeft();
 
     aPos.AdjustX( -(aSize.Width() / 2) );
     aPos.AdjustY( -(aSize.Height() / 2) );

@@ -211,7 +211,7 @@ namespace accessibility
     void AccessibleTabListBoxTable::implSelectRow( sal_Int32 _nRow, bool _bSelect )
     {
         if ( m_pTabListBox )
-            m_pTabListBox->Select( m_pTabListBox->GetEntry( _nRow ), _bSelect );
+            m_pTabListBox->SelectRow(_nRow, _bSelect);
     }
 
     sal_Int32 AccessibleTabListBoxTable::implGetRowCount() const
@@ -237,10 +237,10 @@ namespace accessibility
             SvTreeListEntry* pEntry = m_pTabListBox->FirstSelected();
             while ( pEntry )
             {
-                ++nRow;
                 if ( nRow == nSelRow )
                     return m_pTabListBox->GetEntryPos( pEntry );
                 pEntry = m_pTabListBox->NextSelected( pEntry );
+                ++nRow;
             }
         }
 
@@ -280,7 +280,7 @@ namespace accessibility
         ensureIsAlive();
         ensureValidIndex( nChildIndex );
 
-        return m_pTabListBox && m_pTabListBox->IsSelected( m_pTabListBox->GetEntry( implGetRow( nChildIndex ) ) );
+        return m_pTabListBox && m_pTabListBox->IsRowSelected(implGetRow(nChildIndex));
     }
 
     void SAL_CALL AccessibleTabListBoxTable::clearAccessibleSelection(  )
@@ -320,12 +320,13 @@ namespace accessibility
 
         ensureIsAlive();
 
-        sal_Int32 nRows = implGetSelRowCount();
-        if ( nRows == 0 )
+        const sal_Int32 nColCount = implGetColumnCount();
+
+        if (nColCount == 0)
             throw IndexOutOfBoundsException();
 
-        sal_Int32 nRow = implGetSelRow( nSelectedChildIndex % nRows );
-        sal_Int32 nColumn = nSelectedChildIndex / nRows;
+        const sal_Int32 nRow = implGetSelRow(nSelectedChildIndex / nColCount);
+        const sal_Int32 nColumn = nSelectedChildIndex % nColCount;
         return getAccessibleCellAt( nRow, nColumn );
     }
 

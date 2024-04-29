@@ -91,7 +91,7 @@ HTMLOutEvent const aAnchorEventTable[] =
     { nullptr, nullptr, SvMacroItemId::NONE }
 };
 
-static Writer& OutHTML_SvxAdjust( Writer& rWrt, const SfxPoolItem& rHt );
+static SwHTMLWriter& OutHTML_SvxAdjust( SwHTMLWriter& rWrt, const SfxPoolItem& rHt );
 
 sal_uInt16 SwHTMLWriter::GetDefListLvl( std::u16string_view rNm, sal_uInt16 nPoolId )
 {
@@ -133,12 +133,12 @@ void SwHTMLWriter::OutAndSetDefList( sal_uInt16 nNewLvl )
         // write according to the level difference
         for( sal_uInt16 i=m_nDefListLvl; i<nNewLvl; i++ )
         {
-            if( m_bLFPossible )
+            if (IsLFPossible())
                 OutNewLine();
             HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_deflist) );
             HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_dd) );
             IncIndentLevel();
-            m_bLFPossible = true;
+            SetLFPossible(true);
         }
     }
     else if( m_nDefListLvl > nNewLvl )
@@ -146,11 +146,11 @@ void SwHTMLWriter::OutAndSetDefList( sal_uInt16 nNewLvl )
         for( sal_uInt16 i=nNewLvl ; i < m_nDefListLvl; i++ )
         {
             DecIndentLevel();
-            if( m_bLFPossible )
+            if (IsLFPossible())
                 OutNewLine();
             HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_dd), false );
             HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_deflist), false );
-            m_bLFPossible = true;
+            SetLFPossible(true);
         }
     }
 
@@ -162,7 +162,7 @@ void SwHTMLWriter::ChangeParaToken( HtmlTokenId nNew )
     if( nNew != m_nLastParaToken && HtmlTokenId::PREFORMTXT_ON == m_nLastParaToken )
     {
         HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_preformtxt), false );
-        m_bLFPossible = true;
+        SetLFPossible(true);
     }
     m_nLastParaToken = nNew;
 }
@@ -369,11 +369,15 @@ SwHTMLFormatInfo::SwHTMLFormatInfo( const SwFormat *pF, SwDoc *pDoc, SwDoc *pTem
 
     // remember all the different default spacings from the style or
     // the comparison style.
-    const SvxLRSpaceItem &rLRSpace =
-        (pReferenceFormat ? pReferenceFormat : pFormat)->GetLRSpace();
-    nLeftMargin = rLRSpace.GetTextLeft();
-    nRightMargin = rLRSpace.GetRight();
-    nFirstLineIndent = rLRSpace.GetTextFirstLineOffset();
+    SvxFirstLineIndentItem const& rFirstLine(
+        (pReferenceFormat ? pReferenceFormat : pFormat)->GetFirstLineIndent());
+    SvxTextLeftMarginItem const& rTextLeftMargin(
+        (pReferenceFormat ? pReferenceFormat : pFormat)->GetTextLeftMargin());
+    SvxRightMarginItem const& rRightMargin(
+        (pReferenceFormat ? pReferenceFormat : pFormat)->GetRightMargin());
+    nLeftMargin = rTextLeftMargin.GetTextLeft();
+    nRightMargin = rRightMargin.GetRight();
+    nFirstLineIndent = rFirstLine.GetTextFirstLineOffset();
 
     const SvxULSpaceItem &rULSpace =
         (pReferenceFormat ? pReferenceFormat : pFormat)->GetULSpace();
@@ -381,10 +385,9 @@ SwHTMLFormatInfo::SwHTMLFormatInfo( const SwFormat *pF, SwDoc *pDoc, SwDoc *pTem
     nBottomMargin = rULSpace.GetLower();
 
     // export language if it differs from the default language
-    sal_uInt16 nWhichId =
+    TypedWhichId<SvxLanguageItem> nWhichId =
         SwHTMLWriter::GetLangWhichIdFromScript( nCSS1Script );
-    const SvxLanguageItem& rLang =
-        static_cast<const SvxLanguageItem&>(pFormat->GetFormatAttr( nWhichId ));
+    const SvxLanguageItem& rLang = pFormat->GetFormatAttr( nWhichId );
     LanguageType eLang = rLang.GetLanguage();
     if( eLang != eDfltLang )
     {
@@ -394,15 +397,14 @@ SwHTMLFormatInfo::SwHTMLFormatInfo( const SwFormat *pF, SwDoc *pDoc, SwDoc *pTem
         moItemSet->Put( rLang );
     }
 
-    static const sal_uInt16 aWhichIds[3] =
+    static const TypedWhichId<SvxLanguageItem> aWhichIds[3] =
         { RES_CHRATR_LANGUAGE, RES_CHRATR_CJK_LANGUAGE,
             RES_CHRATR_CTL_LANGUAGE };
-    for(sal_uInt16 i : aWhichIds)
+    for(const TypedWhichId<SvxLanguageItem>& i : aWhichIds)
     {
         if( i != nWhichId )
         {
-            const SvxLanguageItem& rTmpLang =
-                static_cast<const SvxLanguageItem&>(pFormat->GetFormatAttr(i));
+            const SvxLanguageItem& rTmpLang = pFormat->GetFormatAttr(i);
             if( rTmpLang.GetLanguage() != eLang )
             {
                 if( !moItemSet )
@@ -419,14 +421,12 @@ SwHTMLFormatInfo::~SwHTMLFormatInfo()
 {
 }
 
-static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
+static void OutHTML_SwFormat( SwHTMLWriter& rWrt, const SwFormat& rFormat,
                     const SfxItemSet *pNodeItemSet,
                     SwHTMLTextCollOutputInfo& rInfo )
 {
     OSL_ENSURE( RES_CONDTXTFMTCOLL==rFormat.Which() || RES_TXTFMTCOLL==rFormat.Which(),
             "not a paragraph style" );
-
-    SwHTMLWriter & rHWrt = static_cast<SwHTMLWriter&>(rWrt);
 
     // First, some flags
     sal_uInt16 nNewDefListLvl = 0;
@@ -439,11 +439,11 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
     rInfo.bParaPossible = false;    // a <P> may be additionally output
     bool bNoEndTag = false;         // don't output an end tag
 
-    rHWrt.m_bNoAlign = false;       // no ALIGN=... possible
+    rWrt.m_bNoAlign = false;       // no ALIGN=... possible
 
-    if (rHWrt.mbXHTML)
+    if (rWrt.mbXHTML)
     {
-        rHWrt.m_bNoAlign = true;
+        rWrt.m_bNoAlign = true;
     }
 
     sal_uInt8 nBulletGrfLvl = 255;  // The bullet graphic we want to output
@@ -452,10 +452,10 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
     const SwTextNode* pTextNd = rWrt.m_pCurrentPam->GetPointNode().GetTextNode();
 
     SwHTMLNumRuleInfo aNumInfo;
-    if( rHWrt.GetNextNumInfo() )
+    if( rWrt.GetNextNumInfo() )
     {
-        aNumInfo = *rHWrt.GetNextNumInfo();
-        rHWrt.ClearNextNumInfo();
+        aNumInfo = *rWrt.GetNextNumInfo();
+        rWrt.ClearNextNumInfo();
     }
     else
     {
@@ -488,7 +488,7 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
             {
                 nNumStart = static_cast< sal_uInt16 >(pTextNd->GetActualListStartValue());
             }
-            OSL_ENSURE( rHWrt.m_nLastParaToken == HtmlTokenId::NONE,
+            OSL_ENSURE( rWrt.m_nLastParaToken == HtmlTokenId::NONE,
                 "<PRE> was not closed before <LI>." );
         }
     }
@@ -496,18 +496,18 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
     // Now, we're getting the token and, if necessary, the class
     std::unique_ptr<SwHTMLFormatInfo> pTmpInfo(new SwHTMLFormatInfo(&rFormat));
     SwHTMLFormatInfo *pFormatInfo;
-    SwHTMLFormatInfos::iterator it = rHWrt.m_TextCollInfos.find( pTmpInfo );
-    if (it != rHWrt.m_TextCollInfos.end())
+    SwHTMLFormatInfos::iterator it = rWrt.m_TextCollInfos.find( pTmpInfo );
+    if (it != rWrt.m_TextCollInfos.end())
     {
         pFormatInfo = it->get();
     }
     else
     {
-        pFormatInfo = new SwHTMLFormatInfo( &rFormat, rWrt.m_pDoc, rHWrt.m_xTemplate.get(),
-                                      rHWrt.m_bCfgOutStyles, rHWrt.m_eLang,
-                                      rHWrt.m_nCSS1Script );
-        rHWrt.m_TextCollInfos.insert(std::unique_ptr<SwHTMLFormatInfo>(pFormatInfo));
-        if( rHWrt.m_aScriptParaStyles.count( rFormat.GetName() ) )
+        pFormatInfo = new SwHTMLFormatInfo( &rFormat, rWrt.m_pDoc, rWrt.m_xTemplate.get(),
+                                      rWrt.m_bCfgOutStyles, rWrt.m_eLang,
+                                      rWrt.m_nCSS1Script );
+        rWrt.m_TextCollInfos.insert(std::unique_ptr<SwHTMLFormatInfo>(pFormatInfo));
+        if( rWrt.m_aScriptParaStyles.count( rFormat.GetName() ) )
             pFormatInfo->bScriptDependent = true;
     }
 
@@ -523,12 +523,12 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
         if (rInfo.aToken == OOO_STRING_SVTOOLS_HTML_address)
         {
             rInfo.bParaPossible = true;
-            rHWrt.m_bNoAlign = true;
+            rWrt.m_bNoAlign = true;
         }
         else if (rInfo.aToken == OOO_STRING_SVTOOLS_HTML_blockquote)
         {
             rInfo.bParaPossible = true;
-            rHWrt.m_bNoAlign = true;
+            rWrt.m_bNoAlign = true;
         }
         else if (rInfo.aToken == OOO_STRING_SVTOOLS_HTML_parabreak)
         {
@@ -536,14 +536,14 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
         }
         else if (rInfo.aToken == OOO_STRING_SVTOOLS_HTML_preformtxt)
         {
-            if (HtmlTokenId::PREFORMTXT_ON == rHWrt.m_nLastParaToken)
+            if (HtmlTokenId::PREFORMTXT_ON == rWrt.m_nLastParaToken)
             {
                 bOutNewLine = true;
             }
             else
             {
                 nToken = HtmlTokenId::PREFORMTXT_ON;
-                rHWrt.m_bNoAlign = true;
+                rWrt.m_bNoAlign = true;
                 bNoEndTag = true;
             }
         }
@@ -551,7 +551,7 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
         {
             bDT = rInfo.aToken == OOO_STRING_SVTOOLS_HTML_dt;
             rInfo.bParaPossible = !bDT;
-            rHWrt.m_bNoAlign = true;
+            rWrt.m_bNoAlign = true;
             bForceDL = true;
         }
     }
@@ -560,7 +560,7 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
         // all styles that do not correspond to an HTML tag, or that are
         // not derived from it, are exported as <P>
 
-        rInfo.aToken = OOO_STRING_SVTOOLS_HTML_parabreak;
+        rInfo.aToken = OOO_STRING_SVTOOLS_HTML_parabreak ""_ostr;
         bPara = true;
     }
 
@@ -585,18 +585,18 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
         pNodeItemSet ? pNodeItemSet->Get(RES_UL_SPACE)
                      : rFormat.GetULSpace();
 
-    if( (rHWrt.m_bOutHeader &&
+    if( (rWrt.m_bOutHeader &&
          rWrt.m_pCurrentPam->GetPoint()->GetNodeIndex() ==
             rWrt.m_pCurrentPam->GetMark()->GetNodeIndex()) ||
-         rHWrt.m_bOutFooter )
+         rWrt.m_bOutFooter )
     {
-        if( rHWrt.m_bCfgOutStyles )
+        if( rWrt.m_bCfgOutStyles )
         {
             SvxULSpaceItem aULSpaceItem( rULSpace );
-            if( rHWrt.m_bOutHeader )
-                aULSpaceItem.SetLower( rHWrt.m_nHeaderFooterSpace );
+            if( rWrt.m_bOutHeader )
+                aULSpaceItem.SetLower( rWrt.m_nHeaderFooterSpace );
             else
-                aULSpaceItem.SetUpper( rHWrt.m_nHeaderFooterSpace );
+                aULSpaceItem.SetUpper( rWrt.m_nHeaderFooterSpace );
 
             if (!rInfo.moItemSet)
             {
@@ -604,8 +604,8 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
             }
             rInfo.moItemSet->Put( aULSpaceItem );
         }
-        rHWrt.m_bOutHeader = false;
-        rHWrt.m_bOutFooter = false;
+        rWrt.m_bOutHeader = false;
+        rWrt.m_bOutFooter = false;
     }
 
     if( bOutNewLine )
@@ -613,7 +613,7 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
         // output a line break (without indentation) at the beginning of the
         // paragraph, only
         rInfo.aToken.clear();   // don't output an end tag
-        rWrt.Strm().WriteCharPtr( SAL_NEWLINE_STRING );
+        rWrt.Strm().WriteOString( SAL_NEWLINE_STRING );
 
         return;
     }
@@ -626,27 +626,30 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
 
     // Consider the lower spacing of the paragraph? (never in the last
     // paragraph of tables)
-    bool bUseParSpace = !rHWrt.m_bOutTable ||
+    bool bUseParSpace = !rWrt.m_bOutTable ||
                         (rWrt.m_pCurrentPam->GetPoint()->GetNodeIndex() !=
                          rWrt.m_pCurrentPam->GetMark()->GetNodeIndex());
     // If styles are exported, indented paragraphs become definition lists
-    const SvxLRSpaceItem& rLRSpace =
-        pNodeItemSet ? pNodeItemSet->Get(RES_LR_SPACE)
-                     : rFormat.GetLRSpace();
-    if( (!rHWrt.m_bCfgOutStyles || bForceDL) && !rInfo.bInNumberBulletList )
+    SvxFirstLineIndentItem const& rFirstLine(
+        pNodeItemSet ? pNodeItemSet->Get(RES_MARGIN_FIRSTLINE)
+                     : rFormat.GetFirstLineIndent());
+    SvxTextLeftMarginItem const& rTextLeftMargin(
+        pNodeItemSet ? pNodeItemSet->Get(RES_MARGIN_TEXTLEFT)
+                     : rFormat.GetTextLeftMargin());
+    if( (!rWrt.m_bCfgOutStyles || bForceDL) && !rInfo.bInNumberBulletList )
     {
         sal_Int32 nLeftMargin;
         if( bForceDL )
-            nLeftMargin = rLRSpace.GetTextLeft();
+            nLeftMargin = rTextLeftMargin.GetTextLeft();
         else
-            nLeftMargin = rLRSpace.GetTextLeft() > pFormatInfo->nLeftMargin
-                ? rLRSpace.GetTextLeft() - pFormatInfo->nLeftMargin
+            nLeftMargin = rTextLeftMargin.GetTextLeft() > pFormatInfo->nLeftMargin
+                ? rTextLeftMargin.GetTextLeft() - pFormatInfo->nLeftMargin
                 : 0;
 
-        if( nLeftMargin > 0 && rHWrt.m_nDefListMargin > 0 )
+        if( nLeftMargin > 0 && rWrt.m_nDefListMargin > 0 )
         {
-            nNewDefListLvl = static_cast< sal_uInt16 >((nLeftMargin + (rHWrt.m_nDefListMargin/2)) /
-                                                    rHWrt.m_nDefListMargin);
+            nNewDefListLvl = static_cast< sal_uInt16 >((nLeftMargin + (rWrt.m_nDefListMargin/2)) /
+                                                    rWrt.m_nDefListMargin);
             if( nNewDefListLvl == 0 && bForceDL && !bDT )
                 nNewDefListLvl = 1;
         }
@@ -667,31 +670,31 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
             // Instead of a DD we must use a DT from the level above this one.
             nNewDefListLvl++;
         }
-        else if( !nNewDefListLvl && !rHWrt.m_bCfgOutStyles && bPara &&
+        else if( !nNewDefListLvl && !rWrt.m_bCfgOutStyles && bPara &&
                  rULSpace.GetLower()==0 &&
-                 ((bUseParSpace && bIsNextTextNode) || rHWrt.m_nDefListLvl==1) &&
+                 ((bUseParSpace && bIsNextTextNode) || rWrt.m_nDefListLvl==1) &&
                  (!pAdjItem || SvxAdjust::Left==pAdjItem->GetAdjust()) )
         {
             // Export paragraphs without a lower spacing as DT
             nNewDefListLvl = 1;
             bDT = true;
             rInfo.bParaPossible = false;
-            rHWrt.m_bNoAlign = true;
+            rWrt.m_bNoAlign = true;
         }
     }
 
-    if( nNewDefListLvl != rHWrt.m_nDefListLvl )
-        rHWrt.OutAndSetDefList( nNewDefListLvl );
+    if( nNewDefListLvl != rWrt.m_nDefListLvl )
+        rWrt.OutAndSetDefList( nNewDefListLvl );
 
     // if necessary, start a bulleted or numbered list
     if( rInfo.bInNumberBulletList )
     {
-        OSL_ENSURE( !rHWrt.m_nDefListLvl, "DL cannot be inside OL!" );
-        OutHTML_NumberBulletListStart( rHWrt, aNumInfo );
+        OSL_ENSURE( !rWrt.m_nDefListLvl, "DL cannot be inside OL!" );
+        OutHTML_NumberBulletListStart( rWrt, aNumInfo );
 
         if( bNumbered )
         {
-            if( !rHWrt.m_aBulletGrfs[nBulletGrfLvl].isEmpty()  )
+            if( !rWrt.m_aBulletGrfs[nBulletGrfLvl].isEmpty()  )
                 bNumbered = false;
             else
                 nBulletGrfLvl = 255;
@@ -700,60 +703,60 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
 
     // Take the defaults of the style, because they don't need to be
     // exported
-    rHWrt.m_nDfltLeftMargin = pFormatInfo->nLeftMargin;
-    rHWrt.m_nDfltRightMargin = pFormatInfo->nRightMargin;
-    rHWrt.m_nDfltFirstLineIndent = pFormatInfo->nFirstLineIndent;
+    rWrt.m_nDfltLeftMargin = pFormatInfo->nLeftMargin;
+    rWrt.m_nDfltRightMargin = pFormatInfo->nRightMargin;
+    rWrt.m_nDfltFirstLineIndent = pFormatInfo->nFirstLineIndent;
 
     if( rInfo.bInNumberBulletList )
     {
-        if( !rHWrt.IsHTMLMode( HTMLMODE_LSPACE_IN_NUMBER_BULLET ) )
-            rHWrt.m_nDfltLeftMargin = rLRSpace.GetTextLeft();
+        if( !rWrt.IsHTMLMode( HTMLMODE_LSPACE_IN_NUMBER_BULLET ) )
+            rWrt.m_nDfltLeftMargin = rTextLeftMargin.GetTextLeft();
 
         // In numbered lists, don't output a first line indent.
-        rHWrt.m_nFirstLineIndent = rLRSpace.GetTextFirstLineOffset();
+        rWrt.m_nFirstLineIndent = rFirstLine.GetTextFirstLineOffset();
     }
 
-    if( rInfo.bInNumberBulletList && bNumbered && bPara && !rHWrt.m_bCfgOutStyles )
+    if( rInfo.bInNumberBulletList && bNumbered && bPara && !rWrt.m_bCfgOutStyles )
     {
         // a single LI doesn't have spacing
-        rHWrt.m_nDfltTopMargin = 0;
-        rHWrt.m_nDfltBottomMargin = 0;
+        rWrt.m_nDfltTopMargin = 0;
+        rWrt.m_nDfltBottomMargin = 0;
     }
-    else if( rHWrt.m_nDefListLvl && bPara )
+    else if( rWrt.m_nDefListLvl && bPara )
     {
         // a single DD doesn't have spacing, as well
-        rHWrt.m_nDfltTopMargin = 0;
-        rHWrt.m_nDfltBottomMargin = 0;
+        rWrt.m_nDfltTopMargin = 0;
+        rWrt.m_nDfltBottomMargin = 0;
     }
     else
     {
-        rHWrt.m_nDfltTopMargin = pFormatInfo->nTopMargin;
+        rWrt.m_nDfltTopMargin = pFormatInfo->nTopMargin;
         // if in the last paragraph of a table the lower paragraph spacing
         // is changed, Netscape doesn't get it. That's why we don't
         // export anything here for now, by setting this spacing to the
         // default value.
-        if( rHWrt.m_bCfgNetscape4 && !bUseParSpace )
-            rHWrt.m_nDfltBottomMargin = rULSpace.GetLower();
+        if( rWrt.m_bCfgNetscape4 && !bUseParSpace )
+            rWrt.m_nDfltBottomMargin = rULSpace.GetLower();
         else
-            rHWrt.m_nDfltBottomMargin = pFormatInfo->nBottomMargin;
+            rWrt.m_nDfltBottomMargin = pFormatInfo->nBottomMargin;
     }
 
-    if( rHWrt.m_nDefListLvl )
+    if( rWrt.m_nDefListLvl )
     {
-        rHWrt.m_nLeftMargin =
-            (rHWrt.m_nDefListLvl-1) * rHWrt.m_nDefListMargin;
+        rWrt.m_nLeftMargin =
+            (rWrt.m_nDefListLvl-1) * rWrt.m_nDefListMargin;
     }
 
-    if( rHWrt.m_bLFPossible && !rHWrt.m_bFirstLine )
-        rHWrt.OutNewLine(); // paragraph tag on a new line
+    if (rWrt.IsLFPossible() && !rWrt.m_bFirstLine)
+        rWrt.OutNewLine(); // paragraph tag on a new line
     rInfo.bOutPara = false;
 
     // this is now our new token
-    rHWrt.ChangeParaToken( nToken );
+    rWrt.ChangeParaToken( nToken );
 
     bool bHasParSpace = bUseParSpace && rULSpace.GetLower() > 0;
     // XHTML doesn't allow character children for <blockquote>.
-    bool bXhtmlBlockQuote = rHWrt.mbXHTML && rInfo.aToken == OOO_STRING_SVTOOLS_HTML_blockquote;
+    bool bXhtmlBlockQuote = rWrt.mbXHTML && rInfo.aToken == OOO_STRING_SVTOOLS_HTML_blockquote;
 
     // if necessary, start a new list item
     bool bNumberedForListItem = bNumbered;
@@ -761,53 +764,51 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
     {
         // Open a list also for the leading unnumbered nodes (= list headers in ODF terminology);
         // to do that, detect if this unnumbered node is the first in this list
-        const auto& rPrevListInfo = rHWrt.GetNumInfo();
+        const auto& rPrevListInfo = rWrt.GetNumInfo();
         if (rPrevListInfo.GetNumRule() != aNumInfo.GetNumRule() || aNumInfo.IsRestart(rPrevListInfo)
             || rPrevListInfo.GetDepth() < aNumInfo.GetDepth())
             bNumberedForListItem = true;
     }
     if( rInfo.bInNumberBulletList && bNumberedForListItem )
     {
-        HtmlWriter html(rWrt.Strm(), rHWrt.maNamespace);
-        html.prettyPrint(rHWrt.m_bPrettyPrint);
-        html.start(OOO_STRING_SVTOOLS_HTML_li);
+        OStringBuffer sOut(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_li);
         if (!bNumbered)
         {
             // Handles list headers (<text:list-header> ODF element)
-            html.attribute(OOO_STRING_SVTOOLS_HTML_O_style, "display: block");
+            sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_style "=\"display: block\"");
         }
         else if (USHRT_MAX != nNumStart)
-            html.attribute(OOO_STRING_SVTOOLS_HTML_O_value, OString::number(nNumStart));
-        // Finish the opening element, but don't close it.
-        html.characters("");
+            sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_value "=\"" + OString::number(nNumStart)
+                        + "\"");
+        HTMLOutFuncs::Out_AsciiTag(rWrt.Strm(), sOut);
     }
 
-    if( rHWrt.m_nDefListLvl > 0 && !bForceDL )
+    if( rWrt.m_nDefListLvl > 0 && !bForceDL )
     {
         OString aTag = bDT ? OOO_STRING_SVTOOLS_HTML_dt : OOO_STRING_SVTOOLS_HTML_dd;
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHWrt.GetNamespace() + aTag) );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + aTag) );
     }
 
     if( pAdjItem &&
-        rHWrt.IsHTMLMode( HTMLMODE_NO_CONTROL_CENTERING ) &&
-        rHWrt.HasControls() )
+        rWrt.IsHTMLMode( HTMLMODE_NO_CONTROL_CENTERING ) &&
+        rWrt.HasControls() )
     {
         // The align=... attribute does behave strange in netscape
         // if there are controls in a paragraph, because the control and
         // all text behind the control does not recognize this attribute.
-        OString sOut = "<" + rHWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_division;
+        OString sOut = "<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_division;
         rWrt.Strm().WriteOString( sOut );
 
-        rHWrt.m_bTextAttr = false;
-        rHWrt.m_bOutOpts = true;
+        rWrt.m_bTextAttr = false;
+        rWrt.m_bOutOpts = true;
         OutHTML_SvxAdjust( rWrt, *pAdjItem );
         rWrt.Strm().WriteChar( '>' );
         pAdjItem = nullptr;
-        rHWrt.m_bNoAlign = false;
+        rWrt.m_bNoAlign = false;
         rInfo.bOutDiv = true;
-        rHWrt.IncIndentLevel();
-        rHWrt.m_bLFPossible = true;
-        rHWrt.OutNewLine();
+        rWrt.IncIndentLevel();
+        rWrt.SetLFPossible(true);
+        rWrt.OutNewLine();
     }
 
     // for BLOCKQUOTE, ADDRESS and DD we output another paragraph token, if
@@ -815,20 +816,23 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
     // - a lower spacing or a paragraph alignment exists
     // Also, XHTML does not allow character children in this context.
     OString aToken = rInfo.aToken;
-    if( (!rHWrt.m_bCfgOutStyles || rHWrt.mbXHTML) && rInfo.bParaPossible && !bPara &&
+    if( (!rWrt.m_bCfgOutStyles || rWrt.mbXHTML) && rInfo.bParaPossible && !bPara &&
         (bHasParSpace || bXhtmlBlockQuote || pAdjItem) )
     {
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHWrt.GetNamespace() + rInfo.aToken) );
-        aToken = OOO_STRING_SVTOOLS_HTML_parabreak;
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + rInfo.aToken) );
+        aToken = OOO_STRING_SVTOOLS_HTML_parabreak ""_ostr;
         bPara = true;
-        rHWrt.m_bNoAlign = false;
+        rWrt.m_bNoAlign = false;
     }
 
     LanguageType eLang;
     if (rInfo.moItemSet)
-        eLang = static_cast<const SvxLanguageItem&>(rInfo.moItemSet->Get(SwHTMLWriter::GetLangWhichIdFromScript(rHWrt.m_nCSS1Script))).GetLanguage();
+    {
+        const SvxLanguageItem& rLangItem = rInfo.moItemSet->Get(SwHTMLWriter::GetLangWhichIdFromScript(rWrt.m_nCSS1Script));
+        eLang = rLangItem.GetLanguage();
+    }
     else
-        eLang = rHWrt.m_eLang;
+        eLang = rWrt.m_eLang;
 
     if( rInfo.moItemSet )
     {
@@ -844,7 +848,7 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
     }
 
     // and the text direction
-    SvxFrameDirection nDir = rHWrt.GetHTMLDirection(
+    SvxFrameDirection nDir = rWrt.GetHTMLDirection(
             (pNodeItemSet ? pNodeItemSet->Get( RES_FRAMEDIR )
                           : rFormat.GetFrameDir() ).GetValue() );
 
@@ -859,49 +863,49 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
     //      - a user format is exported, or
     //      - a paragraph attribute exists
     if( !bPara ||
-        (!rInfo.bInNumberBulletList && !rHWrt.m_nDefListLvl) ||
+        (!rInfo.bInNumberBulletList && !rWrt.m_nDefListLvl) ||
         (rInfo.bInNumberBulletList && !bNumbered) ||
-        (!rHWrt.m_bCfgOutStyles &&
+        (!rWrt.m_bCfgOutStyles &&
          (bHasParSpace || bXhtmlBlockQuote || pAdjItem ||
-          (eLang != LANGUAGE_DONTKNOW && eLang != rHWrt.m_eLang))) ||
-        nDir != rHWrt.m_nDirection ||
-        rHWrt.m_bCfgOutStyles )
+          (eLang != LANGUAGE_DONTKNOW && eLang != rWrt.m_eLang))) ||
+        nDir != rWrt.m_nDirection ||
+        rWrt.m_bCfgOutStyles )
     {
         // now, options are output
-        rHWrt.m_bTextAttr = false;
-        rHWrt.m_bOutOpts = true;
+        rWrt.m_bTextAttr = false;
+        rWrt.m_bOutOpts = true;
 
-        OString sOut = "<" + rHWrt.GetNamespace() + aToken;
+        OString sOut = "<" + rWrt.GetNamespace() + aToken;
 
-        if( eLang != LANGUAGE_DONTKNOW && eLang != rHWrt.m_eLang )
+        if( eLang != LANGUAGE_DONTKNOW && eLang != rWrt.m_eLang )
         {
             rWrt.Strm().WriteOString( sOut );
-            sOut = "";
-            rHWrt.OutLanguage( eLang );
+            sOut = ""_ostr;
+            rWrt.OutLanguage( eLang );
         }
 
-        if( nDir != rHWrt.m_nDirection )
+        if( nDir != rWrt.m_nDirection )
         {
             if( !sOut.isEmpty() )
             {
                 rWrt.Strm().WriteOString( sOut );
-                sOut = "";
+                sOut = ""_ostr;
             }
-            rHWrt.OutDirection( nDir );
+            rWrt.OutDirection( nDir );
         }
 
-        if( rHWrt.m_bCfgOutStyles &&
+        if( rWrt.m_bCfgOutStyles &&
             (!pFormatInfo->aClass.isEmpty() || pFormatInfo->bScriptDependent) )
         {
             sOut += " " OOO_STRING_SVTOOLS_HTML_O_class "=\"";
             rWrt.Strm().WriteOString( sOut );
-            sOut = "";
+            sOut = ""_ostr;
             OUString aClass( pFormatInfo->aClass );
             if( pFormatInfo->bScriptDependent )
             {
                 if( !aClass.isEmpty() )
                    aClass += "-";
-                switch( rHWrt.m_nCSS1Script )
+                switch( rWrt.m_nCSS1Script )
                 {
                 case CSS1_OUTMODE_WESTERN:
                     aClass += "western";
@@ -918,27 +922,36 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
             sOut += "\"";
         }
         rWrt.Strm().WriteOString( sOut );
-        sOut = "";
+        sOut = ""_ostr;
+
+        std::string_view sStyle;
+        if (rWrt.IsSpacePreserve())
+        {
+            if (rWrt.mbXHTML)
+                rWrt.Strm().WriteOString(" xml:space=\"preserve\"");
+            else
+                sStyle = "white-space: pre-wrap";
+        }
 
         // if necessary, output alignment
-        if( !rHWrt.m_bNoAlign && pAdjItem )
+        if( !rWrt.m_bNoAlign && pAdjItem )
             OutHTML_SvxAdjust( rWrt, *pAdjItem );
 
-        rHWrt.m_bParaDotLeaders = bPara && rHWrt.m_bCfgPrintLayout && rHWrt.indexOfDotLeaders(
+        rWrt.m_bParaDotLeaders = bPara && rWrt.m_bCfgPrintLayout && rWrt.indexOfDotLeaders(
                 pTextNd->GetAnyFormatColl().GetPoolFormatId(), pTextNd->GetText()) > -1;
 
         // and now, if necessary, the STYLE options
-        if (rHWrt.m_bCfgOutStyles && rInfo.moItemSet)
+        if (rWrt.m_bCfgOutStyles && rInfo.moItemSet)
         {
-            OutCSS1_ParaTagStyleOpt( rWrt, *rInfo.moItemSet );
+            OutCSS1_ParaTagStyleOpt(rWrt, *rInfo.moItemSet, sStyle);
         }
 
-        if (rHWrt.m_bParaDotLeaders) {
+        if (rWrt.m_bParaDotLeaders) {
             sOut += " " OOO_STRING_SVTOOLS_HTML_O_class "=\""
                 sCSS2_P_CLASS_leaders "\"><"
                 OOO_STRING_SVTOOLS_HTML_O_span;
             rWrt.Strm().WriteOString( sOut );
-            sOut = "";
+            sOut = ""_ostr;
         }
 
         rWrt.Strm().WriteChar( '>' );
@@ -946,7 +959,7 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
         // is a </P> supposed to be written?
         rInfo.bOutPara =
             bPara &&
-            ( rHWrt.m_bCfgOutStyles || bHasParSpace );
+            ( rWrt.m_bCfgOutStyles || bHasParSpace );
 
         // if no end tag is supposed to be written, delete it
         if( bNoEndTag )
@@ -959,79 +972,77 @@ static void OutHTML_SwFormat( Writer& rWrt, const SwFormat& rFormat,
         OSL_ENSURE( nBulletGrfLvl < MAXLEVEL, "There are not this many layers." );
         const SwNumFormat& rNumFormat = aNumInfo.GetNumRule()->Get(nBulletGrfLvl);
         OutHTML_BulletImage( rWrt, OOO_STRING_SVTOOLS_HTML_image, rNumFormat.GetBrush(),
-                rHWrt.m_aBulletGrfs[nBulletGrfLvl]);
+                rWrt.m_aBulletGrfs[nBulletGrfLvl]);
     }
 
-    rHWrt.GetNumInfo() = aNumInfo;
+    rWrt.GetNumInfo() = aNumInfo;
 
     // reset the defaults
-    rHWrt.m_nDfltLeftMargin = 0;
-    rHWrt.m_nDfltRightMargin = 0;
-    rHWrt.m_nDfltFirstLineIndent = 0;
-    rHWrt.m_nDfltTopMargin = 0;
-    rHWrt.m_nDfltBottomMargin = 0;
-    rHWrt.m_nLeftMargin = 0;
-    rHWrt.m_nFirstLineIndent = 0;
+    rWrt.m_nDfltLeftMargin = 0;
+    rWrt.m_nDfltRightMargin = 0;
+    rWrt.m_nDfltFirstLineIndent = 0;
+    rWrt.m_nDfltTopMargin = 0;
+    rWrt.m_nDfltBottomMargin = 0;
+    rWrt.m_nLeftMargin = 0;
+    rWrt.m_nFirstLineIndent = 0;
 }
 
-static void OutHTML_SwFormatOff( Writer& rWrt, const SwHTMLTextCollOutputInfo& rInfo )
+static void OutHTML_SwFormatOff( SwHTMLWriter& rWrt, const SwHTMLTextCollOutputInfo& rInfo )
 {
-    SwHTMLWriter & rHWrt = static_cast<SwHTMLWriter&>(rWrt);
-
     // if there is no token, we don't need to output anything
     if( rInfo.aToken.isEmpty() )
     {
-        rHWrt.FillNextNumInfo();
-        const SwHTMLNumRuleInfo& rNextInfo = *rHWrt.GetNextNumInfo();
+        rWrt.FillNextNumInfo();
+        const SwHTMLNumRuleInfo& rNextInfo = *rWrt.GetNextNumInfo();
         // a bulleted list must be closed in PRE as well
         if( rInfo.bInNumberBulletList )
         {
 
-            const SwHTMLNumRuleInfo& rNRInfo = rHWrt.GetNumInfo();
+            const SwHTMLNumRuleInfo& rNRInfo = rWrt.GetNumInfo();
             if( rNextInfo.GetNumRule() != rNRInfo.GetNumRule() ||
                 rNextInfo.GetDepth() != rNRInfo.GetDepth() ||
                 rNextInfo.IsNumbered() || rNextInfo.IsRestart(rNRInfo) )
-                rHWrt.ChangeParaToken( HtmlTokenId::NONE );
-            OutHTML_NumberBulletListEnd( rHWrt, rNextInfo );
+                rWrt.ChangeParaToken( HtmlTokenId::NONE );
+            OutHTML_NumberBulletListEnd( rWrt, rNextInfo );
         }
         else if( rNextInfo.GetNumRule() != nullptr )
-            rHWrt.ChangeParaToken( HtmlTokenId::NONE );
+            rWrt.ChangeParaToken( HtmlTokenId::NONE );
 
         return;
     }
 
     if( rInfo.ShouldOutputToken() )
     {
-        if( rHWrt.m_bPrettyPrint && rHWrt.m_bLFPossible )
-            rHWrt.OutNewLine( true );
+        if (rWrt.IsPrettyPrint() && rWrt.IsLFPossible())
+            rWrt.OutNewLine( true );
 
         // if necessary, for BLOCKQUOTE, ADDRESS and DD another paragraph token
         // is output, if
         // - no styles are written and
         // - a lower spacing exists
         if( rInfo.bParaPossible && rInfo.bOutPara )
-            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_parabreak), false );
+            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_parabreak), false );
 
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHWrt.GetNamespace() + rInfo.aToken), false );
-        rHWrt.m_bLFPossible =
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + rInfo.aToken), false );
+        rWrt.SetLFPossible(
             rInfo.aToken != OOO_STRING_SVTOOLS_HTML_dt &&
             rInfo.aToken != OOO_STRING_SVTOOLS_HTML_dd &&
-            rInfo.aToken != OOO_STRING_SVTOOLS_HTML_li;
+            rInfo.aToken != OOO_STRING_SVTOOLS_HTML_li);
     }
     if( rInfo.bOutDiv )
     {
-        rHWrt.DecIndentLevel();
-        if( rHWrt.m_bLFPossible )
-            rHWrt.OutNewLine();
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_division), false );
-        rHWrt.m_bLFPossible = true;
+        rWrt.DecIndentLevel();
+        if (rWrt.IsLFPossible())
+            rWrt.OutNewLine();
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_division), false );
+        rWrt.SetLFPossible(true);
     }
 
     // if necessary, close the list item, then close a bulleted or numbered list
     if( rInfo.bInNumberBulletList )
     {
-        rHWrt.FillNextNumInfo();
-        OutHTML_NumberBulletListEnd( rHWrt, *rHWrt.GetNextNumInfo() );
+        rWrt.FillNextNumInfo();
+        OutHTML_NumberBulletListEnd( rWrt, *rWrt.GetNextNumInfo() );
     }
 }
 
@@ -1047,7 +1058,7 @@ public:
 
     HTMLStartEndPos( const SfxPoolItem& rItem, sal_Int32 nStt, sal_Int32 nE );
 
-    const SfxPoolItem* GetItem() const { return m_pItem.get(); }
+    const SfxPoolItem& GetItem() const { return *m_pItem; }
 
     void SetStart(sal_Int32 nStt) { m_nStart = nStt; }
     sal_Int32 GetStart() const { return m_nStart; }
@@ -1064,7 +1075,7 @@ HTMLStartEndPos::HTMLStartEndPos(const SfxPoolItem& rItem, sal_Int32 nStt, sal_I
     , m_pItem(rItem.Clone())
 {}
 
-typedef std::vector<HTMLStartEndPos *> HTMLStartEndPositions;
+typedef std::map<sal_Int32, std::vector<HTMLStartEndPos*>> HTMLStartEndPositions;
 
 namespace {
 
@@ -1080,8 +1091,8 @@ enum HTMLOnOffState { HTML_NOT_SUPPORTED,   // unsupported Attribute
 
 class HTMLEndPosLst
 {
-    HTMLStartEndPositions m_aStartLst; // list, sorted for start positions
-    HTMLStartEndPositions m_aEndLst; // list, sorted for end positions
+    HTMLStartEndPositions m_aStartLst; // list, each position's elements sorted by appearance order
+    HTMLStartEndPositions m_aEndLst; // list, no sort of elements in position
     std::deque<sal_Int32> m_aScriptChgLst; // positions where script changes
         // 0 is not contained in this list,
         // but the text length
@@ -1099,8 +1110,7 @@ class HTMLEndPosLst
 
     // Insert/remove a SttEndPos in/from the Start and End lists.
     // The end position is known.
-    void InsertItem_( HTMLStartEndPos *pPos, HTMLStartEndPositions::size_type nEndPos );
-    void RemoveItem_( HTMLStartEndPositions::size_type nEndPos );
+    void InsertItem_(HTMLStartEndPos* pPos);
 
     // determine the 'type' of the attribute
     HTMLOnOffState GetHTMLItemState( const SfxPoolItem& rItem );
@@ -1114,8 +1124,7 @@ class HTMLEndPosLst
                                           sal_Int32 nEndPos );
 
     // adapt the end of a split item
-    void FixSplittedItem( HTMLStartEndPos *pPos, sal_Int32 nNewEnd,
-                            HTMLStartEndPositions::size_type nStartPos );
+    void FixSplittedItem(HTMLStartEndPos* pPos, sal_Int32 nNewEnd);
 
     // insert an attribute in the lists and, if necessary, split it
     void InsertItem( const SfxPoolItem& rItem, sal_Int32 nStart,
@@ -1132,6 +1141,8 @@ class HTMLEndPosLst
 
     const SwHTMLFormatInfo *GetFormatInfo( const SwFormat& rFormat,
                                      SwHTMLFormatInfos& rFormatInfos );
+
+    void OutEndAttrs(SwHTMLWriter& rWrt, std::vector<HTMLStartEndPos*>& posItems);
 
 public:
 
@@ -1152,42 +1163,52 @@ public:
     sal_uInt16 GetScriptAtPos( sal_Int32 nPos,
                                sal_uInt16 nWeak );
 
-    void OutStartAttrs( SwHTMLWriter& rHWrt, sal_Int32 nPos );
-    void OutEndAttrs( SwHTMLWriter& rHWrt, sal_Int32 nPos );
+    void OutStartAttrs( SwHTMLWriter& rWrt, sal_Int32 nPos );
+    void OutEndAttrs( SwHTMLWriter& rWrt, sal_Int32 nPos );
 
     bool IsHTMLMode(sal_uLong nMode) const { return (m_nHTMLMode & nMode) != 0; }
 };
 
+struct SortEnds
+{
+    HTMLStartEndPositions& m_startList;
+    SortEnds(HTMLStartEndPositions& startList) : m_startList(startList) {}
+    bool operator()(const HTMLStartEndPos* p1, const HTMLStartEndPos* p2)
+    {
+        // if p1 start after p2, then it ends before
+        if (p1->GetStart() > p2->GetStart())
+            return true;
+        if (p1->GetStart() < p2->GetStart())
+            return false;
+        for (const auto p : m_startList[p1->GetStart()])
+        {
+            if (p == p1)
+                return false;
+            if (p == p2)
+                return true;
+        }
+        assert(!"Neither p1 nor p2 found in their start list");
+        return false;
+    }
+};
+
+#ifndef NDEBUG
+bool IsEmpty(const HTMLStartEndPositions& l)
+{
+    return std::find_if(l.begin(), l.end(), [](auto& i) { return !i.second.empty(); }) == l.end();
+}
+#endif
+
 }
 
-void HTMLEndPosLst::InsertItem_( HTMLStartEndPos *pPos, HTMLStartEndPositions::size_type nEndPos )
+void HTMLEndPosLst::InsertItem_(HTMLStartEndPos* pPos)
 {
-    // Insert the attribute in the Start list behind all attributes that
-    // were started before, or at the same position.
-    sal_Int32 nStart = pPos->GetStart();
-    HTMLStartEndPositions::size_type i {0};
+    // Character border attribute must be the first which is written out because of border merge.
+    auto& posItems1 = m_aStartLst[pPos->GetStart()];
+    auto it = pPos->GetItem().Which() == RES_CHRATR_BOX ? posItems1.begin() : posItems1.end();
+    posItems1.insert(it, pPos);
 
-    while (i < m_aStartLst.size() && m_aStartLst[i]->GetStart() <= nStart)
-        ++i;
-    m_aStartLst.insert(m_aStartLst.begin() + i, pPos);
-
-    // the position in the End list was supplied
-    m_aEndLst.insert(m_aEndLst.begin() + nEndPos, pPos);
-}
-
-void HTMLEndPosLst::RemoveItem_( HTMLStartEndPositions::size_type nEndPos )
-{
-    HTMLStartEndPos* pPos = m_aEndLst[nEndPos];
-
-    // now, we are looking for it in the Start list
-    HTMLStartEndPositions::iterator it = std::find(m_aStartLst.begin(), m_aStartLst.end(), pPos);
-    OSL_ENSURE(it != m_aStartLst.end(), "Item not found in Start List!");
-    if (it != m_aStartLst.end())
-        m_aStartLst.erase(it);
-
-    m_aEndLst.erase(m_aEndLst.begin() + nEndPos);
-
-    delete pPos;
+    m_aEndLst[pPos->GetEnd()].push_back(pPos);
 }
 
 HTMLOnOffState HTMLEndPosLst::GetHTMLItemState( const SfxPoolItem& rItem )
@@ -1214,7 +1235,7 @@ HTMLOnOffState HTMLEndPosLst::GetHTMLItemState( const SfxPoolItem& rItem )
         break;
 
     case RES_CHRATR_CROSSEDOUT:
-        switch( static_cast<const SvxCrossedOutItem&>(rItem).GetStrikeout() )
+        switch( rItem.StaticWhichCast(RES_CHRATR_CROSSEDOUT).GetStrikeout() )
         {
         case STRIKEOUT_SINGLE:
         case STRIKEOUT_DOUBLE:
@@ -1229,7 +1250,7 @@ HTMLOnOffState HTMLEndPosLst::GetHTMLItemState( const SfxPoolItem& rItem )
         break;
 
     case RES_CHRATR_ESCAPEMENT:
-        switch( static_cast<SvxEscapement>(static_cast<const SvxEscapementItem&>(rItem).GetEnumValue()) )
+        switch( static_cast<SvxEscapement>(rItem.StaticWhichCast(RES_CHRATR_ESCAPEMENT).GetEnumValue()) )
         {
         case SvxEscapement::Superscript:
         case SvxEscapement::Subscript:
@@ -1244,7 +1265,7 @@ HTMLOnOffState HTMLEndPosLst::GetHTMLItemState( const SfxPoolItem& rItem )
         break;
 
     case RES_CHRATR_UNDERLINE:
-        switch( static_cast<const SvxUnderlineItem&>(rItem).GetLineStyle() )
+        switch( rItem.StaticWhichCast(RES_CHRATR_UNDERLINE).GetLineStyle() )
         {
         case LINESTYLE_SINGLE:
             eState = HTML_ON_VALUE;
@@ -1284,7 +1305,7 @@ HTMLOnOffState HTMLEndPosLst::GetHTMLItemState( const SfxPoolItem& rItem )
         break;
 
     case RES_CHRATR_BLINK:
-        eState = static_cast<const SvxBlinkItem&>(rItem).GetValue() ? HTML_ON_VALUE
+        eState = rItem.StaticWhichCast(RES_CHRATR_BLINK).GetValue() ? HTML_ON_VALUE
                                                          : HTML_OFF_VALUE;
         break;
 
@@ -1341,23 +1362,25 @@ HTMLOnOffState HTMLEndPosLst::GetHTMLItemState( const SfxPoolItem& rItem )
 
 bool HTMLEndPosLst::ExistsOnTagItem( sal_uInt16 nWhich, sal_Int32 nPos )
 {
-    for (auto pTest : m_aStartLst)
+    for (const auto& [startPos, items] : m_aStartLst)
     {
-        if( pTest->GetStart() > nPos )
+        if (startPos > nPos)
         {
             // this attribute, and all attributes that follow, start later
             break;
         }
-        else if( pTest->GetEnd() > nPos )
+
+        for (const auto* pTest : items)
         {
-            // the attribute starts before, or at, the current position and
-            // ends after it
-            const SfxPoolItem *pItem = pTest->GetItem();
-            if( pItem->Which() == nWhich &&
-                HTML_ON_VALUE == GetHTMLItemState(*pItem) )
+            if (pTest->GetEnd() > nPos)
             {
-                // an OnTag attribute was found
-                return true;
+                // the attribute starts before, or at, the current position and ends after it
+                const SfxPoolItem& rItem = pTest->GetItem();
+                if (rItem.Which() == nWhich && HTML_ON_VALUE == GetHTMLItemState(rItem))
+                {
+                    // an OnTag attribute was found
+                    return true;
+                }
             }
         }
     }
@@ -1375,24 +1398,17 @@ bool HTMLEndPosLst::ExistsOffTagItem( sal_uInt16 nWhich, sal_Int32 nStartPos,
         return false;
     }
 
-    for (auto pTest : m_aStartLst)
+    for (const auto* pTest : m_aStartLst[nStartPos])
     {
-        if( pTest->GetStart() > nStartPos )
+        if (pTest->GetEnd() == nEndPos)
         {
-            // this attribute, and all attributes that follow, start later
-            break;
-        }
-        else if( pTest->GetStart()==nStartPos &&
-                 pTest->GetEnd()==nEndPos )
-        {
-            // the attribute starts before or at the current position and
-            // ends after it
-            const SfxPoolItem *pItem = pTest->GetItem();
-            sal_uInt16 nTstWhich = pItem->Which();
+            // the attribute starts before or at the current position and ends after it
+            const SfxPoolItem& rItem = pTest->GetItem();
+            sal_uInt16 nTstWhich = rItem.Which();
             if( (nTstWhich == RES_CHRATR_CROSSEDOUT ||
                  nTstWhich == RES_CHRATR_UNDERLINE ||
                  nTstWhich == RES_CHRATR_BLINK) &&
-                HTML_OFF_VALUE == GetHTMLItemState(*pItem) )
+                HTML_OFF_VALUE == GetHTMLItemState(rItem) )
             {
                 // an OffTag attribute was found that is exported the same
                 // way as the current item
@@ -1404,55 +1420,51 @@ bool HTMLEndPosLst::ExistsOffTagItem( sal_uInt16 nWhich, sal_Int32 nStartPos,
     return false;
 }
 
-void HTMLEndPosLst::FixSplittedItem( HTMLStartEndPos *pPos, sal_Int32 nNewEnd,
-                                        HTMLStartEndPositions::size_type nStartPos )
+void HTMLEndPosLst::FixSplittedItem(HTMLStartEndPos* pPos, sal_Int32 nNewEnd)
 {
+    // remove the item from the End list
+    std::erase(m_aEndLst[pPos->GetEnd()], pPos);
     // fix the end position accordingly
     pPos->SetEnd( nNewEnd );
-
-    // remove the item from the End list
-    HTMLStartEndPositions::iterator it = std::find(m_aEndLst.begin(), m_aEndLst.end(), pPos);
-    OSL_ENSURE(it != m_aEndLst.end(), "Item not found in End List!");
-    if (it != m_aEndLst.end())
-        m_aEndLst.erase(it);
-
-    // from now on, it is closed as the last one at the corresponding position
-    HTMLStartEndPositions::size_type nEndPos {0};
-    while (nEndPos < m_aEndLst.size() && m_aEndLst[nEndPos]->GetEnd() <= nNewEnd)
-        ++nEndPos;
-    m_aEndLst.insert(m_aEndLst.begin() + nEndPos, pPos);
+    // from now on, it is closed at the corresponding position
+    m_aEndLst[nNewEnd].push_back(pPos);
 
     // now, adjust the attributes that got started afterwards
-    for (HTMLStartEndPositions::size_type i = nStartPos + 1; i < m_aStartLst.size(); ++i)
+    const sal_Int32 nPos = pPos->GetStart();
+    for (const auto& [startPos, items] : m_aStartLst)
     {
-        HTMLStartEndPos* pTest = m_aStartLst[i];
-        sal_Int32 nTestEnd = pTest->GetEnd();
-        if( pTest->GetStart() >= nNewEnd )
-        {
-            // the Test attribute and all the following ones start, after the
-            // split attribute ends
+        if (startPos < nPos)
+            continue;
+
+        if (startPos >= nNewEnd)
             break;
-        }
-        else if( nTestEnd > nNewEnd )
+
+        auto it = items.begin();
+        if (startPos == nPos)
         {
+            it = std::find(items.begin(), items.end(), pPos);
+            if (it != items.end())
+                ++it;
+        }
+        for (; it != items.end(); ++it)
+        {
+            HTMLStartEndPos* pTest = *it;
+            const sal_Int32 nTestEnd = pTest->GetEnd();
+            if (nTestEnd <= nNewEnd)
+                continue;
+
             // the Test attribute starts before the split attribute
             // ends, and ends afterwards, i.e., it must be split, as well
 
+            // remove the attribute from the End list
+            std::erase(m_aEndLst[pTest->GetEnd()], pTest);
             // set the new end
             pTest->SetEnd( nNewEnd );
-
-            // remove the attribute from the End list
-            it = std::find(m_aEndLst.begin(), m_aEndLst.end(), pTest);
-            OSL_ENSURE(it != m_aEndLst.end(), "Item not found in End List!");
-            if (it != m_aEndLst.end())
-                m_aEndLst.erase(it);
-
-            // it now ends as the first attribute in the respective position.
-            // We already know this position in the End list.
-            m_aEndLst.insert(m_aEndLst.begin() + nEndPos, pTest);
+            // it now ends in the respective position.
+            m_aEndLst[nNewEnd].push_back(pTest);
 
             // insert the 'rest' of the attribute
-            InsertItem( *pTest->GetItem(), nNewEnd, nTestEnd );
+            InsertItem( pTest->GetItem(), nNewEnd, nTestEnd );
         }
     }
 }
@@ -1460,36 +1472,38 @@ void HTMLEndPosLst::FixSplittedItem( HTMLStartEndPos *pPos, sal_Int32 nNewEnd,
 void HTMLEndPosLst::InsertItem( const SfxPoolItem& rItem, sal_Int32 nStart,
                                                           sal_Int32 nEnd )
 {
-    HTMLStartEndPositions::size_type i;
-    for (i = 0; i < m_aEndLst.size(); i++)
+    assert(nStart < nEnd);
+
+    for (auto& [endPos, items] : m_aEndLst)
     {
-        HTMLStartEndPos* pTest = m_aEndLst[i];
-        sal_Int32 nTestEnd = pTest->GetEnd();
-        if( nTestEnd <= nStart )
+        if (endPos <= nStart)
         {
             // the Test attribute ends, before the new one starts
             continue;
         }
-        else if( nTestEnd < nEnd )
-        {
-            if( pTest->GetStart() < nStart )
-            {
-                // the Test attribute ends, before the new one ends. Thus, the
-                // new attribute must be split.
-                InsertItem_( new HTMLStartEndPos( rItem, nStart, nTestEnd ), i );
-                nStart = nTestEnd;
-            }
-        }
-        else
+        if (endPos >= nEnd)
         {
             // the Test attribute (and all that follow) ends, before the new
             // one ends
             break;
         }
+
+        std::sort(items.begin(), items.end(), SortEnds(m_aStartLst));
+
+        for (HTMLStartEndPos* pTest : items)
+        {
+            if( pTest->GetStart() < nStart )
+            {
+                // the Test attribute ends, before the new one ends. Thus, the
+                // new attribute must be split.
+                InsertItem_(new HTMLStartEndPos(rItem, nStart, endPos));
+                nStart = endPos;
+            }
+        }
     }
 
     // one attribute must still be inserted
-    InsertItem_( new HTMLStartEndPos( rItem, nStart, nEnd ), i );
+    InsertItem_(new HTMLStartEndPos(rItem, nStart, nEnd));
 }
 
 void HTMLEndPosLst::SplitItem( const SfxPoolItem& rItem, sal_Int32 nStart,
@@ -1500,59 +1514,45 @@ void HTMLEndPosLst::SplitItem( const SfxPoolItem& rItem, sal_Int32 nStart,
     // first, we must search for the old items by using the start list and
     // determine the new item range
 
-    for (HTMLStartEndPositions::size_type i = 0; i < m_aStartLst.size(); ++i)
+    for (auto& [nTestStart, items] : m_aStartLst)
     {
-        HTMLStartEndPos* pTest = m_aStartLst[i];
-        sal_Int32 nTestStart = pTest->GetStart();
-        sal_Int32 nTestEnd = pTest->GetEnd();
-
         if( nTestStart >= nEnd )
         {
             // this attribute, and all that follow, start later
             break;
         }
-        else if( nTestEnd > nStart )
+
+        for (auto it = items.begin(); it != items.end();)
         {
+            auto itTest = it++; // forward early, allow 'continue', and keep a copy for 'erase'
+            HTMLStartEndPos* pTest = *itTest;
+            const sal_Int32 nTestEnd = pTest->GetEnd();
+            if (nTestEnd <= nStart)
+                continue;
+
             // the Test attribute ends in the range that must be deleted
-            const SfxPoolItem *pItem = pTest->GetItem();
+            const SfxPoolItem& rTestItem = pTest->GetItem();
 
             // only the corresponding OnTag attributes have to be considered
-            if( pItem->Which() == nWhich &&
-                HTML_ON_VALUE == GetHTMLItemState( *pItem ) )
+            if (rTestItem.Which() != nWhich || HTML_ON_VALUE != GetHTMLItemState(rTestItem))
+                continue;
+
+            // if necessary, insert the second part of the split attribute
+            if (nTestEnd > nEnd)
+                InsertItem(rTestItem, nEnd, nTestEnd);
+
+            if (nTestStart >= nStart)
             {
-                bool bDelete = true;
-
-                if( nTestStart < nStart )
-                {
-                    // the start of the new attribute corresponds to the new
-                    // end of the attribute
-                    FixSplittedItem( pTest, nStart, i );
-                    bDelete = false;
-                }
-                else
-                {
-                    // the Test item only starts after the new end of the
-                    // attribute. Therefore, it can be completely erased.
-                    m_aStartLst.erase(m_aStartLst.begin() + i);
-                    i--;
-
-                    HTMLStartEndPositions::iterator it
-                        = std::find(m_aEndLst.begin(), m_aEndLst.end(), pTest);
-                    OSL_ENSURE(it != m_aEndLst.end(), "Item not found in End List!");
-                    if (it != m_aEndLst.end())
-                        m_aEndLst.erase(it);
-                }
-
-                // if necessary, insert the second part of the split
-                // attribute
-                if( nTestEnd > nEnd )
-                {
-                    InsertItem( *pTest->GetItem(), nEnd, nTestEnd );
-                }
-
-                if( bDelete )
-                    delete pTest;
+                // the Test item only starts after the new end of the
+                // attribute. Therefore, it can be completely erased.
+                it = items.erase(itTest);
+                std::erase(m_aEndLst[nTestEnd], pTest);
+                delete pTest;
+                continue;
             }
+
+            // the start of the new attribute corresponds to the new end of the attribute
+            FixSplittedItem(pTest, nStart);
         }
     }
 }
@@ -1600,8 +1600,8 @@ HTMLEndPosLst::HTMLEndPosLst(SwDoc* pD, SwDoc* pTempl, std::optional<Color> xDfl
 
 HTMLEndPosLst::~HTMLEndPosLst()
 {
-    OSL_ENSURE(m_aStartLst.empty(), "Start List not empty in destructor");
-    OSL_ENSURE(m_aEndLst.empty(), "End List not empty in destructor");
+    assert(IsEmpty(m_aStartLst) && "Start List not empty in destructor");
+    assert(IsEmpty(m_aEndLst) && "End List not empty in destructor");
 }
 
 void HTMLEndPosLst::InsertNoScript( const SfxPoolItem& rItem,
@@ -1650,7 +1650,7 @@ void HTMLEndPosLst::InsertNoScript( const SfxPoolItem& rItem,
         {
             OSL_ENSURE( RES_TXTATR_CHARFMT == rItem.Which(),
                     "Not a character style after all" );
-            const SwFormatCharFormat& rChrFormat = static_cast<const SwFormatCharFormat&>(rItem);
+            const SwFormatCharFormat& rChrFormat = rItem.StaticWhichCast(RES_TXTATR_CHARFMT);
             const SwCharFormat* pFormat = rChrFormat.GetCharFormat();
 
             const SwHTMLFormatInfo *pFormatInfo = GetFormatInfo( *pFormat, rFormatInfos );
@@ -1670,7 +1670,9 @@ void HTMLEndPosLst::InsertNoScript( const SfxPoolItem& rItem,
 
     case HTML_AUTOFMT_VALUE:
         {
-            const SwFormatAutoFormat& rAutoFormat = static_cast<const SwFormatAutoFormat&>(rItem);
+            OSL_ENSURE( RES_TXTATR_AUTOFMT == rItem.Which(),
+                    "Not an automatic style, after all" );
+            const SwFormatAutoFormat& rAutoFormat = rItem.StaticWhichCast(RES_TXTATR_AUTOFMT);
             const std::shared_ptr<SfxItemSet>& pSet = rAutoFormat.GetStyleHandle();
             if( pSet )
                 Insert( *pSet, nStart, nEnd, rFormatInfos, true, bParaAttrs );
@@ -1683,7 +1685,7 @@ void HTMLEndPosLst::InsertNoScript( const SfxPoolItem& rItem,
         {
             OSL_ENSURE( RES_CHRATR_COLOR == rItem.Which(),
                     "Not a foreground color, after all" );
-            Color aColor( static_cast<const SvxColorItem&>(rItem).GetValue() );
+            Color aColor( rItem.StaticWhichCast(RES_CHRATR_COLOR).GetValue() );
             if( COL_AUTO == aColor )
                 aColor = COL_BLACK;
             bSet = !bParaAttrs || !m_xDefaultColor || !m_xDefaultColor->IsRGBEqual(aColor);
@@ -1694,7 +1696,7 @@ void HTMLEndPosLst::InsertNoScript( const SfxPoolItem& rItem,
         {
             OSL_ENSURE( RES_PARATR_DROP == rItem.Which(),
                     "Not a drop cap, after all" );
-            const SwFormatDrop& rDrop = static_cast<const SwFormatDrop&>(rItem);
+            const SwFormatDrop& rDrop = rItem.StaticWhichCast(RES_PARATR_DROP);
             nEnd = nStart + rDrop.GetChars();
             if (!m_bOutStyles)
             {
@@ -1758,7 +1760,7 @@ void HTMLEndPosLst::Insert( const SfxPoolItem& rItem,
         break;
     case RES_TXTATR_CHARFMT:
         {
-            const SwFormatCharFormat& rChrFormat = static_cast<const SwFormatCharFormat&>(rItem);
+            const SwFormatCharFormat& rChrFormat = rItem.StaticWhichCast(RES_TXTATR_CHARFMT);
             const SwCharFormat* pFormat = rChrFormat.GetCharFormat();
             const SwHTMLFormatInfo *pFormatInfo = GetFormatInfo( *pFormat, rFormatInfos );
             if( pFormatInfo->bScriptDependent )
@@ -1883,125 +1885,160 @@ sal_uInt16 HTMLEndPosLst::GetScriptAtPos( sal_Int32 nPos, sal_uInt16 nWeak )
     return nRet;
 }
 
-void HTMLEndPosLst::OutStartAttrs( SwHTMLWriter& rHWrt, sal_Int32 nPos )
+void HTMLEndPosLst::OutStartAttrs( SwHTMLWriter& rWrt, sal_Int32 nPos )
 {
-    rHWrt.m_bTagOn = true;
+    rWrt.m_bTagOn = true;
 
-    // Character border attribute must be the first which is written out
-    // because of border merge.
-    HTMLStartEndPositions::size_type nCharBoxIndex = 0;
-    while (nCharBoxIndex < m_aStartLst.size()
-           && m_aStartLst[nCharBoxIndex]->GetItem()->Which() != RES_CHRATR_BOX)
-    {
-        ++nCharBoxIndex;
-    }
-
+    auto it = m_aStartLst.find(nPos);
+    if (it == m_aStartLst.end())
+        return;
     // the attributes of the start list are sorted in ascending order
-    for (HTMLStartEndPositions::size_type i = 0; i < m_aStartLst.size(); ++i)
+    for (HTMLStartEndPos* pPos : it->second)
     {
-        HTMLStartEndPos *pPos = nullptr;
-        if (nCharBoxIndex < m_aStartLst.size())
+        // output the attribute
+        sal_uInt16 nCSS1Script = rWrt.m_nCSS1Script;
+        sal_uInt16 nWhich = pPos->GetItem().Which();
+        if( RES_TXTATR_CHARFMT == nWhich ||
+            RES_TXTATR_INETFMT == nWhich ||
+             RES_PARATR_DROP == nWhich )
         {
-            if( i == 0 )
-                pPos = m_aStartLst[nCharBoxIndex];
-            else if( i == nCharBoxIndex )
-                pPos = m_aStartLst[0];
-            else
-                pPos = m_aStartLst[i];
+            rWrt.m_nCSS1Script = GetScriptAtPos( nPos, nCSS1Script );
         }
-        else
-            pPos = m_aStartLst[i];
-
-        sal_Int32 nStart = pPos->GetStart();
-        if( nStart > nPos )
-        {
-            // this attribute, and all that follow, will be opened later on
-            break;
-        }
-        else if( nStart == nPos )
-        {
-            // output the attribute
-            sal_uInt16 nCSS1Script = rHWrt.m_nCSS1Script;
-            sal_uInt16 nWhich = pPos->GetItem()->Which();
-            if( RES_TXTATR_CHARFMT == nWhich ||
-                RES_TXTATR_INETFMT == nWhich ||
-                 RES_PARATR_DROP == nWhich )
-            {
-                rHWrt.m_nCSS1Script = GetScriptAtPos( nPos, nCSS1Script );
-            }
-            HTMLOutFuncs::FlushToAscii( rHWrt.Strm() ); // was one time only - do we still need it?
-            Out( aHTMLAttrFnTab, *pPos->GetItem(), rHWrt );
-            rHWrt.maStartedAttributes[pPos->GetItem()->Which()]++;
-            rHWrt.m_nCSS1Script = nCSS1Script;
-        }
+        HTMLOutFuncs::FlushToAscii( rWrt.Strm() ); // was one time only - do we still need it?
+        Out( aHTMLAttrFnTab, pPos->GetItem(), rWrt );
+        rWrt.maStartedAttributes[pPos->GetItem().Which()]++;
+        rWrt.m_nCSS1Script = nCSS1Script;
     }
 }
 
-void HTMLEndPosLst::OutEndAttrs( SwHTMLWriter& rHWrt, sal_Int32 nPos )
+void HTMLEndPosLst::OutEndAttrs( SwHTMLWriter& rWrt, sal_Int32 nPos )
 {
-    rHWrt.m_bTagOn = false;
+    rWrt.m_bTagOn = false;
 
-    // the attributes in the End list are sorted in ascending order
-    HTMLStartEndPositions::size_type i {0};
-    while (i < m_aEndLst.size())
+    if (nPos == SAL_MAX_INT32)
     {
-        HTMLStartEndPos* pPos = m_aEndLst[i];
-        sal_Int32 nEnd = pPos->GetEnd();
+        for (auto& element : m_aEndLst)
+            OutEndAttrs(rWrt, element.second);
+    }
+    else
+    {
+        auto it = m_aEndLst.find(nPos);
+        if (it != m_aEndLst.end())
+            OutEndAttrs(rWrt, it->second);
+    }
+}
 
-        if( SAL_MAX_INT32 == nPos || nEnd == nPos )
+void HTMLEndPosLst::OutEndAttrs(SwHTMLWriter& rWrt, std::vector<HTMLStartEndPos*>& posItems)
+{
+    std::sort(posItems.begin(), posItems.end(), SortEnds(m_aStartLst));
+    for (auto it = posItems.begin(); it != posItems.end(); it = posItems.erase(it))
+    {
+        HTMLStartEndPos* pPos = *it;
+        HTMLOutFuncs::FlushToAscii( rWrt.Strm() ); // was one time only - do we still need it?
+        // Skip closing span if next character span has the same border (border merge)
+        bool bSkipOut = false;
+        if( pPos->GetItem().Which() == RES_CHRATR_BOX )
         {
-            HTMLOutFuncs::FlushToAscii( rHWrt.Strm() ); // was one time only - do we still need it?
-            // Skip closing span if next character span has the same border (border merge)
-            bool bSkipOut = false;
-            if( pPos->GetItem()->Which() == RES_CHRATR_BOX )
+            auto& startPosItems = m_aStartLst[pPos->GetEnd()];
+            for (auto it2 = startPosItems.begin(); it2 != startPosItems.end(); ++it2)
             {
-                HTMLStartEndPositions::iterator it
-                    = std::find(m_aStartLst.begin(), m_aStartLst.end(), pPos);
-                OSL_ENSURE(it != m_aStartLst.end(), "Item not found in Start List!");
-                if (it != m_aStartLst.end())
-                    ++it;
-                while (it != m_aStartLst.end())
+                HTMLStartEndPos* pEndPos = *it2;
+                if( pEndPos->GetItem().Which() == RES_CHRATR_BOX &&
+                    static_cast<const SvxBoxItem&>(pEndPos->GetItem()) ==
+                    static_cast<const SvxBoxItem&>(pPos->GetItem()) )
                 {
-                    HTMLStartEndPos *pEndPos = *it;
-                    if( pEndPos->GetItem()->Which() == RES_CHRATR_BOX &&
-                        *static_cast<const SvxBoxItem*>(pEndPos->GetItem()) ==
-                        *static_cast<const SvxBoxItem*>(pPos->GetItem()) )
-                    {
-                        pEndPos->SetStart(pPos->GetStart());
-                        bSkipOut = true;
-                        break;
-                    }
-                    ++it;
+                    startPosItems.erase(it2);
+                    pEndPos->SetStart(pPos->GetStart());
+                    auto& oldStartPosItems = m_aStartLst[pEndPos->GetStart()];
+                    oldStartPosItems.insert(oldStartPosItems.begin(), pEndPos);
+                    bSkipOut = true;
+                    break;
                 }
             }
-            if( !bSkipOut )
+        }
+        if( !bSkipOut )
+        {
+            Out( aHTMLAttrFnTab, pPos->GetItem(), rWrt );
+            rWrt.maStartedAttributes[pPos->GetItem().Which()]--;
+        }
+
+        std::erase(m_aStartLst[pPos->GetStart()], pPos);
+        delete pPos;
+    }
+}
+
+static constexpr bool IsLF(sal_Unicode ch) { return ch == '\n'; }
+
+static constexpr bool IsWhitespaceExcludingLF(sal_Unicode ch)
+{
+    return ch == ' ' || ch == '\t' || ch == '\r';
+}
+
+static constexpr bool IsWhitespaceIncludingLF(sal_Unicode ch)
+{
+    return IsWhitespaceExcludingLF(ch) || IsLF(ch);
+}
+
+static bool NeedPreserveWhitespace(std::u16string_view str, bool xml)
+{
+    if (str.empty())
+        return false;
+    // leading / trailing spaces
+    // A leading / trailing \n would turn into a leading / trailing <br/>,
+    // and will not disappear, even without space preserving option
+    if (IsWhitespaceExcludingLF(str.front()) || IsWhitespaceExcludingLF(str.back()))
+        return true;
+    for (size_t i = 0; i < str.size(); ++i)
+    {
+        if (xml)
+        {
+            // No need to consider \n, which convert to <br/>, when it's after a space
+            // (but handle it *before* a space)
+            if (IsWhitespaceIncludingLF(str[i]))
             {
-                Out( aHTMLAttrFnTab, *pPos->GetItem(), rHWrt );
-                rHWrt.maStartedAttributes[pPos->GetItem()->Which()]--;
+                do
+                {
+                    ++i;
+                    if (i == str.size())
+                        return false;
+                } while (IsLF(str[i]));
+                if (IsWhitespaceExcludingLF(str[i]))
+                    return true; // Second whitespace in a row
             }
-            RemoveItem_( i );
         }
-        else if( nEnd > nPos )
+        else // html
         {
-            // this attribute, and all that follow, are closed later on
-            break;
-        }
-        else
-        {
-            // The attribute is closed before the current position. This
-            // is not allowed, but we can handle it anyway.
-            OSL_ENSURE( nEnd >= nPos,
-                    "The attribute should've been closed a long time ago" );
-            i++;
+            // Only consider \n, when an adjacent space is not \n - which would be eaten
+            // without a space preserving option
+            if (IsWhitespaceExcludingLF(str[i]))
+            {
+                ++i;
+                if (i == str.size())
+                    return false;
+                if (IsWhitespaceIncludingLF(str[i]))
+                    return true; // Any whitespace after a non-LF whitespace
+            }
+            else if (IsLF(str[i]))
+            {
+                do
+                {
+                    ++i;
+                    if (i == str.size())
+                        return false;
+                }
+                while (IsLF(str[i]));
+                if (IsWhitespaceExcludingLF(str[i]))
+                    return true; // A non-LF whitespace after a LF
+            }
         }
     }
+    return false;
 }
 
 /* Output of the nodes*/
-Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
+SwHTMLWriter& OutHTML_SwTextNode( SwHTMLWriter& rWrt, const SwContentNode& rNode )
 {
     const SwTextNode * pNd = &static_cast<const SwTextNode&>(rNode);
-    SwHTMLWriter & rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
 
     const OUString& rStr = pNd->GetText();
     sal_Int32 nEnd = rStr.getLength();
@@ -2018,34 +2055,39 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
         // MIB 8.7.97: We enclose the line in a <PRE>. This means that the
         // spacings are wrong, but otherwise we get an empty paragraph
         // after the <HR> which is even uglier.
-        rHTMLWrt.ChangeParaToken( HtmlTokenId::NONE );
+        rWrt.ChangeParaToken( HtmlTokenId::NONE );
 
         // Output all the nodes that are anchored to a frame
-        rHTMLWrt.OutFlyFrame( rNode.GetIndex(), 0, HtmlPosition::Any );
+        rWrt.OutFlyFrame( rNode.GetIndex(), 0, HtmlPosition::Any );
 
-        if( rHTMLWrt.m_bLFPossible )
-            rHTMLWrt.OutNewLine(); // paragraph tag on a new line
+        if (rWrt.IsLFPossible())
+            rWrt.OutNewLine(); // paragraph tag on a new line
 
-        rHTMLWrt.m_bLFPossible = true;
+        rWrt.SetLFPossible(true);
 
-        HtmlWriter aHtml(rWrt.Strm(), rHTMLWrt.maNamespace);
-        aHtml.prettyPrint(rHTMLWrt.m_bPrettyPrint);
-        aHtml.start(OOO_STRING_SVTOOLS_HTML_horzrule);
+        HtmlWriter aHtml(rWrt.Strm(), rWrt.maNamespace);
+        aHtml.prettyPrint(rWrt.IsPrettyPrint());
+        aHtml.start(OOO_STRING_SVTOOLS_HTML_horzrule ""_ostr);
 
         const SfxItemSet* pItemSet = pNd->GetpSwAttrSet();
         if( !pItemSet )
         {
-            aHtml.endAttribute();
-            return rHTMLWrt;
+            aHtml.end();
+            return rWrt;
         }
-        if( const SvxLRSpaceItem* pItem = pItemSet->GetItemIfSet( RES_LR_SPACE, false ))
+        if (pItemSet->GetItemIfSet(RES_MARGIN_FIRSTLINE, false)
+            || pItemSet->GetItemIfSet(RES_MARGIN_TEXTLEFT, false)
+            || pItemSet->GetItemIfSet(RES_MARGIN_RIGHT, false))
         {
-            sal_Int32 nLeft = pItem->GetLeft();
-            sal_Int32 nRight = pItem->GetRight();
+            SvxFirstLineIndentItem const& rFirstLine(pItemSet->Get(RES_MARGIN_FIRSTLINE));
+            SvxTextLeftMarginItem const& rTextLeftMargin(pItemSet->Get(RES_MARGIN_TEXTLEFT));
+            SvxRightMarginItem const& rRightMargin(pItemSet->Get(RES_MARGIN_RIGHT));
+            sal_Int32 const nLeft(rTextLeftMargin.GetLeft(rFirstLine));
+            sal_Int32 const nRight(rRightMargin.GetRight());
             if( nLeft || nRight )
             {
                 const SwFrameFormat& rPgFormat =
-                    rHTMLWrt.m_pDoc->getIDocumentStylePoolAccess().GetPageDescFromPool
+                    rWrt.m_pDoc->getIDocumentStylePoolAccess().GetPageDescFromPool
                     ( RES_POOLPAGE_HTML, false )->GetMaster();
                 const SwFormatFrameSize& rSz   = rPgFormat.GetFrameSize();
                 const SvxLRSpaceItem& rLR = rPgFormat.GetLRSpace();
@@ -2065,7 +2107,7 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
                         nPageWidth = pBox->GetFrameFormat()->GetFrameSize().GetWidth();
                 }
 
-                OString sWidth = OString::number(SwHTMLWriter::ToPixel(nPageWidth - nLeft - nRight, false));
+                OString sWidth = OString::number(SwHTMLWriter::ToPixel(nPageWidth - nLeft - nRight));
                 aHtml.attribute(OOO_STRING_SVTOOLS_HTML_O_width, sWidth);
 
                 if( !nLeft )
@@ -2083,7 +2125,7 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
             if( pBorderLine )
             {
                 sal_uInt16 nWidth = pBorderLine->GetScaledWidth();
-                OString sWidth = OString::number(SwHTMLWriter::ToPixel(nWidth, false));
+                OString sWidth = OString::number(SwHTMLWriter::ToPixel(nWidth));
                 aHtml.attribute(OOO_STRING_SVTOOLS_HTML_O_size, sWidth);
 
                 const Color& rBorderColor = pBorderLine->GetColor();
@@ -2099,7 +2141,7 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
             }
         }
         aHtml.end();
-        return rHTMLWrt;
+        return rWrt;
     }
 
     // Do not export the empty nodes with 2pt fonts and standard style that
@@ -2128,12 +2170,12 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
                    SwTableBoxStartNode == pPrevNd->GetStartNode()->GetStartNodeType() ) )
             {
                 // ... and it is located before a table or a section
-                rHTMLWrt.OutBookmarks();
-                rHTMLWrt.m_bLFPossible = rHTMLWrt.m_nLastParaToken == HtmlTokenId::NONE;
+                rWrt.OutBookmarks();
+                rWrt.SetLFPossible(rWrt.m_nLastParaToken == HtmlTokenId::NONE);
 
                 // Output all frames that are anchored to this node
-                rHTMLWrt.OutFlyFrame( rNode.GetIndex(), 0, HtmlPosition::Any );
-                rHTMLWrt.m_bLFPossible = false;
+                rWrt.OutFlyFrame( rNode.GetIndex(), 0, HtmlPosition::Any );
+                rWrt.SetLFPossible(false);
 
                 return rWrt;
             }
@@ -2142,9 +2184,9 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
 
     // catch PageBreaks and PageDescs
     bool bPageBreakBehind = false;
-    if( rHTMLWrt.m_bCfgFormFeed &&
-        !(rHTMLWrt.m_bOutTable || rHTMLWrt.m_bOutFlyFrame) &&
-        rHTMLWrt.m_pStartNdIdx->GetIndex() != rHTMLWrt.m_pCurrentPam->GetPoint()->GetNodeIndex() )
+    if( rWrt.m_bCfgFormFeed &&
+        !(rWrt.m_bOutTable || rWrt.m_bOutFlyFrame) &&
+        rWrt.m_pStartNdIdx->GetIndex() != rWrt.m_pCurrentPam->GetPoint()->GetNodeIndex() )
     {
         bool bPageBreakBefore = false;
         const SfxItemSet* pItemSet = pNd->GetpSwAttrSet();
@@ -2181,50 +2223,53 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
     }
 
     // if necessary, open a form
-    rHTMLWrt.OutForm();
+    rWrt.OutForm();
 
     // Output the page-anchored frames that are 'anchored' to this node
-    bool bFlysLeft = rHTMLWrt.OutFlyFrame( rNode.GetIndex(), 0, HtmlPosition::Prefix );
+    bool bFlysLeft = rWrt.OutFlyFrame( rNode.GetIndex(), 0, HtmlPosition::Prefix );
 
     // Output all frames that are anchored to this node that are supposed to
     // be written before the paragraph tag.
     if( bFlysLeft )
     {
-        bFlysLeft = rHTMLWrt.OutFlyFrame( rNode.GetIndex(), 0, HtmlPosition::Before );
+        bFlysLeft = rWrt.OutFlyFrame( rNode.GetIndex(), 0, HtmlPosition::Before );
     }
 
-    if( rHTMLWrt.m_pCurrentPam->GetPoint()->GetNode() == rHTMLWrt.m_pCurrentPam->GetMark()->GetNode() )
+    if( rWrt.m_pCurrentPam->GetPoint()->GetNode() == rWrt.m_pCurrentPam->GetMark()->GetNode() )
     {
-        nEnd = rHTMLWrt.m_pCurrentPam->GetMark()->GetContentIndex();
+        nEnd = rWrt.m_pCurrentPam->GetMark()->GetContentIndex();
     }
 
     // are there any hard attributes that must be written as options?
-    rHTMLWrt.m_bTagOn = true;
+    rWrt.m_bTagOn = true;
 
     // now, output the tag of the paragraph
     const SwFormat& rFormat = pNd->GetAnyFormatColl();
     SwHTMLTextCollOutputInfo aFormatInfo;
-    bool bOldLFPossible = rHTMLWrt.m_bLFPossible;
+    bool bOldLFPossible = rWrt.IsLFPossible();
+    bool bOldSpacePreserve = rWrt.IsSpacePreserve();
+    if (rWrt.IsPreserveSpacesOnWritePrefSet())
+        rWrt.SetSpacePreserve(NeedPreserveWhitespace(rStr, rWrt.mbReqIF));
     OutHTML_SwFormat( rWrt, rFormat, pNd->GetpSwAttrSet(), aFormatInfo );
 
     // If we didn't open a new line before the paragraph tag, we do that now
-    rHTMLWrt.m_bLFPossible = rHTMLWrt.m_nLastParaToken == HtmlTokenId::NONE;
-    if( !bOldLFPossible && rHTMLWrt.m_bLFPossible )
-        rHTMLWrt.OutNewLine();
+    rWrt.SetLFPossible(rWrt.m_nLastParaToken == HtmlTokenId::NONE);
+    if (!bOldLFPossible && rWrt.IsLFPossible())
+        rWrt.OutNewLine();
 
     // then, the bookmarks (including end tag)
-    rHTMLWrt.m_bOutOpts = false;
-    rHTMLWrt.OutBookmarks();
+    rWrt.m_bOutOpts = false;
+    rWrt.OutBookmarks();
 
     // now it's a good opportunity again for an LF - if it is still allowed
-    // FIXME: for LOK case we set rHTMLWrt.m_nWishLineLen as -1, for now keep old flow
+    // FIXME: for LOK case we set rWrt.m_nWishLineLen as -1, for now keep old flow
     // when LOK side will be fixed - don't insert new line at the beginning
-    if( rHTMLWrt.m_bLFPossible && rHTMLWrt.m_bPrettyPrint && rHTMLWrt.m_nWishLineLen >= 0 &&
-        rHTMLWrt.GetLineLen() >= rHTMLWrt.m_nWishLineLen )
+    if( rWrt.IsLFPossible() && rWrt.IsPrettyPrint() && rWrt.m_nWishLineLen >= 0 &&
+        rWrt.GetLineLen() >= rWrt.m_nWishLineLen )
     {
-        rHTMLWrt.OutNewLine();
+        rWrt.OutNewLine();
     }
-    rHTMLWrt.m_bLFPossible = false;
+    rWrt.SetLFPossible(false);
 
     // find text that originates from an outline numbering
     sal_Int32 nOffset = 0;
@@ -2241,36 +2286,36 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
         aFullText = aOutlineText;
     }
     OUString aFootEndNoteSym;
-    if( rHTMLWrt.m_pFormatFootnote )
+    if( rWrt.m_pFormatFootnote )
     {
-        aFootEndNoteSym = rHTMLWrt.GetFootEndNoteSym( *rHTMLWrt.m_pFormatFootnote );
+        aFootEndNoteSym = rWrt.GetFootEndNoteSym( *rWrt.m_pFormatFootnote );
         nOffset = nOffset + aFootEndNoteSym.getLength();
         aFullText += aFootEndNoteSym;
     }
 
     // Table of Contents or other paragraph with dot leaders?
-    sal_Int32 nIndexTab = rHTMLWrt.indexOfDotLeaders( nPoolId, rStr );
+    sal_Int32 nIndexTab = rWrt.indexOfDotLeaders( nPoolId, rStr );
     if (nIndexTab > -1)
         // skip part after the tabulator (page number)
         nEnd = nIndexTab;
 
     // are there any hard attributes that must be written as tags?
     aFullText += rStr;
-    HTMLEndPosLst aEndPosLst( rWrt.m_pDoc, rHTMLWrt.m_xTemplate.get(),
-                              rHTMLWrt.m_xDfltColor, rHTMLWrt.m_bCfgOutStyles,
-                              rHTMLWrt.GetHTMLMode(), aFullText,
-                                 rHTMLWrt.m_aScriptTextStyles );
+    HTMLEndPosLst aEndPosLst( rWrt.m_pDoc, rWrt.m_xTemplate.get(),
+                              rWrt.m_xDfltColor, rWrt.m_bCfgOutStyles,
+                              rWrt.GetHTMLMode(), aFullText,
+                                 rWrt.m_aScriptTextStyles );
     if( aFormatInfo.moItemSet )
     {
         aEndPosLst.Insert( *aFormatInfo.moItemSet, 0, nEnd + nOffset,
-                           rHTMLWrt.m_CharFormatInfos, false, true );
+                           rWrt.m_CharFormatInfos, false, true );
     }
 
-    if( !aOutlineText.isEmpty() || rHTMLWrt.m_pFormatFootnote )
+    if( !aOutlineText.isEmpty() || rWrt.m_pFormatFootnote )
     {
         // output paragraph attributes, so that the text gets the attributes of
         // the paragraph.
-        aEndPosLst.OutStartAttrs( rHTMLWrt, 0 );
+        aEndPosLst.OutStartAttrs( rWrt, 0 );
 
         // Theoretically, we would have to consider the character style of
         // the numbering. Because it cannot be set via the UI, let's ignore
@@ -2279,27 +2324,27 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
         if( !aOutlineText.isEmpty() )
             HTMLOutFuncs::Out_String( rWrt.Strm(), aOutlineText );
 
-        if( rHTMLWrt.m_pFormatFootnote )
+        if( rWrt.m_pFormatFootnote )
         {
-            rHTMLWrt.OutFootEndNoteSym( *rHTMLWrt.m_pFormatFootnote, aFootEndNoteSym,
-                                        aEndPosLst.GetScriptAtPos( aOutlineText.getLength(), rHTMLWrt.m_nCSS1Script ) );
-            rHTMLWrt.m_pFormatFootnote = nullptr;
+            rWrt.OutFootEndNoteSym( *rWrt.m_pFormatFootnote, aFootEndNoteSym,
+                                        aEndPosLst.GetScriptAtPos( aOutlineText.getLength(), rWrt.m_nCSS1Script ) );
+            rWrt.m_pFormatFootnote = nullptr;
         }
     }
 
     // for now, correct the start. I.e., if we only output part of the sentence,
     // the attributes must be correct there, as well!!
-    rHTMLWrt.m_bTextAttr = true;
+    rWrt.m_bTextAttr = true;
 
     size_t nAttrPos = 0;
-    sal_Int32 nStrPos = rHTMLWrt.m_pCurrentPam->GetPoint()->GetContentIndex();
+    sal_Int32 nStrPos = rWrt.m_pCurrentPam->GetPoint()->GetContentIndex();
     const SwTextAttr * pHt = nullptr;
     const size_t nCntAttr = pNd->HasHints() ? pNd->GetSwpHints().Count() : 0;
     if( nCntAttr && nStrPos > ( pHt = pNd->GetSwpHints().Get(0) )->GetStart() )
     {
         // Ok, there are earlier attributes that we must output
         do {
-            aEndPosLst.OutEndAttrs( rHTMLWrt, nStrPos + nOffset );
+            aEndPosLst.OutEndAttrs( rWrt, nStrPos + nOffset );
 
             nAttrPos++;
             if( pHt->Which() == RES_TXTATR_FIELD
@@ -2310,7 +2355,7 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
             {
                 const sal_Int32 nHtEnd = *pHt->End(),
                        nHtStt = pHt->GetStart();
-                if( !rHTMLWrt.m_bWriteAll && nHtEnd <= nStrPos )
+                if( !rWrt.m_bWriteAll && nHtEnd <= nStrPos )
                     continue;
 
                 // don't consider empty hints at the beginning - or should we ??
@@ -2318,17 +2363,17 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
                     continue;
 
                 // add attribute to the list
-                if( rHTMLWrt.m_bWriteAll )
+                if( rWrt.m_bWriteAll )
                     aEndPosLst.Insert( pHt->GetAttr(), nHtStt + nOffset,
                                        nHtEnd + nOffset,
-                                       rHTMLWrt.m_CharFormatInfos );
+                                       rWrt.m_CharFormatInfos );
                 else
                 {
                     sal_Int32 nTmpStt = nHtStt < nStrPos ? nStrPos : nHtStt;
                     sal_Int32 nTmpEnd = std::min(nHtEnd, nEnd);
                     aEndPosLst.Insert( pHt->GetAttr(), nTmpStt + nOffset,
                                        nTmpEnd + nOffset,
-                                       rHTMLWrt.m_CharFormatInfos );
+                                       rWrt.m_CharFormatInfos );
                 }
                 continue;
                 // but don't output it, that will be done later !!
@@ -2338,12 +2383,12 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
             ( pHt = pNd->GetSwpHints().Get( nAttrPos ) )->GetStart() );
 
         // so, let's output all collected attributes from the string pos on
-        aEndPosLst.OutEndAttrs( rHTMLWrt, nStrPos + nOffset );
-        aEndPosLst.OutStartAttrs( rHTMLWrt, nStrPos + nOffset );
+        aEndPosLst.OutEndAttrs( rWrt, nStrPos + nOffset );
+        aEndPosLst.OutStartAttrs( rWrt, nStrPos + nOffset );
     }
 
-    bool bWriteBreak = (HtmlTokenId::PREFORMTXT_ON != rHTMLWrt.m_nLastParaToken);
-    if (bWriteBreak && (pNd->GetNumRule() || rHTMLWrt.mbReqIF))
+    bool bWriteBreak = (HtmlTokenId::PREFORMTXT_ON != rWrt.m_nLastParaToken);
+    if (bWriteBreak && (pNd->GetNumRule() || rWrt.mbReqIF))
     {
         // One line-break is exactly one <br> in the ReqIF case.
         bWriteBreak = false;
@@ -2357,8 +2402,8 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
             // output the frames that are anchored to the current position
             if( bFlysLeft )
             {
-                aEndPosLst.OutEndAttrs( rHTMLWrt, nStrPos + nOffset );
-                bFlysLeft = rHTMLWrt.OutFlyFrame( rNode.GetIndex(),
+                aEndPosLst.OutEndAttrs( rWrt, nStrPos + nOffset );
+                bFlysLeft = rWrt.OutFlyFrame( rNode.GetIndex(),
                                                 nStrPos, HtmlPosition::Inside );
             }
 
@@ -2376,16 +2421,16 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
                             // are ignored)
                             aEndPosLst.Insert( pHt->GetAttr(), nStrPos + nOffset,
                                                *pHt->End() + nOffset,
-                                               rHTMLWrt.m_CharFormatInfos );
+                                               rWrt.m_CharFormatInfos );
                         }
                     }
                     else
                     {
                         // hints without an end are output last
                         OSL_ENSURE( !pTextHt, "Why is there already an attribute without an end?" );
-                        if( rHTMLWrt.m_nTextAttrsToIgnore>0 )
+                        if( rWrt.m_nTextAttrsToIgnore>0 )
                         {
-                            rHTMLWrt.m_nTextAttrsToIgnore--;
+                            rWrt.m_nTextAttrsToIgnore--;
                         }
                         else
                         {
@@ -2408,29 +2453,29 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
             if( pTextHt && RES_TXTATR_FLYCNT == pTextHt->Which() )
             {
                 const SwFrameFormat* pFrameFormat =
-                    static_cast<const SwFormatFlyCnt &>(pTextHt->GetAttr()).GetFrameFormat();
+                    pTextHt->GetAttr().StaticWhichCast(RES_TXTATR_FLYCNT).GetFrameFormat();
 
                 if( RES_DRAWFRMFMT == pFrameFormat->Which() )
                     aEndPosLst.Insert( *static_cast<const SwDrawFrameFormat *>(pFrameFormat),
                                         nStrPos + nOffset,
-                                        rHTMLWrt.m_CharFormatInfos );
+                                        rWrt.m_CharFormatInfos );
             }
 
-            aEndPosLst.OutEndAttrs( rHTMLWrt, nStrPos + nOffset );
-            aEndPosLst.OutStartAttrs( rHTMLWrt, nStrPos + nOffset );
+            aEndPosLst.OutEndAttrs( rWrt, nStrPos + nOffset );
+            aEndPosLst.OutStartAttrs( rWrt, nStrPos + nOffset );
 
             if( pTextHt )
             {
-                rHTMLWrt.m_bLFPossible = rHTMLWrt.m_nLastParaToken == HtmlTokenId::NONE &&
+                rWrt.SetLFPossible(rWrt.m_nLastParaToken == HtmlTokenId::NONE &&
                                        nStrPos > 0 &&
-                                       rStr[nStrPos-1] == ' ';
-                sal_uInt16 nCSS1Script = rHTMLWrt.m_nCSS1Script;
-                rHTMLWrt.m_nCSS1Script = aEndPosLst.GetScriptAtPos(
+                                       rStr[nStrPos-1] == ' ');
+                sal_uInt16 nCSS1Script = rWrt.m_nCSS1Script;
+                rWrt.m_nCSS1Script = aEndPosLst.GetScriptAtPos(
                                                 nStrPos + nOffset, nCSS1Script );
                 HTMLOutFuncs::FlushToAscii( rWrt.Strm() );
-                Out( aHTMLAttrFnTab, pTextHt->GetAttr(), rHTMLWrt );
-                rHTMLWrt.m_nCSS1Script = nCSS1Script;
-                rHTMLWrt.m_bLFPossible = false;
+                Out( aHTMLAttrFnTab, pTextHt->GetAttr(), rWrt );
+                rWrt.m_nCSS1Script = nCSS1Script;
+                rWrt.SetLFPossible(false);
             }
 
             if( bOutChar )
@@ -2448,22 +2493,22 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
 
                 // try to split a line after about 255 characters
                 // at a space character unless in a PRE-context
-                if( ' ' == c && rHTMLWrt.m_nLastParaToken == HtmlTokenId::NONE  )
+                if( ' ' == c && rWrt.m_nLastParaToken == HtmlTokenId::NONE && !rWrt.IsSpacePreserve() )
                 {
                     sal_Int32 nLineLen;
-                    nLineLen = rHTMLWrt.GetLineLen();
+                    nLineLen = rWrt.GetLineLen();
 
                     sal_Int32 nWordLen = rStr.indexOf( ' ', nStrPos+1 );
                     if( nWordLen == -1 )
                         nWordLen = nEnd;
                     nWordLen -= nStrPos;
 
-                    if( rHTMLWrt.m_bPrettyPrint && rHTMLWrt.m_nWishLineLen >= 0 &&
-                        (nLineLen >= rHTMLWrt.m_nWishLineLen ||
-                        (nLineLen+nWordLen) >= rHTMLWrt.m_nWishLineLen ) )
+                    if( rWrt.IsPrettyPrint() && rWrt.m_nWishLineLen >= 0 &&
+                        (nLineLen >= rWrt.m_nWishLineLen ||
+                        (nLineLen+nWordLen) >= rWrt.m_nWishLineLen ) )
                     {
                         HTMLOutFuncs::FlushToAscii( rWrt.Strm() );
-                        rHTMLWrt.OutNewLine();
+                        rWrt.OutNewLine();
                         bOutChar = false;
                     }
                 }
@@ -2473,9 +2518,9 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
                     if( 0x0a == c )
                     {
                         HTMLOutFuncs::FlushToAscii( rWrt.Strm() );
-                        HtmlWriter aHtml(rWrt.Strm(), rHTMLWrt.maNamespace);
-                        aHtml.prettyPrint(rHTMLWrt.m_bPrettyPrint);
-                        aHtml.single(OOO_STRING_SVTOOLS_HTML_linebreak);
+                        HtmlWriter aHtml(rWrt.Strm(), rWrt.maNamespace);
+                        aHtml.prettyPrint(rWrt.IsPrettyPrint());
+                        aHtml.single(OOO_STRING_SVTOOLS_HTML_linebreak ""_ostr);
                     }
                     else if (c == CH_TXT_ATR_FORMELEMENT)
                     {
@@ -2483,20 +2528,20 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
 
                         SwPosition aMarkPos = *rWrt.m_pCurrentPam->GetPoint();
                         aMarkPos.AdjustContent( nStrPos - aMarkPos.GetContentIndex() );
-                        rHTMLWrt.OutPointFieldmarks(aMarkPos);
+                        rWrt.OutPointFieldmarks(aMarkPos);
                     }
                     else
                     {
                         bool bConsumed = false;
                         if (c == '\t')
                         {
-                            if (bLeadingTab && rHTMLWrt.m_nLeadingTabWidth.has_value())
+                            if (bLeadingTab && rWrt.m_nLeadingTabWidth.has_value())
                             {
                                 // Consume a tab if it's leading and we know the number of NBSPs to
                                 // be used as a replacement.
-                                for (sal_Int32 i = 0; i < *rHTMLWrt.m_nLeadingTabWidth; ++i)
+                                for (sal_Int32 i = 0; i < *rWrt.m_nLeadingTabWidth; ++i)
                                 {
-                                    rWrt.Strm().WriteCharPtr("&#160;");
+                                    rWrt.Strm().WriteOString("&#160;");
                                 }
                                 bConsumed = true;
                             }
@@ -2513,13 +2558,13 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
                         }
                     }
 
-                    if (!rHTMLWrt.mbReqIF)
+                    if (!rWrt.mbReqIF)
                     {
                         // if a paragraph's last character is a hard line break
                         // then we need to add an extra <br>
                         // because browsers like Mozilla wouldn't add a line for the next paragraph
                         bWriteBreak = (0x0a == c) &&
-                                      (HtmlTokenId::PREFORMTXT_ON != rHTMLWrt.m_nLastParaToken);
+                                      (HtmlTokenId::PREFORMTXT_ON != rWrt.m_nLastParaToken);
                     }
                 }
             }
@@ -2527,49 +2572,49 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
         HTMLOutFuncs::FlushToAscii( rWrt.Strm() );
     }
 
-    aEndPosLst.OutEndAttrs( rHTMLWrt, SAL_MAX_INT32 );
+    aEndPosLst.OutEndAttrs( rWrt, SAL_MAX_INT32 );
 
     // Output the frames that are anchored to the last position
     if( bFlysLeft )
-        bFlysLeft = rHTMLWrt.OutFlyFrame( rNode.GetIndex(),
+        bFlysLeft = rWrt.OutFlyFrame( rNode.GetIndex(),
                                        nEnd, HtmlPosition::Inside );
     OSL_ENSURE( !bFlysLeft, "Not all frames were saved!" );
 
-    rHTMLWrt.m_bTextAttr = false;
+    rWrt.m_bTextAttr = false;
 
     if( bWriteBreak )
     {
-        bool bEndOfCell = rHTMLWrt.m_bOutTable &&
+        bool bEndOfCell = rWrt.m_bOutTable &&
                          rWrt.m_pCurrentPam->GetPoint()->GetNodeIndex() ==
                          rWrt.m_pCurrentPam->GetMark()->GetNodeIndex();
 
         if( bEndOfCell && !nEnd &&
-            rHTMLWrt.IsHTMLMode(HTMLMODE_NBSP_IN_TABLES) )
+            rWrt.IsHTMLMode(HTMLMODE_NBSP_IN_TABLES) )
         {
             // If the last paragraph of a table cell is empty and we export
             // for the MS-IE, we write a &nbsp; instead of a <BR>
-            rWrt.Strm().WriteChar( '&' ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_S_nbsp ).WriteChar( ';' );
+            rWrt.Strm().WriteChar( '&' ).WriteOString( OOO_STRING_SVTOOLS_HTML_S_nbsp ).WriteChar( ';' );
         }
         else
         {
-            HtmlWriter aHtml(rHTMLWrt.Strm(), rHTMLWrt.maNamespace);
-            aHtml.prettyPrint(rHTMLWrt.m_bPrettyPrint);
-            aHtml.single(OOO_STRING_SVTOOLS_HTML_linebreak);
+            HtmlWriter aHtml(rWrt.Strm(), rWrt.maNamespace);
+            aHtml.prettyPrint(rWrt.IsPrettyPrint());
+            aHtml.single(OOO_STRING_SVTOOLS_HTML_linebreak ""_ostr);
             const SvxULSpaceItem& rULSpace = pNd->GetSwAttrSet().Get(RES_UL_SPACE);
             if (rULSpace.GetLower() > 0 && !bEndOfCell)
             {
-                aHtml.single(OOO_STRING_SVTOOLS_HTML_linebreak);
+                aHtml.single(OOO_STRING_SVTOOLS_HTML_linebreak ""_ostr);
             }
-            rHTMLWrt.m_bLFPossible = true;
+            rWrt.SetLFPossible(true);
         }
     }
 
-    if( rHTMLWrt.m_bClearLeft || rHTMLWrt.m_bClearRight )
+    if( rWrt.m_bClearLeft || rWrt.m_bClearRight )
     {
         const char* pString;
-        if( rHTMLWrt.m_bClearLeft )
+        if( rWrt.m_bClearLeft )
         {
-            if( rHTMLWrt.m_bClearRight )
+            if( rWrt.m_bClearRight )
                 pString = OOO_STRING_SVTOOLS_HTML_AL_all;
             else
                 pString = OOO_STRING_SVTOOLS_HTML_AL_left;
@@ -2579,24 +2624,24 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
             pString = OOO_STRING_SVTOOLS_HTML_AL_right;
         }
 
-        HtmlWriter aHtml(rHTMLWrt.Strm(), rHTMLWrt.maNamespace);
-        aHtml.prettyPrint(rHTMLWrt.m_bPrettyPrint);
-        aHtml.start(OOO_STRING_SVTOOLS_HTML_linebreak);
+        HtmlWriter aHtml(rWrt.Strm(), rWrt.maNamespace);
+        aHtml.prettyPrint(rWrt.IsPrettyPrint());
+        aHtml.start(OOO_STRING_SVTOOLS_HTML_linebreak ""_ostr);
         aHtml.attribute(OOO_STRING_SVTOOLS_HTML_O_clear, pString);
         aHtml.end();
 
-        rHTMLWrt.m_bClearLeft = false;
-        rHTMLWrt.m_bClearRight = false;
+        rWrt.m_bClearLeft = false;
+        rWrt.m_bClearRight = false;
 
-        rHTMLWrt.m_bLFPossible = true;
+        rWrt.SetLFPossible(true);
     }
 
     // if an LF is not allowed already, it is allowed once the paragraphs
     // ends with a ' '
-    if( !rHTMLWrt.m_bLFPossible &&
-        rHTMLWrt.m_nLastParaToken == HtmlTokenId::NONE &&
+    if (!rWrt.IsLFPossible() &&
+        rWrt.m_nLastParaToken == HtmlTokenId::NONE &&
         nEnd > 0 && ' ' == rStr[nEnd-1] )
-        rHTMLWrt.m_bLFPossible = true;
+        rWrt.SetLFPossible(true);
 
     // dot leaders: print the skipped page number in a different span element
     if (nIndexTab > -1) {
@@ -2604,37 +2649,39 @@ Writer& OutHTML_SwTextNode( Writer& rWrt, const SwContentNode& rNode )
         rWrt.Strm().WriteOString( Concat2View("</span><span>" + sOut + "</span>") );
     }
 
-    rHTMLWrt.m_bTagOn = false;
+    rWrt.m_bTagOn = false;
     OutHTML_SwFormatOff( rWrt, aFormatInfo );
+    rWrt.SetSpacePreserve(bOldSpacePreserve);
 
     // if necessary, close a form
-    rHTMLWrt.OutForm( false );
+    rWrt.OutForm( false );
 
     if( bPageBreakBehind )
         rWrt.Strm().WriteChar( '\f' );
 
-    return rHTMLWrt;
+    return rWrt;
 }
 
-sal_uInt32 SwHTMLWriter::ToPixel( sal_uInt32 nVal, const bool bVert )
+// In CSS, "px" is 1/96 of inch: https://www.w3.org/TR/css3-values/#absolute-lengths
+sal_uInt32 SwHTMLWriter::ToPixel(sal_uInt32 nTwips)
 {
-    if( Application::GetDefaultDevice() && nVal )
-    {
-        Size aSz( bVert ? 0 : nVal, bVert ? nVal : 0 );
-        aSz = Application::GetDefaultDevice()->LogicToPixel(aSz, MapMode( MapUnit::MapTwip ));
-        nVal = bVert ? aSz.Height() : aSz.Width();
-        if( !nVal )     // if there is a Twip, there should be a pixel as well
-            nVal = 1;
-    }
-    return nVal;
+    // if there is a Twip, there should be a pixel as well
+    return nTwips
+               ? std::max(o3tl::convert(nTwips, o3tl::Length::twip, o3tl::Length::px), sal_Int64(1))
+               : 0;
 }
 
-static Writer& OutHTML_CSS1Attr( Writer& rWrt, const SfxPoolItem& rHt )
+Size SwHTMLWriter::ToPixel(Size aTwips)
+{
+    return Size(ToPixel(aTwips.Width()), ToPixel(aTwips.Height()));
+}
+
+static SwHTMLWriter& OutHTML_CSS1Attr( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
     // if hints are currently written, we try to write the hint as an
     // CSS1 attribute
 
-    if( static_cast<SwHTMLWriter&>(rWrt).m_bCfgOutStyles && static_cast<SwHTMLWriter&>(rWrt).m_bTextAttr )
+    if( rWrt.m_bCfgOutStyles && rWrt.m_bTextAttr )
         OutCSS1_HintSpanTag( rWrt, rHt );
 
     return rWrt;
@@ -2642,35 +2689,34 @@ static Writer& OutHTML_CSS1Attr( Writer& rWrt, const SfxPoolItem& rHt )
 
 /* File CHRATR.HXX: */
 
-static Writer& OutHTML_SvxColor( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SvxColor( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
-    if( !rHTMLWrt.m_bTextAttr && rHTMLWrt.m_bCfgOutStyles && rHTMLWrt.m_bCfgPreferStyles )
+    if( !rWrt.m_bTextAttr && rWrt.m_bCfgOutStyles && rWrt.m_bCfgPreferStyles )
     {
         // don't write the font color as a tag, if styles are preferred to
         // normal tags
         return rWrt;
     }
 
-    if( rHTMLWrt.m_bTagOn )
+    if( rWrt.m_bTagOn )
     {
         Color aColor( static_cast<const SvxColorItem&>(rHt).GetValue() );
         if( COL_AUTO == aColor )
             aColor = COL_BLACK;
 
-        if (rHTMLWrt.mbXHTML)
+        if (rWrt.mbXHTML)
         {
-            OString sOut = "<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span
+            OString sOut = "<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span
                            " " OOO_STRING_SVTOOLS_HTML_O_style "=";
             rWrt.Strm().WriteOString(sOut);
             HTMLOutFuncs::Out_Color(rWrt.Strm(), aColor, /*bXHTML=*/true).WriteChar('>');
         }
         else
         {
-            OString sOut = "<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font " "
+            OString sOut = "<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font " "
                 OOO_STRING_SVTOOLS_HTML_O_color "=";
             rWrt.Strm().WriteOString( sOut );
             HTMLOutFuncs::Out_Color( rWrt.Strm(), aColor ).WriteChar( '>' );
@@ -2678,28 +2724,27 @@ static Writer& OutHTML_SvxColor( Writer& rWrt, const SfxPoolItem& rHt )
     }
     else
     {
-        if (rHTMLWrt.mbXHTML)
+        if (rWrt.mbXHTML)
             HTMLOutFuncs::Out_AsciiTag(
-                rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span), false);
+                rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span), false);
         else
-            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font), false );
+            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font), false );
     }
 
     return rWrt;
 }
 
-static Writer& OutHTML_SwPosture( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SwPosture( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
     const FontItalic nPosture = static_cast<const SvxPostureItem&>(rHt).GetPosture();
     if( ITALIC_NORMAL == nPosture )
     {
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_italic), rHTMLWrt.m_bTagOn );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_italic), rWrt.m_bTagOn );
     }
-    else if( rHTMLWrt.m_bCfgOutStyles && rHTMLWrt.m_bTextAttr )
+    else if( rWrt.m_bCfgOutStyles && rWrt.m_bTextAttr )
     {
         // maybe as CSS1 attribute?
         OutCSS1_HintSpanTag( rWrt, rHt );
@@ -2708,67 +2753,65 @@ static Writer& OutHTML_SwPosture( Writer& rWrt, const SfxPoolItem& rHt )
     return rWrt;
 }
 
-static Writer& OutHTML_SvxFont( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SvxFont( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
-    if (IgnorePropertyForReqIF(rHTMLWrt.mbReqIF, "font-family", ""))
+    if (IgnorePropertyForReqIF(rWrt.mbReqIF, "font-family", ""))
     {
         return rWrt;
     }
 
-    if( rHTMLWrt.m_bTagOn )
+    if( rWrt.m_bTagOn )
     {
         OUString aNames;
         SwHTMLWriter::PrepareFontList( static_cast<const SvxFontItem&>(rHt), aNames, 0,
-                           rHTMLWrt.IsHTMLMode(HTMLMODE_FONT_GENERIC) );
-        if (rHTMLWrt.mbXHTML)
+                           rWrt.IsHTMLMode(HTMLMODE_FONT_GENERIC) );
+        if (rWrt.mbXHTML)
         {
-            OString sOut = "<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span
+            OString sOut = "<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span
                            " " OOO_STRING_SVTOOLS_HTML_O_style "=\"font-family: ";
             rWrt.Strm().WriteOString(sOut);
             HTMLOutFuncs::Out_String(rWrt.Strm(), aNames)
-                .WriteCharPtr("\">");
+                .WriteOString("\">");
         }
         else
         {
-            OString sOut = "<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font " "
+            OString sOut = "<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font " "
                 OOO_STRING_SVTOOLS_HTML_O_face "=\"";
             rWrt.Strm().WriteOString( sOut );
             HTMLOutFuncs::Out_String( rWrt.Strm(), aNames )
-               .WriteCharPtr( "\">" );
+               .WriteOString( "\">" );
         }
     }
     else
     {
-        if (rHTMLWrt.mbXHTML)
+        if (rWrt.mbXHTML)
             HTMLOutFuncs::Out_AsciiTag(
-                rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span), false);
+                rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span), false);
         else
-            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font), false );
+            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font), false );
     }
 
     return rWrt;
 }
 
-static Writer& OutHTML_SvxFontHeight( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SvxFontHeight( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
-    if (IgnorePropertyForReqIF(rHTMLWrt.mbReqIF, "font-size", ""))
+    if (IgnorePropertyForReqIF(rWrt.mbReqIF, "font-size", ""))
     {
         return rWrt;
     }
 
-    if( rHTMLWrt.m_bTagOn )
+    if( rWrt.m_bTagOn )
     {
-        if (rHTMLWrt.mbXHTML)
+        if (rWrt.mbXHTML)
         {
-            OString sOut = "<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span;
+            OString sOut = "<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span;
 
             sal_uInt32 nHeight = static_cast<const SvxFontHeightItem&>(rHt).GetHeight();
             // Twips -> points.
@@ -2779,15 +2822,15 @@ static Writer& OutHTML_SvxFontHeight( Writer& rWrt, const SfxPoolItem& rHt )
         }
         else
         {
-            OString sOut = "<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font;
+            OString sOut = "<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font;
 
             sal_uInt32 nHeight = static_cast<const SvxFontHeightItem&>(rHt).GetHeight();
-            sal_uInt16 nSize = rHTMLWrt.GetHTMLFontSize( nHeight );
+            sal_uInt16 nSize = rWrt.GetHTMLFontSize( nHeight );
             sOut += " " OOO_STRING_SVTOOLS_HTML_O_size "=\"" +
                 OString::number(static_cast<sal_Int32>(nSize)) + "\"";
             rWrt.Strm().WriteOString( sOut );
 
-            if( rHTMLWrt.m_bCfgOutStyles && rHTMLWrt.m_bTextAttr )
+            if( rWrt.m_bCfgOutStyles && rWrt.m_bTextAttr )
             {
                 // always export font size as CSS option, too
                 OutCSS1_HintStyleOpt( rWrt, rHt );
@@ -2797,52 +2840,50 @@ static Writer& OutHTML_SvxFontHeight( Writer& rWrt, const SfxPoolItem& rHt )
     }
     else
     {
-        if (rHTMLWrt.mbXHTML)
+        if (rWrt.mbXHTML)
             HTMLOutFuncs::Out_AsciiTag(
-                rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span), false);
+                rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span), false);
         else
-            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font), false );
+            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_font), false );
     }
 
     return rWrt;
 }
 
-static Writer& OutHTML_SvxLanguage( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SvxLanguage( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
     LanguageType eLang = static_cast<const SvxLanguageItem &>(rHt).GetLanguage();
     if( LANGUAGE_DONTKNOW == eLang )
         return rWrt;
 
-    if( rHTMLWrt.m_bTagOn )
+    if( rWrt.m_bTagOn )
     {
-        OString sOut = "<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span;
+        OString sOut = "<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span;
         rWrt.Strm().WriteOString( sOut );
-        rHTMLWrt.OutLanguage( static_cast<const SvxLanguageItem &>(rHt).GetLanguage() );
+        rWrt.OutLanguage( static_cast<const SvxLanguageItem &>(rHt).GetLanguage() );
         rWrt.Strm().WriteChar( '>' );
     }
     else
     {
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span), false );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span), false );
     }
 
     return rWrt;
 }
-static Writer& OutHTML_SwWeight( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SwWeight( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
     const FontWeight nBold = static_cast<const SvxWeightItem&>(rHt).GetWeight();
     if( WEIGHT_BOLD == nBold )
     {
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_bold), rHTMLWrt.m_bTagOn );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_bold), rWrt.m_bTagOn );
     }
-    else if( rHTMLWrt.m_bCfgOutStyles && rHTMLWrt.m_bTextAttr )
+    else if( rWrt.m_bCfgOutStyles && rWrt.m_bTextAttr )
     {
         // maybe as CSS1 attribute ?
         OutCSS1_HintSpanTag( rWrt, rHt );
@@ -2851,19 +2892,18 @@ static Writer& OutHTML_SwWeight( Writer& rWrt, const SfxPoolItem& rHt )
     return rWrt;
 }
 
-static Writer& OutHTML_SwCrossedOut( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SwCrossedOut( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
     // Because of Netscape, we output STRIKE and not S!
     const FontStrikeout nStrike = static_cast<const SvxCrossedOutItem&>(rHt).GetStrikeout();
-    if( STRIKEOUT_NONE != nStrike && !rHTMLWrt.mbReqIF )
+    if( STRIKEOUT_NONE != nStrike && !rWrt.mbReqIF )
     {
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_strike), rHTMLWrt.m_bTagOn );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_strike), rWrt.m_bTagOn );
     }
-    else if( rHTMLWrt.m_bCfgOutStyles && rHTMLWrt.m_bTextAttr )
+    else if( rWrt.m_bCfgOutStyles && rWrt.m_bTextAttr )
     {
         // maybe as CSS1 attribute?
         OutCSS1_HintSpanTag( rWrt, rHt );
@@ -2872,10 +2912,9 @@ static Writer& OutHTML_SwCrossedOut( Writer& rWrt, const SfxPoolItem& rHt )
     return rWrt;
 }
 
-static Writer& OutHTML_SvxEscapement( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SvxEscapement( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
     const SvxEscapement eEscape =
@@ -2883,17 +2922,17 @@ static Writer& OutHTML_SvxEscapement( Writer& rWrt, const SfxPoolItem& rHt )
     OString aTag;
     switch( eEscape )
     {
-    case SvxEscapement::Superscript: aTag = OOO_STRING_SVTOOLS_HTML_superscript; break;
-    case SvxEscapement::Subscript: aTag = OOO_STRING_SVTOOLS_HTML_subscript; break;
+    case SvxEscapement::Superscript: aTag = OOO_STRING_SVTOOLS_HTML_superscript ""_ostr; break;
+    case SvxEscapement::Subscript: aTag = OOO_STRING_SVTOOLS_HTML_subscript ""_ostr; break;
     default:
         ;
     }
 
     if( !aTag.isEmpty() )
     {
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + aTag), rHTMLWrt.m_bTagOn );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + aTag), rWrt.m_bTagOn );
     }
-    else if( rHTMLWrt.m_bCfgOutStyles && rHTMLWrt.m_bTextAttr )
+    else if( rWrt.m_bCfgOutStyles && rWrt.m_bTextAttr )
     {
         // maybe as CSS1 attribute?
         OutCSS1_HintSpanTag( rWrt, rHt );
@@ -2902,18 +2941,17 @@ static Writer& OutHTML_SvxEscapement( Writer& rWrt, const SfxPoolItem& rHt )
     return rWrt;
 }
 
-static Writer& OutHTML_SwUnderline( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SwUnderline( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
     const FontLineStyle eUnder = static_cast<const SvxUnderlineItem&>(rHt).GetLineStyle();
-    if( LINESTYLE_NONE != eUnder && !rHTMLWrt.mbReqIF )
+    if( LINESTYLE_NONE != eUnder && !rWrt.mbReqIF )
     {
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_underline), rHTMLWrt.m_bTagOn );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_underline), rWrt.m_bTagOn );
     }
-    else if( rHTMLWrt.m_bCfgOutStyles && rHTMLWrt.m_bTextAttr )
+    else if( rWrt.m_bCfgOutStyles && rWrt.m_bTextAttr )
     {
         // maybe as CSS1 attribute?
         OutCSS1_HintSpanTag( rWrt, rHt );
@@ -2922,34 +2960,31 @@ static Writer& OutHTML_SwUnderline( Writer& rWrt, const SfxPoolItem& rHt )
     return rWrt;
 }
 
-static Writer& OutHTML_SwFlyCnt( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SwFlyCnt( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter & rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
     const SwFormatFlyCnt& rFlyCnt = static_cast<const SwFormatFlyCnt&>(rHt);
 
     const SwFrameFormat& rFormat = *rFlyCnt.GetFrameFormat();
     const SdrObject *pSdrObj = nullptr;
 
-    SwHTMLFrameType eType =
-        static_cast<SwHTMLFrameType>(rHTMLWrt.GuessFrameType( rFormat, pSdrObj ));
-    AllHtmlFlags nMode = aHTMLOutFrameAsCharTable[eType][rHTMLWrt.m_nExportMode];
-    rHTMLWrt.OutFrameFormat( nMode, rFormat, pSdrObj );
+    SwHTMLFrameType eType = rWrt.GuessFrameType( rFormat, pSdrObj );
+    AllHtmlFlags nMode = getHTMLOutFrameAsCharTable(eType, rWrt.m_nExportMode);
+    rWrt.OutFrameFormat( nMode, rFormat, pSdrObj );
     return rWrt;
 }
 
 // This is now our Blink item. Blinking is activated by setting the item to
 // true!
-static Writer& OutHTML_SwBlink( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SwBlink( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
     if( static_cast<const SvxBlinkItem&>(rHt).GetValue() )
     {
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_blink), rHTMLWrt.m_bTagOn );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_blink), rWrt.m_bTagOn );
     }
-    else if( rHTMLWrt.m_bCfgOutStyles && rHTMLWrt.m_bTextAttr )
+    else if( rWrt.m_bCfgOutStyles && rWrt.m_bTextAttr )
     {
         // maybe as CSS1 attribute?
         OutCSS1_HintSpanTag( rWrt, rHt );
@@ -2958,10 +2993,8 @@ static Writer& OutHTML_SwBlink( Writer& rWrt, const SfxPoolItem& rHt )
     return rWrt;
 }
 
-Writer& OutHTML_INetFormat( Writer& rWrt, const SwFormatINetFormat& rINetFormat, bool bOn )
+SwHTMLWriter& OutHTML_INetFormat( SwHTMLWriter& rWrt, const SwFormatINetFormat& rINetFormat, bool bOn )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-
     OUString aURL( rINetFormat.GetValue() );
     const SvxMacroTableDtor *pMacTable = rINetFormat.GetMacroTable();
     bool bEvents = pMacTable != nullptr && !pMacTable->empty();
@@ -2973,19 +3006,19 @@ Writer& OutHTML_INetFormat( Writer& rWrt, const SwFormatINetFormat& rINetFormat,
     // bOn controls if we are writing the opening or closing tag
     if( !bOn )
     {
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor), false );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor), false );
         return rWrt;
     }
 
-    OString sOut("<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor);
+    OString sOut("<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor);
 
     bool bScriptDependent = false;
     {
         const SwCharFormat* pFormat = rWrt.m_pDoc->getIDocumentStylePoolAccess().GetCharFormatFromPool(
                  RES_POOLCHR_INET_NORMAL );
         std::unique_ptr<SwHTMLFormatInfo> pFormatInfo(new SwHTMLFormatInfo(pFormat));
-        auto const it = rHTMLWrt.m_CharFormatInfos.find( pFormatInfo );
-        if (it != rHTMLWrt.m_CharFormatInfos.end())
+        auto const it = rWrt.m_CharFormatInfos.find( pFormatInfo );
+        if (it != rWrt.m_CharFormatInfos.end())
         {
             bScriptDependent = (*it)->bScriptDependent;
         }
@@ -2995,8 +3028,8 @@ Writer& OutHTML_INetFormat( Writer& rWrt, const SwFormatINetFormat& rINetFormat,
         const SwCharFormat* pFormat = rWrt.m_pDoc->getIDocumentStylePoolAccess().GetCharFormatFromPool(
                  RES_POOLCHR_INET_VISIT );
         std::unique_ptr<SwHTMLFormatInfo> pFormatInfo(new SwHTMLFormatInfo(pFormat));
-        auto const it = rHTMLWrt.m_CharFormatInfos.find( pFormatInfo );
-        if (it != rHTMLWrt.m_CharFormatInfos.end())
+        auto const it = rWrt.m_CharFormatInfos.find( pFormatInfo );
+        if (it != rWrt.m_CharFormatInfos.end())
         {
             bScriptDependent = (*it)->bScriptDependent;
         }
@@ -3006,7 +3039,7 @@ Writer& OutHTML_INetFormat( Writer& rWrt, const SwFormatINetFormat& rINetFormat,
     {
         sOut += " " OOO_STRING_SVTOOLS_HTML_O_class "=\"";
         const char* pStr = nullptr;
-        switch( rHTMLWrt.m_nCSS1Script )
+        switch( rWrt.m_nCSS1Script )
         {
         case CSS1_OUTMODE_WESTERN:
             pStr = "western";
@@ -3022,7 +3055,7 @@ Writer& OutHTML_INetFormat( Writer& rWrt, const SwFormatINetFormat& rINetFormat,
     }
 
     rWrt.Strm().WriteOString( sOut );
-    sOut = "";
+    sOut = ""_ostr;
 
     OUString sRel;
 
@@ -3039,8 +3072,8 @@ Writer& OutHTML_INetFormat( Writer& rWrt, const SwFormatINetFormat& rINetFormat,
 
         sOut += " " OOO_STRING_SVTOOLS_HTML_O_href "=\"";
         rWrt.Strm().WriteOString( sOut );
-        rHTMLWrt.OutHyperlinkHRefValue( aURL );
-        sOut = "\"";
+        rWrt.OutHyperlinkHRefValue( aURL );
+        sOut = "\""_ostr;
     }
 
     if( !rINetFormat.GetName().isEmpty() )
@@ -3048,7 +3081,7 @@ Writer& OutHTML_INetFormat( Writer& rWrt, const SwFormatINetFormat& rINetFormat,
         sOut += " " OOO_STRING_SVTOOLS_HTML_O_name "=\"";
         rWrt.Strm().WriteOString( sOut );
         HTMLOutFuncs::Out_String( rWrt.Strm(), rINetFormat.GetName() );
-        sOut = "\"";
+        sOut = "\""_ostr;
     }
 
     const OUString& rTarget = rINetFormat.GetTargetFrame();
@@ -3057,7 +3090,7 @@ Writer& OutHTML_INetFormat( Writer& rWrt, const SwFormatINetFormat& rINetFormat,
         sOut += " " OOO_STRING_SVTOOLS_HTML_O_target "=\"";
         rWrt.Strm().WriteOString( sOut );
         HTMLOutFuncs::Out_String( rWrt.Strm(), rTarget );
-        sOut = "\"";
+        sOut = "\""_ostr;
     }
 
     if( !sRel.isEmpty() )
@@ -3068,28 +3101,26 @@ Writer& OutHTML_INetFormat( Writer& rWrt, const SwFormatINetFormat& rINetFormat,
 
     if( bEvents )
         HTMLOutFuncs::Out_Events( rWrt.Strm(), *pMacTable, aAnchorEventTable,
-                                  rHTMLWrt.m_bCfgStarBasic );
-    rWrt.Strm().WriteCharPtr( ">" );
+                                  rWrt.m_bCfgStarBasic );
+    rWrt.Strm().WriteOString( ">" );
 
     return rWrt;
 }
 
-static Writer& OutHTML_SwFormatINetFormat( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SwFormatINetFormat( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
     const SwFormatINetFormat& rINetFormat = static_cast<const SwFormatINetFormat&>(rHt);
 
-    if( rHTMLWrt.m_bTagOn )
+    if( rWrt.m_bTagOn )
     {
         // if necessary, temporarily close an attribute that is still open
-        if( !rHTMLWrt.m_aINetFormats.empty() )
+        if( !rWrt.m_aINetFormats.empty() )
         {
             SwFormatINetFormat *pINetFormat =
-                rHTMLWrt.m_aINetFormats.back();
+                rWrt.m_aINetFormats.back();
             OutHTML_INetFormat( rWrt, *pINetFormat, false );
         }
 
@@ -3098,25 +3129,25 @@ static Writer& OutHTML_SwFormatINetFormat( Writer& rWrt, const SfxPoolItem& rHt 
 
         // and remember it
         SwFormatINetFormat *pINetFormat = new SwFormatINetFormat( rINetFormat );
-        rHTMLWrt.m_aINetFormats.push_back( pINetFormat );
+        rWrt.m_aINetFormats.push_back( pINetFormat );
     }
     else
     {
         OutHTML_INetFormat( rWrt, rINetFormat, false );
 
-        OSL_ENSURE( rHTMLWrt.m_aINetFormats.size(), "there must be a URL attribute missing" );
-        if( !rHTMLWrt.m_aINetFormats.empty() )
+        OSL_ENSURE( rWrt.m_aINetFormats.size(), "there must be a URL attribute missing" );
+        if( !rWrt.m_aINetFormats.empty() )
         {
             // get its own attribute from the stack
-            SwFormatINetFormat *pINetFormat = rHTMLWrt.m_aINetFormats.back();
-            rHTMLWrt.m_aINetFormats.pop_back();
+            SwFormatINetFormat *pINetFormat = rWrt.m_aINetFormats.back();
+            rWrt.m_aINetFormats.pop_back();
             delete pINetFormat;
         }
 
-        if( !rHTMLWrt.m_aINetFormats.empty() )
+        if( !rWrt.m_aINetFormats.empty() )
         {
             // there is still an attribute on the stack that must be reopened
-            SwFormatINetFormat *pINetFormat = rHTMLWrt.m_aINetFormats.back();
+            SwFormatINetFormat *pINetFormat = rWrt.m_aINetFormats.back();
             OutHTML_INetFormat( rWrt, *pINetFormat, true );
         }
     }
@@ -3124,10 +3155,9 @@ static Writer& OutHTML_SwFormatINetFormat( Writer& rWrt, const SfxPoolItem& rHt 
     return rWrt;
 }
 
-static Writer& OutHTML_SwTextCharFormat( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SwTextCharFormat( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( rHTMLWrt.m_bOutOpts )
+    if( rWrt.m_bOutOpts )
         return rWrt;
 
     const SwFormatCharFormat& rChrFormat = static_cast<const SwFormatCharFormat&>(rHt);
@@ -3139,22 +3169,22 @@ static Writer& OutHTML_SwTextCharFormat( Writer& rWrt, const SfxPoolItem& rHt )
     }
 
     std::unique_ptr<SwHTMLFormatInfo> pTmpInfo(new SwHTMLFormatInfo(pFormat));
-    SwHTMLFormatInfos::const_iterator it = rHTMLWrt.m_CharFormatInfos.find(pTmpInfo);
-    if (it == rHTMLWrt.m_CharFormatInfos.end())
+    SwHTMLFormatInfos::const_iterator it = rWrt.m_CharFormatInfos.find(pTmpInfo);
+    if (it == rWrt.m_CharFormatInfos.end())
         return rWrt;
 
     const SwHTMLFormatInfo *pFormatInfo = it->get();
     OSL_ENSURE( pFormatInfo, "Why is there no information about the character style?" );
 
-    if( rHTMLWrt.m_bTagOn )
+    if( rWrt.m_bTagOn )
     {
-        OString sOut = "<" + rHTMLWrt.GetNamespace();
+        OString sOut = "<" + rWrt.GetNamespace();
         if( !pFormatInfo->aToken.isEmpty() )
             sOut += pFormatInfo->aToken;
         else
             sOut += OOO_STRING_SVTOOLS_HTML_span;
 
-        if( rHTMLWrt.m_bCfgOutStyles &&
+        if( rWrt.m_bCfgOutStyles &&
             (!pFormatInfo->aClass.isEmpty() || pFormatInfo->bScriptDependent) )
         {
             sOut += " " OOO_STRING_SVTOOLS_HTML_O_class "=\"";
@@ -3164,7 +3194,7 @@ static Writer& OutHTML_SwTextCharFormat( Writer& rWrt, const SfxPoolItem& rHt )
             {
                 if( !aClass.isEmpty() )
                    aClass += "-";
-                switch( rHTMLWrt.m_nCSS1Script )
+                switch( rWrt.m_nCSS1Script )
                 {
                 case CSS1_OUTMODE_WESTERN:
                     aClass += "western";
@@ -3178,7 +3208,7 @@ static Writer& OutHTML_SwTextCharFormat( Writer& rWrt, const SfxPoolItem& rHt )
                 }
             }
             HTMLOutFuncs::Out_String( rWrt.Strm(), aClass );
-            sOut = "\"";
+            sOut = "\""_ostr;
         }
         sOut += ">";
         rWrt.Strm().WriteOString( sOut );
@@ -3187,16 +3217,15 @@ static Writer& OutHTML_SwTextCharFormat( Writer& rWrt, const SfxPoolItem& rHt )
     {
         OString aTag = !pFormatInfo->aToken.isEmpty() ? pFormatInfo->aToken.getStr()
                                                       : OOO_STRING_SVTOOLS_HTML_span;
-        HTMLOutFuncs::Out_AsciiTag(rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + aTag), false);
+        HTMLOutFuncs::Out_AsciiTag(rWrt.Strm(), Concat2View(rWrt.GetNamespace() + aTag), false);
     }
 
     return rWrt;
 }
 
-static Writer& OutHTML_SvxAdjust( Writer& rWrt, const SfxPoolItem& rHt )
+static SwHTMLWriter& OutHTML_SvxAdjust( SwHTMLWriter& rWrt, const SfxPoolItem& rHt )
 {
-    SwHTMLWriter & rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    if( !rHTMLWrt.m_bOutOpts || !rHTMLWrt.m_bTagOn )
+    if( !rWrt.m_bOutOpts || !rWrt.m_bTagOn )
         return  rWrt;
 
     const SvxAdjustItem& rAdjust = static_cast<const SvxAdjustItem&>(rHt);
@@ -3294,8 +3323,8 @@ SwAttrFnTab aHTMLAttrFnTab = {
 /* RES_PARATR_LINESPACING   */      nullptr,
 /* RES_PARATR_ADJUST    */          OutHTML_SvxAdjust,
 /* RES_PARATR_SPLIT */              nullptr,
-/* RES_PARATR_WIDOWS    */          nullptr,
 /* RES_PARATR_ORPHANS   */          nullptr,
+/* RES_PARATR_WIDOWS    */          nullptr,
 /* RES_PARATR_TABSTOP   */          nullptr,
 /* RES_PARATR_HYPHENZONE*/          nullptr,
 /* RES_PARATR_DROP */               OutHTML_CSS1Attr,
@@ -3320,6 +3349,12 @@ SwAttrFnTab aHTMLAttrFnTab = {
 /* RES_FILL_ORDER   */              nullptr,
 /* RES_FRM_SIZE */                  nullptr,
 /* RES_PAPER_BIN    */              nullptr,
+/* RES_MARGIN_FIRSTLINE */          nullptr,
+/* RES_MARGIN_TEXTLEFT */           nullptr,
+/* RES_MARGIN_RIGHT */              nullptr,
+/* RES_MARGIN_LEFT */               nullptr,
+/* RES_MARGIN_GUTTER */             nullptr,
+/* RES_MARGIN_GUTTER_RIGHT */       nullptr,
 /* RES_LR_SPACE */                  nullptr,
 /* RES_UL_SPACE */                  nullptr,
 /* RES_PAGEDESC */                  nullptr,
@@ -3352,6 +3387,7 @@ SwAttrFnTab aHTMLAttrFnTab = {
 /* RES_FRAMEDIR */                  nullptr,
 /* RES_HEADER_FOOTER_EAT_SPACING */ nullptr,
 /* RES_ROW_SPLIT */                 nullptr,
+/* RES_FLY_SPLIT */                 nullptr,
 /* RES_FOLLOW_TEXT_FLOW */          nullptr,
 /* RES_COLLAPSING_BORDERS */        nullptr,
 /* RES_WRAP_INFLUENCE_ON_OBJPOS */  nullptr,
@@ -3360,6 +3396,9 @@ SwAttrFnTab aHTMLAttrFnTab = {
 /* RES_FRMATR_CONDITIONAL_STYLE_NAME */ nullptr,
 /* RES_FRMATR_GRABBAG */            nullptr,
 /* RES_TEXT_VERT_ADJUST */          nullptr,
+/* RES_BACKGROUND_FULL_SIZE */      nullptr,
+/* RES_RTL_GUTTER */                nullptr,
+/* RES_DECORATIVE */                nullptr,
 
 /* RES_GRFATR_MIRRORGRF */          nullptr,
 /* RES_GRFATR_CROPGRF   */          nullptr,
@@ -3373,8 +3412,6 @@ SwAttrFnTab aHTMLAttrFnTab = {
 /* RES_GRFATR_INVERT */             nullptr,
 /* RES_GRFATR_TRANSPARENCY */       nullptr,
 /* RES_GRFATR_DRWAMODE */           nullptr,
-/* RES_GRFATR_DUMMY1 */             nullptr,
-/* RES_GRFATR_DUMMY2 */             nullptr,
 /* RES_GRFATR_DUMMY3 */             nullptr,
 /* RES_GRFATR_DUMMY4 */             nullptr,
 /* RES_GRFATR_DUMMY5 */             nullptr,

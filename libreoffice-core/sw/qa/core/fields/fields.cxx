@@ -8,7 +8,7 @@
  */
 
 #include <com/sun/star/text/XParagraphCursor.hpp>
-#include "reffld.hxx"
+#include <reffld.hxx>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XIndexAccess.hpp>
@@ -43,7 +43,6 @@
 #include <docsh.hxx>
 #include <rootfrm.hxx>
 #include <wrtsh.hxx>
-#include <ndtxt.hxx>
 
 namespace
 {
@@ -85,10 +84,8 @@ CPPUNIT_TEST_FIXTURE(Test, testAuthorityTooltip)
     auto pField = dynamic_cast<SwAuthorityField*>(
         SwCursorShell::GetFieldAtCursor(pCursor, /*bIncludeInputFieldAtStart=*/true));
     CPPUNIT_ASSERT(pField);
-    SwTextNode* pTextNode = pCursor->GetPointNode().GetTextNode();
-    const SwTextAttr* pTextAttr = pTextNode->GetSwpHints().Get(0);
     const SwRootFrame* pLayout = pWrtShell->GetLayout();
-    OUString aTooltip = pField->GetAuthority(pTextAttr, pLayout);
+    OUString aTooltip = pField->GetAuthority(pLayout);
 
     // Without the accompanying fix in place, generating this tooltip text was not possible without
     // first inserting an empty bibliography table into the document.
@@ -162,7 +159,7 @@ CPPUNIT_TEST_FIXTURE(Test, testChapterFieldsFollowedBy)
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf86790)
 {
-    loadFromURL(u"tdf86790.docx");
+    loadFromFile(u"tdf86790.docx");
 
     uno::Reference<text::XTextFieldsSupplier> xTextFieldsSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XEnumerationAccess> xFieldsAccess(
@@ -188,14 +185,12 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf86790)
     CPPUNIT_ASSERT(!xFields->hasMoreElements());
 }
 
-namespace
-{
-void InsertParagraphBreak(uno::Reference<text::XTextCursor> xCursor)
+void InsertParagraphBreak(const uno::Reference<text::XTextCursor>& xCursor)
 {
     uno::Reference<text::XText> xText = xCursor->getText();
     xText->insertControlCharacter(xCursor, text::ControlCharacter::PARAGRAPH_BREAK, false);
 }
-void InsertHeading(uno::Reference<text::XTextCursor> xCursor, OUString content)
+void InsertHeading(const uno::Reference<text::XTextCursor>& xCursor, const OUString& content)
 {
     uno::Reference<beans::XPropertySet> xCursorPropertySet(xCursor, uno::UNO_QUERY);
     uno::Reference<text::XText> xText = xCursor->getText();
@@ -203,7 +198,6 @@ void InsertHeading(uno::Reference<text::XTextCursor> xCursor, OUString content)
     xCursorPropertySet->setPropertyValue("ParaStyleName", uno::Any(OUString("Heading 1")));
     xText->insertString(xCursor, content, false);
     InsertParagraphBreak(xCursor);
-}
 }
 
 /// If there is referenced text both above and below, STYLEREF searches up
@@ -392,7 +386,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFootnoteStyleRef)
 /// STYLEREFs with the REFFLDFLAG_HIDE_NON_NUMERICAL flag should hide all characters that are not numerical or delimiters
 CPPUNIT_TEST_FIXTURE(Test, testNumericalStyleRef)
 {
-    loadFromURL(u"suppress-non-numerical.docx");
+    loadFromFile(u"suppress-non-numerical.docx");
 
     uno::Reference<text::XTextFieldsSupplier> xTextFieldsSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XEnumerationAccess> xFieldsAccess(
@@ -422,7 +416,7 @@ CPPUNIT_TEST_FIXTURE(Test, testNumericalStyleRef)
 ///        this docx only has such stylerefs to avoid confusion)
 CPPUNIT_TEST_FIXTURE(Test, testOOXMLStyleRefFlags)
 {
-    loadFromURL(u"styleref-flags.docx");
+    loadFromFile(u"styleref-flags.docx");
 
     uno::Reference<text::XTextFieldsSupplier> xTextFieldsSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XEnumerationAccess> xFieldsAccess(
@@ -453,7 +447,7 @@ CPPUNIT_TEST_FIXTURE(Test, testOOXMLStyleRefFlags)
 ///        this docx only has such stylerefs to avoid confusion)
 CPPUNIT_TEST_FIXTURE(Test, testODFStyleRef)
 {
-    loadFromURL(u"styleref.odt");
+    loadFromFile(u"styleref.odt");
 
     uno::Reference<text::XTextFieldsSupplier> xTextFieldsSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XEnumerationAccess> xFieldsAccess(

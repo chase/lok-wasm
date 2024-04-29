@@ -39,7 +39,7 @@ typedef std::deque< sal_uInt16 > SbiBreakpoints;
 class SbiImage;
 class SbClassModuleObject;
 class CodeCompleteDataCache;
-
+class SbUnoObject;
 
 class ModuleInitDependencyMap;
 struct ClassModuleRunInitItem;
@@ -69,7 +69,7 @@ protected:
     bool mbVBASupport; // Option VBASupport
     bool mbCompat; // Option Compatible
     sal_Int32 mnType;
-    SbxObjectRef pDocObject; // an impl object ( used by Document Modules )
+    tools::SvRef<SbUnoObject> pDocObject; // an impl object ( used by Document Modules )
     bool    bIsProxyModule;
 
     SAL_DLLPRIVATE static void implProcessModuleRunInit( ModuleInitDependencyMap& rMap, ClassModuleRunInitItem& rItem );
@@ -89,7 +89,7 @@ protected:
     SAL_DLLPRIVATE const sal_uInt8* FindNextStmnt( const sal_uInt8*, sal_uInt16&, sal_uInt16&,
                                     bool bFollowJumps, const SbiImage* pImg=nullptr ) const;
     SAL_DLLPRIVATE virtual bool LoadData( SvStream&, sal_uInt16 ) override;
-    SAL_DLLPRIVATE virtual bool StoreData( SvStream& ) const override;
+    SAL_DLLPRIVATE virtual std::pair<bool, sal_uInt32> StoreData( SvStream& ) const override;
     SAL_DLLPRIVATE virtual bool LoadCompleted() override;
     SAL_DLLPRIVATE virtual void Notify( SfxBroadcaster& rBC, const SfxHint& rHint ) override;
     SAL_DLLPRIVATE void handleProcedureProperties( SfxBroadcaster& rBC, const SfxHint& rHint );
@@ -120,7 +120,7 @@ public:
     // Store only image, no source (needed for new password protection)
     SAL_DLLPRIVATE void StoreBinaryData( SvStream& );
     SAL_DLLPRIVATE void LoadBinaryData( SvStream& );
-    SAL_DLLPRIVATE bool ExceedsLegacyModuleSize();
+    SAL_DLLPRIVATE bool ExceedsImgVersion12ModuleSize();
     SAL_DLLPRIVATE void fixUpMethodStart( bool bCvtToLegacy, SbiImage* pImg = nullptr ) const;
     SAL_DLLPRIVATE bool HasExeCode();
     bool     IsVBASupport() const { return mbVBASupport; }
@@ -135,7 +135,7 @@ public:
     void     GetCodeCompleteDataFromParse(CodeCompleteDataCache& aCache);
     const SbxArrayRef& GetMethods() const { return pMethods;}
     SbMethod*       FindMethod( const OUString&, SbxClassType );
-    static OUString GetKeywordCase( const OUString& sKeyword );
+    static OUString GetKeywordCase( std::u16string_view sKeyword );
 };
 
 typedef tools::SvRef<SbModule> SbModuleRef;

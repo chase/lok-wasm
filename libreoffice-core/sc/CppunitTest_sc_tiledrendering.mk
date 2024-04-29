@@ -44,7 +44,6 @@ $(eval $(call gb_CppunitTest_use_libraries,sc_tiledrendering, \
 $(eval $(call gb_CppunitTest_use_externals,sc_tiledrendering,\
     boost_headers \
     libxml2 \
-    mdds_headers \
 ))
 
 $(eval $(call gb_CppunitTest_set_include,sc_tiledrendering,\
@@ -65,6 +64,12 @@ $(eval $(call gb_CppunitTest_use_configuration,sc_tiledrendering))
 
 $(eval $(call gb_CppunitTest_add_arguments,sc_tiledrendering, \
     -env:arg-env=$(gb_Helper_LIBRARY_PATH_VAR)"$$$${$(gb_Helper_LIBRARY_PATH_VAR)+=$$$$$(gb_Helper_LIBRARY_PATH_VAR)}" \
+))
+
+$(eval $(call gb_CppunitTest_use_uiconfigs,sc_tiledrendering, \
+    modules/scalc \
+    sfx \
+    svt \
 ))
 
 # vim: set noet sw=4 ts=4:

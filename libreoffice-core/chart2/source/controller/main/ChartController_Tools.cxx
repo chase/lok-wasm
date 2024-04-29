@@ -47,6 +47,7 @@
 #include <ObjectNameProvider.hxx>
 #include <unonames.hxx>
 
+#include <com/sun/star/awt/Gradient.hpp>
 #include <com/sun/star/chart2/DataPointLabel.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
@@ -55,6 +56,7 @@
 #include <com/sun/star/chart/ErrorBarStyle.hpp>
 #include <com/sun/star/chart2/XRegressionCurveContainer.hpp>
 
+#include <docmodel/uno/UnoGradientTools.hxx>
 #include <editeng/editview.hxx>
 #include <editeng/outliner.hxx>
 #include <svx/ActionDescriptionProvider.hxx>
@@ -112,8 +114,8 @@ bool lcl_deleteDataSeries(
                     ActionDescriptionProvider::ActionType::Delete, SchResId( STR_OBJECT_DATASERIES )),
                 xUndoManager );
 
-            rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xModel );
-            rtl::Reference< Axis > xAxis = DiagramHelper::getAttachedAxis( xSeries, xDiagram );
+            rtl::Reference< Diagram > xDiagram = xModel->getFirstChartDiagram();
+            rtl::Reference< Axis > xAxis = xDiagram->getAttachedAxis( xSeries );
 
             DataSeriesHelper::deleteSeries( xSeries, xChartType );
 
@@ -184,7 +186,7 @@ void ChartController::executeDispatch_NewArrangement()
     try
     {
         rtl::Reference<::chart::ChartModel> xModel( getChartModel() );
-        rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xModel );
+        rtl::Reference< Diagram > xDiagram = xModel->getFirstChartDiagram();
         if( xDiagram.is())
         {
             UndoGuard aUndoGuard(
@@ -198,15 +200,15 @@ void ChartController::executeDispatch_NewArrangement()
             xDiagram->setPropertyToDefault( "PosSizeExcludeAxes");
 
             // 3d rotation
-            ThreeDHelper::set3DSettingsToDefault( xDiagram );
+            xDiagram->set3DSettingsToDefault();
 
             // legend
-            Reference< beans::XPropertyState > xLegendState( xDiagram->getLegend(), uno::UNO_QUERY );
-            if( xLegendState.is())
+            rtl::Reference< Legend > xLegend = xDiagram->getLegend2();
+            if( xLegend.is())
             {
-                xLegendState->setPropertyToDefault( "RelativePosition");
-                xLegendState->setPropertyToDefault( "RelativeSize");
-                xLegendState->setPropertyToDefault( "AnchorPosition");
+                xLegend->setPropertyToDefault( "RelativePosition");
+                xLegend->setPropertyToDefault( "RelativeSize");
+                xLegend->setPropertyToDefault( "AnchorPosition");
             }
 
             // titles
@@ -214,16 +216,16 @@ void ChartController::executeDispatch_NewArrangement()
                  eType < TitleHelper::NORMAL_TITLE_END;
                  ++eType )
             {
-                Reference< beans::XPropertyState > xTitleState(
+                rtl::Reference< Title > xTitleState =
                     TitleHelper::getTitle(
-                        static_cast< TitleHelper::eTitleType >( eType ), xModel ), uno::UNO_QUERY );
+                        static_cast< TitleHelper::eTitleType >( eType ), xModel );
                 if( xTitleState.is())
                     xTitleState->setPropertyToDefault( "RelativePosition");
             }
 
             // regression curve equations
             std::vector< rtl::Reference< RegressionCurveModel > > aRegressionCurves =
-                RegressionCurveHelper::getAllRegressionCurvesNotMeanValueLine( xDiagram );
+                xDiagram->getAllRegressionCurvesNotMeanValueLine();
 
             // reset equation position
             for( const auto& xCurve : aRegressionCurves )
@@ -263,7 +265,7 @@ void ChartController::executeDispatch_Paste()
 
     Graphic aGraphic;
     // paste location: center of window
-    Point aPos = pChartWindow->PixelToLogic( tools::Rectangle( {}, pChartWindow->GetSizePixel()).Center());
+    Point aPos = pChartWindow->PixelToLogic( tools::Rectangle(Point{}, pChartWindow->GetSizePixel()).Center());
 
     // handle different formats
     TransferableDataHelper aDataHelper( TransferableDataHelper::CreateFromSystemClipboard( pChartWindow ));
@@ -632,14 +634,14 @@ bool ChartController::executeDispatch_Delete()
                 rtl::Reference< Diagram > xDiagram( xChartDoc->getFirstChartDiagram());
                 if( xDiagram.is())
                 {
-                    uno::Reference< beans::XPropertySet > xLegendProp( xDiagram->getLegend(), uno::UNO_QUERY );
-                    if( xLegendProp.is())
+                    rtl::Reference< Legend > xLegend( xDiagram->getLegend2() );
+                    if( xLegend.is())
                     {
                         UndoGuard aUndoGuard(
                             ActionDescriptionProvider::createDescription(
                                 ActionDescriptionProvider::ActionType::Delete, SchResId( STR_OBJECT_LEGEND )),
                             m_xUndoManager );
-                        xLegendProp->setPropertyValue( "Show", uno::Any( false ));
+                        xLegend->setPropertyValue( "Show", uno::Any( false ));
                         bReturn = true;
                         aUndoGuard.commit();
                     }
@@ -957,7 +959,7 @@ void ChartController::executeDispatch_FillColor(sal_uInt32 nColor)
 void ChartController::executeDispatch_FillGradient(std::u16string_view sJSONGradient)
 {
     basegfx::BGradient aBGradient = basegfx::BGradient::fromJSON(sJSONGradient);
-    css::awt::Gradient aGradient = aBGradient.getAsGradient2();
+    css::awt::Gradient aGradient = model::gradient::createUnoGradient2(aBGradient);
 
     try
     {

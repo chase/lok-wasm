@@ -21,6 +21,7 @@
 #define INCLUDED_SW_SOURCE_CORE_INC_FRMTOOL_HXX
 
 #include <swtypes.hxx>
+#include <frameformats.hxx>
 #include <BorderCacheOwner.hxx>
 #include "frame.hxx"
 #include "txtfrm.hxx"
@@ -44,7 +45,6 @@ class SwNodeIndex;
 class GraphicObject;
 class GraphicAttr;
 class SwPageDesc;
-class SwFrameFormats;
 class SwRegionRects;
 class SwTextNode;
 namespace sw { struct Extent; }
@@ -56,10 +56,9 @@ constexpr tools::Long BROWSE_HEIGHT = 56700 * 10; // 10 Meters
 #define GRFNUM_YES 1
 #define GRFNUM_REPLACE 2
 
-void AppendObjs( const SwFrameFormats *pTable, SwNodeOffset nIndex,
-                       SwFrame *pFrame, SwPageFrame *pPage, SwDoc* doc );
+void AppendObjs(const sw::FrameFormats<sw::SpzFrameFormat*>* pSpz, SwNodeOffset nIndex, SwFrame* pFrame, SwPageFrame* pPage, SwDoc* doc);
 
-void AppendObjsOfNode(SwFrameFormats const* pTable, SwNodeOffset nIndex,
+void AppendObjsOfNode(sw::FrameFormats<sw::SpzFrameFormat*> const* pTable, SwNodeOffset nIndex,
         SwFrame * pFrame, SwPageFrame * pPage, SwDoc * pDoc,
         std::vector<sw::Extent>::const_iterator const* pIter,
         std::vector<sw::Extent>::const_iterator const* pEnd,
@@ -72,7 +71,7 @@ void RemoveHiddenObjsOfNode(SwTextNode const& rNode,
 
 bool IsAnchoredObjShown(SwTextFrame const& rFrame, SwFormatAnchor const& rAnchor);
 
-void AppendAllObjs(const SwFrameFormats* pTable, const SwFrame* pSib);
+void AppendAllObjs(const sw::FrameFormats<sw::SpzFrameFormat*>* pSpzs, const SwFrame* pSib);
 
 // draw background with brush or graphics
 // The 6th parameter indicates that the method should consider background
@@ -310,7 +309,9 @@ class SwBorderAttrs final : public SwCacheObj
 {
     const SwAttrSet      &m_rAttrSet;
     const SvxULSpaceItem &m_rUL;
-    // #i96772#
+    std::unique_ptr<SvxFirstLineIndentItem> m_pFirstLineIndent;
+    std::unique_ptr<SvxTextLeftMarginItem> m_pTextLeftMargin;
+    std::unique_ptr<SvxRightMarginItem> m_pRightMargin;
     std::shared_ptr<SvxLRSpaceItem> m_xLR;
     const SvxBoxItem     &m_rBox;
     const SvxShadowItem  &m_rShadow;

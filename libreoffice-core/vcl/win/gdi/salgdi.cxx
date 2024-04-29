@@ -134,10 +134,6 @@ void ImplInitSalGDI()
     pSalData->mhStockBrushAry[3]        = CreateSolidBrush( pSalData->maStockBrushColorAry[3] );
     pSalData->mnStockBrushCount = 4;
 
-    // initialize cache of device contexts
-    pSalData->mpHDCCache = new HDCCache[ CACHESIZE_HDC ];
-    memset( pSalData->mpHDCCache, 0, CACHESIZE_HDC * sizeof( HDCCache ) );
-
     // initialize temporary font lists
     pSalData->mpSharedTempFontItem = nullptr;
     pSalData->mpOtherTempFontItem = nullptr;
@@ -180,9 +176,9 @@ void ImplInitSalGDI()
 
             pSalData->mhDitherDIB = GlobalAlloc( GMEM_FIXED, sizeof( BITMAPINFOHEADER ) + 192 );
             pSalData->mpDitherDIB = static_cast<BYTE*>(GlobalLock( pSalData->mhDitherDIB ));
-            pSalData->mpDitherDiff = new tools::Long[ 256 ];
-            pSalData->mpDitherLow = new BYTE[ 256 ];
-            pSalData->mpDitherHigh = new BYTE[ 256 ];
+            pSalData->mpDitherDiff.reset(new tools::Long[ 256 ]);
+            pSalData->mpDitherLow.reset(new BYTE[ 256 ]);
+            pSalData->mpDitherHigh.reset(new BYTE[ 256 ]);
             pSalData->mpDitherDIBData = pSalData->mpDitherDIB + sizeof( BITMAPINFOHEADER );
             memset( pSalData->mpDitherDIB, 0, sizeof( BITMAPINFOHEADER ) );
 
@@ -254,9 +250,9 @@ void ImplInitSalGDI()
 
             pSalData->mhDitherDIB = GlobalAlloc( GMEM_FIXED, nSize );
             pSalData->mpDitherDIB = static_cast<BYTE*>(GlobalLock( pSalData->mhDitherDIB ));
-            pSalData->mpDitherDiff = new tools::Long[ 256 ];
-            pSalData->mpDitherLow = new BYTE[ 256 ];
-            pSalData->mpDitherHigh = new BYTE[ 256 ];
+            pSalData->mpDitherDiff.reset(new tools::Long[ 256 ]);
+            pSalData->mpDitherLow.reset(new BYTE[ 256 ]);
+            pSalData->mpDitherHigh.reset(new BYTE[ 256 ]);
             pSalData->mpDitherDIBData = pSalData->mpDitherDIB + sizeof( BITMAPINFOHEADER ) + ( 256 * sizeof( short ) );
             memset( pSalData->mpDitherDIB, 0, sizeof( BITMAPINFOHEADER ) );
 
@@ -318,7 +314,6 @@ void ImplFreeSalGDI()
     }
 
     ImplClearHDCCache( pSalData );
-    delete[] pSalData->mpHDCCache;
 
     // delete Ditherpalette, if existing
     if ( pSalData->mhDitherPal )
@@ -333,9 +328,9 @@ void ImplFreeSalGDI()
         GlobalUnlock( pSalData->mhDitherDIB );
         GlobalFree( pSalData->mhDitherDIB );
         pSalData->mhDitherDIB = nullptr;
-        delete[] pSalData->mpDitherDiff;
-        delete[] pSalData->mpDitherLow;
-        delete[] pSalData->mpDitherHigh;
+        pSalData->mpDitherDiff.reset();
+        pSalData->mpDitherLow.reset();
+        pSalData->mpDitherHigh.reset();
     }
 
     DeleteSysColorList();
@@ -511,7 +506,7 @@ void WinSalGraphics::setHDC(HDC aNew)
 HDC ImplGetCachedDC( sal_uLong nID, HBITMAP hBmp )
 {
     SalData*    pSalData = GetSalData();
-    HDCCache*   pC = &pSalData->mpHDCCache[ nID ];
+    HDCCache*   pC = &pSalData->maHDCCache[ nID ];
 
     if( !pC->mhDC )
     {
@@ -543,7 +538,7 @@ HDC ImplGetCachedDC( sal_uLong nID, HBITMAP hBmp )
 void ImplReleaseCachedDC( sal_uLong nID )
 {
     SalData*    pSalData = GetSalData();
-    HDCCache*   pC = &pSalData->mpHDCCache[ nID ];
+    HDCCache*   pC = &pSalData->maHDCCache[ nID ];
 
     if ( pC->mhActBmp )
         SelectObject( pC->mhDC, pC->mhSelBmp );
@@ -553,7 +548,7 @@ void ImplClearHDCCache( SalData* pData )
 {
     for( sal_uLong i = 0; i < CACHESIZE_HDC; i++ )
     {
-        HDCCache* pC = &pData->mpHDCCache[ i ];
+        HDCCache* pC = &pData->maHDCCache[ i ];
 
         if( pC->mhDC )
         {
@@ -814,9 +809,9 @@ void WinSalGraphics::ResetClipRegion()
     mpImpl->ResetClipRegion();
 }
 
-bool WinSalGraphics::setClipRegion( const vcl::Region& i_rClip )
+void WinSalGraphics::setClipRegion( const vcl::Region& i_rClip )
 {
-    return mpImpl->setClipRegion( i_rClip );
+    mpImpl->setClipRegion( i_rClip );
 }
 
 void WinSalGraphics::SetLineColor()
@@ -1064,23 +1059,15 @@ bool WinSalGraphics::drawEPS( tools::Long nX, tools::Long nY, tools::Long nWidth
                 {
                     RECT* pRect = &(mpClipRgnData->rdh.rcBound);
 
-                    aBuf.append( "\nnewpath\n" );
-                    aBuf.append( pRect->left );
-                    aBuf.append( " " );
-                    aBuf.append( pRect->top );
-                    aBuf.append( " moveto\n" );
-                    aBuf.append( pRect->right );
-                    aBuf.append( " " );
-                    aBuf.append( pRect->top );
-                    aBuf.append( " lineto\n" );
-                    aBuf.append( pRect->right );
-                    aBuf.append( " " );
-                    aBuf.append( pRect->bottom );
-                    aBuf.append( " lineto\n" );
-                    aBuf.append( pRect->left );
-                    aBuf.append( " " );
-                    aBuf.append( pRect->bottom );
-                    aBuf.append( " lineto\n"
+                    aBuf.append( "\nnewpath\n"
+                                 + OString::number(pRect->left) + " " + OString::number(pRect->top)
+                                 + " moveto\n"
+                                 + OString::number(pRect->right) + " " + OString::number(pRect->top)
+                                 + " lineto\n"
+                                 + OString::number(pRect->right) + " "
+                                 + OString::number(pRect->bottom) + " lineto\n"
+                                 + OString::number(pRect->left) + " "
+                                 + OString::number(pRect->bottom) + " lineto\n"
                                  "closepath\n"
                                  "clip\n"
                                  "newpath\n" );
@@ -1097,15 +1084,9 @@ bool WinSalGraphics::drawEPS( tools::Long nX, tools::Long nY, tools::Long nWidth
                 double  dM22 = nHeight / (nBoundingBox[1] - nBoundingBox[3] );
                 // reserve a sal_uInt16 again
                 aBuf.setLength( 2 );
-                aBuf.append( "\n\n[" );
-                aBuf.append( dM11 );
-                aBuf.append( " 0 0 " );
-                aBuf.append( dM22 );
-                aBuf.append( ' ' );
-                aBuf.append( nX - ( dM11 * nBoundingBox[0] ) );
-                aBuf.append( ' ' );
-                aBuf.append( nY - ( dM22 * nBoundingBox[3] ) );
-                aBuf.append( "] concat\n"
+                aBuf.append( "\n\n[" + OString::number(dM11) + " 0 0 " + OString::number(dM22) + " "
+                             + OString::number(nX - ( dM11 * nBoundingBox[0] )) + " "
+                             + OString::number(nY - ( dM22 * nBoundingBox[3] )) + "] concat\n"
                              "%%BeginDocument:\n" );
                 *reinterpret_cast<sal_uInt16*>(const_cast<char *>(aBuf.getStr())) = static_cast<sal_uInt16>( aBuf.getLength() - 2 );
                 Escape ( getHDC(), nEscape, aBuf.getLength(), aBuf.getStr(), nullptr );

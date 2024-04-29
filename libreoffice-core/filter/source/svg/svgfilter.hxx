@@ -28,6 +28,7 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
+#include <com/sun/star/task/XStatusIndicator.hpp>
 #include <cppuhelper/implbase.hxx>
 #include <com/sun/star/xml/sax/XWriter.hpp>
 #include <com/sun/star/view/XSelectionSupplier.hpp>
@@ -54,9 +55,9 @@ using namespace ::com::sun::star::xml::sax;
 
 
 // Placeholder tag used into the ImplWriteActions method to filter text placeholder fields
-inline constexpr OUStringLiteral sPlaceholderTag = u"<[:isPlaceholder:]>";
+inline constexpr OUString sPlaceholderTag = u"<[:isPlaceholder:]>"_ustr;
 // This tag is used for exporting a slide background made of tiled bitmaps
-inline constexpr OStringLiteral sTiledBackgroundTag = "SLIDE_BACKGROUND";
+inline constexpr OString sTiledBackgroundTag = "SLIDE_BACKGROUND"_ostr;
 
 class SVGExport : public SvXMLExport
 {
@@ -208,6 +209,7 @@ private:
     bool                                mbExportShapeSelection;
     Sequence< PropertyValue >           maFilterData;
     Reference< css::drawing::XDrawPage > mxDefaultPage;
+    Reference<css::task::XStatusIndicator> mxStatusIndicator;
     std::vector< Reference< css::drawing::XDrawPage > > mSelectedPages;
     bool                                mbIsPreview;
     bool                                mbShouldCompress;

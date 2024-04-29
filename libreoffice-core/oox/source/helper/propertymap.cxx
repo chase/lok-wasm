@@ -73,14 +73,11 @@ using ::com::sun::star::drawing::TextVerticalAdjust;
 #endif
 
 namespace oox {
-using ::com::sun::star::container::XIndexReplace;
 
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::drawing;
 using namespace ::com::sun::star::uno;
-using ::com::sun::star::drawing::TextHorizontalAdjust;
-using ::com::sun::star::drawing::TextVerticalAdjust;
 
 namespace {
 
@@ -912,7 +909,7 @@ void PropertyMap::dumpCode( const Reference< XPropertySet >& rXPropSet )
 {
     Reference< XPropertySetInfo > info = rXPropSet->getPropertySetInfo ();
     const Sequence< Property > props = info->getProperties ();
-    static const OUStringLiteral sType = u"Type";
+    static constexpr OUStringLiteral sType = u"Type";
 
     for (const Property& rProp : props) {
 

@@ -53,13 +53,13 @@
 #include <rtl/ustrbuf.hxx>
 #include <o3tl/string_view.hxx>
 
-constexpr OUStringLiteral PRESET_DEFAULT = u"default";
-constexpr OUStringLiteral TARGET_CURRENT = u"current";
+constexpr OUString PRESET_DEFAULT = u"default"_ustr;
+constexpr OUString TARGET_CURRENT = u"current"_ustr;
 
 namespace framework
 {
-    constexpr OUStringLiteral CFG_ENTRY_SECONDARY = u"SecondaryKeys";
-    constexpr OUStringLiteral CFG_PROP_COMMAND = u"Command";
+    constexpr OUString CFG_ENTRY_SECONDARY = u"SecondaryKeys"_ustr;
+    constexpr OUString CFG_PROP_COMMAND = u"Command"_ustr;
 
     static OUString lcl_getKeyString(const css::awt::KeyEvent& aKeyEvent)
     {
@@ -617,10 +617,9 @@ void SAL_CALL XCUBasedAcceleratorConfiguration::removeKeyEvent(const css::awt::K
 
     if (rPrimaryCache.hasKey(aKeyEvent))
     {
-        OUString sDelCommand = rPrimaryCache.getCommandByKey(aKeyEvent);
-        if (!sDelCommand.isEmpty())
+        OUString sOriginalCommand = rPrimaryCache.getCommandByKey(aKeyEvent);
+        if (!sOriginalCommand.isEmpty())
         {
-            OUString sOriginalCommand = rPrimaryCache.getCommandByKey(aKeyEvent);
             if (rSecondaryCache.hasCommand(sOriginalCommand))
             {
                 AcceleratorCache::TKeyList lSecondaryKeys = rSecondaryCache.getKeysByCommand(sOriginalCommand);
@@ -963,7 +962,7 @@ void XCUBasedAcceleratorConfiguration::impl_ts_load( bool bPreferred, const css:
     }
 
     const OUString sIsoLang       = impl_ts_getLocale();
-    static const OUStringLiteral sDefaultLocale(u"en-US");
+    static constexpr OUStringLiteral sDefaultLocale(u"en-US");
 
     css::uno::Reference< css::container::XNameAccess > xKey;
     css::uno::Reference< css::container::XNameAccess > xCommand;

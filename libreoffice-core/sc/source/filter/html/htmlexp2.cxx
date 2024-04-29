@@ -112,17 +112,17 @@ void ScHTMLExport::FillGraphList( const SdrPage* pPage, SCTAB nTab,
 void ScHTMLExport::WriteGraphEntry( ScHTMLGraphEntry* pE )
 {
     SdrObject* pObject = pE->pObject;
-    OStringBuffer aBuf;
-    aBuf.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_width).append('=').
-        append(static_cast<sal_Int32>(pE->aSize.Width()));
-    aBuf.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_height).append('=').
-        append(static_cast<sal_Int32>(pE->aSize.Height()));
+    OStringBuffer aBuf =
+        " " OOO_STRING_SVTOOLS_HTML_O_width "="
+        + OString::number(static_cast<sal_Int32>(pE->aSize.Width()))
+        + " " OOO_STRING_SVTOOLS_HTML_O_height "="
+        + OString::number(static_cast<sal_Int32>(pE->aSize.Height()));
     if ( pE->bInCell )
     {
-        aBuf.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_hspace).append('=').
-            append(static_cast<sal_Int32>(pE->aSpace.Width()));
-        aBuf.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_vspace).append('=').
-            append(static_cast<sal_Int32>(pE->aSpace.Height()));
+        aBuf.append(" " OOO_STRING_SVTOOLS_HTML_O_hspace "="
+            + OString::number(static_cast<sal_Int32>(pE->aSpace.Width()))
+            + " " OOO_STRING_SVTOOLS_HTML_O_vspace "="
+            + OString::number(static_cast<sal_Int32>(pE->aSpace.Height())));
     }
     OString aOpt = aBuf.makeStringAndClear();
     switch ( pObject->GetObjIdentifier() )
@@ -131,7 +131,7 @@ void ScHTMLExport::WriteGraphEntry( ScHTMLGraphEntry* pE )
         {
             const SdrGrafObj* pSGO = static_cast<SdrGrafObj*>(pObject);
             std::unique_ptr<SdrGrafObjGeoData> pGeo(static_cast<SdrGrafObjGeoData*>(pSGO->GetGeoData().release()));
-            sal_uInt16 nMirrorCase = (pGeo->maGeo.nRotationAngle == 18000_deg100 ?
+            sal_uInt16 nMirrorCase = (pGeo->maGeo.m_nRotationAngle == 18000_deg100 ?
                     ( pGeo->bMirrored ? 3 : 4 ) : ( pGeo->bMirrored ? 2 : 1 ));
             bool bHMirr = ( ( nMirrorCase == 2 ) || ( nMirrorCase == 4 ) );
             bool bVMirr = ( ( nMirrorCase == 3 ) || ( nMirrorCase == 4 ) );
@@ -210,13 +210,13 @@ void ScHTMLExport::WriteImage( OUString& rLinkName, const Graphic& rGrf,
     // <IMG SRC="..."[ rImgOptions]>
     if( !rLinkName.isEmpty() )
     {
-        rStrm.WriteChar( '<' ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_image ).WriteChar( ' ' ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_O_src ).WriteCharPtr( "=\"" );
+        rStrm.WriteChar( '<' ).WriteOString( OOO_STRING_SVTOOLS_HTML_image ).WriteChar( ' ' ).WriteOString( OOO_STRING_SVTOOLS_HTML_O_src ).WriteOString( "=\"" );
         HTMLOutFuncs::Out_String( rStrm, URIHelper::simpleNormalizedMakeRelative(
                     aBaseURL,
                     rLinkName ) ).WriteChar( '\"' );
         if ( !rImgOptions.empty() )
             rStrm.WriteOString( rImgOptions );
-        rStrm.WriteChar( '>' ).WriteCharPtr( SAL_NEWLINE_STRING ).WriteCharPtr( GetIndentStr() );
+        rStrm.WriteChar( '>' ).WriteOString( SAL_NEWLINE_STRING ).WriteOString( GetIndentStr() );
     }
 }
 

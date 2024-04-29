@@ -403,9 +403,10 @@ void SlideBackground::Update()
             const Color aEndColor(aBGradient.GetColorStops().back().getStopColor());
             mxFillGrad2->SelectEntry(aEndColor);
 
-            // MCGR: preserve in-between ColorStops if given
-            if (aBGradient.GetColorStops().size() > 2)
-                maColorStops = basegfx::BColorStops(aBGradient.GetColorStops().begin() + 1, aBGradient.GetColorStops().end() - 1);
+            // MCGR: preserve ColorStops if given.
+            // tdf#155901 We need offset of first and last stop, so include them.
+            if (aBGradient.GetColorStops().size() >= 2)
+                maColorStops = aBGradient.GetColorStops();
             else
                 maColorStops.clear();
         }
@@ -1132,7 +1133,8 @@ IMPL_LINK_NOARG(SlideBackground, FillColorHdl, ColorListBox&, void)
         break;
         case drawing::FillStyle_GRADIENT:
         {
-            basegfx::BGradient aGradient(createColorStops());
+            basegfx::BGradient aGradient = GetGradientSetOrDefault();
+            aGradient.SetColorStops(createColorStops());
 
             // the name doesn't really matter, it'll be converted to unique one eventually,
             // but it has to be non-empty
@@ -1289,14 +1291,19 @@ basegfx::BColorStops SlideBackground::createColorStops()
 {
     basegfx::BColorStops aColorStops;
 
-    aColorStops.emplace_back(0.0, mxFillGrad1->GetSelectEntryColor().getBColor());
-
-    if(!maColorStops.empty())
+    if (maColorStops.size() >= 2)
     {
-        aColorStops.insert(aColorStops.begin(), maColorStops.begin(), maColorStops.end());
+        aColorStops = maColorStops;
+        aColorStops.front() = basegfx::BColorStop(maColorStops.front().getStopOffset(),
+                                                  mxFillGrad1->GetSelectEntryColor().getBColor());
+        aColorStops.back() = basegfx::BColorStop(maColorStops.back().getStopOffset(),
+                                                 mxFillGrad2->GetSelectEntryColor().getBColor());
     }
-
-    aColorStops.emplace_back(1.0, mxFillGrad2->GetSelectEntryColor().getBColor());
+    else
+    {
+        aColorStops.emplace_back(0.0, mxFillGrad1->GetSelectEntryColor().getBColor());
+        aColorStops.emplace_back(1.0, mxFillGrad2->GetSelectEntryColor().getBColor());
+    }
 
     return aColorStops;
 }

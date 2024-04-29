@@ -63,6 +63,7 @@
 #include "../ppt/pptanimations.hxx"
 
 #include <i18nlangtag/languagetag.hxx>
+#include <svx/sdrmasterpagedescriptor.hxx>
 #include <svx/svdpage.hxx>
 #include <svx/unoapi.hxx>
 #include <svx/svdogrp.hxx>
@@ -81,17 +82,17 @@
 #endif
 
 // presentation namespaces
-#define PNMSS         FSNS(XML_xmlns, XML_a),   OUStringToOString(this->getNamespaceURL(OOX_NS(dml)), RTL_TEXTENCODING_UTF8).getStr(), \
-                      FSNS(XML_xmlns, XML_p),   OUStringToOString(this->getNamespaceURL(OOX_NS(ppt)), RTL_TEXTENCODING_UTF8).getStr(), \
-                      FSNS(XML_xmlns, XML_r),   OUStringToOString(this->getNamespaceURL(OOX_NS(officeRel)), RTL_TEXTENCODING_UTF8).getStr(), \
-                      FSNS(XML_xmlns, XML_p14), OUStringToOString(this->getNamespaceURL(OOX_NS(p14)), RTL_TEXTENCODING_UTF8).getStr(), \
-                      FSNS(XML_xmlns, XML_p15), OUStringToOString(this->getNamespaceURL(OOX_NS(p15)), RTL_TEXTENCODING_UTF8).getStr(), \
-                      FSNS(XML_xmlns, XML_mc),  OUStringToOString(this->getNamespaceURL(OOX_NS(mce)), RTL_TEXTENCODING_UTF8).getStr()
+#define PNMSS         FSNS(XML_xmlns, XML_a),   this->getNamespaceURL(OOX_NS(dml)), \
+                      FSNS(XML_xmlns, XML_p),   this->getNamespaceURL(OOX_NS(ppt)), \
+                      FSNS(XML_xmlns, XML_r),   this->getNamespaceURL(OOX_NS(officeRel)), \
+                      FSNS(XML_xmlns, XML_p14), this->getNamespaceURL(OOX_NS(p14)), \
+                      FSNS(XML_xmlns, XML_p15), this->getNamespaceURL(OOX_NS(p15)), \
+                      FSNS(XML_xmlns, XML_mc),  this->getNamespaceURL(OOX_NS(mce))
 
 // presentationPr namespace
-#define PPRNMSS       FSNS(XML_xmlns, XML_a),   OUStringToOString(this->getNamespaceURL(OOX_NS(dml)), RTL_TEXTENCODING_UTF8).getStr(), \
-                      FSNS(XML_xmlns, XML_r),   OUStringToOString(this->getNamespaceURL(OOX_NS(officeRel)), RTL_TEXTENCODING_UTF8).getStr(), \
-                      FSNS(XML_xmlns, XML_p),   OUStringToOString(this->getNamespaceURL(OOX_NS(ppt)), RTL_TEXTENCODING_UTF8).getStr()
+#define PPRNMSS       FSNS(XML_xmlns, XML_a),   this->getNamespaceURL(OOX_NS(dml)), \
+                      FSNS(XML_xmlns, XML_r),   this->getNamespaceURL(OOX_NS(officeRel)), \
+                      FSNS(XML_xmlns, XML_p),   this->getNamespaceURL(OOX_NS(ppt))
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::animations;
@@ -196,7 +197,7 @@ struct PPTXLayoutInfo
 
 }
 
-const PPTXLayoutInfo aLayoutInfo[EPP_LAYOUT_SIZE] =
+const PPTXLayoutInfo aLayoutInfo[OOXML_LAYOUT_SIZE] =
 {
     { 0, "Title Slide", "title" },
     { 1, "Title and text", "tx" },
@@ -388,7 +389,9 @@ bool PowerPointExport::importDocument() noexcept
 
 bool PowerPointExport::exportDocument()
 {
+    drawingml::DrawingML::ResetMlCounters();
     auto& rGraphicExportCache = drawingml::GraphicExportCache::get();
+
     rGraphicExportCache.push();
 
     maShapeMap.clear();
@@ -1299,10 +1302,10 @@ void PowerPointExport::WriteModifyVerifier()
                     XML_cryptProviderType, "rsaAES",
                     XML_cryptAlgorithmClass, "hash",
                     XML_cryptAlgorithmType, "typeAny",
-                    XML_cryptAlgorithmSid, OString::number(nAlgorithmSid).getStr(),
-                    XML_spinCount, OString::number(nCount).getStr(),
-                    XML_saltData, sSalt.toUtf8().getStr(),
-                    XML_hashData, sHash.toUtf8().getStr());
+                    XML_cryptAlgorithmSid, OString::number(nAlgorithmSid),
+                    XML_spinCount, OString::number(nCount),
+                    XML_saltData, sSalt,
+                    XML_hashData, sHash);
         }
     }
 }
@@ -1513,23 +1516,48 @@ void PowerPointExport::ImplWriteSlideMaster(sal_uInt32 nPageNum, Reference< XPro
     // use master's id type as they have same range, mso does that as well
     pFS->startElementNS(XML_p, XML_sldLayoutIdLst);
 
-    sal_Int32 nLayout = 0;
-    OUString aSlideName;
-    css::uno::Reference< css::beans::XPropertySet >xPagePropSet;
+    auto getLayoutsUsedForMaster = [](SdrPage* pMaster) -> std::unordered_set<sal_Int32>
+    {
+        if (!pMaster)
+            return {};
+
+        std::unordered_set<sal_Int32> aUsedLayouts{};
+        for (const auto* pPageUser : pMaster->GetPageUsers())
+        {
+            const auto* pMasterPageDescriptor
+                = dynamic_cast<const sdr::MasterPageDescriptor*>(pPageUser);
+
+            if (!pMasterPageDescriptor)
+                continue;
+
+            AutoLayout eLayout
+                = static_cast<SdPage&>(pMasterPageDescriptor->GetOwnerPage()).GetAutoLayout();
+            aUsedLayouts.insert(eLayout);
+        }
+        return aUsedLayouts;
+    };
+
+    std::unordered_set<sal_Int32> aLayouts = getLayoutsUsedForMaster(pMasterPage);
+
+    css::uno::Reference< css::beans::XPropertySet > xPagePropSet;
     xPagePropSet.set(mXDrawPage, UNO_QUERY);
     if (xPagePropSet.is())
     {
         uno::Any aAny;
         if (GetPropertyValue(aAny, xPagePropSet, "SlideLayout"))
-            aAny >>= nLayout;
+            aLayouts.insert(aAny.get<sal_Int32>());
     }
 
+    OUString aSlideName;
     Reference< XNamed > xNamed(mXDrawPage, UNO_QUERY);
     if (xNamed.is())
         aSlideName = xNamed->getName();
 
-    ImplWritePPTXLayout(nLayout, nPageNum, aSlideName);
-    AddLayoutIdAndRelation(pFS, GetLayoutFileId(nLayout, nPageNum));
+    for (auto nLayout : aLayouts)
+    {
+        ImplWritePPTXLayout(nLayout, nPageNum, aSlideName);
+        AddLayoutIdAndRelation(pFS, GetLayoutFileId(nLayout, nPageNum));
+    }
 
     pFS->endElementNS(XML_p, XML_sldLayoutIdLst);
 
@@ -1735,7 +1763,7 @@ ShapeExport& PowerPointShapeExport::WritePlaceholderShape(const Reference< XShap
     // visual shape properties
     mpFS->startElementNS(XML_p, XML_spPr);
     WriteShapeTransformation(xShape, XML_a);
-    WritePresetShape("rect");
+    WritePresetShape("rect"_ostr);
     if (xProps.is())
     {
         WriteBlipFill(xProps, "Graphic");
@@ -1775,7 +1803,7 @@ ShapeExport& PowerPointShapeExport::WritePlaceholderReferenceShape(
     mpFS->startElementNS(XML_p, XML_nvSpPr);
     const OString aPlaceholderID("PlaceHolder " + OString::number(mnShapeIdMax++));
     GetFS()->singleElementNS(XML_p, XML_cNvPr, XML_id, OString::number(mnShapeIdMax), XML_name,
-                             aPlaceholderID.getStr());
+                             aPlaceholderID);
 
     mpFS->startElementNS(XML_p, XML_cNvSpPr);
     mpFS->singleElementNS(XML_a, XML_spLocks, XML_noGrp, "1");
@@ -1842,7 +1870,7 @@ ShapeExport& PowerPointShapeExport::WritePlaceholderReferenceTextBody(
                 aSlideNum = OUString::number(nSlideNum);
             }
             OString aUUID(comphelper::xml::generateGUIDString());
-            mpFS->startElementNS(XML_a, XML_fld, XML_id, aUUID.getStr(), XML_type, "slidenum");
+            mpFS->startElementNS(XML_a, XML_fld, XML_id, aUUID, XML_type, "slidenum");
             mpFS->startElementNS(XML_a, XML_t);
             mpFS->writeEscaped(aSlideNum);
             mpFS->endElementNS(XML_a, XML_t);
@@ -1883,7 +1911,7 @@ ShapeExport& PowerPointShapeExport::WritePlaceholderReferenceTextBody(
             if(!bIsDateTimeFixed)
             {
                 OString aUUID(comphelper::xml::generateGUIDString());
-                mpFS->startElementNS(XML_a, XML_fld, XML_id, aUUID.getStr(), XML_type, aDateTimeType);
+                mpFS->startElementNS(XML_a, XML_fld, XML_id, aUUID, XML_type, aDateTimeType);
             }
             else
             {
@@ -1915,7 +1943,7 @@ void PowerPointExport::WriteDefaultColorSchemes(const FSHelperPtr& pFS)
 {
     for (int nId = PredefinedClrSchemeId::dk2; nId != PredefinedClrSchemeId::Count; nId++)
     {
-        OUString sName = PredefinedClrNames[static_cast<PredefinedClrSchemeId>(nId)];
+        OUString sName(getPredefinedClrNames(static_cast<PredefinedClrSchemeId>(nId)));
         sal_Int32 nColor = 0;
 
         switch (nId)
@@ -2158,9 +2186,13 @@ void PowerPointExport::WritePlaceholderReferenceShapes(PowerPointShapeExport& rD
             && (aAny >>= aText) && !aText.isEmpty()))
     {
         if ((xShape = GetReferencedPlaceholderXShape(Footer, ePageType)))
+        {
+            const auto iter = maPlaceholderShapeToIndexMap.find(xShape);
+            assert(iter != maPlaceholderShapeToIndexMap.end());
             rDML.WritePlaceholderReferenceShape(Footer,
-                                                maPlaceholderShapeToIndexMap.find(xShape)->second,
+                                                iter->second,
                                                 ePageType, mXPagePropSet);
+        }
     }
 
     if (ePageType == LAYOUT
@@ -2169,9 +2201,13 @@ void PowerPointExport::WritePlaceholderReferenceShapes(PowerPointShapeExport& rD
             && aAny == true))
     {
         if ((xShape = GetReferencedPlaceholderXShape(SlideNumber, ePageType)))
+        {
+            const auto iter = maPlaceholderShapeToIndexMap.find(xShape);
+            assert(iter != maPlaceholderShapeToIndexMap.end());
             rDML.WritePlaceholderReferenceShape(SlideNumber,
-                                                maPlaceholderShapeToIndexMap.find(xShape)->second,
+                                                iter->second,
                                                 ePageType, mXPagePropSet);
+        }
     }
 
     if (ePageType == LAYOUT
@@ -2183,9 +2219,13 @@ void PowerPointExport::WritePlaceholderReferenceShapes(PowerPointShapeExport& rD
                 || mXPagePropSet->getPropertyValue("IsDateTimeFixed") == false)))
     {
         if ((xShape = GetReferencedPlaceholderXShape(DateAndTime, ePageType)))
+        {
+            const auto iter = maPlaceholderShapeToIndexMap.find(xShape);
+            assert(iter != maPlaceholderShapeToIndexMap.end());
             rDML.WritePlaceholderReferenceShape(DateAndTime,
-                                                maPlaceholderShapeToIndexMap.find(xShape)->second,
+                                                iter->second,
                                                 ePageType, mXPagePropSet);
+        }
     }
 }
 

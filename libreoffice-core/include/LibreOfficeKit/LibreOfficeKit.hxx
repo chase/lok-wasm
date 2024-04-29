@@ -84,10 +84,11 @@ public:
     }
 
     /**
-     * Get the logical rectangle of each part in the document.
+     * Get the extent of each page in the document.
      *
-     * A part refers to an individual page in Writer and has no relevant for
-     * Calc or Impress.
+     * This function is relevant for Writer documents only. It is a
+     * mistake that the API has "part" in its name as Writer documents
+     * don't have parts.
      *
      * @return a rectangle list, using the same format as
      * LOK_CALLBACK_TEXT_SELECTION.
@@ -244,6 +245,17 @@ public:
         mpDoc->pClass->initializeForRendering(mpDoc, pArguments);
     }
 
+    // MACRO: {
+
+    /**
+     * Sets the author for the document
+     */
+    void setAuthor(const char* sAuthor)
+    {
+        mpDoc->pClass->setAuthor(mpDoc, sAuthor);
+    }
+    // MACRO: }
+
     /**
      * Registers a callback. LOK will invoke this function when it wants to
      * inform the client about events.
@@ -359,11 +371,6 @@ public:
     void setTextSelection(int nType, int nX, int nY)
     {
         mpDoc->pClass->setTextSelection(mpDoc, nType, nX, nY);
-    }
-
-    char* hyperlinkInfoAtPosition(int x, int y)
-    {
-        return mpDoc->pClass->hyperlinkInfoAtPosition(mpDoc, x, y);
     }
 
     /**
@@ -495,6 +502,17 @@ public:
     {
         return mpDoc->pClass->getCommandValues(mpDoc, pCommand);
     }
+    // MACRO: {
+    /**
+     * Saves the document to a memory buffer
+     * @param pOutput the data of the file
+     * @return size_t the size of the data
+    */
+    size_t saveToMemory(char** pOutput, void *(*chrome_malloc)(size_t size), const char* pFormat)
+    {
+        return mpDoc->pClass->saveToMemory(mpDoc,pOutput,chrome_malloc, pFormat);
+    }
+    // MACRO: }
 
     /**
      * Save the client's view so that we can compute the right zoom level
@@ -852,6 +870,13 @@ public:
         mpDoc->pClass->sendContentControlEvent(mpDoc, pArguments);
     }
 
+    // MACRO: {
+    void* getXComponent()
+    {
+        return mpDoc->pClass->getXComponent(mpDoc);
+    }
+    // MACRO: }
+
     /**
      * Set the timezone of the window with the specified nId.
      *
@@ -861,6 +886,26 @@ public:
     void setViewTimezone(int nId, const char* timezone)
     {
         mpDoc->pClass->setViewTimezone(mpDoc, nId, timezone);
+    }
+
+    /** Set if the view should be treated as readonly or not.
+     *
+     * @param nId view ID
+     * @param readOnly
+    */
+    void setViewReadOnly(int nId, const bool readOnly)
+    {
+        mpDoc->pClass->setViewReadOnly(mpDoc, nId, readOnly);
+    }
+
+    /** Set if the view can edit comments on readonly mode or not.
+     *
+     * @param nId view ID
+     * @param allow
+    */
+    void setAllowChangeComments(int nId, const bool allow)
+    {
+        mpDoc->pClass->setAllowChangeComments(mpDoc, nId, allow);
     }
 
     /**
@@ -1050,7 +1095,6 @@ public:
      * @since LibreOffice 6.0
      * @param pURL macro url to run
      */
-
     bool runMacro( const char* pURL)
     {
         return mpThis->pClass->runMacro( mpThis, pURL );
@@ -1134,6 +1178,30 @@ public:
         mpThis->pClass->setOption(mpThis, pOption, pValue);
     }
 
+
+    // MACRO: {
+
+    /**
+     * Loads a document from an array buffer
+     * @param data the array buffer of the files contents
+     * @param size the size of the array buffer
+     * @return XTextDocument
+    */
+    Document* loadFromMemory(char *data, size_t size)
+    {
+        LibreOfficeKitDocument* pDoc = NULL;
+
+        pDoc = mpThis->pClass->loadFromMemory(mpThis, data, size);
+        if (pDoc == NULL) {
+            return NULL;
+        }
+
+        return new Document(pDoc);
+    }
+
+
+    //MACRO: }
+
     /**
      * Debugging tool for triggering a dump of internal state.
      *
@@ -1148,6 +1216,13 @@ public:
     {
         mpThis->pClass->dumpState(mpThis, pOption, pState);
     }
+
+    // MACRO: {
+    void* getXComponentContext()
+    {
+        return mpThis->pClass->getXComponentContext(mpThis);
+    }
+    // MACRO: }
 
     char* extractRequest(const char* pFilePath)
     {
@@ -1195,6 +1270,26 @@ public:
     void stopURP(void* pURPContext)
     {
         mpThis->pClass->stopURP(mpThis, pURPContext);
+    }
+
+    /**
+     * Joins all threads if possible to get down to a single process
+     * which can be forked from safely.
+     *
+     * @returns non-zero for successful join, 0 for failure.
+     */
+    int joinThreads()
+    {
+        return mpThis->pClass->joinThreads(mpThis);
+    }
+
+    /**
+     * Informs that this process is either a parent, or a child
+     * process post-fork, allowing improved resource sharing.
+     */
+    void setForkedChild(bool bIsChild)
+    {
+        return mpThis->pClass->setForkedChild(mpThis, bIsChild);
     }
 };
 

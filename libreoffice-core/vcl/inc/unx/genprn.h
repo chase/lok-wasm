@@ -17,12 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_GENERIC_GENPRN_H
-#define INCLUDED_VCL_INC_GENERIC_GENPRN_H
+#pragma once
 
 #include <jobdata.hxx>
-#include <unx/printergfx.hxx>
-#include <unx/printerjob.hxx>
 #include <salprn.hxx>
 
 class GenPspGraphics;
@@ -31,7 +28,6 @@ class VCL_DLLPUBLIC PspSalInfoPrinter : public SalInfoPrinter
 public:
     std::unique_ptr<GenPspGraphics> m_pGraphics;
     psp::JobData            m_aJobData;
-    psp::PrinterGfx         m_aPrinterGfx;
 
     PspSalInfoPrinter();
     virtual ~PspSalInfoPrinter() override;
@@ -49,6 +45,10 @@ public:
     virtual sal_uInt32              GetCapabilities( const ImplJobSetup* pSetupData, PrinterCapType nType ) override;
     virtual sal_uInt16              GetPaperBinCount( const ImplJobSetup* pSetupData ) override;
     virtual OUString                GetPaperBinName( const ImplJobSetup* pSetupData, sal_uInt16 nPaperBin ) override;
+    virtual sal_uInt16              GetPaperBinBySourceIndex(const ImplJobSetup* pSetupData,
+                                                             sal_uInt16 nPaperSource) override;
+    virtual sal_uInt16              GetSourceIndexByPaperBin(const ImplJobSetup* pSetupData,
+                                                             sal_uInt16 nPaperBin) override;
     virtual void                    InitPaperFormats( const ImplJobSetup* pSetupData ) override;
     virtual int                     GetLandscapeAngle( const ImplJobSetup* pSetupData ) override;
 };
@@ -56,17 +56,8 @@ public:
 class VCL_DLLPUBLIC PspSalPrinter : public SalPrinter
 {
 public:
-    OUString                  m_aFileName;
-    OUString                  m_aTmpFile;
     SalInfoPrinter*         m_pInfoPrinter;
-    std::unique_ptr<GenPspGraphics> m_xGraphics;
-    psp::PrinterJob         m_aPrintJob;
     psp::JobData            m_aJobData;
-    psp::PrinterGfx         m_aPrinterGfx;
-    sal_uInt32              m_nCopies;
-    bool                    m_bCollate;
-    bool                    m_bPdf;
-    bool                    m_bIsPDFWriterJob;
 
     PspSalPrinter( SalInfoPrinter *pPrinter );
     virtual ~PspSalPrinter() override;
@@ -88,7 +79,5 @@ public:
     virtual SalGraphics*            StartPage( ImplJobSetup* pSetupData, bool bNewJobData ) override;
     virtual void                    EndPage() override;
 };
-
-#endif // INCLUDED_VCL_INC_GENERIC_GENPRN_H
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
