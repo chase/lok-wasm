@@ -4,8 +4,10 @@
 #include "sfx2/dispatch.hxx"
 #include "sfx2/viewfrm.hxx"
 #include "sfx2/viewsh.hxx"
+#include "svl/itemset.hxx"
 #include "svl/poolitem.hxx"
 #include "svx/rulritem.hxx"
+#include "svx/xcolit.hxx"
 #include "svx/xflclit.hxx"
 #include "tools/json_writer.hxx"
 #include <algorithm>
@@ -127,23 +129,26 @@ static std::string OUStringToString(OUString str) {
 
 std::string WasmDocumentExtension::getPageColor()
 {
-    SfxViewShell* pViewShell = SfxViewShell::Current();
-    SfxViewFrame* pViewFrm = pViewShell ? pViewShell->GetViewFrame() : nullptr;
-    if (!pViewFrm)
+    SfxViewFrame* pViewFrame = SfxViewFrame::Current();
+
+    SfxDispatcher* pDispatch(pViewFrame->GetDispatcher());
+    if (!pViewFrame)
     {
         return nullptr;
     }
 
     static constexpr std::string_view defaultColorHex = "\"#ffffff\"";
 
-    std::unique_ptr<SfxPoolItem> pState;
-    const SfxItemState eState (pViewFrm->GetBindings().QueryState(SID_ATTR_PAGE_COLOR, pState));
+
+    SfxPoolItemHolder pState;
+    const SfxItemState eState (pDispatch->QueryState(SID_ATTR_PAGE_COLOR, pState));
     if (eState < SfxItemState::DEFAULT) {
         return std::string (defaultColorHex);
     }
-    if (pState)
+    if (pState.getItem())
     {
-        OUString aColorHex = u"\"" + static_cast<XFillColorItem*>(pState->Clone())->GetColorValue().AsRGBHEXString() + u"\"";
+        XColorItem* pColor = static_cast<XColorItem*>(pState.getItem()->Clone());
+        OUString aColorHex = u"\"" + pColor->GetColorValue().AsRGBHEXString() + u"\"";
         return OUStringToString(aColorHex);
     }
     return std::string (defaultColorHex);
@@ -156,10 +161,12 @@ std::string WasmDocumentExtension::getPageOrientation ()
     {
         return nullptr;
     }
-    const SvxSizeItem* pSizeItem;
-    pViewFrm->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_SIZE, pSizeItem);
 
-    bool bIsLandscape = (pSizeItem->GetSize().Width() >= pSizeItem->GetSize().Height());
+    SfxPoolItemHolder pState;
+    pViewFrm->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_SIZE, pState);
+    SvxSizeItem* pSize = static_cast<SvxSizeItem*>(pState.getItem()->Clone());
+
+    bool bIsLandscape = (pSize->GetSize().Width() >= pSize->GetSize().Height());
 
     return bIsLandscape ? "\"landscape\"" : "\"portrait\"";
 }
