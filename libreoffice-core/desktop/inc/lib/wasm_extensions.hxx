@@ -93,7 +93,7 @@ class ExpandedStorage {
         ~ExpandedStorage();
 
         void initializeExpandedParts();
-        std::vector<ExpandedPart> saveToExpandedStorage();
+        std::vector<ExpandedPart> saveToExpandedStorage(void* context, void* component);
         std::string readFileByPath(const std::string &path);
         std::string readFileBySha(const std::string &sha);
         bool removeFileByPath(const std::string &path);

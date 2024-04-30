@@ -44,7 +44,7 @@ async function saveAsPDF(doc: DocumentClient | null) {
 
 async function saveToExpanded(doc: DocumentClient | null) {
   if (!doc) return;
-  const result = await doc.saveToExpandedStorage(0, "")
+  const result = await doc.saveToExpandedStorage()
   console.log(result);
 }
 

@@ -1,10 +1,22 @@
+#include "com/sun/star/beans/XPropertySet.hdl"
+#include "com/sun/star/document/XDocumentProperties.hdl"
 #include "com/sun/star/embed/ElementModes.hpp"
+#include "com/sun/star/frame/XModel3.hdl"
+#include "com/sun/star/lang/XComponent.hdl"
+#include "com/sun/star/uno/Reference.h"
+#include "com/sun/star/uno/Sequence.h"
+#include "com/sun/star/uno/XComponentContext.hdl"
+#include "com/sun/star/util/XCloneable.hdl"
 #include "comphelper/hash.hxx"
+#include "comphelper/propertysequence.hxx"
+#include "comphelper/sequence.hxx"
+#include "comphelper/storagehelper.hxx"
 #include "editeng/sizeitem.hxx"
 #include "sal/log.hxx"
 #include "sfx2/bindings.hxx"
 #include "sfx2/dispatch.hxx"
 #include "sfx2/docfile.hxx"
+#include "sfx2/sfxbasemodel.hxx"
 #include "sfx2/shell.hxx"
 #include "sfx2/viewfrm.hxx"
 #include "sfx2/viewsh.hxx"
@@ -207,6 +219,10 @@ std::vector<ExpandedPart> GetExpandedParts(Reference<XStorage> storage, std::opt
             std::optional<OUString> subPath = std::make_optional<OUString>(fullPath);
             // Recursively initialize the expanded parts
             std::vector<ExpandedPart> subParts = GetExpandedParts(subStorage, subPath);
+
+            for (ExpandedPart part : subParts) {
+                expandedParts.push_back(part);
+            }
         }
         // Indicates that the element is a streamable file
         else if (storage->isStreamElement(name))
@@ -278,28 +294,39 @@ ExpandedStorage::ExpandedStorage()
     initializeExpandedParts();
 }
 
-std::vector<ExpandedPart> ExpandedStorage::saveToExpandedStorage()
+std::vector<ExpandedPart> ExpandedStorage::saveToExpandedStorage(void* context, void* component)
 {
-    SfxMedium *medium = new SfxMedium();
+
     SfxViewFrame* frame = SfxViewFrame::Current();
-    SfxObjectShell* objShell = frame->GetObjectShell();
+    SfxMedium* medium = frame->GetObjectShell()->GetMedium();
 
-    bool didSave = objShell->DoSaveAs(*medium);
-    if (didSave)
-    {
-        objShell->DoSaveCompleted(medium);
-    }
-    else
-    {
-        delete medium;
-        SAL_WARN("desktop", "ExpandedStorage::saveToExpandedPart() - failed to save the document - " << objShell->GetErrorCode().toString());
-        return {};
-    }
+    uno::Sequence<beans::PropertyValue> origMediumArgs = medium->GetArgs();
 
-    css::uno::Reference<com::sun::star::embed::XStorage> storage = medium->GetZipStorageToSign_Impl();
+    Reference< XComponentContext > xComponentContext = static_cast<XComponentContext*>(context);
+    Reference< lang::XComponent > xComponent = static_cast<lang::XComponent*>(component);
+    uno::Reference< embed::XStorage > xStorage = comphelper::OStorageHelper::GetTemporaryStorage(
+        xComponentContext
+    );
+
+    Reference< embed::XStorage> oldStorage = medium->GetZipStorageToSign_Impl();
+    Reference< util::XCloneable > xStorageCloneable (oldStorage, UNO_QUERY_THROW);
+    Reference< embed::XStorage> newStorage(xStorageCloneable->createClone(), UNO_QUERY_THROW);
+
+    SfxBaseModel* pBaseModel = dynamic_cast<SfxBaseModel*>(xComponent.get());
+    // We don't need to actually commit the changes to disk, since we are
+    // only using the in memory representation of the storage
+    uno::Sequence<beans::PropertyValue> descriptor( comphelper::InitPropertySequence({
+        { "ShouldCommitToStorage", Any(false) },
+    }));
+
+    uno::Sequence<beans::PropertyValue> finalArgs = comphelper::concatSequences(origMediumArgs, descriptor);
+
+    pBaseModel->storeToStorage(newStorage, finalArgs);
+
     auto path = std::optional<OUString>();
 
-    std::vector<ExpandedPart> expandedPartsVec  = GetExpandedParts(storage, path);
+    std::vector<ExpandedPart> expandedPartsVec = GetExpandedParts(newStorage, path);
+    SAL_WARN("desktop", "expandedPartsVec" << expandedPartsVec.size());
 
     for (const ExpandedPart& part : expandedPartsVec)
     {
@@ -313,6 +340,8 @@ std::vector<ExpandedPart> ExpandedStorage::saveToExpandedStorage()
             }
         } else {
             expandedParts.insert({part.path, part});
+
+                SAL_WARN("desktop", "ExpandedStorage::saveToExpandedPart() - path: " << part.path << " sha: " << part.sha << " is new " << expandedParts[part.path].sha);
         }
     }
 

@@ -14,6 +14,10 @@
 
 using namespace emscripten;
 
+
+
+
+
 //static
 lok::Office* instance()
 {
@@ -57,11 +61,12 @@ public:
         expanded_storage = new desktop::ExpandedStorage();
     }
 
-    val saveToExpandedStorage() {
+    void saveToExpandedStorage() {
         if (expanded_storage == nullptr) {
-            return val::undefined();
+            return;
         }
-        return val(expanded_storage->saveToExpandedStorage());
+
+        expanded_storage->saveToExpandedStorage(instance()->getXComponentContext(), doc_->getXComponent());
     }
 
     bool valid() { return doc_ != nullptr; }
