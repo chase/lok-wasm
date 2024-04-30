@@ -199,7 +199,6 @@ export function OfficeDocument(props: Props) {
 
   const handleScroll = frameThrottle(async (yPx, xPx) => {
     handleScroll.cancel();
-
     // We still need to apply a transform to the 
     // canvas when zooming in/out without triggering
     // a render that would be caused by the scroll event
