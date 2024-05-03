@@ -1,6 +1,7 @@
+#include "com/sun/star/uno/Sequence.h"
 #include "comphelper/hash.hxx"
+#include "cppuhelper/implbase.hxx"
 #include "osl/thread.h"
-#include <cstddef>
 #include <oox/helper/expandedstorage.hxx>
 
 #include <com/sun/star/embed/ElementModes.hpp>
@@ -21,6 +22,39 @@ using namespace ::com::sun::star::embed;
 using namespace ::com::sun::star::io;
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::uno;
+#include <com/sun/star/io/XOutputStream.hpp>
+#include <vector>
+
+namespace helpers {
+
+
+class SequenceOutputStream : public cppu::WeakImplHelper<css::io::XOutputStream>
+{
+public:
+    SequenceOutputStream(css::uno::Sequence<sal_Int8>& sequence)
+        : m_sequence(sequence)
+        , m_position(0)
+    {
+    }
+
+    void writeBytes(const css::uno::Sequence<sal_Int8>& aData) override
+    {
+        sal_Int32 newLength = m_position + aData.getLength();
+        m_sequence.realloc(newLength);
+        std::memcpy(m_sequence.getArray() + m_position, aData.getConstArray(), aData.getLength());
+        m_position = newLength;
+    }
+
+    // No-op for in-memory stream
+    void flush() override {}
+
+    // No-op for in-memory stream
+    void closeOutput() override {}
+
+private:
+    css::uno::Sequence<sal_Int8>& m_sequence;
+    sal_Int32 m_position;
+};
 
 OUString toHexString(const std::vector<unsigned char>& a)
 {
@@ -99,12 +133,13 @@ std::vector<ExpandedPart> GetExpandedParts(Reference<XStorage> storage, std::opt
             const OUString& hashString = toHexString(hashVec);
 
 
-            ExpandedPart part(fullPath, hashString, pUnsignedData);
-            expandedParts.push_back(part);
+            ExpandedPart part(fullPath, hashString, aFileContent);
+            expandedParts.emplace_back(part);
         }
     }
 
     return expandedParts;
+}
 }
 
 ExpandedStorage::ExpandedStorage( const Reference< XComponentContext >& rxContext, const Reference< XInputStream >& rxInStream, bool bRepairStorage ) :
@@ -117,7 +152,7 @@ ExpandedStorage::ExpandedStorage( const Reference< XComponentContext >& rxContex
             ZIP_STORAGE_FORMAT_STRING, rxInStream, rxContext, bRepairStorage);
 
     auto path = std::optional<OUString>();
-    std::vector<ExpandedPart> parts = GetExpandedParts(storage, path);
+    std::vector<ExpandedPart> parts = helpers::GetExpandedParts(storage, path);
 
     for (ExpandedPart part : parts) {
         addPart(part);
@@ -165,52 +200,28 @@ Reference< XInputStream > ExpandedStorage::implOpenInputStream( const OUString& 
     }
 
     auto found = m_parts.find(rElementName);
-
     ExpandedPart& foundPart = found->second;
 
-    Sequence<sal_Int8> aFileContent(reinterpret_cast<signed char*>(foundPart.content));
+    xInStream->readBytes(foundPart.content, foundPart.content.size());
 
-    xInStream->readBytes(foundPart.content, foundPart.size);
-
-
-
-
-
-
-    xInStream.set( mxStorage->openStreamElement( rElementName, css::embed::ElementModes::READ ), UNO_QUERY );
-    catch (Exception const&)
-    {
-        TOOLS_INFO_EXCEPTION("oox.storage", "openStreamElement");
-    }
     return xInStream;
 }
 
-Reference< XOutputStream > ZipStorage::implOpenOutputStream( const OUString& rElementName )
+Reference< XOutputStream > ExpandedStorage::implOpenOutputStream( const OUString& rElementName )
 {
     Reference< XOutputStream > xOutStream;
-    if( mxStorage.is() ) try
+    if (m_parts.find(rElementName) == m_parts.end())
     {
-        xOutStream.set( mxStorage->openStreamElement( rElementName, css::embed::ElementModes::READWRITE ), UNO_QUERY );
+        return nullptr;
     }
-    catch (Exception const&)
-    {
-        TOOLS_INFO_EXCEPTION("oox.storage", "openStreamElement");
-    }
-    return xOutStream;
+    auto found = m_parts.find(rElementName);
+    ExpandedPart& foundPart = found->second;
+
+
+    return new helpers::SequenceOutputStream(foundPart.content);
+
 }
 
-void ZipStorage::implCommit() const
-{
-    try
-    {
-        Reference< XTransactedObject >( mxStorage, UNO_QUERY_THROW )->commit();
-    }
-    catch (Exception const&)
-    {
-        TOOLS_WARN_EXCEPTION("oox.storage", "commit");
-    }
+void ExpandedStorage::implCommit() const {};
+
 }
-
-} // namespace oox
-
-/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

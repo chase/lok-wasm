@@ -25,6 +25,7 @@
 #include <vector>
 
 #include <com/sun/star/uno/Reference.hxx>
+#include <com/sun/star/uno/Sequence.hxx>
 #include <oox/helper/storagebase.hxx>
 #include <rtl/ustring.hxx>
 
@@ -46,14 +47,12 @@ using namespace com::sun::star;
 struct ExpandedPart {
     const OUString&  path;
     const OUString&  sha;
-    const unsigned char* content;
-    const sal_Int32 size;
+    css::uno::Sequence<sal_Int8> content;
 
-    ExpandedPart(const OUString& path_, const OUString& sha_, const unsigned char* content_, const sal_Int32 size_)
+    ExpandedPart(const OUString& path_, const OUString& sha_, css::uno::Sequence<sal_Int8> content_)
         : path(path_)
         , sha(sha_)
-        , content(content_)
-        , size(size_){};
+        , content(content_){};
 };
 
 class ExpandedStorage final : public StorageBase
