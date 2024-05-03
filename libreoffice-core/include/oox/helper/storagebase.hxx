@@ -59,6 +59,8 @@ public:
                             const css::uno::Reference< css::io::XStream >& rxOutStream,
                             bool bBaseStreamAccess );
 
+    explicit            StorageBase();
+
     virtual             ~StorageBase();
 
     /** Returns true, if the object represents a valid storage. */

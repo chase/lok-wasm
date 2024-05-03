@@ -1,5 +1,6 @@
 #pragma once
 
+#include "com/sun/star/embed/XStorage.hdl"
 #include "rtl/ustring.hxx"
 #include <com/sun/star/uno/Reference.h>
 #include <LibreOfficeKit/LibreOfficeKit.h>
@@ -98,5 +99,9 @@ class ExpandedStorage {
         std::string readFileBySha(const std::string &sha);
         bool removeFileByPath(const std::string &path);
         bool addFileByPath(const std::string &path, const std::string &content);
+};
+
+class XExpandedStorage : embed::XStorage {
+
 };
 }
