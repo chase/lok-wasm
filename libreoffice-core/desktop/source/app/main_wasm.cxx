@@ -14,10 +14,6 @@
 
 using namespace emscripten;
 
-
-
-
-
 //static
 lok::Office* instance()
 {
@@ -56,7 +52,6 @@ public:
         , doc_(instance()->documentLoad(path.c_str()))
     {
     }
-
     bool valid() { return doc_ != nullptr; }
 
     bool saveAs(std::string url, std::optional<std::string> format,
@@ -431,4 +426,3 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("ref", &DocumentClient::ref)
         .function("newView", &DocumentClient::newView);
 }
-

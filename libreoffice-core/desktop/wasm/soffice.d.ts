@@ -46,8 +46,6 @@ export declare class Document {
   valid(): boolean;
   saveAs(path: string, format?: string, filterOptions?: string): boolean;
   getParts(): number;
-  initExpandedStorage(): void;
-  saveToExpandedStorage(): Array<{ path: string; sha: string }>;
   getPartRectangles(): string;
   paintTile(
     tileWidthPx: number,

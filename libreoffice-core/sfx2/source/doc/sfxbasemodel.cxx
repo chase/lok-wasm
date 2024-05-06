@@ -3855,20 +3855,11 @@ void SAL_CALL SfxBaseModel::storeToStorage( const Reference< embed::XStorage >& 
     if ( !m_pData->m_pObjectShell.is() )
         throw io::IOException(); // TODO:
 
-    bool bCommit = true;
-    comphelper::SequenceAsHashMap aDescriptorMap(aMediaDescriptor);
-    if (aDescriptorMap.find("ShouldCommitToStorage") != aDescriptorMap.end())
-    {
-        bCommit = false;
-    }
-
     auto xSet = std::make_shared<SfxAllItemSet>(m_pData->m_pObjectShell->GetPool());
     TransformParameters( SID_SAVEASDOC, aMediaDescriptor, *xSet );
 
-
     // TODO/LATER: maybe a special URL "private:storage" should be used
     const SfxStringItem* pItem = xSet->GetItem<SfxStringItem>(SID_FILTER_NAME, false);
-    SAL_WARN("sfxbasemodel", "using filter with name: " << pItem->GetValue());
     sal_Int32 nVersion = SOFFICE_FILEFORMAT_CURRENT;
     if( pItem )
     {
@@ -3878,10 +3869,9 @@ void SAL_CALL SfxBaseModel::storeToStorage( const Reference< embed::XStorage >& 
     }
 
     bool bSuccess = false;
-    if ( xStorage == m_pData->m_pObjectShell->GetStorage() && bCommit )
+    if ( xStorage == m_pData->m_pObjectShell->GetStorage() )
     {
         // storing to the own storage
-        SAL_WARN("sfxbasemodel", "we are in here for some reason");
         bSuccess = m_pData->m_pObjectShell->DoSave();
     }
     else
@@ -3896,7 +3886,7 @@ void SAL_CALL SfxBaseModel::storeToStorage( const Reference< embed::XStorage >& 
         if ( aMedium.GetFilter() )
         {
             // storing without a valid filter will often crash
-            bSuccess = m_pData->m_pObjectShell->DoSaveObjectAs( aMedium, bCommit );
+            bSuccess = m_pData->m_pObjectShell->DoSaveObjectAs( aMedium, true );
             m_pData->m_pObjectShell->DoSaveCompleted();
         }
     }
