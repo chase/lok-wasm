@@ -1,6 +1,7 @@
 #include <emscripten/em_asm.h>
 #include <unordered_set>
 #define LOK_USE_UNSTABLE_API
+#include <lib/wasm_extensions.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <LibreOfficeKit/LibreOfficeKit.hxx>
 #include <emscripten.h>
@@ -9,7 +10,6 @@
 #include <emscripten/promise.h>
 #include <array>
 #include <cstdint>
-#include <lib/wasm_extensions.hxx>
 #include <sal/log.hxx>
 
 using namespace emscripten;

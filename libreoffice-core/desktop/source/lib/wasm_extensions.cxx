@@ -171,7 +171,7 @@ std::string WasmDocumentExtension::getPageOrientation ()
     return bIsLandscape ? "\"landscape\"" : "\"portrait\"";
 }
 
-lok::Document* WasmOfficeExtension::documentExpandedLoad(std::vector<oox::ExpandedPart>& parts, const char* pFilterOptions)
+lok::Document* WasmOfficeExtension::documentExpandedLoad(std::vector<desktop::ExpandedPart>& parts, const char* pFilterOptions)
 {
     return nullptr;
     LibreOfficeKitDocument* pDoc = NULL;
@@ -187,7 +187,7 @@ lok::Document* WasmOfficeExtension::documentExpandedLoad(std::vector<oox::Expand
     return new lok::Document(pDoc);
 }
 
-lok::Document* WasmDocumentExtension::loadFromExpanded(const std::vector<oox::ExpandedPart> &parts, const char* pFilterOptions)
+lok::Document* WasmDocumentExtension::loadFromExpanded(const std::vector<desktop::ExpandedPart> &parts, const char* pFilterOptions)
 {
 
 }

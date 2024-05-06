@@ -1,7 +1,6 @@
 #ifndef INCLUDED_OOX_HELPER_EXPANDEDSTORAGE_HXX
 #define INCLUDED_OOX_HELPER_EXPANDEDSTORAGE_HXX
 
-#include "com/sun/star/uno/Sequence.h"
 #include "sal/types.h"
 #include <vector>
 
@@ -15,7 +14,9 @@ namespace com::sun::star {
     namespace io { class XInputStream; }
     namespace io { class XOutputStream; }
     namespace io { class XStream; }
-    namespace uno { class XComponentContext; }
+    namespace uno {
+        class XComponentContext;
+    }
 }
 
 namespace oox {
