@@ -1,6 +1,7 @@
 #pragma once
 
-#include "com/sun/star/embed/XStorage.hdl"
+#include "LibreOfficeKit/LibreOfficeKit.hxx"
+#include "oox/helper/expandedstorage.hxx"
 #include "rtl/ustring.hxx"
 #include <com/sun/star/uno/Reference.h>
 #include <LibreOfficeKit/LibreOfficeKit.h>
@@ -8,6 +9,7 @@
 
 #include <cstdint>
 #include <desktop/dllapi.h>
+#include <unistd.h>
 #include <unordered_map>
 #include <vector>
 
@@ -75,33 +77,14 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 
     std::string getPageColor();
     std::string getPageOrientation();
-};
 
-struct ExpandedPart {
-    std::string path;
-    std::string sha;
-};
-
-using namespace com::sun::star;
-
-class ExpandedStorage {
-
-    std::unordered_map<std::string, ExpandedPart> expandedParts;
-    std::chrono::time_point<std::chrono::system_clock> lastModified;
-
-    public:
-        ExpandedStorage();
-        ~ExpandedStorage();
-
-        void initializeExpandedParts();
-        std::vector<ExpandedPart> saveToExpandedStorage(void* context, void* component);
-        std::string readFileByPath(const std::string &path);
-        std::string readFileBySha(const std::string &sha);
-        bool removeFileByPath(const std::string &path);
-        bool addFileByPath(const std::string &path, const std::string &content);
-};
-
-class XExpandedStorage : embed::XStorage {
+    lok::Document* loadFromExpanded(const std::vector<oox::ExpandedPart>& parts, const char* pFilterOptions = nullptr);
 
 };
-}
+
+struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public lok::Office
+{
+    lok::Document* documentExpandedLoad(std::vector<oox::ExpandedPart>& parts, const char* pFilteroptions = NULL);
+};
+
+};

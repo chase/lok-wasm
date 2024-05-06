@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include "oox/helper/expandedstorage.hxx"
 #include <oox/core/filterdetect.hxx>
 
 #include <com/sun/star/io/XStream.hpp>
@@ -275,6 +276,11 @@ bool lclIsZipPackage( const Reference< XComponentContext >& rxContext, const Ref
     return aZipStorage.isStorage();
 }
 
+// TODO: @synoet implement
+bool lclIsExpandedStorage( const Reference< XComponentContext >& rxContext, const Reference< XInputStream >& rxInStrm )
+{
+}
+
 class PasswordVerifier : public IDocPasswordVerifier
 {
 public:
@@ -317,10 +323,19 @@ comphelper::DocPasswordVerifierResult PasswordVerifier::verifyEncryptionData( co
 Reference< XInputStream > FilterDetect::extractUnencryptedPackage( MediaDescriptor& rMediaDescriptor ) const
 {
     const bool bRepairPackage(rMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
+
+    const bool bIsExpandedStorage(rMediaDescriptor.getUnpackedValueOrDefault("ExpandedStorage", false));
     // try the plain input stream
     Reference<XInputStream> xInputStream( rMediaDescriptor[ MediaDescriptor::PROP_INPUTSTREAM ], UNO_QUERY );
-    if (!xInputStream.is() || lclIsZipPackage(mxContext, xInputStream, bRepairPackage))
+    if (bIsExpandedStorage)
+    {
         return xInputStream;
+    }
+
+    if (!xInputStream.is() || lclIsZipPackage(mxContext, xInputStream, bRepairPackage))
+    {
+        return xInputStream;
+    }
 
     // check if a temporary file is passed in the 'ComponentData' property
     Reference<XStream> xDecrypted( rMediaDescriptor.getComponentDataEntry( "DecryptedPackage" ), UNO_QUERY );
@@ -420,6 +435,7 @@ OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq
 
     try
     {
+        bool bIsExpandedStorage(aMediaDescriptor.getUnpackedValueOrDefault("ExpandedStorage", false));
         aMediaDescriptor.addInputStream();
 
         /*  Get the unencrypted input stream. This may include creation of a
@@ -431,7 +447,21 @@ OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq
         // stream must be a ZIP package
         ZipStorage aZipStorage(mxContext, xInputStream,
                                aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
-        if( aZipStorage.isStorage() )
+
+        ExpandedStorage aExpandedStorage(mxContext, xInputStream, aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
+
+        StorageBase* aStorage = nullptr;
+
+        if (bIsExpandedStorage)
+        {
+            aStorage = &aExpandedStorage;
+        }
+        else
+        {
+            aStorage = &aZipStorage;
+        }
+
+        if( aStorage->isStorage() )
         {
             // create the fast parser, register the XML namespaces, set document handler
             FastParser aParser;
@@ -446,8 +476,8 @@ OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq
 
             /*  Parse '_rels/.rels' to get the target path and '[Content_Types].xml'
                 to determine the content type of the part at the target path. */
-            aParser.parseStream( aZipStorage, "_rels/.rels" );
-            aParser.parseStream( aZipStorage, "[Content_Types].xml" );
+            aParser.parseStream( *aStorage, "_rels/.rels" );
+            aParser.parseStream( *aStorage, "[Content_Types].xml" );
         }
     }
     catch( const Exception& )

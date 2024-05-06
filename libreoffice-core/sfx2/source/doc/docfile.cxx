@@ -437,6 +437,7 @@ public:
 
     uno::Reference<embed::XStorage> xStorage;
     uno::Reference<embed::XStorage> m_xZipStorage;
+    uno::Reference<embed::XStorage> m_xExpandedSotrage;
     uno::Reference<io::XInputStream> m_xInputStreamToLoadFrom;
     uno::Reference<io::XInputStream> xInputStream;
     uno::Reference<io::XStream> xStream;

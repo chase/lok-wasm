@@ -528,12 +528,20 @@ bool SfxObjectShell::ImportFromGeneratedStream_Impl(
     if ( pMedium && pMedium->HasStorage_Impl() )
         pMedium->CloseStorage();
 
+
+    utl::MediaDescriptor aMediaDescriptor( rMediaDescr );
     bool bResult = false;
+    bool bIsExpandedStorage(aMediaDescriptor.getUnpackedValueOrDefault("ExpandedStorage", false));
 
     try
     {
-        uno::Reference< embed::XStorage > xStorage =
-            ::comphelper::OStorageHelper::GetStorageFromStream( xStream );
+        SAL_WARN("sfx.doc", "MACRO: getting storage from stream");
+        uno::Reference< embed::XStorage > xStorage = nullptr;
+        if (bIsExpandedStorage)
+            // TODO: @synoet - implement grabbing the expanded storage from the stream
+            xStorage = nullptr;
+        else
+            xStorage = ::comphelper::OStorageHelper::GetStorageFromStream( xStream );
 
         if ( !xStorage.is() )
             throw uno::RuntimeException();

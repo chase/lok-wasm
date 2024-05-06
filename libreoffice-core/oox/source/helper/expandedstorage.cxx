@@ -222,6 +222,7 @@ Reference< XOutputStream > ExpandedStorage::implOpenOutputStream( const OUString
 
 }
 
+// currently a no-op because it is unecessary to commit in memory
 void ExpandedStorage::implCommit() const {};
 
 }
