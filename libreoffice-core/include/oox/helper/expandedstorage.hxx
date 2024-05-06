@@ -69,7 +69,7 @@ private:
 
     virtual void        implCommit() const override;
 
-    void addPart(ExpandedPart& part);
+    virtual void addPart(ExpandedPart& part);
 
 private:
     std::unordered_map<OUString, ExpandedPart> m_parts;

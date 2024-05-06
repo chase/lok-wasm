@@ -3,7 +3,6 @@
 #include "cppuhelper/implbase.hxx"
 #include "osl/thread.h"
 #include <oox/helper/expandedstorage.hxx>
-
 #include <com/sun/star/embed/ElementModes.hpp>
 #include <com/sun/star/embed/XStorage.hpp>
 #include <com/sun/star/embed/XTransactedObject.hpp>
@@ -14,6 +13,8 @@
 #include <sal/log.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <comphelper/storagehelper.hxx>
+#include <com/sun/star/io/XOutputStream.hpp>
+#include <vector>
 
 namespace oox {
 
@@ -22,8 +23,7 @@ using namespace ::com::sun::star::embed;
 using namespace ::com::sun::star::io;
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::uno;
-#include <com/sun/star/io/XOutputStream.hpp>
-#include <vector>
+
 
 namespace helpers {
 
@@ -166,6 +166,10 @@ ExpandedStorage::ExpandedStorage( std::vector<ExpandedPart>& parts, bool bRepair
     }
 }
 
+ExpandedStorage::~ExpandedStorage()
+{
+}
+
 
 bool ExpandedStorage::implIsStorage() const
 {
@@ -224,5 +228,10 @@ Reference< XOutputStream > ExpandedStorage::implOpenOutputStream( const OUString
 
 // currently a no-op because it is unecessary to commit in memory
 void ExpandedStorage::implCommit() const {};
+
+
+void ExpandedStorage::addPart(ExpandedPart& part)
+{
+}
 
 }

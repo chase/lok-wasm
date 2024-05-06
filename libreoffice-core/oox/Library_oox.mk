@@ -250,6 +250,7 @@ $(eval $(call gb_Library_add_exception_objects,oox,\
     oox/source/helper/storagebase \
     oox/source/helper/textinputstream \
     oox/source/helper/zipstorage \
+	oox/source/helper/expandedstorage \
     oox/source/mathml/imexport \
     oox/source/mathml/importutils \
     oox/source/ole/axbinaryreader \

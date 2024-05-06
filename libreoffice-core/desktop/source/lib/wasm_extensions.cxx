@@ -1,3 +1,4 @@
+#include "LibreOfficeKit/LibreOfficeKit.h"
 #include "editeng/sizeitem.hxx"
 #include "sal/log.hxx"
 #include "sfx2/bindings.hxx"
@@ -171,7 +172,7 @@ std::string WasmDocumentExtension::getPageOrientation ()
     return bIsLandscape ? "\"landscape\"" : "\"portrait\"";
 }
 
-lok::Document* WasmOfficeExtension::documentExpandedLoad(std::vector<desktop::ExpandedPart>& parts, const char* pFilterOptions)
+_LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(std::vector<desktop::ExpandedPart>& parts, const char* pFilterOptions)
 {
     return nullptr;
     LibreOfficeKitDocument* pDoc = NULL;
@@ -184,10 +185,10 @@ lok::Document* WasmOfficeExtension::documentExpandedLoad(std::vector<desktop::Ex
         return NULL;
     }
 
-    return new lok::Document(pDoc);
+    return pDoc;
 }
 
-lok::Document* WasmDocumentExtension::loadFromExpanded(const std::vector<desktop::ExpandedPart> &parts, const char* pFilterOptions)
+_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(const std::vector<desktop::ExpandedPart> &parts, const char* pFilterOptions)
 {
 
 }

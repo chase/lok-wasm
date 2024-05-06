@@ -1,6 +1,5 @@
 #pragma once
 
-#include "LibreOfficeKit/LibreOfficeKit.hxx"
 #include "rtl/ustring.hxx"
 #include <com/sun/star/uno/Reference.h>
 #include <LibreOfficeKit/LibreOfficeKit.h>
@@ -11,7 +10,6 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
-#include <com/sun/star/uno/Sequence.hxx>
 
 
 // This makes direct extensions to lib/init.cxx much easier to expose in main_wasm.cxx
@@ -33,9 +31,9 @@ static constexpr size_t MAX_INVALIDATION_STACK = 4096;
 struct ExpandedPart {
     const OUString&  path;
     const OUString&  sha;
-    css::uno::Sequence<sal_Int8> content;
+    std::vector<sal_Int8> content;
 
-    ExpandedPart(const OUString& path_, const OUString& sha_, css::uno::Sequence<sal_Int8> content_)
+    ExpandedPart(const OUString& path_, const OUString& sha_, std::vector<sal_Int8> content_)
         : path(path_)
         , sha(sha_)
         , content(content_){};
@@ -92,16 +90,13 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     std::string getPageColor();
     std::string getPageOrientation();
 
-    lok::Document* loadFromExpanded(const std::vector<desktop::ExpandedPart>& parts, const char* pFilterOptions = nullptr);
+    _LibreOfficeKitDocument* loadFromExpanded(const std::vector<desktop::ExpandedPart>& parts, const char* pFilterOptions = nullptr);
 
 };
 
-namespace lok {
-    class Document;
-}
-struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public ::lok::Office
+struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public _LibreOfficeKit
 {
-    lok::Document* documentExpandedLoad(std::vector<desktop::ExpandedPart>& parts, const char* pFilteroptions = NULL);
+    _LibreOfficeKitDocument* documentExpandedLoad(std::vector<desktop::ExpandedPart>& parts, const char* pFilteroptions = NULL);
 };
 
 };
