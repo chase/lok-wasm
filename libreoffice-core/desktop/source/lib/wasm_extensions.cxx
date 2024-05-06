@@ -29,6 +29,8 @@
 #include <rtl/ustring.hxx>
 #include <rtl/string.hxx>
 #include <svx/svxids.hrc>
+#include <string>
+#include <rtl/ustrbuf.hxx>
 
 namespace desktop
 {
@@ -200,7 +202,29 @@ _LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(std::vector<d
     return pDoc;
 }
 
+/// Serializes the ExpandedPart vector to JSON
+/// which will then be put into the input stream
+/// the `ExpandedStorage` will read and deserialize it
+/// back into its original form
+std::string serializeToJson(const std::vector<desktop::ExpandedPart>& parts)
+{
+    tools::JsonWriter aJson;
+    auto aArray = aJson.startAnonArray();
+
+    for (const auto& part : parts)
+    {
+        auto aStruct = aJson.startStruct();
+
+        aJson.put("path", part.path);
+        aJson.put("sha", part.sha);
+        aJson.put("content", part.content);
+    }
+
+    return aJson.finishAndGetAsOString().getStr();
+}
+
 using namespace com::sun::star;
+
 _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, const std::vector<desktop::ExpandedPart> &parts, const char* pFilterOptions)
 {
     uno::XComponentContext * xContext =
@@ -218,13 +242,15 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
         return nullptr;
     }
 
-
-    auto aData = uno::Sequence<sal_Int8>(reinterpret_cast<const sal_Int8*>(parts.data()), parts.size());
+    std::string jsonData = serializeToJson(parts);
+    auto aData = uno::Sequence<sal_Int8>(reinterpret_cast<const sal_Int8*>(jsonData.data()), jsonData.size());
     uno::Reference<io::XInputStream> aInputStream(new comphelper::SequenceInputStream(aData));
 
     utl::MediaDescriptor aMediaDescriptor;
+    // Leave a breadcrumb that this is using expanded storage
     aMediaDescriptor["ExpandedStorage"] <<= true;
-    aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML"); // just hardcode this for now
+    // Expanded storage only supports .docx files right now
+    aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML");
     aMediaDescriptor["InputStream"] <<= aInputStream;
     aMediaDescriptor["Silent"] <<= true;
     aMediaDescriptor["Hidden"] <<= true;

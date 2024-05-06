@@ -31,9 +31,9 @@ static constexpr size_t MAX_INVALIDATION_STACK = 4096;
 struct ExpandedPart {
     const OUString&  path;
     const OUString&  sha;
-    std::vector<sal_Int8> content;
+    std::string content;
 
-    ExpandedPart(const OUString& path_, const OUString& sha_, std::vector<sal_Int8> content_)
+    ExpandedPart(const OUString& path_, const OUString& sha_, std::string content_)
         : path(path_)
         , sha(sha_)
         , content(content_){};
