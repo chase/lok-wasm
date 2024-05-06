@@ -104,7 +104,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
 
       idleAreaPaint = false;
-      zoom(data.s, data.d, data.y);
+      zoom(data.s, data.d);
 
       // Ensure we debounce a reset in combination with shouldStopPaint
       zoomResetTimeout = setTimeout(() => {
@@ -117,7 +117,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
   }
 };
 
-function zoom(in_scale: number, in_dpi: number, in_y: number) {
+function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
 
@@ -131,6 +131,7 @@ function zoom(in_scale: number, in_dpi: number, in_y: number) {
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
 
+  // TODO: @synoet - after making the scroll area responsive (see zoom.ts), this shouldn't be necessary since a scroll event should fire
   // Update the top position to the new scale
   scheduledTopTwips = in_y * scaledTwips;
 

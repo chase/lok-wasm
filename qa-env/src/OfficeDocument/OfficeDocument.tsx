@@ -9,6 +9,7 @@ import {
   createSignal,
   onCleanup,
   onMount,
+  on,
 } from 'solid-js';
 import { CallbackType } from '@lok/lok_enums';
 import { ScrollArea } from './ScrollArea';
@@ -21,15 +22,18 @@ import { getOrCreateFocusedSignal } from './focus';
 import { frameThrottle } from './frameThrottle';
 import { getOrCreateZoomSignal } from './zoom';
 import { getOrCreateDPISignal } from './twipConversion';
-import { isZooming, setIsZooming } from '../App';
 
+// These give us good scaling behavior until the render actually finishes
+/** Cover on Zoom In, will stretch the image to fit as the canvas size changes */
+const ZOOM_IN_CANVAS_FIT = 'cover';
+/** Contain on Zoom Out, squeezes the image to fit as the canvas size changes */
+const ZOOM_OUT_CANVAS_FIT = 'contain';
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
 
 const BORDER_WIDTH = 1;
 
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
   doc: DocumentClient;
-  scrollAreaRef?: (ref: HTMLDivElement) => void;
   ignoreShortcuts?: Shortcut[];
 }
 
@@ -48,8 +52,6 @@ declare module 'solid-js' {
   }
 }
 false && observedSize; // workaround for "unused" function warning with Solid directives
-
-export const [canvasObjectFit, setCanvasObjectFit] = createSignal<"cover" | "contain" | "fill">("cover");
 
 function calcCanvasHeight(heightPx: number | undefined) {
   return heightPx
@@ -94,13 +96,13 @@ function scaleRectCssPx(rect: RectangleTwips, zoom: number): RectanglePx {
     y: twipsToCssPx(rect.y, zoom),
     height: twipsToCssPx(rect.height, zoom),
     width: twipsToCssPx(rect.width, zoom),
-  }
+  };
 }
 
 const didInitialRender = new WeakSet<DocumentClient>();
 
 export function OfficeDocument(props: Props) {
-
+  let scrollAreaRef: HTMLDivElement | undefined;
   /** TODO: add DPI observer and handle DPI change */
   /** TODO: add context loss for machine if left asleep */
   const [containerHeight, setContainerHeight] = createSignal<
@@ -123,23 +125,21 @@ export function OfficeDocument(props: Props) {
 
   createEffect(async () => {
     setDocSizeTwips(await props.doc.documentSize());
-    setRectsTwips(
-      await props.doc.partRectanglesTwips()
-    );
+    setRectsTwips(await props.doc.partRectanglesTwips());
   });
 
   const docSizePx = () => {
     const [getZoom] = getOrCreateZoomSignal(() => props.doc);
     const zoom = getZoom();
     return docSizeTwips()?.map((i) => twipsToCssPx(i, zoom));
-  }
+  };
   const rectsPx = () => {
     const [getZoom] = getOrCreateZoomSignal(() => props.doc);
     const zoom = getZoom();
     return rectsTwips()
-      ?.map(rect => scaleRectCssPx(rect, zoom))
+      ?.map((rect) => scaleRectCssPx(rect, zoom))
       .filter((rect) => rect.width && rect.height);
-  }
+  };
 
   createEffect(() => {
     const callback = async () => {
@@ -157,14 +157,26 @@ export function OfficeDocument(props: Props) {
     if (height) props.doc.setVisibleHeight(height);
   });
 
+  const [getZoom] = getOrCreateZoomSignal(() => props.doc);
+
+  const didZoomOut = createMemo(
+    on(
+      getZoom,
+      (zoom, lastZoom) => {
+        return lastZoom != null && zoom < lastZoom;
+      },
+      { defer: true }
+    ),
+    false
+  );
+
   createEffect(async () => {
     if (didInitialRender.has(props.doc)) return;
     const width = docSizePx()?.[0];
     const height = canvasHeight();
     const canvas0_ = canvas0();
     const canvas1_ = canvas1();
-    if (!width || !height || !canvas0_ || !canvas1_ || !props.doc)
-      return;
+    if (!width || !height || !canvas0_ || !canvas1_ || !props.doc) return;
     const [getZoom] = getOrCreateZoomSignal(() => props.doc);
     const zoom = getZoom();
     const getDpi = getOrCreateDPISignal();
@@ -200,7 +212,7 @@ export function OfficeDocument(props: Props) {
   const handleScroll = frameThrottle(async (yPx, xPx) => {
     handleScroll.cancel();
 
-    // We still need to apply a transform to the 
+    // We still need to apply a transform to the
     // canvas when zooming in/out without triggering
     // a render that would be caused by the scroll event
     if (isZooming()) {
@@ -209,7 +221,7 @@ export function OfficeDocument(props: Props) {
       c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % TILE_DIM_PX}px, 0)`;
       setIsZooming(false);
       return;
-    };
+    }
 
     const c0 = canvas0();
     const c1 = canvas1();
@@ -227,10 +239,8 @@ export function OfficeDocument(props: Props) {
     }
   });
 
-
   return (
     <>
-
       <div
         class="flex flex-1 justify-center relative overflow-hidden"
         use:observedSize={[props.doc, setContainerHeight]}
@@ -241,7 +251,7 @@ export function OfficeDocument(props: Props) {
               ref={setCanvas0}
               class="absolute top-0 pointer-events-none"
               style={{
-                'object-fit': canvasObjectFit(),
+                'object-fit': didZoomOut() ? ZOOM_OUT_CANVAS_FIT : ZOOM_IN_CANVAS_FIT,
                 'object-position': 'top center',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
@@ -252,7 +262,7 @@ export function OfficeDocument(props: Props) {
               ref={setCanvas1}
               class="absolute top-0 pointer-events-none"
               style={{
-                'object-fit': canvasObjectFit(),
+                'object-fit': didZoomOut() ? ZOOM_OUT_CANVAS_FIT : ZOOM_IN_CANVAS_FIT,
                 'object-position': 'top center',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
@@ -265,7 +275,7 @@ export function OfficeDocument(props: Props) {
         <ScrollArea
           class="absolute top-0"
           onScroll={handleScroll}
-          ref={props.scrollAreaRef}
+          ref={scrollAreaRef}
         >
           {docSizePx() && (
             <div
@@ -283,21 +293,21 @@ export function OfficeDocument(props: Props) {
               }}
               oncapture:mousemove={(e: MouseEvent) => {
                 // Seems like on firefox the mousemove event object gets recycled
-                // We can't pass a ref of the event to frameThrottle because it 
+                // We can't pass a ref of the event to frameThrottle because it
                 // might get mutated / cleaned up by the time the callback gets invoked
                 // Instead copying over what we need instead of doing a full clone
                 const partialEvent: vclMouse.PartialMouseEvent = {
-                      buttons: e.buttons,
-                      offsetX: e.offsetX,
-                      offsetY: e.offsetY,
-                      shiftKey: e.shiftKey,
-                      altKey: e.altKey,
-                      metaKey: e.metaKey,
-                      ctrlKey: e.ctrlKey,
-                }
+                  buttons: e.buttons,
+                  offsetX: e.offsetX,
+                  offsetY: e.offsetY,
+                  shiftKey: e.shiftKey,
+                  altKey: e.altKey,
+                  metaKey: e.metaKey,
+                  ctrlKey: e.ctrlKey,
+                };
                 const callback = frameThrottle((evt) => {
-                    vclMouse.handleMouseMove(props.doc, evt);
-                })
+                  vclMouse.handleMouseMove(props.doc, evt);
+                });
 
                 callback(partialEvent);
               }}
