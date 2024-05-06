@@ -1,23 +1,7 @@
-#include "com/sun/star/beans/XPropertySet.hdl"
-#include "com/sun/star/document/XDocumentProperties.hdl"
-#include "com/sun/star/embed/ElementModes.hpp"
-#include "com/sun/star/frame/XModel3.hdl"
-#include "com/sun/star/lang/XComponent.hdl"
-#include "com/sun/star/uno/Reference.h"
-#include "com/sun/star/uno/Sequence.h"
-#include "com/sun/star/uno/XComponentContext.hdl"
-#include "com/sun/star/util/XCloneable.hdl"
-#include "comphelper/hash.hxx"
-#include "comphelper/propertysequence.hxx"
-#include "comphelper/sequence.hxx"
-#include "comphelper/storagehelper.hxx"
 #include "editeng/sizeitem.hxx"
 #include "sal/log.hxx"
 #include "sfx2/bindings.hxx"
 #include "sfx2/dispatch.hxx"
-#include "sfx2/docfile.hxx"
-#include "sfx2/sfxbasemodel.hxx"
-#include "sfx2/shell.hxx"
 #include "sfx2/viewfrm.hxx"
 #include "sfx2/viewsh.hxx"
 #include "svl/itemset.hxx"
@@ -31,14 +15,10 @@
 #include <lib/wasm_extensions.hxx>
 #include <emscripten/bind.h>
 #include <emscripten/threading.h>
-#include <optional>
 #include <pthread.h>
 #include <rtl/ustring.hxx>
 #include <rtl/string.hxx>
 #include <svx/svxids.hrc>
-#include <string>
-#include <iomanip>
-#include <sstream>
 
 namespace desktop
 {
@@ -205,6 +185,11 @@ lok::Document* WasmOfficeExtension::documentExpandedLoad(std::vector<oox::Expand
     }
 
     return new lok::Document(pDoc);
+}
+
+lok::Document* WasmDocumentExtension::loadFromExpanded(const std::vector<oox::ExpandedPart> &parts, const char* pFilterOptions)
+{
+
 }
 
 }
