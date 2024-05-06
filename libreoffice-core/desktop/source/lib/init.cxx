@@ -2900,6 +2900,7 @@ static LibreOfficeKitDocument* lo_documentLoad(LibreOfficeKit* pThis, const char
     return lo_documentLoadWithOptions(pThis, pURL, nullptr);
 }
 
+
 static LibreOfficeKitDocument* lo_documentLoadWithOptions(LibreOfficeKit* pThis, const char* pURL, const char* pOptions)
 {
     comphelper::ProfileZone aZone("lo_documentLoadWithOptions");

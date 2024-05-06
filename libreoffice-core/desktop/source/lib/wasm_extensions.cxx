@@ -1,6 +1,14 @@
 #include "LibreOfficeKit/LibreOfficeKit.h"
+#include "com/sun/star/frame/Desktop.hpp"
+#include "com/sun/star/frame/XDesktop2.hdl"
+#include "com/sun/star/uno/XComponentContext.hdl"
+#include "comphelper/diagnose_ex.hxx"
+#include "comphelper/seqstream.hxx"
+#include "cppuhelper/exc_hlp.hxx"
 #include "editeng/sizeitem.hxx"
+#include "lib/init.hxx"
 #include "sal/log.hxx"
+#include "sal/types.h"
 #include "sfx2/bindings.hxx"
 #include "sfx2/dispatch.hxx"
 #include "sfx2/viewfrm.hxx"
@@ -11,6 +19,7 @@
 #include "svx/xcolit.hxx"
 #include "svx/xflclit.hxx"
 #include "tools/json_writer.hxx"
+#include "unotools/mediadescriptor.hxx"
 #include <algorithm>
 #include <cstdlib>
 #include <lib/wasm_extensions.hxx>
@@ -179,7 +188,10 @@ _LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(std::vector<d
     desktop::WasmDocumentExtension* ext
         = static_cast<desktop::WasmDocumentExtension*>(pDoc);
 
-    ext->loadFromExpanded(parts);
+    LibreOfficeKit* pThis = static_cast<LibreOfficeKit*>(this);
+
+
+    ext->loadFromExpanded(pThis, parts);
 
     if (pDoc == NULL) {
         return NULL;
@@ -188,8 +200,61 @@ _LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(std::vector<d
     return pDoc;
 }
 
-_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(const std::vector<desktop::ExpandedPart> &parts, const char* pFilterOptions)
+using namespace com::sun::star;
+_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, const std::vector<desktop::ExpandedPart> &parts, const char* pFilterOptions)
 {
+    uno::XComponentContext * xContext =
+        static_cast<uno::XComponentContext*>(pThis->pClass->getXComponentContext(pThis));
+
+    if (!xContext) {
+        return nullptr;
+    }
+
+    uno::Reference<frame::XDesktop2> xComponentLoader = frame::Desktop::create(xContext);
+
+    if (!xComponentLoader.is())
+    {
+        SAL_WARN("lok", "ComponentLoader is not available");
+        return nullptr;
+    }
+
+
+    auto aData = uno::Sequence<sal_Int8>(reinterpret_cast<const sal_Int8*>(parts.data()), parts.size());
+    uno::Reference<io::XInputStream> aInputStream(new comphelper::SequenceInputStream(aData));
+
+    utl::MediaDescriptor aMediaDescriptor;
+    aMediaDescriptor["ExpandedStorage"] <<= true;
+    aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML"); // just hardcode this for now
+    aMediaDescriptor["InputStream"] <<= aInputStream;
+    aMediaDescriptor["Silent"] <<= true;
+    aMediaDescriptor["Hidden"] <<= true;
+
+    {
+        SolarMutexGuard aGuard;
+        try
+        {
+            Application::SetDialogCancelMode(DialogCancelMode::LOKSilent);
+            SfxViewShell::SetCurrentDocId(ViewShellDocId(0));
+            uno::Reference<lang::XComponent> xComponent = xComponentLoader->loadComponentFromURL(
+                "private:stream", "_blank", 0, aMediaDescriptor.getAsConstPropertyValueList());
+
+            if (!xComponent.is()) {
+                SAL_WARN("lok", "Could not load in memory doc");
+                return nullptr;
+            }
+
+            return new LibLODocument_Impl(xComponent, 0);
+        }
+        catch (const uno::Exception& exception)
+        {
+            uno::Any exAny( cppu::getCaughtException() );
+            SAL_WARN("lok", "Failed to load to in-memory stream: " + exceptionToString(exAny));
+        }
+    }
+    return nullptr;
+
+
+
 
 }
 
