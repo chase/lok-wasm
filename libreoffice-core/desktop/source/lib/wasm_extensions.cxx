@@ -252,10 +252,6 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
         }
     }
     return nullptr;
-
-
-
-
 }
 
 }
