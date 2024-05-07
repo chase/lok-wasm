@@ -1,3 +1,4 @@
+#include <boost/property_tree/json_parser.hpp>
 #include "com/sun/star/uno/Sequence.h"
 #include "comphelper/hash.hxx"
 #include "cppuhelper/implbase.hxx"
@@ -70,7 +71,7 @@ OUString toHexString(const std::vector<unsigned char>& a)
     return OUString(str.data(), str.length(), osl_getThreadTextEncoding());
 }
 
-std::vector<ExpandedPart> GetExpandedParts(Reference<XStorage> storage, std::optional<OUString> &path)
+std::vector<ExpandedPart> GetExpandedPartsFromStorage(Reference<XStorage> storage, std::optional<OUString> &path)
 {
     std::vector<ExpandedPart> expandedParts;
     Sequence<OUString> elementNames = storage->getElementNames();
@@ -84,7 +85,7 @@ std::vector<ExpandedPart> GetExpandedParts(Reference<XStorage> storage, std::opt
             Reference<XStorage> subStorage = storage->openStorageElement(name, ElementModes::READ);
             std::optional<OUString> subPath = std::make_optional<OUString>(fullPath);
             // Recursively initialize the expanded parts
-            std::vector<ExpandedPart> subParts = GetExpandedParts(subStorage, subPath);
+            std::vector<ExpandedPart> subParts = GetExpandedPartsFromStorage(subStorage, subPath);
 
             for (ExpandedPart part : subParts) {
                 expandedParts.push_back(part);
@@ -140,30 +141,82 @@ std::vector<ExpandedPart> GetExpandedParts(Reference<XStorage> storage, std::opt
 
     return expandedParts;
 }
+
+std::vector<ExpandedPart> GetExpandedPartsFromStream(const Reference< XInputStream >& xInputStream)
+{
+    std::string rJson;
+
+    if (xInputStream.is())
+    {
+        const sal_Int32 bufferSize = 4096;
+        Sequence<sal_Int8> buffer(bufferSize);
+        sal_Int32 bytesRead;
+
+        do
+        {
+            bytesRead = xInputStream->readBytes(buffer, bufferSize);
+            rJson.append(reinterpret_cast<const char*>(buffer.getConstArray()), bytesRead);
+        } while (bytesRead == bufferSize);
+    }
+
+    std::vector<ExpandedPart> parts;
+    boost::property_tree::ptree aRootTree;
+    boost::property_tree::read_json(rJson, aRootTree);
+    for (const auto& part : boost::make_iterator_range(aRootTree))
+    {
+        auto path = part.second.get_value<std::string>("path");
+        auto content = part.second.get_value<std::string>("content");
+        // Generate SHA-256 hash
+        const unsigned char* pData = reinterpret_cast<const unsigned char*>(content.data());
+
+        std::vector<unsigned char> hashVec = comphelper::Hash::calculateHash(
+            pData, content.size(),
+            comphelper::HashType::SHA256
+        );
+        Sequence<sal_Int8> contentSequence(reinterpret_cast<const sal_Int8*>(pData), content.size());
+
+        OUString sPath(path.data(), path.length(), osl_getThreadTextEncoding());
+
+
+        parts.emplace_back(ExpandedPart(sPath, toHexString(hashVec), contentSequence));
+    }
+
+    return parts;
 }
 
-ExpandedStorage::ExpandedStorage( const Reference< XComponentContext >& rxContext, const Reference< XInputStream >& rxInStream, bool bRepairStorage ) :
+}
+
+ExpandedStorage::ExpandedStorage( const Reference< XComponentContext >& rxContext, const Reference< XInputStream >& rxInStream, bool bRepairStorage, bool bFromExpanded) :
     StorageBase( rxInStream, false )
 {
     if( !rxContext.is() )
         return;
 
-    uno::Reference<embed::XStorage> storage = ::comphelper::OStorageHelper::GetStorageOfFormatFromInputStream(
-            ZIP_STORAGE_FORMAT_STRING, rxInStream, rxContext, bRepairStorage);
 
-    auto path = std::optional<OUString>();
-    std::vector<ExpandedPart> parts = helpers::GetExpandedParts(storage, path);
+    // We are loading a zipped docx file into expanded storage
+    if (!bFromExpanded)
+    {
+        uno::Reference<embed::XStorage> storage = ::comphelper::OStorageHelper::GetStorageOfFormatFromInputStream(
+                ZIP_STORAGE_FORMAT_STRING, rxInStream, rxContext, bRepairStorage);
 
+        auto path = std::optional<OUString>();
+        std::vector<ExpandedPart> parts = helpers::GetExpandedPartsFromStorage(storage, path);
+
+        for (ExpandedPart part : parts) {
+            addPart(part);
+        }
+
+        return;
+    }
+
+    // Else we are loading from expanded parts, from the stream
+    // which stores a json representation of the expanded parts to load
+    std::vector<ExpandedPart> parts = helpers::GetExpandedPartsFromStream(rxInStream);
     for (ExpandedPart part : parts) {
         addPart(part);
     }
-}
-ExpandedStorage::ExpandedStorage( std::vector<ExpandedPart>& parts, bool bRepairStorage) :
-    StorageBase()
-{
-    for (ExpandedPart part : parts) {
-        addPart(part);
-    }
+
+    return;
 }
 
 ExpandedStorage::~ExpandedStorage()

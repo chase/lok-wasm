@@ -120,6 +120,13 @@ public:
             sal_Int32 nStorageMode = css::embed::ElementModes::READWRITE,
             const css::uno::Reference< css::uno::XComponentContext >& rxContext
                             = css::uno::Reference< css::uno::XComponentContext >() );
+    /// @throws css::uno::Exception
+    static css::uno::Reference< css::embed::XStorage >
+        GetExpandedStorageFromStream(
+            const css::uno::Reference < css::io::XStream >& xStream,
+            sal_Int32 nStorageMode = css::embed::ElementModes::READWRITE,
+            const css::uno::Reference< css::uno::XComponentContext >& rxContext
+                            = css::uno::Reference< css::uno::XComponentContext >() );
 
     /// @throws css::uno::Exception
     static void CopyInputToOutput(

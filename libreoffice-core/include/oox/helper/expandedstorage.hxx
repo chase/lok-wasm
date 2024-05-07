@@ -41,12 +41,8 @@ public:
     explicit            ExpandedStorage(
                             const css::uno::Reference< css::uno::XComponentContext >& rxContext,
                             const css::uno::Reference< css::io::XInputStream >& rxInStream,
-                            bool bRepairStorage );
-
-    // reading in from a BOM
-    explicit            ExpandedStorage(
-                            std::vector<ExpandedPart>& parts,
-                            bool bRepairStorage);
+                            bool bRepairStorage,
+                            bool bFromExpanded);
 
     virtual             ~ExpandedStorage() override;
 

@@ -60,6 +60,7 @@
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <o3tl/string_view.hxx>
+#include "oox/helper/expandedstorage.hxx"
 
 #if HAVE_FEATURE_GPGME
 # include <context.h>
@@ -168,6 +169,24 @@ uno::Reference< embed::XStorage > OStorageHelper::GetStorageFromStream(
                                                     uno::UNO_QUERY_THROW );
     return xTempStorage;
 }
+
+uno::Reference< embed::XStorage > OStorageHelper::GetExpandedStorageFromStream(
+            const uno::Reference < io::XStream >& xStream,
+            sal_Int32 nStorageMode,
+            const uno::Reference< uno::XComponentContext >& rxContext )
+{
+    uno::Reference< io::XInputStream > xInputStream = xStream->getInputStream();
+
+    uno::Reference< oox::ExpandedStorage > aStorage = new oox::ExpandedStorage(
+            rxContext,
+            xInputStream,
+            false,
+            true
+    );
+
+    return aStorage->getXStorage();
+}
+
 
 
 void OStorageHelper::CopyInputToOutput(

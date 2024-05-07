@@ -538,8 +538,7 @@ bool SfxObjectShell::ImportFromGeneratedStream_Impl(
         SAL_WARN("sfx.doc", "MACRO: getting storage from stream");
         uno::Reference< embed::XStorage > xStorage = nullptr;
         if (bIsExpandedStorage)
-            // TODO: @synoet - implement grabbing the expanded storage from the stream
-            xStorage = nullptr;
+            xStorage = ::comphelper::OStorageHelper::GetExpandedStorageFromStream( xStream );
         else
             xStorage = ::comphelper::OStorageHelper::GetStorageFromStream( xStream );
 
