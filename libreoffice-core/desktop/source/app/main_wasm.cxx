@@ -52,6 +52,29 @@ public:
         , doc_(instance()->documentLoad(path.c_str()))
     {
     }
+
+    explicit DocumentClient(std::vector<std::string> parts, bool bRandom)
+        : ref_(1)
+    {
+        SAL_WARN("desktop", "parts: " << parts.size());
+        std::vector<desktop::ExpandedPart> expandedParts;
+        for (const auto& part : parts) {
+            auto i = part.find_first_of("@");
+            auto path = part.substr(0, i);
+            auto content = part.substr(i + 1);
+            SAL_WARN("desktop", "part " << path << " " << content);
+            expandedParts.push_back(desktop::ExpandedPart(path, content));
+        }
+
+        desktop::WasmOfficeExtension* ext = static_cast<desktop::WasmOfficeExtension*>(instance()->get());
+
+        auto doc = ext->documentExpandedLoad(expandedParts);
+
+        lok::Document aDoc = static_cast<lok::Document>(doc);
+
+        doc_ = &aDoc;
+    }
+
     bool valid() { return doc_ != nullptr; }
 
     bool saveAs(std::string url, std::optional<std::string> format,
@@ -396,9 +419,12 @@ EMSCRIPTEN_BINDINGS(lok)
     register_optional<std::string>();
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
+    register_vector<std::string>("ExpandedPartVec");
+
 
     class_<DocumentClient>("Document")
         .constructor<std::string>()
+        .constructor<std::vector<std::string>, bool>()
         .function("valid", &DocumentClient::valid)
         .function("saveAs", &DocumentClient::saveAs)
         .function("getParts", &DocumentClient::getParts)

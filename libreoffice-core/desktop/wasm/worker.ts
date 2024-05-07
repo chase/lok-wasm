@@ -39,10 +39,30 @@ const lokPromise = LOK({
 
 const handler: AsyncMessage = {
   load: async function (name: string, blob: Blob): Promise<DocumentRef | null> {
-    const { mountBlob, unmountBlob, Document } = await lokPromise;
+    const { mountBlob, unmountBlob, Document} = await lokPromise;
     const doc = new Document(`file://${mountBlob(name, blob)}`);
     const ref = doc.ref();
     unmountBlob();
+
+    if (!doc.valid()) {
+      doc.delete();
+      return null;
+    }
+
+    docMap[ref] = doc;
+    return ref;
+  },
+
+  loadFromExpandedParts: async function(data: any) {
+    const { Document, ExpandedPartVec} = await lokPromise;
+    const parts = new ExpandedPartVec();
+
+    for (const part of data.parts) {
+      parts.push_back(`${part.path}@${part.content.join("")}`)
+    }
+
+    const doc = new Document(parts, false);
+    const ref = doc.ref();
 
     if (!doc.valid()) {
       doc.delete();

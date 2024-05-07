@@ -7,6 +7,7 @@ export type GlobalMessage = {
   /** load the document with the file name `name` and content `blob`
   @returns the corresponding document on success, null otherwise */
   load(name: string, blob: Blob): DocumentRef | null;
+  loadFromExpandedParts(data: Array<{path: string, content: string}>): DocumentRef | null;
   importScript(url: string): void;
   preload(): void;
   setIsMacOSForConfig(): void;

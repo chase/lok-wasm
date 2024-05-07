@@ -15,9 +15,7 @@
 #include "sfx2/viewsh.hxx"
 #include "svl/itemset.hxx"
 #include "svl/poolitem.hxx"
-#include "svx/rulritem.hxx"
 #include "svx/xcolit.hxx"
-#include "svx/xflclit.hxx"
 #include "tools/json_writer.hxx"
 #include "unotools/mediadescriptor.hxx"
 #include <algorithm>
@@ -183,9 +181,9 @@ std::string WasmDocumentExtension::getPageOrientation ()
     return bIsLandscape ? "\"landscape\"" : "\"portrait\"";
 }
 
+
 _LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(std::vector<desktop::ExpandedPart>& parts, const char* pFilterOptions)
 {
-    return nullptr;
     LibreOfficeKitDocument* pDoc = NULL;
     desktop::WasmDocumentExtension* ext
         = static_cast<desktop::WasmDocumentExtension*>(pDoc);
@@ -216,7 +214,6 @@ std::string serializeToJson(const std::vector<desktop::ExpandedPart>& parts)
         auto aStruct = aJson.startStruct();
 
         aJson.put("path", part.path);
-        aJson.put("sha", part.sha);
         aJson.put("content", part.content);
     }
 

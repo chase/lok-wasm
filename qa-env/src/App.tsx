@@ -1,4 +1,4 @@
-import { loadDocument } from '@lok';
+import { loadDocument, loadDocumentFromExpandedParts } from '@lok';
 import type { DocumentClient } from '@lok/shared';
 import './App.css';
 import { Show, createSignal } from 'solid-js';
@@ -14,12 +14,26 @@ async function fileOpen(files: FileList | null) {
   if (!files || !files[0]) return;
   const name = files[0].name;
   const blob = files[0].slice();
+  const type = files[0].type;
+
   setLoading(true);
   const oldDoc = getDoc();
   if (oldDoc) {
     cleanup(oldDoc);
   }
-  const doc = await loadDocument(name, blob);
+  let doc;
+  if (type !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document"){
+    const decoder = new TextDecoder();
+    let content = decoder.decode(await blob.arrayBuffer());
+    console.log(content)
+    let parts = JSON.parse(content) as Array<{path: string, content: string}>;
+
+    doc = await loadDocumentFromExpandedParts(parts)
+
+  } else {
+    doc = await loadDocument(name, blob);
+  }
+
   if (!doc) {
     console.error('failure!');
     return;
@@ -46,6 +60,16 @@ function App() {
         <input
           type="file"
           accept=".docx"
+          class="block w-full text-sm text-slate-500 rounded-md
+        file:mr-4 file:py-2 file:px-4 file:rounded-md
+        file:border-0 file:text-sm file:font-semibold
+        file:bg-blue-50 file:text-blue-700
+        hover:file:bg-blue-100 h-auto"
+          onChange={(evt) => fileOpen(evt.target.files)}
+        />
+        <input
+          type="file"
+          accept=".json"
           class="block w-full text-sm text-slate-500 rounded-md
         file:mr-4 file:py-2 file:px-4 file:rounded-md
         file:border-0 file:text-sm file:font-semibold

@@ -958,6 +958,11 @@ public:
         mpThis->pClass->destroy(mpThis);
     }
 
+    LibreOfficeKit* get()
+    {
+        return mpThis;
+    }
+
     /**
      * Loads a document from a URL.
      *

@@ -272,6 +272,21 @@ export async function loadDocumentFromArrayBuffer<
   return loadDocument<T>(name, new Blob([arrayBuffer], { type }));
 }
 
+export async function loadDocumentFromExpandedParts<
+  T extends DocumentClient = DocumentClient,
+>(
+  parts: Array<{path: string, content: string}>
+): Promise<DocumentClient | null> {
+  const [i, future] = registerFuture<DocumentRef | null>();
+  const message: ToWorker = {
+    f: 'loadFromExpandedParts',
+    i,
+    a: [parts],
+  };
+  loadWorkerOnce().postMessage(message);
+  return future.promise.then(documentClient<T>);
+}
+
 /** imports a script at `url` that registers an extension inside of the worker */
 export async function importScript(url: string) {
   const [i, future] = registerFuture<DocumentRef | null>();

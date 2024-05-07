@@ -41,6 +41,8 @@ export type TileRenderData = {
 /** Embind Document class, see main_wasm.cxx */
 export declare class Document {
   constructor(path: string): void;
+  constructor(parts: ExpandedPartVec, random: boolean): void;
+  static loadFromExpandedParts(parts: ExpandedParts): Document;
   delete(): void;
 
   valid(): boolean;
@@ -117,6 +119,16 @@ declare global {
   }
 }
 
+export declare class ExpandedPart {
+  constructor(path: string, content: string): void;
+}
+
+export declare class ExpandedPartVec {
+  constructor(): void;
+  push_back(part: ExpandedPart): void;
+}
+
+
 interface Module extends EmscriptenModule {
   /** indicate whether to load fccache with the module */
   withFcCache?: boolean;
@@ -131,6 +143,10 @@ interface Module extends EmscriptenModule {
   readUnlink(path: string): Uint8Array;
 
   Document: typeof Document;
+  loadFromExpandedParts: (parts: ExpandedPartVec) => Document;
+
+  ExpandedPart: typeof ExpandedPart;
+  ExpandedPartVec: typeof ExpandedPartVec;
 
   /** preloads LOK */
   preload(): void;

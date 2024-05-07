@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <desktop/dllapi.h>
 #include <unistd.h>
-#include <unordered_map>
 #include <vector>
 
 
@@ -29,18 +28,13 @@ static constexpr size_t MAX_INVALIDATION_STACK = 4096;
 
 
 struct ExpandedPart {
-    const OUString&  path;
-    const OUString&  sha;
+    std::string  path;
     std::string content;
 
-    ExpandedPart(const OUString& path_, const OUString& sha_, std::string content_)
+    ExpandedPart(std::string path_, std::string content_)
         : path(path_)
-        , sha(sha_)
         , content(content_){};
 };
-
-
-
 
 // Used for fast communication between the tile renderer worker and the C++ thread
 struct TileRendererData
