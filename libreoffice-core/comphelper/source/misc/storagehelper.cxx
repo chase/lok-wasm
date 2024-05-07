@@ -175,19 +175,10 @@ uno::Reference< embed::XStorage > OStorageHelper::GetExpandedStorageFromStream(
             sal_Int32 nStorageMode,
             const uno::Reference< uno::XComponentContext >& rxContext )
 {
-    uno::Reference< io::XInputStream > xInputStream = xStream->getInputStream();
 
-    uno::Reference< oox::ExpandedStorage > aStorage = new oox::ExpandedStorage(
-            rxContext,
-            xInputStream,
-            false,
-            true
-    );
+    return nullptr;
 
-    return aStorage->getXStorage();
 }
-
-
 
 void OStorageHelper::CopyInputToOutput(
             const uno::Reference< io::XInputStream >& xInput,

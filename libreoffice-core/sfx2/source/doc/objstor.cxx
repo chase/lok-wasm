@@ -118,6 +118,7 @@
 #include <appbaslib.hxx>
 #include "objstor.hxx"
 #include "exoticfileloadexception.hxx"
+#include "oox/helper/expandedstorage.hxx"
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::container;
@@ -538,7 +539,7 @@ bool SfxObjectShell::ImportFromGeneratedStream_Impl(
         SAL_WARN("sfx.doc", "MACRO: getting storage from stream");
         uno::Reference< embed::XStorage > xStorage = nullptr;
         if (bIsExpandedStorage)
-            xStorage = ::comphelper::OStorageHelper::GetExpandedStorageFromStream( xStream );
+            xStorage = (new oox::ExpandedStorage(comphelper::getProcessComponentContext(), xStream->getInputStream(), false, true))->getXStorage();
         else
             xStorage = ::comphelper::OStorageHelper::GetStorageFromStream( xStream );
 

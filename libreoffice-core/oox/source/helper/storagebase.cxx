@@ -18,7 +18,6 @@
  */
 
 #include <oox/helper/storagebase.hxx>
-
 #include <com/sun/star/io/XStream.hpp>
 #include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>

@@ -448,7 +448,7 @@ OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq
         ZipStorage aZipStorage(mxContext, xInputStream,
                                aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
 
-        ExpandedStorage aExpandedStorage(mxContext, xInputStream, aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
+        ExpandedStorage aExpandedStorage(mxContext, xInputStream, aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false), true);
 
         StorageBase* aStorage = nullptr;
 
