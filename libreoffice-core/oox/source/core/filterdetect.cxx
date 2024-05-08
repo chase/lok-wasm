@@ -18,6 +18,7 @@
  */
 
 #include "oox/helper/expandedstorage.hxx"
+#include "sal/log.hxx"
 #include <oox/core/filterdetect.hxx>
 
 #include <com/sun/star/io/XStream.hpp>
@@ -327,13 +328,16 @@ Reference< XInputStream > FilterDetect::extractUnencryptedPackage( MediaDescript
     const bool bIsExpandedStorage(rMediaDescriptor.getUnpackedValueOrDefault("ExpandedStorage", false));
     // try the plain input stream
     Reference<XInputStream> xInputStream( rMediaDescriptor[ MediaDescriptor::PROP_INPUTSTREAM ], UNO_QUERY );
-    if (bIsExpandedStorage)
+    // TODO: @synoet uncomment
+    /* if (bIsExpandedStorage) */
     {
+        SAL_WARN("oox", "Returning expanded storage");
         return xInputStream;
     }
 
     if (!xInputStream.is() || lclIsZipPackage(mxContext, xInputStream, bRepairPackage))
     {
+        SAL_WARN("oox", "Returning zip storage");
         return xInputStream;
     }
 
@@ -444,20 +448,23 @@ OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq
             descriptor. */
         Reference< XInputStream > xInputStream( extractUnencryptedPackage( aMediaDescriptor ), UNO_SET_THROW );
 
-        // stream must be a ZIP package
-        ZipStorage aZipStorage(mxContext, xInputStream,
-                               aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
 
-        ExpandedStorage aExpandedStorage(mxContext, xInputStream, aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false), true);
+
 
         StorageBase* aStorage = nullptr;
 
         if (bIsExpandedStorage)
         {
+            SAL_WARN("oox", "Opening Expanded Storage");
+            ExpandedStorage aExpandedStorage(mxContext, xInputStream, aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false), true);
             aStorage = &aExpandedStorage;
         }
         else
         {
+            SAL_WARN("oox", "Opening Zip Storage");
+            // stream must be a ZIP package
+            ZipStorage aZipStorage(mxContext, xInputStream,
+                               aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
             aStorage = &aZipStorage;
         }
 

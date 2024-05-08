@@ -57,8 +57,8 @@ const handler: AsyncMessage = {
     const { Document, ExpandedPartVec} = await lokPromise;
     const parts = new ExpandedPartVec();
 
-    for (const part of data.parts) {
-      parts.push_back(`${part.path}@${part.content.join("")}`)
+    for (const part of data) {
+      parts.push_back(`${part.name}@${part.content.join("")}`)
     }
 
     const doc = new Document(parts, false);

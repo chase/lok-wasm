@@ -28,6 +28,7 @@
 
 inline constexpr OUString PACKAGE_STORAGE_FORMAT_STRING = u"PackageFormat"_ustr;
 inline constexpr OUString ZIP_STORAGE_FORMAT_STRING = u"ZipFormat"_ustr;
+inline constexpr OUString EXPANDED_STORAGE_FORMAT_STRING = u"ExpandedFormat"_ustr;
 inline constexpr OUString OFOPXML_STORAGE_FORMAT_STRING = u"OFOPXMLFormat"_ustr;
 
 inline constexpr OUString PACKAGE_ENCRYPTIONDATA_SHA256UTF8 = u"PackageSHA256UTF8EncryptionKey"_ustr;

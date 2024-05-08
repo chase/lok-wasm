@@ -57,6 +57,7 @@
 #include <utility>
 #include <comphelper/diagnose_ex.hxx>
 
+#include "com/sun/star/embed/StorageFormats.hdl"
 #include "xstorage.hxx"
 #include "owriteablestream.hxx"
 #include "switchpersistencestream.hxx"
@@ -423,6 +424,15 @@ void OStorage_Impl::OpenOwnPackage()
                 pArguments = aArguments.getArray();
                 pArguments[nArgNum-1] <<= aNamedValue;
             }
+            else if ( m_nStorageType == embed::StorageFormats::EXPANDED )
+            {
+                beans::NamedValue aNamedValue;
+                aNamedValue.Name = "StorageFormat";
+                aNamedValue.Value <<= OUString( "Expanded" );
+                aArguments.realloc( ++nArgNum );
+                pArguments = aArguments.getArray();
+                pArguments[nArgNum-1] <<= aNamedValue;
+            }
             else if ( m_nStorageType == embed::StorageFormats::OFOPXML )
             {
                 // let the package support OFOPXML media type handling
@@ -434,6 +444,7 @@ void OStorage_Impl::OpenOwnPackage()
                 pArguments[nArgNum-1] <<= aNamedValue;
             }
 
+            SAL_WARN("source", "createInstanceWithArgumentsAndContext zip package");
             m_xPackage.set( m_xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
                                "com.sun.star.packages.comp.ZipPackage", aArguments, m_xContext),
                             uno::UNO_QUERY );

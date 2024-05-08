@@ -3380,6 +3380,8 @@ bool SfxObjectShell::SaveAsOwnFormat( SfxMedium& rMedium )
 
 uno::Reference< embed::XStorage > const & SfxObjectShell::GetStorage()
 {
+    // TODO: @synoet better handling for this
+    return pImpl->m_xDocStorage;
     if ( !pImpl->m_xDocStorage.is() )
     {
         OSL_ENSURE( pImpl->m_bCreateTempStor, "The storage must exist already!" );

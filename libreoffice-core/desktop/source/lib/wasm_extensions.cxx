@@ -249,24 +249,22 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     // Expanded storage only supports .docx files right now
     aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML");
     aMediaDescriptor["InputStream"] <<= aInputStream;
-    aMediaDescriptor["Silent"] <<= true;
-    aMediaDescriptor["Hidden"] <<= true;
 
     {
         SolarMutexGuard aGuard;
         try
         {
             Application::SetDialogCancelMode(DialogCancelMode::LOKSilent);
-            SfxViewShell::SetCurrentDocId(ViewShellDocId(0));
+            SfxViewShell::SetCurrentDocId(ViewShellDocId(1));
             uno::Reference<lang::XComponent> xComponent = xComponentLoader->loadComponentFromURL(
-                "private:stream", "_blank", 0, aMediaDescriptor.getAsConstPropertyValueList());
+                "private:stream", "_blank", 1, aMediaDescriptor.getAsConstPropertyValueList());
 
             if (!xComponent.is()) {
                 SAL_WARN("lok", "Could not load in memory doc");
                 return nullptr;
             }
 
-            return new LibLODocument_Impl(xComponent, 0);
+            return new LibLODocument_Impl(xComponent, 1);
         }
         catch (const uno::Exception& exception)
         {

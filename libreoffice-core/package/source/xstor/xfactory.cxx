@@ -183,6 +183,8 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithAr
                     {
                         if ( aFormatName == PACKAGE_STORAGE_FORMAT_STRING )
                             nStorageType = embed::StorageFormats::PACKAGE;
+                        else if (aFormatName == EXPANDED_STORAGE_FORMAT_STRING)
+                            nStorageType = embed::StorageFormats::EXPANDED;
                         else if ( aFormatName == ZIP_STORAGE_FORMAT_STRING )
                             nStorageType = embed::StorageFormats::ZIP;
                         else if ( aFormatName == OFOPXML_STORAGE_FORMAT_STRING )

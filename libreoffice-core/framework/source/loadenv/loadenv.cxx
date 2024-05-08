@@ -165,12 +165,15 @@ css::uno::Reference< css::lang::XComponent > LoadEnv::loadComponentFromURL(const
         if (comphelper::NamedValueCollection::get(lArgs, u"Hidden") == uno::Any(true) || Application::IsHeadlessModeEnabled())
             loadEnvFeatures = LoadEnvFeatures::NONE;
 
+        SAL_WARN("framework", "before start loading");
         aEnv.startLoading(sURL,
                                lArgs,
                                css::uno::Reference< css::frame::XFrame >(xLoader, css::uno::UNO_QUERY),
                                sTarget,
                                nSearchFlags,
                                loadEnvFeatures);
+
+        SAL_WARN("framework", "after start loading");
         aEnv.waitWhileLoading(); // wait for ever!
 
         xComponent = aEnv.getTargetComponent();
