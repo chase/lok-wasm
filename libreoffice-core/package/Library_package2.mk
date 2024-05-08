@@ -68,6 +68,7 @@ $(eval $(call gb_Library_add_exception_objects,package2,\
 	package/source/zippackage/wrapstreamforshare \
 	package/source/zippackage/zipfileaccess \
 	package/source/zippackage/ZipPackageBuffer \
+	package/source/expandedpackage/ExpandedPackage \
 	package/source/zippackage/ZipPackage \
 	package/source/zippackage/ZipPackageEntry \
 	package/source/zippackage/ZipPackageFolder \
