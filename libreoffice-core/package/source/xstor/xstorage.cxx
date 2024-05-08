@@ -445,9 +445,19 @@ void OStorage_Impl::OpenOwnPackage()
             }
 
             SAL_WARN("source", "createInstanceWithArgumentsAndContext zip package");
+            if ( m_nStorageType == embed::StorageFormats::EXPANDED )
+            {
+                m_xPackage.set( m_xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
+                                   "com.sun.star.packages.comp.ZipPackage", aArguments, m_xContext),
+                                uno::UNO_QUERY );
+            }
+            else {
+            {
             m_xPackage.set( m_xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
                                "com.sun.star.packages.comp.ZipPackage", aArguments, m_xContext),
                             uno::UNO_QUERY );
+            }
+
         }
 
         uno::Reference< container::XHierarchicalNameAccess > xHNameAccess( m_xPackage, uno::UNO_QUERY );

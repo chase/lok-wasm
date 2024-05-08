@@ -41,20 +41,8 @@ sal_Bool SAL_CALL ExpandedPackage::hasByHierarchicalName(const OUString& aName)
         [&aName](const PackageFile& rFile) { return rFile.path == aName; });
 }
 
-uno::Reference<uno::XInterface> SAL_CALL ExpandedPackage::createInstance()
-{
-    return nullptr;
-}
-
-uno::Reference<uno::XInterface> SAL_CALL ExpandedPackage::createInstanceWithArguments(const uno::Sequence<uno::Any>& /*aArguments*/)
-{
-    return nullptr;
-}
-
 void SAL_CALL ExpandedPackage::commitChanges()
-{
-    // TODO @synoet implement if needed
-}
+{}
 
 sal_Bool SAL_CALL ExpandedPackage::hasPendingChanges()
 {
