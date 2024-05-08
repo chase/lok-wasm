@@ -57,7 +57,6 @@
 #include <utility>
 #include <comphelper/diagnose_ex.hxx>
 
-#include "com/sun/star/embed/StorageFormats.hdl"
 #include "xstorage.hxx"
 #include "owriteablestream.hxx"
 #include "switchpersistencestream.hxx"
@@ -444,14 +443,13 @@ void OStorage_Impl::OpenOwnPackage()
                 pArguments[nArgNum-1] <<= aNamedValue;
             }
 
-            SAL_WARN("source", "createInstanceWithArgumentsAndContext zip package");
             if ( m_nStorageType == embed::StorageFormats::EXPANDED )
             {
                 m_xPackage.set( m_xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
                                    "com.sun.star.packages.comp.ZipPackage", aArguments, m_xContext),
                                 uno::UNO_QUERY );
             }
-            else {
+            else
             {
             m_xPackage.set( m_xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
                                "com.sun.star.packages.comp.ZipPackage", aArguments, m_xContext),

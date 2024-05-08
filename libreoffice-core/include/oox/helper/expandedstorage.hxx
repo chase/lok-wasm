@@ -69,6 +69,8 @@ private:
 
 private:
     std::unordered_map<OUString, ExpandedPart> m_parts;
+    css::uno::Reference< css::embed::XStorage >
+                        mxStorage;      ///< Storage based on input or output stream.
 };
 
 

@@ -1,9 +1,14 @@
+#include <boost/property_tree/json_parser.hpp>
 #include "ExpandedPackage.hxx"
 #include "com/sun/star/beans/NamedValue.hdl"
+#include "com/sun/star/io/XInputStream.hdl"
+#include "com/sun/star/uno/Sequence.h"
+#include "osl/thread.h"
 #include <com/sun/star/io/NotConnectedException.hpp>
 #include <com/sun/star/uno/Exception.hpp>
 #include <cppuhelper/supportsservice.hxx>
 #include <algorithm>
+#include <memory>
 
 using namespace com::sun::star;
 
@@ -16,19 +21,78 @@ ExpandedPackage::ExpandedPackage(uno::Reference<uno::XComponentContext> xContext
 
 ExpandedPackage::~ExpandedPackage() = default;
 
+std::vector<PackageFile> getPackageFilesFromInputStream(const std::unique_ptr<io::XInputStream> xInputStream)
+{
+    std::string rJson;
+
+    if (xInputStream)
+    {
+        const sal_Int32 bufferSize = 4096;
+        uno::Sequence<sal_Int8> buffer(bufferSize);
+        sal_Int32 bytesRead;
+
+        do
+        {
+            bytesRead = xInputStream->readBytes(buffer, bufferSize);
+            rJson.append(reinterpret_cast<const char*>(buffer.getConstArray()), bytesRead);
+        } while (bytesRead == bufferSize);
+    }
+
+    std::vector<PackageFile> parts;
+    boost::property_tree::ptree aRootTree;
+    boost::property_tree::read_json(rJson, aRootTree);
+    for (const auto& part : boost::make_iterator_range(aRootTree))
+    {
+        auto path = part.second.get_value<std::string>("path");
+        auto content = part.second.get_value<std::string>("content");
+        // Generate SHA-256 hash
+        const unsigned char* pData = reinterpret_cast<const unsigned char*>(content.data());
+
+        uno::Sequence<sal_Int8> contentSequence(reinterpret_cast<const sal_Int8*>(pData), content.size());
+
+        OUString sPath(path.data(), path.length(), osl_getThreadTextEncoding());
+
+
+        parts.emplace_back(PackageFile(sPath,contentSequence));
+    }
+
+    return parts;
+
+}
+
 void SAL_CALL ExpandedPackage::initialize(const uno::Sequence<uno::Any>& aArguments)
 {
+    std::unique_ptr<io::XInputStream> pStream = nullptr;
+    if ( !aArguments.hasElements() )
+        return;
+    beans::NamedValue aNamedValue;
+    bool bFound = false;
+    for( const auto& rArgument : aArguments )
+    {
+        if ( rArgument >>= pStream )
+        {
+            auto parts = getPackageFilesFromInputStream(std::move(pStream));
+            for (const PackageFile& part : parts)
+            {
+                m_aPackageFiles.insert_or_assign(part.path, part);
+                bFound = true;
+            }
+        }
+    }
+
+    if (!bFound)
+        throw uno::Exception("No input stream found", static_cast<cppu::OWeakObject*>(this));
 }
 
 uno::Any SAL_CALL ExpandedPackage::getByHierarchicalName(const OUString& aName)
 {
     ::osl::MutexGuard aGuard(m_aMutexHolder->GetMutex());
 
-    for (const auto& rFile : m_aPackageFiles)
+    if (m_aPackageFiles.find(aName) != m_aPackageFiles.end())
     {
-        if (rFile.path == aName)
-            return uno::Any(rFile.content);
+        return uno::Any(m_aPackageFiles[aName].content);
     }
+
 
     throw container::NoSuchElementException(aName, static_cast<cppu::OWeakObject*>(this));
 }
@@ -36,9 +100,11 @@ uno::Any SAL_CALL ExpandedPackage::getByHierarchicalName(const OUString& aName)
 sal_Bool SAL_CALL ExpandedPackage::hasByHierarchicalName(const OUString& aName)
 {
     ::osl::MutexGuard aGuard(m_aMutexHolder->GetMutex());
-
-    return std::any_of(m_aPackageFiles.begin(), m_aPackageFiles.end(),
-        [&aName](const PackageFile& rFile) { return rFile.path == aName; });
+    if (m_aPackageFiles.find(aName) != m_aPackageFiles.end())
+    {
+        return true;
+    }
+    return false;
 }
 
 void SAL_CALL ExpandedPackage::commitChanges()
@@ -108,10 +174,9 @@ uno::Sequence<sal_Int8> ExpandedPackage::readFile(const OUString& path)
 {
     ::osl::MutexGuard aGuard(m_aMutexHolder->GetMutex());
 
-    for (const auto& rFile : m_aPackageFiles)
+    if (m_aPackageFiles.find(path) != m_aPackageFiles.end())
     {
-        if (rFile.path == path)
-            return rFile.content;
+        return m_aPackageFiles[path].content;
     }
 
     throw io::NotConnectedException(path, static_cast<cppu::OWeakObject*>(this));

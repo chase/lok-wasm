@@ -21,6 +21,12 @@ struct PackageFile
 {
     OUString path;
     css::uno::Sequence<sal_Int8> content;
+
+    PackageFile(OUString path, css::uno::Sequence<sal_Int8> content)
+        : path(std::move(path))
+        , content(std::move(content))
+    {
+    }
 };
 
 class ExpandedPackage final : public cppu::WeakImplHelper
@@ -34,7 +40,7 @@ class ExpandedPackage final : public cppu::WeakImplHelper
                     >
 {
     rtl::Reference<comphelper::RefCountedMutex> m_aMutexHolder;
-    std::vector<PackageFile> m_aPackageFiles;
+    std::unordered_map<OUString, PackageFile> m_aPackageFiles;
     sal_Int32 m_nFormat;
     const css::uno::Reference<css::uno::XComponentContext> m_xContext;
 

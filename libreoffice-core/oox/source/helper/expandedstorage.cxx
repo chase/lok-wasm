@@ -191,32 +191,17 @@ ExpandedStorage::ExpandedStorage( const Reference< XComponentContext >& rxContex
 {
     if( !rxContext.is() )
         return;
-
-
-    // We are loading a zipped docx file into expanded storage
-    if (!bFromExpanded)
+    try
     {
-        uno::Reference<embed::XStorage> storage = ::comphelper::OStorageHelper::GetStorageOfFormatFromInputStream(
-                ZIP_STORAGE_FORMAT_STRING, rxInStream, rxContext, bRepairStorage);
-
-        auto path = std::optional<OUString>();
-        std::vector<ExpandedPart> parts = helpers::GetExpandedPartsFromStorage(storage, path);
-
-        for (ExpandedPart part : parts) {
-            addPart(part);
-        }
-
-        return;
+        mxStorage = ::comphelper::OStorageHelper::GetStorageOfFormatFromInputStream(
+            EXPANDED_STORAGE_FORMAT_STRING, rxInStream, rxContext, bRepairStorage);
+    }
+    catch (Exception const&)
+    {
+        TOOLS_WARN_EXCEPTION("oox.storage", "ExpandedStorage::ExpandedStorage exception opening input storage");
     }
 
-    // Else we are loading from expanded parts, from the stream
-    // which stores a json representation of the expanded parts to load
-    std::vector<ExpandedPart> parts = helpers::GetExpandedPartsFromStream(rxInStream);
-    for (ExpandedPart part : parts) {
-        addPart(part);
-    }
 
-    return;
 }
 
 ExpandedStorage::~ExpandedStorage()
@@ -236,12 +221,16 @@ Reference< XStorage > ExpandedStorage::implGetXStorage() const
 
 void ExpandedStorage::implGetElementNames( ::std::vector< OUString >& orElementNames ) const
 {
-    for (const std::pair<const OUString, ExpandedPart>& p : m_parts)
-    {
-        orElementNames.push_back(p.first);
-    }
+    /* for (const std::pair<const OUString, ExpandedPart>& p : m_parts) */
+    /* { */
+    /*     orElementNames.push_back(p.first); */
+    /* } */
 }
 
+
+/// Sub storage is not necesarry for expanded storage
+/// since all items are stored in memory
+/// this will return a reference to the current storage
 StorageRef ExpandedStorage::implOpenSubStorage( const OUString& rElementName, bool bCreateMissing )
 {
     return std::shared_ptr<ExpandedStorage>(this);
@@ -250,33 +239,29 @@ StorageRef ExpandedStorage::implOpenSubStorage( const OUString& rElementName, bo
 Reference< XInputStream > ExpandedStorage::implOpenInputStream( const OUString& rElementName )
 {
     Reference< XInputStream > xInStream;
-
-    if (m_parts.find(rElementName) == m_parts.end())
+    if( mxStorage.is() ) try
     {
-        return nullptr;
+        xInStream.set( mxStorage->openStreamElement( rElementName, css::embed::ElementModes::READ ), UNO_QUERY );
     }
-
-    auto found = m_parts.find(rElementName);
-    ExpandedPart& foundPart = found->second;
-
-    xInStream->readBytes(foundPart.content, foundPart.content.size());
-
+    catch (Exception const&)
+    {
+        TOOLS_INFO_EXCEPTION("oox.storage", "openStreamElement");
+    }
     return xInStream;
 }
 
 Reference< XOutputStream > ExpandedStorage::implOpenOutputStream( const OUString& rElementName )
 {
     Reference< XOutputStream > xOutStream;
-    if (m_parts.find(rElementName) == m_parts.end())
+    if( mxStorage.is() ) try
     {
-        return nullptr;
+        xOutStream.set( mxStorage->openStreamElement( rElementName, css::embed::ElementModes::READWRITE ), UNO_QUERY );
     }
-    auto found = m_parts.find(rElementName);
-    ExpandedPart& foundPart = found->second;
-
-
-    return new helpers::SequenceOutputStream(foundPart.content);
-
+    catch (Exception const&)
+    {
+        TOOLS_INFO_EXCEPTION("oox.storage", "openStreamElement");
+    }
+    return xOutStream;
 }
 
 // currently a no-op because it is unecessary to commit in memory
