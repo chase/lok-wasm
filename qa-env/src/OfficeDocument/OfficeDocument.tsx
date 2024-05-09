@@ -134,10 +134,6 @@ export function OfficeDocument(props: Props) {
     return docSizeTwips()?.map((i) => twipsToCssPx(i, zoom));
   };
 
-  createEffect(() => {
-    console.log(docSizePx())
-  })
-
   const rectsPx = () => {
     const [getZoom] = getOrCreateZoomSignal(() => props.doc);
     const zoom = getZoom();
@@ -214,34 +210,35 @@ export function OfficeDocument(props: Props) {
     return result;
   });
 
-  const [scrollPos, setScrollPos] = createSignal<{x: number, y: number}>();
+  const [scrollPos, setScrollPos] = createSignal<{ x: number; y: number }>();
 
   /// Make the scroll responsive to the changing zoom level
   /// Only update scroll when zoom has actually changed
-  createEffect((prev: number | undefined) => {
-    let newZoom = getZoom();
-    if (!prev || prev === newZoom) return newZoom; 
-    const pos = scrollPos();
-    if (!pos) return newZoom;
+  createEffect(
+    on(
+      getZoom,
+      (newZoom, prev) => {
+        const pos = scrollPos();
+        if (!pos) return;
 
-    const scalePos = (p: number) =>
-      Math.floor(((p / (prev || 1) * newZoom)));
+        const scalePos = (p: number) => Math.floor((p / (prev || 1)) * newZoom);
 
-    const newX = scalePos(pos.x);
-    const newY = scalePos(pos.y);
+        const newX = scalePos(pos.x);
+        const newY = scalePos(pos.y);
 
-    if (!scrollAreaRef) return newZoom;
+        if (!scrollAreaRef) return;
 
-    scrollAreaRef.scrollLeft = newX;
-    scrollAreaRef.scrollTop = newY;
+        scrollAreaRef.scrollLeft = newX;
+        scrollAreaRef.scrollTop = newY;
 
-    setScrollPos({x: newX, y: newY});
-    return newZoom;
-  }, getZoom())
-
+        setScrollPos({ x: newX, y: newY });
+      },
+      { defer: true }
+    )
+  );
 
   const handleScroll = frameThrottle(async (yPx, xPx) => {
-    setScrollPos({x: xPx, y: yPx});
+    setScrollPos({ x: xPx, y: yPx });
     handleScroll.cancel();
     const c0 = canvas0();
     const c1 = canvas1();
@@ -271,7 +268,9 @@ export function OfficeDocument(props: Props) {
               ref={setCanvas0}
               class="absolute top-0 pointer-events-none"
               style={{
-                'object-fit': didZoomOut() ? ZOOM_OUT_CANVAS_FIT : ZOOM_IN_CANVAS_FIT,
+                'object-fit': didZoomOut()
+                  ? ZOOM_OUT_CANVAS_FIT
+                  : ZOOM_IN_CANVAS_FIT,
                 'object-position': 'top center',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
@@ -282,7 +281,9 @@ export function OfficeDocument(props: Props) {
               ref={setCanvas1}
               class="absolute top-0 pointer-events-none"
               style={{
-                'object-fit': didZoomOut() ? ZOOM_OUT_CANVAS_FIT : ZOOM_IN_CANVAS_FIT,
+                'object-fit': didZoomOut()
+                  ? ZOOM_OUT_CANVAS_FIT
+                  : ZOOM_IN_CANVAS_FIT,
                 'object-position': 'top center',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
