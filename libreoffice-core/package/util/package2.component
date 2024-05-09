@@ -28,6 +28,10 @@
     constructor="package_ZipPackage_get_implementation">
     <service name="com.sun.star.packages.Package"/>
   </implementation>
+  <implementation name="com.sun.star.packages.comp.ExpandedPackage"
+    constructor="package_ExpandedPackage_get_implementation">
+    <service name="com.sun.star.packages.Package"/>
+  </implementation>
   <implementation name="com.sun.star.packages.manifest.comp.ManifestReader"
     constructor="package_ManifestReader_get_implementation">
     <service name="com.sun.star.packages.manifest.ManifestReader"/>

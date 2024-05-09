@@ -1,14 +1,13 @@
 #include <boost/property_tree/json_parser.hpp>
 #include "ExpandedPackage.hxx"
-#include "com/sun/star/beans/NamedValue.hdl"
 #include "com/sun/star/io/XInputStream.hdl"
 #include "com/sun/star/uno/Sequence.h"
+#include "com/sun/star/uno/XInterface.hdl"
 #include "osl/thread.h"
+#include "sal/log.hxx"
 #include <com/sun/star/io/NotConnectedException.hpp>
 #include <com/sun/star/uno/Exception.hpp>
 #include <cppuhelper/supportsservice.hxx>
-#include <algorithm>
-#include <memory>
 
 using namespace com::sun::star;
 
@@ -17,6 +16,8 @@ ExpandedPackage::ExpandedPackage(uno::Reference<uno::XComponentContext> xContext
     , m_nFormat(0)
     , m_xContext(std::move(xContext))
 {
+
+    SAL_WARN("expandedpackage", "initializing");
 }
 
 ExpandedPackage::~ExpandedPackage() = default;
@@ -62,6 +63,7 @@ std::vector<PackageFile> getPackageFilesFromInputStream(const uno::Reference<io:
 
 void SAL_CALL ExpandedPackage::initialize(const uno::Sequence<uno::Any>& aArguments)
 {
+    SAL_WARN("expandedpackage", "initializing");
     uno::Reference<io::XInputStream> pStream = nullptr;
     if ( !aArguments.hasElements() )
         return;
@@ -71,6 +73,8 @@ void SAL_CALL ExpandedPackage::initialize(const uno::Sequence<uno::Any>& aArgume
         if ( rArgument >>= pStream )
         {
             auto parts = getPackageFilesFromInputStream(pStream);
+
+            SAL_WARN("expandedpackage", "initializing" << " found parts : " << parts.size());
             for (const PackageFile& part : parts)
             {
                 m_aPackageFiles.insert_or_assign(part.path, part);
@@ -87,10 +91,13 @@ uno::Any SAL_CALL ExpandedPackage::getByHierarchicalName(const OUString& aName)
 {
     ::osl::MutexGuard aGuard(m_aMutexHolder->GetMutex());
 
-    /* if (m_aPackageFiles.find(aName) != m_aPackageFiles.end()) */
-    /* { */
-    /*     return uno::Any(m_aPackageFiles.content); */
-    /* } */
+    if (m_aPackageFiles.find(aName) != m_aPackageFiles.end())
+    {
+        const PackageFile& foundFile = m_aPackageFiles.at(aName);
+        std::string content = reinterpret_cast<const char*>(foundFile.content.getConstArray());
+
+        return uno::toAny(OUString(content.c_str(), content.size(), osl_getThreadTextEncoding()));
+    }
 
 
     throw container::NoSuchElementException(aName, static_cast<cppu::OWeakObject*>(this));
@@ -104,6 +111,17 @@ sal_Bool SAL_CALL ExpandedPackage::hasByHierarchicalName(const OUString& aName)
         return true;
     }
     return false;
+}
+uno::Reference< uno::XInterface > SAL_CALL ExpandedPackage::createInstance()
+{
+    uno::Reference < XInterface > xRef = *this;
+    return xRef;
+}
+
+uno::Reference< uno::XInterface > SAL_CALL ExpandedPackage::createInstanceWithArguments(const css::uno::Sequence<css::uno::Any>& aArguments)
+{
+    uno::Reference < XInterface > xRef = *this;
+    return xRef;
 }
 
 void SAL_CALL ExpandedPackage::commitChanges()
@@ -156,7 +174,7 @@ void SAL_CALL ExpandedPackage::removeVetoableChangeListener(const OUString& /*Pr
 
 OUString SAL_CALL ExpandedPackage::getImplementationName()
 {
-    return "com.sun.star.comp.ExpandedPackage";
+    return { "com.sun.star.packages.Package" };
 }
 
 sal_Bool SAL_CALL ExpandedPackage::supportsService(const OUString& rServiceName)
@@ -181,4 +199,11 @@ uno::Sequence<sal_Int8> ExpandedPackage::readFile(const OUString& path)
     }
 
     throw io::NotConnectedException(path, static_cast<cppu::OWeakObject*>(this));
+}
+
+extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*
+package_ExpandedPackage_get_implementation(
+    css::uno::XComponentContext* context , css::uno::Sequence<css::uno::Any> const&)
+{
+    return cppu::acquire(new ExpandedPackage(context));
 }

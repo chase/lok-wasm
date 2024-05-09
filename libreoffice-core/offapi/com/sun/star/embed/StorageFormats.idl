@@ -40,6 +40,10 @@ published constants StorageFormats
     /** specifies Office Open XML format
      */
     const long OFOPXML = 3;
+
+    /** specifies macro expanded zip format
+     */
+    const long EXPANDED = 4;
 };
 
 

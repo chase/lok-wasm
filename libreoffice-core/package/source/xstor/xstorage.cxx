@@ -443,18 +443,26 @@ void OStorage_Impl::OpenOwnPackage()
                 pArguments[nArgNum-1] <<= aNamedValue;
             }
 
-            if ( m_nStorageType == embed::StorageFormats::EXPANDED )
+            OUString instanceName;
+
+            switch (m_nStorageType)
             {
-                m_xPackage.set( m_xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
-                                   "com.sun.star.packages.comp.ExpandedPackage", aArguments, m_xContext),
-                                uno::UNO_QUERY );
+                case embed::StorageFormats::EXPANDED:
+                    instanceName = "com.sun.star.packages.comp.ExpandedPackage";
+                    break;
+                case embed::StorageFormats::ZIP:
+                    instanceName = "com.sun.star.packages.comp.ZipPackage";
+                    break;
+                default:
+                    instanceName = "com.sun.star.packages.comp.ZipPackage";
+                    break;
             }
-            else
-            {
+
+            SAL_WARN("xstor", "using instanceName " << instanceName);
+
             m_xPackage.set( m_xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
-                               "com.sun.star.packages.comp.ZipPackage", aArguments, m_xContext),
+                               instanceName, aArguments, m_xContext),
                             uno::UNO_QUERY );
-            }
 
         }
 
@@ -555,11 +563,20 @@ void OStorage_Impl::ReadContents()
 {
     ::osl::MutexGuard aGuard( m_xMutex->GetMutex() );
 
+
+
     if ( m_bListCreated )
         return;
 
     if ( m_bIsRoot )
         OpenOwnPackage();
+
+
+    // MACRO: ExpandedStorage
+    // we might need to open the package to properly initialize it, but
+    // we don't need to read anything in since it should already exist in memory
+    if (m_nStorageType == embed::StorageFormats::EXPANDED)
+        return;
 
     uno::Reference< container::XEnumerationAccess > xEnumAccess( m_xPackageFolder, uno::UNO_QUERY_THROW );
     uno::Reference< container::XEnumeration > xEnum = xEnumAccess->createEnumeration();

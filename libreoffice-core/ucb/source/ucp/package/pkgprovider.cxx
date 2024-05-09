@@ -224,9 +224,10 @@ ContentProvider::createPackage( const PackageUri & rURI )
     uno::Reference< container::XHierarchicalNameAccess > xNameAccess;
     try
     {
+        // TODO: @synoet manually change this back
         xNameAccess.set(
             m_xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
-                "com.sun.star.packages.comp.ZipPackage",
+                "com.sun.star.packages.comp.ExpandedPackage",
                 aArguments, m_xContext ),
             css::uno::UNO_QUERY_THROW );
     }

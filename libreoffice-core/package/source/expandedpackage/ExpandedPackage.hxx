@@ -23,8 +23,8 @@ struct PackageFile
     css::uno::Sequence<sal_Int8> content;
 
     PackageFile(OUString path, css::uno::Sequence<sal_Int8> content)
-        : path(std::move(path))
-        , content(std::move(content))
+        : path(path)
+        , content(content)
     {
     }
 };

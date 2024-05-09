@@ -58,7 +58,7 @@ const handler: AsyncMessage = {
     const parts = new ExpandedPartVec();
 
     for (const part of data) {
-      parts.push_back(`${part.name}@${part.content.join("")}`)
+      parts.push_back(`${part.path}@${part.content.join("")}`)
     }
 
     const doc = new Document(parts, false);
