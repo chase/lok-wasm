@@ -50,23 +50,6 @@ export function updateZoom(
   const roundedZoom = Math.round((zoom() + offset) / Epsilon) * Epsilon;
   const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, roundedZoom));
 
-  let newScrollTop: number = 0;
-
-  // TODO: @synoet - don't manipulate the scroll area inside of a setter,
-  // make it responsive and move this inside of OfficeDocument.tsx {
- 
-  // We need to adjust the scroll position manually
-  // to keep the relative position of the document the same
-  // after the zoom level changes
-  if (scrollArea) {
-    const scrollTop = scrollArea.scrollTop;
-    newScrollTop = scrollTop / zoom() * newZoom;
-    scrollArea.scrollTop =  newScrollTop
-  } else {
-    console.error(`tried to update zoom without scrollAreaRef`)
-  }
-  // TODO: }
-
   setZoom(doc, newZoom);
   return newZoom;
 }

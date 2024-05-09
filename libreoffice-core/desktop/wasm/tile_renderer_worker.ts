@@ -131,10 +131,6 @@ function zoom(in_scale: number, in_dpi: number) {
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
 
-  // TODO: @synoet - after making the scroll area responsive (see zoom.ts), this shouldn't be necessary since a scroll event should fire
-  // Update the top position to the new scale
-  scheduledTopTwips = in_y * scaledTwips;
-
   // Set this as a reference for the new position for the next scroll event
   renderedTileTop = Math.floor(scheduledTopTwips / tileDimTwips);
 
@@ -152,7 +148,7 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
 
   scale = data.s;
   dpi = data.dpi;
-  zoom(data.s, dpi, data.y);
+  zoom(data.s, dpi);
   scheduledTopTwips = data.y * scaledTwips;
 
   pendingStateChange = true;

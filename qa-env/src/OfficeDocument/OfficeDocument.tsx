@@ -133,6 +133,11 @@ export function OfficeDocument(props: Props) {
     const zoom = getZoom();
     return docSizeTwips()?.map((i) => twipsToCssPx(i, zoom));
   };
+
+  createEffect(() => {
+    console.log(docSizePx())
+  })
+
   const rectsPx = () => {
     const [getZoom] = getOrCreateZoomSignal(() => props.doc);
     const zoom = getZoom();
@@ -209,20 +214,35 @@ export function OfficeDocument(props: Props) {
     return result;
   });
 
+  const [scrollPos, setScrollPos] = createSignal<{x: number, y: number}>();
+
+  /// Make the scroll responsive to the changing zoom level
+  /// Only update scroll when zoom has actually changed
+  createEffect((prev: number | undefined) => {
+    let newZoom = getZoom();
+    if (!prev || prev === newZoom) return newZoom; 
+    const pos = scrollPos();
+    if (!pos) return newZoom;
+
+    const scalePos = (p: number) =>
+      Math.floor(((p / (prev || 1) * newZoom)));
+
+    const newX = scalePos(pos.x);
+    const newY = scalePos(pos.y);
+
+    if (!scrollAreaRef) return newZoom;
+
+    scrollAreaRef.scrollLeft = newX;
+    scrollAreaRef.scrollTop = newY;
+
+    setScrollPos({x: newX, y: newY});
+    return newZoom;
+  }, getZoom())
+
+
   const handleScroll = frameThrottle(async (yPx, xPx) => {
+    setScrollPos({x: xPx, y: yPx});
     handleScroll.cancel();
-
-    // We still need to apply a transform to the
-    // canvas when zooming in/out without triggering
-    // a render that would be caused by the scroll event
-    if (isZooming()) {
-      const c = activeCanvas === 0 ? canvas0() : canvas1();
-      if (!c) return;
-      c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % TILE_DIM_PX}px, 0)`;
-      setIsZooming(false);
-      return;
-    }
-
     const c0 = canvas0();
     const c1 = canvas1();
     if (!c0 || !c1) return;
