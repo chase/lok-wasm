@@ -219,14 +219,12 @@ export function OfficeDocument(props: Props) {
       getZoom,
       (newZoom, prev) => {
         const pos = scrollPos();
-        if (!pos) return;
+        if (!pos || !scrollAreaRef) return;
 
         const scalePos = (p: number) => Math.floor((p / (prev || 1)) * newZoom);
 
         const newX = scalePos(pos.x);
         const newY = scalePos(pos.y);
-
-        if (!scrollAreaRef) return;
 
         scrollAreaRef.scrollLeft = newX;
         scrollAreaRef.scrollTop = newY;
