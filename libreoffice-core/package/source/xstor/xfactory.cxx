@@ -258,7 +258,7 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithAr
             OSL_FAIL( "Nonseekable streams are not supported for now!" );
         }
 
-        if ( !CheckPackageSignature_Impl( xInputStream, xSeekable ) )
+        if ( nStorageType != embed::StorageFormats::EXPANDED && !CheckPackageSignature_Impl( xInputStream, xSeekable ) )
             throw io::IOException("package signature check failed, probably not a package file", nullptr); // TODO: this is not a package file
                                                                                                            //
         SAL_WARN("xfactory", "got the input stream, size: " << xInputStream->available() << " nStorageType " << nStorageType);
