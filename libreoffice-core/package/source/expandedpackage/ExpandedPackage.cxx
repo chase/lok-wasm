@@ -1,6 +1,7 @@
 #include <boost/property_tree/json_parser.hpp>
 #include "ExpandedPackage.hxx"
 #include "com/sun/star/io/XInputStream.hdl"
+#include "com/sun/star/io/XStream.hdl"
 #include "com/sun/star/uno/Sequence.h"
 #include "com/sun/star/uno/XInterface.hdl"
 #include "osl/thread.h"
@@ -24,22 +25,34 @@ ExpandedPackage::~ExpandedPackage() = default;
 
 std::vector<PackageFile> getPackageFilesFromInputStream(const uno::Reference<io::XInputStream> xInputStream)
 {
+    std::vector<PackageFile> parts;
     std::string rJson;
 
-    if (xInputStream)
+    if (!xInputStream)
     {
-        const sal_Int32 bufferSize = 4096;
-        uno::Sequence<sal_Int8> buffer(bufferSize);
-        sal_Int32 bytesRead;
-
-        do
-        {
-            bytesRead = xInputStream->readBytes(buffer, bufferSize);
-            rJson.append(reinterpret_cast<const char*>(buffer.getConstArray()), bytesRead);
-        } while (bytesRead == bufferSize);
+        SAL_WARN("expandedpackage", "no input stream");
+        return parts;
     }
 
-    std::vector<PackageFile> parts;
+    if (xInputStream->available() == 0)
+    {
+        SAL_WARN("expandedpackage", "INPUT STREAM IS EMPTY");
+        return parts;
+    }
+
+    const sal_Int32 bufferSize = 4096;
+    uno::Sequence<sal_Int8> buffer(bufferSize);
+    sal_Int32 bytesRead;
+
+    SAL_WARN("expandedpackage", "xinputstream size: " << xInputStream->available());
+
+    do
+    {
+        bytesRead = xInputStream->readBytes(buffer, bufferSize);
+        SAL_WARN("expandedpackage", "read bytes from input stream: " << bytesRead);
+        rJson.append(reinterpret_cast<const char*>(buffer.getConstArray()), bytesRead);
+    } while (bytesRead == bufferSize);
+
     boost::property_tree::ptree aRootTree;
     boost::property_tree::read_json(rJson, aRootTree);
     for (const auto& part : boost::make_iterator_range(aRootTree))
@@ -64,17 +77,17 @@ std::vector<PackageFile> getPackageFilesFromInputStream(const uno::Reference<io:
 void SAL_CALL ExpandedPackage::initialize(const uno::Sequence<uno::Any>& aArguments)
 {
     SAL_WARN("expandedpackage", "initializing");
-    uno::Reference<io::XInputStream> pStream = nullptr;
+    uno::Reference<io::XInputStream> xInputStream = nullptr;
+    uno::Reference<io::XStream> xStream = nullptr;
     if ( !aArguments.hasElements() )
         return;
     bool bFound = false;
     for( const auto& rArgument : aArguments )
     {
-        if ( rArgument >>= pStream )
+        if ( rArgument >>= xInputStream )
         {
-            auto parts = getPackageFilesFromInputStream(pStream);
+            auto parts = getPackageFilesFromInputStream(xInputStream);
 
-            SAL_WARN("expandedpackage", "initializing" << " found parts : " << parts.size());
             for (const PackageFile& part : parts)
             {
                 m_aPackageFiles.insert_or_assign(part.path, part);

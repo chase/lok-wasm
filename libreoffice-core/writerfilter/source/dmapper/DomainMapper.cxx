@@ -19,6 +19,8 @@
 #include "BorderHandler.hxx"
 #include "PageBordersHandler.hxx"
 
+#include "com/sun/star/uno/XComponentContext.hdl"
+#include "comphelper/processfactory.hxx"
 #include "util.hxx"
 #include "SdtHelper.hxx"
 #include "TagLogger.hxx"
@@ -111,10 +113,12 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
                             bool bRepairStorage,
                             SourceDocumentType eDocumentType,
                             utl::MediaDescriptor const & rMediaDesc) :
+
     LoggedProperties("DomainMapper"),
     LoggedTable("DomainMapper"),
     LoggedStream("DomainMapper"),
     m_pImpl(new DomainMapper_Impl(*this, xContext, xModel, eDocumentType, rMediaDesc)),
+    xContext(xContext),
     mbIsSplitPara(false),
     mbHasControls(false),
     mbWasShapeInPara(false)
@@ -139,7 +143,7 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
             uno::Any(true));
         m_pImpl->SetDocumentSettingsProperty("FrameAutowidthWithMorePara", uno::Any(true));
         m_pImpl->SetDocumentSettingsProperty("FootnoteInColumnToPageEnd", uno::Any(true));
-        m_pImpl->SetDocumentSettingsProperty("TabAtLeftIndentForParagraphsInList", uno::Any(true));
+        m_pImpl->SetDocumentSettingsProperty("TabAtLeftndentForParagraphsInList", uno::Any(true));
         m_pImpl->SetDocumentSettingsProperty(u"NoGapAfterNoteNumber"_ustr,
                                              uno::Any(true));
 
@@ -151,7 +155,18 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
     try
     {
         uno::Reference<rdf::XDocumentMetadataAccess> xDocumentMetadataAccess(xModel, uno::UNO_QUERY_THROW);
-        uno::Reference<embed::XStorage> xStorage = comphelper::OStorageHelper::GetTemporaryStorage();
+
+
+        SAL_WARN("domainmapper", "xinputstream size " << xInputStream->available());
+        // TODO: @synoet make sure to make this conditional
+        uno::Reference<embed::XStorage> xStorage = comphelper::OStorageHelper::GetStorageOfFormatFromInputStream(
+            EXPANDED_STORAGE_FORMAT_STRING,
+            xInputStream,
+            xContext,
+            true
+        );
+
+
         OUString aBaseURL = rMediaDesc.getUnpackedValueOrDefault("URL", OUString());
         const uno::Reference<frame::XModel> xModel_(xModel,
             uno::UNO_QUERY_THROW);

@@ -243,6 +243,8 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     auto aData = uno::Sequence<sal_Int8>(reinterpret_cast<const sal_Int8*>(jsonData.data()), jsonData.size());
     uno::Reference<io::XInputStream> aInputStream(new comphelper::SequenceInputStream(aData));
 
+    SAL_WARN("wasm_extensions", "input stream size " << aInputStream->available());
+
     utl::MediaDescriptor aMediaDescriptor;
     // Leave a breadcrumb that this is using expanded storage
     aMediaDescriptor["ExpandedStorage"] <<= true;

@@ -70,6 +70,8 @@ class DomainMapper : public LoggedProperties, public LoggedTable,
 {
     std::unique_ptr<DomainMapper_Impl> m_pImpl;
 
+    css::uno::Reference<css::uno::XComponentContext> xContext;
+
 public:
     DomainMapper(const css::uno::Reference<css::uno::XComponentContext>& xContext,
                  css::uno::Reference<css::io::XInputStream> const& xInputStream,
@@ -90,6 +92,8 @@ public:
     virtual void data(const sal_uInt8* buf, size_t len) override;
 
     void sprmWithProps( Sprm& sprm, const PropertyMapPtr& pContext );
+
+    css::uno::Reference<css::uno::XComponentContext>  getComponentContext() { return xContext; };
 
     void PushStyleSheetProperties( const PropertyMapPtr& pStyleProperties, bool bAffectTableMngr = false );
     void PopStyleSheetProperties( bool bAffectTableMngr = false );

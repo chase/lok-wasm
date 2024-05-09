@@ -1131,7 +1131,9 @@ void SfxObjectShell::FinishedLoading( SfxLoadedFlags nFlags )
         if( !bSetModifiedTRUE && IsEnableSetModified() )
             SetModified( false );
 
-        CheckSecurityOnLoading_Impl();
+        // TODO: @synoet bring this back conditionally
+        // I don't think that security matters if we are loading the document from memory
+        /* CheckSecurityOnLoading_Impl(); */
 
         bHasName = true; // the document is loaded, so the name should already available
         GetTitle( SFX_TITLE_DETECT );

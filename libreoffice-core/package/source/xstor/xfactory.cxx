@@ -120,10 +120,17 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithAr
     uno::Reference< io::XStream > xStream;
     uno::Reference< io::XInputStream > xInputStream;
 
-    if ( aArguments[0] >>= aURL )
+    SAL_WARN("xfactory", "before checking url and input stream");
+    if (aArguments[0] >>= xInputStream)
     {
+        SAL_WARN("xfactory", "found x input stream inside of the arguments " <<  xInputStream->available());
+    }
+    else if ( aArguments[0] >>= aURL )
+    {
+        SAL_WARN("xfactory", "checking url");
         if ( aURL.isEmpty() )
         {
+
             OSL_FAIL( "Empty URL is provided!" );
             throw lang::IllegalArgumentException(); // TODO:
         }
@@ -145,6 +152,7 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithAr
     }
     else if ( !( aArguments[0] >>= xStream ) && !( aArguments[0] >>= xInputStream ) )
     {
+        SAL_WARN("xfactory", "failed during checking url");
         OSL_FAIL( "Wrong first argument!" );
         throw uno::Exception("wrong first arg", nullptr); // TODO: Illegal argument
     }
@@ -155,8 +163,10 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithAr
 
     sal_Int32 nStorageType = embed::StorageFormats::PACKAGE;
 
+    SAL_WARN("xfactory", "before checking package something else");
     if ( nArgNum >= 3 )
     {
+        SAL_WARN("xfactory", "checking package something else");
         if( aArguments[2] >>= aDescr )
         {
             if ( !aURL.isEmpty() )
@@ -179,6 +189,7 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithAr
                 }
                 else if ( rProp.Name == "StorageFormat" )
                 {
+                    SAL_WARN("xfactory", "checking format");
                     OUString aFormatName;
                     sal_Int32 nFormatID = 0;
                     if ( rProp.Value >>= aFormatName )
@@ -194,17 +205,22 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithAr
                         else
                             throw lang::IllegalArgumentException( THROW_WHERE, uno::Reference< uno::XInterface >(), 1 );
                     }
+
                     else if ( rProp.Value >>= nFormatID )
                     {
                         if ( nFormatID != embed::StorageFormats::PACKAGE
                           && nFormatID != embed::StorageFormats::ZIP
-                          && nFormatID != embed::StorageFormats::OFOPXML )
+                          && nFormatID != embed::StorageFormats::OFOPXML
+                          && nFormatID != embed::StorageFormats::EXPANDED
+                          )
                             throw lang::IllegalArgumentException( THROW_WHERE, uno::Reference< uno::XInterface >(), 1 );
 
                         nStorageType = nFormatID;
                     }
                     else
                         throw lang::IllegalArgumentException( THROW_WHERE, uno::Reference< uno::XInterface >(), 1 );
+
+                    SAL_WARN("xfactory", "checked format" << nStorageType);
                 }
                 else if (rProp.Name == "NoFileSync")
                 {
@@ -226,9 +242,11 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithAr
 
     }
 
+    SAL_WARN("xfactory", "before checking the input stream");
     // create storage based on source
     if ( xInputStream.is() )
     {
+        SAL_WARN("xfactory", "checking the input stream");
         // if xInputStream is set the storage should be open from it
         if ( nStorageMode & embed::ElementModes::WRITE )
               throw uno::Exception("storagemode==write", nullptr); // TODO: access denied
@@ -242,12 +260,15 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithAr
 
         if ( !CheckPackageSignature_Impl( xInputStream, xSeekable ) )
             throw io::IOException("package signature check failed, probably not a package file", nullptr); // TODO: this is not a package file
+                                                                                                           //
+        SAL_WARN("xfactory", "got the input stream, size: " << xInputStream->available() << " nStorageType " << nStorageType);
 
         return cppu::getXWeak(
             new OStorage(xInputStream, nStorageMode, aPropsToSet, m_xContext, nStorageType));
     }
     else if ( xStream.is() )
     {
+        SAL_WARN("xfactory", "found xstream but not input, size: " << xStream->getInputStream()->available() << " nStorageType " << nStorageType);
         if ( ( ( nStorageMode & embed::ElementModes::WRITE ) && !xStream->getOutputStream().is() )
              || !xStream->getInputStream().is() )
               throw uno::Exception("access denied", nullptr); // TODO: access denied
@@ -262,6 +283,8 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithAr
         if ( !CheckPackageSignature_Impl( xStream->getInputStream(), xSeekable ) )
             throw io::IOException(); // TODO: this is not a package file
 
+        SAL_WARN("xfactory", "making new OStorage with the following arguments" <<
+                " mode " << nStorageMode << " type " << nStorageType);
         return cppu::getXWeak(
             new OStorage(xStream, nStorageMode, aPropsToSet, m_xContext, nStorageType));
     }

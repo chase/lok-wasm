@@ -1267,6 +1267,7 @@ DocumentMetadataAccess::loadMetadataFromMedium(
             "DocumentMetadataAccess::loadMetadataFromMedium: "
             "invalid medium: no URL, no input stream", *this, 0);
     }
+    SAL_WARN("documentmetadataacccess", "INPUT STREAM IS AVAILABLE" << xIn.is());
     uno::Reference<embed::XStorage> xStorage;
     try {
         if (xIn.is()) {

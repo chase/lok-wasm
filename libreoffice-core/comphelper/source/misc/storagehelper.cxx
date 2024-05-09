@@ -344,6 +344,7 @@ uno::Reference< embed::XStorage > OStorageHelper::GetStorageOfFormatFromInputStr
         pProps[1].Value <<= bRepairStorage;
     }
 
+    SAL_WARN("ostoragehelper", "get storage from the input stream " << xStream->available());
     uno::Sequence< uno::Any > aArgs{ uno::Any(xStream), uno::Any(embed::ElementModes::READ), uno::Any(aProps) };
     uno::Reference< embed::XStorage > xTempStorage( GetStorageFactory( rxContext )->createInstanceWithArguments( aArgs ),
                                                     uno::UNO_QUERY_THROW );
