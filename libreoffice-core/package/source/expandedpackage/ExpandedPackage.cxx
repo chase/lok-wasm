@@ -21,7 +21,7 @@ ExpandedPackage::ExpandedPackage(uno::Reference<uno::XComponentContext> xContext
 
 ExpandedPackage::~ExpandedPackage() = default;
 
-std::vector<PackageFile> getPackageFilesFromInputStream(const std::unique_ptr<io::XInputStream> xInputStream)
+std::vector<PackageFile> getPackageFilesFromInputStream(const uno::Reference<io::XInputStream> xInputStream)
 {
     std::string rJson;
 
@@ -62,16 +62,15 @@ std::vector<PackageFile> getPackageFilesFromInputStream(const std::unique_ptr<io
 
 void SAL_CALL ExpandedPackage::initialize(const uno::Sequence<uno::Any>& aArguments)
 {
-    std::unique_ptr<io::XInputStream> pStream = nullptr;
+    uno::Reference<io::XInputStream> pStream = nullptr;
     if ( !aArguments.hasElements() )
         return;
-    beans::NamedValue aNamedValue;
     bool bFound = false;
     for( const auto& rArgument : aArguments )
     {
         if ( rArgument >>= pStream )
         {
-            auto parts = getPackageFilesFromInputStream(std::move(pStream));
+            auto parts = getPackageFilesFromInputStream(pStream);
             for (const PackageFile& part : parts)
             {
                 m_aPackageFiles.insert_or_assign(part.path, part);
@@ -88,10 +87,10 @@ uno::Any SAL_CALL ExpandedPackage::getByHierarchicalName(const OUString& aName)
 {
     ::osl::MutexGuard aGuard(m_aMutexHolder->GetMutex());
 
-    if (m_aPackageFiles.find(aName) != m_aPackageFiles.end())
-    {
-        return uno::Any(m_aPackageFiles[aName].content);
-    }
+    /* if (m_aPackageFiles.find(aName) != m_aPackageFiles.end()) */
+    /* { */
+    /*     return uno::Any(m_aPackageFiles.content); */
+    /* } */
 
 
     throw container::NoSuchElementException(aName, static_cast<cppu::OWeakObject*>(this));
@@ -176,7 +175,9 @@ uno::Sequence<sal_Int8> ExpandedPackage::readFile(const OUString& path)
 
     if (m_aPackageFiles.find(path) != m_aPackageFiles.end())
     {
-        return m_aPackageFiles[path].content;
+
+        return m_aPackageFiles.find(path)->second.content;
+
     }
 
     throw io::NotConnectedException(path, static_cast<cppu::OWeakObject*>(this));

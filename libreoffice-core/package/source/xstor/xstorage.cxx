@@ -446,7 +446,7 @@ void OStorage_Impl::OpenOwnPackage()
             if ( m_nStorageType == embed::StorageFormats::EXPANDED )
             {
                 m_xPackage.set( m_xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
-                                   "com.sun.star.packages.comp.ZipPackage", aArguments, m_xContext),
+                                   "com.sun.star.packages.comp.ExpandedPackage", aArguments, m_xContext),
                                 uno::UNO_QUERY );
             }
             else

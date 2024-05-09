@@ -1829,7 +1829,9 @@ uno::Reference < embed::XStorage > SfxMedium::GetStorage( bool bCreateTempFile )
 
         uno::Sequence< beans::PropertyValue > aAddProps{
             comphelper::makePropertyValue("RepairPackage", true),
-            comphelper::makePropertyValue("StatusIndicator", xProgressHandler)
+            comphelper::makePropertyValue("StatusIndicator", xProgressHandler),
+            // TODO: @synoet put this here conditionally
+            comphelper::makePropertyValue("StorageFormat", EXPANDED_STORAGE_FORMAT_STRING)
         };
 
         // the first arguments will be filled later
@@ -1868,6 +1870,7 @@ uno::Reference < embed::XStorage > SfxMedium::GetStorage( bool bCreateTempFile )
         pArgs[1] <<= embed::ElementModes::READ;
         pImpl->bStorageBasedOnInStream = false;
     }
+
 
     try
     {
