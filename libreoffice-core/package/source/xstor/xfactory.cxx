@@ -35,6 +35,7 @@
 #include <osl/diagnose.h>
 #include <unotools/tempfile.hxx>
 
+#include "com/sun/star/embed/StorageFormats.hdl"
 #include "xfactory.hxx"
 #include "xstorage.hxx"
 
@@ -74,9 +75,10 @@ uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstance()
     // TODO: reimplement TempStream service to support XStream interface
     uno::Reference < io::XStream > xTempStream(new utl::TempFileFastService);
 
+    // TODO: @synoet make temporary storage based on input format
     return cppu::getXWeak(new OStorage(xTempStream, embed::ElementModes::READWRITE,
                                                   uno::Sequence<beans::PropertyValue>(), m_xContext,
-                                                  embed::StorageFormats::PACKAGE));
+                                                  embed::StorageFormats::EXPANDED));
 }
 
 uno::Reference< uno::XInterface > SAL_CALL OStorageFactory::createInstanceWithArguments(
