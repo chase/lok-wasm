@@ -56,13 +56,11 @@ public:
     explicit DocumentClient(std::vector<std::string> parts, bool bRandom)
         : ref_(1)
     {
-        SAL_WARN("desktop", "parts: " << parts.size());
         std::vector<desktop::ExpandedPart> expandedParts;
         for (const auto& part : parts) {
             auto i = part.find_first_of("@");
             auto path = part.substr(0, i);
             auto content = part.substr(i + 1);
-            SAL_WARN("desktop", "part " << path << " " << content);
             expandedParts.push_back(desktop::ExpandedPart(path, content));
         }
 

@@ -44,18 +44,19 @@ std::vector<PackageFile> getPackageFilesFromInputStream(const uno::Reference<io:
     uno::Sequence<sal_Int8> buffer(bufferSize);
     sal_Int32 bytesRead;
 
-    SAL_WARN("expandedpackage", "xinputstream size: " << xInputStream->available());
 
     do
     {
         bytesRead = xInputStream->readBytes(buffer, bufferSize);
-        SAL_WARN("expandedpackage", "read bytes from input stream: " << bytesRead);
         rJson.append(reinterpret_cast<const char*>(buffer.getConstArray()), bytesRead);
     } while (bytesRead == bufferSize);
 
     boost::property_tree::ptree aRootTree;
-    boost::property_tree::read_json(rJson, aRootTree);
-    for (const auto& part : boost::make_iterator_range(aRootTree))
+    std::stringstream aStream(rJson);
+    boost::property_tree::read_json(aStream, aRootTree);
+
+    auto child = aRootTree.get_child("parts");
+    for (const auto& part : boost::make_iterator_range(child))
     {
         auto path = part.second.get_value<std::string>("path");
         auto content = part.second.get_value<std::string>("content");
@@ -76,7 +77,6 @@ std::vector<PackageFile> getPackageFilesFromInputStream(const uno::Reference<io:
 
 void SAL_CALL ExpandedPackage::initialize(const uno::Sequence<uno::Any>& aArguments)
 {
-    SAL_WARN("expandedpackage", "initializing");
     uno::Reference<io::XInputStream> xInputStream = nullptr;
     uno::Reference<io::XStream> xStream = nullptr;
     if ( !aArguments.hasElements() )

@@ -575,8 +575,8 @@ void OStorage_Impl::ReadContents()
     // MACRO: ExpandedStorage
     // we might need to open the package to properly initialize it, but
     // we don't need to read anything in since it should already exist in memory
-    if (m_nStorageType == embed::StorageFormats::EXPANDED)
-        return;
+    /* if (m_nStorageType == embed::StorageFormats::EXPANDED) */
+    /*     return; */
 
     uno::Reference< container::XEnumerationAccess > xEnumAccess( m_xPackageFolder, uno::UNO_QUERY_THROW );
     uno::Reference< container::XEnumeration > xEnum = xEnumAccess->createEnumeration();
@@ -3877,6 +3877,7 @@ sal_Bool SAL_CALL OStorage::hasByName( const OUString& aName )
 {
     ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
+    SAL_WARN("xstorage", "has by name " << aName);
     if ( !m_pImpl )
     {
         SAL_INFO("package.xstor", THROW_WHERE "Disposed!");
@@ -3896,8 +3897,8 @@ sal_Bool SAL_CALL OStorage::hasByName( const OUString& aName )
     }
     catch( const uno::RuntimeException& )
     {
-        TOOLS_INFO_EXCEPTION("package.xstor", "Rethrow:");
-        throw;
+        /* TOOLS_INFO_EXCEPTION("package.xstor", "Rethrow:"); */
+        /* throw; */
     }
     catch ( const uno::Exception& )
     {

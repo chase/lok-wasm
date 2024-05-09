@@ -82,12 +82,12 @@ public:
 
     /** returns true if the current JSON data matches the string */
     bool isDataEquals(std::string_view) const;
+    void endArray();
+    void endStruct();
 
 private:
     void startAnonBlock(const char cType);
     void endNode();
-    void endArray();
-    void endStruct();
     void addCommaBeforeField();
     void writeEscapedOUString(const OUString& rPropVal);
     void closeDocument();

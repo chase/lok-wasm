@@ -207,7 +207,7 @@ _LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(std::vector<d
 std::string serializeToJson(const std::vector<desktop::ExpandedPart>& parts)
 {
     tools::JsonWriter aJson;
-    auto aArray = aJson.startAnonArray();
+    auto aArray = aJson.startArray("parts");
 
     for (const auto& part : parts)
     {
@@ -216,6 +216,8 @@ std::string serializeToJson(const std::vector<desktop::ExpandedPart>& parts)
         aJson.put("path", part.path);
         aJson.put("content", part.content);
     }
+
+    aJson.endArray();
 
     return aJson.finishAndGetAsOString().getStr();
 }
@@ -242,8 +244,6 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     std::string jsonData = serializeToJson(parts);
     auto aData = uno::Sequence<sal_Int8>(reinterpret_cast<const sal_Int8*>(jsonData.data()), jsonData.size());
     uno::Reference<io::XInputStream> aInputStream(new comphelper::SequenceInputStream(aData));
-
-    SAL_WARN("wasm_extensions", "input stream size " << aInputStream->available());
 
     utl::MediaDescriptor aMediaDescriptor;
     // Leave a breadcrumb that this is using expanded storage
